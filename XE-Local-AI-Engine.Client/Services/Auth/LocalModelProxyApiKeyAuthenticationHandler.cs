@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Proxy;
 ///     A THIRD authentication scheme beside JWT bearer and the MCP key, applied only by the model-proxy authorization policy, so the browser-facing surface
 ///     keeps its JWT/Operator posture and the MCP surface its own key. <b>Why a bearer key:</b> external OpenAI-compatible clients (LiteLLM, Continue, a
 ///     Hermes-style agent) already accept a static <c>Authorization: Bearer …</c> header as the API key — it is the OpenAI wire convention — so a pre-shared
-///     bearer over a loopback-only, single-user surface is both the proportionate control and the one these clients speak natively.
+///     bearer over a loopback-only, single-user surface is the proportionate control. Anthropic clients send the same key as <c>x-api-key</c>.
 /// </remarks>
 internal sealed class LocalModelProxyApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
@@ -22,6 +22,9 @@ internal sealed class LocalModelProxyApiKeyAuthenticationHandler : Authenticatio
     public const string SchemeName = "LocalModelProxyApiKey";
 
     private const string BearerPrefix = "Bearer ";
+
+    /// <summary>The header Anthropic clients send their API key in; accepted beside <c>Authorization: Bearer</c>.</summary>
+    private const string ApiKeyHeaderName = "x-api-key";
 
     private readonly ILocalModelProxyApiKeyService _apiKeyService;
 
@@ -46,19 +49,32 @@ internal sealed class LocalModelProxyApiKeyAuthenticationHandler : Authenticatio
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var header = Request.Headers.Authorization.ToString();
-        if (string.IsNullOrWhiteSpace(header))
+        var apiKeyHeader = Request.Headers[ApiKeyHeaderName].ToString().Trim();
+        if (string.IsNullOrWhiteSpace(header) && apiKeyHeader.Length == 0)
         {
             // NoResult, not Fail: "no credential presented" is not an authentication error, and returning Fail here
             // would bypass the challenge that emits the WWW-Authenticate header clients need.
             return AuthenticateResult.NoResult();
         }
 
-        if (!header.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase))
+        string? bearer = null;
+        if (!string.IsNullOrWhiteSpace(header))
         {
-            return AuthenticateResult.Fail("Unsupported authorization scheme.");
+            if (!header.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return AuthenticateResult.Fail("Unsupported authorization scheme.");
+            }
+
+            bearer = header[BearerPrefix.Length..].Trim();
         }
 
-        var presented = header[BearerPrefix.Length..].Trim();
+        // Both headers present must name the same key: a valid one never vouches for a second, unchecked credential.
+        if (bearer is not null && apiKeyHeader.Length > 0 && !string.Equals(bearer, apiKeyHeader, StringComparison.Ordinal))
+        {
+            return AuthenticateResult.Fail("Invalid model-proxy API key.");
+        }
+
+        var presented = bearer ?? apiKeyHeader;
         if (!await _apiKeyService.ValidateAsync(presented, Context.RequestAborted))
         {
             // Deliberately uniform: never distinguish "no key generated" from "wrong key" to a caller.

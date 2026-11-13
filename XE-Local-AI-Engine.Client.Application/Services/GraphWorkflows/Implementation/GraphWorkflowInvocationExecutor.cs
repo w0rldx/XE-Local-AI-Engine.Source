@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
@@ -17,6 +18,9 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Coder;
+using XE_Local_AI_Engine.Client.Services.Coder.Tools;
+using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
@@ -25,6 +29,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
+using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
@@ -33,14 +38,16 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     <see cref="GraphWorkflowInFlightLane{TResult}" /> and never inside it.
 /// </summary>
 /// <remarks>
-///     Shaped from the development-workflow TOOL lane rather than its agent lane: a work session is durable and
-///     pollable across a restart, while an <see cref="IInvocationRunner" /> turn is an in-process task with no durable
-///     handle. That is why an interrupted <c>Running</c> Agent row is failed rather than resumed, and why
+///     An <see cref="IInvocationRunner" /> turn, not a work session: a work session is durable and pollable across a
+///     restart, while a turn is an in-process task with no durable handle. That is why an interrupted <c>Running</c> Agent row is failed rather than resumed, and why
 ///     <see cref="GraphWorkflowNodeRun.InvocationId" /> is written at all — the correlation id for a turn nothing
 ///     else survives. <b>Singleton</b>: scoped collaborators resolve in the task body. What it copies from <c>RunSavedAgentHandler</c>: docs/wiki/21-graph-workflows.md ("Agent").
 /// </remarks>
 internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecutor, IAsyncDisposable
 {
+    /// <summary>The run-input member naming the Development project a <c>repository</c> Agent node reads, as <c>run.input.developmentProjectId</c>.</summary>
+    internal const string DevelopmentProjectIdKey = "developmentProjectId";
+
     /// <summary>What a queued model row is waiting for. It is waiting, not failing, so it carries no event.</summary>
     private const string AwaitingInvocationSlot = "awaiting-invocation-slot";
 
@@ -61,8 +68,20 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     /// </summary>
     private static readonly string[] KnownFinishReasons = ["stop", "length", "tool_calls", "content_filter"];
 
+    /// <summary>The tools a <c>repository</c> node's agent must list: the read-only coder reads that honour <see cref="CoderRepositoryScope" />.</summary>
+    private static readonly string[] RepositoryToolNames = [CoderToolDefinition.ListFilesToolName, CoderToolDefinition.ReadFileToolName, CoderToolDefinition.SearchTextToolName];
+
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
+
+    /// <summary>
+    ///     JSON a model reads as text: backticks, apostrophes, angle brackets and non-ASCII stay as written, not <c>\uXXXX</c>
+    ///     (a quote is <c>\"</c>). Never for HTML: in a prompt the nonce fence bounds untrusted data.
+    /// </summary>
+    internal static readonly JsonSerializerOptions PromptJsonOptions = new(JsonSerializerOptions.Web)
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     private readonly IReadOnlyList<IGraphWorkflowDecisionProvider> _decisionProviders;
     private readonly IReadOnlyList<IGraphWorkflowNativeDecisionProvider> _nativeDecisionProviders;
@@ -422,6 +441,47 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 return Invalid(toolRefusal);
             }
 
+            // The REPOSITORY option, refused before capacity. Its files are node-local data, so a cloud model reads them only by the operator's local-data opt-in.
+            string? repositoryRoot = null;
+            if (agentConfig.Repository)
+            {
+                if (await CloudLocalDataGate.WithholdsAsync(capabilities.IsCloud, capabilities.CloudGrants, runtimeSettings, cancellationToken))
+                {
+                    _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': it reads a repository, its effective model is cloud-hosted and AllowCloudModelAccess is off.",
+                        runId,
+                        node.NodeKey);
+                    return Invalid($"Node '{node.NodeKey}' would let the cloud model '{effectiveModel}' read its Development project's repository. "
+                                   + "Turn on 'Let cloud models read local data' in Node Settings → Privacy & updates, or grant local data on the model's external connection when it has one, to allow it.");
+                }
+
+                if (definition?.AllowedToolNames.Any(name => RepositoryToolNames.Contains(name, StringComparer.Ordinal)) != true)
+                {
+                    return Invalid(MissingRepository(node, "its agent lists none of them"));
+                }
+
+                if (DevelopmentProjectId(inputJson) is not { } projectId)
+                {
+                    return Invalid(MissingRepository(node, $"this run's input names no Development project ('{DevelopmentProjectIdKey}')"));
+                }
+
+                if (services.GetService<IDevelopmentRepositoryBindingService>() is not { } bindings)
+                {
+                    return Invalid(MissingRepository(node, "Development Mode is off on this node"));
+                }
+
+                try
+                {
+                    repositoryRoot = (await bindings.ResolveProjectAsync(projectId, cancellationToken)).RepositoryRoot;
+                }
+                catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException or DevelopmentNotFoundException or SelectedFolderValidationException
+                                                      or IOException or UnauthorizedAccessException)
+                {
+                    // Never the exception's own text in the row: a binding failure can name the host path.
+                    _logger.LogWarning(exception, "Graph workflow run {RunId} node '{NodeKey}' could not resolve its Development project's repository.", runId, node.NodeKey);
+                    return Invalid(MissingRepository(node, "its Development project's repository cannot be resolved (reconnect it on the Development page)"));
+                }
+            }
+
             var attachments = await AttachmentsAsync(services, runId, node, agentConfig.IncludeAttachments, inputJson, effectiveModel, capabilities, cancellationToken);
             if (attachments.Refusal is { } refusal)
             {
@@ -475,7 +535,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 seedPrompt,
                 attachments.Images);
 
-            // 8–10. The lease, the terminal capture, and the run.
+            // 8–10. The lease, the terminal capture, and the run. Opened here, in the lane's own flow, so the tool loop's handlers read it; null reads AgentHome.
+            using var repository = CoderRepositoryScope.Begin(repositoryRoot);
             var terminal = await RunInvocationAsync(services.GetRequiredService<IWorkerEventDispatcher>(),
                 _invocationRunner,
                 package,
@@ -930,7 +991,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         }
 
         // Bound values carry run input, upstream outputs and run.previous, so they are fenced as data, never instructions.
-        var data = UntrustedContentFraming.WrapDocument($"```json\n{JsonSerializer.Serialize(bound, JsonOptions)}\n```", [new("source", "input bindings")]);
+        var data = UntrustedContentFraming.WrapDocument($"```json\n{JsonSerializer.Serialize(bound, PromptJsonOptions)}\n```", [new("source", "input bindings")]);
         prompt = $"{config.Prompt}\n\nNamed input data:\n{data}";
         if (Encoding.UTF8.GetByteCount(prompt) > maxBytes)
         {
@@ -986,7 +1047,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     ///     may honestly say <c>Running</c>. The runner has no return value, so the result comes back through
     ///     <see cref="IWorkerEventDispatcher.InvocationStateChanged" /> — held in a <see cref="StrongBox{T}" /> rather
     ///     than a local, which flow analysis would otherwise prove always-null because it cannot see the handler fire
-    ///     synchronously from the completion report.
+    ///     synchronously from the completion report. Its text is the answer after the last tool call, as chat persists it.
     /// </remarks>
     private async Task<InvocationState?> RunInvocationAsync(IWorkerEventDispatcher eventDispatcher,
         IInvocationRunner invocationRunner,
@@ -995,6 +1056,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         CancellationToken cancellationToken)
     {
         var terminalState = new StrongBox<InvocationState?>(null);
+        var answerStart = new StrongBox<int>(0);
 
         void OnInvocationStateChanged(object? sender, InvocationStateChangedEventArgs args)
         {
@@ -1005,12 +1067,22 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             }
         }
 
+        // The narration a model streams before each tool call is not its answer, and the next node would read it as one.
+        void OnToolCallLifecycleChanged(object? sender, ToolCallLifecycleChangedEventArgs args)
+        {
+            if (args.Payload is { Phase: ToolCallLifecyclePhase.Requested, ContentOffset: { } offset } && args.Payload.InvocationId == package.InvocationId)
+            {
+                answerStart.Value = Math.Max(answerStart.Value, offset);
+            }
+        }
+
         var lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken);
         leaseAcquired.Value = true;
 
         // The row still reads Queued; a sweep is what writes it Running now that a model is in fact working on it.
         _sweepWake.Raise();
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
+        eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
         try
         {
             var executionContext = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
@@ -1018,6 +1090,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         }
         finally
         {
+            eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
             eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
             await lease.DisposeAsync();
         }
@@ -1025,7 +1098,14 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         // The runner reports Cancelled and returns normally rather than rethrowing, so a stop would otherwise land here
         // as an ordinary terminal and settle the row as a failure instead of a cancellation.
         cancellationToken.ThrowIfCancellationRequested();
-        return terminalState.Value;
+        if (terminalState.Value is not { } terminal || answerStart.Value == 0)
+        {
+            return terminalState.Value;
+        }
+
+        var answered = terminal.Clone();
+        answered.StreamedContent = NodeChatPartAccumulator.FinalSegment(terminal.StreamedContent, answerStart.Value);
+        return answered;
     }
 
     /// <summary>The headless loopback package for one node's turn.</summary>
@@ -1250,7 +1330,6 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     ///     The "## Operator steering" section: the row's APPLIED steers, oldest first, or null when there are none —
     ///     so a row nobody steered sends a prompt byte-identical to one before steering existed.
     /// </summary>
-    /// <remarks>Re-implemented from the development-workflow operator retry reason, never shared with it.</remarks>
     private static string? SteeringSection(GraphWorkflowNodeRunSnapshot nodeRun)
     {
         var applied = nodeRun.Steering.Where(static entry => entry.Applied == true).Select(static (entry, index) => $"{index + 1}. {entry.Message}").ToList();
@@ -1262,8 +1341,17 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
     /// <summary>The local-data refusal; <paramref name="destination" /> names where the content would go, as the unattended refusal does.</summary>
     private static string LocalDataRefusal(GraphWorkflowGraphNode node, GraphWorkflowGraphNode source, string destination) =>
-        $"Node '{node.NodeKey}' would send the output of Tool node '{source.NodeKey}' ('{((GraphWorkflowToolConfig)source.Config).ToolName}'), which reads node-local data, {destination}. "
+        $"Node '{node.NodeKey}' would send the output of {GraphWorkflowToolGate.LocalDataLabel(source)}, which reads node-local data, {destination}. "
         + "Turn on 'Let cloud models read local data' in Node Settings → Privacy & updates, or grant local data on the model's external connection when it has one, to allow it.";
+
+    private static string MissingRepository(GraphWorkflowGraphNode node, string why) =>
+        $"Agent node '{node.NodeKey}' reads the repository with {string.Join(", ", RepositoryToolNames)}, and {why}.";
+
+    /// <summary>The run's <c>developmentProjectId</c>, read from <c>run.input</c>: the run's stored input as the document carries it.</summary>
+    private static Guid? DevelopmentProjectId(string inputJson) =>
+        GraphWorkflowDocuments.Resolve(inputJson, $"run.input.{DevelopmentProjectIdKey}") is { ValueKind: JsonValueKind.String } value && value.TryGetGuid(out var projectId)
+            ? projectId
+            : null;
 
     private void LogLocalDataRefusal(Guid runId, GraphWorkflowGraphNode node, GraphWorkflowGraphNode source) =>
         _logger.LogInformation(

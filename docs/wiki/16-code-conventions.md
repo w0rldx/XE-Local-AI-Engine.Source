@@ -411,8 +411,7 @@ listed with its reason in `TryOutParameterNullOnSuccessAllowlist.txt` beside the
 
 Before moving an existing exception onto `ResourceNotFoundException`, audit every `catch` and `is` check of its old
 base type it can flow through: a `catch (InvalidOperationException)` that used to see it no longer does, and a
-`KeyNotFoundException` filter now does. `DevWorkflowToolCommands.RunAsync` and `DevWorkflowDefinitionSeeder.StartAsync`
-name `DevWorkflowNotFoundException` in their filters for exactly that reason.
+`KeyNotFoundException` filter now does.
 
 ### `ConfigureAwait` is contextual
 
@@ -498,7 +497,7 @@ build's test gate, not the reviewer's memory:
 | A service implementation file under `Client.Application/Services/{AgentHome,Benchmarks,Capacity,Development,DocumentIngestion,Inference,Integrations,Knowledge,Models,Training,WorkSessions}/` declares the service and nothing else — its records and enums go in a sibling `*Models` / `*ServiceModels` / `*Contracts` / `*Dtos` file. | `ServiceModelColocationTests.ServiceImplementationFiles_DoNotAlsoDeclareContractTypes` |
 | A production `.cs` file declares one top-level type, unless it is a family file, an `IFoo`+`Foo` pair, one type beside only enums and delegates, or an `I*Store.cs`/`I*Service.cs` contract bundle. | `FilePlacementConventionTests.ProductionProjects_DeclareOneTopLevelTypePerFile` |
 | An endpoint class is alone in a file named after it; no plural `*Endpoints.cs` may declare one. | `EndpointConventionTests.EveryEndpointTypeIsDeclaredInExactlyOneFileNamedAfterIt`, `…PluralEndpointFilesAreOnlyTheNamedGroupingExceptions` |
-| A concrete store that a publishing decorator wraps (`DevWorkflowStore`, `GraphWorkflowStore`, and `AgentWorkSessionStore` pre-emptively) is named only in the DI module that registers it, so no caller resolves the undecorated store and skips its events. | `ConcreteStoreConstructionArchitectureTests.ProductionCallers_NameAConcreteStoreOnlyWhereItIsRegistered` |
+| A concrete store that a publishing decorator wraps (`GraphWorkflowStore`, and `AgentWorkSessionStore` pre-emptively) is named only in the DI module that registers it, so no caller resolves the undecorated store and skips its events. | `ConcreteStoreConstructionArchitectureTests.ProductionCallers_NameAConcreteStoreOnlyWhereItIsRegistered` |
 | The model-provider map is reached only through `ICoordinatedModelProviderMapStore`: `IModelProviderMapStore` / `ModelProviderMapStore` are named only by the facade and its DI module, and that module registers the shared lock domain and coordinators. | `ProviderMapCoordinationArchitectureTests.ProductionCallers_CannotBypassCoordinatedProviderMapFacade`, `…ProductionComposition_RegistersSharedCoordinationDomainAndFacades` |
 
 `PlacementConventionTests` is **ArchUnitNET** (`TngTech.ArchUnitNET`, test-project only) over compiled IL; it
@@ -743,7 +742,7 @@ exist in-file (a mechanical extract, as done for `ImageModelManager.tsx`).
 order of magnitude. Escalate only when they cannot express the thing:
 
 1. **`.module.css`** for pseudo-selectors, keyframes, and React Flow node styling — the handful of modules in
-   the tree are almost all canvas nodes in `devWorkflows`/`graphWorkflows`.
+   the tree are almost all canvas nodes in `graphWorkflows`.
 2. **Inline `style={{ … }}` only for a genuinely computed value** (a measured offset, a progress width). A
    static inline style object is a Mantine prop that has not been written yet, and such sites are the app's largest
    style drift.

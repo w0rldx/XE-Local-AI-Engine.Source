@@ -512,7 +512,7 @@ public sealed class AgentDefinitionResolverTests
 
     /// <summary>
     ///     Inside a work-session step, an agent whose allowed names omit the four state tools still gets them — a
-    ///     custom agent driving a session, or bound to a development-workflow node, otherwise runs tool-less to its step cap.
+    ///     custom agent driving a session otherwise runs tool-less to its step cap.
     /// </summary>
     [Test]
     public async Task ResolveAsync_InAWorkSessionStep_OffersTheStateToolsToACustomAgent()
@@ -573,51 +573,6 @@ public sealed class AgentDefinitionResolverTests
         {
             AssertEx.Contains(resolved!.AllowedTools, tool => tool.Name == name, $"the whole offer holds {name} out, so the step must lift it from the profile pool.");
         }
-    }
-
-    /// <summary>
-    ///     The read tool belongs to a step that was handed upstream artifacts: a step handed none is not offered it, and neither is
-    ///     an ordinary chat turn on an agent whose definition lists it by name.
-    /// </summary>
-    [Test]
-    public async Task ResolveAsync_OffersTheUpstreamReadOnlyToAStepHandedArtifacts()
-    {
-        var resolver = BuildRealOfferResolver(out var store, allowCloudKnowledgeAccess: false, Substitute.For<IModelCapabilityResolver>());
-        var definition = CreateDefinition(allowedTools: ["GetCurrentTime", WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName], modelProfile: null);
-        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
-        var handed = new WorkSessionReadableArtifact
-        {
-            RunId = Guid.NewGuid(),
-            ArtifactId = Guid.NewGuid(),
-            Name = "validate.patch",
-            Kind = "Patch",
-            Producer = "validate",
-            Version = 1,
-            MediaType = "text/x-diff",
-            ContentSha256 = new string('0', 64),
-            SizeBytes = 1
-        };
-
-        ResolvedAgentRuntime? withArtifacts, withoutArtifacts;
-        using (WorkSessionTurnScope.Begin(readableArtifacts: [handed]))
-        {
-            withArtifacts = await resolver.ResolveAsync(definition.Id, CloudPinnedModel);
-        }
-
-        using (WorkSessionTurnScope.Begin())
-        {
-            withoutArtifacts = await resolver.ResolveAsync(definition.Id, CloudPinnedModel);
-        }
-
-        var chat = await resolver.ResolveAsync(definition.Id, CloudPinnedModel);
-
-        static bool OffersRead(ResolvedAgentRuntime? resolved) =>
-            AssertEx.NotNull(resolved).AllowedTools.Any(static tool => tool.Name == WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName);
-
-        AssertEx.True(OffersRead(withArtifacts), "a step handed upstream artifacts is offered the tool that reads them.");
-        AssertEx.False(OffersRead(withoutArtifacts), "a step handed none has nothing to read.");
-        AssertEx.False(OffersRead(chat), "listing the tool by name does not reach an ordinary chat turn.");
-        AssertEx.Contains(AssertEx.NotNull(chat).AllowedTools, static tool => tool.Name == "GetCurrentTime");
     }
 
     [Test]

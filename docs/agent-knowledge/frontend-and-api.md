@@ -17,7 +17,7 @@ regenerating `openapi/v1.json`. Conventions: `XE-Local-AI-Engine.Client.React/AG
 
 ### Edit `de.json` by key: "Knoten" and "Node" are different words
 
-**Rule:** in German, "Knoten" is correct for a graph node (`pages.graphWorkflows`, `pages.devWorkflows` and a few `pages.chat.workflow.*` strings); only the engine instance is "Node", so never search and replace. Several Vitest files pin German sentences verbatim (for example `NodeSettingsFieldsCard.test.tsx`, `AppUpdateChannelSelector.test.tsx`), so grep the tests for the old string before changing one. With parallel locale work only one writer edits the file; others hand over key-to-value change lists. **Prevents:** a bulk replace that corrupts graph terminology and reds unrelated tests. **Authority:** `src/locales/de.json`; `src/I18n.test.ts` (key parity).
+**Rule:** in German, "Knoten" is correct for a graph node (`pages.graphWorkflows` and a few `pages.chat.workflow.*` strings); only the engine instance is "Node", so never search and replace. Several Vitest files pin German sentences verbatim (for example `NodeSettingsFieldsCard.test.tsx`, `AppUpdateChannelSelector.test.tsx`), so grep the tests for the old string before changing one. With parallel locale work only one writer edits the file; others hand over key-to-value change lists. **Prevents:** a bulk replace that corrupts graph terminology and reds unrelated tests. **Authority:** `src/locales/de.json`; `src/I18n.test.ts` (key parity).
 
 ### Chat rendering contract
 
@@ -299,7 +299,7 @@ undeclared request calls `assertNoUnhandledRequests()`, which asserts and drains
 unmount is dropped and charged to no test. When the generated client loses an async hop (the request validators were
 dropped on 2026-10-09), a GET that used to fire one tick after the test unmounted fires inside it and hits the strict
 guard: register the route in that test, never widen `onUnhandledFrame` or add a wait. **Authority:**
-`src/test/UseMswServer.ts`; `ValidationProblemProbeApi.test.ts`; `DevWorkflowDefinitionFormPanel.test.tsx`.
+`src/test/UseMswServer.ts`; `ValidationProblemProbeApi.test.ts`.
 
 ### Every `MantineProvider` a test mounts carries `env="test"`
 

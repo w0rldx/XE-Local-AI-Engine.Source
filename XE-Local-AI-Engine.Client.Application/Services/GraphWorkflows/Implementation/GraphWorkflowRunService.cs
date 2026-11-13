@@ -2,12 +2,15 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Tools;
+using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
 ///     The command surface over a graph workflow run. Everything it does is validate, commit, signal, and answer with
@@ -16,8 +19,8 @@ using XE_Local_AI_Engine.Client.Services.Tools;
 internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
 {
     /// <summary>
-    ///     The longest comment an answer may carry, matching the development-workflow gate's own cap. It is free text
-    ///     beside the act rather than part of it, and an unbounded one would ride inside the node's output envelope.
+    ///     The longest comment an answer may carry. It is free text beside the act rather than part of it, and an
+    ///     unbounded one would ride inside the node's output envelope.
     /// </summary>
     private const int MaxDecisionComment = 500;
 
@@ -29,13 +32,19 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
 
     private readonly INodeRuntimeSettings _runtimeSettings;
 
+    /// <summary>The request scope, asked for the Development services Development Mode may not have registered.</summary>
+    private readonly IServiceProvider _services;
+
     public GraphWorkflowRunService(IGraphWorkflowStore store,
         IGraphWorkflowDispatcherSignal signal,
         IToolInvocationService tools,
         INodeRuntimeSettings runtimeSettings,
         IOptions<GraphWorkflowOptions> options,
-        IOptions<SecurityOptions> security)
+        IOptions<SecurityOptions> security,
+        IServiceProvider services)
     {
+        ArgumentNullException.ThrowIfNull(services);
+        _services = services;
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
         _security = (security ?? throw new ArgumentNullException(nameof(security))).Value;
         ArgumentNullException.ThrowIfNull(signal);
@@ -113,6 +122,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         }
 
         await EnsureToolNodesAreRunnableAsync(graph, definition.AllowsActions, cancellationToken);
+        await EnsureDevelopmentProjectAsync(graph, inputJson, cancellationToken);
 
         if (graph.Nodes.Count > _options.MaxNodeRunsPerRun)
         {
@@ -711,6 +721,46 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         if (errors.Count > 0)
         {
             throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(errors));
+        }
+    }
+
+    /// <summary>
+    ///     A graph holding a <c>DevTask</c> node works in ONE Development project, named by the run input's <c>developmentProjectId</c>: refused
+    ///     at start while Development Mode is off, without the key, or when the project's binding does not resolve.
+    /// </summary>
+    /// <remarks>
+    ///     Resolved through <see cref="IDevelopmentRepositoryBindingService" /> as the Agent node's <c>repository</c> option does; Development Mode
+    ///     off at startup registers none. The exception text is never repeated: a binding failure can name the host path.
+    /// </remarks>
+    private async Task EnsureDevelopmentProjectAsync(GraphWorkflowGraph graph, string? inputJson, CancellationToken cancellationToken)
+    {
+        if (!graph.Nodes.Values.Any(static node => node.Kind == GraphWorkflowNodeKind.DevTask))
+        {
+            return;
+        }
+
+        const string key = GraphWorkflowInvocationExecutor.DevelopmentProjectIdKey;
+        if (_services.GetService<IDevelopmentRepositoryBindingService>() is not { } bindings)
+        {
+            throw new GraphWorkflowRunConflictException("This workflow has DevTask nodes and Development Mode is off on this node. Turn it on to run the workflow.");
+        }
+
+        if (GraphWorkflowDocuments.Resolve(inputJson, key) is not { ValueKind: JsonValueKind.String } value || !value.TryGetGuid(out var projectId))
+        {
+            throw new GraphWorkflowValidationException($"This workflow has DevTask nodes, so its run input needs '{key}': the id of the Development project it works in.");
+        }
+
+        try
+        {
+            _ = await bindings.ResolveProjectAsync(projectId, cancellationToken);
+        }
+        catch (DevelopmentNotFoundException exception)
+        {
+            throw new GraphWorkflowValidationException($"The run input's '{key}' names no Development project on this node.", exception);
+        }
+        catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException or SelectedFolderValidationException or IOException or UnauthorizedAccessException)
+        {
+            throw new GraphWorkflowRunConflictException("The Development project's repository cannot be resolved. Reconnect it on the Development page.");
         }
     }
 

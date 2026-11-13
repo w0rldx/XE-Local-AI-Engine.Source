@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
@@ -1396,6 +1397,27 @@ public sealed class SubAgentSpawnServiceTests
 
         AssertEx.Contains(result, "may not spawn further sub-agents");
         AssertEx.Equal(0, harness.ChatClient.CallCount);
+    }
+
+    /// <summary>
+    ///     A child spawned from inside a repository-scoped turn (a graph Agent node with <c>repository</c>) runs in the parent's
+    ///     async flow, so without its own scope it would read the repository on a model no repository gate judged.
+    /// </summary>
+    [Test]
+    public async Task Spawn_FromARepositoryScopedTurn_ChildDoesNotSeeTheRepositoryRoot()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        var service = harness.Build();
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        using var repository = CoderRepositoryScope.Begin("/repository/of/the/parent");
+
+        var result = await service.SpawnAsync(ModelRequest("read the notes"), CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
+        AssertEx.Equal(1, harness.ChatClient.CallCount, "the child ran, so what it saw was recorded.");
+        AssertEx.Null(harness.ChatClient.LastRepositoryRoot, "the child reads the AgentHome workspace, not the parent's repository.");
+        AssertEx.Equal("/repository/of/the/parent", CoderRepositoryScope.Root, "the parent's own scope is untouched by the spawn.");
     }
 
     [Test]

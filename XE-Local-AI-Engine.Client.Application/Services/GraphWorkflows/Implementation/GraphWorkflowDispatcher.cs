@@ -958,7 +958,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         catch (GraphWorkflowInvalidTransitionException exception)
         {
             // Usually somebody else moved the run between this tick's read and its write. Their write stands and the next tick re-derives. Deliberately NOT
-            // re-signaled: where Dev Workflows has a separate concurrency exception, a stale version and an illegal move share ONE type here, so it would spin a BUG.
+            // re-signaled: a stale version and an illegal move share this ONE exception type, so re-signaling would spin a BUG.
             _logger.LogWarning(exception, "Graph workflow run {RunId} could not commit a transition mid-tick.", runId);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

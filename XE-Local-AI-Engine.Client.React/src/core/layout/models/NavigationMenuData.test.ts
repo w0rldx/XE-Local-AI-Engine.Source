@@ -217,7 +217,7 @@ describe("navigationLinks", () => {
 		]);
 	});
 
-	it("groups Image Generation, Development Mode, Workflow Runs and Transcription under the Preview group as a pure toggle", () => {
+	it("groups Image Generation, Development Mode and Transcription under the Preview group as a pure toggle", () => {
 		const preview = navigationLinks.find((link) => link.id === "preview");
 
 		// Preview is a group (no own route); the experimental surfaces are its children.
@@ -225,18 +225,8 @@ describe("navigationLinks", () => {
 		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.images,
 			nodeRoutePaths.development,
-			nodeRoutePaths.devWorkflows,
 			nodeRoutePaths.transcription,
 		]);
-	});
-
-	// The module is "Development Workflows" but the NAV entry says "Workflow Runs", because it sits directly under
-	// "Development" and two adjacent "Development…" entries are indistinguishable at a glance.
-	it("labels the Development Workflows child so it does not read as Development Mode's sibling", () => {
-		const preview = navigationLinks.find((link) => link.id === "preview");
-		const child = preview?.links?.find((nestedLink) => nestedLink.to === nodeRoutePaths.devWorkflows);
-
-		expect(child?.translationKey).toBe("navigation.devWorkflows");
 	});
 
 	it("drops the Image Generation child from Preview when the images capability is off", async () => {
@@ -245,22 +235,10 @@ describe("navigationLinks", () => {
 
 		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.development,
-			nodeRoutePaths.devWorkflows,
 			nodeRoutePaths.transcription,
 		]);
 		// It must not reappear as a top-level entry either.
 		expect(gatedLinks.some((link) => link.id === "images")).toBe(false);
-	});
-
-	it("drops the Workflow Runs child from Preview when the devWorkflows capability is off", async () => {
-		const { navigationLinks: gatedLinks } = await mockCapabilities({ devWorkflows: false });
-		const preview = gatedLinks.find((link) => link.id === "preview");
-
-		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
-			nodeRoutePaths.images,
-			nodeRoutePaths.development,
-			nodeRoutePaths.transcription,
-		]);
 	});
 
 	// Graph Workflows ships ON and is a TOP-LEVEL entry, not a Preview child: a later refactor must not push it back
@@ -324,7 +302,6 @@ describe("navigationLinks", () => {
 		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.images,
 			nodeRoutePaths.development,
-			nodeRoutePaths.devWorkflows,
 			nodeRoutePaths.transcription,
 		]);
 	});
@@ -333,7 +310,6 @@ describe("navigationLinks", () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({
 			images: false,
 			development: false,
-			devWorkflows: false,
 			transcription: false,
 		});
 

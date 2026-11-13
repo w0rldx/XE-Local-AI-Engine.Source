@@ -8,6 +8,7 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { GraphWorkflowDecisionModelResult } from "@/features/graphWorkflows/components/GraphWorkflowDecisionModelResult";
 import { GraphWorkflowDecisionPanel } from "@/features/graphWorkflows/components/GraphWorkflowDecisionPanel";
+import { GraphWorkflowDevTaskResult } from "@/features/graphWorkflows/components/GraphWorkflowDevTaskResult";
 import { GraphWorkflowNodeStatusBadge } from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
 import {
 	type GraphWorkflowDecisionKind,
@@ -77,7 +78,7 @@ function passThroughKey(kind: GraphWorkflowNodeKind): string | undefined {
  * The read-only pane for one node run: its header facts, the decision controls when the runtime is asking, and the
  * three documents (input, output, error) as pretty JSON.
  *
- * It owns its own query, the way `DevWorkflowNodePanel` does — the run payload carries the node ROWS but not their
+ * It owns its own query: the run payload carries the node ROWS but not their
  * documents, so the panel is the only thing that needs the detail read and the only thing that should pay for it.
  */
 export function GraphWorkflowNodePanel({ runId, nodeKey, runStatus, pauseConfig, onClose }: GraphWorkflowNodePanelProps) {
@@ -229,6 +230,9 @@ export function GraphWorkflowNodePanel({ runId, nodeKey, runStatus, pauseConfig,
 								</Text>
 							) : null}
 							{kind === "DecisionModel" ? <GraphWorkflowDecisionModelResult output={inner} /> : null}
+							{kind === "DevTask" ? (
+								<GraphWorkflowDevTaskResult output={nodeRun.output} input={nodeRun.input} attempt={nodeRun.attempt ?? 1} />
+							) : null}
 							{passThrough ? (
 								<Text size="xs" c="dimmed" data-testid="graph-workflow-node-panel-pass-through">
 									{passThrough === "passThrough"

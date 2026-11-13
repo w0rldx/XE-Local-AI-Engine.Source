@@ -31,6 +31,19 @@ public sealed class GraphWorkflowDesignerPromptTests
         }
     }
 
+    /// <summary>The designer can draw a DevTask only if it is told both actions, the project key a run needs, and the DEVTASK-1 shape an apply must sit in.</summary>
+    [Test]
+    [Arguments("`implement`")]
+    [Arguments("`apply`")]
+    [Arguments("`requirements` (required")]
+    [Arguments("`task` (required")]
+    [Arguments("run.input.developmentProjectId")]
+    [Arguments("Rule DEVTASK-1: every edge into")]
+    [Arguments("never in a Chat graph")]
+    [Arguments("for a DevTask `apply` node: it reads its task by key")]
+    public void StaticContract_DescribesTheDevTaskKindAndItsApplyRule(string expected) =>
+        AssertEx.Contains(GraphWorkflowDesignerPrompt.StaticContract, expected);
+
     /// <summary>The worked example teaches the model by imitation, so it must itself be a clean graph.</summary>
     [Test]
     public void StaticContract_ExampleGraph_ParsesWithoutAWarning()

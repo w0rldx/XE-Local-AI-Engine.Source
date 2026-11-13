@@ -165,8 +165,10 @@ function StartRunForm({
 				</Text>
 			) : null}
 
-			{conflict?.conflictType === graphWorkflowConflictTypes.runConflict ||
-			conflict?.conflictType === graphWorkflowConflictTypes.definitionConflict ? (
+			{/* Only a definition conflict is surely "saved again". A run conflict also carries the start refusals that
+			    are not about the version (a trigger source, Development Mode off for a DevTask graph), so it shows the
+			    server's own sentence below. */}
+			{conflict?.conflictType === graphWorkflowConflictTypes.definitionConflict ? (
 				<Alert color="yellow" variant="light" data-testid="graph-workflow-start-run-stale">
 					{t(
 						"pages.graphWorkflows.startRun.staleVersion",

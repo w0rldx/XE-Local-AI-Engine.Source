@@ -301,6 +301,24 @@ export const decisionModelConfigSchema = z
 		}
 	});
 
+/** `ParseDevTask`'s required members: `implement` needs its requirements, `apply` the implement node it lands. */
+const devTaskConfigSchema = z
+	.object({
+		action: z.string(),
+		requirements: z.string(),
+		task: z.string().nullable(),
+		inputBindings: llmCallConfigSchema.shape.inputBindings,
+	})
+	.superRefine((node, context) => {
+		if (node.action === "apply") {
+			if ((node.task ?? "").trim().length === 0) {
+				context.addIssue({ code: "custom", path: ["task"], message: messageKey("devTaskTask", "required") });
+			}
+		} else if (node.requirements.trim().length === 0) {
+			context.addIssue({ code: "custom", path: ["requirements"], message: messageKey("requirements", "required") });
+		}
+	});
+
 export const endConfigSchema = z.object({
 	outcome: z
 		.string()
@@ -342,6 +360,8 @@ function configSchemaFor(kind: GraphWorkflowNodeKind): ZodType | undefined {
 			return chatInputConfigSchema;
 		case "DecisionModel":
 			return decisionModelConfigSchema;
+		case "DevTask":
+			return devTaskConfigSchema;
 		default:
 			return undefined;
 	}

@@ -66,10 +66,6 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeWorkSessions(configuration);
         builder.AddNodeDevelopment(configuration, startupSettings);
 
-        // After both, for hosted-service START order — NOT because the dependency is one-way: a DevTask node run drives a
-        // Development task and vice versa, so Development's reconciler must terminalize its orphans before this dispatcher admits runs.
-        builder.AddNodeDevWorkflows(configuration, startupSettings);
-
         // Hosted-service START order: after chat restart recovery, so the coordinator never adopts an execution chat is repairing,
         // and BEFORE AddNodeGraphWorkflows, so its restart sweep cancels an abandoned execution's graph run before the dispatcher resumes a node.
         builder.AddNodeIntegrations(configuration);

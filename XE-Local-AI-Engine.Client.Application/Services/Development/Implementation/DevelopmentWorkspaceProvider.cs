@@ -404,7 +404,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         var git = new HostGitRunner(_options.MaxAttemptDurationSeconds);
         await CreateValidationTreeAsync(git, canonicalRepositoryRoot, validationPath, workspace.BaseCommit, workspace.ObjectFormat, cancellationToken);
 
-        var applied = await DevelopmentPatchOverlay.ApplyAsync(validationPath, patch, _options, refuseWhitespaceErrors: false, cancellationToken);
+        var applied = await DevelopmentPatchOverlay.ApplyAsync(validationPath, patch, _options, cancellationToken);
         EnsureGitSuccess(applied, "The task's patch did not apply to a fresh clone of its base commit.");
         await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(git, validationPath, cancellationToken);
         var secrets = await DetectCommittedSecretsAsync(git, validationPath, cancellationToken);

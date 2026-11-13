@@ -19,6 +19,13 @@ vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 	),
 }));
 
+const navigate = vi.hoisted(() => vi.fn());
+
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@tanstack/react-router")>()),
+	useNavigate: () => navigate,
+}));
+
 import { getGraphWorkflowNodeRunQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
 import { GraphWorkflowNodePanel } from "@/features/graphWorkflows/components/GraphWorkflowNodePanel";
 import type { GraphWorkflowNodeRunResponse } from "@/features/graphWorkflows/models/GraphWorkflowModels";
@@ -170,6 +177,47 @@ describe("GraphWorkflowNodePanel", () => {
 		await waitFor(() =>
 			expect(screen.getByTestId("graph-workflow-node-panel-tab-output").getAttribute("data-active")).toBe("true"),
 		);
+	});
+
+	describe("a DevTask node", () => {
+		const projectId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+		const taskId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+		function devTaskRun(overrides: Partial<GraphWorkflowNodeRunResponse>): GraphWorkflowNodeRunResponse {
+			return detail({
+				nodeKey: "impl",
+				kind: "DevTask",
+				status: "Succeeded",
+				attempt: 1,
+				input: { run: { input: { developmentProjectId: projectId }, previous: null }, upstream: {}, input: null },
+				output: {
+					status: "Succeeded",
+					attempt: 1,
+					output: { developmentTaskId: taskId, taskStatus: "AwaitingApply", reviewRound: 1 },
+				},
+				...overrides,
+			});
+		}
+
+		it("shows its Development task's stage and links to that task on the Development page", async () => {
+			navigate.mockClear();
+			nodeRoute("impl", devTaskRun({}));
+			renderPanel("impl", "WaitingForApproval");
+
+			expect((await screen.findByTestId("graph-workflow-node-panel-devtask-status")).textContent).toBe("Awaiting apply");
+			expect(screen.getByTestId("graph-workflow-node-panel-devtask-id").textContent).toBe(taskId);
+
+			fireEvent.click(screen.getByTestId("graph-workflow-node-panel-devtask-link"));
+			expect(navigate).toHaveBeenCalledWith({ to: "/development", search: { project: projectId, task: taskId } });
+		});
+
+		it("names no task while it is still working, nor one an earlier attempt left behind", async () => {
+			nodeRoute("impl", devTaskRun({ status: "Running", attempt: 2 }));
+			renderPanel("impl", "Running");
+
+			expect(await screen.findByTestId("graph-workflow-node-panel-devtask-pending")).toBeDefined();
+			expect(screen.queryByTestId("graph-workflow-node-panel-devtask-link")).toBeNull();
+		});
 	});
 
 	it("renders the load failure rather than an empty pane when the node cannot be read", async () => {

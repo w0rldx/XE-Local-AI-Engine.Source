@@ -15,22 +15,9 @@ internal readonly record struct WorkSessionToolGateVerdict(
     string AgentName,
     string? EffectiveModel,
     bool? SupportsTools,
-    bool IsAllowListed,
-    bool ModelIsCallerPinned = false)
+    bool IsAllowListed)
 {
     /// <summary>How a refusal names the model, which has to name the thing the operator would go and change.</summary>
-    /// <remarks>
-    ///     A caller pin — a development-workflow node's <c>modelProfile</c> — is not something the agent "runs on": the
-    ///     agent may be pinned to something else, and the agent's settings would be the wrong screen.
-    /// </remarks>
     public string Subject =>
-        ModelIsCallerPinned
-            ? $"This work session is pinned to '{EffectiveModel}'"
-            : $"'{AgentName}' runs on '{EffectiveModel}'";
-
-    /// <summary>Where the model that was refused can be changed, which follows from the same distinction.</summary>
-    public string Remedy =>
-        ModelIsCallerPinned
-            ? "pin a listed model instead"
-            : "pick an agent on a listed model";
+        $"'{AgentName}' runs on '{EffectiveModel}'";
 }

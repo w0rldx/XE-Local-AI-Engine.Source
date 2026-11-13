@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Runtime.Versioning;
 using TUnit.Core.Exceptions;
+using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -158,6 +159,46 @@ public sealed class DevelopmentSandboxToolchainTests : IDisposable
         }
 
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     A venv under <c>/tmp</c> whose <c>python3</c> links into a bound base interpreter stays reported: substituting the base would
+    ///     run Python without the venv's packages, and validation then failed with the generic install hint naming no tree.
+    /// </summary>
+    [Test]
+    public async Task Resolve_NeverSubstitutesARefusedVenv_SoTheUnreachableRunnerDetailNamesIt()
+    {
+        RequireLinux();
+
+        var baseBin = Executable(Path.Combine(_root, "python", "3.14.8", "bin"), "python3");
+        var temp = Path.Combine("/tmp", "xe-toolchain-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var venv = Directory.CreateDirectory(Path.Combine(temp, "venv", "bin")).Parent!.FullName;
+            File.CreateSymbolicLink(Path.Combine(venv, "bin", "python3"), Path.Combine(baseBin, "python3"));
+            await File.WriteAllTextAsync(Path.Combine(venv, "pyvenv.cfg"), $"home = {baseBin}\n");
+
+            var toolchain = DevelopmentSandboxToolchain.Resolve(["python3"], Path.Combine(venv, "bin"), Roots(Path.Combine(_root, "home"), Path.Combine(_root, "data")));
+
+            var skipped = AssertEx.NotNull(toolchain.SkippedTrees.SingleOrDefault(entry => string.Equals(entry.Tree, venv, StringComparison.Ordinal)),
+                "the refused venv is still reported once its interpreter links into a bound tree.");
+            AssertEx.Contains(skipped.Reason, "/tmp");
+            AssertEx.False(toolchain.SearchPath.Split(':').Contains(baseBin), toolchain.SearchPath);
+
+            var verdict = DevelopmentValidationVerdict.Evaluate(DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.PythonPytest, buildTarget: null),
+            [
+                new DevelopmentCommandEvidence(DevelopmentCommandIds.GitDiffCheck, 0, Completed: true, OutputTruncated: false, 1, string.Empty, string.Empty),
+                new DevelopmentCommandEvidence(DevelopmentCommandIds.PythonPytest, 127, Completed: true, OutputTruncated: false, 1, string.Empty, SandboxCommandResult.LaunchFailurePrefix + ".")
+            ],
+            toolchain.SkippedTrees);
+            var detail = AssertEx.NotNull(verdict.FailureDetail);
+            AssertEx.Contains(detail, "could not reach its runner behind the filesystem boundary");
+            AssertEx.Contains(detail, "it lies under a mount point the sandbox owns");
+        }
+        finally
+        {
+            Directory.Delete(temp, recursive: true);
+        }
     }
 
     /// <summary>

@@ -15,7 +15,6 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
-using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using static NodeChatStreamServiceTestSupport;
@@ -96,85 +95,6 @@ public sealed class NodeChatStreamServiceOrchestrationTests
         AssertEx.NotNull(runner.LastOrchestrationSpec);
         AssertEx.Equal(spec.TriageParticipantKey, runner.LastOrchestrationSpec!.TriageParticipantKey);
         AssertEx.Equal(expected: 2, runner.LastOrchestrationSpec.Participants.Count);
-    }
-
-    [Test]
-    public async Task SendMessageAsync_WhenOperatorToolsAreSuppressed_WithholdsThemFromEveryOrchestrationParticipant()
-    {
-        // Participants carry their own projected offer on the compiled spec, so the withdrawal has to reach it too. This
-        // send offers no local tools, which leaves the spec as the only path the assertion can be reading.
-        var conversationId = Guid.NewGuid();
-        var assistantMessageId = Guid.NewGuid();
-        var requestId = Guid.NewGuid();
-        var agentDefinitionId = Guid.NewGuid();
-        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { }, agentDefinitionId);
-        var dispatcher = new RecordingWorkerEventDispatcher();
-        var runner = new PackageCapturingInvocationRunner(dispatcher);
-
-        var store = Substitute.For<IAgentDefinitionStore>();
-        store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
-        var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
-        agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                               .Returns(new ResolvedAgentRuntime("Orchestrator persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 4,
-                                   agentDefinitionId, "Orchestrator", Kind: AgentDefinitionKind.Orchestrator));
-        var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
-        var spec = CreateSampleSpec();
-        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration
-                             {
-                                 Spec = spec,
-                                 ResolvedSystemPrompt = "Orchestrator prompt.",
-                                 ModelProfile = "qwen3:8b",
-                                 ReasoningEffort = null,
-                                 AgentDefinitionVersion = 4,
-                                 AnyParticipantNeedsCloudDataSwitch = false,
-                                 FirstUngrantedCloudParticipantModel = null
-                             }));
-
-        var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(agentDefinitionResolver, store, orchestrationResolver, CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance),
-            new NodeChatMutationGuard(persistence),
-            new LocalChatRuntimePackageBuilder(),
-            runner,
-            dispatcher,
-            Options.Create(new LocalChatAgentOptions()),
-            StubNodeRuntimeSettings.Create().Build(),
-            new NodeChatStreamCancellationRegistry(),
-            CreateOfferProvider(),
-            CreateDefaultAgentProvider(),
-            CreateNodeSettingsStore(),
-            CreateLocalDefaultChatModelResolver(),
-            CreateMemoryExtractionDispatcher(),
-            Substitute.For<IConversationMaintenanceDispatcher>(),
-            CreateTurnContextBuilder(),
-            Substitute.For<IConversationSandboxStager>(),
-            Options.Create(new ChatStreamBudgetOptions()),
-            TimeProvider.System,
-            new PermissiveToolApprovalPolicy(),
-            Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance,
-            new GpuWorkGate());
-
-        var drained = 0;
-        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
-                           "hello",
-                           MessageId: assistantMessageId,
-                           RequestId: requestId,
-                           SuppressOperatorTools: true)))
-        {
-            drained++;
-        }
-
-        AssertEx.True(drained > 0, "Expected the send to stream events.");
-        var withdrawn = AssertEx.NotNull(runner.LastOrchestrationSpec);
-        AssertEx.Equal(expected: 2, withdrawn.Participants.Count, "The withdrawal rewrites the tools and nothing else.");
-        AssertEx.False(withdrawn.Participants.Any(participant => participant.Tools.Any(tool => tool.Name == AskUserTool.ToolName)),
-            "No participant may reach the runner still able to park on a question.");
-        AssertEx.False(withdrawn.Participants.Any(participant => participant.Tools.Any(tool => WebAccessToolCatalog.IsWebTool(tool.Name))),
-            "No participant may reach the runner still able to park on a web review.");
-        AssertEx.Contains(withdrawn.Participants.Single(participant => participant.Key == "b").Tools, tool => tool.Name == "Calculate");
-        AssertEx.Contains(spec.Participants, participant => participant.Tools.Any(tool => tool.Name == AskUserTool.ToolName));
     }
 
     [Test]

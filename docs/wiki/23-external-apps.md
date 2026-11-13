@@ -13,6 +13,9 @@ authoring a catalog entry. **Skip to** [§5](#5-security-posture) for the securi
 [§6](#6-lifecycle-and-restore-semantics) for lifecycle; the **manifest** is in [§4](#4-the-manifest); **related
 pages:** [API & Hubs](09-api-and-hubs.md), [Security & Privacy](12-security-and-privacy.md).
 
+**Tier: experimental, frozen.** External Apps and the container bridge take bug fixes only, carry no 1.0 stability or
+API promise and may change or be cut ([feature tiers](../user-guide/docs/for-experienced-users.md#feature-tiers)).
+
 ## Contents
 
 - [1. What it is, and what it is not](#1-what-it-is-and-what-it-is-not)

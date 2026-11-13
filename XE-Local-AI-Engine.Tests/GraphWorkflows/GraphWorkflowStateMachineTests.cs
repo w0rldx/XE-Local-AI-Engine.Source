@@ -670,9 +670,8 @@ public sealed class GraphWorkflowStateMachineTests
     }
 
     /// <summary>
-    ///     Retry in place is the ONE edge out of a terminal status. The Dev Workflow module's other three belong to a
-    ///     cross-node fix loop this runtime does not have, so a Succeeded, Skipped or Cancelled row here is an answer
-    ///     nothing will ask again.
+    ///     Retry in place is the ONE edge out of a terminal status: this runtime has no cross-node fix loop, so a
+    ///     Succeeded, Skipped or Cancelled row here is an answer nothing will ask again.
     /// </summary>
     [Test]
     public void IsLegal_ForANodeRun_PermitsFailedToPendingAndNoOtherTerminalExit()

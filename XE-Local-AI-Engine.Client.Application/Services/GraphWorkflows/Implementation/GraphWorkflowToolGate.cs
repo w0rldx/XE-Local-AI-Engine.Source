@@ -49,14 +49,29 @@ internal static class GraphWorkflowToolGate
     }
 
     /// <summary>
-    ///     Whether <paramref name="node" /> is a <c>Tool</c> node whose tool returns node-local data: the set the chat
-    ///     local-data gate withholds from a cloud model (<see cref="LocalToolOfferProvider.LocalDataToolNames" />).
+    ///     Whether <paramref name="node" />'s output carries node-local data: a <c>Tool</c> node whose tool is in the chat
+    ///     local-data set (<see cref="LocalToolOfferProvider.LocalDataToolNames" />), or an Agent node with <c>repository</c>.
     /// </summary>
     public static bool ReadsLocalData(GraphWorkflowGraphNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
 
-        return node.Config is GraphWorkflowToolConfig config && LocalToolOfferProvider.LocalDataToolNames.Contains(config.ToolName);
+        return node.Config switch
+        {
+            GraphWorkflowToolConfig config => LocalToolOfferProvider.LocalDataToolNames.Contains(config.ToolName),
+            GraphWorkflowAgentConfig { Repository: true } => true,
+            _ => false
+        };
+    }
+
+    /// <summary>How a refusal or warning names a <see cref="ReadsLocalData" /> source: the node and its tool, or its repository option.</summary>
+    public static string LocalDataLabel(GraphWorkflowGraphNode source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        return source.Config is GraphWorkflowToolConfig config
+            ? $"Tool node '{source.NodeKey}' ('{config.ToolName}')"
+            : $"Agent node '{source.NodeKey}' ('repository')";
     }
 
     /// <summary>The first DIRECT predecessor, in node-key order, that fed <paramref name="inputJson" /> node-local data, or <see langword="null" />.</summary>

@@ -6,8 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>What an inbound edge says about whether its target may proceed.</summary>
 /// <remarks>
-///     There is deliberately no <c>Waived</c> member. Dev Workflows has one to tell an operator's <c>Skip</c>
-///     decision from a cascade off something dead; here the decision kinds are <c>Approve</c> and <c>Reject</c> only,
+///     There is deliberately no <c>Waived</c> member: the decision kinds are <c>Approve</c> and <c>Reject</c> only,
 ///     so nothing can produce a waiver and the machinery would be unreachable. Re-add the concept with the first
 ///     decision kind that produces one.
 /// </remarks>
@@ -142,8 +141,7 @@ internal static class GraphWorkflowStateMachine
     ///     Every terminal status but <c>Succeeded</c> kills the out-edge: none of them produced the output a condition
     ///     would read, and treating "no output" as a passing condition is how a run routes on evidence it never had.
     ///     So does a <c>Succeeded</c> source whose condition did not fire — the branch not taken. The graph is not a
-    ///     parameter, unlike the Dev Workflow original: the waiver rule is what needed to walk back through it, and
-    ///     there is no waiver here.
+    ///     parameter: only a waiver rule would walk back through it, and there is no waiver here.
     /// </remarks>
     public static GraphWorkflowEdgeState EdgeState(GraphWorkflowGraphEdge edge, IReadOnlyDictionary<string, GraphWorkflowNodeRunSnapshot> nodeRunsByKey)
     {

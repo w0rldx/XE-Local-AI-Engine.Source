@@ -58,6 +58,65 @@ public sealed partial class GraphWorkflowStore
             // The stamp moves no run state, so no run-level write needs to lose a race to it: it takes a watermark, not a version.
             bumpVersion: false);
 
+    public Task<GraphWorkflowConditionalWriteResult> SetNodeRunDevelopmentTaskAsync(Guid runId,
+        Guid nodeRunId,
+        Guid developmentTaskId,
+        CancellationToken cancellationToken = default) =>
+        ExecuteConditionalMutationAsync(runId,
+            GraphWorkflowVersions.Any,
+            async run =>
+            {
+                if (run.Status is not (GraphWorkflowRunStatus.Running or GraphWorkflowRunStatus.WaitingForApproval))
+                {
+                    return MutationOutcome.Decline(GraphWorkflowWriteDecline.RunNotActive);
+                }
+
+                // Set once: a row already pointing at another task keeps it, or a restart would orphan the task it started.
+                var nodeRun = await _dbContext.GraphWorkflowNodeRuns
+                                              .SingleOrDefaultAsync(entity => entity.Id == nodeRunId
+                                                                              && entity.RunId == run.Id
+                                                                              && (entity.Status == GraphWorkflowNodeRunStatus.Queued
+                                                                                  || entity.Status == GraphWorkflowNodeRunStatus.Running)
+                                                                              && (entity.DevelopmentTaskId == null || entity.DevelopmentTaskId == developmentTaskId),
+                                                  cancellationToken);
+                if (nodeRun is null)
+                {
+                    return MutationOutcome.Decline(GraphWorkflowWriteDecline.NodeRunNotEligible);
+                }
+
+                nodeRun.DevelopmentTaskId = developmentTaskId;
+                nodeRun.UpdatedAtUtc = Now();
+                return new MutationOutcome
+                {
+                    EventType = null,
+                    NodeKey = nodeRun.NodeKey,
+                    DetailJson = null
+                };
+            },
+            cancellationToken,
+            bumpVersion: false);
+
+    public async Task<IReadOnlyList<GraphWorkflowDevelopmentTaskRun>> ListDevelopmentTaskRunsAsync(IReadOnlyList<Guid> developmentTaskIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(developmentTaskIds);
+        if (developmentTaskIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await (from nodeRun in _dbContext.GraphWorkflowNodeRuns.AsNoTracking()
+                          join run in _dbContext.GraphWorkflowRuns.AsNoTracking() on nodeRun.RunId equals run.Id
+                          where nodeRun.DevelopmentTaskId != null && developmentTaskIds.Contains(nodeRun.DevelopmentTaskId.Value)
+                          orderby run.CreatedAtUtc descending, run.Id descending
+                          select new GraphWorkflowDevelopmentTaskRun
+                          {
+                              DevelopmentTaskId = nodeRun.DevelopmentTaskId!.Value,
+                              RunId = run.Id,
+                              RunStatus = run.Status
+                          }).ToListAsync(cancellationToken);
+    }
+
     public Task<GraphWorkflowConditionalWriteResult> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);

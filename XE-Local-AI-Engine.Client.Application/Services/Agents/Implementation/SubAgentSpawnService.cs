@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Mcp;
@@ -645,6 +646,9 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         AttachSkillsProvider(agentOptions, binding.Skills, _logger);
 
         var agent = new ChatClientAgent(_chatClient, agentOptions, _loggerFactory);
+
+        // A child never inherits the parent's repository scope: its own model passed no repository gate (graph Agent node 'repository').
+        using var noRepository = CoderRepositoryScope.Begin(null);
 
         // BeginChildScope pushes Depth+1 WITHOUT re-seeding a root, then restores the parent.
         using (context.BeginChildScope())

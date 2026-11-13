@@ -20,21 +20,6 @@ internal static class WorkSessionStateBlockComposer
     /// <summary>The prefix the frontend collapses these synthetic user turns by. Do not change it without changing that.</summary>
     public const string BlockPrefix = "[work session state";
 
-    /// <summary>Appended for <see cref="AgentWorkSessionKind.Workflow" /> sessions; see the call site for why.</summary>
-    /// <remarks>
-    ///     The stuck sentence names the two signals <c>DevWorkflowAgentExecutor</c> READS out of a completed session
-    ///     before it decides the node run's fate — a task left <c>Blocked</c>, and <c>objectiveMet:false</c> on the
-    ///     completion — either of which blocks the row for a human rather than reporting a success nobody had. It is
-    ///     the wording of a contract the executor enforces, so both signals must stay named here.
-    /// </remarks>
-    private const string WorkflowOwnedFooter =
-        " This session is driven by a development-workflow node and has no operator attached: ask_user is not available"
-        + " and nothing you ask will be answered. Decide and carry on yourself. If you are genuinely stuck, mark the task"
-        + " Blocked with the reason, record a finding that says the objective was NOT met and why, and call"
-        + " complete_work_session with objectiveMet false and that reason in the summary. Do not claim success in the"
-        + " completion summary. A task you marked Blocked and later worked past must be moved to Done or Dropped before"
-        + " you complete: a task left Blocked stands this step down for a human.";
-
     private const int MaxOpenTasks = 20;
     private const int MaxFindings = 15;
     private const int MaxFindingCharacters = 400;
@@ -119,15 +104,8 @@ internal static class WorkSessionStateBlockComposer
             _ = body.Append(CultureInfo.InvariantCulture, $"Last checkpoint (step {checkpoint.Step}): {summary}\n");
         }
 
-        var footer = "\nContinue the objective. Record what you learn with record_finding, keep the plan current with "
-                     + "update_work_plan, and call complete_work_session when the objective is met.";
-
-        // The send withdraws ask_user here (NodeChatStreamRequest.SuppressOperatorTools) while the seeded personas' saved
-        // instructions still point at it, so say so — otherwise the model loops on it until the provider-call cap.
-        if (state.Session.Kind == AgentWorkSessionKind.Workflow)
-        {
-            footer += WorkflowOwnedFooter;
-        }
+        const string footer = "\nContinue the objective. Record what you learn with record_finding, keep the plan current with "
+                              + "update_work_plan, and call complete_work_session when the objective is met.";
 
         return header + UntrustedContentFraming.WrapDocument(body.ToString(), []) + footer;
     }

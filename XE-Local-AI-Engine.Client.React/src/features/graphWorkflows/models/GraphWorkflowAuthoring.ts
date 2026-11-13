@@ -72,6 +72,18 @@ export function defaultNodeData(kind: GraphWorkflowNodeKind, key: string): Graph
 				model: null,
 				inputBindings: [],
 			};
+		case "DevTask":
+			return {
+				...base,
+				kind,
+				action: "implement",
+				title: "",
+				requirements: "",
+				acceptanceCriteria: [],
+				instructions: "",
+				inputBindings: [],
+				task: null,
+			};
 		// `default` IS the End case — see `nodeDataFromWire` in `GraphWorkflowCanvasConversion`.
 		default:
 			return { ...base, kind, outcome: "completed", resultPath: null };
@@ -121,7 +133,13 @@ export function renameNodeKey(
 	if (to !== from && (nodes.some((node) => node.id === to) || edges.some((edge) => edge.id === to))) {
 		return { error: "collision" };
 	}
-	const renamedNodes = nodes.map((node) => (node.id === from ? { ...node, id: to, data: { ...node.data, key: to } } : node));
+	const renamedNodes = nodes.map((node) => {
+		const renamed = node.id === from ? { ...node, id: to, data: { ...node.data, key: to } } : node;
+		// An `apply` node names its `implement` node by key, so that reference follows the rename like an edge endpoint.
+		return renamed.data.kind === "DevTask" && renamed.data.task === from
+			? { ...renamed, data: { ...renamed.data, task: to } }
+			: renamed;
+	});
 	// Endpoints only. An edge condition is never rewritten: a Pause out-edge's `condition.value` is a DECISION name, so
 	// following a rename into it could only corrupt the routing of a node someone happened to key `Approve`.
 	const renamedEdges = edges.map((edge) => ({

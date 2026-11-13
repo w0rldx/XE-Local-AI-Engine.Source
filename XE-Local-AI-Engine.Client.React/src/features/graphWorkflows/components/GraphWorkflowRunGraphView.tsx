@@ -2,6 +2,7 @@ import { Alert, Badge, Group, Stack, Text } from "@mantine/core";
 import {
 	IconArrowsJoin2,
 	IconArrowsSplit2,
+	IconCode,
 	IconFlag,
 	IconGitBranch,
 	IconMessageQuestion,
@@ -52,6 +53,7 @@ const kindIcons: Record<GraphWorkflowNodeKind, typeof IconRobot> = {
 	End: IconFlag,
 	ChatInput: IconMessageQuestion,
 	DecisionModel: IconRoute,
+	DevTask: IconCode,
 };
 
 /**

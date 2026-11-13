@@ -5,6 +5,9 @@ containers on your computer. **Today the catalog is empty**, so there is nothing
 what the feature is, what you will see, and how installing, updating and removing will work once applications are
 offered.
 
+External Apps and the container bridge are **experimental and frozen**: bug fixes only, no 1.0 stability promise,
+and they may change or be cut. [Feature tiers](for-experienced-users.md#feature-tiers)
+
 ---
 
 ## What it is

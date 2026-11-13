@@ -20,7 +20,7 @@ public sealed class CreateTranscriptionSessionRequestValidator : Validator<Creat
     public CreateTranscriptionSessionRequestValidator()
     {
         // Matched against the NAMES: Enum.TryParse also parses the underlying numbers, so "99" would pass both this rule and the service's and be stored as an ordinal no
-        // member has, surfacing on the wire for a client that has no case for it. Same rule as DevWorkflowTokenRules.IsNamed, kept local so two feature folders stay apart.
+        // member has, surfacing on the wire for a client that has no case for it.
         RuleFor(static request => request.SourceKind)
             .Must(static sourceKind => string.IsNullOrWhiteSpace(sourceKind)
                                        || Enum.GetNames<TranscriptionSourceKind>().Contains(sourceKind.Trim(), StringComparer.OrdinalIgnoreCase))

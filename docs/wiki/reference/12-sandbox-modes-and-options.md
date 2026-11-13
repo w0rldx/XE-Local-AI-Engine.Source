@@ -228,15 +228,10 @@ two sandboxes, not one sandbox with two postures.
    failed deterministic gate costs one exactly as a reviewer rejection does, and a task that exhausts it is stood
    down at `Blocked` rather than reworked again.
 
-   **A task's round budget is immutable except that an operator's Retry widens it by one.** That is the single
-   edge out of `Blocked`, and `DevelopmentStore.TransitionTaskAsync` refuses it to any command that does not also
-   widen the cap, so a task cannot be let out of `Blocked` into a round it has no budget to finish. Only
-   `DevWorkflowDevTaskExecutor.CarryOperatorRetryAsync` sets it, once per node-run attempt under the retry's own
-   operation id, and only for a task whose block IS the round cap — a task blocked on anything a round cannot fix
-   is left where it is. Before this, a Retry on a workflow node blocked at the cap re-dispatched the node, which
-   re-read a task still at its cap and stood itself down about two seconds later, spending one of the node's own
-   attempts each time and never starting a coder round, so the reason typed into the retry box could not reach a
-   model.
+   **A task's round budget is immutable.** The one edge out of `Blocked` is `Blocked → InProgress`, and
+   `DevelopmentStore.TransitionTaskAsync` takes it only for `RetryValidation` (a missing runner, below), so a task
+   stood down at its round cap is not continued: the operator starts a new run, which creates a new task (ADR 0023
+   decision 7).
 
    **Known ceilings of the rework surface**, recorded so they are not re-discovered as bugs:
    an operator instruction on a task **no workflow ever drove** has no `WorkflowPolicyApplied` row to bound it and
@@ -486,15 +481,14 @@ like part of the base; and skip-worktree or assume-unchanged bits that survived 
   `IDevelopmentWorkspaceProvider.PrepareValidationAsync` deletes and rebuilds `<runtime>/validation` for every run:
   the tree in `tree/` (`git init` in the checkout's object format, a depth-1 fetch of the base commit by id from the
   checkout's path, so a base branch that has moved since does not matter and no remote is recorded, a detached
-  checkout, then the stored patch through `DevelopmentPatchOverlay.ApplyAsync`, the same apply the Dev Workflows
-  overlay uses), and empty `home/`, `tmp/` and `dotnet/` beside it for `HOME`, `TMPDIR` and `DOTNET_CLI_HOME`. With
+  checkout, then the stored patch through `DevelopmentPatchOverlay.ApplyAsync`), and empty `home/`, `tmp/` and `dotnet/` beside it for `HOME`, `TMPDIR` and `DOTNET_CLI_HOME`. With
   the coder's `HOME`, a planted `.gitconfig` relaxing `core.whitespace` passed trailing spaces through the profile's
   `git diff --check`, and an MSBuild user import under `.local/share/Microsoft/MSBuild/Current/Imports/` ran in
   every validation build. The runner kills the coder's sandbox before it resolves the patch, so a process left
   running there cannot write meanwhile. The commands run in a sandbox of its own (runtime profile
   `development-validation`, a fresh attach key per run, the agent-facing ceilings and egress posture), killed
   afterwards, also when a command throws. Validation applies the patch as is (`--whitespace=nowarn`) so the profile's
-  own `git diff --check` reports whitespace to the coder; the Dev Workflows overlay refuses such a patch.
+  own `git diff --check` reports whitespace to the coder.
 - **The reviewer's read-only tools read the same kind of tree**, rebuilt for the review with its own sandbox, so a
   file the coder left ignored in its worktree is not there to read. The subject-hash check before and after the
   review still runs against the coder's worktree.
@@ -555,7 +549,9 @@ rather than binding `~/.local`. Where an executable found in that entry links in
 to `~/.dotnet`, uv's default `python3`), the PATH carries that real directory at the entry's position instead, so it
 still shadows later entries as on the host, but only when that directory finds the executable by its own name as the
 same binary (a `python3` link into a directory holding only `python3.12` is not substituted, and stays reported
-unreachable).
+unreachable). A refused virtual environment (a `pyvenv.cfg` in the entry's prefix) is never substituted: its base
+interpreter would run without the venv's packages, so a refused venv stays reported unreachable and the
+`runner_not_installed` detail names it.
 
 A toolchain tree must pass the descriptor opener's read-only rule: owned by the engine's user or by root, and not
 group- or world-writable, the same for every ancestor, so a root-owned `/opt/dotnet` or `/snap/bin` is bound like
@@ -611,7 +607,9 @@ fresh restore on a missing local source (`NU1301`) unless the repository sets `R
 > **`HOME` is the per-task directory, so a `pip install --user` pytest is invisible.** Python's user site lives under
 > `~/.local`, which inside a Development command is the empty per-task `HOME`. Install pytest where the host `python3`
 > on the node's `PATH` finds it without the user site: the distribution's package, or a virtual environment whose
-> `python3` comes first on that `PATH`.
+> `python3` comes first on that `PATH`. Behind the filesystem boundary that venv must not live under `/tmp` (the
+> chain owns it) or a protected folder, and must not be group- or world-writable: a refused venv is reported
+> unreachable, and the bare base interpreter, without pytest, is what would run.
 
 **A missing runner stops the task after one validation.** `DevelopmentValidationVerdict` reports `runner_not_installed`
 when a code-owned adapter says its runner is missing (pytest's bootstrap `ModuleNotFoundError`) or when any validation
@@ -625,10 +623,10 @@ line (`bwrap: execvp dotnet: No such file or directory`, or `setsid`'s, `env`'s,
 could not be established reports it too, so one rule covers every host. A command the engine never started (the
 boundary could not be established, or the executable could not be started at all) keeps that evidence without the
 workspace invariant probes, which would fail through the same boundary and throw first
-(`DevelopmentWorkspaceTools.NeverStarted`); the wrapper-rewritten form still runs them, since its line came from a child. In Development Mode the blocked task stays
-blocked; under Dev Workflows an operator `Retry` after installing the runner moves it back to `InProgress`
-(`RetryValidation`), so the same succeeded coder attempt is validated again with no round charged and no cap widened
-(wiki 25, "Operator retry reasons").
+(`DevelopmentWorkspaceTools.NeverStarted`); the wrapper-rewritten form still runs them, since its line came from a child. In Development Mode, after installing the runner, the page's
+"Retry validation" next action moves it back to `InProgress` (`RetryValidation`) once no workflow run driving the task
+is live (ADR 0023 decision 7), so the same succeeded coder attempt is validated again with no round charged and no cap
+widened.
 
 ### The test-write policy's protected-path set
 

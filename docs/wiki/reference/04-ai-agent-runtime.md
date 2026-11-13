@@ -551,9 +551,7 @@ is deliberately coarse: it groups tools by what a call can **do**, not by which 
 | `Network` | Tools reaching an external or out-of-process surface, including every **HTTP** MCP tool |
 | `Unknown` | The fail-closed default for a tool that declared no category, so a new uncategorized tool is treated as approval-requiring rather than silently auto-executing |
 
-The four work-session state tools carry `WriteExecute` in the categorized offer, which is what `GRAPH-2`'s
-runtime half judges a workflow Agent node on — it excludes those four by name, because every agent node is
-offered them. The one write/execute gateway that is **not** in the taxonomy, `run_in_agent_home`, sits on the
+The four work-session state tools carry `WriteExecute` in the categorized offer. The one write/execute gateway that is **not** in the taxonomy, `run_in_agent_home`, sits on the
 ClientLocal registry seam rather than the offer and is floored by that registry's `ApprovalRequiredAIFunction`
 pre-wrap instead of by a category.
 

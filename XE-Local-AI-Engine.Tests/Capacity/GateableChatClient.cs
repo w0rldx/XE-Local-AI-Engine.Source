@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Capacity;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
@@ -61,6 +62,9 @@ internal sealed class GateableChatClient : IChatClient
     /// <summary>The ambient provider-call budget in force during the last run, or <see langword="null" /> when the run had no budget scope.</summary>
     public ProviderCallBudget? LastProviderBudget { get; private set; }
 
+    /// <summary>The repository root the coder read tools would serve during the last run, or <see langword="null" /> for the AgentHome workspace.</summary>
+    public string? LastRepositoryRoot { get; private set; }
+
     /// <summary>The system instructions the inner agent passed on the last run (read from <c>ChatOptions.Instructions</c>).</summary>
     public string? LastInstructions { get; private set; }
 
@@ -104,6 +108,7 @@ internal sealed class GateableChatClient : IChatClient
         // place a test can see whether the child's own send was actually covered by one.
         LastBindingPin = ExternalProviderBindingPinScope.Find(options?.ModelId);
         LastProviderBudget = ProviderCallBudget.Current;
+        LastRepositoryRoot = CoderRepositoryScope.Root;
         LastModelId = options?.ModelId;
         LastInstructions = options?.Instructions;
         LastAdditionalProperties = options?.AdditionalProperties;

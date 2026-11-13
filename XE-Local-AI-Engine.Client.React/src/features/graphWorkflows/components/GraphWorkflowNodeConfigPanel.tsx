@@ -24,6 +24,7 @@ import {
 } from "@/features/graphWorkflows/components/config/GraphWorkflowAgentConfigForm";
 import { GraphWorkflowChatSwitches } from "@/features/graphWorkflows/components/config/GraphWorkflowChatSwitches";
 import { GraphWorkflowDecisionModelConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowDecisionModelConfigForm";
+import { GraphWorkflowDevTaskConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowDevTaskConfigForm";
 import { GraphWorkflowLlmCallConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowLlmCallConfigForm";
 import {
 	GraphWorkflowChatInputConfigForm,
@@ -69,6 +70,8 @@ export interface GraphWorkflowNodeConfigPanelProps {
 	readonly decisionModelOptionsReady?: boolean;
 	/** The graph's `kind` and `chat` block: they decide which chat switches apply and what End publishes by default. */
 	readonly graphSettings?: GraphWorkflowGraphSettings;
+	/** Every node of the graph, for a DevTask `apply` node's implement-node picker. */
+	readonly graphNodes?: readonly GraphWorkflowCanvasNodeData[];
 	readonly readOnly?: boolean;
 	/** Opens the Assistant tab about this node. Absent where there is no assistant, such as the run view. */
 	readonly onAskAssistant?: () => void;
@@ -89,6 +92,7 @@ export function GraphWorkflowNodeConfigPanel({
 	llmModelOptionsReady = true,
 	decisionModelOptionsReady = true,
 	graphSettings = standardGraphSettings,
+	graphNodes = [],
 	readOnly = false,
 	onAskAssistant,
 }: GraphWorkflowNodeConfigPanelProps) {
@@ -233,6 +237,17 @@ export function GraphWorkflowNodeConfigPanel({
 						decisionModelOptions={decisionModelOptions}
 						modelOptionsReady={llmModelOptionsReady}
 						decisionModelOptionsReady={decisionModelOptionsReady}
+						readOnly={readOnly}
+					/>
+				);
+			case "DevTask":
+				return (
+					<GraphWorkflowDevTaskConfigForm
+						node={node}
+						onChange={onChange}
+						errorFor={errorFor}
+						onTouch={touch}
+						graphNodes={graphNodes}
 						readOnly={readOnly}
 					/>
 				);

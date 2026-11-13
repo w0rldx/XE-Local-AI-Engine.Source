@@ -1080,22 +1080,26 @@ await_cancel_history_line "$n"
 # --- a lane that had already finished CONTAMINATED outranks the cancellation status ---
 # NO_BUILD_LOCK=1 so the gate itself is the process we signal: through the wrapper, a group signal
 # kills that trapless foreground process first and we would read ITS 143, never the gate's verdict.
-# The batched lane exits 75 immediately (it does no work at all), so its result is on disk well
-# before the two sibling lanes have finished registering, which is what this case waits for.
+# The batched lane exits 75 immediately (it does no work at all). Under load its result file can
+# land after the sibling lanes register, so this case waits for both: the gate's TMPDIR is pinned
+# so the lane result directory it makes with mktemp is visible here.
 write_solution "${ALL_PROJECTS[@]}"
 : >"$PIDS_FILE"
 : >"$TMP/promote.log"
+PROMOTE_TMP="$TMP/promote-tmp"
+mkdir -p "$PROMOTE_TMP"
 set -m
 FAKE_LOG="$TMP/promote.log" FAKE_PIDS="$PIDS_FILE" FAKE_SLEEP=120 FAKE_RUNNER_EXIT=75 \
-  NO_BUILD=1 NO_BUILD_LOCK=1 XE_GATE_CANCEL_GRACE=2 \
+  NO_BUILD=1 NO_BUILD_LOCK=1 XE_GATE_CANCEL_GRACE=2 TMPDIR="$PROMOTE_TMP" \
   "$FAKE/scripts/run-backend-tests.sh" >"$TMP/promote.out" 2>&1 &
 PUBLIC=$!
 set +m
 
 deadline=$((SECONDS + 60))
-while [[ "$(wc -l <"$PIDS_FILE")" -lt 4 ]]; do
+while [[ "$(wc -l <"$PIDS_FILE")" -lt 4 ]] \
+  || ! grep -qsE '^[^ ]+ [^ ]+ 75 ' "$PROMOTE_TMP"/*/*.result; do
   if (( SECONDS > deadline )); then
-    echo "sibling lanes never started: $(cat "$PIDS_FILE")" >&2
+    echo "sibling lanes or the contaminated lane result never appeared: $(cat "$PIDS_FILE")" >&2
     cancel_case_cleanup
     exit 1
   fi

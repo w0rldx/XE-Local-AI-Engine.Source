@@ -208,24 +208,24 @@ public sealed class McpAgentDeleteResponse
 }
 
 /// <summary>
-///     One development-workflow run as an observing agent sees it: lifecycle metadata and node tallies, nothing else.
+///     One Graph workflow run as an observing agent sees it: lifecycle metadata, nothing else.
 /// </summary>
 /// <remarks>
-///     The pinned graph, artifact bytes, work-session transcripts and every host path stay on the REST surface a
-///     browser operator uses: an MCP client is told how a run is going, not handed its contents.
+///     The pinned graph, node inputs and outputs, transcripts and every host path stay on the REST surface a browser
+///     operator uses: an MCP client is told how a run is going, not handed its contents.
 /// </remarks>
 public record McpWorkflowRunSummary(
     string RunId,
-    string WorkItemId,
+    string DefinitionId,
     string? DefinitionName,
     string Status,
-    int QueuedNodeCount,
-    int RunningNodeCount,
-    int CompletedNodeCount,
-    int TotalNodeCount,
-    int PendingDecisionCount);
+    string? FailureClass,
+    string TriggerSource,
+    long CreatedAtUtc,
+    long? StartedAtUtc,
+    long? CompletedAtUtc);
 
-/// <summary>Bounded run listing: one row per work item's latest run, matching the one existing REST list surface.</summary>
+/// <summary>Bounded run listing, newest first.</summary>
 public sealed class McpWorkflowRunListResponse
 {
     public required string Status { get; init; }
@@ -243,7 +243,7 @@ public sealed class McpWorkflowRunListResponse
     public string? DisplayMessage { get; init; }
 }
 
-/// <summary>One node run, reduced to the five fields that answer where a run stands and how hard a node tried.</summary>
+/// <summary>One node run, reduced to the four fields that answer where a run stands and how hard a node tried.</summary>
 public sealed class McpWorkflowNodeRunSummary
 {
     public required string NodeKey { get; init; }
@@ -253,41 +253,40 @@ public sealed class McpWorkflowNodeRunSummary
     public required string Status { get; init; }
 
     public required int Attempt { get; init; }
-
-    public required int MaxAttempts { get; init; }
 }
 
 /// <summary>
-///     A single run's observation: the list row's own fields, why it ended if it has, and its node rows, FLAT, so a
-///     caller reads <c>run.status</c> rather than <c>run.run.status</c>.
+///     A single run's observation: the list row's own fields, its node tallies and its node rows, FLAT, so a caller
+///     reads <c>run.status</c> rather than <c>run.run.status</c>.
 /// </summary>
 /// <remarks>
 ///     It extends the summary rather than embedding one, which keeps the field set a caller sees here identical to the
-///     one the listing returns.
+///     one the listing returns. Pending counts <c>Pending</c> and <c>Queued</c> node runs.
 /// </remarks>
 public sealed record McpWorkflowRunDetail(
     string RunId,
-    string WorkItemId,
+    string DefinitionId,
     string? DefinitionName,
     string Status,
-    int QueuedNodeCount,
+    string? FailureClass,
+    string TriggerSource,
+    long CreatedAtUtc,
+    long? StartedAtUtc,
+    long? CompletedAtUtc,
+    int PendingNodeCount,
     int RunningNodeCount,
     int CompletedNodeCount,
     int TotalNodeCount,
     int PendingDecisionCount,
-    string? FailureClass,
-    string? TerminalReason,
-    long? StartedAtUtc,
-    long? EndedAtUtc,
     IReadOnlyList<McpWorkflowNodeRunSummary> Nodes) : McpWorkflowRunSummary(RunId,
-    WorkItemId,
+    DefinitionId,
     DefinitionName,
     Status,
-    QueuedNodeCount,
-    RunningNodeCount,
-    CompletedNodeCount,
-    TotalNodeCount,
-    PendingDecisionCount);
+    FailureClass,
+    TriggerSource,
+    CreatedAtUtc,
+    StartedAtUtc,
+    CompletedAtUtc);
 
 public sealed class McpWorkflowRunGetResponse
 {
@@ -475,7 +474,6 @@ internal static class McpAdminWireNames
             NodeSettingsField.PlaybookEvalModelName => "playbook_eval_model_name",
             NodeSettingsField.MemoryExtractionModelName => "memory_extraction_model_name",
             NodeSettingsField.WorkSessionsEnabled => "work_sessions_enabled",
-            NodeSettingsField.DevWorkflowsEnabled => "dev_workflows_enabled",
             NodeSettingsField.AgentHomeEnabled => "agent_home_enabled",
             NodeSettingsField.HuggingFaceDefaultQuant => "hugging_face_default_quant",
             NodeSettingsField.RerankerModelName => "reranker_model_name",

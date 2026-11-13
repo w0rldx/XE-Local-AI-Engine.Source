@@ -19,7 +19,7 @@ internal static class AddNodeGraphWorkflowsExtensions
     ///     Registers the graph-workflow configuration, store, definition service and dispatcher.
     /// </summary>
     /// <remarks>
-    ///     As with development workflows, <c>Enabled=false</c> does <em>not</em> skip registration: a disabled node has
+    ///     As with work sessions, <c>Enabled=false</c> does <em>not</em> skip registration: a disabled node has
     ///     to answer legibly rather than 500 out of an empty container, so the switch is enforced by the request-path
     ///     gate in <c>Program</c> and by the runtime. The options binding is what every registration here resolves.
     /// </remarks>
@@ -100,6 +100,10 @@ internal static class AddNodeGraphWorkflowsExtensions
         // The Tool lane, on a bounded in-flight lane of its own. Registration order carries no meaning — the
         // dispatcher asks each executor which kind it owns, and exactly one owns any kind.
         builder.Services.AddSingleton<IGraphWorkflowNodeExecutor, GraphWorkflowToolExecutor>();
+
+        // The DevTask lane. It holds no slot: the Dev Mode task it drives is durable, so a tick polls it, and it resolves
+        // Development services per call because Development Mode off registers none.
+        builder.Services.AddSingleton<IGraphWorkflowNodeExecutor, GraphWorkflowDevTaskExecutor>();
 
         // BEFORE the dispatcher: hosted services start in registration order, and the dispatcher's pumps must not begin
         // admitting node runs a restart has not judged yet.

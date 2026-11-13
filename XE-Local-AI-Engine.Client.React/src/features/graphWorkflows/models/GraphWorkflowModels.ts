@@ -1,6 +1,5 @@
 // Domain vocabulary for the Graph Workflows surface, and the ONE file that names a generated DTO: every other file in
-// this feature imports the bare aliases from here, so a regenerated client is a one-file edit. Same shape as
-// `DevWorkflowModels.ts`, which this is copy-adapted from (features never import each other — see `no-cross-feature`).
+// this feature imports the bare aliases from here, so a regenerated client is a one-file edit.
 //
 // The generated client types every enum as a bare `string` (they cross the wire as enum NAMES via `ToString()`), so
 // these unions are the client-side narrowing — and the place a status typo fails to compile instead of falling
@@ -84,7 +83,7 @@ export type {
 	ValidateGraphWorkflowDefinitionResponse,
 };
 
-/** The eleven node kinds. A closed vocabulary: an unknown `kind` is a save-time validation error server-side. */
+/** The twelve node kinds. A closed vocabulary: an unknown `kind` is a save-time validation error server-side. */
 export const graphWorkflowNodeKinds = [
 	"Start",
 	"Agent",
@@ -97,8 +96,12 @@ export const graphWorkflowNodeKinds = [
 	"End",
 	"ChatInput",
 	"DecisionModel",
+	"DevTask",
 ] as const;
 export type GraphWorkflowNodeKind = (typeof graphWorkflowNodeKinds)[number];
+
+/** `GraphWorkflowGraph.DevTaskImplement` / `DevTaskApply`: what a DevTask node does with its Development task. */
+export const graphWorkflowDevTaskActions = ["implement", "apply"] as const;
 
 /** Every node carries a join policy; `All` is the parser's default. `Any` is what a reconverging End needs. */
 export const graphWorkflowJoinPolicies = ["All", "Any"] as const;

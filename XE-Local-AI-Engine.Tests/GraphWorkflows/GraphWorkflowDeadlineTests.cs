@@ -75,8 +75,8 @@ public sealed class GraphWorkflowDeadlineTests
     }
 
     /// <summary>
-    ///     Unlike the development-workflow original, a node that declares no timeout still has one: graph workflows
-    ///     carry a node-timeout default, and the author's own number only overrides it.
+    ///     A node that declares no timeout still has one: graph workflows carry a node-timeout default, and the
+    ///     author's own number only overrides it.
     /// </summary>
     [Test]
     public void HasExpired_ForANodeThatDeclaresNoTimeout_FallsBackToTheConfiguredDefault()

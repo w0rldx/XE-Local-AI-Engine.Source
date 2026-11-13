@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -22,7 +21,6 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.Drafting;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Server;
@@ -34,10 +32,6 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using ApplicationGenerationProvenance = XE_Local_AI_Engine.Client.Services.Drafting.GenerationProvenance;
-using DevWorkflowNodeRunStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowNodeRunStatus;
-using DevWorkflowNodeType = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowNodeType;
-using DevWorkflowRunStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowRunStatus;
-using DevWorkflowWorkItemStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowWorkItemStatus;
 // System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
 using CategoryAttribute = CategoryAttribute;
 
@@ -818,11 +812,12 @@ public sealed class NodeAdminMcpToolsTests
         harness.Agents.CreateAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.GetByKeyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.UpdateAsync(record.Id, Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
-        var runDetail = RunDetail();
-        harness.WorkflowStore.ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>())
-               .Returns(Array.Empty<DevWorkflowWorkItemSnapshot>());
-        harness.WorkflowStore.ListDefinitionsAsync(true, Arg.Any<CancellationToken>()).Returns(Array.Empty<DevWorkflowDefinitionSummary>());
-        harness.WorkflowRuns.GetAsync(runDetail.Run.Id, Arg.Any<CancellationToken>()).Returns(runDetail);
+        var graphRun = GraphRun(GraphWorkflowRunStatus.Running);
+        harness.WorkflowStore.ListRunsAsync(Arg.Any<GraphWorkflowRunStatus?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+               .Returns(Array.Empty<GraphWorkflowRunSnapshot>());
+        harness.WorkflowStore.ListDefinitionsAsync(Arg.Any<CancellationToken>()).Returns(Array.Empty<GraphWorkflowDefinitionSummary>());
+        harness.WorkflowStore.GetRunAsync(graphRun.Id, Arg.Any<CancellationToken>()).Returns(graphRun);
+        harness.WorkflowStore.ListNodeRunsAsync(graphRun.Id, Arg.Any<CancellationToken>()).Returns(Array.Empty<GraphWorkflowNodeRunSnapshot>());
 
         _ = await harness.Tools.GetStatusAsync(CancellationToken.None);
         _ = await harness.Tools.GetRuntimeStatusAsync(CancellationToken.None);
@@ -840,7 +835,7 @@ public sealed class NodeAdminMcpToolsTests
         _ = await harness.Tools.UpdateAgentAsync("agent", "Agent", "Instructions", CancellationToken.None);
         _ = await harness.Tools.DeleteAgentAsync("agent", CancellationToken.None);
         _ = await harness.Tools.ListWorkflowRunsAsync(CancellationToken.None);
-        _ = await harness.Tools.GetWorkflowRunAsync(runDetail.Run.Id.ToString("D"), CancellationToken.None);
+        _ = await harness.Tools.GetWorkflowRunAsync(graphRun.Id.ToString("D"), CancellationToken.None);
 
         var auditEntries = harness.Logger.Entries.Where(static entry => entry.EventId.Name == "McpAdminToolInvoked").ToArray();
         AssertEx.Equal(ExpectedToolNames.Length, auditEntries.Length);
@@ -1015,36 +1010,35 @@ public sealed class NodeAdminMcpToolsTests
     }
 
     [Test]
-    public async Task ListWorkflowRuns_ReturnsOneBoundedRowPerWorkItemsLatestRunAndFiltersByStatus()
+    public async Task ListWorkflowRuns_ReturnsBoundedGraphRunRowsAndPassesTheStatusFilterToTheStore()
     {
         var harness = new Harness();
-        var running = WorkItem("Ship it", DevWorkflowRunStatus.Running);
-        var completed = WorkItem("Shipped", DevWorkflowRunStatus.Completed);
-        var never = WorkItem("Never started", null);
-        harness.WorkflowStore.ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>())
-               .Returns([running, completed, never]);
+        var running = GraphRun(GraphWorkflowRunStatus.Running);
+        var completed = GraphRun(GraphWorkflowRunStatus.Completed);
+        harness.WorkflowStore.ListRunsAsync(null, 20, Arg.Any<CancellationToken>()).Returns([running, completed]);
+        harness.WorkflowStore.ListRunsAsync(GraphWorkflowRunStatus.Completed, 50, Arg.Any<CancellationToken>()).Returns([completed]);
+        harness.WorkflowStore.ListDefinitionsAsync(Arg.Any<CancellationToken>()).Returns([Definition(running.DefinitionId, "dev-intake")]);
 
         var all = await harness.Tools.ListWorkflowRunsAsync(CancellationToken.None);
 
         AssertEx.Equal("ok", all.Status);
         AssertEx.Equal(2, all.Count);
         AssertEx.Equal(20, all.Limit);
-        AssertEx.Equal(running.LatestRunId!.Value.ToString("D"), all.Runs[0].RunId);
-        AssertEx.Equal(running.Id.ToString("D"), all.Runs[0].WorkItemId);
-        AssertEx.Equal("seeded", all.Runs[0].DefinitionName!);
+        AssertEx.Equal(running.Id.ToString("D"), all.Runs[0].RunId);
+        AssertEx.Equal(running.DefinitionId.ToString("D"), all.Runs[0].DefinitionId);
+        AssertEx.Equal("dev-intake", all.Runs[0].DefinitionName!);
+        AssertEx.Null(all.Runs[1].DefinitionName, "a run whose definition is gone still lists, unnamed.");
         AssertEx.Equal("Running", all.Runs[0].Status);
-        AssertEx.Equal(1, all.Runs[0].QueuedNodeCount);
-        AssertEx.Equal(2, all.Runs[0].RunningNodeCount);
-        AssertEx.Equal(3, all.Runs[0].CompletedNodeCount);
-        AssertEx.Equal(7, all.Runs[0].TotalNodeCount);
-        AssertEx.Equal(1, all.Runs[0].PendingDecisionCount);
+        AssertEx.Null(all.Runs[0].FailureClass, "None is no failure, so it is not on the wire.");
+        AssertEx.Equal("Manual", all.Runs[0].TriggerSource);
+        AssertEx.Equal(11L, all.Runs[0].StartedAtUtc!.Value);
 
         var filtered = await harness.Tools.ListWorkflowRunsAsync(CancellationToken.None, limit: 500, status: "completed");
 
         AssertEx.Equal("ok", filtered.Status);
         AssertEx.Equal(1, filtered.Count);
         AssertEx.Equal(50, filtered.Limit);
-        AssertEx.Equal(completed.LatestRunId!.Value.ToString("D"), filtered.Runs[0].RunId);
+        AssertEx.Equal(completed.Id.ToString("D"), filtered.Runs[0].RunId);
     }
 
     [Test]
@@ -1057,7 +1051,7 @@ public sealed class NodeAdminMcpToolsTests
         AssertEx.Equal("invalid_status", response.Status);
         AssertEx.Equal("invalid_status", response.FailureCode!);
         AssertEx.Empty(response.Runs);
-        await harness.WorkflowStore.DidNotReceive().ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>());
+        await harness.WorkflowStore.DidNotReceive().ListRunsAsync(Arg.Any<GraphWorkflowRunStatus?>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
         AssertSingleOutcome(harness, "rejected");
     }
 
@@ -1065,51 +1059,41 @@ public sealed class NodeAdminMcpToolsTests
     public async Task GetWorkflowRun_ReturnsTheNarrowSummaryAndNodeRowsAndNothingElse()
     {
         var harness = new Harness();
-        var detail = RunDetail();
-        harness.WorkflowRuns.GetAsync(detail.Run.Id, Arg.Any<CancellationToken>()).Returns(detail);
-        harness.WorkflowStore.ListDefinitionsAsync(true, Arg.Any<CancellationToken>())
+        var graphRun = GraphRun(GraphWorkflowRunStatus.WaitingForApproval, GraphWorkflowFailureClass.NodeFailed);
+        harness.WorkflowStore.GetRunAsync(graphRun.Id, Arg.Any<CancellationToken>()).Returns(graphRun);
+        harness.WorkflowStore.ListNodeRunsAsync(graphRun.Id, Arg.Any<CancellationToken>())
                .Returns([
-                   new DevWorkflowDefinitionSummary
-                   {
-                       Id = detail.Run.DefinitionId,
-                       Name = "seeded",
-                       GraphHash = "hash",
-                       NodeCount = 2,
-                       Source = DevWorkflowDefinitionSource.Seeded,
-                       SeedSlug = "slug",
-                       Archived = false,
-                       Version = 1,
-                       CreatedAtUtc = 10,
-                       UpdatedAtUtc = 10
-                   }
+                   NodeRun(graphRun.Id, "plan", GraphWorkflowNodeRunStatus.Succeeded),
+                   NodeRun(graphRun.Id, "review", GraphWorkflowNodeRunStatus.WaitingForApproval),
+                   NodeRun(graphRun.Id, "implement", GraphWorkflowNodeRunStatus.Running),
+                   NodeRun(graphRun.Id, "apply", GraphWorkflowNodeRunStatus.Pending)
                ]);
+        harness.WorkflowStore.ListDefinitionsAsync(Arg.Any<CancellationToken>()).Returns([Definition(graphRun.DefinitionId, "dev-intake")]);
 
-        var response = await harness.Tools.GetWorkflowRunAsync(detail.Run.Id.ToString("D"), CancellationToken.None);
+        var response = await harness.Tools.GetWorkflowRunAsync(graphRun.Id.ToString("D"), CancellationToken.None);
 
         AssertEx.Equal("ok", response.Status);
         var run = AssertEx.NotNull(response.Run);
-        AssertEx.Equal(detail.Run.Id.ToString("D"), run.RunId);
-        AssertEx.Equal(detail.Run.WorkItemId.ToString("D"), run.WorkItemId);
-        AssertEx.Equal("seeded", run.DefinitionName!);
+        AssertEx.Equal(graphRun.Id.ToString("D"), run.RunId);
+        AssertEx.Equal(graphRun.DefinitionId.ToString("D"), run.DefinitionId);
+        AssertEx.Equal("dev-intake", run.DefinitionName!);
         AssertEx.Equal("WaitingForApproval", run.Status);
-        AssertEx.Equal(0, run.QueuedNodeCount);
+        AssertEx.Equal("NodeFailed", run.FailureClass!);
+        AssertEx.Equal(1, run.PendingNodeCount);
         AssertEx.Equal(1, run.RunningNodeCount);
         AssertEx.Equal(1, run.CompletedNodeCount);
-        AssertEx.Equal(2, run.TotalNodeCount);
+        AssertEx.Equal(4, run.TotalNodeCount);
         AssertEx.Equal(1, run.PendingDecisionCount);
-        AssertEx.Equal("gate_rejected", run.FailureClass!);
-        AssertEx.Equal("a sanitized reason", run.TerminalReason!);
         AssertEx.Equal(11L, run.StartedAtUtc!.Value);
-        AssertEx.Equal(12L, run.EndedAtUtc!.Value);
-        AssertEx.Equal(2, run.Nodes.Count);
+        AssertEx.Equal(12L, run.CompletedAtUtc!.Value);
+        AssertEx.Equal(4, run.Nodes.Count);
         AssertEx.Equal("plan", run.Nodes[0].NodeKey);
         AssertEx.Equal("Agent", run.Nodes[0].NodeType);
         AssertEx.Equal("Succeeded", run.Nodes[0].Status);
         AssertEx.Equal(1, run.Nodes[0].Attempt);
-        AssertEx.Equal(3, run.Nodes[0].MaxAttempts);
 
-        // The narrow projection is the point: nothing here can carry the pinned graph, an artifact body, a transcript
-        // or a host path, because there is no member on the wire shape that could hold one.
+        // The narrow projection is the point: nothing here can carry the pinned graph, a node's input or output, a
+        // transcript or a host path, because there is no member on the wire shape that could hold one.
         var serialized = JsonSerializer.Serialize(response);
         AssertEx.False(serialized.Contains("graph", StringComparison.OrdinalIgnoreCase), serialized);
         AssertEx.False(serialized.Contains("secret-input", StringComparison.Ordinal), serialized);
@@ -1119,7 +1103,7 @@ public sealed class NodeAdminMcpToolsTests
         using var document = JsonDocument.Parse(serialized);
         var wireRun = document.RootElement.GetProperty("Run");
         AssertEx.Equal("WaitingForApproval", wireRun.GetProperty("Status").GetString()!);
-        AssertEx.Equal("gate_rejected", wireRun.GetProperty("FailureClass").GetString()!);
+        AssertEx.Equal("NodeFailed", wireRun.GetProperty("FailureClass").GetString()!);
         AssertEx.False(wireRun.TryGetProperty("Run", out _), $"the summary must not be nested under a second run key: {serialized}");
     }
 
@@ -1128,8 +1112,8 @@ public sealed class NodeAdminMcpToolsTests
     {
         var harness = new Harness();
         var runId = Guid.NewGuid();
-        harness.WorkflowRuns.GetAsync(runId, Arg.Any<CancellationToken>())
-               .Returns<Task<DevWorkflowRunDetail>>(_ => throw new DevWorkflowNotFoundException("gone"));
+        harness.WorkflowStore.GetRunAsync(runId, Arg.Any<CancellationToken>())
+               .Returns<Task<GraphWorkflowRunSnapshot>>(_ => throw new GraphWorkflowNotFoundException("gone"));
 
         var missing = await harness.Tools.GetWorkflowRunAsync(runId.ToString("D"), CancellationToken.None);
         var malformed = await new Harness().Tools.GetWorkflowRunAsync("not-a-uuid", CancellationToken.None);
@@ -1153,7 +1137,7 @@ public sealed class NodeAdminMcpToolsTests
     [Test]
     public async Task WorkflowObserveTools_AnswerNotAvailableWhenTheFeatureIsOffRatherThanFaulting()
     {
-        var harness = new Harness(devWorkflowsEnabled: false);
+        var harness = new Harness(graphWorkflowsEnabled: false);
 
         var list = await harness.Tools.ListWorkflowRunsAsync(CancellationToken.None);
         var get = await harness.Tools.GetWorkflowRunAsync(Guid.NewGuid().ToString("D"), CancellationToken.None);
@@ -1164,62 +1148,44 @@ public sealed class NodeAdminMcpToolsTests
         AssertEx.Equal("not_available", get.Status);
         AssertEx.Equal("not_available", get.FailureCode!);
         AssertEx.Null(get.Run);
-        await harness.WorkflowStore.DidNotReceive().ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>());
-        await harness.WorkflowRuns.DidNotReceive().GetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await harness.WorkflowStore.DidNotReceive().ListRunsAsync(Arg.Any<GraphWorkflowRunStatus?>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await harness.WorkflowStore.DidNotReceive().GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    private static DevWorkflowWorkItemSnapshot WorkItem(string title, DevWorkflowRunStatus? latestRunStatus) =>
+    private static GraphWorkflowRunSnapshot GraphRun(GraphWorkflowRunStatus status, GraphWorkflowFailureClass failureClass = GraphWorkflowFailureClass.None) =>
         new()
         {
             Id = Guid.NewGuid(),
-            Title = title,
-            Request = "request",
-            Status = DevWorkflowWorkItemStatus.Active,
-            DevelopmentProjectId = null,
-            LatestRunId = latestRunStatus is null ? null : Guid.NewGuid(),
-            LatestRunStatus = latestRunStatus,
-            LatestRunDefinitionName = latestRunStatus is null ? null : "seeded",
-            LatestRunNodes = latestRunStatus is null
-                ? DevWorkflowNodeCounters.Empty
-                : new DevWorkflowNodeCounters
-                {
-                    Queued = 1,
-                    Running = 2,
-                    Completed = 3,
-                    Total = 7,
-                    PendingDecisionCount = 1,
-                    BlockingGateNodeRunId = null
-                },
-            CreatedAtUtc = 10,
-            UpdatedAtUtc = 10,
-            Version = 1
+            RequestId = Guid.NewGuid(),
+            DefinitionId = Guid.NewGuid(),
+            DefinitionVersion = 1,
+            GraphHash = "hash",
+            Status = status,
+            FailureClass = failureClass,
+            GraphJson = """{"schemaVersion":1,"nodes":[],"edges":[]}""",
+            InputJson = """{"request":"secret-input"}""",
+            OutputJson = null,
+            Seq = 4,
+            Version = 1,
+            CancelRequestedAtUtc = null,
+            StartedAtUtc = 11,
+            CompletedAtUtc = 12,
+            CreatedAtUtc = 10
         };
 
-    private static DevWorkflowRunDetail RunDetail() =>
+    private static GraphWorkflowDefinitionSummary Definition(Guid id, string name) =>
         new()
         {
-            Run = new DevWorkflowRunSnapshot
-            {
-                Id = Guid.NewGuid(),
-                WorkItemId = Guid.NewGuid(),
-                DefinitionId = Guid.NewGuid(),
-                DefinitionVersion = 1,
-                DefinitionGraphHash = "hash",
-                GraphJson = """{"schemaVersion":1,"nodes":[],"edges":[]}""",
-                GraphRevision = 1,
-                Status = DevWorkflowRunStatus.WaitingForApproval,
-                LastSequence = 4,
-                FailureClass = "gate_rejected",
-                TerminalReason = "a sanitized reason",
-                StartedAtUtc = 11,
-                EndedAtUtc = 12,
-                CreatedAtUtc = 10,
-                UpdatedAtUtc = 10,
-                Version = 1
-            },
-            NodeRuns = [NodeRun("plan", DevWorkflowNodeRunStatus.Succeeded), NodeRun("build", DevWorkflowNodeRunStatus.Running)],
-            PendingDecisionCount = 1,
-            BlockingGateNodeRunId = null
+            Id = id,
+            Name = name,
+            Description = null,
+            GraphHash = "hash",
+            NodeCount = 4,
+            SchemaVersion = 1,
+            Kind = GraphWorkflowDefinitionKind.Standard,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
         };
 
     // The switch throws on an unmapped member, and a validation error is the only thing that reaches it — so a new
@@ -1234,36 +1200,26 @@ public sealed class NodeAdminMcpToolsTests
         }
     }
 
-    private static DevWorkflowNodeRunSnapshot NodeRun(string nodeKey, DevWorkflowNodeRunStatus status) =>
+    private static GraphWorkflowNodeRunSnapshot NodeRun(Guid runId, string nodeKey, GraphWorkflowNodeRunStatus status) =>
         new()
         {
             Id = Guid.NewGuid(),
-            RunId = Guid.NewGuid(),
+            RunId = runId,
             NodeKey = nodeKey,
-            NodeType = DevWorkflowNodeType.Agent,
-            Attempt = 1,
-            MaxAttempts = 3,
-            SessionResumes = 0,
+            Kind = GraphWorkflowNodeKind.Agent,
             Status = status,
-            QueueReason = null,
+            Attempt = 1,
             PendingDecisionKind = null,
-            Sequence = 1,
-            WorkSessionId = null,
-            WorkSessionAvailable = false,
-            AgentDefinitionId = null,
-            DevelopmentProjectId = null,
-            DevelopmentTaskId = null,
+            DecisionOperationId = null,
+            DecidedBySubject = null,
+            FailureClass = GraphWorkflowFailureClass.None,
+            Error = null,
             InputJson = """{"objective":"secret-input"}""",
             OutputJson = null,
-            PolicyResolutionJson = null,
-            MaterializedFromNodeRunId = null,
-            MaterializationIndex = null,
-            FailureClass = null,
-            TerminalReason = null,
-            QueuedAtUtc = null,
+            InvocationId = null,
             StartedAtUtc = null,
-            EndedAtUtc = null,
-            CreatedAtUtc = 10
+            CompletedAtUtc = null,
+            UpdatedAtUtc = 10
         };
 
     private static void AssertSingleOutcome(Harness harness, string outcome)
@@ -1327,7 +1283,7 @@ public sealed class NodeAdminMcpToolsTests
             IAgentDefinitionService? agents = null,
             ClaimsPrincipal? principal = null,
             ILogger<NodeAdminMcpTools>? logger = null,
-            bool devWorkflowsEnabled = true)
+            bool graphWorkflowsEnabled = true)
         {
             Agents = agents ?? Substitute.For<IAgentDefinitionService>();
             HttpContextAccessor.HttpContext = new DefaultHttpContext
@@ -1339,18 +1295,15 @@ public sealed class NodeAdminMcpToolsTests
                 Models,
                 Settings,
                 Agents,
-                WorkflowRuns,
                 WorkflowStore,
-                Options.Create(new DevWorkflowOptions()),
-                StubNodeRuntimeSettings.Create().WithDevWorkflowsEnabled(devWorkflowsEnabled).Build(),
+                StubNodeRuntimeSettings.Create().WithGraphWorkflowsEnabled(graphWorkflowsEnabled).Build(),
                 timeProvider ?? TimeProvider.System,
                 HttpContextAccessor,
                 logger ?? Logger);
         }
 
         public IAgentDefinitionService Agents { get; }
-        public IDevWorkflowRunService WorkflowRuns { get; } = Substitute.For<IDevWorkflowRunService>();
-        public IDevWorkflowStore WorkflowStore { get; } = Substitute.For<IDevWorkflowStore>();
+        public IGraphWorkflowStore WorkflowStore { get; } = Substitute.For<IGraphWorkflowStore>();
         public IGgufDownloadCoordinator Download { get; } = Substitute.For<IGgufDownloadCoordinator>();
         public ILocalModelAdministrationService Models { get; } = Substitute.For<ILocalModelAdministrationService>();
         public ILlamaCppRuntimeAdministrationService Runtime { get; } = Substitute.For<ILlamaCppRuntimeAdministrationService>();

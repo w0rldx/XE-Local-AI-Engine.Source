@@ -31,9 +31,6 @@ import type {
 	ApproveGoldenConversationData,
 	ApproveGoldenConversationErrors,
 	ApproveGoldenConversationResponses,
-	ArchiveDevWorkflowDefinitionData,
-	ArchiveDevWorkflowDefinitionErrors,
-	ArchiveDevWorkflowDefinitionResponses,
 	ArchiveNodeChatConversationData,
 	ArchiveNodeChatConversationErrors,
 	ArchiveNodeChatConversationResponses,
@@ -64,9 +61,6 @@ import type {
 	CancelDevelopmentAttemptData,
 	CancelDevelopmentAttemptErrors,
 	CancelDevelopmentAttemptResponses,
-	CancelDevWorkflowRunData,
-	CancelDevWorkflowRunErrors,
-	CancelDevWorkflowRunResponses,
 	CancelEvaluationData,
 	CancelEvaluationErrors,
 	CancelEvaluationResponses,
@@ -178,15 +172,6 @@ import type {
 	CreateDevelopmentRepositoryFromTemplateData,
 	CreateDevelopmentRepositoryFromTemplateErrors,
 	CreateDevelopmentRepositoryFromTemplateResponses,
-	CreateDevWorkflowDefinitionData,
-	CreateDevWorkflowDefinitionErrors,
-	CreateDevWorkflowDefinitionResponses,
-	CreateDevWorkflowRuleSetData,
-	CreateDevWorkflowRuleSetErrors,
-	CreateDevWorkflowRuleSetResponses,
-	CreateDevWorkflowWorkItemData,
-	CreateDevWorkflowWorkItemErrors,
-	CreateDevWorkflowWorkItemResponses,
 	CreateEvaluationData,
 	CreateEvaluationErrors,
 	CreateEvaluationResponses,
@@ -241,9 +226,6 @@ import type {
 	CreateWorkspaceData,
 	CreateWorkspaceErrors,
 	CreateWorkspaceResponses,
-	DecideDevWorkflowNodeRunData,
-	DecideDevWorkflowNodeRunErrors,
-	DecideDevWorkflowNodeRunResponses,
 	DecideGraphWorkflowNodeRunData,
 	DecideGraphWorkflowNodeRunErrors,
 	DecideGraphWorkflowNodeRunResponses,
@@ -277,12 +259,6 @@ import type {
 	DeleteCustomToolData,
 	DeleteCustomToolErrors,
 	DeleteCustomToolResponses,
-	DeleteDevWorkflowRuleSetData,
-	DeleteDevWorkflowRuleSetErrors,
-	DeleteDevWorkflowRuleSetResponses,
-	DeleteDevWorkflowWorkItemData,
-	DeleteDevWorkflowWorkItemErrors,
-	DeleteDevWorkflowWorkItemResponses,
 	DeleteEvaluationData,
 	DeleteEvaluationErrors,
 	DeleteEvaluationResponses,
@@ -520,27 +496,6 @@ import type {
 	GetDevelopmentTaskData,
 	GetDevelopmentTaskErrors,
 	GetDevelopmentTaskResponses,
-	GetDevWorkflowArtifactContentData,
-	GetDevWorkflowArtifactContentErrors,
-	GetDevWorkflowArtifactContentResponses,
-	GetDevWorkflowCapabilityData,
-	GetDevWorkflowCapabilityErrors,
-	GetDevWorkflowCapabilityResponses,
-	GetDevWorkflowDefinitionData,
-	GetDevWorkflowDefinitionErrors,
-	GetDevWorkflowDefinitionResponses,
-	GetDevWorkflowNodeRunData,
-	GetDevWorkflowNodeRunErrors,
-	GetDevWorkflowNodeRunResponses,
-	GetDevWorkflowRuleSetData,
-	GetDevWorkflowRuleSetErrors,
-	GetDevWorkflowRuleSetResponses,
-	GetDevWorkflowRunData,
-	GetDevWorkflowRunErrors,
-	GetDevWorkflowRunResponses,
-	GetDevWorkflowWorkItemData,
-	GetDevWorkflowWorkItemErrors,
-	GetDevWorkflowWorkItemResponses,
 	GetEvaluationData,
 	GetEvaluationErrors,
 	GetEvaluationResponses,
@@ -883,24 +838,6 @@ import type {
 	ListDevelopmentTemplatesData,
 	ListDevelopmentTemplatesErrors,
 	ListDevelopmentTemplatesResponses,
-	ListDevWorkflowArtifactsData,
-	ListDevWorkflowArtifactsErrors,
-	ListDevWorkflowArtifactsResponses,
-	ListDevWorkflowDefinitionsData,
-	ListDevWorkflowDefinitionsErrors,
-	ListDevWorkflowDefinitionsResponses,
-	ListDevWorkflowRuleSetsData,
-	ListDevWorkflowRuleSetsErrors,
-	ListDevWorkflowRuleSetsResponses,
-	ListDevWorkflowRunEventsData,
-	ListDevWorkflowRunEventsErrors,
-	ListDevWorkflowRunEventsResponses,
-	ListDevWorkflowRunsData,
-	ListDevWorkflowRunsErrors,
-	ListDevWorkflowRunsResponses,
-	ListDevWorkflowWorkItemsData,
-	ListDevWorkflowWorkItemsErrors,
-	ListDevWorkflowWorkItemsResponses,
 	ListEligibleBenchmarkAgentsData,
 	ListEligibleBenchmarkAgentsErrors,
 	ListEligibleBenchmarkAgentsResponses,
@@ -1087,9 +1024,6 @@ import type {
 	OverrideTrainingArtifactQualityData,
 	OverrideTrainingArtifactQualityErrors,
 	OverrideTrainingArtifactQualityResponses,
-	PauseDevWorkflowRunData,
-	PauseDevWorkflowRunErrors,
-	PauseDevWorkflowRunResponses,
 	PauseWorkSessionData,
 	PauseWorkSessionErrors,
 	PauseWorkSessionResponses,
@@ -1210,9 +1144,6 @@ import type {
 	RestoreNodeBackupData,
 	RestoreNodeBackupErrors,
 	RestoreNodeBackupResponses,
-	ResumeDevWorkflowRunData,
-	ResumeDevWorkflowRunErrors,
-	ResumeDevWorkflowRunResponses,
 	ResumeEvaluationData,
 	ResumeEvaluationErrors,
 	ResumeEvaluationResponses,
@@ -1312,9 +1243,6 @@ import type {
 	StartDevelopmentNextActionData,
 	StartDevelopmentNextActionErrors,
 	StartDevelopmentNextActionResponses,
-	StartDevWorkflowRunData,
-	StartDevWorkflowRunErrors,
-	StartDevWorkflowRunResponses,
 	StartDictationSessionData,
 	StartDictationSessionErrors,
 	StartDictationSessionResponses,
@@ -1411,15 +1339,6 @@ import type {
 	UpdateCustomToolData,
 	UpdateCustomToolErrors,
 	UpdateCustomToolResponses,
-	UpdateDevWorkflowDefinitionData,
-	UpdateDevWorkflowDefinitionErrors,
-	UpdateDevWorkflowDefinitionResponses,
-	UpdateDevWorkflowRuleSetData,
-	UpdateDevWorkflowRuleSetErrors,
-	UpdateDevWorkflowRuleSetResponses,
-	UpdateDevWorkflowWorkItemData,
-	UpdateDevWorkflowWorkItemErrors,
-	UpdateDevWorkflowWorkItemResponses,
 	UpdateExternalAppData,
 	UpdateExternalAppErrors,
 	UpdateExternalAppResponses,
@@ -1498,7 +1417,6 @@ import {
 	zApplyAppUpdateResponse,
 	zApplyDevelopmentPatchResponse,
 	zApproveGoldenConversationResponse,
-	zArchiveDevWorkflowDefinitionResponse,
 	zArchiveNodeChatConversationResponse,
 	zBeginTrainingArtifactQualityRevalidationResponse,
 	zBenchmarkInferenceProfileResponse,
@@ -1509,7 +1427,6 @@ import {
 	zCancelBaseArtifactResponse,
 	zCancelBenchmarkRunResponse,
 	zCancelDevelopmentAttemptResponse,
-	zCancelDevWorkflowRunResponse,
 	zCancelEvaluationResponse,
 	zCancelGgufDownloadResponse,
 	zCancelGgufImportResponse,
@@ -1544,9 +1461,6 @@ import {
 	zCreateCustomToolResponse,
 	zCreateDevelopmentProjectResponse,
 	zCreateDevelopmentRepositoryFromTemplateResponse,
-	zCreateDevWorkflowDefinitionResponse,
-	zCreateDevWorkflowRuleSetResponse,
-	zCreateDevWorkflowWorkItemResponse,
 	zCreateEvaluationResponse,
 	zCreateGoldenConversationResponse,
 	zCreateGraphWorkflowDefinitionResponse,
@@ -1565,7 +1479,6 @@ import {
 	zCreateTranscriptionSessionResponse,
 	zCreateWorkSessionResponse,
 	zCreateWorkspaceResponse,
-	zDecideDevWorkflowNodeRunResponse,
 	zDecideGraphWorkflowNodeRunResponse,
 	zDecideTrainingArtifactQualityResponse,
 	zDeleteAgentDefinitionResponse,
@@ -1577,8 +1490,6 @@ import {
 	zDeleteComparisonResponse,
 	zDeleteConversationFileResponse,
 	zDeleteCustomToolResponse,
-	zDeleteDevWorkflowRuleSetResponse,
-	zDeleteDevWorkflowWorkItemResponse,
 	zDeleteEvaluationResponse,
 	zDeleteExternalProviderConnectionResponse,
 	zDeleteGoldenConversationResponse,
@@ -1658,13 +1569,6 @@ import {
 	zGetDevelopmentCapabilityResponse,
 	zGetDevelopmentProjectResponse,
 	zGetDevelopmentTaskResponse,
-	zGetDevWorkflowArtifactContentResponse,
-	zGetDevWorkflowCapabilityResponse,
-	zGetDevWorkflowDefinitionResponse,
-	zGetDevWorkflowNodeRunResponse,
-	zGetDevWorkflowRuleSetResponse,
-	zGetDevWorkflowRunResponse,
-	zGetDevWorkflowWorkItemResponse,
 	zGetEvaluationResponse,
 	zGetExternalAppCatalogApplicationResponse,
 	zGetExternalAppInstallPreviewResponse,
@@ -1779,12 +1683,6 @@ import {
 	zListDevelopmentProjectsResponse,
 	zListDevelopmentRepositoriesResponse,
 	zListDevelopmentTemplatesResponse,
-	zListDevWorkflowArtifactsResponse,
-	zListDevWorkflowDefinitionsResponse,
-	zListDevWorkflowRuleSetsResponse,
-	zListDevWorkflowRunEventsResponse,
-	zListDevWorkflowRunsResponse,
-	zListDevWorkflowWorkItemsResponse,
 	zListEligibleBenchmarkAgentsResponse,
 	zListEligibleBenchmarkModelsResponse,
 	zListEvaluationsResponse,
@@ -1847,7 +1745,6 @@ import {
 	zNodeSetupResponse,
 	zNodeVaultConfirmResponse,
 	zOverrideTrainingArtifactQualityResponse,
-	zPauseDevWorkflowRunResponse,
 	zPauseWorkSessionResponse,
 	zPinNodeChatConversationResponse,
 	zPostWorkSessionMessageResponse,
@@ -1887,7 +1784,6 @@ import {
 	zResolveUserQuestionResponse,
 	zRestartExternalAppResponse,
 	zRestoreNodeBackupResponse,
-	zResumeDevWorkflowRunResponse,
 	zResumeEvaluationResponse,
 	zResumeWorkSessionResponse,
 	zRetrieveImageResponse,
@@ -1921,7 +1817,6 @@ import {
 	zStartBenchmarkRunFidelityResponse,
 	zStartBenchmarkRunResponse,
 	zStartDevelopmentNextActionResponse,
-	zStartDevWorkflowRunResponse,
 	zStartDictationSessionResponse,
 	zStartExternalAppResponse,
 	zStartGgufDownloadResponse,
@@ -1954,9 +1849,6 @@ import {
 	zUpdateBenchmarkProjectResponse,
 	zUpdateBenchmarkTaskItemResponse,
 	zUpdateCustomToolResponse,
-	zUpdateDevWorkflowDefinitionResponse,
-	zUpdateDevWorkflowRuleSetResponse,
-	zUpdateDevWorkflowWorkItemResponse,
 	zUpdateExternalAppResponse,
 	zUpdateExternalAppVariablesResponse,
 	zUpdateGraphWorkflowDefinitionResponse,
@@ -5085,641 +4977,6 @@ export const updateCustomTool = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/custom-tools/{customToolId}",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const getDevWorkflowCapability = <ThrowOnError extends boolean = true>(
-	options?: Options<GetDevWorkflowCapabilityData, ThrowOnError>,
-): RequestResult<GetDevWorkflowCapabilityResponses, GetDevWorkflowCapabilityErrors, ThrowOnError> =>
-	(options?.client ?? client).get<GetDevWorkflowCapabilityResponses, GetDevWorkflowCapabilityErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zGetDevWorkflowCapabilityResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/capability",
-		...options,
-	});
-
-export const listDevWorkflowDefinitions = <ThrowOnError extends boolean = true>(
-	options: Options<ListDevWorkflowDefinitionsData, ThrowOnError>,
-): RequestResult<ListDevWorkflowDefinitionsResponses, ListDevWorkflowDefinitionsErrors, ThrowOnError> =>
-	(options.client ?? client).get<ListDevWorkflowDefinitionsResponses, ListDevWorkflowDefinitionsErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zListDevWorkflowDefinitionsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/definitions",
-		...options,
-	});
-
-export const createDevWorkflowDefinition = <ThrowOnError extends boolean = true>(
-	options: Options<CreateDevWorkflowDefinitionData, ThrowOnError>,
-): RequestResult<CreateDevWorkflowDefinitionResponses, CreateDevWorkflowDefinitionErrors, ThrowOnError> =>
-	(options.client ?? client).post<CreateDevWorkflowDefinitionResponses, CreateDevWorkflowDefinitionErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zCreateDevWorkflowDefinitionResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/definitions",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const archiveDevWorkflowDefinition = <ThrowOnError extends boolean = true>(
-	options: Options<ArchiveDevWorkflowDefinitionData, ThrowOnError>,
-): RequestResult<ArchiveDevWorkflowDefinitionResponses, ArchiveDevWorkflowDefinitionErrors, ThrowOnError> =>
-	(options.client ?? client).delete<ArchiveDevWorkflowDefinitionResponses, ArchiveDevWorkflowDefinitionErrors, ThrowOnError>({
-		responseValidator: async (data) => await zArchiveDevWorkflowDefinitionResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/definitions/{definitionId}",
-		...options,
-	});
-
-export const getDevWorkflowDefinition = <ThrowOnError extends boolean = true>(
-	options: Options<GetDevWorkflowDefinitionData, ThrowOnError>,
-): RequestResult<GetDevWorkflowDefinitionResponses, GetDevWorkflowDefinitionErrors, ThrowOnError> =>
-	(options.client ?? client).get<GetDevWorkflowDefinitionResponses, GetDevWorkflowDefinitionErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zGetDevWorkflowDefinitionResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/definitions/{definitionId}",
-		...options,
-	});
-
-export const updateDevWorkflowDefinition = <ThrowOnError extends boolean = true>(
-	options: Options<UpdateDevWorkflowDefinitionData, ThrowOnError>,
-): RequestResult<UpdateDevWorkflowDefinitionResponses, UpdateDevWorkflowDefinitionErrors, ThrowOnError> =>
-	(options.client ?? client).put<UpdateDevWorkflowDefinitionResponses, UpdateDevWorkflowDefinitionErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zUpdateDevWorkflowDefinitionResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/definitions/{definitionId}",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const listDevWorkflowRuleSets = <ThrowOnError extends boolean = true>(
-	options?: Options<ListDevWorkflowRuleSetsData, ThrowOnError>,
-): RequestResult<ListDevWorkflowRuleSetsResponses, ListDevWorkflowRuleSetsErrors, ThrowOnError> =>
-	(options?.client ?? client).get<ListDevWorkflowRuleSetsResponses, ListDevWorkflowRuleSetsErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zListDevWorkflowRuleSetsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/rule-sets",
-		...options,
-	});
-
-export const createDevWorkflowRuleSet = <ThrowOnError extends boolean = true>(
-	options: Options<CreateDevWorkflowRuleSetData, ThrowOnError>,
-): RequestResult<CreateDevWorkflowRuleSetResponses, CreateDevWorkflowRuleSetErrors, ThrowOnError> =>
-	(options.client ?? client).post<CreateDevWorkflowRuleSetResponses, CreateDevWorkflowRuleSetErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zCreateDevWorkflowRuleSetResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/rule-sets",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const deleteDevWorkflowRuleSet = <ThrowOnError extends boolean = true>(
-	options: Options<DeleteDevWorkflowRuleSetData, ThrowOnError>,
-): RequestResult<DeleteDevWorkflowRuleSetResponses, DeleteDevWorkflowRuleSetErrors, ThrowOnError> =>
-	(options.client ?? client).delete<DeleteDevWorkflowRuleSetResponses, DeleteDevWorkflowRuleSetErrors, ThrowOnError>({
-		responseValidator: async (data) => await zDeleteDevWorkflowRuleSetResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/rule-sets/{ruleSetId}",
-		...options,
-	});
-
-export const getDevWorkflowRuleSet = <ThrowOnError extends boolean = true>(
-	options: Options<GetDevWorkflowRuleSetData, ThrowOnError>,
-): RequestResult<GetDevWorkflowRuleSetResponses, GetDevWorkflowRuleSetErrors, ThrowOnError> =>
-	(options.client ?? client).get<GetDevWorkflowRuleSetResponses, GetDevWorkflowRuleSetErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zGetDevWorkflowRuleSetResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/rule-sets/{ruleSetId}",
-		...options,
-	});
-
-export const updateDevWorkflowRuleSet = <ThrowOnError extends boolean = true>(
-	options: Options<UpdateDevWorkflowRuleSetData, ThrowOnError>,
-): RequestResult<UpdateDevWorkflowRuleSetResponses, UpdateDevWorkflowRuleSetErrors, ThrowOnError> =>
-	(options.client ?? client).put<UpdateDevWorkflowRuleSetResponses, UpdateDevWorkflowRuleSetErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zUpdateDevWorkflowRuleSetResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/rule-sets/{ruleSetId}",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const listDevWorkflowRuns = <ThrowOnError extends boolean = true>(
-	options: Options<ListDevWorkflowRunsData, ThrowOnError>,
-): RequestResult<ListDevWorkflowRunsResponses, ListDevWorkflowRunsErrors, ThrowOnError> =>
-	(options.client ?? client).get<ListDevWorkflowRunsResponses, ListDevWorkflowRunsErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zListDevWorkflowRunsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/runs",
-		...options,
-	});
-
-export const getDevWorkflowRun = <ThrowOnError extends boolean = true>(
-	options: Options<GetDevWorkflowRunData, ThrowOnError>,
-): RequestResult<GetDevWorkflowRunResponses, GetDevWorkflowRunErrors, ThrowOnError> =>
-	(options.client ?? client).get<GetDevWorkflowRunResponses, GetDevWorkflowRunErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zGetDevWorkflowRunResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/runs/{runId}",
-		...options,
-	});
-
-export const listDevWorkflowArtifacts = <ThrowOnError extends boolean = true>(
-	options: Options<ListDevWorkflowArtifactsData, ThrowOnError>,
-): RequestResult<ListDevWorkflowArtifactsResponses, ListDevWorkflowArtifactsErrors, ThrowOnError> =>
-	(options.client ?? client).get<ListDevWorkflowArtifactsResponses, ListDevWorkflowArtifactsErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zListDevWorkflowArtifactsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/runs/{runId}/artifacts",
-		...options,
-	});
-
-export const getDevWorkflowArtifactContent = <ThrowOnError extends boolean = true>(
-	options: Options<GetDevWorkflowArtifactContentData, ThrowOnError>,
-): RequestResult<GetDevWorkflowArtifactContentResponses, GetDevWorkflowArtifactContentErrors, ThrowOnError> =>
-	(options.client ?? client).get<GetDevWorkflowArtifactContentResponses, GetDevWorkflowArtifactContentErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zGetDevWorkflowArtifactContentResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/runs/{runId}/artifacts/{artifactId}/content",
-		...options,
-	});
-
-export const cancelDevWorkflowRun = <ThrowOnError extends boolean = true>(
-	options: Options<CancelDevWorkflowRunData, ThrowOnError>,
-): RequestResult<CancelDevWorkflowRunResponses, CancelDevWorkflowRunErrors, ThrowOnError> =>
-	(options.client ?? client).post<CancelDevWorkflowRunResponses, CancelDevWorkflowRunErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zCancelDevWorkflowRunResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/runs/{runId}/cancel",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const listDevWorkflowRunEvents = <ThrowOnError extends boolean = true>(
-	options: Options<ListDevWorkflowRunEventsData, ThrowOnError>,
-): RequestResult<ListDevWorkflowRunEventsResponses, ListDevWorkflowRunEventsErrors, ThrowOnError> =>
-	(options.client ?? client).get<ListDevWorkflowRunEventsResponses, ListDevWorkflowRunEventsErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zListDevWorkflowRunEventsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/runs/{runId}/events",
-		...options,
-	});
-
-export const getDevWorkflowNodeRun = <ThrowOnError extends boolean = true>(
-	options: Options<GetDevWorkflowNodeRunData, ThrowOnError>,
-): RequestResult<GetDevWorkflowNodeRunResponses, GetDevWorkflowNodeRunErrors, ThrowOnError> =>
-	(options.client ?? client).get<GetDevWorkflowNodeRunResponses, GetDevWorkflowNodeRunErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zGetDevWorkflowNodeRunResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/runs/{runId}/nodes/{nodeRunId}",
-		...options,
-	});
-
-export const decideDevWorkflowNodeRun = <ThrowOnError extends boolean = true>(
-	options: Options<DecideDevWorkflowNodeRunData, ThrowOnError>,
-): RequestResult<DecideDevWorkflowNodeRunResponses, DecideDevWorkflowNodeRunErrors, ThrowOnError> =>
-	(options.client ?? client).post<DecideDevWorkflowNodeRunResponses, DecideDevWorkflowNodeRunErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zDecideDevWorkflowNodeRunResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/runs/{runId}/nodes/{nodeRunId}/decision",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const pauseDevWorkflowRun = <ThrowOnError extends boolean = true>(
-	options: Options<PauseDevWorkflowRunData, ThrowOnError>,
-): RequestResult<PauseDevWorkflowRunResponses, PauseDevWorkflowRunErrors, ThrowOnError> =>
-	(options.client ?? client).post<PauseDevWorkflowRunResponses, PauseDevWorkflowRunErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zPauseDevWorkflowRunResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/runs/{runId}/pause",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const resumeDevWorkflowRun = <ThrowOnError extends boolean = true>(
-	options: Options<ResumeDevWorkflowRunData, ThrowOnError>,
-): RequestResult<ResumeDevWorkflowRunResponses, ResumeDevWorkflowRunErrors, ThrowOnError> =>
-	(options.client ?? client).post<ResumeDevWorkflowRunResponses, ResumeDevWorkflowRunErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zResumeDevWorkflowRunResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/runs/{runId}/resume",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const listDevWorkflowWorkItems = <ThrowOnError extends boolean = true>(
-	options?: Options<ListDevWorkflowWorkItemsData, ThrowOnError>,
-): RequestResult<ListDevWorkflowWorkItemsResponses, ListDevWorkflowWorkItemsErrors, ThrowOnError> =>
-	(options?.client ?? client).get<ListDevWorkflowWorkItemsResponses, ListDevWorkflowWorkItemsErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zListDevWorkflowWorkItemsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/work-items",
-		...options,
-	});
-
-export const createDevWorkflowWorkItem = <ThrowOnError extends boolean = true>(
-	options: Options<CreateDevWorkflowWorkItemData, ThrowOnError>,
-): RequestResult<CreateDevWorkflowWorkItemResponses, CreateDevWorkflowWorkItemErrors, ThrowOnError> =>
-	(options.client ?? client).post<CreateDevWorkflowWorkItemResponses, CreateDevWorkflowWorkItemErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zCreateDevWorkflowWorkItemResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/work-items",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const deleteDevWorkflowWorkItem = <ThrowOnError extends boolean = true>(
-	options: Options<DeleteDevWorkflowWorkItemData, ThrowOnError>,
-): RequestResult<DeleteDevWorkflowWorkItemResponses, DeleteDevWorkflowWorkItemErrors, ThrowOnError> =>
-	(options.client ?? client).delete<DeleteDevWorkflowWorkItemResponses, DeleteDevWorkflowWorkItemErrors, ThrowOnError>({
-		responseValidator: async (data) => await zDeleteDevWorkflowWorkItemResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/work-items/{workItemId}",
-		...options,
-	});
-
-export const getDevWorkflowWorkItem = <ThrowOnError extends boolean = true>(
-	options: Options<GetDevWorkflowWorkItemData, ThrowOnError>,
-): RequestResult<GetDevWorkflowWorkItemResponses, GetDevWorkflowWorkItemErrors, ThrowOnError> =>
-	(options.client ?? client).get<GetDevWorkflowWorkItemResponses, GetDevWorkflowWorkItemErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zGetDevWorkflowWorkItemResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/work-items/{workItemId}",
-		...options,
-	});
-
-export const updateDevWorkflowWorkItem = <ThrowOnError extends boolean = true>(
-	options: Options<UpdateDevWorkflowWorkItemData, ThrowOnError>,
-): RequestResult<UpdateDevWorkflowWorkItemResponses, UpdateDevWorkflowWorkItemErrors, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateDevWorkflowWorkItemResponses, UpdateDevWorkflowWorkItemErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zUpdateDevWorkflowWorkItemResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/work-items/{workItemId}",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const startDevWorkflowRun = <ThrowOnError extends boolean = true>(
-	options: Options<StartDevWorkflowRunData, ThrowOnError>,
-): RequestResult<StartDevWorkflowRunResponses, StartDevWorkflowRunErrors, ThrowOnError> =>
-	(options.client ?? client).post<StartDevWorkflowRunResponses, StartDevWorkflowRunErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zStartDevWorkflowRunResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/development-workflows/work-items/{workItemId}/runs",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

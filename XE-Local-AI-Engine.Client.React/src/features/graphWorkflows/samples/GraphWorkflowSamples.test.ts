@@ -7,7 +7,12 @@ import { describe, expect, it } from "vitest";
 import { canvasToGraph, graphToCanvas } from "@/features/graphWorkflows/models/GraphWorkflowCanvasConversion";
 import { graphWorkflowsEqual } from "@/features/graphWorkflows/models/GraphWorkflowEquality";
 import { validateGraphWorkflowGraph } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
-import { GRAPH_WORKFLOW_SAMPLES } from "@/features/graphWorkflows/samples/GraphWorkflowSamples";
+import type { GraphWorkflowGraph } from "@/features/graphWorkflows/models/GraphWorkflowModels";
+import {
+	bindRepositoryAgent,
+	GRAPH_WORKFLOW_SAMPLES,
+	needsRepositoryAgent,
+} from "@/features/graphWorkflows/samples/GraphWorkflowSamples";
 import en from "@/locales/en.json";
 
 function bundleString(key: string): unknown {
@@ -15,7 +20,7 @@ function bundleString(key: string): unknown {
 }
 
 describe("GRAPH_WORKFLOW_SAMPLES", () => {
-	it("ships the five samples under unique ids", () => {
+	it("ships the seven samples under unique ids", () => {
 		const ids = GRAPH_WORKFLOW_SAMPLES.map((sample) => sample.id);
 
 		expect(ids).toEqual([
@@ -24,8 +29,43 @@ describe("GRAPH_WORKFLOW_SAMPLES", () => {
 			"parallel-perspectives",
 			"brief-with-review-loop",
 			"agent-research-and-check",
+			"dev-intake",
+			"research-plan-approval",
 		]);
 		expect(new Set(ids).size).toBe(ids.length);
+	});
+
+	it("ships repository Agent nodes only in the Development samples, unbound, so the create binds them", () => {
+		const needing = GRAPH_WORKFLOW_SAMPLES.filter((sample) => needsRepositoryAgent(sample.graph)).map((sample) => sample.id);
+
+		expect(needing).toEqual(["dev-intake", "research-plan-approval"]);
+	});
+
+	describe("bindRepositoryAgent", () => {
+		const graph = GRAPH_WORKFLOW_SAMPLES.find((sample) => sample.id === "research-plan-approval")?.graph as GraphWorkflowGraph;
+		const agentOf = (bound: GraphWorkflowGraph, key: string) =>
+			((bound.nodes ?? []).find((node) => node.key === key)?.config as Record<string, unknown> | undefined)?.[
+				"agentDefinitionId"
+			];
+
+		it("binds the first agent whose tools are all repository reads, and leaves every other node as it was", () => {
+			const bound = bindRepositoryAgent(graph, [
+				{ id: "writer", allowedToolNames: ["read_file", "write_file"] },
+				{ id: "no-tools", allowedToolNames: [] },
+				{ id: "reader", allowedToolNames: ["read_file", "search_text"] },
+			]);
+
+			expect(agentOf(bound, "research")).toBe("reader");
+			expect(needsRepositoryAgent(bound)).toBe(false);
+			expect(bound.nodes?.filter((node) => node.key !== "research")).toEqual(
+				graph.nodes?.filter((node) => node.key !== "research"),
+			);
+			expect(needsRepositoryAgent(graph)).toBe(true);
+		});
+
+		it("returns the graph unchanged when no agent only reads the repository", () => {
+			expect(bindRepositoryAgent(graph, [{ id: "writer", allowedToolNames: ["read_file", "write_file"] }])).toBe(graph);
+		});
 	});
 
 	describe.each(GRAPH_WORKFLOW_SAMPLES)("$id", (sample) => {

@@ -134,33 +134,20 @@ public sealed class DevelopmentTransitionTaskCommand
     public string? ApprovedSubjectHash { get; init; }
 
     /// <summary>
-    ///     That a PERSON wrote <see cref="Reason" />, rather than a reviewer, a gate or a workflow's own fix loop. It
+    ///     That a PERSON wrote <see cref="Reason" />, rather than a reviewer or a gate. It
     ///     is what lets the prompts rank it: an operator's sentence amends the task's immutable requirements, and a
     ///     reviewer's does not.
     /// </summary>
     public bool OperatorDirected { get; init; }
 
     /// <summary>
-    ///     Raises the task's <c>MaxReviewRounds</c> by one, and is the ONLY thing that opens the edge from <c>Blocked</c> to
-    ///     <c>ChangesRequested</c>.
-    /// </summary>
-    /// <remarks>
-    ///     A person retrying a workflow node stopped at "all N rounds used" is buying the task the round it needs, the
-    ///     same way that click already buys the node one more attempt; a task let out of Blocked without one would
-    ///     spend a whole coder round to be stood down again on the same sentence. CALLER-TRUSTED: the store verifies
-    ///     no operator did anything, so only an operator-DECISION path may set it — today
-    ///     <c>DevWorkflowDevTaskExecutor.CarryOperatorRetryAsync</c>, gated on <c>IsOperatorRetry</c>.
-    /// </remarks>
-    public bool WidenReviewRounds { get; init; }
-
-    /// <summary>
     ///     Moves a <c>Blocked</c> task back to <c>InProgress</c> so its latest, succeeded coder attempt is validated again, charging and
-    ///     widening nothing; the ONLY thing that opens that edge.
+    ///     widening nothing; the ONLY edge out of <c>Blocked</c>.
     /// </summary>
     /// <remarks>
     ///     For a validation stopped because the host had no test runner: no patch was judged, so the retry re-runs the gate on the same
-    ///     patch instead of sending it back to the coder. CALLER-TRUSTED like <see cref="WidenReviewRounds" />; set only by
-    ///     <c>DevWorkflowDevTaskExecutor.CarryOperatorRetryAsync</c>, gated on <c>IsOperatorRetry</c>.
+    ///     patch instead of sending it back to the coder. CALLER-TRUSTED: the store verifies no operator did anything; set only by
+    ///     <c>DevelopmentManagementService.StartNextActionAsync</c>.
     /// </remarks>
     public bool RetryValidation { get; init; }
 }
@@ -310,7 +297,7 @@ public sealed class DevelopmentEventSnapshot
 
     /// <summary>
     ///     The sentence the event was written with, when it carries one — why a task was blocked, why validation
-    ///     failed, why a workflow's fix loop sent an approved task back.
+    ///     failed, why a task was sent back for rework.
     /// </summary>
     /// <remarks>
     ///     The only member of the detail document that leaves this store: it is authored or sanitized and bounded at
@@ -374,19 +361,19 @@ public sealed record DevelopmentExecutionSnapshot
     /// </summary>
     /// <remarks>
     ///     Resolved from the task's own event log rather than from a column, so it costs no migration and reads the
-    ///     same sentence a reviewer wrote and a workflow's fix loop wrote.
+    ///     same sentence a reviewer or a failed validation wrote.
     /// </remarks>
     public string? PreviousRoundFeedback { get; init; }
 
     /// <summary>
-    ///     The rule-set text a Development workflow injected onto this task, or nothing when no workflow drives it.
+    ///     The instructions a Graph workflow <c>DevTask</c> node recorded on this task, or nothing when no node run drives it.
     /// </summary>
     /// <remarks>
     ///     Resolved from the task's own event log exactly as <see cref="PreviousRoundFeedback" /> is, so it costs no
     ///     migration and reaches the coder and the reviewer through the one channel both already read. Bounded by the
-    ///     node run that applied it, not by the task: the workflow records its resolution on every dispatch — an EMPTY
-    ///     one included — and an empty one again when it settles the node run, so a later workflow that resolves no
-    ///     policy and a manual round afterwards both answer nothing rather than replaying a dead snapshot.
+    ///     node run that applied it, not by the task: the node records its instructions when each attempt starts — an
+    ///     EMPTY one included — and an empty one again when the attempt ends, so a later node with no instructions and a
+    ///     manual round afterwards both answer nothing rather than replaying a dead snapshot.
     /// </remarks>
     public string? WorkflowPolicyText { get; init; }
 
@@ -405,8 +392,8 @@ public sealed record DevelopmentExecutionSnapshot
 }
 
 /// <summary>
-///     One rule set as a workflow's policy event names it. The hash is what lets the Dev Mode audit and the workflow's
-///     own node-run resolution be checked against each other; the text itself lives in the event's <c>policyText</c>.
+///     The instructions a Graph workflow <c>DevTask</c> node run handed its task, as the policy event names them. The
+///     hash lets the Dev Mode audit be checked against the node run; the text itself lives in the event's <c>policyText</c>.
 /// </summary>
 public sealed record DevelopmentWorkflowRuleSetReference(Guid Id, string Name, string ContentSha256);
 
@@ -598,15 +585,14 @@ public interface IDevelopmentStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Records the rule-set text a Development workflow resolved for the node run that drives
+    ///     Records the instructions a Graph workflow <c>DevTask</c> node run carries for the task it drives,
     ///     <paramref name="taskId" />, as the channel the coder and reviewer prompts read it back through.
     /// </summary>
     /// <remarks>
-    ///     Idempotent per <paramref name="operationId" />, derived deterministically from the run and node, so a node
-    ///     run re-bound to the same task after a crash appends no second injection. The text goes into the event's
-    ///     encrypted detail: a SNAPSHOT the node run already made, since this store never reads a rule set and what it
-    ///     is handed is what the workflow's audit names by hash. A BLANK text with no rule sets is the clear, and the
-    ///     snapshot reads the latest row — recording one revokes the policy for every round after it, bounding the injection without a second event type.
+    ///     Idempotent per <paramref name="operationId" />, derived from the run and node, so a node run re-bound to the
+    ///     same task after a crash appends no second injection. The text goes into the event's encrypted detail as handed;
+    ///     each reference names the node's instructions by hash. A BLANK text with no references is the clear: the
+    ///     snapshot reads the latest row, so recording one revokes the policy for every later round.
     /// </remarks>
     Task<DevelopmentOperationResult> RecordWorkflowPolicyAsync(Guid taskId,
         Guid operationId,

@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     One entry in an instance's lifecycle history. A plain class rather than a record class, matching the sibling
-///     event tables it copies (<see cref="IntegrationExecutionEvent" />, <see cref="DevWorkflowRunEvent" />).
+///     event tables it copies (<see cref="IntegrationExecutionEvent" />, <see cref="AgentWorkSessionEvent" />).
 /// </summary>
 internal sealed class ExternalAppInstanceEvent
 {

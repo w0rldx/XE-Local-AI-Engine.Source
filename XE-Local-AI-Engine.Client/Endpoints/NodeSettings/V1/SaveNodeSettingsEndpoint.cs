@@ -113,9 +113,6 @@ public sealed class SaveNodeSettingsEndpoint : Endpoint<SaveNodeSettingsRequest,
             case NodeSettingsField.WorkSessionsEnabled:
                 AddError(r => r.WorkSessionsEnabled, error.Message);
                 break;
-            case NodeSettingsField.DevWorkflowsEnabled:
-                AddError(r => r.DevWorkflowsEnabled, error.Message);
-                break;
             case NodeSettingsField.AgentHomeEnabled:
                 AddError(r => r.AgentHomeEnabled, error.Message);
                 break;

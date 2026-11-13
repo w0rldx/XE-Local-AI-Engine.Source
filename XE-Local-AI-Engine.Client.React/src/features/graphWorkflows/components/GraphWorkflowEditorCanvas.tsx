@@ -11,6 +11,7 @@ import { Alert, Button, Group, Paper, Stack, Text } from "@mantine/core";
 import {
 	IconArrowsJoin2,
 	IconArrowsSplit2,
+	IconCode,
 	IconFlag,
 	IconFlagCheck,
 	IconGitBranch,
@@ -67,6 +68,7 @@ const paletteIcons: Record<GraphWorkflowNodeKind, typeof IconRobot> = {
 	End: IconFlagCheck,
 	ChatInput: IconMessageQuestion,
 	DecisionModel: IconRoute,
+	DevTask: IconCode,
 };
 
 /**

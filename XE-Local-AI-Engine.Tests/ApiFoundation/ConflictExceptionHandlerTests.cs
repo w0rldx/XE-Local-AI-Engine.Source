@@ -49,24 +49,6 @@ public sealed class ConflictExceptionHandlerTests
     }
 
     /// <summary>
-    ///     The development-workflow gate's arm, and the other half of <c>SetStandingDecision</c>: <c>standingDecision</c>
-    ///     tells the second person to click WHAT was decided rather than only that their click failed.
-    /// </summary>
-    [Test]
-    public async Task TryHandleAsync_ForADevWorkflowGateAlreadyDecided_WritesTheStandingDecision()
-    {
-        var exception = new DevWorkflowGateAlreadyDecidedException("Node run 'review' was already decided Approve.", DevWorkflowDecisionKind.Approve);
-
-        var body = await HandleAsync(exception);
-
-        AssertEx.Equal("DevWorkflowGateAlreadyDecided", body.ConflictType);
-        AssertEx.Equal(expected: 409, body.Status);
-        AssertEx.Equal(exception.Message, body.Detail);
-        AssertEx.Equal("Approve", body.StandingDecision);
-        AssertEx.NotEmpty(body.TraceId);
-    }
-
-    /// <summary>
     ///     The graph-workflow run family's arm, asserted against the handler itself rather than over a route. The three
     ///     exception types it maps come from three different layers, and one of them — the store's own rejection
     ///     channel — is not reachable from any endpoint without first winning a race; asking the switch directly is the

@@ -1,4 +1,4 @@
-// The feature's one fixture file. Per-DTO builders rather than per-route, the `DevWorkflowFixtures.ts` shape: the
+// The feature's one fixture file. Per-DTO builders rather than per-route, the `GraphWorkflowFixtures.ts` shape: the
 // instance payload backs several test files from one builder, parameterized by status.
 //
 // Every builder returns the WIRE shape (all fields optional, as hey-api types them from the OpenAPI document), so a

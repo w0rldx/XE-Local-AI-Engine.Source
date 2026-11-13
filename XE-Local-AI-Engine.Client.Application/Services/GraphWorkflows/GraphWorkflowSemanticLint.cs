@@ -67,6 +67,7 @@ internal static class GraphWorkflowSemanticLint
         {
             GraphWorkflowLlmCallConfig llm => llm.InputBindings.Select(static binding => new BindingPath($"inputBindings.{binding.Key}", binding.Value)),
             GraphWorkflowDecisionModelConfig decision => decision.InputBindings.Select(static binding => new BindingPath($"inputBindings.{binding.Key}", binding.Value)),
+            GraphWorkflowDevTaskConfig devTask => devTask.InputBindings.Select(static binding => new BindingPath($"inputBindings.{binding.Key}", binding.Value)),
             GraphWorkflowToolConfig tool => tool.ArgumentBindings.Select(static binding => new BindingPath($"argumentBindings.{binding.Key}", binding.Value)),
             GraphWorkflowEndConfig { ResultPath: { } resultPath } => [new BindingPath("resultPath", resultPath)],
             _ => []

@@ -196,40 +196,8 @@ public sealed class NodeChatHubTests
     }
 
     /// <summary>
-    ///     <c>RefuseUndeclaredWrites</c> is a server-set field: only the development-workflow runtime arms it, on the
-    ///     requests it builds itself. It travels on the same record the hub forwards, so a client can put it on the
-    ///     wire — and the hub clears it, because nothing arriving here is running a workflow node and a client-armed
-    ///     rule could only make that client's own turn refuse.
-    /// </summary>
-    [Test]
-    public async Task SendMessage_WhenAClientArmsTheWriteDeclarationFlag_ClearsItBeforeTheStreamService()
-    {
-        var recorder = new RecordingNodeChatStreamService();
-        await using var factory = new TestServerWebAppFactory
-        {
-            ConfigureAdditionalTestServices = services =>
-            {
-                services.RemoveAll<INodeChatStreamService>();
-                services.AddSingleton<INodeChatStreamService>(recorder);
-            }
-        };
-        await using var connection = CreateHubConnection(factory);
-        await connection.StartAsync();
-
-        await foreach (var _ in connection.StreamAsync<ChatStreamEvent>("SendMessage",
-                           new NodeChatStreamRequest(Guid.NewGuid(), "hello", RefuseUndeclaredWrites: true)))
-        {
-            // The scrub is what this pins; the stream itself is the recorder's fixed single event.
-        }
-
-        AssertEx.True(recorder.Invoked, "the send itself is not rejected — only the field is dropped.");
-        AssertEx.False(AssertEx.NotNull(recorder.LastRequest).RefuseUndeclaredWrites,
-            "a client may not arm GRAPH-2's runtime half on a turn no workflow node is driving.");
-    }
-
-    /// <summary>
-    ///     <c>ExecutionParent</c> is server-set the same way: an engine stamps it on the requests it builds, and a
-    ///     client-supplied one would forge a link from its own turn's run envelope to an engine journal.
+    ///     <c>ExecutionParent</c> is server-set: an engine stamps it on the requests it builds, and a client-supplied one
+    ///     would forge a link from its own turn's run envelope to an engine journal.
     /// </summary>
     [Test]
     public async Task SendMessage_WhenAClientNamesAnExecutionParent_ClearsItBeforeTheStreamService()

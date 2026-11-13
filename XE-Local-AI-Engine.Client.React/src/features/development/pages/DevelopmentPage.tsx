@@ -43,7 +43,6 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 		tasks,
 		selectedTaskId,
 		setSelectedTaskId,
-		workflowWorkItemId,
 		retryWorkflowRun,
 		workflowOwnsApply,
 		workflowRunEnded,
@@ -243,7 +242,6 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 								<DevelopmentTaskSwitcher tasks={tasks} selectedTaskId={selectedTaskId} onSelect={setSelectedTaskId} />
 								<DevelopmentWorkflowTaskBanner
 									workflowRunId={task.workflowRunId}
-									workItemId={workflowWorkItemId}
 									runEnded={workflowRunEnded}
 									runUnreadable={workflowRunUnreadable}
 									onRetryStatus={retryWorkflowRun}

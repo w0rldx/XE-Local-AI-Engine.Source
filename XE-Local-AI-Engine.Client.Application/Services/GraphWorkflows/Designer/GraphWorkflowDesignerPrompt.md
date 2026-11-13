@@ -80,7 +80,8 @@ Binding rules (`inputBindings`, `argumentBindings`, `resultPath`):
 - Branches out of a `Condition` or `DecisionModel` node are mutually exclusive: only one is taken. A node that the
   branches flow back into MUST use `joinPolicy: "Any"`, or it is skipped whenever any branch is not taken.
 - A node after a `Pause` or `ChatInput` receives the decision document, not the content before the wait. To carry the
-  content, also add an edge from the node before the pause to that successor (it keeps `joinPolicy: "All"`).
+  content, also add an edge from the node before the pause to that successor (it keeps `joinPolicy: "All"`). Never
+  for a DevTask `apply` node: it reads its task by key, and DEVTASK-1 refuses that edge.
 
 # Node kinds
 
@@ -112,6 +113,16 @@ Binding rules (`inputBindings`, `argumentBindings`, `resultPath`):
   document), `publishToChat` (defaults true in a Chat graph). Output: `{"outcome", "result"}`.
 - `ChatInput` — Chat graphs only: waits for the chat user's next message. Config: `prompt` (required). Needs at least
   one unconditional out-edge. Output: `{"decision": "Answer", "text"}`.
+- `DevTask` — a Development Mode coding task; never in a Chat graph. A run of a graph with one needs
+  `run.input.developmentProjectId` (the Development project to work in), so declare it in the Start `inputSchema`.
+  Config `action` is `implement` or `apply`, and each reads only its own members:
+  - `implement`: `requirements` (required: what to build), `title`, `acceptanceCriteria` (list of strings),
+    `instructions` (rules the coder and reviewer follow), `inputBindings` (handed over beside the requirements, e.g.
+    `{"request": "run.input.request"}`). Drives one task until its patch is reviewed and awaits apply.
+  - `apply`: `task` (required: the key of the `implement` node whose patch it applies). Rule DEVTASK-1: every edge into
+    an `apply` node comes from a `Pause` placed after that `implement` node, and is conditioned on
+    `{"path": "output.decision", "op": "Eq", "value": "Approve"}`. No other edge may enter an `apply`, not even one
+    carrying content. Typical shape: `implement` → `Pause` → (Approve) `apply` → `End`, with Reject → another `End`.
 
 # Example
 

@@ -48,5 +48,6 @@ public sealed class GetLocalModelProxyApiKeyEndpointTests
         AssertEx.False(status.Configured, "A node with no minted credential must report configured=false, not 404.");
         AssertEx.Null(status.ApiKey);
         AssertEx.Contains(status.EndpointUrl, "/api/local/v1/proxy/v1", StringComparison.Ordinal);
+        AssertEx.True(status.AnthropicEndpointUrl.EndsWith("/api/local/v1/proxy", StringComparison.Ordinal), status.AnthropicEndpointUrl);
     }
 }

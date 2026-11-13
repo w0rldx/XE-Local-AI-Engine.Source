@@ -2,7 +2,7 @@
 
 Scope: Agent Mode, MAF/MEAI wiring, tool calling and approval, cloud providers, chat state, workflow engines,
 and the `--mcp-only` launch. Read when: touching `AI.Agent`, tool invocation or approval, a cloud or MCP provider,
-`Services/GraphWorkflows` / `Services/DevWorkflows`, `LaunchMode.McpOnly`, or bumping the MAF / MEAI / `OpenAI` packages.
+`Services/GraphWorkflows`, `LaunchMode.McpOnly`, or bumping the MAF / MEAI / `OpenAI` packages.
 Sandbox, compute and AgentHome containment: [sandbox-and-compute](sandbox-and-compute.md).
 
 ## Tools, approval and invocation
@@ -120,19 +120,11 @@ Sandbox, compute and AgentHome containment: [sandbox-and-compute](sandbox-and-co
 
 ### Graph Workflows: a cap has to be enforced BEFORE the work it bounds, not after it
 
-**Rule:** both parsers refuse on the declared `nodes` array length before reading a node: `GraphWorkflowGraph.Parse(graphJson, maxNodes)` (200, 1 MiB body) and `DevWorkflowGraph.Parse(graphJson, maxNodes)` via `DevWorkflowGraphContract.ValidateAndCountNodes` (`DevWorkflowOptions.MaxNodesPerDefinition` 500; `DevWorkflowRequestSizeLimit` 2 MiB on create/update). Cycle and ancestor walks (`EnsureAcyclic`, `AncestorsFirst`) use an explicit stack. Re-parses of a stored graph (and `DevWorkflowDefinitionSeeder`) stay uncapped on purpose. **Prevents:** a deep chain overflowing the stack (a process kill no `catch` sees). **Authority:** `GraphWorkflowGraphContractTests`, `DevWorkflowGraphTests.Parse_WithAChainDeeperThanTheStackWouldCarry_IsWalkedWithoutRecursion`. [evidence](../agent-knowledge-evidence.md#graph-workflows-a-cap-has-to-be-enforced-before-the-work-it-bounds-not-after-it)
+**Rule:** the parser refuses on the declared `nodes` array length before reading a node: `GraphWorkflowGraph.Parse(graphJson, maxNodes)` (200, 1 MiB body). Cycle and ancestor walks (`EnsureAcyclic`, `AncestorsFirst`) use an explicit stack. Re-parses of a stored graph stay uncapped on purpose. **Prevents:** a deep chain overflowing the stack (a process kill no `catch` sees). **Authority:** `GraphWorkflowGraphContractTests`. [evidence](../agent-knowledge-evidence.md#graph-workflows-a-cap-has-to-be-enforced-before-the-work-it-bounds-not-after-it)
 
 ### Graph Workflows: the response-schema warning mirrors a THIRD-PARTY transform, so it drifts on a package bump
 
 **Rule:** `GraphWorkflowGraph.ResponseSchemaWarnings` (`DroppedSchemaKeywords`, `NestedSchemaMembers`) hand-copies the `Microsoft.Extensions.AI.OpenAI` strict-schema transform: re-read the adapter's keyword list and descent members on every bump of that package. **Prevents:** a warning that lies in whichever direction upstream moved, false or missing. **Authority:** `GraphWorkflowGraphTests`, `GraphWorkflowValidateEndpointTests`; mechanism in `docs/wiki/21-graph-workflows.md` §2.4.
-
-### Graph Workflows: `GraphWorkflowCondition.Order` and `DevWorkflowCondition.Order` are a knowingly duplicated pair
-
-**Rule:** a change to either comparison ladder is a change to both: edit both files and run `GraphWorkflowConditionTests` and `DevWorkflowConditionTests`. There is no shared evaluator by decision (graph-core extraction shelved), not debt. **Prevents:** fixing one engine and shipping the other wrong with both suites green. **Authority:** operator ruling R7-1; the "Mirrored in GraphWorkflowCondition.Order … change both" comment in `DevWorkflowCondition`.
-
-### A fix in one workflow engine is not automatically engine-local
-
-**Rule:** before changing behaviour in `Services/DevWorkflows/` or `Services/GraphWorkflows/`, read `docs/wiki/22-workflow-engines-divergence-register.md` for the sibling engine's equivalent. The engines were copy-adapted, not shared; most differences are deliberate, but the register also tracks unexamined gaps, and it, not assumption, says which is which. **Prevents:** fixing a restart-recovery, approval or retry defect in one engine and leaving it in the other. **Authority:** the register; operator ruling of 2026-09-09 (write the register, defer convergence).
 
 ## Agentic support / MCP-only mode
 
@@ -172,6 +164,6 @@ Superseded claims; the entries above are the active rules.
 | Win32k is denied in the MXC sandbox, so only native console programs and CPython start there. | Allowed since the ADR 0019 amendment of 2026-10-11 (`MxcPolicyMapper` sets `Ui.Disable = false`, `MxcPolicyGuard` accepts either value): node.js, PowerShell 7 and .NET children can start. Clipboard and input injection stay denied. The next Windows round re-proves it. |
 | A subfolder of a protected credential store (Firefox profiles, `Roaming\Microsoft\Protect`) is bindable as a sandboxed server's command or working folder. | Refused: a tree that equals, contains or lies inside a protected root is refused; `AppData\Roaming\npm` and `WindowsApps` still bind. |
 | The jail is always the sandboxed server's current directory. | On Linux and Windows a granted registered working directory becomes the child's cwd (bubblewrap binds it at its host path and changes into it); the jail stays the only writable root, so relative writes fail, `HOME`, `TMP` and `TEMP` stay in the jail, and a folder named only in the arguments is never granted. |
-| Dev Workflows accepts a definition of any size, and the node cap there is a known-unfixed finding. | Fixed: `DevWorkflowOptions.MaxNodesPerDefinition` (500) is enforced inside the parse and `DevWorkflowRequestSizeLimit` caps create and update at 2 MiB (§4). |
+| A fix in one workflow engine must be checked against the other in the divergence register. | One engine since ADR 0023: Dev Workflows is retired, so `GraphWorkflowCondition.Order` has no mirror to keep in step and wiki 22 is a retired-engine note. |
 | `llm` is the one `DecisionModel` provider, and its output's `confidence` and `probabilities` are always null. | `systemone` is a second provider (native decision models through `/v1/systemone`, `choice`/`noul`/`score`); its output carries model-reported, uncalibrated `probabilities`, `confidence`, `noul`, `score` and `legend`. Only `llm` still reports null (wiki 21 §4.9). |
 | A `DecisionModel` always answers one of its `labels`. | Only a `choice` question does; `noul` takes no labels and `score` takes ordered levels, and their `output.choice` is a convenience (`yes`/`no`, the nearest level) beside the real number. |

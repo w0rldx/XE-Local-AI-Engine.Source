@@ -1,6 +1,6 @@
 // Verifies that the External Apps i18n keys stay in parity between en.json and every other locale, and that every
 // closed vocabulary this feature looks up by value has a label. Parity is opt-in per feature, so this area owns its
-// own file the way Development Workflows does. Not jsdom-scoped: it operates purely on the JSON locale files.
+// own file the way Graph Workflows does. Not jsdom-scoped: it operates purely on the JSON locale files.
 //
 // The label maps are the half that fails SILENTLY. A status, failure category, runtime status, event kind, conflict
 // type, permission name or blocked reason is looked up by its narrowed value, so a member without a label renders its

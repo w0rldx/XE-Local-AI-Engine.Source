@@ -45,13 +45,27 @@ public sealed class DevelopmentProjectAggregate
     public required IReadOnlyList<DevelopmentEventSnapshot> Events { get; init; }
 }
 
+/// <summary>The workflow engine a run id belongs to; Graph Workflows is the only one since Dev Workflows was retired (ADR 0023).</summary>
+public enum DevelopmentWorkflowEngine
+{
+    GraphWorkflow
+}
+
+/// <summary>A workflow run named together with its engine: what owns a task, and what an apply lane passes as its caller.</summary>
+public sealed record DevelopmentWorkflowRunReference
+{
+    public required DevelopmentWorkflowEngine Engine { get; init; }
+
+    public required Guid RunId { get; init; }
+}
+
 /// <summary>
-///     Everything a task page renders in one read, including <see cref="WorkflowRunId" />.
+///     Everything a task page renders in one read, including <see cref="WorkflowRun" />.
 /// </summary>
 /// <remarks>
-///     <see cref="WorkflowRunId" /> names the development workflow run driving this task and is null for a task an
-///     operator drives themselves — the one thing here that is not the task's own row. Apply is approved at that
-///     run's gate, so the page has to know it is not the one being asked.
+///     <see cref="WorkflowRun" /> names the workflow run driving this task and is null for a task an operator drives
+///     themselves — the one thing here that is not the task's own row. Apply is approved at that run's gate, so the
+///     page has to know it is not the one being asked, and which engine's page to link.
 /// </remarks>
 public sealed record DevelopmentTaskAggregate
 {
@@ -61,7 +75,7 @@ public sealed record DevelopmentTaskAggregate
 
     public required IReadOnlyList<DevelopmentArtifactSnapshot> Artifacts { get; init; }
 
-    public Guid? WorkflowRunId { get; init; }
+    public DevelopmentWorkflowRunReference? WorkflowRun { get; init; }
 }
 
 public sealed class DevelopmentNextActionResult

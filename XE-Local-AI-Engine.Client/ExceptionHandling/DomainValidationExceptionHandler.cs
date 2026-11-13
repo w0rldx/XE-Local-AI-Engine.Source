@@ -12,7 +12,6 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -57,7 +56,6 @@ public sealed class DomainValidationExceptionHandler : IExceptionHandler
             or AgentDefinitionValidationException
             or AgentSkillValidationException
             or WorkSessionValidationException
-            or DevWorkflowValidationException
             or EntraConnectionNotConfiguredException
             or SkillImportException
             or AppUpdateException

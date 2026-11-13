@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.WorkSessions;
 using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
-using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -87,91 +86,12 @@ public sealed class WorkSessionToolSchemaTests
             "Sessions without an output contract never send one.");
     }
 
-    /// <summary>A plain string member still has a bound, the tool's own text cap, and the rendered contract says so.</summary>
-    [Test]
-    public void OutputContract_RendersAPlainStringMemberWithTheToolsTextBound()
-    {
-        var contract = new WorkSessionOutputSchema
-        {
-            Properties =
-            [
-                new WorkSessionOutputProperty
-                {
-                    Name = "note",
-                    Type = WorkSessionOutputType.String,
-                    Required = false,
-                    Enum = null,
-                    MaxLength = null
-                }
-            ]
-        };
-
-        AssertEx.Contains(contract.Render(), $"- note: string, at most {WorkSessionToolDefinitions.TextMaxLength} characters");
-    }
-
-    /// <summary>An integer member is judged by value, not by spelling: JSON Schema counts 1.0 and 1e0 as integers too.</summary>
-    [Test]
-    [Arguments("3", true)]
-    [Arguments("3.0", true)]
-    [Arguments("1e0", true)]
-    [Arguments("-2E2", true)]
-    [Arguments("3.5", false)]
-    [Arguments("1e-1", false)]
-    [Arguments("\"3\"", false)]
-    public void OutputContract_AcceptsAnIntegerMemberByValueWhateverItsSpelling(string count, bool accepted)
-    {
-        var contract = new WorkSessionOutputSchema
-        {
-            Properties =
-            [
-                new WorkSessionOutputProperty
-                {
-                    Name = "count",
-                    Type = WorkSessionOutputType.Integer,
-                    Required = true,
-                    Enum = null,
-                    MaxLength = null
-                }
-            ]
-        };
-        using var output = JsonDocument.Parse($$"""{"count":{{count}}}""");
-
-        var violation = contract.Violation(output.RootElement);
-
-        if (accepted)
-        {
-            AssertEx.Null(violation);
-        }
-        else
-        {
-            AssertEx.Contains(AssertEx.NotNull(violation), "'output.count' must be a whole number");
-        }
-    }
-
-    /// <summary>The read tool's shape: a required name, an optional non-negative character offset, an optional producer, nothing else.</summary>
-    [Test]
-    public void ReadUpstreamArtifact_TakesANameAndAnOptionalOffsetAndProducer()
-    {
-        using var document = JsonDocument.Parse(WorkSessionToolDefinitions.ReadUpstreamArtifact.ParameterSchema);
-
-        var properties = document.RootElement.GetProperty("properties");
-        AssertEx.Equal("name, offset, producer", string.Join(", ", properties.EnumerateObject().Select(static property => property.Name)));
-        AssertEx.Equal("integer", properties.GetProperty("offset").GetProperty("type").GetString());
-        AssertEx.Equal(expected: 0, properties.GetProperty("offset").GetProperty("minimum").GetInt32());
-        AssertEx.Equal("name", string.Join(", ", document.RootElement.GetProperty("required").EnumerateArray().Select(static member => member.GetString())));
-        AssertEx.True(WorkSessionToolDefinitions.ReadUpstreamArtifact.PageCharacters <= WorkSessionToolDefinitions.TextMaxLength,
-            "a page is never longer than the text bound every other work-session tool holds itself to.");
-    }
-
-    /// <summary>The read tool writes nothing, so it is the one descriptor that is not WriteExecute; the four state tools all are.</summary>
+    /// <summary>The four state tools all write durable rows, so every descriptor is WriteExecute.</summary>
     [Test]
     public void EveryDescriptor_MatchesTheHandlerNameAndCarriesNoApprovalGate()
     {
-        AssertEx.Equal(WorkSessionToolDefinitions.ToolNames.Count + 1, WorkSessionToolCatalog.Descriptors.Count);
-        var read = AssertEx.NotNull(WorkSessionToolCatalog.Descriptors.SingleOrDefault(static descriptor => descriptor.Name == WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName));
-        AssertEx.Equal(ToolCategory.ReadLocal, read.Category);
-        AssertEx.False(read.RequiresApproval);
-        foreach (var descriptor in WorkSessionToolCatalog.Descriptors.Where(static descriptor => descriptor.Name != WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName))
+        AssertEx.Equal(WorkSessionToolDefinitions.ToolNames.Count, WorkSessionToolCatalog.Descriptors.Count);
+        foreach (var descriptor in WorkSessionToolCatalog.Descriptors)
         {
             AssertEx.Contains(WorkSessionToolDefinitions.ToolNames, descriptor.Name);
             AssertEx.False(descriptor.RequiresApproval, "A prompt per recorded finding would make an unattended session unusable.");

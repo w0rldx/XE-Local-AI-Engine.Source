@@ -20,6 +20,9 @@ public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
 
     private const string PreVramMigrationId = "20260904190259_AddModelReadinessTelemetry";
 
+    /// <summary>Asserted at this migration, not at head: <c>DropDevWorkflows</c> later drops <c>dev_workflow_node_runs</c>.</summary>
+    private const string VramMigrationId = "20260904234758_AddVramAtLoadTelemetry";
+
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
@@ -51,7 +54,7 @@ public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync();
+            await context.Database.GetService<IMigrator>().MigrateAsync(VramMigrationId);
         }
 
         await using var upgraded = await OpenConnectionAsync(databasePath);
@@ -61,16 +64,16 @@ public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
     }
 
     [Test]
-    public async Task MigrateAsync_ToHeadOnFreshDatabase_AddsBothVramColumns()
+    public async Task MigrateAsync_OnAFreshDatabase_AddsBothVramColumns()
     {
         var databasePath = GetDatabasePath("vram-at-load-fresh.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, VramMigrationId);
 
         await using var connection = await OpenConnectionAsync(databasePath);
         var columns = await GetNodeRunColumnNamesAsync(connection);
-        AssertEx.True(columns.Contains(FreeColumn), "A fresh migrate-to-head should expose the free-VRAM column.");
-        AssertEx.True(columns.Contains(AdmittedColumn), "A fresh migrate-to-head should expose the admitted-VRAM column.");
+        AssertEx.True(columns.Contains(FreeColumn), "A fresh migrate should expose the free-VRAM column.");
+        AssertEx.True(columns.Contains(AdmittedColumn), "A fresh migrate should expose the admitted-VRAM column.");
     }
 
     [Test]

@@ -248,6 +248,7 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 			llmModelOptionsReady={llmModelOptionsQuery.isSuccess}
 			decisionModelOptionsReady={decisionModelOptionsQuery.isSuccess}
 			graphSettings={editor.settings}
+			graphNodes={editor.nodes.map((node) => node.data)}
 			readOnly={!isEditing}
 			onAskAssistant={() =>
 				designer.openAssistant(

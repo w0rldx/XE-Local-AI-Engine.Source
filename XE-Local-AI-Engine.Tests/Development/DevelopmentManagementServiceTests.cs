@@ -266,43 +266,191 @@ public sealed class DevelopmentManagementServiceTests
     {
         var projectId = Guid.NewGuid();
         var operatorDriven = Guid.NewGuid();
-        var workflowDriven = Guid.NewGuid();
         var alsoOperatorDriven = Guid.NewGuid();
-        var runId = Guid.NewGuid();
+        var graphDriven = Guid.NewGuid();
+        var graphRunId = Guid.NewGuid();
         var store = Substitute.For<IDevelopmentStore>();
         store.GetProjectAsync(projectId, Arg.Any<CancellationToken>()).Returns(ProjectSnapshot(projectId));
         store.ListTasksAsync(projectId, Arg.Any<CancellationToken>())
              .Returns([
                  TaskSnapshot(projectId, operatorDriven),
-                 TaskSnapshot(projectId, workflowDriven),
-                 TaskSnapshot(projectId, alsoOperatorDriven)
+                 TaskSnapshot(projectId, alsoOperatorDriven),
+                 TaskSnapshot(projectId, graphDriven)
              ]);
+        var graphWorkflows = Substitute.For<IGraphWorkflowStore>();
+        graphWorkflows.ListDevelopmentTaskRunsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+                      .Returns([GraphOwner(graphDriven, graphRunId, GraphWorkflowRunStatus.Running)]);
         store.ListAttemptsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<DevelopmentAttemptSnapshot>());
         store.ListArtifactsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<DevelopmentArtifactSnapshot>());
         store.ListEventsAsync(projectId, Arg.Any<CancellationToken>()).Returns(Array.Empty<DevelopmentEventSnapshot>());
 
-        var workflows = Substitute.For<IDevWorkflowStore>();
-        workflows.FindRunIdsForDevelopmentTasksAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
-                 .Returns(new Dictionary<Guid, Guid>
-                 {
-                     [workflowDriven] = runId
-                 });
-
         var service = CreateService(store,
             Substitute.For<IDevelopmentCoordinator>(),
             Substitute.For<IDevelopmentAttemptExecutionSupervisor>(),
-            workflows: workflows);
+            graphWorkflows: graphWorkflows);
 
         var project = await service.GetProjectAsync(projectId);
 
         AssertEx.Equal(3, project.Tasks.Count);
-        AssertEx.Null(project.Tasks[0].WorkflowRunId);
-        AssertEx.Equal(runId, project.Tasks[1].WorkflowRunId!.Value);
-        AssertEx.Null(project.Tasks[2].WorkflowRunId);
-        await workflows.Received(1)
-                       .FindRunIdsForDevelopmentTasksAsync(Arg.Is<IReadOnlyList<Guid>>(ids => ids.Count == 3 && ids.Contains(workflowDriven)),
-                           Arg.Any<CancellationToken>());
-        await workflows.DidNotReceive().FindRunIdForDevelopmentTaskAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        AssertEx.Null(project.Tasks[0].WorkflowRun);
+        AssertEx.Null(project.Tasks[1].WorkflowRun);
+        AssertEx.Equal(new DevelopmentWorkflowRunReference
+        {
+            Engine = DevelopmentWorkflowEngine.GraphWorkflow,
+            RunId = graphRunId
+        }, project.Tasks[2].WorkflowRun, "a Graph-driven task names its run WITH its engine, so the page links the right one.");
+        await graphWorkflows.Received(1)
+                            .ListDevelopmentTaskRunsAsync(Arg.Is<IReadOnlyList<Guid>>(ids => ids.Count == 3 && ids.Contains(graphDriven)),
+                                Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>Who asks for the apply. Ids are relative to the owning run a row sets up.</summary>
+    public enum ApplyCaller
+    {
+        Operator,
+        StrangerGraphRun,
+        TheGraphOwner
+    }
+
+    /// <summary>What owns the task in the Graph store: <c>TerminalThenLive</c> is a newer ended run over an older live one.</summary>
+    public enum GraphOwnership
+    {
+        None,
+        Live,
+        Terminal,
+        TerminalThenLive
+    }
+
+    /// <summary>
+    ///     The apply guard as a table: any live owning Graph run refuses unless it is the caller.
+    /// </summary>
+    /// <remarks>
+    ///     Allowed is asserted as "reached the apply service" (this class's apply service throws
+    ///     <see cref="NotSupportedException" />), refused as the guard's own exception naming the run.
+    /// </remarks>
+    [Test]
+    [Arguments(GraphOwnership.None, ApplyCaller.Operator, false)]
+    [Arguments(GraphOwnership.Live, ApplyCaller.Operator, true)]
+    [Arguments(GraphOwnership.Live, ApplyCaller.StrangerGraphRun, true)]
+    [Arguments(GraphOwnership.Live, ApplyCaller.TheGraphOwner, false)]
+    [Arguments(GraphOwnership.Terminal, ApplyCaller.Operator, false)]
+    [Arguments(GraphOwnership.TerminalThenLive, ApplyCaller.Operator, true)]
+    public async Task Apply_IsRefusedWhileALiveRunOwnsTheTask_UnlessThatRunIsTheCaller(GraphOwnership graphOwnership, ApplyCaller caller, bool refused)
+    {
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var ownerRunId = Guid.NewGuid();
+        var store = Substitute.For<IDevelopmentStore>();
+        store.GetTaskAsync(taskId, Arg.Any<CancellationToken>()).Returns(TaskSnapshot(projectId, taskId));
+
+        var graphWorkflows = Substitute.For<IGraphWorkflowStore>();
+        graphWorkflows.ListDevelopmentTaskRunsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+                      .Returns(graphOwnership switch
+                      {
+                          GraphOwnership.None => [],
+                          GraphOwnership.Live => [GraphOwner(taskId, ownerRunId, GraphWorkflowRunStatus.WaitingForApproval)],
+                          GraphOwnership.Terminal => [GraphOwner(taskId, ownerRunId, GraphWorkflowRunStatus.Completed)],
+                          _ => [GraphOwner(taskId, Guid.NewGuid(), GraphWorkflowRunStatus.Failed), GraphOwner(taskId, ownerRunId, GraphWorkflowRunStatus.Running)]
+                      });
+
+        var service = CreateService(store,
+            Substitute.For<IDevelopmentCoordinator>(),
+            Substitute.For<IDevelopmentAttemptExecutionSupervisor>(),
+            graphWorkflows: graphWorkflows);
+        var onBehalfOf = caller switch
+        {
+            ApplyCaller.Operator => (DevelopmentWorkflowRunReference?)null,
+            ApplyCaller.StrangerGraphRun => Run(Guid.NewGuid()),
+            _ => Run(ownerRunId)
+        };
+
+        var failure = await AssertEx.ThrowsAsync<Exception>(() => service.ApplyAsync(projectId, taskId, Guid.NewGuid(), onBehalfOf));
+
+        if (!refused)
+        {
+            AssertEx.True(failure is NotSupportedException, $"the guard must let this caller through to the apply: {failure.Message}");
+        }
+        else
+        {
+            AssertEx.True(failure is DevelopmentInvalidTransitionException, $"the guard must refuse this caller: {failure.Message}");
+            AssertEx.Contains(failure.Message, $"Graph workflow run '{ownerRunId:D}'");
+            AssertEx.Contains(failure.Message, "has not ended");
+        }
+    }
+
+    /// <summary>
+    ///     Graph Workflows off stops the dispatcher, so a live owner can neither end nor be cancelled. The guard fails
+    ///     closed anyway, and its refusal names the way out instead of an approval nobody can give.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task Apply_WithALiveGraphOwner_SaysToTurnGraphWorkflowsBackOnOnlyWhileItIsOff(bool graphWorkflowsEnabled)
+    {
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var ownerRunId = Guid.NewGuid();
+        var store = Substitute.For<IDevelopmentStore>();
+        store.GetTaskAsync(taskId, Arg.Any<CancellationToken>()).Returns(TaskSnapshot(projectId, taskId));
+        var graphWorkflows = Substitute.For<IGraphWorkflowStore>();
+        graphWorkflows.ListDevelopmentTaskRunsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+                      .Returns([GraphOwner(taskId, ownerRunId, GraphWorkflowRunStatus.WaitingForApproval)]);
+        var service = CreateService(store,
+            Substitute.For<IDevelopmentCoordinator>(),
+            Substitute.For<IDevelopmentAttemptExecutionSupervisor>(),
+            graphWorkflows: graphWorkflows,
+            graphWorkflowsEnabled: graphWorkflowsEnabled);
+
+        var failure = await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => service.ApplyAsync(projectId, taskId, Guid.NewGuid(), onBehalfOfWorkflowRun: null));
+
+        AssertEx.Contains(failure.Message, $"Graph workflow run '{ownerRunId:D}'");
+        if (graphWorkflowsEnabled)
+        {
+            AssertEx.Contains(failure.Message, "Approve it there");
+            AssertEx.False(failure.Message.Contains("Turn Graph Workflows back on", StringComparison.Ordinal), failure.Message);
+        }
+        else
+        {
+            AssertEx.Contains(failure.Message, "Turn Graph Workflows back on in Node Settings → General → Features to finish or cancel it.");
+            AssertEx.False(failure.Message.Contains("Approve it there", StringComparison.Ordinal), "no approval can be given while the engine is off.");
+        }
+    }
+
+    /// <summary>
+    ///     The link the page reads apply authority from: a live owner wins over a newer ended one, so the page never shows
+    ///     an Apply the guard would refuse; with no owner there is no link.
+    /// </summary>
+    [Test]
+    [Arguments(GraphOwnership.None, false)]
+    [Arguments(GraphOwnership.Live, true)]
+    [Arguments(GraphOwnership.Terminal, true)]
+    [Arguments(GraphOwnership.TerminalThenLive, true)]
+    public async Task GetTask_LinksALiveOwnerBeforeAnEndedOne(GraphOwnership graphOwnership, bool linked)
+    {
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var graphRunId = Guid.NewGuid();
+        var store = Substitute.For<IDevelopmentStore>();
+        store.GetTaskAsync(taskId, Arg.Any<CancellationToken>()).Returns(TaskSnapshot(projectId, taskId));
+        store.ListAttemptsAsync(taskId, Arg.Any<CancellationToken>()).Returns(Array.Empty<DevelopmentAttemptSnapshot>());
+        store.ListArtifactsAsync(taskId, Arg.Any<CancellationToken>()).Returns(Array.Empty<DevelopmentArtifactSnapshot>());
+        var graphWorkflows = Substitute.For<IGraphWorkflowStore>();
+        graphWorkflows.ListDevelopmentTaskRunsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+                      .Returns(graphOwnership switch
+                      {
+                          GraphOwnership.None => [],
+                          GraphOwnership.Live => [GraphOwner(taskId, graphRunId, GraphWorkflowRunStatus.Running)],
+                          GraphOwnership.Terminal => [GraphOwner(taskId, graphRunId, GraphWorkflowRunStatus.Completed)],
+                          _ => [GraphOwner(taskId, Guid.NewGuid(), GraphWorkflowRunStatus.Failed), GraphOwner(taskId, graphRunId, GraphWorkflowRunStatus.Running)]
+                      });
+        var service = CreateService(store,
+            Substitute.For<IDevelopmentCoordinator>(),
+            Substitute.For<IDevelopmentAttemptExecutionSupervisor>(),
+            graphWorkflows: graphWorkflows);
+
+        var task = await service.GetTaskAsync(projectId, taskId);
+
+        AssertEx.Equal(linked ? Run(graphRunId) : null, task.WorkflowRun);
     }
 
     /// <summary>A Ready task on a project whose coder model is <paramref name="coderModelId" />, stubbed only as far as the model gate.</summary>
@@ -369,7 +517,8 @@ public sealed class DevelopmentManagementServiceTests
         IDevelopmentRepositoryBindingService? repositoryBindings = null,
         Guid? selectedFolderId = null,
         IModelTrustResolver? modelTrustResolver = null,
-        IDevWorkflowStore? workflows = null) =>
+        IGraphWorkflowStore? graphWorkflows = null,
+        bool graphWorkflowsEnabled = true) =>
         new(store,
             coordinator,
             supervisor,
@@ -384,11 +533,9 @@ public sealed class DevelopmentManagementServiceTests
             // the profile carries no template id.
             Substitute.For<IDevelopmentTemplateStore>(),
 
-            // No workflow drives these tasks: the substitute answers null, which is the ordinary operator-driven case.
-            workflows ?? Substitute.For<IDevWorkflowStore>(),
-
-            // Workflows ON, so the apply-ownership guard is the one under test wherever these tests reach it.
-            StubNodeRuntimeSettings.Create().WithDevWorkflowsEnabled(true).Build(),
+            // No workflow drives these tasks unless a test says so: the ordinary operator-driven case.
+            graphWorkflows ?? NoGraphOwner(),
+            StubNodeRuntimeSettings.Create().WithGraphWorkflowsEnabled(graphWorkflowsEnabled).Build(),
             TimeProvider.System,
             NullLogger<DevelopmentManagementService>.Instance);
 
@@ -433,6 +580,29 @@ public sealed class DevelopmentManagementServiceTests
             CommandProfileJson = Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
                                                          .Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
                                                          .ToCanonicalUtf8())
+        };
+
+    /// <summary>A Graph store that names no owner for any task: the ordinary case, and every test here not about the guard.</summary>
+    private static IGraphWorkflowStore NoGraphOwner()
+    {
+        var graphWorkflows = Substitute.For<IGraphWorkflowStore>();
+        graphWorkflows.ListDevelopmentTaskRunsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>()).Returns([]);
+        return graphWorkflows;
+    }
+
+    private static GraphWorkflowDevelopmentTaskRun GraphOwner(Guid taskId, Guid runId, GraphWorkflowRunStatus status) =>
+        new()
+        {
+            DevelopmentTaskId = taskId,
+            RunId = runId,
+            RunStatus = status
+        };
+
+    private static DevelopmentWorkflowRunReference Run(Guid runId) =>
+        new()
+        {
+            Engine = DevelopmentWorkflowEngine.GraphWorkflow,
+            RunId = runId
         };
 
     private static DevelopmentTaskSnapshot TaskSnapshot(Guid projectId, Guid taskId) =>

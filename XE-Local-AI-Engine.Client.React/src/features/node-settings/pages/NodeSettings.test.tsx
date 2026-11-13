@@ -76,7 +76,6 @@ const { generatedMock } = vi.hoisted(() => ({
 		// for the workloads the high profile would refuse.
 		getDevelopmentCapabilityOptions: vi.fn(),
 		getDevelopmentCapabilityQueryKey: vi.fn(() => ["getDevelopmentCapability"]),
-		getDevWorkflowCapabilityQueryKey: vi.fn(() => ["getDevWorkflowCapability"]),
 		getGraphWorkflowCapabilityQueryKey: vi.fn(() => ["getGraphWorkflowCapability"]),
 		getWorkSessionCapabilityQueryKey: vi.fn(() => ["getWorkSessionCapability"]),
 		getTranscriptionRuntimeStatusQueryKey: vi.fn(() => ["getTranscriptionRuntimeStatus"]),
@@ -111,7 +110,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	downloadRecommendedEmbeddingMutation: generatedMock.downloadRecommendedEmbeddingMutation,
 	getDevelopmentCapabilityOptions: generatedMock.getDevelopmentCapabilityOptions,
 	getDevelopmentCapabilityQueryKey: generatedMock.getDevelopmentCapabilityQueryKey,
-	getDevWorkflowCapabilityQueryKey: generatedMock.getDevWorkflowCapabilityQueryKey,
 	getGraphWorkflowCapabilityQueryKey: generatedMock.getGraphWorkflowCapabilityQueryKey,
 	getWorkSessionCapabilityQueryKey: generatedMock.getWorkSessionCapabilityQueryKey,
 	getTranscriptionRuntimeStatusQueryKey: generatedMock.getTranscriptionRuntimeStatusQueryKey,
@@ -1171,7 +1169,6 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 
 		const capabilityKeys = [
 			["getDevelopmentCapability"],
-			["getDevWorkflowCapability"],
 			["getGraphWorkflowCapability"],
 			["getWorkSessionCapability"],
 			["getTranscriptionRuntimeStatus"],
@@ -1208,18 +1205,6 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			expect(invalidate).toHaveBeenCalledWith({ queryKey: fakeQueryKey("getDefaultAssistantToolOffer") });
 			expect(invalidate).toHaveBeenCalledWith({ queryKey: fakeQueryKey("getToolCatalog") });
 		});
-	});
-
-	it("refuses development workflows without work sessions, returns to General and flags the switch", async () => {
-		renderPage("general");
-		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
-
-		fireEvent.click(screen.getByTestId("node-settings-feature-dev-workflows"));
-		openSection("chat");
-		fireEvent.click(screen.getByTestId("node-settings-save-button"));
-
-		await waitFor(() => expect(screen.getByTestId("node-settings-features-card")).toBeTruthy());
-		expect(generatedMock.saveFn).not.toHaveBeenCalled();
 	});
 
 	it("keeps the plain saved notice when only live fields changed", async () => {

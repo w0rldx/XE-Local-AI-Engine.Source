@@ -1,0 +1,365 @@
+{
+	"schemaVersion": 1,
+	"nodes": [
+		{
+			"key": "start",
+			"kind": "Start",
+			"label": "Start",
+			"position": {
+				"x": 0,
+				"y": 260
+			},
+			"config": {
+				"inputSchema": null,
+				"defaultInput": {
+					"request": "Add a short CONTRIBUTING.md that explains how to build this project and run its tests, based on what the repository actually uses.",
+					"developmentProjectId": ""
+				}
+			}
+		},
+		{
+			"key": "classify",
+			"kind": "DecisionModel",
+			"label": "Classify the request",
+			"position": {
+				"x": 280,
+				"y": 260
+			},
+			"config": {
+				"question": "What kind of development request is the `request` data block?",
+				"labels": ["change", "question", "unclear"],
+				"criteria": {
+					"change": "It asks for the code to change: a feature (new behaviour, or a change to existing behaviour; a change request is a feature) or a bug (behaviour that is wrong today).",
+					"question": "It wants an explanation of the code or the project and no change.",
+					"unclear": "It cannot be acted on as written: it names no behaviour, contradicts itself, or leaves out what anyone would have to ask first."
+				},
+				"inputBindings": {
+					"request": "run.input.request"
+				}
+			}
+		},
+		{
+			"key": "answer",
+			"kind": "Agent",
+			"label": "Answer the question",
+			"position": {
+				"x": 560,
+				"y": 0
+			},
+			"config": {
+				"agentDefinitionId": null,
+				"instructions": "Answer the operator's question about this repository. The question is the `request` field of the Start node's output below. Read the code, configuration and documentation it is about with your file tools (list_files, search_text, read_file), and ground every statement in something you actually read, naming the files and symbols. Change nothing: this path ends with your answer. If the repository does not hold the answer, say so plainly and say what you looked at.",
+				"model": null,
+				"reasoningEffort": null,
+				"responseJsonSchema": null,
+				"includeUpstreamOutputs": true,
+				"repository": true
+			}
+		},
+		{
+			"key": "needsinfo",
+			"kind": "LlmCall",
+			"label": "Say what is missing",
+			"position": {
+				"x": 560,
+				"y": 130
+			},
+			"config": {
+				"systemPrompt": "You help a developer turn an unclear request into one that can be acted on. You do not research, plan or change anything.",
+				"prompt": "The request in the `request` data block was classified as unclear, so this run ends with questions for its requester rather than a guess. Say what is missing before anyone can act on it: the behaviour wanted or the behaviour observed, where it happens, how to reproduce it, and the result expected. Write each point as a numbered question the requester can answer in a line or two, and say what kind of request (feature, bug or question) it would become once answered, if you can tell. The requester answers by starting a new run with a clearer request.",
+				"inputBindings": {
+					"request": "run.input.request"
+				}
+			}
+		},
+		{
+			"key": "plan",
+			"kind": "Agent",
+			"label": "Plan the change",
+			"position": {
+				"x": 560,
+				"y": 260
+			},
+			"config": {
+				"agentDefinitionId": null,
+				"instructions": "Plan the change the operator's request asks for in this repository. The request is the `request` field of the Start node's output below. Say on the first line whether it is a feature (new or changed behaviour) or a bug (behaviour that is wrong today). Read the code the change touches, the conventions it follows and what already exists that it should reuse with your file tools (list_files, search_text, read_file), and ground every claim in something you actually read, naming the files and symbols. For a bug, trace the faulty behaviour back to where it originates rather than where it shows, check the callers of the code you suspect, and plan the fix that removes the cause, with a test that fails before the fix and passes after it. Then write a plan a person can approve: what to change, in which files, in what order, and what would show it worked. Keep every name, signature and interface the request specifies exactly as it is written. Where the plan has to deviate from the request, list each deviation and why under a heading \"Deviations from the request\", and write \"None\" there when there is none. The plan is implemented as one Development task, so keep it to one coherent change, and put any tests it adds in new test files: existing test files cannot be modified. Change nothing yourself.",
+				"model": null,
+				"reasoningEffort": null,
+				"responseJsonSchema": null,
+				"includeUpstreamOutputs": true,
+				"repository": true
+			}
+		},
+		{
+			"key": "planapproval",
+			"kind": "Pause",
+			"label": "Approve the plan",
+			"position": {
+				"x": 840,
+				"y": 260
+			},
+			"config": {
+				"prompt": "Read the plan in the Plan the change node's output. Approve to have Development Mode implement it as one task in this run's project, or reject it and say in the comment what is wrong. A rejection ends the run and changes nothing.",
+				"allowedDecisions": ["Approve", "Reject"],
+				"requireComment": false
+			}
+		},
+		{
+			"key": "implement",
+			"kind": "DevTask",
+			"label": "Implement the plan",
+			"position": {
+				"x": 1120,
+				"y": 260
+			},
+			"config": {
+				"action": "implement",
+				"requirements": "Implement the approved plan in the `plan` entry of the named input data. It answers the operator's request in the `request` entry: keep every name, signature and interface the request specifies, apart from deviations the plan lists under \"Deviations from the request\".",
+				"acceptanceCriteria": [
+					"The change does what the approved plan says and what the request asks.",
+					"Every name, signature and interface the request specifies is kept, apart from deviations the plan lists."
+				],
+				"instructions": "Judge the change against the operator's request first and the approved plan second: the request wins. A deviation the plan lists under \"Deviations from the request\" was approved with it; any other dropped, renamed or changed name, signature or interface the request specifies is a reason to refuse the change. Add tests in new test files: existing test files cannot be modified.",
+				"inputBindings": {
+					"plan": "upstream.plan.output.text",
+					"request": "run.input.request"
+				}
+			}
+		},
+		{
+			"key": "resultapproval",
+			"kind": "Pause",
+			"label": "Approve the result",
+			"position": {
+				"x": 1400,
+				"y": 260
+			},
+			"config": {
+				"prompt": "Development Mode implemented, validated and reviewed the change. Open its task from the Implement the plan node to read the patch, the validation and the review. Approve to apply the patch to the project's repository, or reject it and say in the comment why. A rejection ends the run without applying anything; the task stays on the Development page.",
+				"allowedDecisions": ["Approve", "Reject"],
+				"requireComment": false
+			}
+		},
+		{
+			"key": "apply",
+			"kind": "DevTask",
+			"label": "Apply the patch",
+			"position": {
+				"x": 1680,
+				"y": 130
+			},
+			"config": {
+				"action": "apply",
+				"task": "implement"
+			}
+		},
+		{
+			"key": "end_answered",
+			"kind": "End",
+			"label": "Answered",
+			"position": {
+				"x": 840,
+				"y": 0
+			},
+			"config": {
+				"outcome": "answered",
+				"resultPath": "upstream.answer.output.text"
+			}
+		},
+		{
+			"key": "end_unclear",
+			"kind": "End",
+			"label": "Needs a clearer request",
+			"position": {
+				"x": 840,
+				"y": 130
+			},
+			"config": {
+				"outcome": "unclear",
+				"resultPath": "upstream.needsinfo.output.text"
+			}
+		},
+		{
+			"key": "end_plan_rejected",
+			"kind": "End",
+			"label": "Plan rejected",
+			"position": {
+				"x": 1120,
+				"y": 420
+			},
+			"config": {
+				"outcome": "plan-rejected",
+				"resultPath": "upstream.planapproval.output.comment"
+			}
+		},
+		{
+			"key": "end_not_applied",
+			"kind": "End",
+			"label": "Not applied",
+			"position": {
+				"x": 1680,
+				"y": 420
+			},
+			"config": {
+				"outcome": "not-applied",
+				"resultPath": "upstream.resultapproval.output.comment"
+			}
+		},
+		{
+			"key": "end_applied",
+			"kind": "End",
+			"label": "Applied",
+			"position": {
+				"x": 1960,
+				"y": 130
+			},
+			"config": {
+				"outcome": "applied",
+				"resultPath": "upstream.apply.output"
+			}
+		}
+	],
+	"edges": [
+		{
+			"key": "e1",
+			"from": "start",
+			"to": "classify"
+		},
+		{
+			"key": "e2",
+			"from": "classify",
+			"to": "answer",
+			"label": "question",
+			"condition": {
+				"path": "output.choice",
+				"op": "Eq",
+				"value": "question"
+			}
+		},
+		{
+			"key": "e3",
+			"from": "start",
+			"to": "answer",
+			"label": "request"
+		},
+		{
+			"key": "e4",
+			"from": "classify",
+			"to": "needsinfo",
+			"label": "unclear",
+			"condition": {
+				"path": "output.choice",
+				"op": "Eq",
+				"value": "unclear"
+			}
+		},
+		{
+			"key": "e5",
+			"from": "classify",
+			"to": "plan",
+			"label": "change",
+			"condition": {
+				"path": "output.choice",
+				"op": "Eq",
+				"value": "change"
+			}
+		},
+		{
+			"key": "e6",
+			"from": "start",
+			"to": "plan",
+			"label": "request"
+		},
+		{
+			"key": "e7",
+			"from": "answer",
+			"to": "end_answered"
+		},
+		{
+			"key": "e8",
+			"from": "needsinfo",
+			"to": "end_unclear"
+		},
+		{
+			"key": "e9",
+			"from": "plan",
+			"to": "planapproval"
+		},
+		{
+			"key": "e10",
+			"from": "planapproval",
+			"to": "implement",
+			"label": "Approve",
+			"sourceHandle": "Approve",
+			"condition": {
+				"path": "output.decision",
+				"op": "Eq",
+				"value": "Approve"
+			}
+		},
+		{
+			"key": "e11",
+			"from": "plan",
+			"to": "implement",
+			"label": "context"
+		},
+		{
+			"key": "e12",
+			"from": "planapproval",
+			"to": "end_plan_rejected",
+			"label": "Reject",
+			"sourceHandle": "Reject",
+			"condition": {
+				"path": "output.decision",
+				"op": "Eq",
+				"value": "Reject"
+			}
+		},
+		{
+			"key": "e13",
+			"from": "plan",
+			"to": "end_plan_rejected",
+			"label": "context"
+		},
+		{
+			"key": "e14",
+			"from": "implement",
+			"to": "resultapproval"
+		},
+		{
+			"key": "e15",
+			"from": "resultapproval",
+			"to": "apply",
+			"label": "Approve",
+			"sourceHandle": "Approve",
+			"condition": {
+				"path": "output.decision",
+				"op": "Eq",
+				"value": "Approve"
+			}
+		},
+		{
+			"key": "e16",
+			"from": "resultapproval",
+			"to": "end_not_applied",
+			"label": "Reject",
+			"sourceHandle": "Reject",
+			"condition": {
+				"path": "output.decision",
+				"op": "Eq",
+				"value": "Reject"
+			}
+		},
+		{
+			"key": "e17",
+			"from": "implement",
+			"to": "end_not_applied",
+			"label": "context"
+		},
+		{
+			"key": "e18",
+			"from": "apply",
+			"to": "end_applied"
+		}
+	]
+}

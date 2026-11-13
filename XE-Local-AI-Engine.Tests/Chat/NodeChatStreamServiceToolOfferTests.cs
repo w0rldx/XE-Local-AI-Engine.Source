@@ -17,7 +17,6 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
-using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -89,77 +88,10 @@ public sealed class NodeChatStreamServiceToolOfferTests
     }
 
     [Test]
-    public async Task SendMessageAsync_WhenOperatorToolsAreSuppressed_WithholdsAskUserAndTheWebToolsFromTheRuntimePackage()
+    public async Task SendMessageAsync_LeavesAskUserAndTheWebToolsInPlace()
     {
-        // The workflow-owned work-session send: no operator is attached to answer a question or review a web result, so
-        // those tools are withdrawn rather than left to park the turn. Everything else the turn was offered survives.
-        var conversationId = Guid.NewGuid();
-        var assistantMessageId = Guid.NewGuid();
-        var requestId = Guid.NewGuid();
-        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
-        var dispatcher = new RecordingWorkerEventDispatcher();
-        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
-        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
-            CreateLocalToolDto(AskUserTool.ToolName, "{\"type\":\"object\"}"),
-            CreateLocalToolDto(WebFetchToolDefinition.ToolName, "{\"type\":\"object\"}"),
-            CreateLocalToolDto(WebSearchToolDefinition.ToolName, "{\"type\":\"object\"}"),
-            CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
-        var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
-                CreateModelCapabilityResolver(),
-                NullLogger<ChatTurnResolver>.Instance),
-            new NodeChatMutationGuard(persistence),
-            new LocalChatRuntimePackageBuilder(),
-            runner,
-            dispatcher,
-            Options.Create(new LocalChatAgentOptions
-            {
-                EnableTools = true
-            }),
-            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
-            new NodeChatStreamCancellationRegistry(),
-            offerProvider,
-            CreateDefaultAgentProvider(),
-            CreateNodeSettingsStore(),
-            CreateLocalDefaultChatModelResolver(),
-            CreateMemoryExtractionDispatcher(),
-            Substitute.For<IConversationMaintenanceDispatcher>(),
-            CreateTurnContextBuilder(),
-            Substitute.For<IConversationSandboxStager>(),
-            Options.Create(new ChatStreamBudgetOptions()),
-            TimeProvider.System,
-            new PermissiveToolApprovalPolicy(),
-            Substitute.For<IGraphWorkflowStore>(),
-            NullLogger<NodeChatStreamService>.Instance,
-            new GpuWorkGate());
-
-        var drained = 0;
-        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
-                           "hello",
-                           MessageId: assistantMessageId,
-                           RequestId: requestId,
-                           UseLocalTools: true,
-                           SuppressOperatorTools: true)))
-        {
-            drained++;
-        }
-
-        AssertEx.True(drained > 0, "Expected the send to stream events.");
-        AssertEx.Equal(expected: 2, runner.LastAllowedTools.Count);
-        AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == "GetCurrentTime");
-        AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == "Calculate");
-        AssertEx.False(runner.LastAllowedTools.Any(tool => tool.Name == AskUserTool.ToolName),
-            "The suppressed turn must reach the runtime package without ask_user.");
-        AssertEx.False(runner.LastAllowedTools.Any(tool => WebAccessToolCatalog.IsWebTool(tool.Name)),
-            "A web result would park on a review card nobody can open, so neither web tool may reach the package.");
-    }
-
-    [Test]
-    public async Task SendMessageAsync_WhenOperatorToolsAreNotSuppressed_LeavesAskUserAndTheWebToolsInPlace()
-    {
-        // The other half of the pin: suppression is opt-in per send, so an interactive turn with web access on keeps
-        // every tool it was offered. Same offer as the suppressed case, so only the flag can explain the difference.
+        // An interactive turn with web access on keeps every tool it was offered, including the ones that park on its
+        // operator: ask_user and both web tools.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -280,87 +212,6 @@ public sealed class NodeChatStreamServiceToolOfferTests
         AssertEx.Equal(expected: true, readLocalTool.RequiresApproval);
     }
 
-    /// <summary>
-    ///     A definition widened between the development-workflow lane's early binding check and the send: the resolver
-    ///     answers narrow once, then write-capable, and the turn is refused on the offer it would hand the model.
-    /// </summary>
-    [Test]
-    public async Task SendMessageAsync_WhenTheDefinitionWidensAfterTheEarlyCheck_RefusesTheTurnOnTheOfferItWouldRun()
-    {
-        var conversationId = Guid.NewGuid();
-        var assistantMessageId = Guid.NewGuid();
-        var requestId = Guid.NewGuid();
-        var agentDefinitionId = Guid.NewGuid();
-        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
-        var dispatcher = new RecordingWorkerEventDispatcher();
-        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
-        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"));
-        var resolver = CreateWideningAgentDefinitionResolver(agentDefinitionId);
-        var service = CreateWriteDeclarationService(persistence, runner, dispatcher, resolver, offerProvider);
-
-        // The early answer, taken while the definition is still narrow — the pre-session check the workflow lane makes.
-        var early = await new WorkSessionWriteDeclarationGuard(resolver, offerProvider, CreateNodeSettingsStore(), CreateLocalDefaultChatModelResolver())
-            .InspectAsync(agentDefinitionId, WriteDeclarationModel, CancellationToken.None);
-        AssertEx.Null(early, "The definition carries nothing that writes when the early check reads it.");
-
-        var refusal = await AssertEx.ThrowsAsync<WorkSessionUndeclaredWriteException>(async () =>
-        {
-            await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
-                               "hello",
-                               MessageId: assistantMessageId,
-                               RequestId: requestId,
-                               Model: WriteDeclarationModel,
-                               UseLocalTools: true,
-                               AgentDefinitionId: agentDefinitionId,
-                               RefuseUndeclaredWrites: true)))
-            {
-                // The refusal lands before the first tool-bearing event; nothing here is expected to run.
-            }
-        });
-
-        AssertEx.Contains(refusal.Message, WriteDeclarationToolName, StringComparison.Ordinal);
-        AssertEx.Contains(refusal.Message, "GRAPH-2", StringComparison.Ordinal);
-        AssertEx.Empty(runner.LastAllowedTools, "The refused turn never reached the runner, so no offer was ever handed to a model.");
-    }
-
-    /// <summary>
-    ///     The same widened definition on a turn that never armed the rule (an ordinary chat send or an undriven work
-    ///     session): the write tool is offered and the turn is sent.
-    /// </summary>
-    [Test]
-    public async Task SendMessageAsync_WhenTheWriteDeclarationIsNotArmed_SendsTheWriteCapableOfferUnchanged()
-    {
-        var conversationId = Guid.NewGuid();
-        var assistantMessageId = Guid.NewGuid();
-        var requestId = Guid.NewGuid();
-        var agentDefinitionId = Guid.NewGuid();
-        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
-        var dispatcher = new RecordingWorkerEventDispatcher();
-        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
-        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"));
-        var resolver = CreateWideningAgentDefinitionResolver(agentDefinitionId);
-        var service = CreateWriteDeclarationService(persistence, runner, dispatcher, resolver, offerProvider);
-
-        // Burn the narrow first answer so this send resolves the widened definition, exactly as the refusing test does.
-        _ = await resolver.ResolveAsync(agentDefinitionId, WriteDeclarationModel, retrievalQuery: null, supportsTools: true, honorModelProfile: false,
-            activeModelIsCloud: false, CancellationToken.None);
-
-        var drained = 0;
-        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
-                           "hello",
-                           MessageId: assistantMessageId,
-                           RequestId: requestId,
-                           Model: WriteDeclarationModel,
-                           UseLocalTools: true,
-                           AgentDefinitionId: agentDefinitionId)))
-        {
-            drained++;
-        }
-
-        AssertEx.True(drained > 0, "Expected the send to stream events.");
-        AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == WriteDeclarationToolName);
-    }
-
     [Test]
     public async Task SendMessageAsync_WhenLocalToolsDisabled_OffersNoTools()
     {
@@ -431,15 +282,15 @@ public sealed class NodeChatStreamServiceToolOfferTests
         var own = CreateLocalToolDto("run_python", "{\"type\":\"object\"}");
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns(new ResolvedAgentRuntime("Persona.", [own], WriteDeclarationModel, null, 1, agentDefinitionId, "Mathematician", DeclaresToolList: true));
-        var service = CreateWriteDeclarationService(persistence, runner, dispatcher, resolver, CreateOfferProvider(own, CreateLocalToolDto("Calculate", "{\"type\":\"object\"}")));
+                .Returns(new ResolvedAgentRuntime("Persona.", [own], ToolCapableModel, null, 1, agentDefinitionId, "Mathematician", DeclaresToolList: true));
+        var service = CreateServiceWithResolver(persistence, runner, dispatcher, resolver, CreateOfferProvider(own, CreateLocalToolDto("Calculate", "{\"type\":\"object\"}")));
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           Model: WriteDeclarationModel,
+                           Model: ToolCapableModel,
                            UseLocalTools: false,
                            AgentDefinitionId: agentDefinitionId)))
         {

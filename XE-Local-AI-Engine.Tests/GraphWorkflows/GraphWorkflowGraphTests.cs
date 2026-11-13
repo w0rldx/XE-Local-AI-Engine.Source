@@ -876,6 +876,19 @@ public sealed class GraphWorkflowGraphTests
         AssertEx.Contains(refusal.Message, "unknown 'reasoningEffort'");
     }
 
+    /// <summary><c>repository</c> reads as written and defaults off; a node binding no agent is refused, since only an agent's tool list offers the reads.</summary>
+    [Test]
+    public void Parse_ReadsTheRepositoryOptionAndRefusesItOnANodeThatBindsNoAgent()
+    {
+        var bound = GraphWorkflowGraph.Parse(Agent($$"""{ "instructions": "Go.", "agentDefinitionId": "{{Guid.NewGuid()}}", "repository": true }"""));
+        var plain = GraphWorkflowGraph.Parse(Agent("""{ "instructions": "Go." }"""));
+
+        AssertEx.True(AssertEx.NotNull(bound.Nodes["agent"].Config as GraphWorkflowAgentConfig).Repository);
+        AssertEx.False(AssertEx.NotNull(plain.Nodes["agent"].Config as GraphWorkflowAgentConfig).Repository, "absent reads as off.");
+        var refusal = AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraph.Parse(Agent("""{ "instructions": "Go.", "repository": true }""")));
+        AssertEx.Contains(refusal.Message, "sets 'repository', which needs an 'agentDefinitionId'");
+    }
+
     [Test]
     public void ToolNodeNames_ListsEveryToolNodesToolName()
     {

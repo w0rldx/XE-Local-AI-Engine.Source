@@ -8,8 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
 ///     One throwaway on-disk SQLite database per test, with both encryption interceptors wired, so a fresh-context
-///     round trip proves the encrypt/decrypt path rather than the change tracker's plaintext. Shaped on
-///     <c>DevWorkflowTestFixture</c>.
+///     round trip proves the encrypt/decrypt path rather than the change tracker's plaintext.
 /// </summary>
 /// <remarks>
 ///     A real file is not optional here: <c>IIntegrationExecutionStore.AcceptAsync</c> opens its <b>own</b>

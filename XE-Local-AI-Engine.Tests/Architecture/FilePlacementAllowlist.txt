@@ -68,10 +68,6 @@ XE-Local-AI-Engine.Client.Application/Services/Containers/ContainerInspection.cs
 XE-Local-AI-Engine.Client.Application/Services/Containers/ContainerLogs.cs|2
 XE-Local-AI-Engine.Client.Application/Services/Containers/ContainerRuntimeResolution.cs|3
 XE-Local-AI-Engine.Client.Application/Services/Containers/ContainerSpecification.cs|5
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowRulePolicyResolver.cs|3
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowStateMachine.cs|5
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowVocabularies.cs|5
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/IDevWorkflowToolCommands.cs|2
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentAttemptFailure.cs|4
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentAttemptLiveUpdate.cs|3
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentCloudContextBundle.cs|2
@@ -160,7 +156,6 @@ XE-Local-AI-Engine.Client.Application/Services/WorkSessions/WorkSessionEventType
 XE-Local-AI-Engine.Client.Application/Services/Workspace/IWorkspaceRevocationPreparation.cs|2
 XE-Local-AI-Engine.Client.Persistence/Entities/AgentWorkSessionEnums.cs|6
 XE-Local-AI-Engine.Client.Persistence/Entities/BenchmarkEnums.cs|5
-XE-Local-AI-Engine.Client.Persistence/Entities/DevWorkflowEnums.cs|7
 XE-Local-AI-Engine.Client.Persistence/Entities/DevelopmentEnums.cs|6
 XE-Local-AI-Engine.Client.Persistence/Entities/ExternalAppInstanceStatus.cs|4
 XE-Local-AI-Engine.Client.Persistence/Entities/GraphWorkflowEnums.cs|6
@@ -169,10 +164,8 @@ XE-Local-AI-Engine.Client.Persistence/Entities/TrainingEnums.cs|15
 XE-Local-AI-Engine.Client.Persistence/Entities/TranscriptionEnums.cs|3
 XE-Local-AI-Engine.Client.Persistence/Sqlite/NodeSqliteOptions.cs|3
 XE-Local-AI-Engine.Client.Persistence/Stores/BenchmarkStoreExceptions.cs|5
-XE-Local-AI-Engine.Client.Persistence/Stores/DevWorkflowStoreExceptions.cs|6
 XE-Local-AI-Engine.Client/Endpoints/AgentHome/V1/Validators/AgentHomePatchValidators.cs|3
 XE-Local-AI-Engine.Client/Endpoints/Auth/V1/Validators/NodeAuthEndpointValidators.cs|3
-XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Validators/DevWorkflowValidators.cs|15
 XE-Local-AI-Engine.Client/Endpoints/ExternalApps/V1/Validators/ExternalAppValidators.cs|9
 XE-Local-AI-Engine.Client/Endpoints/ExternalProviders/V1/Validators/ExternalProviderEndpointValidators.cs|2
 XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Validators/GraphWorkflowValidators.cs|9

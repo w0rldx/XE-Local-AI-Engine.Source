@@ -95,7 +95,7 @@ public sealed partial class DevelopmentStore
     /// </summary>
     /// <remarks>
     ///     One row off the task's append-only log: the LATEST event carrying a reason, from the reviewer's
-    ///     <c>ReviewFinalized</c>, the gate's <c>ValidationFinalized</c> or a workflow's <c>TaskTransitioned</c>.
+    ///     <c>ReviewFinalized</c>, the gate's <c>ValidationFinalized</c> or a <c>TaskTransitioned</c>.
     ///     Latest, because a validation failure after a reviewer's round is the newer fact. Only an event that left the
     ///     task where a coder round runs qualifies, and a transition a PERSON asked for is excluded: that answers
     ///     <see cref="OperatorInstructionAsync" />, disjoint so no prompt renders the same sentence twice.
@@ -156,13 +156,13 @@ public sealed partial class DevelopmentStore
     private sealed record ReasonDetail(string? Reason);
 
     /// <summary>
-    ///     The rule-set text a workflow injected onto this task, or nothing when no workflow drives it.
+    ///     The instructions a Graph workflow <c>DevTask</c> node recorded on this task, or nothing when no node run drives it.
     /// </summary>
     /// <remarks>
     ///     One row off the task's append-only log, exactly as <see cref="PreviousRoundFeedbackAsync" /> reads its
     ///     sentence, so it costs no migration and no column. LATEST wins: a node run re-bound to the same task records
-    ///     again. A latest row with BLANK text is the workflow saying nothing applies any more and answers null, which
-    ///     is what bounds the snapshot in time — the executor records on EVERY dispatch and again when it settles.
+    ///     again. A latest row with BLANK text says nothing applies any more and answers null, which is what bounds
+    ///     the snapshot in time — the lane records when each attempt starts and again when it ends.
     /// </remarks>
     private async Task<string?> WorkflowPolicyTextAsync(Guid taskId, CancellationToken cancellationToken)
     {

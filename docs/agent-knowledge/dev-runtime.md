@@ -94,15 +94,13 @@ start falls back to `AppContext.BaseDirectory/models`): symlinks plus an `index.
 unlocked read-modify-write. **Prevents:** lost registry writes and a round on the wrong DB. **Authority:**
 `scripts/dev-start.sh`, `AddNodeModelRuntimeExtensions` (models-directory default), `GgufRegistryRevision`.
 
-### The Dev-workflow surface answers 404 unless its flag is set at `dev-start` time
+### A feature surface answers 404 unless its flag is set at `dev-start` time
 
 **Rule:** feature flags reach the Client only as inherited environment of the `dev-start.sh` invocation
-(`DevWorkflows__Enabled=true WorkSessions__Enabled=true scripts/dev-start.sh`); `AppHost.cs` forwards none, and they are read
-once at startup, so a change needs a restart. `DevWorkflowOptionsValidator` fails the host when DevWorkflows is on and
-WorkSessions off. Graph Workflows default on; External Apps' code default is `false` (only `appsettings.json` enables it).
+(`WorkSessions__Enabled=true scripts/dev-start.sh`); `AppHost.cs` forwards none, and they are read
+once at startup, so a change needs a restart. Graph Workflows default on; External Apps' code default is `false` (only `appsettings.json` enables it).
 Each gate is middleware ahead of `LocalApiSecurityMiddleware`, so a disabled feature and a mistyped path both answer 404.
-**Prevents:** a live round burned on a "wrong route". **Authority:** `Program.cs` (`areDevWorkflowsEnabled`,
-`areGraphWorkflowsEnabled`), `DevWorkflowOptionsValidator`.
+**Prevents:** a live round burned on a "wrong route". **Authority:** `FeatureSwitchMiddleware`.
 
 ### A live round in a worktree starts from a FRESH isolated DB, and a scratch host never touches the user data dir
 
@@ -112,7 +110,7 @@ Each gate is middleware ahead of `LocalApiSecurityMiddleware`, so a disabled fea
 `scripts/lab-up.sh --snapshot` made itself (throwaway admin, lab-owned `node.key` and `dp-keys`), restored only when its
 migration-set key matches. A throwaway host sets `XDG_DATA_HOME` to a scratch dir that MIRRORS `~/.local/share` (symlink
 each child but `XE-Local-AI-Engine`; an empty one makes Aspire exit 7), or a GPU round sources the BYO llama-server
-override. `agent_execution_logs` rows terminalize asynchronously (re-read); `dev_workflow_*` ids UPPER-CASE.
+override. `agent_execution_logs` rows terminalize asynchronously (re-read).
 **Prevents:** voided rounds and a rewritten user-level `installed-runtime.json`. **Authority:** `scripts/lab-up.sh`.
 
 ### an `XDG_DATA_HOME` override for a scratch host also blinds a per-user tool-version manager
@@ -121,7 +119,7 @@ override. `agent_execution_logs` rows terminalize asynchronously (re-read); `dev
 (for mise, `MISE_DATA_DIR=$HOME/.local/share/mise`) on EVERY command of the round: start, status, `aspire logs`, stop.
 Otherwise the `aspire`/`python3` shim fails, `dev_aspire_ps_json` discards its stderr, and `dev-start.sh` only says "Could
 not query Aspire state safely"; diagnose by running `aspire ps` without discarding stderr. Run the backend gate and
-contract lane without the mise shims first on `PATH`: the dev-workflow sandbox cannot reach a shimmed `dotnet`/`python3`
+contract lane without the mise shims first on `PATH`: the Development validation sandbox cannot reach a shimmed `dotnet`/`python3`
 (`runner_not_installed`). **Prevents:** a toolchain failure read as a stale-AppHost or sandbox bug. **Authority:** `dev_aspire_ps_json`, `dev_matching_app_json` in
 `scripts/dev-aspire-common.sh`; the `query_status -ne 3` branch in `scripts/dev-start.sh`.
 

@@ -14,8 +14,7 @@ export interface GraphWorkflowEventsTabProps {
 }
 
 /**
- * The run's trail. This is the one component in the feature that owns a query, exactly as `DevWorkflowEventsTab`'s
- * feed does: the events are nobody else's data, and threading them through the page would give the page a second
+ * The run's trail. This is the one component in the feature that owns a query: the events are nobody else's data, and threading them through the page would give the page a second
  * pagination state to keep.
  *
  * The feed is read forward from the start of the log (`afterSeq: 0`) and rendered newest-first, so `replayTruncated`

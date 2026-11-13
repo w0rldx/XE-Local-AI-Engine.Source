@@ -26,6 +26,8 @@ export interface LocalModelProxyApiKeyView {
 	createdAt: string | null;
 	lastUsedAt: string | null;
 	endpointUrl: string;
+	// One segment shorter than endpointUrl: an Anthropic client appends /v1/messages to its base itself.
+	anthropicEndpointUrl: string;
 }
 
 export function useLocalModelProxyApiKey() {
@@ -37,6 +39,7 @@ export function useLocalModelProxyApiKey() {
 			createdAt: data.apiKey?.createdAt ?? null,
 			lastUsedAt: data.apiKey?.lastUsedAt ?? null,
 			endpointUrl: data.endpointUrl ?? "",
+			anthropicEndpointUrl: data.anthropicEndpointUrl ?? "",
 		}),
 	});
 }

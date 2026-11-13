@@ -19,7 +19,6 @@ public sealed class FeatureSwitchMiddlewareTests
     [Arguments("/api/local/v1/development/projects")]
     [Arguments("/api/local/v1/development/hub/negotiate")]
     [Arguments("/api/local/v1/work-sessions/00000000-0000-0000-0000-000000000001")]
-    [Arguments("/api/local/v1/development-workflows/runs")]
     [Arguments("/api/local/v1/graph-workflows/definitions")]
     [Arguments("/api/local/v1/transcription/runtime")]
     [Arguments("/api/local/v1/transcription/capability")]
@@ -40,7 +39,6 @@ public sealed class FeatureSwitchMiddlewareTests
     [Test]
     [Arguments("/api/local/v1/development/capability")]
     [Arguments("/api/local/v1/work-sessions/capability")]
-    [Arguments("/api/local/v1/development-workflows/capability")]
     [Arguments("/api/local/v1/graph-workflows/capability")]
     public async Task TheCapabilityGet_StaysReachable_WhileItsSwitchIsOff(string path)
     {
@@ -79,7 +77,6 @@ public sealed class FeatureSwitchMiddlewareTests
     [Test]
     [Arguments("/api/local/v1/development/projects")]
     [Arguments("/api/local/v1/work-sessions/00000000-0000-0000-0000-000000000001")]
-    [Arguments("/api/local/v1/development-workflows/runs")]
     [Arguments("/api/local/v1/graph-workflows/definitions")]
     [Arguments("/api/local/v1/transcription/runtime")]
     [Arguments("/api/local/v1/external-apps")]
@@ -129,10 +126,10 @@ public sealed class FeatureSwitchMiddlewareTests
     }
 
     [Test]
-    public async Task DevelopmentOff_DoesNotCloseTheDevelopmentWorkflowsFamily()
+    public async Task DevelopmentOff_DoesNotCloseASiblingPathSharingItsPrefix()
     {
-        // "development" is a prefix of "development-workflows" as text but not as a path segment.
-        var (_, nextCalled) = await InvokeAsync("/api/local/v1/development-workflows/runs",
+        // "development" is a prefix of "development-sibling" as text but not as a path segment.
+        var (_, nextCalled) = await InvokeAsync("/api/local/v1/development-sibling/runs",
             StubNodeRuntimeSettings.Create().WithDevelopmentEnabled(false).Build());
 
         AssertEx.True(nextCalled);
@@ -153,7 +150,6 @@ public sealed class FeatureSwitchMiddlewareTests
         StubNodeRuntimeSettings.Create()
                                .WithDevelopmentEnabled(false)
                                .WithWorkSessionsEnabled(false)
-                               .WithDevWorkflowsEnabled(false)
                                .WithGraphWorkflowsEnabled(false)
                                .WithTranscriptionEnabled(false)
                                .WithExternalAppsEnabled(false)

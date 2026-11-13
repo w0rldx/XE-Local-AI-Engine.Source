@@ -117,6 +117,19 @@ public sealed record GraphWorkflowNodeRunSnapshot
 
     /// <summary>The operator's steering entries, oldest first. Empty on every row nobody steered.</summary>
     public IReadOnlyList<GraphWorkflowSteeringEntry> Steering { get; init; } = [];
+
+    /// <summary>The Development Mode task this row drives; null on every row that is not a DevTask node run.</summary>
+    public Guid? DevelopmentTaskId { get; init; }
+}
+
+/// <summary>One graph run that owns a Development Mode task through a node run, with the run's status as it stands.</summary>
+public sealed record GraphWorkflowDevelopmentTaskRun
+{
+    public required Guid DevelopmentTaskId { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required GraphWorkflowRunStatus RunStatus { get; init; }
 }
 
 /// <summary>
@@ -719,6 +732,26 @@ public interface IGraphWorkflowStore
 
     Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Pins the Development Mode task a node run drives, while the run is live and the row is <c>Queued</c> or
+    ///     <c>Running</c>. Set once: the same task again is a no-op write, a different one declines.
+    /// </summary>
+    /// <remarks>
+    ///     A DevTask lane writes it BEFORE the task's first action, so a restart re-uses the task instead of creating a
+    ///     second one, and the apply guard sees this run as the task's owner from that moment on.
+    /// </remarks>
+    Task<GraphWorkflowConditionalWriteResult> SetNodeRunDevelopmentTaskAsync(Guid runId,
+        Guid nodeRunId,
+        Guid developmentTaskId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Every run that owns one of <paramref name="developmentTaskIds" /> through a node run, newest run first, any
+    ///     status: the caller judges terminal, and the apply guard refuses on ANY live owner, not only the newest.
+    /// </summary>
+    Task<IReadOnlyList<GraphWorkflowDevelopmentTaskRun>> ListDevelopmentTaskRunsAsync(IReadOnlyList<Guid> developmentTaskIds,
+        CancellationToken cancellationToken = default);
+
     /// <summary>By node key, which is the node run's identity within its run — there is one row per <c>(run, node key)</c>.</summary>
     Task<GraphWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid runId, string nodeKey, CancellationToken cancellationToken = default);
 
@@ -767,8 +800,7 @@ public interface IGraphWorkflowStore
     /// </summary>
     /// <remarks>
     ///     Runs auto-resume, so no run row is touched, and a host that dies mid-recovery leaves the rows as it found
-    ///     them. The NAME is a misnomer inherited from the development-workflow original — the set is
-    ///     <c>Queued ∪ Running</c> — kept so the two modules' recovery paths read alike. Only rows whose live state
+    ///     them. The NAME is a misnomer — the set is <c>Queued ∪ Running</c>. Only rows whose live state
     ///     still matches their verdict are collapsed; a non-null <paramref name="unjudged" /> makes this the LAST pass
     ///     and settles the rest, decided against the row in front of it where no snapshot can be stale.
     /// </remarks>

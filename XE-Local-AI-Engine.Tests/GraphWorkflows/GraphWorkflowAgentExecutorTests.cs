@@ -748,6 +748,25 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.ContainsSingle(Capacity(harness).ReservationsFor(model), static reservation => reservation.Disposed, "a completed turn releases its footprint.");
     }
 
+    /// <summary>The narration a model streams before a tool call is not its answer: the output text, which the next node reads, is what follows the last call.</summary>
+    [Test]
+    public async Task ATurnWithAToolCall_YieldsOnlyTheAnswerAfterIt()
+    {
+        const string instructions = "narration-before-a-tool-call";
+        await using var harness = new GraphWorkflowHarness(Host);
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Narration = "Let me explore the repository first. ",
+            Text = "The plan: change calc.py."
+        });
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status);
+        AssertEx.Equal("The plan: change calc.py.", Output(analyze).GetProperty("text").GetString());
+    }
+
     /// <summary>A node declaring a response schema gets the parsed object beside the text it parsed.</summary>
     [Test]
     public async Task ASchemaBackedNode_ParsesItsAnswerIntoTheOutputDocument()

@@ -62,11 +62,6 @@ export interface NodeCapabilityConfig {
 	// supervisor). Gates both the nav entry and the two /work-sessions routes. The node ALSO has its own
 	// `WorkSessions:Enabled` switch, which 404s the API — this flag only decides whether the surface is offered.
 	readonly workSessions: boolean;
-	// Development Workflows: durable, graph-based work items whose runs dispatch agent / tool / gate node-runs and
-	// survive an engine restart. Gates the nav child and the two /development-workflows routes. The node ALSO has its
-	// own `DevWorkflows:Enabled` switch, which 404s the API — this flag only decides whether the surface is offered.
-	// It is an EXPERIMENTAL surface, so its nav entry is a child of the Preview group rather than a top-level link.
-	readonly devWorkflows: boolean;
 	// External Integrations: operator-managed triggers, API keys, sessions and executions for the loopback
 	// integration-api. Gates the nav group and all four /integrations/* routes. Build-time flag only — the node's
 	// own Operator policy on the admin endpoints is the real authorization boundary, and the external
@@ -165,7 +160,6 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// operator kill switch still fails closed without requiring a separate frontend build.
 	development: true,
 	workSessions: true,
-	devWorkflows: true,
 	integrations: true,
 	// On: the editor and the run view are verified end to end, so the surface is offered by default.
 	graphWorkflows: true,
@@ -219,9 +213,6 @@ export const nodeRoutePaths = {
 	development: "/development",
 	// Agent work sessions list — gated on nodeCapabilities.workSessions. The detail route is /work-sessions/{id}.
 	workSessions: "/work-sessions",
-	// Development Workflows work-item list — gated on nodeCapabilities.devWorkflows. Detail is
-	// /development-workflows/{workItemId}; the run, node and tab selections live in its search params.
-	devWorkflows: "/development-workflows",
 	// External Integrations — four sibling routes, each with its own beforeLoad capability gate. The bare
 	// /integrations prefix has no entry: its index route redirects to integrationTriggers.
 	integrationTriggers: "/integrations/triggers",

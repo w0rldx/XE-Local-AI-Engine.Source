@@ -1,1 +1,322 @@
-[]
+[
+  {
+    "id": "operation-removed:DELETE /api/local/v1/development-workflows/definitions/{definitionId}",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:DELETE /api/local/v1/development-workflows/rule-sets/{ruleSetId}",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:DELETE /api/local/v1/development-workflows/work-items/{workItemId}",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:GET /api/local/v1/development-workflows/capability",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:GET /api/local/v1/development-workflows/definitions",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:GET /api/local/v1/development-workflows/definitions/{definitionId}",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:GET /api/local/v1/development-workflows/rule-sets",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:GET /api/local/v1/development-workflows/rule-sets/{ruleSetId}",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:GET /api/local/v1/development-workflows/runs",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:GET /api/local/v1/development-workflows/runs/{runId}",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:GET /api/local/v1/development-workflows/runs/{runId}/artifacts",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:GET /api/local/v1/development-workflows/runs/{runId}/artifacts/{artifactId}/content",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:GET /api/local/v1/development-workflows/runs/{runId}/events",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:GET /api/local/v1/development-workflows/runs/{runId}/nodes/{nodeRunId}",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:GET /api/local/v1/development-workflows/work-items",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:GET /api/local/v1/development-workflows/work-items/{workItemId}",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:PATCH /api/local/v1/development-workflows/work-items/{workItemId}",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:POST /api/local/v1/development-workflows/definitions",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:POST /api/local/v1/development-workflows/rule-sets",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:POST /api/local/v1/development-workflows/runs/{runId}/cancel",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:POST /api/local/v1/development-workflows/runs/{runId}/nodes/{nodeRunId}/decision",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:POST /api/local/v1/development-workflows/runs/{runId}/pause",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:POST /api/local/v1/development-workflows/runs/{runId}/resume",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:POST /api/local/v1/development-workflows/work-items",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:POST /api/local/v1/development-workflows/work-items/{workItemId}/runs",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:PUT /api/local/v1/development-workflows/definitions/{definitionId}",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "operation-removed:PUT /api/local/v1/development-workflows/rule-sets/{ruleSetId}",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "property-removed:XE_Local_AI_EngineClientEndpointsNodeSettingsV1NodeSettingsResponse.devWorkflowsEnabled",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "property-removed:XE_Local_AI_EngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest.devWorkflowsEnabled",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowDefinitionRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowRuleSetRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowWorkItemRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactContentResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactFeedRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowCapabilityResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResultResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionSummaryResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowEdgeCondition",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphEdge",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowMaterialization",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetSummaryResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunActionRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventFeedRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemSummaryResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowArtifactsResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRuleSetsResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunEventsResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsResponse",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1StartDevWorkflowRunRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowDefinitionRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowRuleSetRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowWorkItemRequest",
+    "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  }
+]

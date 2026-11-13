@@ -57,6 +57,9 @@ internal sealed class GraphWorkflowScriptedTurn
 
     public string Text { get; init; } = "the fake agent answered";
 
+    /// <summary>Text streamed before one requested tool call, ahead of <see cref="Text" />: the model's interim narration.</summary>
+    public string? Narration { get; init; }
+
     public string FinishReason { get; init; } = "stop";
 
     public FailureCategory FailureCategory { get; init; } = FailureCategory.ProviderUnreachable;
@@ -192,6 +195,18 @@ internal sealed class FakeGraphWorkflowInvocation : IInvocationRunner
                 return;
 
             default:
+                if (turn.Narration is { } narration)
+                {
+                    await _eventDispatcher.Value.ReportInvocationStreamChunkAsync(package.InvocationId, narration);
+                    await _eventDispatcher.Value.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+                    {
+                        InvocationId = package.InvocationId,
+                        ToolCallId = "call-1",
+                        ToolName = "list_files",
+                        Phase = ToolCallLifecyclePhase.Requested
+                    });
+                }
+
                 await _eventDispatcher.Value.ReportInvocationStreamChunkAsync(package.InvocationId, turn.Text);
                 await _eventDispatcher.Value.ReportInvocationCompletedAsync(package.InvocationId,
                     inputTokens: 11,

@@ -20,7 +20,7 @@ internal sealed class GraphWorkflowRunConfiguration : IEntityTypeConfiguration<G
         builder.Property(entity => entity.GraphHash).HasColumnName("graph_hash").HasMaxLength(128).IsRequired();
         builder.Property(entity => entity.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(32);
 
-        // Persisted as text, like the Dev Workflow column it mirrors: a closed token set the UI filters on. Storing
+        // Persisted as text: a closed token set the UI filters on. Storing
         // the enum by ordinal would make the durable log unreadable the first time a member is inserted.
         builder.Property(entity => entity.FailureClass).HasColumnName("failure_class").HasConversion<string>().HasMaxLength(64);
         builder.Property(entity => entity.GraphJson).HasColumnName("graph_json").IsRequired();

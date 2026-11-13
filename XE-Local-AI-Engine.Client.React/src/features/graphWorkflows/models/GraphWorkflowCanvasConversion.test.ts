@@ -269,6 +269,53 @@ describe("graphToCanvas / canvasToGraph round trip", () => {
 });
 
 describe("node config conversion", () => {
+	it("round-trips both DevTask actions and writes only the members each action reads", () => {
+		const source = wireGraph(
+			[
+				{
+					key: "impl",
+					kind: "DevTask",
+					config: {
+						action: "implement",
+						title: "Health route",
+						requirements: "Add GET /health",
+						acceptanceCriteria: ["Returns 200"],
+						instructions: "Keep it small.",
+						inputBindings: { brief: "run.input.brief" },
+					},
+				},
+				{ key: "land", kind: "DevTask", config: { action: "apply", task: "impl" } },
+			],
+			[],
+		);
+		const canvas = graphToCanvas(source);
+		const result = canvasToGraph(canvas.nodes, canvas.edges);
+		expect(result.issues).toEqual([]);
+		expect(result.graph.nodes?.map((node) => node.config)).toEqual(source.nodes?.map((node) => node.config));
+
+		// An implement node turned into an apply keeps its implement fields on the canvas but must not send them: the
+		// parser refuses a member only the other action reads.
+		const flipped = { ...dataOfKind(canvas, "impl", "DevTask"), action: "apply", task: "other" };
+		expect(canvasToGraph([canvasNode(flipped)], []).graph.nodes?.[0]?.config).toEqual({ action: "apply", task: "other" });
+		expect(canvasToGraph([canvasNode(defaultNodeData("DevTask", "fresh"))], []).graph.nodes?.[0]?.config).toEqual({
+			action: "implement",
+			requirements: "",
+		});
+	});
+
+	it("round-trips an Agent node's repository option and leaves it absent when never set", () => {
+		const source = wireGraph(
+			[{ key: "agent", kind: "Agent", config: { ...canvasAgentConfig, agentDefinitionId: "a1", repository: true } }],
+			[],
+		);
+		const canvas = graphToCanvas(source);
+		expect(dataOfKind(canvas, "agent", "Agent").repository).toBe(true);
+		expect(canvasToGraph(canvas.nodes, canvas.edges).graph.nodes?.[0]?.config).toMatchObject({ repository: true });
+		expect(canvasToGraph([canvasNode(defaultNodeData("Agent", "agent"))], []).graph.nodes?.[0]?.config).not.toHaveProperty(
+			"repository",
+		);
+	});
+
 	it("round-trips Start aliases trimmed, and omits the key when there are none", () => {
 		const source = wireGraph(
 			[

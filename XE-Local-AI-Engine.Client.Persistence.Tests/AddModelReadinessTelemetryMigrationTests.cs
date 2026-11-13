@@ -19,6 +19,9 @@ public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
 
     private const string PreReadinessMigrationId = "20260904121650_AddAiTrendsWave";
 
+    /// <summary>Asserted at this migration, not at head: <c>DropDevWorkflows</c> later drops <c>dev_workflow_node_runs</c>.</summary>
+    private const string ReadinessMigrationId = "20260904190259_AddModelReadinessTelemetry";
+
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
@@ -51,7 +54,7 @@ public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync();
+            await context.Database.GetService<IMigrator>().MigrateAsync(ReadinessMigrationId);
         }
 
         await using var upgraded = await OpenConnectionAsync(databasePath);
@@ -62,17 +65,17 @@ public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
     }
 
     [Test]
-    public async Task MigrateAsync_ToHeadOnFreshDatabase_AddsTheReadinessColumnToBothTables()
+    public async Task MigrateAsync_OnAFreshDatabase_AddsTheReadinessColumnToBothTables()
     {
         var databasePath = GetDatabasePath("model-readiness-fresh.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, ReadinessMigrationId);
 
         await using var connection = await OpenConnectionAsync(databasePath);
         AssertEx.True((await GetColumnNamesAsync(connection, envelopeTable: true)).Contains(ReadinessColumn),
-            "A fresh migrate-to-head should expose the readiness column on agent_execution_logs.");
+            "A fresh migrate should expose the readiness column on agent_execution_logs.");
         AssertEx.True((await GetColumnNamesAsync(connection, envelopeTable: false)).Contains(ReadinessColumn),
-            "A fresh migrate-to-head should expose the readiness column on dev_workflow_node_runs.");
+            "A fresh migrate should expose the readiness column on dev_workflow_node_runs.");
     }
 
     [Test]

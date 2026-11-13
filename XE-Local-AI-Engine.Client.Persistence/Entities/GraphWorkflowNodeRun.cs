@@ -57,4 +57,10 @@ internal sealed class GraphWorkflowNodeRun
     ///     <c>applied</c> by the dispatcher tick. Encrypted: it is operator free text.
     /// </summary>
     public byte[]? SteeringJson { get; set; }
+
+    /// <summary>
+    ///     The Development Mode task a DevTask node run drives. Loose reference, no foreign key: written before the
+    ///     task's first action, so a restart re-uses the task and the apply guard can find this run.
+    /// </summary>
+    public Guid? DevelopmentTaskId { get; set; }
 }

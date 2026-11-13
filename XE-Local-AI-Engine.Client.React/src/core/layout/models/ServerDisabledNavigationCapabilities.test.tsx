@@ -48,7 +48,6 @@ describe("useServerDisabledNavigationCapabilities", () => {
 			{
 				developmentEnabled: false,
 				workSessionsEnabled: false,
-				devWorkflowsEnabled: false,
 				graphWorkflowsEnabled: false,
 				externalAppsEnabled: false,
 				transcriptionEnabled: false,
@@ -62,16 +61,7 @@ describe("useServerDisabledNavigationCapabilities", () => {
 
 		await waitFor(() =>
 			expect([...result.current].sort()).toEqual(
-				[
-					"agentHome",
-					"development",
-					"devWorkflows",
-					"externalApps",
-					"graphWorkflows",
-					"scheduler",
-					"transcription",
-					"workSessions",
-				].sort(),
+				["agentHome", "development", "externalApps", "graphWorkflows", "scheduler", "transcription", "workSessions"].sort(),
 			),
 		);
 	});

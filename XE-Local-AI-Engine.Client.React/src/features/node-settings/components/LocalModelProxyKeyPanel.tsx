@@ -100,6 +100,28 @@ export function LocalModelProxyKeyPanel() {
 						</Group>
 
 						<Text size="sm" fw={500} mt="xs">
+							{t("pages.nodeSettings.localModelProxyKey.anthropicEndpointLabel", "ANTHROPIC_BASE_URL")}
+						</Text>
+						<Group gap="xs" wrap="nowrap">
+							<Code data-testid="local-model-proxy-key-anthropic-endpoint" style={{ flex: 1, overflowX: "auto" }}>
+								{data.anthropicEndpointUrl}
+							</Code>
+							<CopyButton value={data.anthropicEndpointUrl}>
+								{({ copied, copy }) => (
+									<Button
+										variant="default"
+										size="xs"
+										leftSection={copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+										onClick={copy}
+										data-testid="local-model-proxy-key-copy-anthropic-endpoint"
+									>
+										{copied ? t("common.copied", "Copied") : t("common.copy", "Copy")}
+									</Button>
+								)}
+							</CopyButton>
+						</Group>
+
+						<Text size="sm" fw={500} mt="xs">
 							{t("pages.nodeSettings.localModelProxyKey.prefixLabel", "Key")}
 						</Text>
 						<Code data-testid="local-model-proxy-key-prefix" style={{ overflowX: "auto" }}>
@@ -173,7 +195,7 @@ export function LocalModelProxyKeyPanel() {
 					<Alert color="blue" variant="light" data-testid="local-model-proxy-key-hint">
 						{t(
 							"pages.nodeSettings.localModelProxyKey.clientHint",
-							"Point your OpenAI-compatible client at base_url = the endpoint above with api_key = the generated key. It serves only the local model — no agent tools, no memory, no knowledge base.",
+							"Point an OpenAI-compatible client (Chat Completions or Responses) at base_url, or an Anthropic client such as Claude Code at ANTHROPIC_BASE_URL, with the generated key as its API key and an installed model's exact name as its model. It serves only the local model — no agent tools, no memory, no knowledge base.",
 						)}
 					</Alert>
 				) : null}

@@ -5,8 +5,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     reach this table; per-token assistant deltas never do.
 /// </summary>
 /// <remarks>
-///     A plain class rather than a record class, matching the two sibling event tables it copies
-///     (<see cref="DevWorkflowRunEvent" />, <see cref="AgentWorkSessionEvent" />).
+///     A plain class rather than a record class, matching the sibling event table it copies
+///     (<see cref="AgentWorkSessionEvent" />).
 /// </remarks>
 internal sealed class IntegrationExecutionEvent
 {

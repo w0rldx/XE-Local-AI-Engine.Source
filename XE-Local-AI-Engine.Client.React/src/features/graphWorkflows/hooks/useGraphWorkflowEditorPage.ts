@@ -33,6 +33,7 @@ import {
 } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 import {
 	useGraphWorkflowAgentOptions,
+	useFetchGraphWorkflowAgents,
 	useGraphWorkflowDecisionModelOptions,
 	useGraphWorkflowLlmModelOptions,
 	useGraphWorkflowModelOptions,
@@ -48,7 +49,11 @@ import {
 	useUpdateGraphWorkflowDefinition,
 	useValidateGraphWorkflowDefinition,
 } from "@/features/graphWorkflows/queries/useGraphWorkflows";
-import { GRAPH_WORKFLOW_SAMPLES } from "@/features/graphWorkflows/samples/GraphWorkflowSamples";
+import {
+	bindRepositoryAgent,
+	GRAPH_WORKFLOW_SAMPLES,
+	needsRepositoryAgent,
+} from "@/features/graphWorkflows/samples/GraphWorkflowSamples";
 
 /** What a brand-new workflow starts as: the smallest graph the server accepts, already laid out. */
 const STARTER_GRAPH: GraphWorkflowGraph = {
@@ -91,6 +96,7 @@ export function useGraphWorkflowEditorPage(
 	const modelOptionsQuery = useGraphWorkflowModelOptions({ enabled: hasNodeSelection });
 	const llmModelOptionsQuery = useGraphWorkflowLlmModelOptions({ enabled: hasNodeSelection });
 	const decisionModelOptionsQuery = useGraphWorkflowDecisionModelOptions({ enabled: hasNodeSelection });
+	const fetchAgents = useFetchGraphWorkflowAgents();
 
 	const createMutation = useCreateGraphWorkflowDefinition();
 	const updateMutation = useUpdateGraphWorkflowDefinition();
@@ -314,10 +320,15 @@ export function useGraphWorkflowEditorPage(
 				.catch(failed);
 			return;
 		}
-		const sample = GRAPH_WORKFLOW_SAMPLES.find((entry) => entry.id === values.sampleId);
+		const sample = mode === "saveAs" ? undefined : GRAPH_WORKFLOW_SAMPLES.find((entry) => entry.id === values.sampleId);
 		const graph = mode === "saveAs" ? editor.graph : (sample?.graph ?? STARTER_GRAPH);
-		createMutation
-			.mutateAsync({ body: { name: values.name, description: values.description, graph } })
+		// A Development sample's repository nodes ship unbound: bind them to a read-only repository agent first.
+		const bound =
+			sample !== undefined && needsRepositoryAgent(sample.graph)
+				? fetchAgents().then((agents) => bindRepositoryAgent(sample.graph, agents))
+				: Promise.resolve(graph);
+		bound
+			.then((body) => createMutation.mutateAsync({ body: { name: values.name, description: values.description, graph: body } }))
 			.then((created) => {
 				done();
 				if (created.id) {

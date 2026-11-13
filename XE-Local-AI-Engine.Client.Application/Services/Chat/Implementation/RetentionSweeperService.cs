@@ -7,10 +7,10 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Ages out whole conversations once they pass the configured retention window, deleting the same footprint the
@@ -25,6 +25,9 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 /// </remarks>
 public sealed class RetentionSweeperService : BackgroundService
 {
+    /// <summary>Where the retired Dev Workflows module kept its run artifacts, under the node data directory.</summary>
+    private const string RetiredDevWorkflowsFolder = "dev-workflows";
+
     /// <summary>How long an artifact scope directory is spared after its newest write before it can be reclaimed.</summary>
     /// <remarks>
     ///     A scope directory appears only after its owning row commits, so an orphan is settled — but the sweep still
@@ -208,14 +211,10 @@ public sealed class RetentionSweeperService : BackgroundService
                 cancellationToken);
         }
 
-        if (scope.ServiceProvider.GetService<IDevWorkflowArtifactBlobStore>() is { } runBlobs)
+        // Dev Workflows is retired (ADR 0023) and its tables are dropped, so every run artifact it left on disk is an orphan.
+        if (scope.ServiceProvider.GetService<INodeDataDirectory>() is { } dataDirectory)
         {
-            await PurgeOrphanedScopesAsync(scope,
-                "SELECT id FROM dev_workflow_runs WHERE id = {0}",
-                runBlobs.ListRunIdsLastWrittenBefore(cutoffUtc),
-                runBlobs.DeleteRun,
-                "development workflow run",
-                cancellationToken);
+            DeleteRetiredDevWorkflowArtifacts(Path.Combine(dataDirectory.Root, RetiredDevWorkflowsFolder));
         }
 
         // Accepted ceiling: run-keyed, so a blob (each at most MaxArtifactBytes) orphaned inside a LIVE run's scope by a crash
@@ -228,6 +227,25 @@ public sealed class RetentionSweeperService : BackgroundService
                 benchmarkBlobs.DeleteRun,
                 "benchmark run",
                 cancellationToken);
+        }
+    }
+
+    private void DeleteRetiredDevWorkflowArtifacts(string directory)
+    {
+        if (!Directory.Exists(directory))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Delete(directory, recursive: true);
+            _logger.LogInformation("Removed the retired Dev Workflows artifact directory.");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The next start tries again; nothing reads these bytes.
+            _logger.LogWarning(exception, "Could not remove the retired Dev Workflows artifact directory.");
         }
     }
 

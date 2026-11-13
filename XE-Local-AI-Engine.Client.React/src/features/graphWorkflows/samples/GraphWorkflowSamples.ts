@@ -4,11 +4,18 @@
 // agentDefinitionId, because an unbound Agent runs the built-in default persona with the local tools, which every fresh
 // install has; a bound agent would need setup first. Prompts inside the graphs are model-facing node config and stay
 // English; only the name and description shown in the picker are translated.
+//
+// The two Development samples (they replace the retired Dev Workflows templates) also need Development Mode and a
+// project, named by the run input's `developmentProjectId`. Their `repository` Agent nodes ship unbound, and the create
+// binds them to a read-only repository agent (`bindRepositoryAgent`), because only a saved agent's tool list can offer
+// the file tools and its id differs per node.
 
 import type { GraphWorkflowGraph } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import agentResearchAndCheck from "@/features/graphWorkflows/samples/agent-research-and-check.json";
 import briefWithReviewLoop from "@/features/graphWorkflows/samples/brief-with-review-loop.json";
+import devIntake from "@/features/graphWorkflows/samples/dev-intake.json";
 import parallelPerspectives from "@/features/graphWorkflows/samples/parallel-perspectives.json";
+import researchPlanApproval from "@/features/graphWorkflows/samples/research-plan-approval.json";
 import summarizeWithApproval from "@/features/graphWorkflows/samples/summarize-with-approval.json";
 import triageAndRoute from "@/features/graphWorkflows/samples/triage-and-route.json";
 
@@ -65,4 +72,60 @@ export const GRAPH_WORKFLOW_SAMPLES: readonly GraphWorkflowSample[] = [
 		defaultDescription:
 			"An agent answers a question with its tools and lists its sources, a second model checks the answer, and a person approves it.",
 	},
+	{
+		id: "dev-intake",
+		graph: devIntake as GraphWorkflowGraph,
+		nameKey: "pages.graphWorkflows.samples.devIntake.name",
+		defaultName: "Development intake",
+		descriptionKey: "pages.graphWorkflows.samples.devIntake.description",
+		defaultDescription:
+			"Classifies a development request, answers a question from the repository, or plans a change, implements it with Development Mode and applies it after two approvals. Needs Development Mode and a project.",
+	},
+	{
+		id: "research-plan-approval",
+		graph: researchPlanApproval as GraphWorkflowGraph,
+		nameKey: "pages.graphWorkflows.samples.researchPlanApproval.name",
+		defaultName: "Research, plan, approve",
+		descriptionKey: "pages.graphWorkflows.samples.researchPlanApproval.description",
+		defaultDescription:
+			"Researches a request in a Development project's repository, writes a plan and asks a person to approve it. Implements nothing. Needs Development Mode and a project.",
+	},
 ];
+
+/** The file tools a `repository` Agent node's agent must list (the server's `RepositoryToolNames`). */
+const REPOSITORY_TOOL_NAMES: readonly string[] = ["list_files", "read_file", "search_text"];
+
+function isUnboundRepositoryNode(node: NonNullable<GraphWorkflowGraph["nodes"]>[number]): boolean {
+	const config = node.config as Record<string, unknown> | null | undefined;
+	return node.kind === "Agent" && config?.["repository"] === true && config["agentDefinitionId"] == null;
+}
+
+/** Whether creating this graph needs an agent bound first: it holds a `repository` Agent node that names none. */
+export function needsRepositoryAgent(graph: GraphWorkflowGraph): boolean {
+	return (graph.nodes ?? []).some(isUnboundRepositoryNode);
+}
+
+/**
+ * Binds every unbound `repository` Agent node to the first agent that lists file tools and nothing else, which on a
+ * fresh install is the seeded "Coder (read-only)". With no such agent the graph is returned as it is, and the create
+ * call answers with the server's sentence naming what the node needs.
+ */
+export function bindRepositoryAgent(
+	graph: GraphWorkflowGraph,
+	agents: readonly { readonly id: string; readonly allowedToolNames: readonly string[] }[],
+): GraphWorkflowGraph {
+	const agent = agents.find(
+		(entry) => entry.allowedToolNames.length > 0 && entry.allowedToolNames.every((name) => REPOSITORY_TOOL_NAMES.includes(name)),
+	);
+	if (agent === undefined) {
+		return graph;
+	}
+	return {
+		...graph,
+		nodes: (graph.nodes ?? []).map((node) =>
+			isUnboundRepositoryNode(node)
+				? { ...node, config: { ...(node.config as Record<string, unknown>), agentDefinitionId: agent.id } }
+				: node,
+		),
+	};
+}

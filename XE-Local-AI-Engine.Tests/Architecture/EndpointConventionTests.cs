@@ -48,8 +48,8 @@ public sealed class EndpointConventionTests
     /// </summary>
     private const int EndpointFloor = 400;
 
-    /// <summary>Floor for the host's own route mappings (nineteen hubs, one MCP map, eight minimal-API maps).</summary>
-    private const int MappingFloor = 27;
+    /// <summary>Floor for the host's own route mappings (eighteen hubs, one MCP map, eight minimal-API maps).</summary>
+    private const int MappingFloor = 26;
 
     private const string EndpointsPrefix = "XE-Local-AI-Engine.Client/Endpoints/";
 

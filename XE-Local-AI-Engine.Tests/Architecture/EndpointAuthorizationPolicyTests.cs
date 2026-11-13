@@ -38,10 +38,10 @@ public sealed class EndpointAuthorizationPolicyTests
     private const int EndpointFloor = 400;
 
     /// <summary>Every SignalR hub type in the host assembly. An exact count, so a twentieth hub fails here.</summary>
-    private const int HubTypeCount = 19;
+    private const int HubTypeCount = 18;
 
-    /// <summary>The eight hand-mapped minimal-API routes plus <c>MapMcp</c>'s single stateless POST.</summary>
-    private const int MinimalApiRouteCount = 9;
+    /// <summary>The twelve hand-mapped minimal-API routes plus <c>MapMcp</c>'s single stateless POST.</summary>
+    private const int MinimalApiRouteCount = 13;
 
     /// <summary>
     ///     Microsoft.AspNetCore.TestHost maps this for its own base-address bookkeeping. It exists only under the
@@ -143,7 +143,7 @@ public sealed class EndpointAuthorizationPolicyTests
                                            .ToList();
 
         AssertEx.Equal(expected: HubTypeCount, hubTypes.Count,
-            "The host assembly no longer declares exactly nineteen hub types. This is an inventory check: a new hub "
+            "The host assembly no longer declares exactly eighteen hub types. This is an inventory check: a new hub "
             + "type must be added to this suite's coverage deliberately, because a hub's mapping and its "
             + "authorization are separate decisions.");
 
@@ -182,20 +182,24 @@ public sealed class EndpointAuthorizationPolicyTests
     public void NonFastEndpointsMinimalApiRoutes_RequireTheirNamedPolicy()
     {
         var apiPrefix = $"/{LocalApiRoutes.Prefix}/";
-        (string Path, string Method, string Policy)[] expectedRoutes =
+        ExpectedRoute[] expectedRoutes =
         [
-            (apiPrefix + LocalApiRoutes.Proxy.Models, "GET", NodeAuthorizationPolicies.LocalModelProxy),
-            (apiPrefix + LocalApiRoutes.Proxy.ChatCompletions, "POST", NodeAuthorizationPolicies.LocalModelProxy),
-            (apiPrefix + LocalApiRoutes.Proxy.Embeddings, "POST", NodeAuthorizationPolicies.LocalModelProxy),
-            (apiPrefix + LocalApiRoutes.IntegrationApi.Invoke, "POST", NodeAuthorizationPolicies.IntegrationApi),
-            (apiPrefix + LocalApiRoutes.IntegrationApi.ExecutionById, "GET", NodeAuthorizationPolicies.IntegrationApi),
-            (apiPrefix + LocalApiRoutes.IntegrationApi.ExecutionEvents, "GET", NodeAuthorizationPolicies.IntegrationApi),
-            (apiPrefix + LocalApiRoutes.IntegrationApi.ExecutionCancel, "POST", NodeAuthorizationPolicies.IntegrationApi),
-            (apiPrefix + LocalApiRoutes.IntegrationApi.SessionById, "GET", NodeAuthorizationPolicies.IntegrationApi),
+            new(apiPrefix + LocalApiRoutes.Proxy.Models, "GET", NodeAuthorizationPolicies.LocalModelProxy),
+            new(apiPrefix + LocalApiRoutes.Proxy.ChatCompletions, "POST", NodeAuthorizationPolicies.LocalModelProxy),
+            new(apiPrefix + LocalApiRoutes.Proxy.Embeddings, "POST", NodeAuthorizationPolicies.LocalModelProxy),
+            new(apiPrefix + LocalApiRoutes.Proxy.Messages, "POST", NodeAuthorizationPolicies.LocalModelProxy),
+            new(apiPrefix + LocalApiRoutes.Proxy.MessagesCountTokens, "POST", NodeAuthorizationPolicies.LocalModelProxy),
+            new(apiPrefix + LocalApiRoutes.Proxy.Responses, "POST", NodeAuthorizationPolicies.LocalModelProxy),
+            new(apiPrefix + LocalApiRoutes.Proxy.ResponsesInputTokens, "POST", NodeAuthorizationPolicies.LocalModelProxy),
+            new(apiPrefix + LocalApiRoutes.IntegrationApi.Invoke, "POST", NodeAuthorizationPolicies.IntegrationApi),
+            new(apiPrefix + LocalApiRoutes.IntegrationApi.ExecutionById, "GET", NodeAuthorizationPolicies.IntegrationApi),
+            new(apiPrefix + LocalApiRoutes.IntegrationApi.ExecutionEvents, "GET", NodeAuthorizationPolicies.IntegrationApi),
+            new(apiPrefix + LocalApiRoutes.IntegrationApi.ExecutionCancel, "POST", NodeAuthorizationPolicies.IntegrationApi),
+            new(apiPrefix + LocalApiRoutes.IntegrationApi.SessionById, "GET", NodeAuthorizationPolicies.IntegrationApi),
             // MCP's transport is stateless (SEP-2567), and the stateless mapping is one POST route — no GET, no
             // DELETE. Its pattern carries a trailing slash the SDK appends to the path Program.cs passes; routing
             // matches the slashless request to it either way, but RawText is what this lookup compares.
-            (apiPrefix + LocalApiRoutes.Mcp.ServerEndpoint + "/", "POST", NodeAuthorizationPolicies.McpServer)
+            new(apiPrefix + LocalApiRoutes.Mcp.ServerEndpoint + "/", "POST", NodeAuthorizationPolicies.McpServer)
         ];
 
         var routes = RouteEndpoints(Factory);
@@ -230,7 +234,7 @@ public sealed class EndpointAuthorizationPolicyTests
         AssertEx.Empty(absent,
             $"This test expects route(s) the host no longer maps: {string.Join("; ", absent)}.");
         AssertEx.Equal(expected: MinimalApiRouteCount, handMapped.Count,
-            $"Expected exactly {MinimalApiRouteCount} hand-mapped, self-authorizing routes (eight minimal-API maps "
+            $"Expected exactly {MinimalApiRouteCount} hand-mapped, self-authorizing routes (twelve minimal-API maps "
             + $"plus MapMcp's single stateless POST); the host has {handMapped.Count}.");
 
         foreach (var (path, method, policy) in expectedRoutes)
@@ -292,4 +296,27 @@ public sealed class EndpointAuthorizationPolicyTests
         endpoint.Metadata
                 .GetOrderedMetadata<IAuthorizeData>()
                 .Any(data => string.Equals(data.Policy, policy, StringComparison.Ordinal));
+
+    private sealed class ExpectedRoute
+    {
+        public ExpectedRoute(string path, string method, string policy)
+        {
+            Path = path;
+            Method = method;
+            Policy = policy;
+        }
+
+        public string Path { get; }
+
+        public string Method { get; }
+
+        public string Policy { get; }
+
+        public void Deconstruct(out string path, out string method, out string policy)
+        {
+            path = Path;
+            method = Method;
+            policy = Policy;
+        }
+    }
 }

@@ -7,7 +7,6 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
@@ -106,7 +105,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     private readonly bool _computeEnabledSeed;
     private readonly bool _agentHomeEnabledSeed;
     private readonly bool _schedulerEnabledSeed;
-    private readonly bool _devWorkflowsEnabledSeed;
     private readonly bool _executionPreviewsEnabledSeed;
 
     public NodeRuntimeSettings(INodeSettingsStore store,
@@ -241,7 +239,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         _computeEnabledSeed = BoolSeed(configuration, $"{ComputeOptions.SectionName}:Enabled", false);
         _agentHomeEnabledSeed = BoolSeed(configuration, $"{AgentHomeOptions.SectionName}:Enabled", false);
         _schedulerEnabledSeed = BoolSeed(configuration, $"{SchedulerOptions.Section}:Enabled", true);
-        _devWorkflowsEnabledSeed = BoolSeed(configuration, $"{DevWorkflowOptions.Section}:Enabled", false);
         _executionPreviewsEnabledSeed = BoolSeed(configuration, "ExecutionPreviews:Enabled", false);
 
         // From configuration, not IOptions<OrchestrationAgentOptions>, to avoid a DI cycle: OrchestrationAgentOptions is itself Configure-d FROM
@@ -624,7 +621,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
             ComputeEnabled = stored.ComputeEnabled ?? _computeEnabledSeed,
             AgentHomeEnabled = stored.AgentHomeEnabled ?? _agentHomeEnabledSeed,
             SchedulerEnabled = stored.SchedulerEnabled ?? _schedulerEnabledSeed,
-            DevWorkflowsEnabled = stored.DevWorkflowsEnabled ?? _devWorkflowsEnabledSeed,
             ExecutionPreviewsEnabled = stored.ExecutionPreviewsEnabled ?? _executionPreviewsEnabledSeed,
             SandboxSecurityProfile = SandboxSecurityProfilePolicy.Parse(stored.SandboxSecurityProfile)
         };
@@ -656,9 +652,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public async Task<bool> GetSchedulerEnabledAsync(CancellationToken cancellationToken = default) =>
         (await LoadAsync(cancellationToken)).SchedulerEnabled ?? _schedulerEnabledSeed;
-
-    public async Task<bool> GetDevWorkflowsEnabledAsync(CancellationToken cancellationToken = default) =>
-        (await LoadAsync(cancellationToken)).DevWorkflowsEnabled ?? _devWorkflowsEnabledSeed;
 
     public async Task<bool> GetExecutionPreviewsEnabledAsync(CancellationToken cancellationToken = default) =>
         (await LoadAsync(cancellationToken)).ExecutionPreviewsEnabled ?? _executionPreviewsEnabledSeed;
@@ -877,9 +870,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public bool GetSchedulerEnabled() =>
         LoadStored().SchedulerEnabled ?? _schedulerEnabledSeed;
-
-    public bool GetDevWorkflowsEnabled() =>
-        LoadStored().DevWorkflowsEnabled ?? _devWorkflowsEnabledSeed;
 
     public bool GetExecutionPreviewsEnabled() =>
         LoadStored().ExecutionPreviewsEnabled ?? _executionPreviewsEnabledSeed;

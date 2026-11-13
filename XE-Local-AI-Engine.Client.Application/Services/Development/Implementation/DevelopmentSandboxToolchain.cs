@@ -154,9 +154,11 @@ internal sealed record DevelopmentSandboxToolchain
                 continue;
             }
 
+            // Never a venv's slot: its base interpreter runs without the venv's packages, so the refused venv stays reported.
             foreach (var substitute in resolved.Where(entry => string.Equals(entry.Directory, directory, StringComparison.Ordinal)
                                                                && IsVisible(entry.BinaryDirectory)
-                                                               && ResolvesByName(entry)))
+                                                               && ResolvesByName(entry)
+                                                               && VenvHome(entry.EntryRoot) is null))
             {
                 visible.Add(substitute.BinaryDirectory);
                 skipped.RemoveAll(entry => string.Equals(entry.Executable, substitute.Executable, StringComparison.Ordinal)

@@ -42,7 +42,7 @@ resolving the conflict, re-read every `<remarks>` and comment run in each confli
 | `Providers.LlamaServer`, the llama.cpp pin or binaries, launch fallback, tool offering or a tool schema, chat-template capability detection | [inference-runtime](agent-knowledge/inference-runtime.md) |
 | Model fit / HF discovery, `CapacityService`, llama-server supervisor | [model-fit-and-discovery](agent-knowledge/model-fit-and-discovery.md) |
 | `Benchmark*`, knowledge base, `Services/Training`, `Services/Transcription` | [benchmarks-kb-training-transcription](agent-knowledge/benchmarks-kb-training-transcription.md) |
-| `AI.Agent`, tool invocation or approval, cloud/MCP providers, Graph/Dev Workflows, `LaunchMode.McpOnly`, MAF/MEAI/`OpenAI` bumps | [agents-and-sandbox](agent-knowledge/agents-and-sandbox.md) |
+| `AI.Agent`, tool invocation or approval, cloud/MCP providers, Graph Workflows, `LaunchMode.McpOnly`, MAF/MEAI/`OpenAI` bumps | [agents-and-sandbox](agent-knowledge/agents-and-sandbox.md) |
 | `Services/Sandbox`/`Compute`/`AgentHome`, bubblewrap, any path-containment or patch-apply check | [sandbox-and-compute](agent-knowledge/sandbox-and-compute.md) |
 | `XE-Local-AI-Engine.Client.React/`, an endpoint's request/response/error declaration, hub payloads, `openapi/v1.json` | [frontend-and-api](agent-knowledge/frontend-and-api.md) |
 

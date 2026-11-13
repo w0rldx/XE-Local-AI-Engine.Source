@@ -367,9 +367,9 @@ The timeout ladder, the deliberate splits in it, context budgeting and `WithEffe
 `list_files`, `read_file` and `search_text`. All three are **provider** operations — `ISandboxRuntimeProvider.ListFilesAsync`,
 `ReadFileAsync` and `SearchTextAsync` — not argument vectors handed to `ExecuteAsync`.
 
-Inside a `CoderRepositoryScope` the three reads serve a Development repository instead of the AgentHome workspace. The
-work-session supervisor seeds that scope around a step of a development-workflow Agent node whose work item is bound to a
-project ([Dev Workflows, "Seeded templates"](25-dev-workflows.md)). The reads go through the same jail guards, applied with the repository root as the jail.
+Inside a `CoderRepositoryScope` the three reads serve a Development repository instead of the AgentHome workspace.
+`GraphWorkflowInvocationExecutor` opens that scope around a Graph Workflows Agent node with the `repository` option,
+over the project the run input names ([Graph Workflows §4.2](21-graph-workflows.md#42-agent)). The reads go through the same jail guards, applied with the repository root as the jail.
 `read_file` there also refuses everything the surveys suppress, `.git` included, and Agent Mode's switch does not gate them.
 
 Why provider operations replace argument vectors, the secret exclusions and the untrusted-content fencing are on the reference page. See [the reference page](reference/04-application-services.md#26-the-coder-reader).

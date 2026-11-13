@@ -1,8 +1,8 @@
 // The card React Flow draws for every node kind. The `nodeTypes` registry that maps a type name to it lives in
-// `GraphWorkflowEditorCanvas`, the way `DevWorkflowGraphView` holds its own.
+// `GraphWorkflowEditorCanvas`.
 //
 // The cards differ in exactly two things: their icon, and their HANDLES. Everything else a kind carries lives in the
-// config panel, which already dispatches on kind — the devWorkflows split, kept. Handles are the exception because
+// config panel, which already dispatches on kind. Handles are the exception because
 // `Condition` and `Pause` are the only kinds where a handle id means something: `onConnect` copies it into the new
 // edge's `sourceHandle`, its label and its condition, which is what routes the branch.
 //
@@ -13,6 +13,7 @@ import { Badge, Group, Stack, Text } from "@mantine/core";
 import {
 	IconArrowsJoin2,
 	IconArrowsSplit2,
+	IconCode,
 	IconFlag,
 	IconFlagCheck,
 	IconGitBranch,
@@ -45,6 +46,7 @@ const nodeKindIcons: Record<GraphWorkflowNodeKind, typeof IconRobot> = {
 	End: IconFlagCheck,
 	ChatInput: IconMessageQuestion,
 	DecisionModel: IconRoute,
+	DevTask: IconCode,
 };
 
 /**

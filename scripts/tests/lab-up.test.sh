@@ -560,7 +560,7 @@ cp "${PROFILE_FILE}" "${TEMP_ROOT}/test.json.orig"
 python3 -c '
 import json, sys
 p = json.load(open(sys.argv[1]))
-p["env"]["DevWorkflows__Enabled"] = "true"
+p["env"]["GraphWorkflows__Enabled"] = "true"
 json.dump(p, open(sys.argv[1], "w"))
 ' "${PROFILE_FILE}"
 echo 3 >"${CTL}/dev-status.exit"
@@ -569,10 +569,10 @@ run_lab -- --until host
 check "host start with a feature-flag profile exits 0" "0" "${STATUS}"
 KEYS="$(cat "${LAB}/host-env.keys" 2>/dev/null)"
 for key in XDG_DATA_HOME HuggingFace__ModelsDirectory XE_LLAMACPP_SERVER_PATH XE_LLAMACPP_VARIANT LAB_TEST_PROFILE_ONLY \
-    DevWorkflows__Enabled; do
+    GraphWorkflows__Enabled; do
   check "host-env.keys holds ${key}" "yes" "$(grep -qx "${key}" <<<"${KEYS}" && echo yes || echo no)"
 done
-start_host_stub "${LAB_HOST_ENV[@]}" "DevWorkflows__Enabled=true"
+start_host_stub "${LAB_HOST_ENV[@]}" "GraphWorkflows__Enabled=true"
 FLAG_HOST="${STUB_PID}"
 echo "${FLAG_HOST}" >"${CTL}/host-pid"
 run_lab -- --until host
@@ -580,7 +580,7 @@ check "same profile, same flagged host => reused (exit 0)" "0" "${STATUS}"
 cp "${TEMP_ROOT}/test.json.orig" "${PROFILE_FILE}"
 run_lab -- --until host
 check "profile dropped the flag the host still carries => exit 3" "3" "${STATUS}"
-check_contains "the dropped flag is named" "DevWorkflows__Enabled=true, this run wants DevWorkflows__Enabled=<unset>" "${ERR}"
+check_contains "the dropped flag is named" "GraphWorkflows__Enabled=true, this run wants GraphWorkflows__Enabled=<unset>" "${ERR}"
 echo "${GOOD_HOST}" >"${CTL}/host-pid"
 run_lab -- --until host
 check "back on the matching host => exit 0 (manifest rewritten for lab-api below)" "0" "${STATUS}"

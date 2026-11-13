@@ -269,7 +269,7 @@ describe("InstallDialog", () => {
 		server.use(
 			jsonRoute("get", previewPath, externalAppInstallPreview()),
 			// A conflict body carries `conflictType`, which the shared ProblemDetails shape does not declare, so the
-			// route is written out rather than built by `problemDetailsRoute` — the same way the Dev Workflows tests do.
+			// route is written out rather than built by `problemDetailsRoute`.
 			http.post(localApiPath("external-apps/instances"), () =>
 				HttpResponse.json(
 					{

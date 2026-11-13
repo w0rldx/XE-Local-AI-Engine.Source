@@ -411,9 +411,9 @@ public sealed class DevelopmentProjectResponse
 }
 
 /// <summary>
-///     <see cref="WorkflowRunId" /> names the development workflow run driving this task, and is absent for the
-///     ordinary task an operator drives themselves. A task that has one is approved at that run's gate, so this page
-///     defers the apply to it rather than offering its own.
+///     <see cref="WorkflowRunId" /> names the workflow run driving this task and <see cref="WorkflowEngine" /> its
+///     engine; both are absent for a task an operator drives. Such a task is approved at that run's gate, so this page
+///     defers the apply to it.
 /// </summary>
 public sealed class DevelopmentTaskResponse
 {
@@ -440,6 +440,9 @@ public sealed class DevelopmentTaskResponse
     public required long Version { get; init; }
 
     public required Guid? WorkflowRunId { get; init; }
+
+    /// <summary><c>GraphWorkflow</c>, the only engine left: which page <see cref="WorkflowRunId" /> opens on.</summary>
+    public required string? WorkflowEngine { get; init; }
 }
 
 public sealed class DevelopmentAttemptResponse

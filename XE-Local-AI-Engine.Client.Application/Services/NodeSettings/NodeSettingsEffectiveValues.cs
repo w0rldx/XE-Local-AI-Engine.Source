@@ -60,8 +60,6 @@ public sealed record NodeSettingsEffectiveValues
 
     public required bool SchedulerEnabled { get; init; }
 
-    public required bool DevWorkflowsEnabled { get; init; }
-
     public required bool ExecutionPreviewsEnabled { get; init; }
 
     /// <summary>The profile every sandbox gate reads: <c>high</c> only when the stored literal is <c>high</c>. There is no configuration seed.</summary>

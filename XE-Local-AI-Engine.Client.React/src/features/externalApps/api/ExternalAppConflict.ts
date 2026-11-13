@@ -25,7 +25,7 @@ export interface ExternalAppConflict {
 	readonly conflictType: string;
 	/**
 	 * Permission-change refusal only: the names the update widens, from the closed eight-name vocabulary, carried on the
-	 * problem details the way `DevWorkflowGateAlreadyDecided` carries `standingDecision`. The SPA cannot compute the
+	 * problem details as an extension member. The SPA cannot compute the
 	 * widening — it never sees the target manifest's effective permissions — so it renders this list and nothing else.
 	 */
 	readonly addedPermissions?: readonly string[];

@@ -55,10 +55,6 @@ public class ConflictExceptionHandler : IExceptionHandler
             ModelOperationNotSupportedByProviderException => NodeConflictProblemType.ModelOperationNotSupportedByProvider,
             WorkSessionInvalidTransitionException => NodeConflictProblemType.WorkSessionInvalidTransition,
             WorkSessionConcurrencyException => NodeConflictProblemType.WorkSessionVersionConflict,
-            DevWorkflowGateAlreadyDecidedException => NodeConflictProblemType.DevWorkflowGateAlreadyDecided,
-            DevWorkflowRunInFlightException => NodeConflictProblemType.DevWorkflowRunInFlight,
-            DevWorkflowInvalidTransitionException => NodeConflictProblemType.DevWorkflowInvalidTransition,
-            DevWorkflowConcurrencyException => NodeConflictProblemType.DevWorkflowVersionConflict,
             GraphWorkflowDefinitionConflictException => NodeConflictProblemType.GraphWorkflowDefinitionConflict,
             GraphWorkflowRunConflictException => NodeConflictProblemType.GraphWorkflowRunConflict,
             GraphWorkflowGateAlreadyDecidedException => NodeConflictProblemType.GraphWorkflowGateAlreadyDecided,
@@ -128,9 +124,6 @@ public class ConflictExceptionHandler : IExceptionHandler
     {
         switch (exception)
         {
-            case DevWorkflowGateAlreadyDecidedException alreadyDecided:
-                problemDetails.StandingDecision = alreadyDecided.StandingDecision.ToString();
-                break;
             case GraphWorkflowGateAlreadyDecidedException graphGateDecided:
                 problemDetails.StandingDecision = graphGateDecided.StandingDecision.ToString();
                 break;

@@ -56,7 +56,6 @@ const nodeSettingsFieldSections: Readonly<
 	computeEnabled: "general",
 	agentHomeEnabled: "general",
 	schedulerEnabled: "general",
-	devWorkflowsEnabled: "general",
 	executionPreviewsEnabled: "sandbox",
 	sandboxSecurityProfile: "sandbox",
 	maxMessageRequestTimeoutSeconds: "chat",

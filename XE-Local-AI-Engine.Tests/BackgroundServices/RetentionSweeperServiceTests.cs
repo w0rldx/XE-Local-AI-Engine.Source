@@ -16,8 +16,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -290,17 +288,29 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     [Test]
     public async Task OrphanResweep_ReclaimsAnArtifactScopeWhoseOwningRowIsGone()
     {
-        // What a crash between the row commit and the best-effort DeleteSession/DeleteRun beside it strands for good:
-        // artifact bytes under a scope id no row names any more. Both consumers that can delete a row are swept.
-        await using var provider = await BuildProviderAsync("orphan-scopes.sqlite", RegisterDevWorkflowArtifactBlobStore);
+        // What a crash between the row commit and the best-effort DeleteSession beside it strands for good:
+        // artifact bytes under a scope id no row names any more.
+        await using var provider = await BuildProviderAsync("orphan-scopes.sqlite");
         var orphanedSession = SeedArtifactScope("work-sessions", Guid.NewGuid(), AgedWriteTimeUtc());
-        var orphanedRun = SeedArtifactScope("dev-workflows", Guid.NewGuid(), AgedWriteTimeUtc());
 
         using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new ManualTimeProvider(FixedNowUtc));
         await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
 
         AssertEx.False(Directory.Exists(orphanedSession), "A work-session artifact directory with no agent_work_sessions row must be reclaimed.");
-        AssertEx.False(Directory.Exists(orphanedRun), "A workflow-run artifact directory with no dev_workflow_runs row must be reclaimed.");
+    }
+
+    [Test]
+    public async Task OrphanResweep_RemovesTheRetiredDevWorkflowsArtifactFolder()
+    {
+        // Dev Workflows is retired and its tables dropped: its run artifacts, fresh or aged, belong to nothing.
+        await using var provider = await BuildProviderAsync("retired-dev-workflows.sqlite");
+        _ = SeedArtifactScope("dev-workflows", Guid.NewGuid(), FreshWriteTimeUtc());
+        var retired = Path.Combine(_rootPath, "dev-workflows");
+
+        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new ManualTimeProvider(FixedNowUtc));
+        await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
+
+        AssertEx.False(Directory.Exists(retired), "The retired module's whole artifact folder must be removed.");
     }
 
     [Test]
@@ -402,12 +412,6 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     private static void RegisterBenchmarkRunArtifactBlobStore(ServiceCollection services)
     {
         services.AddSingleton<BenchmarkRunArtifactBlobStore>();
-    }
-
-    private static void RegisterDevWorkflowArtifactBlobStore(ServiceCollection services)
-    {
-        services.AddSingleton(Options.Create(new DevWorkflowOptions()));
-        services.AddSingleton<IDevWorkflowArtifactBlobStore, ManagedDevWorkflowArtifactBlobStore>();
     }
 
     // Puts artifact bytes where a scope directory sits, with every stamp the age gate reads pinned to one instant so

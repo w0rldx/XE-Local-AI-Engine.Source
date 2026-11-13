@@ -2,7 +2,7 @@
 // `DevelopmentStore.*.cs` passes one of the 17 literals below, and the column had no label map at all — an operator
 // read `TransitionedByOperator` and `Terminalized` as raw camel-case tokens.
 //
-// Mirrors `features/devWorkflows/I18nParity.test.ts`'s vocabulary block rather than inventing a second shape.
+// Mirrors `features/graphWorkflows/I18nParity.test.ts`'s vocabulary block rather than inventing a second shape.
 //
 // WHAT THIS DOES AND DOES NOT GUARD. The list below is typed by hand and compared against `en.json` only. Nothing
 // here reads `DevelopmentStore.*.cs`, so a NEW outcome literal added on the C# side does not fail anything — it

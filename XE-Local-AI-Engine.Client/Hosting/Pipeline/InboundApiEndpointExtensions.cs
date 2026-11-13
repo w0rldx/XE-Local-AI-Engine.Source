@@ -36,6 +36,22 @@ internal static class InboundApiEndpointExtensions
                static (HttpContext context, LocalModelProxyForwarder forwarder) => forwarder.ForwardEmbeddingsAsync(context))
            .RequireAuthorization(NodeAuthorizationPolicies.LocalModelProxy)
            .RequireRateLimiting(NodeAuthRateLimits.LocalModelProxyPolicy);
+        app.MapPost(proxyRoutePrefix + LocalApiRoutes.Proxy.Messages,
+               static (HttpContext context, LocalModelProxyForwarder forwarder) => forwarder.ForwardMessagesAsync(context))
+           .RequireAuthorization(NodeAuthorizationPolicies.LocalModelProxy)
+           .RequireRateLimiting(NodeAuthRateLimits.LocalModelProxyPolicy);
+        app.MapPost(proxyRoutePrefix + LocalApiRoutes.Proxy.MessagesCountTokens,
+               static (HttpContext context, LocalModelProxyForwarder forwarder) => forwarder.ForwardMessagesCountTokensAsync(context))
+           .RequireAuthorization(NodeAuthorizationPolicies.LocalModelProxy)
+           .RequireRateLimiting(NodeAuthRateLimits.LocalModelProxyPolicy);
+        app.MapPost(proxyRoutePrefix + LocalApiRoutes.Proxy.Responses,
+               static (HttpContext context, LocalModelProxyForwarder forwarder) => forwarder.ForwardResponsesAsync(context))
+           .RequireAuthorization(NodeAuthorizationPolicies.LocalModelProxy)
+           .RequireRateLimiting(NodeAuthRateLimits.LocalModelProxyPolicy);
+        app.MapPost(proxyRoutePrefix + LocalApiRoutes.Proxy.ResponsesInputTokens,
+               static (HttpContext context, LocalModelProxyForwarder forwarder) => forwarder.ForwardResponsesInputTokensAsync(context))
+           .RequireAuthorization(NodeAuthorizationPolicies.LocalModelProxy)
+           .RequireRateLimiting(NodeAuthRateLimits.LocalModelProxyPolicy);
 
         // The inbound EXTERNAL integration API, hand-mapped like MapMcp and the model proxy and for the same reasons; its paths MUST stay inside /api/local/v1. The
         // IntegrationApi policy accepts ONLY the integration key scheme. See docs/wiki/09-api-and-hubs.md ("Notable non-typed routes").

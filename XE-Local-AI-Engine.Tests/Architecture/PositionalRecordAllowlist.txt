@@ -37,13 +37,6 @@ XE-Local-AI-Engine.Client.Application/Services/Chat/Implementation/NodeChatMessa
 XE-Local-AI-Engine.Client.Application/Services/CustomTools/CustomToolContracts.cs|CommandConfig
 XE-Local-AI-Engine.Client.Application/Services/CustomTools/CustomToolContracts.cs|CustomToolParameter
 XE-Local-AI-Engine.Client.Application/Services/CustomTools/CustomToolContracts.cs|HttpFetchConfig
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowNodeRunDocuments.cs|StoredRoute
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowRulePolicyResolver.cs|DevWorkflowAppliedRuleSet
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowRulePolicyResolver.cs|StoredScope
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowStateMachine.cs|DevWorkflowRoute
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowDevTaskExecutor.cs|DevTaskBrief
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowMaterializer.cs|TaskPackageItem
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowValidationReport.cs|DevWorkflowValidationReport
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentCommandProfile.cs|DevelopmentCommandProfile
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentCommandProfileImport.cs|DevelopmentProfileImportDocument
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentReviewerAttemptRunnerModels.cs|DevelopmentReviewReport
@@ -81,7 +74,6 @@ XE-Local-AI-Engine.Client.Application/Services/WorkSessions/WorkSessionModels.cs
 XE-Local-AI-Engine.Client/Endpoints/Agents/V1/Dtos/GoldenConversationEndpointDtos.cs|GoldenAssertionDto
 XE-Local-AI-Engine.Client/Endpoints/Agents/V1/Dtos/GoldenConversationEndpointDtos.cs|GoldenTurnDto
 XE-Local-AI-Engine.Client/Endpoints/Agents/V1/Dtos/PlaybookActionEndpointDtos.cs|PlaybookEvalResultResponse
-XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowGraph
 XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Dtos/GraphWorkflowContracts.cs|GraphWorkflowGraph
 XE-Local-AI-Engine.Client/Hosting/ReadyInfo.cs|ReadyInfo
 XE-Local-AI-Engine.Providers.Abstractions/ManagedRuntimeAdoptionJournal.cs|ManagedRuntimeAdoptionJournal
@@ -156,7 +148,6 @@ XE-Local-AI-Engine.Client.Application/Services/Chat/NodeChatDtos.cs|NodeChatMess
 XE-Local-AI-Engine.Client.Application/Services/Chat/NodeChatDtos.cs|NodeChatMessageSource
 XE-Local-AI-Engine.Client.Application/Services/CustomTools/CustomToolContracts.cs|CustomToolEnvironmentVariable
 XE-Local-AI-Engine.Client.Application/Services/CustomTools/CustomToolContracts.cs|CustomToolHeader
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowValidationBasedOn.cs|DevWorkflowValidationBasedOn
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentCommandProfile.cs|DevelopmentProfileCommand
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentReviewFinding.cs|DevelopmentReviewFinding
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentTestResultAdapter.cs|DevelopmentTestOutcome
@@ -280,16 +271,9 @@ XE-Local-AI-Engine.Client.Application/Services/Models/ILocalModelDetailsResolver
 # --- stored-row-read-back (18) ----------------------------------------------------
 # Deserialized from JSON stored in a SQLite row, or projected by EF SqlQuery/SqlQueryRaw. required would reject
 # a row written before the member existed; as a class, an EF raw-SQL row type also trips S1144 (Release error).
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowDispatcher.cs|ReasonDetail
 XE-Local-AI-Engine.Client.Persistence/Implementation/AgentSkillStore.cs|SkillFrontmatter
 XE-Local-AI-Engine.Client.Persistence/Implementation/AgentWorkSessionStore.cs|ArtifactReplacementDetail
 XE-Local-AI-Engine.Client.Persistence/Implementation/AgentWorkSessionStore.cs|ReasonDetailPayload
-XE-Local-AI-Engine.Client.Persistence/Implementation/DevWorkflowStore.cs|ArtifactSupersessionDetail
-XE-Local-AI-Engine.Client.Persistence/Implementation/DevWorkflowStore.cs|ArtifactUseDetail
-XE-Local-AI-Engine.Client.Persistence/Implementation/DevWorkflowStore.cs|MaterializationDetail
-XE-Local-AI-Engine.Client.Persistence/Implementation/DevWorkflowStore.cs|ReasonDetailPayload
-XE-Local-AI-Engine.Client.Persistence/Implementation/DevWorkflowStore.cs|StaleMarkDetail
-XE-Local-AI-Engine.Client.Persistence/Implementation/DevWorkflowStore.cs|WorkSessionAttachedDetail
 XE-Local-AI-Engine.Client.Persistence/Implementation/DevelopmentStore.Queries.cs|ReasonDetail
 XE-Local-AI-Engine.Client.Persistence/Implementation/DevelopmentStore.Queries.cs|WorkflowPolicyDetail
 XE-Local-AI-Engine.Client.Persistence/Stores/BenchmarkPairwiseStoreContracts.cs|BenchmarkPairwiseScoreEntry
@@ -303,7 +287,6 @@ XE-Local-AI-Engine.Client.Persistence/Stores/ITrainingEvaluationStore.cs|Trainin
 # Hand-writes PrintMembers so ToString() keeps secrets out of logs. A class has no such hook: the redaction
 # would simply disappear.
 XE-Local-AI-Engine.Client.Application/Services/Containers/Bridge/ContainerBridgeGrant.cs|ContainerBridgeGrant
-XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowGraphModels.cs|DevWorkflowGraphEdge
 XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ApplicationManifest
 XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ExternalAppCatalogSnapshot
 XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/IExternalAppCatalogCacheStore.cs|StoredExternalAppCatalogCache
@@ -325,11 +308,6 @@ XE-Local-AI-Engine.Client.Application/Services/Chat/NodeChatStreamDtos.cs|NodeCh
 XE-Local-AI-Engine.Client.Application/Services/Training/Datasets/DatasetContracts.cs|DatasetSampleKindTargetV1
 XE-Local-AI-Engine.Client.Application/Services/Training/Datasets/DatasetContracts.cs|DatasetToolSnapshotV1
 XE-Local-AI-Engine.Client.Application/Services/Training/Datasets/DatasetContracts.cs|ToolMockRuleV1
-XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowEdgeCondition
-XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowGraphEdge
-XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowGraphNode
-XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowMaterialization
-XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowRuleScope
 XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Dtos/GraphWorkflowContracts.cs|GraphWorkflowEdgeCondition
 XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Dtos/GraphWorkflowContracts.cs|GraphWorkflowGraphEdge
 XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Dtos/GraphWorkflowContracts.cs|GraphWorkflowGraphNode

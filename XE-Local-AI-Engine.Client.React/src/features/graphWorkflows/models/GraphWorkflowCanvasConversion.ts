@@ -175,6 +175,7 @@ function nodeDataFromWire(node: GraphWorkflowGraphNode): GraphWorkflowCanvasNode
 				reasoningEffort: stringOrNull(config["reasoningEffort"]),
 				responseJsonSchema: jsonText(config["responseJsonSchema"]),
 				includeUpstreamOutputs: booleanOr(config["includeUpstreamOutputs"], true),
+				...(typeof config["repository"] === "boolean" ? { repository: config["repository"] } : {}),
 				...chatFlagsFromWire(config, true),
 			};
 		case "LlmCall":
@@ -234,6 +235,20 @@ function nodeDataFromWire(node: GraphWorkflowGraphNode): GraphWorkflowCanvasNode
 				provider: stringOrNull(config["provider"]),
 				model: stringOrNull(config["model"]),
 				inputBindings: bindingsFromWire(config["inputBindings"]),
+			};
+		case "DevTask":
+			return {
+				...base,
+				kind: "DevTask",
+				action: stringOrEmpty(config["action"]),
+				title: stringOrEmpty(config["title"]),
+				requirements: stringOrEmpty(config["requirements"]),
+				acceptanceCriteria: Array.isArray(config["acceptanceCriteria"])
+					? config["acceptanceCriteria"].filter((entry): entry is string => typeof entry === "string")
+					: [],
+				instructions: stringOrEmpty(config["instructions"]),
+				inputBindings: bindingsFromWire(config["inputBindings"]),
+				task: stringOrNull(config["task"]),
 			};
 		// `default` IS the End case: `narrowGraphWorkflowNodeKind` answers one of the members and the others above
 		// are handled, so TypeScript narrows `node` here exactly as a `case "End"` would. It also catches an UNKNOWN
@@ -463,6 +478,7 @@ function configToWire(data: GraphWorkflowCanvasNodeData, issues: GraphWorkflowGr
 				reasoningEffort: data.reasoningEffort,
 				responseJsonSchema: parseJsonField(data.responseJsonSchema, data.key, issues, true),
 				includeUpstreamOutputs: data.includeUpstreamOutputs,
+				...(data.repository === undefined ? {} : { repository: data.repository }),
 				...chatFlagsToWire(data),
 			};
 		case "LlmCall": {
@@ -520,6 +536,21 @@ function configToWire(data: GraphWorkflowCanvasNodeData, issues: GraphWorkflowGr
 				...(type === "choice" && criteria.length > 0 ? { criteria: Object.fromEntries(criteria) } : {}),
 				...(data.provider === null ? {} : { provider: data.provider }),
 				...(data.model === null ? {} : { model: data.model }),
+				...(bindings ? { inputBindings: bindings } : {}),
+			};
+		}
+		case "DevTask": {
+			// The parser refuses a member only the other action reads, so each action writes its own members and no more.
+			if (data.action === "apply") {
+				return { action: data.action, task: data.task };
+			}
+			const bindings = llmBindingsToWire(data.inputBindings, data.key, issues);
+			return {
+				action: data.action,
+				...(data.title.trim().length > 0 ? { title: data.title } : {}),
+				requirements: data.requirements,
+				...(data.acceptanceCriteria.length > 0 ? { acceptanceCriteria: data.acceptanceCriteria } : {}),
+				...(data.instructions.trim().length > 0 ? { instructions: data.instructions } : {}),
 				...(bindings ? { inputBindings: bindings } : {}),
 			};
 		}

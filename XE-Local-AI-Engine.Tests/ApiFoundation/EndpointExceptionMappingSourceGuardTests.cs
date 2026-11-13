@@ -73,28 +73,6 @@ public sealed class EndpointExceptionMappingSourceGuardTests
             "WorkSession endpoint-local raw KeyNotFoundException catches can turn unrelated defects into 404. Throw the typed persistence family and let its global handler map it.");
     }
 
-    /// <summary>
-    ///     The sweep above is hardcoded per family, so a new endpoint folder is not covered by it — "still green" after
-    ///     adding one would be true trivially. This is that folder's own sweep.
-    /// </summary>
-    [Test]
-    public void DevWorkflowEndpoints_CatchNothingAndTranslateNoRawKeyNotFoundExceptions()
-    {
-        var root = FindRepositoryRoot();
-        var endpoints = Path.Combine(root, "XE-Local-AI-Engine.Client", "Endpoints", "DevelopmentWorkflows");
-        AssertEx.True(Directory.Exists(endpoints), "The development-workflow endpoint folder must exist for this guard to mean anything.");
-
-        var offenders = Directory.EnumerateFiles(endpoints, "*.cs", SearchOption.AllDirectories)
-                                 .Where(path => CountCatches(File.ReadAllText(path)) > 0)
-                                 .Select(path => Path.GetRelativePath(endpoints, path).Replace('\\', '/'))
-                                 .OrderBy(static path => path, StringComparer.Ordinal)
-                                 .ToArray();
-
-        AssertEx.Empty(offenders,
-            "Development-workflow endpoints must throw the typed persistence and runtime families and let the global handlers map them. "
-            + "An endpoint-local catch turns unrelated defects into 404s and 400s, and duplicates a mapping that already exists in one place.");
-    }
-
     [Test]
     public void GlobalHandlers_RegisterTheDevelopmentHandlersBeforeTheDefaultHandler()
     {
@@ -117,7 +95,7 @@ public sealed class EndpointExceptionMappingSourceGuardTests
     }
 
     /// <summary>
-    ///     The Development folder's own sweep, mirroring the development-workflow one above. A raw
+    ///     The Development folder's own sweep. A raw
     ///     <c>KeyNotFoundException</c> catch here turned any unrelated dictionary miss in the pipeline into a 404; the
     ///     store now throws <c>DevelopmentNotFoundException</c> and <c>ResourceNotFoundExceptionHandler</c> answers it.
     /// </summary>

@@ -9,8 +9,8 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     Reports whether graph workflows are switched on for this node.
 /// </summary>
 /// <remarks>
-///     The one route in the family carved out of the disabled-feature 404 sweep in <c>FeatureSwitchMiddleware</c>, exactly as
-///     <c>development-workflows/capability</c> is: every other path under <c>graph-workflows/</c> answers a bodyless 404
+///     The one route in the family carved out of the disabled-feature 404 sweep in <c>FeatureSwitchMiddleware</c>: every
+///     other path under <c>graph-workflows/</c> answers a bodyless 404
 ///     with the feature off, which a client cannot tell from a broken route, so this is what lets the SPA hide the
 ///     feature and keep chat sending instead of reporting a load failure. The switch is read from node settings
 ///     per request, so a saved change shows without a restart, and this family is never dropped from discovery.

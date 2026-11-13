@@ -1052,7 +1052,6 @@ describe("NodeSettingsFieldsCard — feature switches", () => {
 	const switchTestIds = [
 		"development",
 		"work-sessions",
-		"dev-workflows",
 		"graph-workflows",
 		"agent-home",
 		"compute",
@@ -1061,7 +1060,7 @@ describe("NodeSettingsFieldsCard — feature switches", () => {
 		"scheduler",
 	].map((name) => `node-settings-feature-${name}`);
 
-	it("places the Features card with all nine switches in the general section only", () => {
+	it("places the Features card with all eight switches in the general section only", () => {
 		renderCard({ section: "general" });
 		const card = screen.getByTestId("node-settings-features-card");
 		expect(within(card).getByText("Features")).toBeTruthy();
@@ -1098,7 +1097,6 @@ describe("NodeSettingsFieldsCard — feature switches", () => {
 		expect(screen.queryByTestId("node-settings-restart-badge-workSessionsEnabled")).toBeNull();
 		expect(screen.getByText(/the container bridge listener applies after a restart/)).toBeTruthy();
 		expect(screen.getByText(/The Mathematician agent is seeded on the next restart/)).toBeTruthy();
-		expect(screen.getByText(/workflow definitions are seeded on the next restart/)).toBeTruthy();
 	});
 
 	it("tells the operator Development off applies at once only while the switch is off, in en and de", () => {
@@ -1116,17 +1114,15 @@ describe("NodeSettingsFieldsCard — feature switches", () => {
 		expect(de?.pages.nodeSettings.fields.developmentEnabled.offHint).toBeTruthy();
 	});
 
-	it("shows a coupling error on the switch it is blamed on, with both codes in the en and de bundles", () => {
-		renderCard({ section: "general", errors: { devWorkflowsEnabled: "requiresWorkSessions" } });
+	it("shows a coupling error on the switch it is blamed on, with its code in the en and de bundles", () => {
+		renderCard({ section: "general", errors: { agentHomeEnabled: "requiresToolCapableModels" } });
 
 		const switchRoot = (testId: string): HTMLElement => screen.getByTestId(testId).closest(".mantine-Switch-root") as HTMLElement;
-		expect(within(switchRoot("node-settings-feature-dev-workflows")).getByText("Invalid value.")).toBeTruthy();
+		expect(within(switchRoot("node-settings-feature-agent-home")).getByText("Invalid value.")).toBeTruthy();
 		expect(within(switchRoot("node-settings-feature-work-sessions")).queryByText("Invalid value.")).toBeNull();
 		const de = nonEnglishLocales.find((locale) => locale.code === "de")?.resource;
-		for (const code of ["requiresWorkSessions", "requiresToolCapableModels"]) {
-			const key = `pages.nodeSettings.fields.errors.${code}`;
-			expect(i18next.getFixedT("en")(key)).not.toBe(key);
-			expect(typeof key.split(".").reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], de)).toBe("string");
-		}
+		const key = "pages.nodeSettings.fields.errors.requiresToolCapableModels";
+		expect(i18next.getFixedT("en")(key)).not.toBe(key);
+		expect(typeof key.split(".").reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], de)).toBe("string");
 	});
 });

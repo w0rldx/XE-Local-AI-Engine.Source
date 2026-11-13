@@ -247,6 +247,54 @@ describe("GraphWorkflowsPage", () => {
 			expect(posted()?.graph).toEqual(GRAPH_WORKFLOW_SAMPLES.find((entry) => entry.id === "parallel-perspectives")?.graph);
 		});
 
+		it("binds a Development sample's repository nodes to the read-only repository agent before posting it", async () => {
+			const agent = (id: string, allowedToolNames: string[]) => ({
+				id,
+				name: id,
+				instructions: "Do the thing.",
+				kind: "Single",
+				allowedToolNames,
+				isDefaultAssistant: false,
+				toolApprovals: {},
+				playbookEnabled: false,
+				defaultTemporaryChat: false,
+				memoryExtractionEnabled: false,
+				disableBaseScaffold: false,
+				disableToolRelevanceFilter: false,
+				allowedSkillIds: [],
+				version: 1,
+				createdAtUtc: 1_700_000_000_000,
+				updatedAtUtc: 1_700_000_000_000,
+			});
+			const writer = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+			const reader = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+			server.use(
+				...editorRoutes(),
+				jsonRoute("get", "agents", {
+					items: [agent(writer, ["read_file", "write_file"]), agent(reader, ["list_files", "read_file", "search_text"])],
+				}),
+			);
+			const { posted } = createRoute();
+			renderPage({});
+
+			fireEvent.click(await screen.findByTestId("gw-definition-create"));
+			fireEvent.click(await screen.findByTestId("gw-definition-meta-sample"));
+			fireEvent.click(await screen.findByRole("option", { name: en.pages.graphWorkflows.samples.devIntake.name, hidden: true }));
+			fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
+
+			await waitFor(() => {
+				expect(posted()).toBeDefined();
+			});
+			const bound = (posted()?.graph.nodes ?? [])
+				.filter((node) => (node.config as Record<string, unknown> | undefined)?.["repository"] === true)
+				.map((node) => [node.key, (node.config as Record<string, unknown>)["agentDefinitionId"]]);
+			// A writing agent is never picked, however early it is listed: the sample's agents only read.
+			expect(bound).toEqual([
+				["answer", reader],
+				["plan", reader],
+			]);
+		});
+
 		it("posts the Start-to-End starter graph when no sample was picked", async () => {
 			server.use(...editorRoutes());
 			const { posted } = createRoute();

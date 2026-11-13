@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed partial class EncryptedColumnRegistryTests
 {
     /// <summary>Today's column count as a floor: a parser that stops matching fails here, and removing a column is a deliberate edit to this constant.</summary>
-    private const int EncryptedColumnFloor = 128;
+    private const int EncryptedColumnFloor = 118;
 
     private const int DbSetFloor = 50;
 

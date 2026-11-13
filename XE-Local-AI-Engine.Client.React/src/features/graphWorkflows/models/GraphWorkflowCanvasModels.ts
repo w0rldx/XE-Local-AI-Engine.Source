@@ -105,6 +105,8 @@ export type GraphWorkflowCanvasNodeData =
 			readonly reasoningEffort: string | null;
 			readonly responseJsonSchema: string | null;
 			readonly includeUpstreamOutputs: boolean;
+			/** Reads the run's Development project; absent on the wire is `false`, held as absent like the chat flags. */
+			readonly repository?: boolean;
 	  } & GraphWorkflowAttachmentFlags)
 	| (GraphWorkflowNodeBase & {
 			readonly kind: "Tool";
@@ -135,6 +137,19 @@ export type GraphWorkflowCanvasNodeData =
 			readonly provider: string | null;
 			readonly model: string | null;
 			readonly inputBindings: readonly GraphWorkflowInputBinding[];
+	  })
+	| (GraphWorkflowNodeBase & {
+			readonly kind: "DevTask";
+			/** `implement` or `apply`. A string, not the union, so an imported unknown value stays visible. */
+			readonly action: string;
+			/** The members below `action` are `implement`'s, except `task`, which only `apply` sends. Both stay on the canvas. */
+			readonly title: string;
+			readonly requirements: string;
+			readonly acceptanceCriteria: readonly string[];
+			readonly instructions: string;
+			readonly inputBindings: readonly GraphWorkflowInputBinding[];
+			/** The key of the `implement` node an `apply` node lands (DEVTASK-1). */
+			readonly task: string | null;
 	  })
 	| (GraphWorkflowNodeBase & {
 			readonly kind: "End";
@@ -180,4 +195,5 @@ export const graphWorkflowNodeTypeByKind: Record<GraphWorkflowNodeKind, string> 
 	End: "end",
 	ChatInput: "chat-input",
 	DecisionModel: "decision-model",
+	DevTask: "dev-task",
 };

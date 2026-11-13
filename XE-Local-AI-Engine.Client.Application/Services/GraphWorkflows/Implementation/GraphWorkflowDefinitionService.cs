@@ -276,8 +276,8 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
             }
 
             warnings.Add(new GraphWorkflowValidationError(node.NodeKey,
-                $"Node '{node.NodeKey}' pins model '{model}', which is not a node-local model, and reads Tool node '{source.NodeKey}' "
-                + $"('{((GraphWorkflowToolConfig)source.Config).ToolName}'), which returns node-local data, so a run will refuse this node. Turn on "
+                $"Node '{node.NodeKey}' pins model '{model}', which is not a node-local model, and reads {GraphWorkflowToolGate.LocalDataLabel(source)}, "
+                + "which returns node-local data, so a run will refuse this node. Turn on "
                 + "'Let cloud models read local data' in Node Settings → Privacy & updates, or grant local data on the model's external connection when it has one, to allow it."));
         }
 

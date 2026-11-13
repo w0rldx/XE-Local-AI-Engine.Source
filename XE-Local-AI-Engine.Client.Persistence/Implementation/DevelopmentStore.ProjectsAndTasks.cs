@@ -298,14 +298,7 @@ public sealed partial class DevelopmentStore
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 EnsureLegalTransition(task.Status, command.TargetStatus);
 
-                // The widening is what PAYS for the edge out of Blocked, so the two are checked together: a rework asked of a task at its round cap without one runs
-                // a whole coder attempt — its tokens and its duration — and is stood down by StartNextActionAsync before a review, the no-op loop this edge ends.
-                if (task.Status == DevelopmentTaskStatus.Blocked && command.TargetStatus == DevelopmentTaskStatus.ChangesRequested && !command.WidenReviewRounds)
-                {
-                    throw new DevelopmentInvalidTransitionException("A blocked development task can only be reworked by a retry that widens its review-round cap.");
-                }
-
-                // The other edge out of Blocked spends nothing, so it is only for the validation a missing runner stopped: the coder's unchanged, succeeded
+                // The one edge out of Blocked spends nothing, so it is only for the validation a missing runner stopped: the coder's unchanged, succeeded
                 // attempt goes back to InProgress, where the next action is that validation again (StartValidationAsync re-checks the attempt).
                 if (command.RetryValidation
                     != (task.Status == DevelopmentTaskStatus.Blocked && command.TargetStatus == DevelopmentTaskStatus.InProgress))
@@ -324,17 +317,12 @@ public sealed partial class DevelopmentStore
                     throw new DevelopmentInvalidTransitionException("A validation can only be retried while the latest Development attempt is a successful coder attempt.");
                 }
 
-                if (command.WidenReviewRounds)
-                {
-                    task.MaxReviewRounds++;
-                }
-
                 var now = Now();
                 task.Status = command.TargetStatus;
                 task.UpdatedAtUtc = now;
                 task.Version++;
-                // A task asked for rework carries WHY it was asked, as a stood-down one does: DevWorkflowDevTaskExecutor.RequestChangesAsync computes the rework's
-                // sentence, and gating on Blocked alone discarded it to the event log. Every reader is Status-gated; BlockedAtUtc stays Blocked-only, timing a stand-down.
+                // A task asked for rework carries WHY it was asked, as a stood-down one does; gating on Blocked alone discarded that sentence to the event log.
+                // Every reader is Status-gated; BlockedAtUtc stays Blocked-only, timing a stand-down.
                 task.BlockedReason = command.TargetStatus is DevelopmentTaskStatus.Blocked or DevelopmentTaskStatus.ChangesRequested
                     ? command.Reason
                     : null;

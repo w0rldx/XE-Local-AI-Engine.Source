@@ -120,7 +120,6 @@ public sealed class StubNodeRuntimeSettings
     private bool _computeEnabled = true;
     private bool _agentHomeEnabled = true;
     private bool _schedulerEnabled = true;
-    private bool _devWorkflowsEnabled = true;
     private bool _executionPreviewsEnabled;
     private SandboxSecurityProfile _sandboxSecurityProfile;
 
@@ -747,12 +746,6 @@ public sealed class StubNodeRuntimeSettings
         return this;
     }
 
-    public StubNodeRuntimeSettings WithDevWorkflowsEnabled(bool value)
-    {
-        _devWorkflowsEnabled = value;
-        return this;
-    }
-
     public StubNodeRuntimeSettings WithExecutionPreviewsEnabled(bool value)
     {
         _executionPreviewsEnabled = value;
@@ -919,8 +912,6 @@ public sealed class StubNodeRuntimeSettings
         settings.GetAgentHomeEnabled().Returns(_ => _agentHomeEnabled);
         settings.GetSchedulerEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _schedulerEnabled);
         settings.GetSchedulerEnabled().Returns(_ => _schedulerEnabled);
-        settings.GetDevWorkflowsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _devWorkflowsEnabled);
-        settings.GetDevWorkflowsEnabled().Returns(_ => _devWorkflowsEnabled);
         settings.GetExecutionPreviewsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _executionPreviewsEnabled);
         settings.GetExecutionPreviewsEnabled().Returns(_ => _executionPreviewsEnabled);
         settings.GetSandboxSecurityProfileAsync(Arg.Any<CancellationToken>()).Returns(_ => _sandboxSecurityProfile);
@@ -956,7 +947,6 @@ public sealed class StubNodeRuntimeSettings
                         ComputeEnabled = stored.ComputeEnabled ?? _computeEnabled,
                         AgentHomeEnabled = stored.AgentHomeEnabled ?? _agentHomeEnabled,
                         SchedulerEnabled = stored.SchedulerEnabled ?? _schedulerEnabled,
-                        DevWorkflowsEnabled = stored.DevWorkflowsEnabled ?? _devWorkflowsEnabled,
                         ExecutionPreviewsEnabled = stored.ExecutionPreviewsEnabled ?? _executionPreviewsEnabled,
                         SandboxSecurityProfile = stored.SandboxSecurityProfile is null
                             ? _sandboxSecurityProfile

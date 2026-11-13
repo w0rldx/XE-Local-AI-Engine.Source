@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -15,7 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     The ten feature switches resolve stored &gt; configuration seed &gt; the options class's code default, through the async
+///     The nine feature switches resolve stored &gt; configuration seed &gt; the options class's code default, through the async
 ///     getter, its sync twin and the effective values alike.
 /// </summary>
 [Category(TestCategories.Unit)]
@@ -63,11 +62,6 @@ public sealed class NodeRuntimeSettingsFeatureSwitchTests
                 SchedulerEnabled = v
             },
             static (r, ct) => r.GetSchedulerEnabledAsync(ct), static r => r.GetSchedulerEnabled(), static e => e.SchedulerEnabled),
-        new("DevWorkflows:Enabled", new DevWorkflowOptions().Enabled, static (s, v) => s with
-            {
-                DevWorkflowsEnabled = v
-            },
-            static (r, ct) => r.GetDevWorkflowsEnabledAsync(ct), static r => r.GetDevWorkflowsEnabled(), static e => e.DevWorkflowsEnabled),
         // No options class: a security-widening switch whose code default is OFF, stated here rather than borrowed (ADR 0019).
         new("ExecutionPreviews:Enabled", codeDefault: false, static (s, v) => s with
             {

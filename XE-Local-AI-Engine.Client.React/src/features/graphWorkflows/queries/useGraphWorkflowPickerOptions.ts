@@ -1,6 +1,7 @@
 // What the node config pickers offer: tools, agent definitions and the three model lists.
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse as LocalModelResponse } from "@/core/api/generated";
 import {
@@ -38,6 +39,12 @@ export function useGraphWorkflowAgentOptions(options: FeedOptions = {}) {
 				requiresTools: agent.allowedToolNames.length > 0 || agent.kind === "Orchestrator",
 			})),
 	});
+}
+
+/** The agent definitions fetched on demand, for a sample's create to bind its `repository` nodes (`bindRepositoryAgent`). */
+export function useFetchGraphWorkflowAgents() {
+	const queryClient = useQueryClient();
+	return useCallback(async () => (await queryClient.fetchQuery(listAgentDefinitionsOptions())).items ?? [], [queryClient]);
 }
 
 // The catalog's cloud provider tags (backend `LocalModelProviders`). Duplicated from the chat feature's picker on

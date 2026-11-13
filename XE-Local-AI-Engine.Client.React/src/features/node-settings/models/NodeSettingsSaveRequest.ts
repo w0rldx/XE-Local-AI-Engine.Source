@@ -375,11 +375,8 @@ export function buildNodeSettingsRequest(
 		}
 	}
 
-	// Client mirror of the two NodeSettingsPolicy couplings, blamed on the same field the server blames: the switch being
+	// Client mirror of the NodeSettingsPolicy coupling, blamed on the same field the server blames: the switch being
 	// turned on, or — when it was already on — what took its prerequisite away.
-	if (form.devWorkflowsEnabled && !form.workSessionsEnabled) {
-		errors[baseline.devWorkflowsEnabled ? "workSessionsEnabled" : "devWorkflowsEnabled"] = "requiresWorkSessions";
-	}
 	// The server judges the list the save leaves: a non-empty one, else the appsettings seed. Only an empty stored list lets
 	// the effective list (`effectiveToolCapableModels`, GET agents/tool-capable-models) reveal that seed, so clearing a
 	// non-empty list is left to the server's refusal on the field. Unknown reads as satisfied: a missed refusal still

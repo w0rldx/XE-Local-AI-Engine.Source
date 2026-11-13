@@ -40,8 +40,8 @@ internal static class DevelopmentAttemptFailureCodes
 
     /// <summary>A workspace policy refused the attempt's own diff; the test-write policy is the one that fires in practice.</summary>
     /// <remarks>
-    ///     The code exists so the workflow lane classes it as a policy refusal rather than a provider error, which is
-    ///     what the retry budget is spent on.
+    ///     The code exists so the Graph workflow <c>DevTask</c> lane classes it as a policy refusal rather than a provider
+    ///     error, which is what the retry budget is spent on.
     /// </remarks>
     public const string WorkspacePolicyRefused = "workspace_policy_refused";
 }
@@ -87,7 +87,7 @@ internal sealed class DevelopmentAttemptEvidenceException : InvalidOperationExce
     ///     into a terminal reason rather than raised as one.
     /// </summary>
     /// <remarks>
-    ///     One formatter, so the code prefix a reader and the workflow lane match on cannot drift between the paths.
+    ///     One formatter, so the code prefix a reader and the <c>DevTask</c> lane match on cannot drift between the paths.
     /// </remarks>
     public static string Compose(string failureCode, string operatorReason)
     {

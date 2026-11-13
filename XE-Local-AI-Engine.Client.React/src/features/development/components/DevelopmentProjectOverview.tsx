@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import type { DevelopmentProjectDetail, DevelopmentTaskDetail } from "@/features/development/models/DevelopmentModels";
-import { nextActionStatuses, statusColor } from "@/features/development/models/DevelopmentStatusModel";
+import { canStartNextAction, statusColor } from "@/features/development/models/DevelopmentStatusModel";
 
 type Project = NonNullable<DevelopmentProjectDetail["project"]>;
 type Task = NonNullable<DevelopmentTaskDetail["task"]>;
@@ -111,7 +111,7 @@ export function DevelopmentProjectOverview({
 				/>
 			) : null}
 			<Group align="end">
-				{nextActionStatuses.has(task.status ?? "") ? (
+				{canStartNextAction(task.status, task.blockedReason) ? (
 					<Button
 						data-testid="development-start-next"
 						disabled={!repository.ready || attempt.active}

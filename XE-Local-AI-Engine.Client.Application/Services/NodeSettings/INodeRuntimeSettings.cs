@@ -313,9 +313,6 @@ public interface INodeRuntimeSettings
     /// <summary>Whether the scheduler is on (stored &gt; <c>Scheduler:Enabled</c> &gt; on). Read once per request, turn or tick.</summary>
     Task<bool> GetSchedulerEnabledAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Whether development workflows are on (stored &gt; <c>DevWorkflows:Enabled</c> &gt; off). Read once per request, turn or tick.</summary>
-    Task<bool> GetDevWorkflowsEnabledAsync(CancellationToken cancellationToken = default);
-
     /// <summary>
     ///     Whether Preview sandbox mechanisms may serve a role (stored &gt; <c>ExecutionPreviews:Enabled</c> &gt; off). Read per sandbox
     ///     create and per capability read.
@@ -556,8 +553,6 @@ public interface INodeRuntimeSettings
     bool GetAgentHomeEnabled();
 
     bool GetSchedulerEnabled();
-
-    bool GetDevWorkflowsEnabled();
 
     bool GetExecutionPreviewsEnabled();
 }

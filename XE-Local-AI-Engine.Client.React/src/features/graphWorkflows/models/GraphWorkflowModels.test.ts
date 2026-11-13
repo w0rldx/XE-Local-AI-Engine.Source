@@ -98,6 +98,7 @@ describe("graph-workflow vocabularies", () => {
 			"End",
 			"ChatInput",
 			"DecisionModel",
+			"DevTask",
 		]);
 		expect(graphWorkflowJoinPolicies).toEqual(["All", "Any"]);
 		expect(graphWorkflowRunStatuses).toHaveLength(7);

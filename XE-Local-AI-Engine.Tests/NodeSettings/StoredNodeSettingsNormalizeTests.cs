@@ -813,8 +813,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
             ExternalAppsEnabled = false,
             ComputeEnabled = false,
             AgentHomeEnabled = false,
-            SchedulerEnabled = false,
-            DevWorkflowsEnabled = false
+            SchedulerEnabled = false
         });
 
         AssertEx.Equal(expected: false, loaded.DevelopmentEnabled);
@@ -825,9 +824,9 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         AssertEx.Equal(expected: false, loaded.ComputeEnabled);
         AssertEx.Equal(expected: false, loaded.AgentHomeEnabled);
         AssertEx.Equal(expected: false, loaded.SchedulerEnabled);
-        AssertEx.Equal(expected: false, loaded.DevWorkflowsEnabled);
 
-        await WriteSettingsJsonAsync("{ \"maxMessageRequestTimeoutSeconds\": 120 }");
+        // The retired Dev Workflows switch an older file still carries must not stop it loading.
+        await WriteSettingsJsonAsync("{ \"maxMessageRequestTimeoutSeconds\": 120, \"devWorkflowsEnabled\": true }");
         var old = await LoadAsync();
 
         AssertEx.Null(old.DevelopmentEnabled);
@@ -838,7 +837,6 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         AssertEx.Null(old.ComputeEnabled);
         AssertEx.Null(old.AgentHomeEnabled);
         AssertEx.Null(old.SchedulerEnabled);
-        AssertEx.Null(old.DevWorkflowsEnabled);
     }
 
     [Test]

@@ -106,41 +106,6 @@ public sealed class WorkSessionStateBlockTests
     }
 
     [Test]
-    public void Compose_WhenTheSessionIsWorkflowOwned_TellsTheModelAskUserIsGone()
-    {
-        // The send withdraws the tool for these sessions, and the seeded personas still tell the model to use it — an
-        // installed row keeps the instructions it was seeded with. Without this line the model calls a function it was
-        // never offered.
-        var workflow = StateWith() with
-        {
-            Session = Session() with
-            {
-                Kind = AgentWorkSessionKind.Workflow
-            }
-        };
-
-        var block = WorkSessionStateBlockComposer.Compose(workflow, step: 1, maxStepsPerRun: 25);
-
-        AssertEx.Contains(block, AskUserTool.ToolName);
-        AssertEx.Contains(block, "no operator attached");
-        AssertEx.True(block.IndexOf(AskUserTool.ToolName, StringComparison.Ordinal) > block.IndexOf(UntrustedContentFraming.EndMarkerPrefix, StringComparison.Ordinal),
-            "The notice is an instruction the model must follow, so it belongs after the untrusted fence closes.");
-
-        // The stuck instruction names the two signals DevWorkflowAgentExecutor reads out of a completed session before
-        // it decides the node run's fate. A step told to complete without them is a step told to report a success it
-        // did not have.
-        AssertEx.Contains(block, "mark the task Blocked with the reason");
-        AssertEx.Contains(block, "objective was NOT met");
-        AssertEx.Contains(block, "complete_work_session with objectiveMet false");
-        AssertEx.Contains(block, "Do not claim success in the completion summary.");
-
-        // The seeded persona teaches Blocked as a transient marker to attach to an ask_user question — a tool these
-        // sessions do not get — so without this clause a model routes around the obstacle, completes honestly, and
-        // leaves the stale Blocked row that now stands its node run down.
-        AssertEx.Contains(block, "moved to Done or Dropped before you complete");
-    }
-
-    [Test]
     public void Compose_WhenTheSessionIsOperatorDriven_SaysNothingAboutAskUser()
     {
         var block = WorkSessionStateBlockComposer.Compose(StateWith(), step: 1, maxStepsPerRun: 25);

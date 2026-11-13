@@ -4,7 +4,6 @@ import type { XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 import {
 	getDefaultAssistantToolOfferQueryKey,
 	getDevelopmentCapabilityQueryKey,
-	getDevWorkflowCapabilityQueryKey,
 	getGraphWorkflowCapabilityQueryKey,
 	getNodeSettingsQueryKey,
 	getToolCatalogQueryKey,
@@ -30,7 +29,6 @@ export async function invalidateAfterNodeSettingsSave(queryClient: QueryClient, 
 		await Promise.all(
 			[
 				getDevelopmentCapabilityQueryKey(),
-				getDevWorkflowCapabilityQueryKey(),
 				getGraphWorkflowCapabilityQueryKey(),
 				getWorkSessionCapabilityQueryKey(),
 				getTranscriptionRuntimeStatusQueryKey(),

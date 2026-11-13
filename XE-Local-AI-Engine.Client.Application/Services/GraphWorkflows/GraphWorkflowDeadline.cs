@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <remarks>
 ///     Derived from the ROW — its <c>StartedAtUtc</c> plus the node's declared timeout — and never held in memory: a
 ///     deadline a process owns dies with that process, and the node run it bounded would run until something else
-///     noticed. Unlike the development-workflow original, a node that declares no timeout still HAS one, from the
+///     noticed. A node that declares no timeout still HAS one, from the
 ///     node-timeout default in options, which an author's <c>timeoutSeconds</c> only overrides. A row that never
 ///     started has no deadline at all, which is what leaves a re-attempt and a restart collapse nothing to expire.
 /// </remarks>
@@ -29,14 +29,15 @@ internal static class GraphWorkflowDeadline
         return Expiry(node, nodeRun, options) is { } expiry && timeProvider.GetUtcNow() >= expiry + Grace;
     }
 
-    /// <summary>The absolute instant this attempt is due, or <see langword="null" /> when the row has not started.</summary>
+    /// <summary>The absolute instant this attempt is due, or <see langword="null" /> when the row has not started or the node has no deadline.</summary>
     public static DateTimeOffset? Expiry(GraphWorkflowGraphNode node, GraphWorkflowNodeRunSnapshot nodeRun, GraphWorkflowOptions options)
     {
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(nodeRun);
         ArgumentNullException.ThrowIfNull(options);
 
-        var seconds = node.TimeoutSeconds ?? options.DefaultNodeTimeoutSeconds;
+        // An implement DevTask node gets no default: a Dev Mode chain outlasts it and carries its own attempt budget.
+        var seconds = node.TimeoutSeconds ?? (node.Config is GraphWorkflowDevTaskConfig { IsApply: false } ? 0 : options.DefaultNodeTimeoutSeconds);
         return seconds > 0 && nodeRun.StartedAtUtc is { } startedAt
             ? DateTimeOffset.FromUnixTimeMilliseconds(startedAt).AddSeconds(seconds)
             : null;

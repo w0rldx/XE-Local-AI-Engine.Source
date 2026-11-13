@@ -1627,7 +1627,6 @@ describe("feature switches", () => {
 	const restartGated = ["developmentEnabled", "schedulerEnabled"] as const;
 	const live = [
 		"workSessionsEnabled",
-		"devWorkflowsEnabled",
 		"graphWorkflowsEnabled",
 		"agentHomeEnabled",
 		"computeEnabled",
@@ -1646,7 +1645,6 @@ describe("feature switches", () => {
 			computeEnabled: false,
 			agentHomeEnabled: false,
 			schedulerEnabled: true,
-			devWorkflowsEnabled: false,
 			executionPreviewsEnabled: false,
 		});
 	});
@@ -1708,23 +1706,6 @@ describe("feature switches", () => {
 			summarizePendingChanges(buildNodeSettingsRequest(on, onBaseline, bounds, false), on, onBaseline, restartRequiredFields)
 				.restartRequired,
 		).toEqual(["developmentEnabled"]);
-	});
-
-	it("refuses development workflows without work sessions, blamed on the switch being turned on", () => {
-		const { body, errors } = buildNodeSettingsRequest({ ...baseline, devWorkflowsEnabled: true }, baseline, bounds, false);
-		expect(errors).toEqual({ devWorkflowsEnabled: "requiresWorkSessions" });
-		expect(body.devWorkflowsEnabled).toBe(true);
-
-		expect(
-			buildNodeSettingsRequest({ ...baseline, devWorkflowsEnabled: true, workSessionsEnabled: true }, baseline, bounds, false)
-				.errors,
-		).toEqual({});
-	});
-
-	it("blames work sessions when they are turned off under running development workflows", () => {
-		const loaded = { ...baseline, workSessionsEnabled: true, devWorkflowsEnabled: true };
-		const { errors } = buildNodeSettingsRequest({ ...loaded, workSessionsEnabled: false }, loaded, bounds, false);
-		expect(errors).toEqual({ workSessionsEnabled: "requiresWorkSessions" });
 	});
 
 	it("refuses AgentHome only when the effective tool-capable list is known to be empty", () => {

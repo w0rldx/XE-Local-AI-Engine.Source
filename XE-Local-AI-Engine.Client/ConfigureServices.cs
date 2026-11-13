@@ -41,7 +41,6 @@ using XE_Local_AI_Engine.Client.Security.DataProtection;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.Diagnostics;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
@@ -205,11 +204,7 @@ public static class ConfigureServices
         // TryAddSingleton, so a change committed by the supervisor or by a state tool reaches the session view live.
         builder.Services.AddSingleton<IWorkSessionEventPublisher, WorkSessionEventPublisher>();
 
-        // Same posture for development workflows: the hub-backed publisher supersedes the no-op the module registers
-        // with TryAddSingleton, so every committed run change reaches an open run view live.
-        builder.Services.AddSingleton<IDevWorkflowEventPublisher, DevWorkflowEventPublisher>();
-
-        // And for graph workflows, whose publishing store decorator announces every committed run mutation.
+        // Same posture for graph workflows, whose publishing store decorator announces every committed run mutation.
         builder.Services.AddSingleton<IGraphWorkflowEventPublisher, GraphWorkflowEventPublisher>();
 
         // Transcription: the hub-backed publisher supersedes the no-op AddNodeTranscription registers with

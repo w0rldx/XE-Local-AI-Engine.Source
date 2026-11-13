@@ -772,9 +772,6 @@ public sealed record NodeSettingsResponse
     /// <summary>Whether the scheduler runs. Applies after a node restart. Effective value: stored, else the configuration seed.</summary>
     public bool SchedulerEnabled { get; init; }
 
-    /// <summary>Whether development workflows run. Applies to the next request and dispatcher tick; definitions are seeded on the next restart. Effective value: stored, else the configuration seed.</summary>
-    public bool DevWorkflowsEnabled { get; init; }
-
     /// <summary>
     ///     Whether Preview sandbox mechanisms (the Windows AppContainer boundary) may serve <c>run_python</c> and sandboxed MCP servers.
     ///     Applies to the next sandbox created. Effective value: stored, else the configuration seed (off).
@@ -1278,9 +1275,6 @@ public sealed record SaveNodeSettingsRequest
 
     /// <summary>Whether the scheduler runs. Applies after a node restart.</summary>
     public bool? SchedulerEnabled { get; init; }
-
-    /// <summary>Whether development workflows run. Applies to the next request and dispatcher tick; definitions are seeded on the next restart.</summary>
-    public bool? DevWorkflowsEnabled { get; init; }
 
     /// <summary>
     ///     Whether Preview sandbox mechanisms (the Windows AppContainer boundary) may serve <c>run_python</c> and sandboxed MCP servers.

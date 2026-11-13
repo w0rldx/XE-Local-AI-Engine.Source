@@ -175,25 +175,58 @@ describe("GraphWorkflowStartRunDialog", () => {
 		expect((screen.getByTestId("graph-workflow-start-run-submit") as HTMLButtonElement).disabled).toBe(true);
 	});
 
-	it("reads a 409 as 'this definition moved on' rather than as a start to retry", async () => {
-		recordStarts([
-			() =>
-				HttpResponse.json(
-					{
-						type: "about:blank",
-						title: "Conflict",
-						status: 409,
-						detail: "The definition version does not match.",
-						conflictType: "GraphWorkflowRunConflict",
-					},
-					{ status: 409, headers: { "content-type": "application/problem+json" } },
-				),
-		]);
+	function conflict(conflictType: string, detail: string): () => Response {
+		return () =>
+			HttpResponse.json(
+				{ type: "about:blank", title: "Conflict", status: 409, detail, conflictType },
+				{ status: 409, headers: { "content-type": "application/problem+json" } },
+			);
+	}
+
+	it("reads a definition conflict as 'this definition moved on' rather than as a start to retry", async () => {
+		recordStarts([conflict("GraphWorkflowDefinitionConflict", "The definition was saved again.")]);
 		renderDialog();
 
 		fireEvent.click(screen.getByTestId("graph-workflow-start-run-submit"));
 
 		expect((await screen.findByTestId("graph-workflow-start-run-stale")).textContent).toContain("saved again");
 		expect(screen.queryByTestId("graph-workflow-start-run-error")).toBeNull();
+	});
+
+	// A run conflict at start is the version check AND every start refusal that has nothing to do with the version,
+	// such as a DevTask graph on a node whose Development Mode is off. Each says what is wrong in its own words.
+	it.each([
+		"This workflow has DevTask nodes and Development Mode is off on this node. Turn it on to run the workflow.",
+		"Graph workflow definition 'Analyze' is at version 5, not the version 4 this run was started against.",
+	])("shows a run conflict's own refusal: %s", async (detail) => {
+		recordStarts([conflict("GraphWorkflowRunConflict", detail)]);
+		renderDialog();
+
+		fireEvent.click(screen.getByTestId("graph-workflow-start-run-submit"));
+
+		expect((await screen.findByTestId("graph-workflow-start-run-error")).textContent).toContain(detail);
+		expect(screen.queryByTestId("graph-workflow-start-run-stale")).toBeNull();
+	});
+
+	it("shows a DevTask start binding's 400 as the server wrote it", async () => {
+		const detail = "This workflow has DevTask nodes, so its run input needs 'developmentProjectId' naming a Development project.";
+		// The start route replays a graph refusal onto the endpoint's failure list, so the reason rides in `errors`.
+		recordStarts([
+			() =>
+				HttpResponse.json(
+					{
+						type: "https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1",
+						title: "One or more validation errors occurred.",
+						status: 400,
+						errors: [{ name: "generalErrors", reason: detail }],
+					},
+					{ status: 400, headers: { "content-type": "application/problem+json" } },
+				),
+		]);
+		renderDialog();
+
+		fireEvent.click(screen.getByTestId("graph-workflow-start-run-submit"));
+
+		expect((await screen.findByTestId("graph-workflow-start-run-error")).textContent).toContain(detail);
 	});
 });

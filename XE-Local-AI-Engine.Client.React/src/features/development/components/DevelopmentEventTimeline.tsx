@@ -61,7 +61,7 @@ function EventRow({ event }: { readonly event: DevelopmentEvent }) {
 					<Code>#{event.sequence}</Code> {t(`pages.development.timeline.eventType.${event.eventType}`, event.eventType ?? "")}
 				</Text>
 				{/* Both columns are backend tokens — 16 event types and 17 outcomes — and must not render raw in a
-				    user-facing row. Looked up the way every dev-workflow badge looks its enum up, with the raw value as
+				    user-facing row. Looked up the way every graph-workflow badge looks its enum up, with the raw value as
 				    the fallback so a token a newer server invents degrades to what it always showed rather than to a
 				    key. `DevelopmentEventTimelineOutcomes.test.ts` is what keeps both maps whole. The event type stays
 				    beside the outcome because one outcome label serves several types — `Started` is the attempt's, the

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.WorkSessions;
 
-using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>One row of the work-session list. Deliberately carries no objective — the list never renders one.</summary>
@@ -208,93 +207,6 @@ public sealed class WorkSessionArtifactContent
 }
 
 /// <summary>
-///     What ONE session runs on when its caller pins it rather than the bound agent definition: the model name and
-///     the reasoning effort, either of which may be null to leave that half to the agent.
-/// </summary>
-/// <remarks>
-///     This is a pin, not a preference: a development-workflow node authoring <c>modelProfile</c> means that node's session runs on
-///     that model, so it is applied exactly the way an agent definition's own pin is, tool gate included, and a name this node cannot
-///     load fails the session the same way a stale pin on the definition does. Nothing is persisted on the session row — the run's
-///     graph snapshot is where a workflow node's authoring lives, and it re-supplies this on every start and resume.
-/// </remarks>
-public sealed class WorkSessionRuntimeOverride
-{
-    /// <summary>The model this session's turns run on, or null to leave that to the agent.</summary>
-    public required string? ModelProfile { get; init; }
-
-    /// <summary>The reasoning effort those turns run at, or null to leave that to the agent.</summary>
-    public required string? ReasoningEffort { get; init; }
-
-    /// <summary>
-    ///     <c>GRAPH-2</c>'s runtime half, carried per drive because the thing it judges is mutable. Default
-    ///     <see langword="false" />, which is every caller but the workflow runtime.
-    /// </summary>
-    /// <remarks>
-    ///     Set by a development-workflow Agent node that declares no <c>WriteExecute</c> capability and whose template waives nothing:
-    ///     every turn of that session is then refused if the agent definition it re-resolves would offer a tool that writes files or
-    ///     runs commands. Checked once at creation it is not checked at all, because the definition can be edited between two steps,
-    ///     or deleted so the turn falls back to the default persona and its whole offer.
-    /// </remarks>
-    public bool RefuseUndeclaredWrites { get; init; }
-
-    /// <summary>The canonical root of the Development repository this session's coder reads serve, or null for the AgentHome workspace.</summary>
-    /// <remarks>
-    ///     Set by a development-workflow Agent node whose work item is bound to a project and whose agent is offered the read-only
-    ///     repository tools, re-resolved on every drive like the rest of the override. A host path, held in memory only.
-    /// </remarks>
-    public string? RepositoryRoot { get; init; }
-
-    /// <summary>The output contract <c>complete_work_session</c> holds every step to, or null for none.</summary>
-    /// <remarks>
-    ///     Set by a development-workflow Agent node that declares <c>outputSchema</c>, read off the run's PINNED graph on every
-    ///     drive like the rest of the override, so a definition edited mid-run cannot change what the session must hand in.
-    /// </remarks>
-    internal WorkSessionOutputSchema? OutputSchema { get; init; }
-
-    /// <summary>The upstream artifacts <c>read_upstream_artifact</c> may read in this session; empty, the default, offers no such tool.</summary>
-    /// <remarks>
-    ///     Set by a development-workflow Agent node from what its node run RECORDED consuming, never from the live graph, and
-    ///     re-supplied on every drive like the rest of the override. Server-built, so the tool trusts the ids and digests it carries.
-    /// </remarks>
-    internal IReadOnlyList<WorkSessionReadableArtifact> ReadableArtifacts { get; init; } = [];
-
-    /// <summary>
-    ///     Nothing pinned and nothing to enforce, which is the shape every caller but the workflow runtime has.
-    /// </summary>
-    /// <remarks>
-    ///     The refusal flag counts: a node that pins no model and no effort still has to have its turns judged, and
-    ///     the supervisor drops an override this reports empty.
-    /// </remarks>
-    public bool IsEmpty =>
-        string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort) && !RefuseUndeclaredWrites && RepositoryRoot is null
-        && OutputSchema is null && ReadableArtifacts.Count == 0;
-}
-
-/// <summary>One artifact a work-session step may read back page by page: where its bytes live and the digest they must verify against.</summary>
-internal sealed class WorkSessionReadableArtifact
-{
-    /// <summary>The development-workflow run whose blob store holds the bytes.</summary>
-    public required Guid RunId { get; init; }
-
-    public required Guid ArtifactId { get; init; }
-
-    public required string Name { get; init; }
-
-    public required string Kind { get; init; }
-
-    /// <summary>The node key that produced it, which tells two same-named artifacts apart.</summary>
-    public required string Producer { get; init; }
-
-    public required int Version { get; init; }
-
-    public required string MediaType { get; init; }
-
-    public required string ContentSha256 { get; init; }
-
-    public required long SizeBytes { get; init; }
-}
-
-/// <summary>
 ///     Create input. Named <c>…RequestModel</c> so it cannot collide with the store layer's
 ///     <c>CreateWorkSessionCommand</c>, which carries the ids and the concurrency token this one has no business
 ///     knowing about.
@@ -308,8 +220,6 @@ public sealed class CreateWorkSessionRequestModel
     public required AgentWorkSessionKind Kind { get; init; }
 
     public required Guid AgentDefinitionId { get; init; }
-
-    public WorkSessionRuntimeOverride? Runtime { get; init; }
 }
 
 /// <summary>Update input. A null member leaves the stored value alone.</summary>
@@ -328,25 +238,6 @@ public sealed class UpdateWorkSessionRequestModel
 /// <remarks>
 ///     <see cref="ObjectiveMet" /> is nullable rather than defaulted so an event recorded before the argument existed
 ///     reads as <see langword="null" /> — absent, and therefore met — instead of as an unmet objective the model
-///     never declared. Only an explicit <see langword="false" /> stands a workflow-owned node run down. <see cref="Output" />
-///     is recorded only under an output contract, so an event without one, older ones included, reads as null.
+///     never declared.
 /// </remarks>
-internal sealed record WorkSessionCompletionDetail(string Summary, bool? ObjectiveMet = null, JsonElement? Output = null);
-
-/// <summary>One page <c>read_upstream_artifact</c> served, as its <see cref="WorkSessionEventTypes.ArtifactRead" /> event records it, in characters.</summary>
-internal sealed class WorkSessionArtifactReadDetail
-{
-    public required Guid ArtifactId { get; init; }
-
-    public required string Name { get; init; }
-
-    public required string Producer { get; init; }
-
-    public required int Version { get; init; }
-
-    public required int Offset { get; init; }
-
-    public required int Length { get; init; }
-
-    public required int Total { get; init; }
-}
+internal sealed record WorkSessionCompletionDetail(string Summary, bool? ObjectiveMet = null);

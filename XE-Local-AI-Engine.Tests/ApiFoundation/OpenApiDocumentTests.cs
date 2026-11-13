@@ -815,17 +815,10 @@ public sealed class OpenApiDocumentTests
         var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
 
         AssertRequired(schemas, "UpdateGraphWorkflowDefinitionRequest", required: ["version"], optional: ["name"]);
-        AssertRequired(schemas, "UpdateDevWorkflowDefinitionRequest", required: ["version"], optional: ["name"]);
 
-        // The rule set is the control: it is a WHOLE-document PUT, so its name and body are genuinely required and
-        // must stay that way — without this the test above would also pass on a spec that made everything optional.
-        AssertRequired(schemas, "UpdateDevWorkflowRuleSetRequest", required: ["version", "name", "body"], optional: []);
-
-        // The create routes answer 201, and the client narrows the created body off that response.
+        // The create route answers 201, and the client narrows the created body off that response.
         var paths = document.RootElement.GetProperty("paths");
-        AssertResponses(paths, "/api/local/v1/development-workflows/definitions", "post", ["201", "400"]);
-        AssertResponses(paths, "/api/local/v1/development-workflows/rule-sets", "post", ["201", "400"]);
-        AssertResponses(paths, "/api/local/v1/development-workflows/work-items", "post", ["201", "400"]);
+        AssertResponses(paths, "/api/local/v1/graph-workflows/definitions", "post", ["201", "400"]);
     }
 
     /// <summary>

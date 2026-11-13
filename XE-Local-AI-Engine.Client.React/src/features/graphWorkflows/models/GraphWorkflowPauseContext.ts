@@ -117,7 +117,13 @@ export function pauseContextEdges(
 	);
 	// EVERY kind, not just `Join`: the policy is a member of the node base and the run reads it off whichever node it
 	// is admitting. An `End` or an `Agent` set to `Any` joins exactly as a `Join` does.
-	const anyPolicy = new Set(nodes.filter((node) => node.data.joinPolicy === "Any").map((node) => node.id));
+	// A DevTask `apply` is skipped as well, as `PauseContextWarnings` exempts it: DEVTASK-1 refuses the very content
+	// edge this pass would draw, because every way into an apply must be a Pause's Approve.
+	const skipped = new Set(
+		nodes
+			.filter((node) => node.data.joinPolicy === "Any" || (node.data.kind === "DevTask" && node.data.action === "apply"))
+			.map((node) => node.id),
+	);
 	if (pauseKeys.size === 0) {
 		return [];
 	}
@@ -143,7 +149,7 @@ export function pauseContextEdges(
 
 	for (const successor of [...new Set(candidates)].toSorted(byKey)) {
 		const inbound = wiring.filter((pair) => pair.to === successor);
-		if (!inbound.every((pair) => pauseKeys.has(pair.from)) || anyPolicy.has(successor)) {
+		if (!inbound.every((pair) => pauseKeys.has(pair.from)) || skipped.has(successor)) {
 			continue;
 		}
 		// The union over every pause that feeds this successor, so a second pause carrying a second branch is counted.

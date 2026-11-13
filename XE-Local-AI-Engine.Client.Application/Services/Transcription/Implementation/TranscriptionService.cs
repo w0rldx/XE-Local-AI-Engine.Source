@@ -913,7 +913,7 @@ public sealed class TranscriptionService : ITranscriptionService
         }
 
         // Matched against the NAMES, not through Enum.TryParse: that also parses the underlying numbers, so a caller sending "99" would store an ordinal no
-        // member has and read it back on the wire as "99". Same rule, and the same reason, as DevWorkflowTokenRules.IsNamed on the endpoint side.
+        // member has and read it back on the wire as "99".
         var trimmed = sourceKind.Trim();
         return Enum.GetNames<TranscriptionSourceKind>().Contains(trimmed, StringComparer.OrdinalIgnoreCase)
             ? Enum.Parse<TranscriptionSourceKind>(trimmed, ignoreCase: true)

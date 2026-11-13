@@ -69,6 +69,15 @@ internal sealed class GraphWorkflowGraph
     /// <summary>The longest description a choice criterion may carry.</summary>
     private const int MaxDecisionCriterionLength = 512;
 
+    /// <summary>The two actions of a <c>DevTask</c> node, and the config members each reads beside <c>action</c>.</summary>
+    internal const string DevTaskImplement = "implement";
+
+    internal const string DevTaskApply = "apply";
+
+    private static readonly string[] DevTaskImplementMembers = ["action", "title", "requirements", "acceptanceCriteria", "instructions", "inputBindings"];
+
+    private static readonly string[] DevTaskApplyMembers = ["action", "task"];
+
     /// <summary>The alias bounds of a <c>Start</c> node.</summary>
     private const int MaxAliases = 32;
 
@@ -85,7 +94,7 @@ internal sealed class GraphWorkflowGraph
     internal static readonly IReadOnlyDictionary<GraphWorkflowNodeKind, string[]> ConfigMembers = new Dictionary<GraphWorkflowNodeKind, string[]>
     {
         [GraphWorkflowNodeKind.Start] = ["inputSchema", "defaultInput", "aliases"],
-        [GraphWorkflowNodeKind.Agent] = ["agentDefinitionId", "instructions", "model", "reasoningEffort", "responseJsonSchema", "includeUpstreamOutputs", "publishToChat", "includeAttachments"],
+        [GraphWorkflowNodeKind.Agent] = ["agentDefinitionId", "instructions", "model", "reasoningEffort", "responseJsonSchema", "includeUpstreamOutputs", "publishToChat", "includeAttachments", "repository"],
         [GraphWorkflowNodeKind.LlmCall] = ["model", "systemPrompt", "prompt", "inputBindings", "reasoningEffort", "responseJsonSchema", "samplingOptions", "publishToChat", "includeAttachments"],
         [GraphWorkflowNodeKind.Tool] = ["toolName", "arguments", "argumentBindings", "allowedUrls"],
         [GraphWorkflowNodeKind.Condition] = ["path"],
@@ -94,7 +103,8 @@ internal sealed class GraphWorkflowGraph
         [GraphWorkflowNodeKind.Pause] = ["prompt", "allowedDecisions", "requireComment"],
         [GraphWorkflowNodeKind.End] = ["outcome", "resultPath", "publishToChat"],
         [GraphWorkflowNodeKind.ChatInput] = ["prompt"],
-        [GraphWorkflowNodeKind.DecisionModel] = ["question", "questionType", "labels", "criteria", "provider", "model", "inputBindings"]
+        [GraphWorkflowNodeKind.DecisionModel] = ["question", "questionType", "labels", "criteria", "provider", "model", "inputBindings"],
+        [GraphWorkflowNodeKind.DevTask] = ["action", "title", "requirements", "acceptanceCriteria", "instructions", "inputBindings", "task"]
     };
 
     /// <summary>
@@ -631,7 +641,8 @@ internal sealed class GraphWorkflowGraph
                 OptionalBool(config, "includeUpstreamOutputs", nodeKey, fallback: true))
             {
                 PublishToChat = ParsePublishToChat(config, nodeKey, graphKind, fallback: false),
-                IncludeAttachments = ParseIncludeAttachments(config, nodeKey, chat)
+                IncludeAttachments = ParseIncludeAttachments(config, nodeKey, chat),
+                Repository = ParseRepository(config, nodeKey)
             },
             GraphWorkflowNodeKind.LlmCall => new GraphWorkflowLlmCallConfig
             {
@@ -664,6 +675,7 @@ internal sealed class GraphWorkflowGraph
                 Prompt = RequiredString(config, "prompt", owner)
             },
             GraphWorkflowNodeKind.DecisionModel => ParseDecisionModel(config, nodeKey, owner),
+            GraphWorkflowNodeKind.DevTask => ParseDevTask(config, nodeKey, owner),
             _ => new GraphWorkflowEmptyConfig()
         };
     }
@@ -687,6 +699,18 @@ internal sealed class GraphWorkflowGraph
         return !include || chat is { AcceptsAttachments: true }
             ? include
             : throw new GraphWorkflowValidationException($"Node '{nodeKey}' sets 'includeAttachments', but the graph does not accept attachments ('chat.acceptsAttachments').");
+    }
+
+    /// <summary>
+    ///     <c>repository</c>, refused as <see langword="true" /> on a node that binds no agent: only a saved agent's tool list can
+    ///     offer list_files/read_file/search_text, and the run checks that list before the turn.
+    /// </summary>
+    private static bool ParseRepository(JsonElement config, string nodeKey)
+    {
+        var repository = OptionalBool(config, "repository", nodeKey, fallback: false);
+        return !repository || OptionalGuid(config, "agentDefinitionId", nodeKey) is not null
+            ? repository
+            : throw new GraphWorkflowValidationException($"Node '{nodeKey}' sets 'repository', which needs an 'agentDefinitionId' whose agent lists list_files, read_file or search_text.");
     }
 
     /// <summary>
@@ -865,6 +889,60 @@ internal sealed class GraphWorkflowGraph
         return DecisionProviders.Contains(provider, StringComparer.Ordinal)
             ? provider
             : throw new GraphWorkflowValidationException($"Node '{nodeKey}' names the decision provider '{provider}'; expected one of {string.Join(", ", DecisionProviders)}.");
+    }
+
+    /// <summary>
+    ///     A <c>DevTask</c> node: <c>implement</c> needs <c>requirements</c>, <c>apply</c> needs the <c>task</c> it applies, and
+    ///     a member only the other action reads is refused. Which node <c>task</c> may name is <c>DEVTASK-1</c>, a whole-graph rule.
+    /// </summary>
+    private static GraphWorkflowDevTaskConfig ParseDevTask(JsonElement config, string nodeKey, string owner)
+    {
+        var action = RequiredString(config, "action", owner).Trim();
+        var members = action switch
+        {
+            DevTaskImplement => DevTaskImplementMembers,
+            DevTaskApply => DevTaskApplyMembers,
+            _ => throw new GraphWorkflowValidationException($"Node '{nodeKey}' has the DevTask action '{action}'; expected '{DevTaskImplement}' or '{DevTaskApply}'.")
+        };
+        if (config.EnumerateObject().Select(static member => member.Name).FirstOrDefault(member => !members.Contains(member, StringComparer.Ordinal)) is { } stray)
+        {
+            throw new GraphWorkflowValidationException($"Node '{nodeKey}' is a DevTask '{action}' node and its config declares '{stray}', which only the other action reads.");
+        }
+
+        if (action == DevTaskApply)
+        {
+            return new GraphWorkflowDevTaskConfig
+            {
+                Action = DevTaskApply,
+                TaskNodeKey = RequiredString(config, "task", owner).Trim()
+            };
+        }
+
+        return new GraphWorkflowDevTaskConfig
+        {
+            Action = DevTaskImplement,
+            Title = StrictOptionalString(config, "title", nodeKey)?.Trim() is { Length: > 0 } title ? title : null,
+            Requirements = RequiredString(config, "requirements", owner),
+            AcceptanceCriteria = ParseAcceptanceCriteria(config, nodeKey),
+            Instructions = StrictOptionalString(config, "instructions", nodeKey)?.Trim() is { Length: > 0 } instructions ? instructions : null,
+            InputBindings = ParseBindings(config, "inputBindings", nodeKey)
+        };
+    }
+
+    /// <summary>An <c>implement</c> node's <c>acceptanceCriteria</c>: absent, or an array of non-blank strings.</summary>
+    private static IReadOnlyList<string> ParseAcceptanceCriteria(JsonElement config, string nodeKey)
+    {
+        if (!config.TryGetProperty("acceptanceCriteria", out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return [];
+        }
+
+        if (value.ValueKind != JsonValueKind.Array || value.EnumerateArray().Any(static entry => entry.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(entry.GetString())))
+        {
+            throw new GraphWorkflowValidationException($"The 'acceptanceCriteria' on node '{nodeKey}' must be an array of non-empty strings.");
+        }
+
+        return [.. value.EnumerateArray().Select(static entry => entry.GetString()!.Trim())];
     }
 
     /// <summary>The node's reasoning-effort override, checked against the four the agent surface itself accepts.</summary>
@@ -1237,6 +1315,71 @@ internal sealed class GraphWorkflowGraph
         {
             ValidateChatInput(node, outbound, errors);
         }
+
+        if (node.Config is GraphWorkflowDevTaskConfig devTask)
+        {
+            ValidateDevTask(node, devTask, errors);
+        }
+    }
+
+    /// <summary>
+    ///     No <c>DevTask</c> in a <c>Chat</c> graph. <c>DEVTASK-1</c>: an <c>apply</c> names an <c>implement</c> node, and every inbound edge
+    ///     leaves a <c>Pause</c> after it, firing on <c>Approve</c> only.
+    /// </summary>
+    /// <remarks>
+    ///     "Every inbound edge", not "a pause on every path": the approval must be the step in front of the apply and given after the patch exists.
+    ///     The answers come from the state machine's own routing over the pause document, as <see cref="ValidatePause" /> asks; a probe differs only in
+    ///     <c>output.decision</c>, so a condition on any other path fires on both answers or neither. Rule: docs/wiki/21-graph-workflows.md §4.10.
+    /// </remarks>
+    private void ValidateDevTask(GraphWorkflowGraphNode node, GraphWorkflowDevTaskConfig devTask, List<GraphWorkflowValidationError> errors)
+    {
+        if (Kind == GraphWorkflowDefinitionKind.Chat)
+        {
+            errors.Add(new GraphWorkflowValidationError(node.NodeKey,
+                $"Node '{node.NodeKey}' is a DevTask node, which a Chat graph cannot carry: a chat steer must never reach a repository change."));
+        }
+
+        if (!devTask.IsApply)
+        {
+            return;
+        }
+
+        var task = devTask.TaskNodeKey!;
+        var named = Nodes.TryGetValue(task, out var implement) && implement.Config is GraphWorkflowDevTaskConfig { IsApply: false };
+        if (!named)
+        {
+            errors.Add(new GraphWorkflowValidationError(node.NodeKey,
+                $"Node '{node.NodeKey}' applies the task of '{task}', which is not a DevTask 'implement' node of this graph (DEVTASK-1)."));
+        }
+
+        foreach (var edge in InboundEdges(node.NodeKey))
+        {
+            if (Nodes[edge.From].Kind != GraphWorkflowNodeKind.Pause)
+            {
+                errors.Add(new GraphWorkflowValidationError(node.NodeKey,
+                    $"Node '{node.NodeKey}' applies a patch to a real repository and edge {edge} reaches it from a node that is not a Pause. "
+                    + "Every edge into an apply must leave a Pause on its Approve answer (DEVTASK-1)."));
+                continue;
+            }
+
+            foreach (var decision in GraphWorkflowStateMachine.DecisionsFor(GraphWorkflowNodeKind.Pause))
+            {
+                var fires = GraphWorkflowStateMachine.DecisionEdgeFires(edge, decision);
+                if (decision == GraphWorkflowDecisionKind.Approve ? !fires : fires)
+                {
+                    errors.Add(new GraphWorkflowValidationError(node.NodeKey,
+                        $"Node '{node.NodeKey}' applies a patch and edge {edge} {(fires ? "also fires" : "does not fire")} on {decision}. "
+                        + "Condition it on the approval: {\"path\": \"output.decision\", \"op\": \"Eq\", \"value\": \"Approve\"} (DEVTASK-1)."));
+                }
+            }
+
+            if (named && !Ancestors(edge.From).Contains(task))
+            {
+                errors.Add(new GraphWorkflowValidationError(node.NodeKey,
+                    $"Node '{node.NodeKey}' applies the task of '{task}', but the Pause '{edge.From}' in front of it does not come after '{task}', "
+                    + "so its approval could be given before the patch exists (DEVTASK-1)."));
+            }
+        }
     }
 
     /// <summary>
@@ -1316,10 +1459,13 @@ internal sealed class GraphWorkflowGraph
     private IReadOnlyList<GraphWorkflowValidationError> PauseContextWarnings()
     {
         var warnings = new List<GraphWorkflowValidationError>();
+
+        // An apply reads its task by key, never its input, and DEVTASK-1 refuses the content edge the advice would add.
         foreach (var successor in Nodes.Keys
                                        .Where(key => InboundEdges(key).Count > 0
                                                      && InboundEdges(key).All(edge => IsParkingKind(Nodes[edge.From].Kind))
-                                                     && !FiresOnOneBranch(key))
+                                                     && !FiresOnOneBranch(key)
+                                                     && Nodes[key].Config is not GraphWorkflowDevTaskConfig { IsApply: true })
                                        .Order(StringComparer.Ordinal))
         {
             var pauses = InboundEdges(successor).Select(static edge => edge.From).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();

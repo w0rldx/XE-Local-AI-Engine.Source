@@ -23,8 +23,6 @@ public sealed class FeatureSwitchMiddleware
             static (settings, _, ct) => settings.GetDevelopmentEnabledAsync(ct)),
         new(Route(LocalApiRoutes.WorkSessions.Root), Route(LocalApiRoutes.WorkSessions.Capability),
             static (settings, _, ct) => settings.GetWorkSessionsEnabledAsync(ct)),
-        new(Route(LocalApiRoutes.DevelopmentWorkflows.Root), Route(LocalApiRoutes.DevelopmentWorkflows.Capability),
-            static (settings, _, ct) => settings.GetDevWorkflowsEnabledAsync(ct)),
         new(Route(LocalApiRoutes.GraphWorkflows.Root), Route(LocalApiRoutes.GraphWorkflows.Capability),
             static (settings, _, ct) => settings.GetGraphWorkflowsEnabledAsync(ct)),
         new(Route(LocalApiRoutes.Transcription.Root), PathString.Empty,

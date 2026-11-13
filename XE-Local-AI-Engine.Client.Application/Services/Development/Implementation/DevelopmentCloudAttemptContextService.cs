@@ -120,7 +120,7 @@ internal sealed class DevelopmentCloudAttemptContextService : IDevelopmentCloudA
 
     /// <summary>
     ///     What the bundle's <c>policy</c> resource says: the CloudScoped authorization sentence, plus the rule-set
-    ///     text a Development workflow snapshotted onto this task when there is one.
+    ///     text a Graph workflow <c>DevTask</c> node recorded on this task when there is one.
     /// </summary>
     /// <remarks>
     ///     Load-bearing for both roles: a cloud-routed attempt is sent only this bundle — its prompt's local

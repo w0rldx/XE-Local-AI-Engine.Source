@@ -48,6 +48,10 @@ Framework pins, while the wiki covers architecture.
 - **The Open Canvas import runs at startup and stops startup if it fails.** Saved canvases become Graph Workflow
   definitions; the encrypted source is staged, so a failed conversion retries on the next start. Read
   [Graph Workflows §9](21-graph-workflows.md#9-the-open-canvas-import) before upgrading a node whose canvases matter.
+- **Not every feature carries the 1.0 promise.** Training, Model Lab and External Apps with the container bridge are
+  experimental. Dev Workflows is retired: development work runs as a Graph workflow
+  ([ADR 0023](../adr/0023-dev-workflows-converge-into-graph-workflows.md)).
+  The list and what each tier means: [feature tiers](../user-guide/docs/for-experienced-users.md#feature-tiers).
 - **"No Docker anywhere" is stale (it predates ADR 0004), and so is "Docker on the inference path".** The Docker
   bullet above is the current rule.
 
@@ -76,10 +80,9 @@ Framework pins, while the wiki covers architecture.
 | 19 | [Compute Tools](19-compute-tools.md) | Sandboxed code execution: the `run_python` tool, process-sandbox isolation, uv-pinned venv (numpy/scipy/sympy), security/gating (WriteExecute + approval-required, profile-opt-in), Linux x64 and Windows x64, operator enablement |
 | 20 | [Benchmarks](20-benchmarks.md) | Task suites and long-context probes, freeze fan-out and cell ranking, verifiable criteria incl. `pythonTests` execution scoring, pairwise Bradley-Terry and paired-difference intervals, quant fidelity (perplexity/KLD, base-logit cache, comparability digest), the four-kind work queue, scheduled matrices and the training hand-off, export schema 4 |
 | 21 | [Graph Workflows](21-graph-workflows.md) | Operator-authored DAGs: the graph contract and its validation rules, the run and node-run lifecycles, the node kinds including direct LLM calls, chat inputs and decision models and their documents, Standard vs Chat graphs, the route family and the `graphWorkflowChanged` hub contract, the React editor and run view, the options table, and the one-shot Open Canvas import |
-| 22 | [Workflow Engines Divergence Register](22-workflow-engines-divergence-register.md) | Dev Workflows vs. Graph Workflows: status/decision vocabulary, approval model, restart/reconciler behavior, the cross-node fix loop, persistence and hub shape, MAF/MEAI boundary, feature flags — what was deliberately dropped and what is an unintentional gap, with convergence explicitly deferred. Dev Workflows themselves are [page 25](25-dev-workflows.md); this register carries only the comparison |
+| 22 | [Workflow Engines Divergence Register](22-workflow-engines-divergence-register.md) | A retired-engine note: Dev Workflows converged into Graph Workflows ([ADR 0023](../adr/0023-dev-workflows-converge-into-graph-workflows.md)) and is gone; the page keeps the open addendum on Development Mode's second tool-invocation stack |
 | 23 | [External Apps](23-external-apps.md) | Curated containerised applications: the catalog document and its fingerprint, the engine-owned container runtime layer beside the sandbox SPI, the container policy and what it verifies on read-back, per-instance storage and the storage-wipe helper container, the lifecycle and the boot reconciler, runtime selection and the daemon identity pin, the `ExternalApps:Enabled` kill switch and what disabling does not do |
 | 24 | [Audio Transcription](24-audio-transcription.md) | Local speech-to-text on whisper.cpp: the supervised `whisper-server` runtime in brief, the encrypted session and segment tables and their AAD layout, the batch upload path (streaming multipart, engine-owned temp slot, container sniffing, engine-side ffmpeg transcode, `Seq` from 1), the session route family, the React feature area, the never-persist-audio rule and its four enforcement points, the options table, and what the live capture slices have not built yet |
-| 25 | [Development Workflows](25-dev-workflows.md) | Templated graphs over a code work item: the database-as-truth tick and its serialized-write invariant, the agent/tool/dev-task lanes and the write declaration, decomposition and the task-package contract, the provenance rule that gates an apply, the cross-node fix loop and its budgets, operator retry reasons and the task statuses that carry none, telemetry and rule-set policy text, artifact promotion, startup recovery, and the options table |
 
 ### Reference pages
 

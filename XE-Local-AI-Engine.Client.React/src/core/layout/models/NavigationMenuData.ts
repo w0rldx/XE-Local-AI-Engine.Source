@@ -42,7 +42,6 @@ type NavigationCapabilityKey =
 	| "benchmarks"
 	| "training"
 	| "workSessions"
-	| "devWorkflows"
 	| "graphWorkflows"
 	| "integrations"
 	| "externalApps"
@@ -257,9 +256,6 @@ export const allNavigationLinks: INavigationLink[] = [
 				promoteInSimple: { id: "images", icon: IconPhoto },
 			},
 			{ translationKey: "navigation.development", to: nodeRoutePaths.development, capability: "development", simple: false },
-			// Labeled "Workflow Runs", not "Development Workflows": sitting next to "Development" the module name
-			// reads as its sibling, and the two are not siblings — this one lists work items, their runs and their nodes.
-			{ translationKey: "navigation.devWorkflows", to: nodeRoutePaths.devWorkflows, capability: "devWorkflows", simple: false },
 			{
 				translationKey: "navigation.transcription",
 				to: nodeRoutePaths.transcription,
@@ -401,7 +397,6 @@ export function filterNavigationLinksByDisabledCapabilities(
 const featureSwitchByCapability = {
 	development: "developmentEnabled",
 	workSessions: "workSessionsEnabled",
-	devWorkflows: "devWorkflowsEnabled",
 	graphWorkflows: "graphWorkflowsEnabled",
 	externalApps: "externalAppsEnabled",
 	transcription: "transcriptionEnabled",

@@ -2,11 +2,11 @@ import { Alert, Anchor, Stack, Text } from "@mantine/core";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
+import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+
 export interface DevelopmentWorkflowTaskBannerProps {
 	/** The task's `workflowRunId`. Null for a task an operator created directly, which is most of them. */
 	readonly workflowRunId: string | null | undefined;
-	/** The run's work item, which the controller resolves. Null until it lands, or where the route is off. */
-	readonly workItemId: string | null;
 	/** The run reached a terminal status, so it will answer no further gate and this page is the authority again. */
 	readonly runEnded: boolean;
 	/** The run's status could not be read, so who owns the decision is unknown and the page stays read-only. */
@@ -32,15 +32,11 @@ export interface DevelopmentWorkflowTaskBannerProps {
  * pending in a workflow nobody can see. The retry is the way out — without it a single failed read strands the patch
  * behind a banner with no next step.
  *
- * The link is built from the run rather than guessed: the Dev Mode task carries only a run id, and the workflow detail
- * route is keyed by WORK ITEM. The run-detail endpoint already answers both — `GET runs/{runId}` returns the run's
- * `workItemId` — so the controller reads that one existing endpoint rather than asking the workflow API for a new
- * field. No link is offered until it
- * resolves, and none at all where the capability is off: a route that redirects home is worse than prose.
+ * The link opens the Graph Workflows run by its id. None is offered where the capability is off: a route that
+ * redirects home is worse than prose.
  */
 export function DevelopmentWorkflowTaskBanner({
 	workflowRunId,
-	workItemId,
 	runEnded,
 	runUnreadable,
 	onRetryStatus,
@@ -71,8 +67,21 @@ export function DevelopmentWorkflowTaskBanner({
 		);
 	}
 
+	// With Graph Workflows off its run cannot be read, end or be cancelled, and the server refuses an apply while it is live.
+	const graphWorkflowsOff = !nodeCapabilities.graphWorkflows;
+	if (graphWorkflowsOff) {
+		body = t(
+			"pages.development.workflow.graphWorkflowsOff",
+			"A graph workflow created this task, and Graph Workflows is switched off, so that run can neither finish nor be cancelled. If it has not ended, applying here is refused: turn Graph Workflows back on in Node Settings to finish or cancel it.",
+		);
+	}
+
 	return (
-		<Alert color={runEnded || runUnreadable ? "yellow" : "blue"} variant="light" data-testid="development-workflow-banner">
+		<Alert
+			color={runEnded || runUnreadable || graphWorkflowsOff ? "yellow" : "blue"}
+			variant="light"
+			data-testid="development-workflow-banner"
+		>
 			<Stack gap={4} align="flex-start">
 				<Text size="sm">{body}</Text>
 				{runUnreadable ? (
@@ -80,23 +89,17 @@ export function DevelopmentWorkflowTaskBanner({
 						{t("pages.development.workflow.retry", "Check the workflow again")}
 					</Anchor>
 				) : null}
-				{workItemId ? (
+				{graphWorkflowsOff ? null : (
 					<Anchor
 						component="button"
 						type="button"
 						size="sm"
-						onClick={() =>
-							navigate({
-								to: "/development-workflows/$workItemId",
-								params: { workItemId },
-								search: { run: workflowRunId },
-							})
-						}
+						onClick={() => navigate({ to: "/graph-workflows", search: { runId: workflowRunId } })}
 						data-testid="development-workflow-link"
 					>
 						{t("pages.development.workflow.open", "Open the workflow run")}
 					</Anchor>
-				) : null}
+				)}
 			</Stack>
 		</Alert>
 	);

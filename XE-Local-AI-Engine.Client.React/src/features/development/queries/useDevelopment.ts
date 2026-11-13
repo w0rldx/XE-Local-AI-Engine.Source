@@ -10,7 +10,7 @@ import {
 	getDevelopmentArtifactOptions,
 	getDevelopmentCapabilityOptions,
 	getDevelopmentProjectOptions,
-	getDevWorkflowRunOptions,
+	getGraphWorkflowRunOptions,
 	listDevelopmentProjectsOptions,
 	listDevelopmentTemplatesOptions,
 	previewDevelopmentPatchMutation,
@@ -114,7 +114,7 @@ export function useDevelopmentProject(projectId: string | null, enabled = true) 
 
 /**
  * Case (c) while an attempt runs: its hub streams output but refreshes this detail only on `Terminal`, so persisted
- * events, artifacts and a coalesced terminal arrive here. Case (d) otherwise: a dev workflow starts attempts and tasks
+ * events, artifacts and a coalesced terminal arrive here. Case (d) otherwise: a graph workflow starts attempts and tasks
  * outside this page, and no hub announces them.
  */
 export function developmentProjectPollInterval(query: { state: { data?: DevelopmentProjectDetail } }): number {
@@ -122,16 +122,13 @@ export function developmentProjectPollInterval(query: { state: { data?: Developm
 }
 
 /**
- * The work item a workflow-driven task's run belongs to.
- *
- * A Dev Mode task carries only `workflowRunId`, and the workflow detail route is keyed by WORK ITEM — so a deep link
- * back to the run needs the one thing the run-detail endpoint already answers alongside everything else it returns.
- * Read here rather than asked of the workflow API as a new field: the endpoint exists, the join is one hop, and a run's work item never changes, so this
- * never polls.
+ * The Graph Workflows run that drives a workflow-driven task. The banner links it by its own id, so this read is only
+ * for the status. The run never changes owner, so this never polls.
  */
 export function useDevelopmentTaskWorkflowRun(workflowRunId: string | null | undefined, enabled = true) {
 	return useQuery({
-		...getDevWorkflowRunOptions({ path: { runId: workflowRunId ?? "" } }),
+		...getGraphWorkflowRunOptions({ path: { runId: workflowRunId ?? "" } }),
+		select: (data): { status: string } => ({ status: data.run.status }),
 		enabled: enabled && hasIdentifier(workflowRunId),
 	});
 }

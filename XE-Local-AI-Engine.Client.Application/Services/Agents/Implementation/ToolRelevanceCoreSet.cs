@@ -31,10 +31,7 @@ internal sealed class ToolRelevanceCoreSet : IToolRelevanceCoreSet
     {
         // Read live rather than cached: the MCP registry (and therefore the catalog) is populated as servers connect,
         // and the composition below is a handful of string comparisons over a precomputed built-in list.
-        var core = new HashSet<string>(WorkSessionToolDefinitions.ToolNames, StringComparer.Ordinal)
-        {
-            WorkSessionToolDefinitions.ReadUpstreamArtifact.ToolName
-        };
+        var core = new HashSet<string>(WorkSessionToolDefinitions.ToolNames, StringComparer.Ordinal);
 
         foreach (var entry in _offerProvider.GetKnownTools())
         {

@@ -109,7 +109,7 @@
 #     JOBS=10 PAR=1   9:08 wall   1433 MB per batch      JOBS=10 PAR=2   8:20   2921 MB
 #     JOBS=16 PAR=1   7:02 wall   1369 MB per batch      JOBS=16 PAR=2   6:52   2951 MB
 #   All four green at 12132/0. Two things follow. Width 2 buys 2 % of wall for 2.2x the memory, so
-#   PAR stays 1, and DevWorkflows gets no width-2 exception on the same evidence: with JOBS=16 the
+#   PAR stays 1, and no namespace gets a width-2 exception on the same evidence: with JOBS=16 the
 #   host is saturated, so the family finishing ~20 % sooner only hands its cores to another namespace
 #   (GraphWorkflows grew 314 s -> 330 s) and the module's wall did not move (7:02 without an
 #   exception, 7:08 with one) while peak RSS per batch rose from 1369 MB to 2064 MB.
@@ -463,8 +463,7 @@ fi
 # unset.
 # Unlisted namespaces weigh 1 and follow alphabetically. These weights are also what the TEST_GROUPS
 # packer bins on, and the packer cannot split a namespace: a namespace that outgrows a whole bin has
-# to be split into sub-namespaces in the test project (see DevWorkflows.{Execution,Materialization,
-# Dispatch}, which is why those four entries exist rather than one).
+# to be split into sub-namespaces in the test project.
 # The cut-off is 10s and not 20s because everything unlisted weighs 1 regardless of its real cost.
 # Measured once, on one CI run under TEST_GROUPS=4: a 15s cut-off left 71 namespaces hiding
 # 248s from the packer and packed worse than the stale table it replaced (486s vs 479s of true load
@@ -473,12 +472,9 @@ fi
 # ~114s of real work, ~47s more than the 67s their weight-1 stubs give the packer — the cut-off
 # does not.
 HEAVY=(
-  XE_Local_AI_Engine.Tests.Endpoints.DevelopmentWorkflows.V1 # 432s
   XE_Local_AI_Engine.Tests.Endpoints.ExternalApps.V1   # 357s
   XE_Local_AI_Engine.Tests.NodeSettings                # 325s
   XE_Local_AI_Engine.Tests.GraphWorkflows              # 314s
-  XE_Local_AI_Engine.Tests.DevWorkflows.Dispatch       # 313s
-  XE_Local_AI_Engine.Tests.DevWorkflows                # 291s
   XE_Local_AI_Engine.Tests.Endpoints.Benchmarks.V1     # 290s
   XE_Local_AI_Engine.Tests.Auth                        # 262s
   XE_Local_AI_Engine.Tests.Endpoints.WorkSessions.V1   # 206s
@@ -487,12 +483,10 @@ HEAVY=(
   XE_Local_AI_Engine.Tests.Endpoints.Transcription     # 172s
   XE_Local_AI_Engine.Tests.ApiFoundation               # 166s
   XE_Local_AI_Engine.Tests.Endpoints.Development.V1    # 163s
-  XE_Local_AI_Engine.Tests.DevWorkflows.Materialization # 163s
   XE_Local_AI_Engine.Tests.Chat                        # 162s
   XE_Local_AI_Engine.Tests.Endpoints.Images            # 153s
   XE_Local_AI_Engine.Tests.Endpoints.LocalModels       # 152s
   XE_Local_AI_Engine.Tests.Endpoints.Training.V1       # 150s
-  XE_Local_AI_Engine.Tests.DevWorkflows.Execution      # 145s
   XE_Local_AI_Engine.Tests.Endpoints.AgentHome.V1      # 140s
   XE_Local_AI_Engine.Tests.Endpoints.Knowledge         # 133s
   XE_Local_AI_Engine.Tests.Development                 # 122s

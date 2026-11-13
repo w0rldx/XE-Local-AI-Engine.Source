@@ -266,9 +266,10 @@ the tour.)*
 
 Both the diagram and everything a run produces are **encrypted at rest**, like your chats.
 
-> **Workflow Runs** is a separate, developer-facing module for driving work items through review
-> stages. It is **off by default**. To use it, turn on **Development workflows** (and **Work sessions**,
-> which it needs) in [the Features card](#turn-features-on-or-off).
+**Development work runs as a workflow too.** With Development mode on and a project set up, pick the
+**Development intake** or **Research, plan, approve** sample under **Start from** when you create a
+workflow, and fill in `developmentProjectId` in the run input with your Development project's id. A workflow never applies a change to your
+repository on its own: it stops at a pause step and applies only after you approve there.
 
 ---
 
@@ -421,15 +422,18 @@ driver before it starts.
 
 → [The full pipeline, with the actual limits](for-experienced-users.md#fine-tuning-training)
 
+Training and Model Lab are **experimental**: no 1.0 stability promise, and they may change or be cut.
+[Feature tiers](for-experienced-users.md#feature-tiers)
+
 ---
 
 ## Advanced
 
 ### Turn features on or off
 
-**Settings → Node Settings → General → Features** has a switch for each of nine larger features:
-Development mode, Work sessions, Development workflows, Graph workflows, AgentHome workspaces, Compute
-tools, External apps, Audio transcription and the Scheduler. A feature you switch off disappears from the
+**Settings → Node Settings → General → Features** has a switch for each of eight larger features:
+Development mode, Work sessions, Graph workflows, AgentHome workspaces, Compute tools, External apps, Audio
+transcription and the Scheduler. A feature you switch off disappears from the
 navigation. Most switches apply as soon as you save. **Development mode** and the **Scheduler** need a
 restart, and a few switches say in their description which part waits for one.
 
@@ -457,12 +461,62 @@ This needs testing across distributions and drivers. → [Installing on Linux](i
 ### Use your local models from other tools
 
 **Settings → Node Settings → Local model proxy** exposes this node's local models over an
-**OpenAI-compatible API**, so another program on the same machine — an editor plugin, a script, another
-app — can point its `base_url` at it and use your models as if they were a cloud provider.
+**OpenAI-compatible API** (Chat Completions and Responses) and the **Anthropic Messages API**, so another
+program on the same machine — an editor plugin, a script, a coding CLI — can point its base URL at it
+and use your models as if they were a cloud provider.
 
 It is **off until you generate a key**. The key is shown once, can be revoked or regenerated at any
 time, and the proxy is only reachable from this machine. What comes back is the plain model — no
-agent persona, tools, memory or knowledge-base grounding.
+agent persona, tools, memory or knowledge-base grounding. The model name must be the **exact name of
+an installed local model** (the names the proxy lists at `<base_url>/models`); any other name, including a cloud model's,
+is answered with "not found".
+
+#### Recipe: Claude Code or Codex CLI on a local model
+
+The panel shows two base URLs: `base_url` (ends in `/proxy/v1`) for OpenAI clients and
+`ANTHROPIC_BASE_URL` (ends in `/proxy`) for Anthropic clients. The port changes when the app restarts,
+so copy it from the panel each time.
+
+Claude Code (Anthropic Messages):
+
+```bash
+export ANTHROPIC_BASE_URL="http://127.0.0.1:<port>/api/local/v1/proxy"
+export ANTHROPIC_AUTH_TOKEN="xeprx_..."        # or ANTHROPIC_API_KEY; both are accepted
+export ANTHROPIC_MODEL="<installed model name>"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="<installed model name>"   # background tasks use this one
+claude
+```
+
+Codex CLI (OpenAI Responses), in `~/.codex/config.toml`:
+
+```toml
+model = "<installed model name>"
+model_provider = "xe-local"
+
+[model_providers.xe-local]
+name = "XE Local AI Engine"
+base_url = "http://127.0.0.1:<port>/api/local/v1/proxy/v1"
+env_key = "XE_PROXY_API_KEY"
+wire_api = "responses"
+```
+
+Then `export XE_PROXY_API_KEY="xeprx_..."` and run `codex`.
+
+Known differences from the cloud APIs (the local runtime answers both formats natively; the proxy
+passes its replies through unchanged):
+
+- The `model` field in a reply is the model file's path, not the name you sent.
+- Messages: the one change the proxy makes to a request is to move system instructions that a client
+  sends in the middle of the conversation (Claude Code does) up to the top-level `system`, because a
+  local model's chat template accepts system instructions only at the start.
+- Messages: ids look like `chatcmpl-…` rather than `msg_…`, tool-call ids carry no `toolu_` prefix,
+  thinking is streamed even when not requested (with an empty signature), and a thinking block can
+  close after the next block has opened.
+- Responses: stream events carry no `sequence_number`, there is no
+  `response.function_call_arguments.done` event, and a reply cut off by `max_output_tokens` reports
+  `completed` rather than `incomplete`.
+- A local model is slower and has a smaller context window than a cloud model; when a conversation
+  outgrows it, the error says "prompt is too long", as the cloud API does.
 
 ### Optional cloud providers
 

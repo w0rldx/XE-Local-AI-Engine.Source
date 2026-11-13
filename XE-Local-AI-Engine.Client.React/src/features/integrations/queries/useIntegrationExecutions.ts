@@ -78,7 +78,7 @@ export function useIntegrationExecution(executionId: string | null, options: Int
  * silently dropped every event past the 500th, and events ascend, so the row lost first is the terminal one that
  * says how the run ended.
  *
- * A loop inside `queryFn` rather than `useInfiniteQuery` (which is what the dev-workflows event feed uses): there
+ * A loop inside `queryFn` rather than `useInfiniteQuery` (which is what the graph-workflows event feed uses): there
  * is no pager here. The timeline renders the whole log and re-reads it while the run is active, so one cache entry holding one
  * ascending array keeps the `select`/`refetchInterval` contract its two consumers already have.
  *

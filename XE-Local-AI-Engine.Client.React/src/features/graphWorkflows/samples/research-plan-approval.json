@@ -1,0 +1,149 @@
+{
+	"schemaVersion": 1,
+	"nodes": [
+		{
+			"key": "start",
+			"kind": "Start",
+			"label": "Start",
+			"position": {
+				"x": 0,
+				"y": 130
+			},
+			"config": {
+				"inputSchema": null,
+				"defaultInput": {
+					"request": "Find out how this project reads its configuration: where settings come from, which ones exist, and what happens when one is missing. Then plan how a missing required setting could stop startup with a clear message.",
+					"developmentProjectId": ""
+				}
+			}
+		},
+		{
+			"key": "research",
+			"kind": "Agent",
+			"label": "Research",
+			"position": {
+				"x": 280,
+				"y": 130
+			},
+			"config": {
+				"agentDefinitionId": null,
+				"instructions": "Research what the operator's request asks about in this repository. The request is the `request` field of the Start node's output below. Read the code, configuration and documentation it concerns with your file tools (list_files, search_text, read_file), and ground every claim in something you actually read, naming the files and symbols. Write up what you found for the person who plans the work: what exists today, what the request would touch, and what is still unclear. Change nothing.",
+				"model": null,
+				"reasoningEffort": null,
+				"responseJsonSchema": null,
+				"includeUpstreamOutputs": true,
+				"repository": true
+			}
+		},
+		{
+			"key": "plan",
+			"kind": "LlmCall",
+			"label": "Plan",
+			"position": {
+				"x": 560,
+				"y": 130
+			},
+			"config": {
+				"systemPrompt": "You turn research into a plan a person can approve. You plan only from the research you are given and never invent files or symbols it does not name.",
+				"prompt": "Turn the research in the `research` data block into a plan for the operator's request in the `request` data block: what to do, in what order, and what would show it worked. Keep every name, signature and interface the request specifies exactly as it is written. Where the plan has to deviate from the request, list each deviation and why under a heading \"Deviations from the request\", and write \"None\" there when there is none. Put any tests the plan adds in new test files: existing test files cannot be modified.",
+				"inputBindings": {
+					"request": "run.input.request",
+					"research": "upstream.research.output.text"
+				}
+			}
+		},
+		{
+			"key": "approve",
+			"kind": "Pause",
+			"label": "Approve the plan",
+			"position": {
+				"x": 840,
+				"y": 130
+			},
+			"config": {
+				"prompt": "Read the plan in the Plan node's output and the research behind it in the Research node's output. Approve to finish the run with the plan as its result, or reject it and say in the comment what is wrong. Nothing is implemented either way.",
+				"allowedDecisions": ["Approve", "Reject"],
+				"requireComment": false
+			}
+		},
+		{
+			"key": "end_approved",
+			"kind": "End",
+			"label": "Approved",
+			"position": {
+				"x": 1120,
+				"y": 0
+			},
+			"config": {
+				"outcome": "approved",
+				"resultPath": "upstream.plan.output.text"
+			}
+		},
+		{
+			"key": "end_rejected",
+			"kind": "End",
+			"label": "Rejected",
+			"position": {
+				"x": 1120,
+				"y": 260
+			},
+			"config": {
+				"outcome": "rejected",
+				"resultPath": "upstream.approve.output.comment"
+			}
+		}
+	],
+	"edges": [
+		{
+			"key": "e1",
+			"from": "start",
+			"to": "research"
+		},
+		{
+			"key": "e2",
+			"from": "research",
+			"to": "plan"
+		},
+		{
+			"key": "e3",
+			"from": "plan",
+			"to": "approve"
+		},
+		{
+			"key": "e4",
+			"from": "approve",
+			"to": "end_approved",
+			"label": "Approve",
+			"sourceHandle": "Approve",
+			"condition": {
+				"path": "output.decision",
+				"op": "Eq",
+				"value": "Approve"
+			}
+		},
+		{
+			"key": "e5",
+			"from": "plan",
+			"to": "end_approved",
+			"label": "context"
+		},
+		{
+			"key": "e6",
+			"from": "approve",
+			"to": "end_rejected",
+			"label": "Reject",
+			"sourceHandle": "Reject",
+			"condition": {
+				"path": "output.decision",
+				"op": "Eq",
+				"value": "Reject"
+			}
+		},
+		{
+			"key": "e7",
+			"from": "plan",
+			"to": "end_rejected",
+			"label": "context"
+		}
+	]
+}

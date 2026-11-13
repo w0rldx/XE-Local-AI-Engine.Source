@@ -94,14 +94,14 @@ run_case() {
   grep -Fq 'fail=0' <<<"$output"
 }
 
-# Every namespace runs at width 1 unless PAR says otherwise — DevWorkflows included, because a
-# width-2 exception for it was measured: no wall-clock gain, 50% more peak RSS.
-write_namespaces XE_Local_AI_Engine.Tests.DevWorkflows
+# Every namespace runs at width 1 unless PAR says otherwise — a heavy one included, because a
+# width-2 exception for one was measured: no wall-clock gain, 50% more peak RSS.
+write_namespaces XE_Local_AI_Engine.Tests.GraphWorkflows
 run_case dev-default env
-grep -Fqx 'max=1 html=1 filter=/*/XE_Local_AI_Engine.Tests.DevWorkflows/*/*' "$TMP/dev-default.log"
+grep -Fqx 'max=1 html=1 filter=/*/XE_Local_AI_Engine.Tests.GraphWorkflows/*/*' "$TMP/dev-default.log"
 
 run_case dev-explicit env PAR=3
-grep -Fqx 'max=3 html=1 filter=/*/XE_Local_AI_Engine.Tests.DevWorkflows/*/*' "$TMP/dev-explicit.log"
+grep -Fqx 'max=3 html=1 filter=/*/XE_Local_AI_Engine.Tests.GraphWorkflows/*/*' "$TMP/dev-explicit.log"
 
 write_namespaces XE_Local_AI_Engine.Tests.Ordinary
 run_case ordinary env
@@ -135,17 +135,17 @@ set -e
 [[ "$invalid_status" -eq 2 ]]
 grep -Fq "XE_TEST_PROFILE must be 'low-memory' or unset" <<<"$invalid_output"
 
-write_namespaces XE_Local_AI_Engine.Tests.DevWorkflows XE_Local_AI_Engine.Tests.Ordinary
+write_namespaces XE_Local_AI_Engine.Tests.GraphWorkflows XE_Local_AI_Engine.Tests.Ordinary
 run_case grouped env TEST_GROUPS=1
-grep -Fqx 'max=1 html=1 filter=/*/(XE_Local_AI_Engine.Tests.DevWorkflows|XE_Local_AI_Engine.Tests.Ordinary)/*/*' \
+grep -Fqx 'max=1 html=1 filter=/*/(XE_Local_AI_Engine.Tests.GraphWorkflows|XE_Local_AI_Engine.Tests.Ordinary)/*/*' \
   "$TMP/grouped.log"
 
 # Coverage mode pre-warms the migrated template once, by name, before the slot clones; a run that leaves no
 # template behind fails loudly instead of letting every slot process build its own.
-write_namespaces XE_Local_AI_Engine.Tests.DevWorkflows
+write_namespaces XE_Local_AI_Engine.Tests.GraphWorkflows
 run_case coverage env COVERAGE_DIR="$TMP/coverage"
-grep -Fqx 'max=1 html=1 filter=/*/XE_Local_AI_Engine.Tests.DevWorkflows/*/*' "$TMP/coverage.log"
-grep -q '<class' "$TMP/coverage/XE_Local_AI_Engine.Tests.DevWorkflows/coverage.cobertura.xml"
+grep -Fqx 'max=1 html=1 filter=/*/XE_Local_AI_Engine.Tests.GraphWorkflows/*/*' "$TMP/coverage.log"
+grep -q '<class' "$TMP/coverage/XE_Local_AI_Engine.Tests.GraphWorkflows/coverage.cobertura.xml"
 [[ "$(grep -c 'TestServerWebAppFactoryTemplateSweepTests' "$TMP/coverage.log")" -eq 1 ]]
 [[ "$(head -n 1 "$TMP/coverage.log")" == *TestServerWebAppFactoryTemplateSweepTests* ]]
 rm -rf "$BIN/sqlite-templates"
@@ -161,14 +161,14 @@ grep -Fq 'ERROR: template pre-warm failed' <<<"$prewarm_output"
 # A grouped coverage report whose sentinel packages lost their hits is retried once in a re-cloned slot; the
 # retry's report and TRX are the only ones left, and the summary names the unit.
 run_case coverage-lossy-once env COVERAGE_DIR="$TMP/cov-retry" TEST_GROUPS=1 FAKE_COVERAGE=lossy-once
-unit_dir="$TMP/cov-retry/group0[DevWorkflows+0]"
-grep -Fq "!! coverage lost in group0[DevWorkflows+0]: XE-Local-AI-Engine.Client.Application XE-Local-AI-Engine.Client.Persistence XE-Local-AI-Engine.Client; retrying once in a re-cloned slot" <<<"$output"
-grep -Fq 'Coverage retried (lost hits on the first attempt): group0[DevWorkflows+0]' <<<"$output"
+unit_dir="$TMP/cov-retry/group0[GraphWorkflows+0]"
+grep -Fq "!! coverage lost in group0[GraphWorkflows+0]: XE-Local-AI-Engine.Client.Application XE-Local-AI-Engine.Client.Persistence XE-Local-AI-Engine.Client; retrying once in a re-cloned slot" <<<"$output"
+grep -Fq 'Coverage retried (lost hits on the first attempt): group0[GraphWorkflows+0]' <<<"$output"
 [[ "$(find "$unit_dir" -name coverage.cobertura.xml | wc -l)" -eq 1 ]]
 [[ "$(find "$unit_dir" -name '*.trx' | wc -l)" -eq 1 ]]
 grep -Fq 'line-rate="0.5"' "$unit_dir/coverage.cobertura.xml"
 [[ -d "$unit_dir/coverage-logs-attempt1" ]]
-[[ "$(grep -c 'DevWorkflows)/' "$TMP/coverage-lossy-once.log")" -eq 2 ]]
+[[ "$(grep -c 'GraphWorkflows)/' "$TMP/coverage-lossy-once.log")" -eq 2 ]]
 
 write_namespaces XE_Local_AI_Engine.Tests.Ordinary
 set +e

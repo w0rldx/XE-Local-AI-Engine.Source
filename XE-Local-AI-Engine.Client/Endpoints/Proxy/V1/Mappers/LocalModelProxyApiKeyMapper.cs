@@ -17,7 +17,8 @@ internal static class LocalModelProxyApiKeyMapper
         {
             Configured = view is not null,
             ApiKey = view is null ? null : ToApiKey(view),
-            EndpointUrl = BuildEndpointUrl(httpContext)
+            EndpointUrl = BuildEndpointUrl(httpContext, LocalApiRoutes.Proxy.OpenAiBase),
+            AnthropicEndpointUrl = BuildEndpointUrl(httpContext, LocalApiRoutes.Proxy.AnthropicBase)
         };
     }
 
@@ -34,7 +35,8 @@ internal static class LocalModelProxyApiKeyMapper
         {
             Configured = true,
             ApiKey = ToApiKey(generated.View),
-            EndpointUrl = BuildEndpointUrl(httpContext),
+            EndpointUrl = BuildEndpointUrl(httpContext, LocalApiRoutes.Proxy.OpenAiBase),
+            AnthropicEndpointUrl = BuildEndpointUrl(httpContext, LocalApiRoutes.Proxy.AnthropicBase),
             Key = generated.Key
         };
     }
@@ -50,17 +52,17 @@ internal static class LocalModelProxyApiKeyMapper
     }
 
     /// <summary>
-    ///     Builds the absolute OpenAI base URL from the LIVE request rather than from configuration.
+    ///     Builds an absolute client base URL from the LIVE request rather than from configuration.
     /// </summary>
     /// <remarks>
     ///     The node binds an OS-assigned loopback port in desktop mode, so the port is not knowable ahead of time and
     ///     any configured value would go stale on the next launch; the request the operator's own browser just made
-    ///     carries the authoritative scheme, host and port. An external tool sets this as its <c>base_url</c>, and the
-    ///     client appends <c>/chat/completions</c> and the rest.
+    ///     carries the authoritative scheme, host and port. An OpenAI client appends <c>/chat/completions</c> or
+    ///     <c>/responses</c> to its base; an Anthropic client appends <c>/v1/messages</c> to its own.
     /// </remarks>
-    private static string BuildEndpointUrl(HttpContext httpContext)
+    private static string BuildEndpointUrl(HttpContext httpContext, string clientBase)
     {
         var request = httpContext.Request;
-        return $"{request.Scheme}://{request.Host.Value}/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Proxy.OpenAiBase}";
+        return $"{request.Scheme}://{request.Host.Value}/{LocalApiRoutes.Prefix}/{clientBase}";
     }
 }

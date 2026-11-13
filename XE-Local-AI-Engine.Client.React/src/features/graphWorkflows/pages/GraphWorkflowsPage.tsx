@@ -1,5 +1,5 @@
 // The one Graph Workflows surface, in two modes over one selection. Router-free by design (it takes `selection` and
-// `onSelectionChange` as props, the way `DevWorkflowDetailPage` does), so it renders directly in a unit test and
+// `onSelectionChange` as props), so it renders directly in a unit test and
 // `routes/_layout/graph-workflows.tsx` stays a thin adapter.
 //
 // `runId` set ⇒ the run view; unset ⇒ the editor. This file owns only the choice between them and the page chrome

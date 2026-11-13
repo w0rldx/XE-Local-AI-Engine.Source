@@ -894,7 +894,8 @@ internal static class InvocationRunnerTestSupport
         ILogger<InvocationRunner>? logger = null,
         TimeProvider? coordinatorTimeProvider = null,
         ICloudModelResolver? cloudModelResolver = null,
-        IModelTrustResolver? modelTrustResolver = null)
+        IModelTrustResolver? modelTrustResolver = null,
+        Lazy<IWorkerEventDispatcher>? lazyEventDispatcher = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -913,7 +914,9 @@ internal static class InvocationRunnerTestSupport
         // local provider exactly as before. A cloud-routing test injects one that returns true to prove the warm is skipped.
         var resolvedActiveCloudFactory = activeCloudFactory ?? Substitute.For<IActiveCloudChatClientFactory>();
 
+        // A host's real dispatcher takes the runner in its constructor, so a runner registered in that host passes it lazily.
         var resolvedEventDispatcher = eventDispatcher ?? Substitute.For<IWorkerEventDispatcher>();
+        var dispatcher = lazyEventDispatcher ?? new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher);
 
         // Default to a real resilience with retry/backoff/breaker at defaults: success-path tests establish the stream
         // on the first attempt, so the wrapper is transparent. Resilience-specific behavior is covered directly in
@@ -952,7 +955,7 @@ internal static class InvocationRunnerTestSupport
         var resolvedPendingToolCallRegistry = pendingToolCallRegistry ?? new PendingToolCallRegistry();
         var resolvedTimeProvider = timeProvider ?? TimeProvider.System;
 
-        return new InvocationRunner(new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
+        return new InvocationRunner(dispatcher,
             resolvedFactory,
             resolvedOrchestrationFactory,
             resolvedValidator,
@@ -966,7 +969,7 @@ internal static class InvocationRunnerTestSupport
             Options.Create(new ProviderCallBudgetOptions()),
             toolRelevanceCoreSet ?? new FakeToolRelevanceCoreSet(),
             runtimeSettings,
-            new ToolApprovalCoordinator(new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
+            new ToolApprovalCoordinator(dispatcher,
                 resolvedPendingToolCallRegistry,
                 approvalAuditRecorder ?? Substitute.For<IToolApprovalAuditRecorder>(),
                 approvalPolicy ?? NodeToolApprovalPolicy.FromSettings(settings: null),

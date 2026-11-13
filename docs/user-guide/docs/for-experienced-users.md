@@ -39,7 +39,8 @@ What an outside client can rely on from 1.0. The binding text is in the wiki; th
   [Rule](../../wiki/09-api-and-hubs.md#2-signalr-hubs-inbound-browser--node)
 - **Inbound MCP tools.** Each tool carries a stability column; all 25 are `stable`, and a `preview` tool would be
   the only kind allowed to change without notice. [Tool table](../../../skills/xe-local-ai-engine/references/mcp-tools.md)
-- **Preview.** No HTTP route and no hub is marked preview: everything under `/api/local/v1` is stable as of 1.0.
+- **Preview.** No HTTP route and no hub is marked preview: everything under `/api/local/v1` is stable as of 1.0,
+  except the routes and hubs of the [experimental features](#feature-tiers).
 - **Announcing a break.** A `CHANGELOG.md` deprecation note at least one minor release ahead, then the next major
   version. The version follows Semantic Versioning.
 - **The spec.** Production builds do not serve the OpenAPI document. Each release carries it as the asset
@@ -48,6 +49,21 @@ What an outside client can rely on from 1.0. The binding text is in the wiki; th
 - **Loopback only.** Every route and hub is bound to the loopback interface and gated by the Host/Origin check;
   the stability promise is for clients on the same machine. The one non-loopback listener is the container
   bridge, which serves only the model endpoints for containers. [Security](../../wiki/12-security-and-privacy.md)
+
+### Feature tiers
+
+What 1.0 promises depends on a feature's tier. This is the one list; other pages link here.
+
+- **Core:** every feature not named below, Benchmarks and Development Mode included. The API stability rules above
+  apply, and these features are fixed and developed normally.
+- **Experimental:** Training (dataset generation, fine-tuning, export and evaluation), Model Lab, and External Apps
+  together with the container bridge. Experimental means no 1.0 stability or API promise: the `training/*`,
+  `model-lab/*` and `external-apps/*` routes, their hubs, the bridge's `/llm/v1/*` endpoints and what these features
+  store may change in any release, a 1.x one included, and a feature may be cut. External Apps and the container
+  bridge are also **frozen**: bug fixes only, no new features.
+- **Retired:** Dev Workflows (the former **Development workflows** switch) is gone, together with its stored data;
+  development work runs as a Graph workflow.
+  [ADR 0023](../../adr/0023-dev-workflows-converge-into-graph-workflows.md)
 
 ---
 

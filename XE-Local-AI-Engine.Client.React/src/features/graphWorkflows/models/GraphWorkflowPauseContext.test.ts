@@ -168,6 +168,22 @@ describe("pauseContextEdges", () => {
 		expect(pauseContextEdges(canvas.nodes, canvas.edges, { from: "a", to: "first" })).toEqual([]);
 	});
 
+	// DEVTASK-1 refuses every way into an apply that is not a Pause's Approve, so the content edge would make the graph
+	// unsaveable. An implement node behind a Pause still gets its context edge.
+	it("draws no context edge into a DevTask apply node", () => {
+		const nodes = ["start:Start", "impl:DevTask", "review:Pause", "land:DevTask", "done:End"];
+		const edges = ["start>impl", "impl>review", "review>land", "land>done"];
+		const canvas = canvasOf(nodes, edges);
+		const applying = canvas.nodes.map((node) =>
+			node.id === "land" && node.data.kind === "DevTask"
+				? { ...node, data: { ...node.data, action: "apply", task: "impl" } }
+				: node,
+		);
+
+		expect(pauseContextEdges(applying, canvas.edges)).toEqual([]);
+		expect(addedPairs(nodes, edges)).toEqual(["impl>land"]);
+	});
+
 	it("stops on a Pause wired back into itself instead of walking forever", () => {
 		expect(addedPairs(["hold:Pause", "b:Agent", "done:End"], ["hold>hold", "hold>b", "b>done"])).toEqual([]);
 	});

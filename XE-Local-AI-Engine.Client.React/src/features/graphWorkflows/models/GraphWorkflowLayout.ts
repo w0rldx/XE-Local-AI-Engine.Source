@@ -1,10 +1,8 @@
 // A layered left-to-right DAG layout. Pure: no React, no React Flow, no dependency — dagre and elkjs are both correct
 // and both a new production dependency for ~70 lines of arithmetic.
 //
-// This is a COPY of `devWorkflows/models/DevWorkflowLayout.ts` (features never import each other — see
-// `no-cross-feature`), trimmed of the materialization tie-break: a Graph Workflow never clones a template at run time,
-// so a node's identity is its key and the tie-break is that key alone. The ranking, the barycenter pass, the
-// top-alignment and the cycle guard are the original's, unchanged.
+// A Graph Workflow never clones a template at run time, so a node's identity is its key and the tie-break is that key
+// alone.
 //
 // rank(n)     = 0 with no inbound edge, else 1 + max(rank(pred))   — longest path, taken in Kahn order
 // orderInRank = ONE barycenter pass over predecessor orders, ties broken by key

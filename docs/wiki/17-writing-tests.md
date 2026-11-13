@@ -202,9 +202,7 @@ Agent-definition *names* are indexed but **not** unique, so duplicate seed names
 A test that reads a container-singleton fake's history by POSITION — `fake.Objectives[^1]`, `fake.Created.Count`,
 `fake.Calls.Single()` — fails conditions 1 and 2 on a shared host, because that history is every sibling's too. The
 fix is usually not a private host: read the same value off the row the test's own run owns, and the assertion both
-survives sharing and names what it is about. `DevWorkflowHarness.ReadObjectiveAsync(runId, nodeKey)` is the worked
-example — it answers the objective from the node run's own session row instead of the fake's list, which turned
-seventeen positional reads in `DevWorkflows/Execution/DevWorkflowAgentExecutorTests` into id-scoped ones.
+survives sharing and names what it is about.
 
 **Never buy eligibility by resetting shared state.** `ClearReceivedCalls()`, clearing a fake's list, or deleting rows
 between tests makes the suite order-dependent instead of independent. If no id-scoped read expresses the claim — a
@@ -352,7 +350,7 @@ Measure it with `PRAGMA foreign_keys` — `NodeSqlitePragmasTests` is where that
 
 A suite fixture that builds its schema with `EnsureCreatedAsync()` is the same mistake wearing a different hat — a
 second definition of the schema, off the entity model. `GraphWorkflowTestFixture` copies the template instead;
-the shared fixtures `DevWorkflowTestFixture`, `ExternalAppTestFixture`, `IntegrationTestFixture`,
+the shared fixtures `ExternalAppTestFixture`, `IntegrationTestFixture`,
 `WorkSessionPersistenceTestSupport` and `DevelopmentPersistenceTestSupport` have not been moved, and dozens of store
 suites still call `EnsureCreatedAsync()` inline — that is the remaining backlog. One test keeps `EnsureCreated` on
 purpose: `AddGraphWorkflowsMigrationTests.MigratedSchema_MatchesWhatEnsureCreatedBuilds` holds its own context through

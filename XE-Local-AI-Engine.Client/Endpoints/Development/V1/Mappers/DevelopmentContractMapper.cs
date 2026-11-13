@@ -62,7 +62,7 @@ internal static class DevelopmentContractMapper
     ///     The task's own row says nothing about workflows, so the run driving it travels beside it — from the
     ///     aggregate, which is where the reverse lookup happens.
     /// </summary>
-    public static DevelopmentTaskResponse ToResponse(this DevelopmentTaskSnapshot value, Guid? workflowRunId = null) =>
+    public static DevelopmentTaskResponse ToResponse(this DevelopmentTaskSnapshot value, DevelopmentWorkflowRunReference? workflowRun = null) =>
         new()
         {
             Id = value.Id,
@@ -76,7 +76,8 @@ internal static class DevelopmentContractMapper
             BlockedReason = value.BlockedReason,
             ApprovedSubjectHash = value.ApprovedSubjectHash,
             Version = value.Version,
-            WorkflowRunId = workflowRunId
+            WorkflowRunId = workflowRun?.RunId,
+            WorkflowEngine = workflowRun?.Engine.ToString()
         };
 
     public static DevelopmentAttemptResponse ToResponse(this DevelopmentAttemptSnapshot value) =>
@@ -135,7 +136,7 @@ internal static class DevelopmentContractMapper
     public static DevelopmentTaskDetailResponse ToResponse(this DevelopmentTaskAggregate value) =>
         new()
         {
-            Task = value.Task.ToResponse(value.WorkflowRunId),
+            Task = value.Task.ToResponse(value.WorkflowRun),
             Attempts = value.Attempts.Select(ToResponse).ToArray(),
             Artifacts = value.Artifacts.Select(ToResponse).ToArray()
         };

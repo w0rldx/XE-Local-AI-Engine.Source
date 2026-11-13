@@ -144,6 +144,17 @@ export function GraphWorkflowAgentConfigForm({
 				onChange={(event) => onChange({ includeUpstreamOutputs: event.currentTarget.checked })}
 				data-testid="gw-node-config-include-upstream"
 			/>
+			<Switch
+				label={t("pages.graphWorkflows.config.repository", "Read the Development project")}
+				description={t(
+					"pages.graphWorkflows.config.repositoryHelp",
+					"Lets the bound agent's file tools read the repository of the project the run input names as developmentProjectId. Needs an agent and Development Mode.",
+				)}
+				checked={node.repository === true}
+				disabled={readOnly}
+				onChange={(event) => onChange({ repository: event.currentTarget.checked })}
+				data-testid="gw-node-config-repository"
+			/>
 		</>
 	);
 }

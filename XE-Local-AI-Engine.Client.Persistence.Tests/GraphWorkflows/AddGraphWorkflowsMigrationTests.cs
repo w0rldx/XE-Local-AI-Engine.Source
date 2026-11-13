@@ -157,8 +157,7 @@ public sealed class AddGraphWorkflowsMigrationTests
     ///         Compared by column SIGNATURE — name, declared type and nullability — and by index name set, not by
     ///         column name alone. A column the migration declares TEXT and the model declares BLOB carries the same
     ///         name on both boxes and stores a different thing on each, and an index present on one of them is a query
-    ///         plan that only holds on that box. Deeper than the Dev Workflow suite's equivalent, which compares names
-    ///         only.
+    ///         plan that only holds on that box.
     ///     </para>
     /// </summary>
     [Test]

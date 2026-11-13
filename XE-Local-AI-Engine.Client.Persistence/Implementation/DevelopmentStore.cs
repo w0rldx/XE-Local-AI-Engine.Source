@@ -42,10 +42,7 @@ public sealed partial class DevelopmentStore : IDevelopmentStore
         {
             [DevelopmentTaskStatus.Planned] = [DevelopmentTaskStatus.Ready, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             [DevelopmentTaskStatus.Ready] = [DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
-            // ChangesRequested from InProgress is the workflow lane's other rework ask: it hands an operator's retry sentence to a task whose coder round failed,
-            // spending no review round. CALLER-SIDE INVARIANT: DevWorkflowDevTaskExecutor.CarryOperatorRetryAsync first checks the LAST coder attempt did not succeed.
-            [DevelopmentTaskStatus.InProgress] =
-                [DevelopmentTaskStatus.Validation, DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
+            [DevelopmentTaskStatus.InProgress] = [DevelopmentTaskStatus.Validation, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             // ChangesRequested is the FAILED deterministic gate's target because InProgress could not be: a task the gate rejected sits at InProgress with a
             // SUCCEEDED coder attempt, which StartNextActionAsync re-reads as "validate it" — 289 such runs on one task in 25 minutes. InProgress stays for recovery.
             [DevelopmentTaskStatus.Validation] =
@@ -56,14 +53,13 @@ public sealed partial class DevelopmentStore : IDevelopmentStore
             [DevelopmentTaskStatus.InReview] = [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.AwaitingApply, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             [DevelopmentTaskStatus.ChangesRequested] = [DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
 
-            // ChangesRequested is reachable from AwaitingApply because a workflow's fix loop can route a downstream validation failure back at an implementation
-            // node whose task is approved: without it the re-attempt re-succeeds in the same tick and burns the budget. Completed stays absent — that is the apply port's.
+            // ChangesRequested from AwaitingApply sends an approved task back for rework; no production caller takes it today. Completed stays absent — that is
+            // the apply port's.
             [DevelopmentTaskStatus.AwaitingApply] =
                 [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
 
-            // The edges out of Blocked, each refused without its flag: a Retry buys the round the cap stopped (ChangesRequested, WidenReviewRounds; a Retry at N of N
-            // without it stood itself down ~2 s later, twice) or re-runs the validation a missing runner stopped (InProgress, RetryValidation).
-            [DevelopmentTaskStatus.Blocked] = [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.InProgress]
+            // The one edge out of Blocked, refused without RetryValidation: it re-runs the validation a missing runner stopped.
+            [DevelopmentTaskStatus.Blocked] = [DevelopmentTaskStatus.InProgress]
         };
 
     private readonly NodeChatDbContext _dbContext;

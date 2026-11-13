@@ -96,6 +96,19 @@ internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
     public Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default) =>
         _inner.ListNodeRunsAsync(runId, cancellationToken);
 
+    /// <summary>The row now names its task, which the node panel links to, so the client repaints the node.</summary>
+    public async Task<GraphWorkflowConditionalWriteResult> SetNodeRunDevelopmentTaskAsync(Guid runId,
+        Guid nodeRunId,
+        Guid developmentTaskId,
+        CancellationToken cancellationToken = default) =>
+        await PublishWrittenAsync(await _inner.SetNodeRunDevelopmentTaskAsync(runId, nodeRunId, developmentTaskId, cancellationToken),
+            GraphWorkflowChangeKind.Node,
+            cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowDevelopmentTaskRun>> ListDevelopmentTaskRunsAsync(IReadOnlyList<Guid> developmentTaskIds,
+        CancellationToken cancellationToken = default) =>
+        _inner.ListDevelopmentTaskRunsAsync(developmentTaskIds, cancellationToken);
+
     public Task<GraphWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid runId, string nodeKey, CancellationToken cancellationToken = default) =>
         _inner.GetNodeRunAsync(runId, nodeKey, cancellationToken);
 

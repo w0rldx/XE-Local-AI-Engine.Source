@@ -563,6 +563,12 @@ internal sealed class GatedDrainGraphWorkflowStore : IGraphWorkflowStore
     public Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default) =>
         _inner.ListNodeRunsAsync(runId, cancellationToken);
 
+    public Task<GraphWorkflowConditionalWriteResult> SetNodeRunDevelopmentTaskAsync(Guid runId, Guid nodeRunId, Guid developmentTaskId, CancellationToken cancellationToken = default) =>
+        _inner.SetNodeRunDevelopmentTaskAsync(runId, nodeRunId, developmentTaskId, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowDevelopmentTaskRun>> ListDevelopmentTaskRunsAsync(IReadOnlyList<Guid> developmentTaskIds, CancellationToken cancellationToken = default) =>
+        _inner.ListDevelopmentTaskRunsAsync(developmentTaskIds, cancellationToken);
+
     public Task<GraphWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid runId, string nodeKey, CancellationToken cancellationToken = default) =>
         _inner.GetNodeRunAsync(runId, nodeKey, cancellationToken);
 

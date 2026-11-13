@@ -26,6 +26,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class LocalModelProxyForwarderTests
 {
     private const string InstalledModel = "test-model";
+
+    // Fields the Messages fold must carry through unchanged, unknown ones and a number's own spelling included.
+    private const string SystemFoldTail = ",\"thinking\":{\"type\":\"adaptive\"},\"context_management\":{\"edits\":[{\"type\":\"clear\",\"keep\":1.50}]},\"stream\":true}";
+    // Bodies every route must refuse: a repeated top-level name, and a repeated name inside a message object.
+    private const string DuplicateTopLevelKey = "{\"model\":\"test-model\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"input\":\"hi\",\"messages\":[]}";
+    private const string DuplicateKeyInAMessage = "{\"model\":\"test-model\",\"messages\":[{\"role\":\"system\",\"content\":\"S\",\"role\":\"user\"}],\"input\":\"hi\"}";
+
     private static readonly Uri ChildEndpoint = new("http://127.0.0.1:18100/v1");
 
     [Test]
@@ -294,6 +301,419 @@ public sealed class LocalModelProxyForwarderTests
             "No error envelope may be appended to a half-written JSON document.");
     }
 
+    [Test]
+    [Arguments("messages")]
+    [Arguments("messages/count_tokens")]
+    [Arguments("responses")]
+    [Arguments("responses/input_tokens")]
+    public async Task NativeWireFormatRoute_ForwardsVerbatimToItsOwnSubpathOnTheChatRoleAndRelaysTheEventStream(string route)
+    {
+        const string requestBody = "{\"model\":\"test-model\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true}";
+        const string streamed = "event: message_start\ndata: {\"type\":\"message_start\"}\n\n";
+        using var upstream = new CapturingHandler(HttpStatusCode.OK, "text/event-stream", streamed);
+        var forwarder = CreateForwarder(out _, out var supervisor, upstream);
+        var context = BuildContext(requestBody, out var responseBody);
+
+        await ForwardRouteAsync(forwarder, route, context);
+
+        _ = supervisor.Received(1).EnsureRunningAsync(InstalledModel, ModelRole.Chat, Arg.Any<CancellationToken>());
+        AssertEx.Equal($"http://127.0.0.1:18100/v1/{route}", AssertEx.NotNull(upstream.LastRequest).RequestUri!.AbsoluteUri);
+        AssertEx.Equal(requestBody, upstream.LastRequestBody);
+        AssertEx.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        AssertEx.Equal("text/event-stream", context.Response.ContentType);
+        AssertEx.Equal(streamed, Encoding.UTF8.GetString(responseBody.ToArray()));
+    }
+
+    [Test]
+    [Arguments("messages")]
+    [Arguments("responses")]
+    public async Task NativeWireFormatRoute_ToATwoSlotChatProcess_PinsTheForegroundSlotOverTheCallersOwn(string route)
+    {
+        using var upstream = new CapturingHandler(HttpStatusCode.OK, "application/json", "{}");
+        var forwarder = CreateForwarder(out _, out var supervisor, upstream);
+        supervisor.EnsureRunningAsync(InstalledModel, ModelRole.Chat, Arg.Any<CancellationToken>())
+                  .Returns(new LlamaServerEndpoint
+                  {
+                      ModelName = InstalledModel,
+                      Role = ModelRole.Chat,
+                      BaseAddress = ChildEndpoint,
+                      ParallelSlots = LlamaServerChatSlots.Count
+                  });
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[],\"input\":\"hi\",\"id_slot\":1}", out _);
+
+        await ForwardRouteAsync(forwarder, route, context);
+
+        using var forwarded = JsonDocument.Parse(AssertEx.NotNull(upstream.LastRequestBody));
+        AssertEx.Equal(LlamaServerChatSlots.Foreground, forwarded.RootElement.GetProperty("id_slot").GetInt32());
+        AssertEx.Equal("hi", forwarded.RootElement.GetProperty("input").GetString());
+    }
+
+    [Test]
+    // Top-level system absent / a string / blocks, system-message content a string / blocks, one and several: folded in order.
+    [Arguments("messages", "", "{\"role\":\"system\",\"content\":\"S1\"}", "[{\"type\":\"text\",\"text\":\"S1\"}]")]
+    [Arguments("messages", ",\"system\":\"T\"", "{\"role\":\"system\",\"content\":[{\"type\":\"text\",\"text\":\"S1\",\"cache_control\":{\"type\":\"ephemeral\"}}]}",
+        "[{\"type\":\"text\",\"text\":\"T\"},{\"type\":\"text\",\"text\":\"S1\",\"cache_control\":{\"type\":\"ephemeral\"}}]")]
+    [Arguments("messages", ",\"system\":[{\"type\":\"text\",\"text\":\"T1\"},{\"type\":\"text\",\"text\":\"T2\"}]",
+        "{\"role\":\"system\",\"content\":\"S1\"},{\"role\":\"assistant\",\"content\":\"A\"},{\"role\":\"system\",\"content\":[{\"type\":\"text\",\"text\":\"S2\"}]}",
+        "[{\"type\":\"text\",\"text\":\"T1\"},{\"type\":\"text\",\"text\":\"T2\"},{\"type\":\"text\",\"text\":\"S1\"},{\"type\":\"text\",\"text\":\"S2\"}]")]
+    [Arguments("messages/count_tokens", ",\"system\":\"T\"", "{\"role\":\"system\",\"content\":\"S1\"}",
+        "[{\"type\":\"text\",\"text\":\"T\"},{\"type\":\"text\",\"text\":\"S1\"}]")]
+    public async Task MessagesSurface_FoldsSystemRoleMessagesIntoTheTopLevelSystemAndKeepsEveryOtherField(string route, string system, string systemMessages, string expectedSystem)
+    {
+        // Claude Code sends a system-role message after a user turn; a template that wants the system message first answers 500.
+        using var upstream = new CapturingHandler(HttpStatusCode.OK, "application/json", "{}");
+        var forwarder = CreateForwarder(out _, out _, upstream);
+        var context = BuildContext(
+            $"{{\"model\":\"test-model\"{system},\"messages\":[{{\"role\":\"user\",\"content\":\"hi\"}},{systemMessages}]{SystemFoldTail}", out _);
+
+        await ForwardRouteAsync(forwarder, route, context);
+
+        using var forwarded = JsonDocument.Parse(AssertEx.NotNull(upstream.LastRequestBody));
+        var root = forwarded.RootElement;
+        using var expected = JsonDocument.Parse(expectedSystem);
+        AssertEx.True(JsonElement.DeepEquals(expected.RootElement, root.GetProperty("system")),
+            $"Got system: {root.GetProperty("system").GetRawText()}");
+        var messages = root.GetProperty("messages").EnumerateArray().ToList();
+        AssertEx.False(messages.Exists(message => message.GetProperty("role").GetString() == "system"), "No system-role message may stay in messages.");
+        AssertEx.Equal("hi", messages[0].GetProperty("content").GetString());
+        AssertEx.Equal("test-model", root.GetProperty("model").GetString());
+        AssertEx.Equal("{\"edits\":[{\"type\":\"clear\",\"keep\":1.50}]}", root.GetProperty("context_management").GetRawText());
+        AssertEx.Equal("{\"type\":\"adaptive\"}", root.GetProperty("thinking").GetRawText());
+        AssertEx.True(root.GetProperty("stream").GetBoolean());
+        AssertEx.False(root.TryGetProperty("id_slot", out _), "A single-slot process gets no slot pin.");
+    }
+
+    [Test]
+    // No system-role message, or one this fold cannot read: the child gets the caller's exact bytes.
+    [Arguments("messages", "{\"model\":\"test-model\",\"system\":\"T\",\"messages\":[{\"role\":\"user\",\"content\":\"h\\u00e9\"}],\"keep\":1.50}")]
+    [Arguments("messages", "{\"model\":\"test-model\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"system\",\"content\":7}]}")]
+    [Arguments("messages", "{\"model\":\"test-model\",\"system\":7,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"system\",\"content\":\"S\"}]}")]
+    [Arguments("messages", "{\"model\":\"test-model\",\"messages\":[\"hi\",null,{\"role\":7}]}")]
+    [Arguments("messages/count_tokens", "{\"model\":\"test-model\",\"messages\":[{\"role\":\"user\",\"content\":\"h\\u00e9\"}],\"keep\":1.50}")]
+    public async Task MessagesSurface_WithNothingToFold_ForwardsTheOriginalBytes(string route, string body)
+    {
+        using var upstream = new CapturingHandler(HttpStatusCode.OK, "application/json", "{}");
+        var forwarder = CreateForwarder(out _, out _, upstream);
+        var context = BuildContext(body, out _);
+
+        await ForwardRouteAsync(forwarder, route, context);
+
+        AssertEx.Equal(body, upstream.LastRequestBody);
+    }
+
+    [Test]
+    public async Task MessagesSurface_ToATwoSlotChatProcess_FoldsSystemMessagesAndPinsTheForegroundSlot()
+    {
+        using var upstream = new CapturingHandler(HttpStatusCode.OK, "application/json", "{}");
+        var forwarder = CreateForwarder(out _, out var supervisor, upstream);
+        supervisor.EnsureRunningAsync(InstalledModel, ModelRole.Chat, Arg.Any<CancellationToken>())
+                  .Returns(new LlamaServerEndpoint
+                  {
+                      ModelName = InstalledModel,
+                      Role = ModelRole.Chat,
+                      BaseAddress = ChildEndpoint,
+                      ParallelSlots = LlamaServerChatSlots.Count
+                  });
+        var context = BuildContext(
+            "{\"model\":\"test-model\",\"system\":\"T\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"system\",\"content\":\"S1\"}],\"id_slot\":1}", out _);
+
+        await ForwardRouteAsync(forwarder, "messages", context);
+
+        using var forwarded = JsonDocument.Parse(AssertEx.NotNull(upstream.LastRequestBody));
+        AssertEx.Equal(LlamaServerChatSlots.Foreground, forwarded.RootElement.GetProperty("id_slot").GetInt32());
+        AssertEx.Equal("[{\"type\":\"text\",\"text\":\"T\"},{\"type\":\"text\",\"text\":\"S1\"}]", forwarded.RootElement.GetProperty("system").GetRawText());
+        AssertEx.Equal(1, forwarded.RootElement.GetProperty("messages").GetArrayLength());
+    }
+
+    [Test]
+    [Arguments("messages", "no-model", StatusCodes.Status400BadRequest, "invalid_request_error")]
+    [Arguments("messages", "malformed", StatusCodes.Status400BadRequest, "invalid_request_error")]
+    [Arguments("messages", "unknown-model", StatusCodes.Status404NotFound, "not_found_error")]
+    [Arguments("messages", "cannot-provision", StatusCodes.Status503ServiceUnavailable, "overloaded_error")]
+    [Arguments("messages", "connection-refused", StatusCodes.Status503ServiceUnavailable, "overloaded_error")]
+    [Arguments("messages/count_tokens", "unknown-model", StatusCodes.Status404NotFound, "not_found_error")]
+    [Arguments("messages/count_tokens", "cannot-provision", StatusCodes.Status503ServiceUnavailable, "overloaded_error")]
+    public async Task MessagesSurface_ErrorsTheProxyWritesItself_UseTheAnthropicEnvelope(string route, string failure, int status, string anthropicType)
+    {
+        using var context = await RunFailureAsync(route, failure);
+
+        AssertEx.Equal(status, context.Http.Response.StatusCode);
+        var root = context.Body.RootElement;
+        AssertEx.Equal("error", root.GetProperty("type").GetString(), "An Anthropic client reads the top-level type first.");
+        AssertEx.Equal(anthropicType, root.GetProperty("error").GetProperty("type").GetString());
+        AssertEx.False(string.IsNullOrWhiteSpace(root.GetProperty("error").GetProperty("message").GetString()), "The envelope must carry a reason.");
+        AssertEx.False(root.GetProperty("error").TryGetProperty("code", out _), "The OpenAI code field does not belong in the Anthropic envelope.");
+        if (status == StatusCodes.Status503ServiceUnavailable)
+        {
+            AssertEx.Equal("5", context.Http.Response.Headers.RetryAfter.ToString());
+        }
+    }
+
+    [Test]
+    [Arguments("responses", "no-model", StatusCodes.Status400BadRequest, "invalid_request_error")]
+    [Arguments("responses", "unknown-model", StatusCodes.Status404NotFound, "invalid_request_error")]
+    [Arguments("responses", "cannot-provision", StatusCodes.Status503ServiceUnavailable, "server_error")]
+    [Arguments("responses/input_tokens", "unknown-model", StatusCodes.Status404NotFound, "invalid_request_error")]
+    [Arguments("chat/completions", "unknown-model", StatusCodes.Status404NotFound, "invalid_request_error")]
+    [Arguments("chat/completions", "cannot-provision", StatusCodes.Status503ServiceUnavailable, "server_error")]
+    public async Task OpenAiSurfaces_ErrorsTheProxyWritesItself_KeepTheOpenAiEnvelope(string route, string failure, int status, string openAiType)
+    {
+        using var context = await RunFailureAsync(route, failure);
+
+        AssertEx.Equal(status, context.Http.Response.StatusCode);
+        var root = context.Body.RootElement;
+        AssertEx.False(root.TryGetProperty("type", out _), "The OpenAI envelope has no top-level type.");
+        AssertEx.Equal(openAiType, root.GetProperty("error").GetProperty("type").GetString());
+        AssertEx.True(root.GetProperty("error").TryGetProperty("code", out _), "The OpenAI envelope carries a code field.");
+    }
+
+    [Test]
+    [Arguments("messages", "{\"model\":\"test-model\"}")]
+    [Arguments("messages", "{\"model\":\"test-model\",\"messages\":null}")]
+    [Arguments("messages", "{\"model\":\"test-model\",\"messages\":\"hi\"}")]
+    [Arguments("messages", "{\"model\":\"test-model\",\"messages\":{\"role\":\"user\"}}")]
+    [Arguments("messages", "{\"model\":\"test-model\",\"Messages\":[]}")]
+    [Arguments("messages/count_tokens", "{\"model\":\"test-model\",\"input\":\"hi\"}")]
+    public async Task MessagesSurface_WithoutAMessagesArray_Answers400ItselfAndNeverProvisionsOrForwards(string route, string body)
+    {
+        // The child answers a missing "messages" with a 500 server_error; a client would retry what can never succeed.
+        using var upstream = Idle();
+        var forwarder = CreateForwarder(out _, out var supervisor, upstream);
+        var context = BuildContext(body, out var responseBody);
+
+        await ForwardRouteAsync(forwarder, route, context);
+
+        AssertEx.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        using var document = JsonDocument.Parse(responseBody.ToArray());
+        AssertEx.Equal("invalid_request_error", document.RootElement.GetProperty("error").GetProperty("type").GetString());
+        AssertEx.Null(upstream.LastRequest);
+        _ = supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments("chat/completions", DuplicateTopLevelKey)]
+    [Arguments("chat/completions", DuplicateKeyInAMessage)]
+    [Arguments("embeddings", DuplicateTopLevelKey)]
+    [Arguments("embeddings", DuplicateKeyInAMessage)]
+    [Arguments("messages", DuplicateTopLevelKey)]
+    [Arguments("messages", DuplicateKeyInAMessage)]
+    [Arguments("messages/count_tokens", DuplicateTopLevelKey)]
+    [Arguments("messages/count_tokens", DuplicateKeyInAMessage)]
+    [Arguments("responses", DuplicateTopLevelKey)]
+    [Arguments("responses", DuplicateKeyInAMessage)]
+    [Arguments("responses/input_tokens", DuplicateTopLevelKey)]
+    [Arguments("responses/input_tokens", DuplicateKeyInAMessage)]
+    public async Task EveryProxyRoute_WithARepeatedPropertyName_Answers400InItsOwnEnvelopeAndNeverProvisionsOrForwards(string route, string body)
+    {
+        // A JsonObject throws a non-JSON exception on a repeated name, so a rewrite of such a body would end as an unhandled 500.
+        using var upstream = Idle();
+        var forwarder = CreateForwarder(out _, out var supervisor, upstream);
+        var context = BuildContext(body, out var responseBody);
+
+        await ForwardRouteAsync(forwarder, route, context);
+
+        AssertEx.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        using var document = JsonDocument.Parse(responseBody.ToArray());
+        AssertEx.Equal("invalid_request_error", document.RootElement.GetProperty("error").GetProperty("type").GetString());
+        AssertEx.Equal(route.StartsWith("messages", StringComparison.Ordinal), document.RootElement.TryGetProperty("type", out _),
+            "Only the Anthropic envelope has a top-level type.");
+        AssertEx.Null(upstream.LastRequest);
+        _ = supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task MessagesSurface_WithManySystemEntries_FoldsEveryOneInOrderAndKeepsTheRestInOrder()
+    {
+        const int pairs = 20_000;
+        var entries = Enumerable.Range(0, pairs).Select(static i => $"{{\"role\":\"user\",\"content\":\"U{i}\"}},{{\"role\":\"system\",\"content\":\"S{i}\"}}");
+        using var upstream = new CapturingHandler(HttpStatusCode.OK, "application/json", "{}");
+        var forwarder = CreateForwarder(out _, out _, upstream);
+        var context = BuildContext($"{{\"model\":\"test-model\",\"messages\":[{string.Join(',', entries)}]}}", out _);
+
+        await forwarder.ForwardMessagesAsync(context);
+
+        using var forwarded = JsonDocument.Parse(AssertEx.NotNull(upstream.LastRequestBody));
+        var system = forwarded.RootElement.GetProperty("system").EnumerateArray().Select(static block => block.GetProperty("text").GetString()).ToList();
+        var messages = forwarded.RootElement.GetProperty("messages").EnumerateArray().Select(static message => message.GetProperty("content").GetString()).ToList();
+        AssertEx.True(Enumerable.Range(0, pairs).Select(static i => $"S{i}").SequenceEqual(system), "Every system entry must be folded, in order.");
+        AssertEx.True(Enumerable.Range(0, pairs).Select(static i => $"U{i}").SequenceEqual(messages), "Every other entry must stay, in order.");
+    }
+
+    [Test]
+    [Arguments(503, 17, "17")]
+    [Arguments(503, 0, "5")]
+    [Arguments(529, 30, "30")]
+    [Arguments(529, 0, "5")]
+    [Arguments(500, 17, "")]
+    public async Task MessagesSurface_UpstreamOverloadedError_KeepsARetryAfterHintWhenReWrapped(int status, int upstreamRetryAfterSeconds, string expectedRetryAfter)
+    {
+        // An upstream Retry-After of 0 here means "the child sent none".
+        using var upstream = new CapturingHandler((HttpStatusCode)status, "application/json", "{\"error\":{\"message\":\"Loading model\"}}")
+        {
+            RetryAfter = upstreamRetryAfterSeconds > 0 ? new RetryConditionHeaderValue(TimeSpan.FromSeconds(upstreamRetryAfterSeconds)) : null
+        };
+        var forwarder = CreateForwarder(out _, out _, upstream);
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
+
+        await forwarder.ForwardMessagesAsync(context);
+
+        AssertEx.Equal(status, context.Response.StatusCode);
+        AssertEx.Equal(expectedRetryAfter, context.Response.Headers.RetryAfter.ToString());
+    }
+
+    [Test]
+    [Arguments("responses")]
+    [Arguments("chat/completions")]
+    public async Task OpenAiSurfaces_DoNotRequireAMessagesArray(string route)
+    {
+        using var upstream = Idle();
+        var forwarder = CreateForwarder(out _, out _, upstream);
+        var context = BuildContext("{\"model\":\"test-model\",\"input\":\"hi\"}", out _);
+
+        await ForwardRouteAsync(forwarder, route, context);
+
+        AssertEx.NotNull(upstream.LastRequest, "Only the Messages surface requires a messages array.");
+    }
+
+    [Test]
+    [Arguments("messages", 400, "{\"error\":{\"code\":400,\"message\":\"[json.exception.parse_error.101] bad\",\"type\":\"invalid_request_error\"}}", "invalid_request_error", "[json.exception.parse_error.101] bad")]
+    [Arguments("messages", 400, "{\"error\":{\"code\":400,\"message\":\"request (26408 tokens) exceeds the available context size (16384 tokens), try increasing it\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":26408,\"n_ctx\":16384}}", "invalid_request_error", "prompt is too long: 26408 tokens > 16384 maximum")]
+    [Arguments("messages", 400, "{\"error\":{\"message\":\"too big\",\"type\":\"exceed_context_size_error\"}}", "invalid_request_error", "prompt is too long: too big")]
+    [Arguments("messages/count_tokens", 400, "{\"error\":{\"code\":400,\"message\":\"request (9 tokens) exceeds\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":9,\"n_ctx\":8}}", "invalid_request_error", "prompt is too long: 9 tokens > 8 maximum")]
+    [Arguments("messages", 500, "{\"error\":{\"code\":500,\"message\":\"boom\",\"type\":\"server_error\"}}", "api_error", "boom")]
+    [Arguments("messages", 503, "{\"error\":{\"code\":503,\"message\":\"Loading model\",\"type\":\"unavailable_error\"}}", "overloaded_error", "Loading model")]
+    [Arguments("messages", 404, "{\"error\":\"File Not Found\"}", "not_found_error", "File Not Found")]
+    [Arguments("messages", 500, "not json", "api_error", "The local model runtime answered HTTP 500.")]
+    public async Task MessagesSurface_UpstreamJsonError_IsReWrappedIntoTheAnthropicEnvelopeKeepingTheStatus(string route,
+        int status,
+        string upstreamBody,
+        string anthropicType,
+        string message)
+    {
+        using var upstream = new CapturingHandler((HttpStatusCode)status, "application/json", upstreamBody);
+        var forwarder = CreateForwarder(out _, out _, upstream);
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out var responseBody);
+
+        await ForwardRouteAsync(forwarder, route, context);
+
+        AssertEx.Equal(status, context.Response.StatusCode);
+        using var document = JsonDocument.Parse(responseBody.ToArray());
+        AssertEx.Equal("error", document.RootElement.GetProperty("type").GetString());
+        AssertEx.Equal(anthropicType, document.RootElement.GetProperty("error").GetProperty("type").GetString());
+        AssertEx.Equal(message, document.RootElement.GetProperty("error").GetProperty("message").GetString());
+    }
+
+    [Test]
+    [Arguments("responses")]
+    [Arguments("chat/completions")]
+    public async Task OpenAiSurfaces_UpstreamJsonError_IsRelayedVerbatim(string route)
+    {
+        const string upstreamBody = "{\"error\":{\"code\":400,\"message\":\"too long\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":9,\"n_ctx\":8}}";
+        using var upstream = new CapturingHandler(HttpStatusCode.BadRequest, "application/json", upstreamBody);
+        var forwarder = CreateForwarder(out _, out _, upstream);
+        var context = BuildContext("{\"model\":\"test-model\",\"input\":\"hi\"}", out var responseBody);
+
+        await ForwardRouteAsync(forwarder, route, context);
+
+        AssertEx.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        AssertEx.Equal(upstreamBody, Encoding.UTF8.GetString(responseBody.ToArray()));
+    }
+
+    [Test]
+    public async Task MessagesSurface_SuccessfulJsonResponse_IsRelayedVerbatim()
+    {
+        // The model field echoes the child's GGUF path; the proxy never rewrites a body it did not author.
+        const string upstreamBody = "{\"id\":\"chatcmpl-1\",\"type\":\"message\",\"model\":\"/models/test.gguf\",\"content\":[]}";
+        using var upstream = new CapturingHandler(HttpStatusCode.OK, "application/json", upstreamBody);
+        var forwarder = CreateForwarder(out _, out _, upstream);
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out var responseBody);
+
+        await forwarder.ForwardMessagesAsync(context);
+
+        AssertEx.Equal(upstreamBody, Encoding.UTF8.GetString(responseBody.ToArray()));
+    }
+
+    [Test]
+    [Arguments("messages", "{\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":")]
+    [Arguments("responses", "{\"type\":\"error\",\"code\":\"server_error\",\"message\":")]
+    public async Task NativeWireFormatRoute_WhenTheUpstreamDiesMidEventStream_EndsWithTheSurfacesOwnErrorEvent(string route, string expectedDataPrefix)
+    {
+        using var upstream = new DyingHandler("text/event-stream");
+        var forwarder = CreateForwarder(out _, out _, upstream);
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[],\"input\":\"hi\",\"stream\":true}", out var responseBody);
+
+        await ForwardRouteAsync(forwarder, route, context);
+
+        var written = Encoding.UTF8.GetString(responseBody.ToArray());
+        AssertEx.True(written.StartsWith(DyingStream.PartialLine, StringComparison.Ordinal), $"The bytes already relayed must survive. Got: {written}");
+        AssertEx.Contains(written, "\n\nevent: error\ndata: " + expectedDataPrefix);
+        AssertEx.False(written.Contains("[DONE]", StringComparison.Ordinal), "Neither the Messages nor the Responses stream protocol has a [DONE] terminator.");
+        AssertEx.True(written.EndsWith("\n\n", StringComparison.Ordinal), "The error event must be dispatched, so it ends on a blank line.");
+        var dataLine = written.Split('\n').Last(static line => line.StartsWith("data: ", StringComparison.Ordinal));
+        using var frame = JsonDocument.Parse(dataLine["data: ".Length..]);
+        AssertEx.Equal("error", frame.RootElement.GetProperty("type").GetString());
+        AssertEx.False(context.RequestAborted.IsCancellationRequested, "An event stream is ended deliberately, not aborted.");
+    }
+
+    private static Task ForwardRouteAsync(LocalModelProxyForwarder forwarder, string route, HttpContext context) => route switch
+    {
+        "chat/completions" => forwarder.ForwardChatCompletionsAsync(context),
+        "embeddings" => forwarder.ForwardEmbeddingsAsync(context),
+        "messages" => forwarder.ForwardMessagesAsync(context),
+        "messages/count_tokens" => forwarder.ForwardMessagesCountTokensAsync(context),
+        "responses" => forwarder.ForwardResponsesAsync(context),
+        "responses/input_tokens" => forwarder.ForwardResponsesInputTokensAsync(context),
+        _ => throw new ArgumentOutOfRangeException(nameof(route), route, "No forwarder entry point for this route.")
+    };
+
+    /// <summary>Drives one route into a failure the proxy answers itself, and parses what it wrote.</summary>
+    private static async Task<FailureResult> RunFailureAsync(string route, string failure)
+    {
+        HttpMessageHandler upstream = failure == "connection-refused" ? new ThrowingHandler() : Idle();
+        var forwarder = CreateForwarder(out _, out var supervisor, upstream);
+        if (failure == "cannot-provision")
+        {
+            supervisor.EnsureRunningAsync(InstalledModel, ModelRole.Chat, Arg.Any<CancellationToken>())
+                      .Returns<Task<LlamaServerEndpoint>>(_ => throw new LlamaRuntimeException("At capacity."));
+        }
+
+        var body = failure switch
+        {
+            "no-model" => "{\"messages\":[]}",
+            "malformed" => "not json at all",
+            "unknown-model" => "{\"model\":\"claude-sonnet-5-5\",\"messages\":[]}",
+            _ => "{\"model\":\"test-model\",\"messages\":[]}"
+        };
+        var context = BuildContext(body, out var responseBody);
+
+        try
+        {
+            await ForwardRouteAsync(forwarder, route, context);
+        }
+        finally
+        {
+            upstream.Dispose();
+        }
+
+        return new FailureResult
+        {
+            Http = context,
+            Body = JsonDocument.Parse(responseBody.ToArray())
+        };
+    }
+
+    private sealed class FailureResult : IDisposable
+    {
+        public required HttpContext Http { get; init; }
+
+        public required JsonDocument Body { get; init; }
+
+        public void Dispose()
+        {
+            Body.Dispose();
+        }
+    }
+
     private static CapturingHandler Idle()
     {
         return new CapturingHandler(HttpStatusCode.OK, "application/json", "{}");
@@ -387,6 +807,8 @@ public sealed class LocalModelProxyForwarderTests
 
         public string? LastRequestBody { get; private set; }
 
+        public RetryConditionHeaderValue? RetryAfter { get; init; }
+
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             LastRequest = request;
@@ -399,6 +821,7 @@ public sealed class LocalModelProxyForwarderTests
                 Content = new StringContent(_body, Encoding.UTF8)
             };
             response.Content.Headers.ContentType = new MediaTypeHeaderValue(_contentType);
+            response.Headers.RetryAfter = RetryAfter;
             return response;
         }
     }

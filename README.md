@@ -38,12 +38,12 @@ They are unsigned, so verify `CHECKSUMS.sha256` before running them.
 | Area | Features |
 | --- | --- |
 | **Core** | [Chat](docs/wiki/05-chat.md) · [agents and work sessions](docs/wiki/04-agent-mode.md) · [scheduler](docs/wiki/06-scheduler.md) · [Model Advisor](docs/wiki/07-model-fit.md) · [knowledge base](docs/wiki/15-knowledge-base.md) · [image generation and editing](docs/wiki/14-image-generation.md) · [audio transcription](docs/wiki/24-audio-transcription.md) |
-| **Developer** | [Development Mode](docs/adr/0004-development-mode-container-execution-docker-stopgap.md) · [Dev Workflows](docs/wiki/25-dev-workflows.md) · [Graph Workflows](docs/wiki/21-graph-workflows.md) · [compute tools](docs/wiki/19-compute-tools.md) · [training](docs/wiki/18-training.md) · [benchmarks](docs/wiki/20-benchmarks.md) · [custom tools](docs/wiki/04-agent-mode.md) · MCP client and server ([Agentic Support](#agentic-support)) · [web search and fetch](docs/adr/0017-web-access-tools-and-graph-allowlist.md) |
+| **Developer** | [Development Mode](docs/adr/0004-development-mode-container-execution-docker-stopgap.md) · [Graph Workflows](docs/wiki/21-graph-workflows.md) · [compute tools](docs/wiki/19-compute-tools.md) · [training](docs/wiki/18-training.md) · [benchmarks](docs/wiki/20-benchmarks.md) · [custom tools](docs/wiki/04-agent-mode.md) · MCP client and server ([Agentic Support](#agentic-support)) · [web search and fetch](docs/adr/0017-web-access-tools-and-graph-allowlist.md) |
 | **Platform** | [desktop shell](docs/adr/0013-native-desktop-shell.md) · [update channels](docs/adr/0014-update-channels-and-development-builds.md) · [vault key custody](docs/adr/0018-local-vault-passphrase-wrapped-node-key.md) · [External Apps](docs/wiki/23-external-apps.md) |
 | **Runtimes** | llama.cpp, stable-diffusion.cpp, whisper.cpp, or a cloud provider. See [Local runtime & providers](docs/wiki/03-local-runtime-and-providers.md). |
 
 Feature switches are node settings, edited under **Settings → Node Settings → General → Features** and listed in
-[wiki 08](docs/wiki/08-data-and-persistence.md). Dev Workflows, compute tools, custom tools and web access ship off,
+[wiki 08](docs/wiki/08-data-and-persistence.md). Compute tools, custom tools and web access ship off,
 and the External Apps catalog ships empty. The project layout is in [wiki 02](docs/wiki/02-project-layout.md).
 
 ## Agentic Support

@@ -14,6 +14,9 @@ not start or finish. **Skip to** [§1](#1-the-python-runtime-uv-pinned-machine-g
 [§7](#7-endpoints-hubs-and-background-services); **related pages:** [Benchmarks](20-benchmarks.md), [Compute
 Tools](19-compute-tools.md), [Model Fit](07-model-fit.md).
 
+**Tier: experimental.** Training and Model Lab carry no 1.0 stability or API promise and may change or be cut
+([feature tiers](../user-guide/docs/for-experienced-users.md#feature-tiers)).
+
 ## Contents
 
 - [Where the code lives](#where-the-code-lives)

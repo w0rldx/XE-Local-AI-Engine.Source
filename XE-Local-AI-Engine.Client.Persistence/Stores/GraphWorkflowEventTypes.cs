@@ -5,9 +5,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 /// <remarks>
 ///     Extended by amendment and never silently: the run event feed is append-only and durable, so a token written
-///     once is a token every later reader has to understand. It lives beside <see cref="IGraphWorkflowStore" /> for the
-///     same reason <c>DevWorkflowEventTypes</c> lives beside its own store — the writer of the column and the
-///     vocabulary of the column are one file apart. <see cref="RunWaiting" /> and the two <c>gate.*</c> tokens ship
+///     once is a token every later reader has to understand. It lives beside <see cref="IGraphWorkflowStore" /> so the
+///     writer of the column and the vocabulary of the column are one file apart. <see cref="RunWaiting" /> and the two <c>gate.*</c> tokens ship
 ///     unwritten, so the pause node that produces them adds behavior rather than contract.
 /// </remarks>
 public static class GraphWorkflowEventTypes

@@ -121,7 +121,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     /// </summary>
     public bool HasCapacity => _runtimeSettings.GetWorkSessionsEnabled() && !_shutdown.IsCancellationRequested && _admission.CurrentCount > 0;
 
-    public bool TryStart(Guid sessionId, WorkSessionRuntimeOverride? runtime = null)
+    public bool TryStart(Guid sessionId)
     {
         if (!_runtimeSettings.GetWorkSessionsEnabled() || _shutdown.IsCancellationRequested || !_admission.Wait(millisecondsTimeout: 0, CancellationToken.None))
         {
@@ -133,7 +133,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         try
         {
             cancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
-            var run = new SessionRun(cancellation, runtime);
+            var run = new SessionRun(cancellation);
             if (!_runs.TryAdd(sessionId, run))
             {
                 return false;
@@ -335,7 +335,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         try
         {
             toolGate = await turnScope.ServiceProvider.GetRequiredService<WorkSessionToolGate>()
-                                      .InspectAllowListAsync(state.Session.AgentDefinitionId, run.Runtime?.ModelProfile, CancellationToken.None);
+                                      .InspectAllowListAsync(state.Session.AgentDefinitionId, CancellationToken.None);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException or KeyNotFoundException)
         {
@@ -410,20 +410,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             RequestId: correlation.RequestId,
             UseLocalTools: true,
             AgentDefinitionId: state.Session.AgentDefinitionId,
-            // The session's pins, or nulls that leave the turn resolving as usual. A model here suppresses the agent's
-            // own pin as the chat dropdown does; the effort needs the flag beside it, or it LOSES to the agent's.
-            Model: run.Runtime?.ModelProfile,
-            ReasoningEffort: run.Runtime?.ReasoningEffort,
-            ReasoningEffortOverridesAgentPin: run.Runtime?.ReasoningEffort is { Length: > 0 },
-            // Every step of every session, whatever the caller pinned: this turn is autonomous, so the send path must
-            // never let the adaptive-effort dispatcher serve it on a model nobody chose.
+            // Every step of every session: this turn is autonomous, so the send path must never let the adaptive-effort
+            // dispatcher serve it on a model nobody chose.
             IsWorkSessionTurn: true,
-            // GRAPH-2's runtime half: the declaration rides on the override, re-supplied on every start and resume
-            // off the run's PINNED graph, so no mid-run edit widens it. The send decides — only it sees the real offer.
-            RefuseUndeclaredWrites: run.Runtime?.RefuseUndeclaredWrites == true,
-            // No operator is attached to a workflow-owned session, and its embedded chat is read-only, so an ask_user
-            // question or a web result review could only ever go unanswered — see the flag's own comment.
-            SuppressOperatorTools: state.Session.Kind == AgentWorkSessionKind.Workflow,
             // The turn's run envelope names this step by the StepStarted row recorded above, the one row every sent step
             // writes whatever its outcome (a failed, cancelled or interrupted step writes no StepEnded), so the join is exact.
             ExecutionParent: new ExecutionParent
@@ -444,23 +433,16 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             ? ProviderCallBudget.BeginCallCapScope(_options.MaxProviderCallsPerStep)
             : null;
 
-        // Seeded the same way: the resolver offers the state tools to whatever agent drives this step, off this flag, complete_work_session
-        // holds the step to the override's output contract, and read_upstream_artifact reads only the artifacts the override carries.
-        using var workSessionTurn = WorkSessionTurnScope.Begin(run.Runtime?.OutputSchema, run.Runtime?.ReadableArtifacts);
+        // Seeded the same way: the resolver offers the state tools to whatever agent drives this step, off this flag.
+        using var workSessionTurn = WorkSessionTurnScope.Begin();
 
-        // And the repository a bound development-workflow node reads, so its coder tools serve that checkout rather than the AgentHome workspace.
-        using var repository = CoderRepositoryScope.Begin(run.Runtime?.RepositoryRoot);
+        // A step reads the AgentHome workspace, never a repository scope the flow that started the session happened to hold.
+        using var noRepository = CoderRepositoryScope.Begin(null);
 
         ChatStreamEvent terminal;
         try
         {
             terminal = await DrainStepAsync(turnScope.ServiceProvider.GetRequiredService<INodeChatStreamService>(), guard, request, sessionId, step, started.Sequence);
-        }
-        catch (WorkSessionUndeclaredWriteException refusal)
-        {
-            // The send saw an undeclared write/execute tool in the offer and stopped (GRAPH-2); nothing ran, so this
-            // is the gate's own row. Failed, not Paused — the owning run would resume a pause until its budget died.
-            return await SettleWriteGateAsync(sessionId, step, attempt, refusal.Message);
         }
         finally
         {
@@ -899,33 +881,6 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         }
     }
 
-    /// <summary>
-    ///     Records the write-declaration gate's refusal against the step it stopped, then settles the session on it.
-    /// </summary>
-    /// <remarks>
-    ///     The sentence is the step row's DETAIL, not only the session's terminal reason: the owning workflow run must
-    ///     answer with <c>GRAPH-2</c>'s own failure class, and the record written when it happened is the only honest
-    ///     source for a historical cause. Re-derived from the definition's CURRENT state it goes quiet the moment an
-    ///     operator restores or narrows it, and the node run falls through as a retryable provider failure.
-    /// </remarks>
-    private async Task<StepOutcome> SettleWriteGateAsync(Guid sessionId, int step, long attempt, string refusal)
-    {
-        _logger.LogWarning("Work session {SessionId} step {Step} was not sent: {Reason}", sessionId, step, refusal);
-        _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand
-            {
-                SessionId = sessionId,
-                ExpectedVersion = WorkSessionVersions.Any,
-                EventType = WorkSessionEventTypes.StepEnded,
-                OperationId = WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.WriteGate, attempt),
-                Outcome = WorkSessionEventTypes.WriteGateOutcome,
-                DetailJson = WorkSessionEventTypes.WriteGateDetail(refusal)
-            },
-            CancellationToken.None));
-        await CheckpointAsync(sessionId);
-        await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, refusal);
-        return StepOutcome.Settled;
-    }
-
     private async Task TerminalizeFailureAsync(Guid sessionId, string reason)
     {
         try
@@ -979,22 +934,10 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         private NodeChatMessageCorrelation? _correlation;
         private int _stopReason = -1;
 
-        public SessionRun(CancellationTokenSource cancellation, WorkSessionRuntimeOverride? runtime)
-        {
+        public SessionRun(CancellationTokenSource cancellation) =>
             Cancellation = cancellation;
-            Runtime = runtime is { IsEmpty: false } ? runtime : null;
-        }
 
         public CancellationTokenSource Cancellation { get; }
-
-        /// <summary>
-        ///     What this run was told to run on instead of the bound agent's own pins, or null for the agent's.
-        /// </summary>
-        /// <remarks>
-        ///     Held for the life of the run rather than stored on the session: the caller re-supplies it on every start
-        ///     and resume, which is what makes a restart cost nothing.
-        /// </remarks>
-        public WorkSessionRuntimeOverride? Runtime { get; }
 
         public Task? Completion { get; set; }
 

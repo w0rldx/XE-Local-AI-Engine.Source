@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     The closed v1 node vocabulary of a Graph Workflow. Widening this set is a reviewed schema change.
 /// </summary>
 /// <remarks>
-///     Unlike the Dev Workflow module, <c>Start</c> and <c>End</c> are explicit nodes: a definition has exactly one
+///     <c>Start</c> and <c>End</c> are explicit nodes: a definition has exactly one
 ///     <c>Start</c> and at least one <c>End</c>, and the parser refuses any other kind.
 /// </remarks>
 public enum GraphWorkflowNodeKind
@@ -23,7 +23,10 @@ public enum GraphWorkflowNodeKind
     ChatInput,
 
     /// <summary>Chooses one of a closed set of labels through a decision provider; its out-edges route on <c>output.choice</c>.</summary>
-    DecisionModel
+    DecisionModel,
+
+    /// <summary>Drives one Development Mode task (<c>implement</c>) or applies it (<c>apply</c>, gated by <c>DEVTASK-1</c>). Never in a <c>Chat</c> graph.</summary>
+    DevTask
 }
 
 /// <summary>
@@ -80,7 +83,7 @@ public enum GraphWorkflowDecisionKind
 
 /// <summary>
 ///     Why a run or node run ended the way it did. Persisted as text (<c>HasConversion&lt;string&gt;</c>) so the column
-///     matches the Dev Workflow shape while C# and the wire stay typed.
+///     stays readable while C# and the wire stay typed.
 /// </summary>
 public enum GraphWorkflowFailureClass
 {

@@ -12,6 +12,24 @@ import { graphToCanvas } from "@/features/graphWorkflows/models/GraphWorkflowCan
 import { eightNodeGraph } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 
 describe("renameNodeKey", () => {
+	it("carries a DevTask apply node's task reference to the renamed implement node", () => {
+		const canvas = graphToCanvas({
+			schemaVersion: 1,
+			nodes: [
+				{ key: "impl", kind: "DevTask", config: { action: "implement", requirements: "Add a route" } },
+				{ key: "land", kind: "DevTask", config: { action: "apply", task: "impl" } },
+			],
+			edges: [],
+		});
+		const result = renameNodeKey(canvas.nodes, canvas.edges, "impl", "build");
+
+		expect("error" in result).toBe(false);
+		if ("error" in result) {
+			return;
+		}
+		expect(result.nodes.find((node) => node.id === "land")?.data).toMatchObject({ action: "apply", task: "build" });
+	});
+
 	it("rewrites the node id, its data key and every edge endpoint", () => {
 		const canvas = graphToCanvas(eightNodeGraph);
 		const result = renameNodeKey(canvas.nodes, canvas.edges, "review", "human-review");

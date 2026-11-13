@@ -274,15 +274,11 @@ notice. The "Invocation completed" log line carries `FinishReason`, so a silent 
 
 ### Work-session write declaration
 
-This is the runtime half of invariant **`GRAPH-2`** (named in [API & hubs](09-api-and-hubs.md), embedded in the refusal the operator sees, and asserted on by name in the work-session and dev-workflow tests). A development-workflow Agent node that declares no `WriteExecute` capability arms a runtime refusal on every turn of the session it drives (`request.RefuseUndeclaredWrites` → `WorkSessionWriteDeclarationGuard.Refuse` in `NodeChatStreamService.ResolveDeclaredWriteOfferAsync`). The earlier check at node dispatch resolves the definition separately and is the *friendly* refusal, not the enforcing one — between that check and the send, the definition can be widened, or deleted so the turn falls back to the default persona and its whole offer. The enforcing check therefore asks the rule of the **offer this turn will really hand the model**, resolved once and reused verbatim by the package: one resolution, one decision, nothing in between for an edit to land in. The supervisor turns the throw into the gate's own row and the session's terminal reason.
+**Gone.** The work-session write declaration (runtime half of the Dev Workflows invariant `GRAPH-2`) was removed with Dev Workflows ([ADR 0023](../adr/0023-dev-workflows-converge-into-graph-workflows.md)): `WorkSessionRuntimeOverride`, `NodeChatStreamRequest.RefuseUndeclaredWrites`, `WorkSessionWriteDeclarationGuard` and the `WriteGate` step outcome no longer exist. A work session's offer is the one its agent definition resolves, gated by `WorkSessionToolGate` like any other session, and `LocalChatHub` clears only the server-set `ExecutionParent` on a browser request.
 
 ### Withdrawing operator tools from a workflow-owned session
 
-`NodeChatStreamRequest.SuppressOperatorTools` sends a turn **without** the `ask_user` tool and the two web tools (`web_fetch`, `web_search`), overriding the "every tool-enabled turn can always ask its operator a question" invariant `AskUserToolOffer` otherwise holds. It is true only for a work session owned by a development-workflow node, because no operator is attached to one: that session's embedded chat is read-only — its lifecycle is driven through the workflow run, not the work-sessions surface — so no card exists to answer the question on. The question would then go unanswered for the full node-wide `WorkerNode:MaxPendingToolCallAgeMinutes` (10 minutes by default) before the model is handed a "no answer" result. `WorkSessions:MaxParkedSeconds` is meant to bound that wait sooner, but it did not fire in the live incident this flag was written for, so it is not a working fallback here. A web call parks the same way — its result waits on a review card nobody can open — so `AskUserToolOffer.WithdrawOperatorTools` drops the web tools too (matched with `WebAccessToolCatalog.IsWebTool`). A tool the model never sees is a tool it cannot park on.
-
-The withdrawal is scoped to the supervisor's step send. `NodeChatRegenerationService` and `NodeChatVariantBranchService` build their own packages and keep the tool deliberately: both are operator-initiated, so someone is there to answer. Withdrawing it **does** move a workflow-owned session's runtime-package config hash once, since `ask_user` leaves the hashed tool list — expect one resume invalidation for in-flight sessions on upgrade.
-
-That offer is resolved early **only** for an armed turn. For every other send the offer read is part of the pre-ownership window (a client that disconnects while `GetEnableToolsAsync` is in flight must find a placeholder to terminalize), so an unarmed send resolves it in its usual place and moves not at all. An armed turn has no browser behind it, and refusing before the placeholder exists is what keeps a refused step from leaving a stranded row.
+**Gone.** `NodeChatStreamRequest.SuppressOperatorTools` and `AskUserToolOffer.WithdrawOperatorTools`, which sent a Dev Workflows-owned work session's turn without `ask_user`, `web_fetch` and `web_search`, were removed with that engine ([ADR 0023](../adr/0023-dev-workflows-converge-into-graph-workflows.md)). Every tool-enabled chat turn keeps `ask_user`, the invariant `AskUserToolOffer.EnsureOffered` holds.
 
 ## Plain-chat knowledge-base grounding
 
@@ -375,9 +371,9 @@ installed node-local model."* A fast model whose process crashed is relaunched a
 `auto` turn (previously the capacity snapshot kept listing the dead process). The codes are declared on
 `IReasoningEffortDispatcher` and graded by `DefaultReasoningEffortDispatcher` (`ReasoningEffortDispatcherTests`);
 the locality gate is `NodeLocalModelGate`, and the rejection message is the constant on
-`NodeSettingsAdministrationService`. See also the runbook clause in
-[`docs/runbooks/agent-unit-cost-telemetry-runbook.md`](../runbooks/agent-unit-cost-telemetry-runbook.md) (rule 12)
-for the `fast-model-*` codes being refusal-only, never a swap reason.
+`NodeSettingsAdministrationService`. The `fast-model-*` codes (`fast-model-unset`, `fast-model-is-active-model`,
+`fast-model-not-local`, `fast-model-no-capacity`, `fast-model-unavailable`) are refusal codes only and never co-occur
+with a served swap, so never read one as the reason a swap fired.
 
 ### Thinking budget (llama.cpp) and where it is enforceable
 

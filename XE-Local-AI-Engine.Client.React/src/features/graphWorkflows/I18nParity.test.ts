@@ -1,5 +1,5 @@
 // Verifies that the Graph Workflows i18n keys stay in parity between en.json and every other locale. Parity is opt-in
-// per feature, so this area owns its own file the way devWorkflows and work sessions do. Not jsdom-scoped: it operates
+// per feature, so this area owns its own file the way work sessions do. Not jsdom-scoped: it operates
 // purely on the JSON locale files.
 //
 // This lands with the FIRST keys rather than as polish. Ten closed vocabularies are looked up by their narrowed value,

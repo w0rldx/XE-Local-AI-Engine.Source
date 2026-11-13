@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { type ExternalAppStatus, isExternalAppBusy } from "@/features/externalApps/models/ExternalAppModels";
 
-// Color map only — the pill itself is the shared StatusBadge, exactly as DevWorkflowStatusBadge does it.
+// Color map only — the pill itself is the shared StatusBadge, exactly as GraphWorkflowStatusBadge does it.
 const statusColors: Record<ExternalAppStatus, MantineColor> = {
 	Installing: "blue",
 	Starting: "blue",

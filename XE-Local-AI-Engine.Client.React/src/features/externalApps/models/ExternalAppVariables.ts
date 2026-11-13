@@ -1,5 +1,4 @@
-// The variable form's model: pure, no React, so it is testable in a plain `.test.ts` — the
-// `DevWorkflowDefinitionValidation.ts` shape.
+// The variable form's model: pure, no React, so it is testable in a plain `.test.ts`.
 //
 // Client validation is a COURTESY. The server validates again and its 400 names the offending variables, so nothing
 // here is a gate: it only saves a round trip and puts the message next to the field.

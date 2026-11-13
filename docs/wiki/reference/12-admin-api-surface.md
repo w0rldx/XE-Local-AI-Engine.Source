@@ -177,11 +177,13 @@ decision.
 
 ### 3.2.1 The inbound model-proxy bearer key
 
-The node exposes an **OpenAI-compatible passthrough** (`proxy/v1/{chat/completions,embeddings,models}`)
-so an external tool — LiteLLM, Continue, a Hermes-style agent — can point its `base_url` at this node
-and use the locally loaded model. The credential is a single operator-generated bearer key, deliberately
-chosen because a static `Authorization: Bearer …` header *is* the OpenAI wire convention and is what
-those clients already speak.
+The node exposes a **model passthrough** in three wire formats — OpenAI Chat Completions and embeddings,
+OpenAI Responses, Anthropic Messages (`proxy/v1/{chat/completions,embeddings,models,responses,responses/input_tokens,messages,messages/count_tokens}`)
+— so an external tool (LiteLLM, Continue, a coding CLI such as Codex CLI or Claude Code) can point its
+base URL at this node and use the locally loaded model. The credential is a single operator-generated
+key, presented as `Authorization: Bearer …` (the OpenAI convention) or as `x-api-key` (the Anthropic
+SDK default); a request carrying both must carry the same key in each, so a valid key never vouches for
+a second, unchecked credential. Neither header ever authenticates the operator.
 
 Its handling mirrors the MCP key rather than inventing a second posture
 (`LocalModelProxyApiKeyService`, `LocalModelProxyApiKeyAuthenticationHandler`):
@@ -200,8 +202,10 @@ Its handling mirrors the MCP key rather than inventing a second posture
   than reading as "no authentication required".
 - Comparison hashes the presented value and runs `CryptographicOperations.FixedTimeEquals` over the
   **digest bytes**, because a short-circuiting compare is a byte-at-a-time oracle over loopback.
-- The three passthrough routes carry their own fixed-window rate-limit policy
-  (`NodeAuthRateLimits.LocalModelProxyPolicy`).
+  Both headers go through the same comparison; the 401 challenge stays `WWW-Authenticate: Bearer`.
+- Every passthrough route carries its own fixed-window rate-limit policy
+  (`NodeAuthRateLimits.LocalModelProxyPolicy`). The container bridge maps only chat completions,
+  embeddings and models; the Responses and Messages routes exist on the loopback listener alone.
 
 **The bearer key is not the only gate, and that is load-bearing.** The passthrough is hand-mapped
 *inside* the `/api/local/v1` prefix precisely so `LocalApiSecurityMiddleware`'s loopback-peer + Host +
@@ -209,8 +213,11 @@ Origin check has already rejected any non-loopback caller before the handler run
 therefore has to be on this host (or reach it through the operator's own tunnel) — mounting these routes
 outside the prefix would silently remove that layer and leave the key as the only control. `proxy/key`
 itself is an ordinary Operator-gated FastEndpoints family, so key management stays on the browser's
-JWT posture. Requests are forwarded verbatim to the resolved `llama-server` child and never route
-through the operator's cloud credentials. See [API & Hubs](../09-api-and-hubs.md).
+JWT posture. Requests are forwarded to the resolved `llama-server` child and never route through the
+operator's cloud credentials. The body is the caller's own, except for the foreground `id_slot` pin and, on
+the Messages routes, system-role messages folded into the top-level `system` (the chat template refuses a
+system message after the first turn). A body that repeats a property name is refused with a 400 before
+anything is provisioned. See [API & Hubs](../09-api-and-hubs.md).
 
 Local endpoints are still authenticated and policy-gated; loopback is necessary but not sufficient. `NodeAuthorizationPolicies` (`Services/Auth/NodeAuthorizationPolicies.cs`) defines the `NodeOperator` policy (claim type `role`, `Admin`), and endpoints apply it — e.g. `ListAgentExecutionLogsEndpoint.Configure()` calls `Policies(NodeAuthorizationPolicies.Operator)` (see `ListAgentExecutionLogsEndpoint.Configure()`). JWTs are signed with the separately-derived node JWT key (§2.1). Auth wiring lives in `AddNodeAuthExtensions`. See [API & Hubs](../09-api-and-hubs.md) for the full endpoint inventory.
 

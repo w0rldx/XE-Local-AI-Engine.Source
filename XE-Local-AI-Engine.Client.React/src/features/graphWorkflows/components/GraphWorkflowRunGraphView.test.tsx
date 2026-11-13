@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 // React Flow renders into a measured container and jsdom reports 0×0, which suppresses the viewport entirely (the same
-// note stands in `devWorkflows/components/DevWorkflowGraphView.test.tsx`), so no card would ever paint through a real
+// note stands in `GraphWorkflowEditorCanvas.test.tsx`), so no card would ever paint through a real
 // `<ReactFlow>`. The mock below is the minimum that keeps the units under test real: it renders each node through the
 // registered `nodeTypes` component, exposes the read-only props as attributes, and wires the two clicks the view
 // listens for. `fitView` is a shared spy, because "a status tick does not re-frame the viewport" is a CALL COUNT.

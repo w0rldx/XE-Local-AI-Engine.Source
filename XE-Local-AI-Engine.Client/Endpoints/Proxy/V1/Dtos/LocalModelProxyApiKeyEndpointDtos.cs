@@ -32,6 +32,9 @@ public sealed record LocalModelProxyApiKeyStatusResponse
 
     /// <summary>The absolute loopback base URL an external OpenAI-compatible tool should set as its <c>base_url</c>, derived from the live request.</summary>
     public required string EndpointUrl { get; init; }
+
+    /// <summary>The base URL an Anthropic client (<c>ANTHROPIC_BASE_URL</c>) should use; the client appends <c>/v1/messages</c> itself.</summary>
+    public required string AnthropicEndpointUrl { get; init; }
 }
 
 /// <summary>
@@ -50,6 +53,9 @@ public sealed record GeneratedLocalModelProxyApiKeyResponse
 
     /// <summary>The absolute loopback base URL an external OpenAI-compatible tool should set as its <c>base_url</c>, derived from the live request.</summary>
     public required string EndpointUrl { get; init; }
+
+    /// <summary>The base URL an Anthropic client (<c>ANTHROPIC_BASE_URL</c>) should use; the client appends <c>/v1/messages</c> itself.</summary>
+    public required string AnthropicEndpointUrl { get; init; }
 
     /// <summary>The full bearer key, shown exactly once. Never logged, never stored, never returned again.</summary>
     public required string Key { get; init; }

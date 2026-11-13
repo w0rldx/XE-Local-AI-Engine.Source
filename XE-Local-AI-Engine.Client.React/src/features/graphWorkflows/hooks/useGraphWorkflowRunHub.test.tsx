@@ -340,7 +340,7 @@ describe("useGraphWorkflowRunHub", () => {
 
 		act(() => hubMock.reconnecting?.());
 
-		// Observed live on the dev-workflow hub this is copied from: the page kept saying "connected" and painted frozen
+		// Observed live on the retired hub this was copied from: the page kept saying "connected" and painted frozen
 		// data with no alert and no network activity, because only the subscribe's own catch could turn polling on.
 		expect(result.current.connectionState).toBe("reconnecting");
 		expect(result.current.pollIntervalMs).toBe(GRAPH_WORKFLOW_POLL_INTERVAL_MS);

@@ -76,53 +76,6 @@ public sealed class WorkSessionServiceTests
             "WorkSessionService must create its conversation with NodeConversationKind.WorkSession, so it never shows as a chat the operator did not start.");
     }
 
-    /// <summary>
-    ///     The caller's own model pin BEATS the bound agent's, and is what the tool gate judges — in both
-    ///     directions, because an override that only ever loosened or only ever tightened would not be a pin.
-    /// </summary>
-    [Test]
-    public async Task Create_WithAModelOverride_JudgesTheOverrideRatherThanTheAgentsOwnPin()
-    {
-        var factory = Host.Factory;
-        var listed = await SeedAgentAsync(factory, "tool-capable-model");
-        var unlisted = await SeedAgentAsync(factory, "a-model-nobody-listed");
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
-
-        var rejection = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
-            service.CreateAsync(new CreateWorkSessionRequestModel
-            {
-                Title = "t",
-                Objective = "o",
-                Kind = AgentWorkSessionKind.General,
-                AgentDefinitionId = listed,
-                Runtime = new WorkSessionRuntimeOverride
-                {
-                    ModelProfile = "a-model-nobody-listed",
-                    ReasoningEffort = null
-                }
-            }));
-
-        // The refusal names the model the session would have run on, not the agent's own.
-        AssertEx.Contains(rejection.Message, "a-model-nobody-listed");
-
-        var created = await service.CreateAsync(new CreateWorkSessionRequestModel
-        {
-            Title = "t",
-            Objective = "o",
-            Kind = AgentWorkSessionKind.General,
-            AgentDefinitionId = unlisted,
-            Runtime = new WorkSessionRuntimeOverride
-            {
-                ModelProfile = "tool-capable-model",
-                ReasoningEffort = "high"
-            }
-        });
-
-        AssertEx.Equal(AgentWorkSessionStatus.Draft, created.Status, "an override onto a listed model admits a session the agent's own pin would have been refused for.");
-    }
-
     [Test]
     public async Task Create_WhenTheAgentIsUnknown_IsRejected()
     {

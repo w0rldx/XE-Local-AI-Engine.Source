@@ -53,10 +53,6 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.workSessions).toBe(true);
 	});
 
-	it("enables the Development Workflows surface by default", () => {
-		expect(nodeCapabilities.devWorkflows).toBe(true);
-	});
-
 	it("enables the External Integrations surface by default", () => {
 		expect(nodeCapabilities.integrations).toBe(true);
 	});
@@ -80,7 +76,6 @@ describe("nodeCapabilities", () => {
 			chat: "/chat",
 			development: "/development",
 			workSessions: "/work-sessions",
-			devWorkflows: "/development-workflows",
 			knowledgeBase: "/knowledge-base",
 			nodeSettings: "/node-settings",
 			cloudProviders: "/cloud-providers",

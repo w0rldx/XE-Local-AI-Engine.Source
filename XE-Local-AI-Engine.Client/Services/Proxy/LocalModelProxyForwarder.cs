@@ -13,14 +13,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     The inbound OpenAI-compatible model proxy: provisions the requested local model through the llama-server
-///     supervisor, then reverse-proxies the caller's request VERBATIM and streams the response back byte-for-byte.
+///     The inbound model proxy (OpenAI, OpenAI Responses, Anthropic Messages): provisions the requested local model, then reverse-proxies the
+///     caller's request VERBATIM and streams the response back byte-for-byte.
 /// </summary>
 /// <remarks>
-///     <b>Why byte-for-byte:</b> a llama-server child already speaks the OpenAI wire protocol (<c>/v1/chat/completions</c>, <c>/v1/embeddings</c>), so
-///     forwarding raw bytes is both the smallest possible implementation and the strongest guarantee the caller asked for — no part of the node's chat
-///     orchestration (persona, tools, memory, RAG, skills, sampling defaults, context clamps) sits on this path, so none of it can leak into the request.
-///     The external tool sees the raw model and only the raw model.
+///     <b>Why byte-for-byte:</b> a llama-server child already speaks all three wire protocols natively, so forwarding raw bytes is both the smallest
+///     implementation and the strongest guarantee the caller asked for — none of the node's chat orchestration (persona, tools, memory, RAG, sampling
+///     defaults) sits on this path. Response bodies are never rewritten (a reply's <c>model</c> is the child's GGUF path); a request changes only by the
+///     <c>id_slot</c> pin and, on Messages, by <see cref="FoldSystemMessages" />. Only the proxy's own errors and a Messages error take the caller's envelope.
 /// </remarks>
 internal sealed class LocalModelProxyForwarder
 {
@@ -30,6 +30,9 @@ internal sealed class LocalModelProxyForwarder
     private const string JsonContentType = "application/json";
 
     private const int StreamCopyBufferSize = 16 * 1024;
+
+    private const string UpstreamGoneMessage =
+        "The local model runtime stopped while streaming this response (it may have been ejected). Try again shortly.";
 
     /// <summary>
     ///     How many times a forwarded request re-ensures around a profiling spawn before answering 503. Profiling holds
@@ -59,7 +62,18 @@ internal sealed class LocalModelProxyForwarder
     ///     blank lines cost nothing, since an event with no data is not dispatched.
     /// </remarks>
     private static readonly byte[] UpstreamGoneSseFrames = Encoding.UTF8.GetBytes(
-        "\n\ndata: {\"error\":{\"message\":\"The local model runtime stopped while streaming this response (it may have been ejected). Try again shortly.\",\"type\":\"server_error\",\"code\":null}}\n\ndata: [DONE]\n\n");
+        $"\n\ndata: {{\"error\":{{\"message\":\"{UpstreamGoneMessage}\",\"type\":\"server_error\",\"code\":null}}}}\n\ndata: [DONE]\n\n");
+
+    /// <summary>The Anthropic streaming <c>error</c> event for the same mid-stream death; that protocol has no <c>[DONE]</c> terminator.</summary>
+    private static readonly byte[] AnthropicUpstreamGoneSseFrames = Encoding.UTF8.GetBytes(
+        $"\n\nevent: error\ndata: {{\"type\":\"error\",\"error\":{{\"type\":\"api_error\",\"message\":\"{UpstreamGoneMessage}\"}}}}\n\n");
+
+    /// <summary>
+    ///     The Responses streaming <c>error</c> event for the same mid-stream death. No <c>sequence_number</c>: the
+    ///     upstream numbers none of its own events, so any value here would be invented.
+    /// </summary>
+    private static readonly byte[] ResponsesUpstreamGoneSseFrames = Encoding.UTF8.GetBytes(
+        $"\n\nevent: error\ndata: {{\"type\":\"error\",\"code\":\"server_error\",\"message\":\"{UpstreamGoneMessage}\",\"param\":null}}\n\n");
 
     private readonly IGgufModelStore _ggufModelStore;
     private readonly LlamaCppRuntimeOrchestrationService _runtime;
@@ -109,13 +123,37 @@ internal sealed class LocalModelProxyForwarder
         }, ct);
     }
 
+    /// <summary>The client wire format a proxied route speaks; it picks only the shape of the errors the proxy writes itself.</summary>
+    private enum WireFormat
+    {
+        OpenAi,
+        AnthropicMessages,
+        OpenAiResponses
+    }
+
     /// <summary>Handles <c>POST proxy/v1/chat/completions</c>.</summary>
     public Task ForwardChatCompletionsAsync(HttpContext context) =>
-        ForwardAsync(context, ModelRole.Chat, "chat/completions");
+        ForwardAsync(context, ModelRole.Chat, "chat/completions", WireFormat.OpenAi);
 
     /// <summary>Handles <c>POST proxy/v1/embeddings</c>.</summary>
     public Task ForwardEmbeddingsAsync(HttpContext context) =>
-        ForwardAsync(context, ModelRole.Embedding, "embeddings");
+        ForwardAsync(context, ModelRole.Embedding, "embeddings", WireFormat.OpenAi);
+
+    /// <summary>Handles <c>POST proxy/v1/messages</c> (Anthropic Messages, served natively by the child).</summary>
+    public Task ForwardMessagesAsync(HttpContext context) =>
+        ForwardAsync(context, ModelRole.Chat, "messages", WireFormat.AnthropicMessages);
+
+    /// <summary>Handles <c>POST proxy/v1/messages/count_tokens</c>.</summary>
+    public Task ForwardMessagesCountTokensAsync(HttpContext context) =>
+        ForwardAsync(context, ModelRole.Chat, "messages/count_tokens", WireFormat.AnthropicMessages);
+
+    /// <summary>Handles <c>POST proxy/v1/responses</c> (OpenAI Responses, served natively by the child).</summary>
+    public Task ForwardResponsesAsync(HttpContext context) =>
+        ForwardAsync(context, ModelRole.Chat, "responses", WireFormat.OpenAiResponses);
+
+    /// <summary>Handles <c>POST proxy/v1/responses/input_tokens</c>.</summary>
+    public Task ForwardResponsesInputTokensAsync(HttpContext context) =>
+        ForwardAsync(context, ModelRole.Chat, "responses/input_tokens", WireFormat.OpenAiResponses);
 
     /// <summary>
     ///     Provisions the model, leases it for the request's lifetime, and forwards the exchange.
@@ -127,7 +165,7 @@ internal sealed class LocalModelProxyForwarder
     ///     hands it the port the replaced process just freed, so this endpoint may BE the measurement: re-ensure, parking on the per-key gate profiling holds
     ///     through teardown, bounded so repeated measurements answer retryably.
     /// </remarks>
-    private async Task ForwardAsync(HttpContext context, ModelRole role, string upstreamPath)
+    private async Task ForwardAsync(HttpContext context, ModelRole role, string upstreamPath, WireFormat format)
     {
         var ct = context.RequestAborted;
 
@@ -135,18 +173,28 @@ internal sealed class LocalModelProxyForwarder
         await context.Request.Body.CopyToAsync(buffer, ct);
         var body = buffer.ToArray();
 
-        if (!TryReadModel(body, out var model))
+        if (!TryReadRequest(body, out var request, out var model))
         {
-            await WriteErrorAsync(context, StatusCodes.Status400BadRequest,
-                "Request body must be JSON with a non-empty \"model\" field.", "invalid_request_error", ct);
+            await WriteErrorAsync(context, format, StatusCodes.Status400BadRequest,
+                "Request body must be JSON with a non-empty \"model\" field and no repeated property names.", "invalid_request_error", ct);
             return;
         }
+
+        // The child answers a missing "messages" with a 500; the Messages API calls that a 400, so the proxy says so itself.
+        if (format == WireFormat.AnthropicMessages && request["messages"] is not JsonArray)
+        {
+            await WriteErrorAsync(context, format, StatusCodes.Status400BadRequest,
+                "Request body must carry a \"messages\" array.", "invalid_request_error", ct);
+            return;
+        }
+
+        var rewritten = format == WireFormat.AnthropicMessages && FoldSystemMessages(request);
 
         // Existence check against the local GGUF catalog is what makes this llama.cpp-only and refuses cloud model
         // names — an unknown or cloud model is a 404 here rather than a route to any other provider.
         if (!await IsInstalledLlamaModelAsync(model, ct))
         {
-            await WriteErrorAsync(context, StatusCodes.Status404NotFound,
+            await WriteErrorAsync(context, format, StatusCodes.Status404NotFound,
                 $"The model '{model}' does not exist as a local model on this node.", "invalid_request_error", ct);
             return;
         }
@@ -167,14 +215,14 @@ internal sealed class LocalModelProxyForwarder
                 // Spawn failed, the loaded-model cap was reached, or restart-backoff was exceeded. The message is already
                 // sanitized by the supervisor. A busy/at-capacity node is a retryable condition, not a permanent failure.
                 _logger.LogWarning(ex, "Model proxy could not provision model {Model} for {Role}.", model, role);
-                await WriteBusyAsync(context, "The local runtime could not load the requested model right now (it may be at capacity). Try again shortly.", ct);
+                await WriteBusyAsync(context, format, "The local runtime could not load the requested model right now (it may be at capacity). Try again shortly.", ct);
                 return;
             }
 
             var acquisition = _runtime.TryAcquireInferenceLease(model, role);
             if (acquisition.ProcessEvicting)
             {
-                await WriteBusyAsync(context, "The requested model is being ejected by the operator. Try again shortly.", ct);
+                await WriteBusyAsync(context, format, "The requested model is being ejected by the operator. Try again shortly.", ct);
                 return;
             }
 
@@ -186,7 +234,7 @@ internal sealed class LocalModelProxyForwarder
 
             if (profilingReEnsures++ >= MaxProfilingReEnsures)
             {
-                await WriteBusyAsync(context, "The requested model is being profiled by a benchmark right now. Try again shortly.", ct);
+                await WriteBusyAsync(context, format, "The requested model is being profiled by a benchmark right now. Try again shortly.", ct);
                 return;
             }
         }
@@ -194,16 +242,17 @@ internal sealed class LocalModelProxyForwarder
         using var lease = acquired;
 
         // A multi-slot chat process keeps its second slot for the node's background work (LlamaServerChatSlots): an external caller takes the
-        // foreground slot, as a node chat turn does, so it never runs beside a turn or leaves its full-window prompt in the background slot.
+        // foreground slot over its own id_slot, as a node chat turn does, so it never runs beside a turn or leaves its full-window prompt there.
         if (role == ModelRole.Chat && endpoint.ParallelSlots > 1)
         {
-            body = PinForegroundSlot(body);
+            request["id_slot"] = LlamaServerChatSlots.Foreground;
+            rewritten = true;
         }
 
         var upstreamUri = new Uri($"{endpoint.BaseAddress.AbsoluteUri.TrimEnd('/')}/{upstreamPath}");
         using var upstreamRequest = new HttpRequestMessage(HttpMethod.Post, upstreamUri)
         {
-            Content = new ByteArrayContent(body)
+            Content = new ByteArrayContent(rewritten ? JsonSerializer.SerializeToUtf8Bytes(request) : body)
         };
         upstreamRequest.Content.Headers.TryAddWithoutValidation("Content-Type", JsonContentType);
 
@@ -218,14 +267,32 @@ internal sealed class LocalModelProxyForwarder
         catch (Exception ex) when (ex is HttpRequestException or IOException)
         {
             // The child exited after EnsureRunningAsync, or refused/reset before any response bytes: the same "runtime unavailable" condition as an
-            // at-capacity spawn, so answer the SAME retryable OpenAI-shaped 503, not a generic 500. A caller disconnect surfaces as OperationCanceledException.
+            // at-capacity spawn, so answer the SAME retryable 503, not a generic 500. A caller disconnect surfaces as OperationCanceledException.
             _logger.LogWarning(ex, "Model proxy could not reach the llama-server child for model {Model} ({Role}).", model, role);
-            await WriteBusyAsync(context, "The local model runtime is temporarily unavailable. Try again shortly.", ct);
+            await WriteBusyAsync(context, format, "The local model runtime is temporarily unavailable. Try again shortly.", ct);
             return;
         }
 
         using (upstreamResponse)
         {
+            // The child's Messages errors use the OpenAI envelope; an Anthropic client reads only its own. A small,
+            // complete JSON body (never a stream) is the one case the proxy re-wraps instead of relaying bytes.
+            if (format == WireFormat.AnthropicMessages
+                && !upstreamResponse.IsSuccessStatusCode
+                && upstreamResponse.Content.Headers.ContentType?.MediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                var statusCode = (int)upstreamResponse.StatusCode;
+                // Overloaded keeps a retry hint, as WriteBusyAsync gives one: the child's own when it sent one.
+                if (statusCode is StatusCodes.Status503ServiceUnavailable or 529)
+                {
+                    context.Response.Headers.RetryAfter = upstreamResponse.Headers.RetryAfter?.ToString() ?? "5";
+                }
+
+                var upstreamError = await upstreamResponse.Content.ReadAsByteArrayAsync(ct);
+                await WriteErrorAsync(context, format, statusCode, ReadUpstreamErrorMessage(upstreamError, statusCode), "invalid_request_error", ct);
+                return;
+            }
+
             context.Response.StatusCode = (int)upstreamResponse.StatusCode;
             if (upstreamResponse.Content.Headers.ContentType is { } contentType)
             {
@@ -237,7 +304,7 @@ internal sealed class LocalModelProxyForwarder
             context.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
 
             await using var upstreamStream = await upstreamResponse.Content.ReadAsStreamAsync(ct);
-            await PumpWithIdleDeadlineAsync(upstreamStream, context, model, upstreamPath, ct);
+            await PumpWithIdleDeadlineAsync(upstreamStream, context, model, upstreamPath, format, ct);
         }
     }
 
@@ -255,6 +322,7 @@ internal sealed class LocalModelProxyForwarder
         HttpContext context,
         string model,
         string upstreamPath,
+        WireFormat format,
         CancellationToken ct)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(StreamCopyBufferSize);
@@ -281,7 +349,7 @@ internal sealed class LocalModelProxyForwarder
                     {
                         // The child died mid-stream, typically a forced eject. Propagating it would reach the pipeline AFTER the response
                         // started, logging an unhandled ERROR and cutting the stream mid-token — see EndAfterUpstreamGoneAsync's remarks.
-                        await EndAfterUpstreamGoneAsync(context, model, upstreamPath, ex, ct);
+                        await EndAfterUpstreamGoneAsync(context, model, upstreamPath, format, ex, ct);
                         return;
                     }
                 }
@@ -305,15 +373,15 @@ internal sealed class LocalModelProxyForwarder
     ///     Ends an exchange whose upstream child vanished after the response started.
     /// </summary>
     /// <remarks>
-    ///     The status is already on the wire and can no longer become a 503, so the contract is per body shape: an event stream gets one error frame plus
-    ///     <c>[DONE]</c>, so an SSE client sees a reason instead of a truncated stream, and anything else — a half-written JSON document that cannot be
-    ///     repaired — is aborted, like the idle-deadline arm. The caller's token is checked alongside the "server is gone" match, as both sites in
-    ///     <c>DeferredLlamaServerChatClient</c> do: a disconnected caller aborts the same read, and calling that the child dying would write a frame to
-    ///     nobody and log a failure that never happened.
+    ///     The status is already on the wire and can no longer become a 503, so the contract is per body shape: an event stream gets the surface's own
+    ///     terminal error event (OpenAI adds <c>[DONE]</c>), so an SSE client sees a reason instead of a truncated stream, and anything else — a
+    ///     half-written JSON document that cannot be repaired — is aborted, like the idle-deadline arm. The caller's token is checked alongside the
+    ///     "server is gone" match, as both sites in <c>DeferredLlamaServerChatClient</c> do: a disconnected caller aborts the same read.
     /// </remarks>
     private async Task EndAfterUpstreamGoneAsync(HttpContext context,
         string model,
         string upstreamPath,
+        WireFormat format,
         Exception ex,
         CancellationToken ct)
     {
@@ -327,7 +395,13 @@ internal sealed class LocalModelProxyForwarder
 
         try
         {
-            await context.Response.Body.WriteAsync(UpstreamGoneSseFrames, ct);
+            var frames = format switch
+            {
+                WireFormat.AnthropicMessages => AnthropicUpstreamGoneSseFrames,
+                WireFormat.OpenAiResponses => ResponsesUpstreamGoneSseFrames,
+                _ => UpstreamGoneSseFrames
+            };
+            await context.Response.Body.WriteAsync(frames, ct);
             await context.Response.Body.FlushAsync(ct);
         }
         catch (Exception writeFailure) when (writeFailure is IOException or ObjectDisposedException or OperationCanceledException)
@@ -355,54 +429,174 @@ internal sealed class LocalModelProxyForwarder
             descriptor.IsAvailable && string.Equals(descriptor.ModelName, model, StringComparison.OrdinalIgnoreCase));
     }
 
-    // The body is a JSON object (TryReadModel proved it); the caller's own id_slot, if any, is overwritten.
-    private static byte[] PinForegroundSlot(byte[] body)
+    /// <summary>
+    ///     Moves every <c>role: "system"</c> entry of <c>messages</c>, in order, onto the end of the top-level <c>system</c> text blocks.
+    /// </summary>
+    /// <remarks>
+    ///     Claude Code sends system entries after a user turn; the child hands them to the chat template where they stand, and templates that require the
+    ///     system message first answer 500. Count-tokens renders the same template. A body with no system entry, or a <c>system</c>/<c>content</c> that is
+    ///     neither a string nor an array, is left untouched (false), so the child gets the original bytes and answers them as before.
+    /// </remarks>
+    private static bool FoldSystemMessages(JsonObject request)
     {
-        var request = JsonNode.Parse(body)!.AsObject();
-        request["id_slot"] = LlamaServerChatSlots.Foreground;
-        return JsonSerializer.SerializeToUtf8Bytes(request);
-    }
-
-    private static bool TryReadModel(byte[] body, [NotNullWhen(true)] out string? model)
-    {
-        model = null;
-        if (body.Length == 0)
+        var messages = request["messages"]!.AsArray();
+        var systemMessages = messages.Where(IsSystemMessage).ToList();
+        if (systemMessages.Count == 0)
         {
             return false;
         }
 
+        var system = new JsonArray();
+        if (!TryAppendTextBlocks(system, request["system"]) || !systemMessages.TrueForAll(message => TryAppendTextBlocks(system, message!["content"])))
+        {
+            return false;
+        }
+
+        messages.RemoveAll(IsSystemMessage);
+        request["system"] = system;
+        return true;
+    }
+
+    private static bool IsSystemMessage(JsonNode? message) =>
+        message is JsonObject entry
+        && entry["role"]?.GetValueKind() == JsonValueKind.String
+        && entry["role"]!.GetValue<string>() == "system";
+
+    // A string becomes one text block; an array's blocks are copied as they are; absent adds nothing.
+    private static bool TryAppendTextBlocks(JsonArray target, JsonNode? content)
+    {
+        switch (content?.GetValueKind())
+        {
+            case null:
+                return true;
+            case JsonValueKind.String:
+                target.Add(new JsonObject { ["type"] = "text", ["text"] = content.GetValue<string>() });
+                return true;
+            case JsonValueKind.Array:
+                foreach (var block in content.AsArray())
+                {
+                    target.Add(block?.DeepClone());
+                }
+
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>Parses the body once into the object every later check and rewrite reads, and reads its <c>model</c>.</summary>
+    /// <remarks>
+    ///     A repeated property name is refused here: <see cref="JsonObject" /> throws a non-JSON exception on one, which would otherwise surface as an
+    ///     unhandled 500 from the fold or the slot pin.
+    /// </remarks>
+    private static bool TryReadRequest(byte[] body, [NotNullWhen(true)] out JsonObject? request, [NotNullWhen(true)] out string? model)
+    {
+        request = null;
+        model = null;
         try
         {
-            using var document = JsonDocument.Parse(body);
-            if (document.RootElement.ValueKind == JsonValueKind.Object
-                && document.RootElement.TryGetProperty("model", out var modelElement)
-                && modelElement.ValueKind == JsonValueKind.String)
+            if (JsonNode.Parse(body, documentOptions: new JsonDocumentOptions { AllowDuplicateProperties = false }) is JsonObject parsed
+                && parsed["model"]?.GetValueKind() == JsonValueKind.String
+                && parsed["model"]!.GetValue<string>() is { } value
+                && !string.IsNullOrWhiteSpace(value))
             {
-                var value = modelElement.GetString();
-                if (!string.IsNullOrWhiteSpace(value))
-                {
-                    model = value;
-                    return true;
-                }
+                request = parsed;
+                model = value;
+                return true;
             }
         }
         catch (JsonException)
         {
-            // Malformed JSON — fall through to the invalid-request path.
+            // Empty, malformed, too deep or a repeated property name — fall through to the invalid-request path.
         }
 
         return false;
     }
 
-    private static Task WriteBusyAsync(HttpContext context, string message, CancellationToken ct)
+    /// <summary>
+    ///     The message of the child's OpenAI-shaped error body, worded for an Anthropic client.
+    /// </summary>
+    /// <remarks>
+    ///     A context overflow gets the Messages API's own "prompt is too long" wording, which coding clients match on to compact a conversation.
+    /// </remarks>
+    private static string ReadUpstreamErrorMessage(byte[] body, int statusCode)
     {
-        context.Response.Headers.RetryAfter = "5";
-        return WriteErrorAsync(context, StatusCodes.Status503ServiceUnavailable, message, "server_error", ct);
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("error", out var error))
+            {
+                if (error.ValueKind == JsonValueKind.String)
+                {
+                    return error.GetString() ?? string.Empty;
+                }
+
+                if (error.ValueKind == JsonValueKind.Object)
+                {
+                    var message = error.TryGetProperty("message", out var messageElement) && messageElement.ValueKind == JsonValueKind.String
+                        ? messageElement.GetString()
+                        : null;
+                    if (error.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String && type.ValueEquals("exceed_context_size_error"))
+                    {
+                        return error.TryGetProperty("n_prompt_tokens", out var prompt) && error.TryGetProperty("n_ctx", out var window)
+                            ? $"prompt is too long: {prompt.GetRawText()} tokens > {window.GetRawText()} maximum"
+                            : $"prompt is too long: {message}";
+                    }
+
+                    if (message is not null)
+                    {
+                        return message;
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Not JSON after all: fall through to the status-only message.
+        }
+
+        return $"The local model runtime answered HTTP {statusCode}.";
     }
 
-    private static async Task WriteErrorAsync(HttpContext context, int statusCode, string message, string type, CancellationToken ct)
+    // The Messages API's error type for a status (its documented table); 503 is how the proxy says "busy, retry".
+    private static string AnthropicErrorType(int statusCode) => statusCode switch
+    {
+        StatusCodes.Status400BadRequest => "invalid_request_error",
+        StatusCodes.Status401Unauthorized => "authentication_error",
+        StatusCodes.Status403Forbidden => "permission_error",
+        StatusCodes.Status404NotFound => "not_found_error",
+        StatusCodes.Status413PayloadTooLarge => "request_too_large",
+        StatusCodes.Status429TooManyRequests => "rate_limit_error",
+        StatusCodes.Status503ServiceUnavailable or 529 => "overloaded_error",
+        StatusCodes.Status504GatewayTimeout => "timeout_error",
+        >= StatusCodes.Status500InternalServerError => "api_error",
+        _ => "invalid_request_error"
+    };
+
+    private static Task WriteBusyAsync(HttpContext context, WireFormat format, string message, CancellationToken ct)
+    {
+        context.Response.Headers.RetryAfter = "5";
+        return WriteErrorAsync(context, format, StatusCodes.Status503ServiceUnavailable, message, "server_error", ct);
+    }
+
+    // The type argument is the OpenAI one; the Anthropic envelope derives its own from the status.
+    private static async Task WriteErrorAsync(HttpContext context, WireFormat format, int statusCode, string message, string type, CancellationToken ct)
     {
         context.Response.StatusCode = statusCode;
+        if (format == WireFormat.AnthropicMessages)
+        {
+            await context.Response.WriteAsJsonAsync(new
+            {
+                type = "error",
+                error = new
+                {
+                    type = AnthropicErrorType(statusCode),
+                    message
+                }
+            }, ct);
+            return;
+        }
+
         // OpenAI error envelope, so an OpenAI-compatible client surfaces the message instead of an empty failure.
         await context.Response.WriteAsJsonAsync(new
         {

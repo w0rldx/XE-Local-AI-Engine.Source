@@ -1,5 +1,5 @@
 // Server state for the Graph Workflows surface. Every call goes through the generated hey-api `*Options()` /
-// `*Mutation()` adapters, exactly as `useDevWorkflows.ts` does — no hand-wired axios and no hand-written request
+// `*Mutation()` adapters — no hand-wired axios and no hand-written request
 // types. The paged event feed and the picker option lists sit beside this file.
 //
 // The generated query keys are single-element arrays `[{ _id: "<operationId>", path, query, … }]`, and TanStack
@@ -269,7 +269,7 @@ export function useStartGraphWorkflowRun() {
  * Whether this node serves graph workflows at all — the ONE route that still answers when the operator switched the
  * feature off (`GraphWorkflows:Enabled=false`), every other one being 404ed with a bodyless response the client cannot
  * tell from a broken route. The route gate, the nav entry and chat workflow mode read it, so a disabled node hides the
- * feature instead of reporting load failures. Same shape as `useDevWorkflowCapability`.
+ * feature instead of reporting load failures.
  */
 export function useGraphWorkflowCapability(options: { readonly enabled?: boolean } = {}) {
 	return useQuery({

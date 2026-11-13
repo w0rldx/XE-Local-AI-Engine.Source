@@ -9,8 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 /// <remarks>
 ///     It is a seam because <c>IDevelopmentStore.RecordWorkspaceSecretsAsync</c> resolves the project from a
 ///     <c>DevelopmentTask</c> row and then asserts a matching <c>DevelopmentAttempt</c>, so a caller preparing a
-///     workspace for something that is not a Dev Mode task — a development-workflow node-run — names neither row and
-///     never gets past that resolve. The keys are named for what they are: the isolation key is whatever the
+///     workspace for something that is not a Dev Mode task names neither row and never gets past that resolve. The keys are named for what they are: the isolation key is whatever the
 ///     workspace directory is partitioned by, and the attempt key is what makes a repeated preparation idempotent.
 /// </remarks>
 internal interface IDevelopmentWorkspaceSecretsSink

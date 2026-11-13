@@ -6,13 +6,11 @@ using System.Globalization;
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.Drafting;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.Models;
@@ -30,12 +28,10 @@ public sealed partial class NodeAdminMcpTools
     ///     What the two observe tools answer when the feature is switched off. MCP has no path-prefix gate to hide
     ///     behind the way the REST module does, so the tools stay registered and say so rather than faulting.
     /// </summary>
-    private const string DevWorkflowsDisabledMessage = "Development workflows are disabled on this node.";
+    private const string GraphWorkflowsDisabledMessage = "Graph workflows are disabled on this node.";
 
     private readonly IAgentDefinitionService _agentDefinitionService;
-    private readonly IDevWorkflowRunService _devWorkflowRunService;
-    private readonly IDevWorkflowStore _devWorkflowStore;
-    private readonly DevWorkflowOptions _devWorkflowOptions;
+    private readonly IGraphWorkflowStore _graphWorkflowStore;
     private readonly IGgufDownloadCoordinator _ggufDownloadCoordinator;
     private readonly ILocalModelAdministrationService _localModelAdministrationService;
     private readonly INodeSettingsAdministrationService _nodeSettingsAdministrationService;
@@ -50,9 +46,7 @@ public sealed partial class NodeAdminMcpTools
         ILocalModelAdministrationService localModelAdministrationService,
         INodeSettingsAdministrationService nodeSettingsAdministrationService,
         IAgentDefinitionService agentDefinitionService,
-        IDevWorkflowRunService devWorkflowRunService,
-        IDevWorkflowStore devWorkflowStore,
-        IOptions<DevWorkflowOptions> devWorkflowOptions,
+        IGraphWorkflowStore graphWorkflowStore,
         INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         IHttpContextAccessor httpContextAccessor,
@@ -60,11 +54,8 @@ public sealed partial class NodeAdminMcpTools
     {
         ArgumentNullException.ThrowIfNull(agentDefinitionService);
         _agentDefinitionService = agentDefinitionService;
-        ArgumentNullException.ThrowIfNull(devWorkflowRunService);
-        _devWorkflowRunService = devWorkflowRunService;
-        ArgumentNullException.ThrowIfNull(devWorkflowStore);
-        _devWorkflowStore = devWorkflowStore;
-        _devWorkflowOptions = (devWorkflowOptions ?? throw new ArgumentNullException(nameof(devWorkflowOptions))).Value;
+        ArgumentNullException.ThrowIfNull(graphWorkflowStore);
+        _graphWorkflowStore = graphWorkflowStore;
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         ArgumentNullException.ThrowIfNull(ggufDownloadCoordinator);
         _ggufDownloadCoordinator = ggufDownloadCoordinator;

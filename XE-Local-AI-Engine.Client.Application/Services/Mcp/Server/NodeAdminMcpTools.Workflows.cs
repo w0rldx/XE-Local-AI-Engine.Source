@@ -4,26 +4,28 @@ using System.ComponentModel;
 using ModelContextProtocol.Server;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 /// <summary>
-///     Development-workflow tools of <see cref="NodeAdminMcpTools" />: listing runs and reading one run's detail,
-///     both refused when development workflows are disabled on the node.
+///     Graph workflow tools of <see cref="NodeAdminMcpTools" />: listing runs and reading one run's detail, both refused
+///     when Graph Workflows is disabled on the node.
 /// </summary>
 public sealed partial class NodeAdminMcpTools
 {
+    private const int DefaultWorkflowListLimit = 20;
+    private const int MaxWorkflowListLimit = 50;
+
     [McpServerTool(Name = "list_workflow_runs", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description(
-        "List development workflow runs as bounded lifecycle metadata — one row per work item's LATEST run, matching the operator's own list. Each row carries the run status, node tallies and pending-decision count. An optional case-insensitive run status filter may be supplied. Graphs, artifact contents, work-session transcripts and host paths are never returned, and nothing here starts, cancels or otherwise moves a run.")]
+        "List Graph workflow runs, newest first, as bounded lifecycle metadata: run id, definition, status, failure class, trigger source and timestamps. An optional case-insensitive run status filter may be supplied. Graphs, node inputs and outputs, transcripts and host paths are never returned, and nothing here starts, cancels or otherwise moves a run.")]
     // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public Task<McpWorkflowRunListResponse> ListWorkflowRunsAsync(CancellationToken cancellationToken,
-        [Description("Maximum runs to return. Values are clamped to the server's configured bounded range.")] int? limit = null,
-        [Description("Optional run status: pending, running, pausing, paused, waitingForApproval, cancelling, completed, failed, or cancelled.")]
+        [Description("Maximum runs to return. Values are clamped to the server's bounded range.")] int? limit = null,
+        [Description("Optional run status: pending, running, waitingForApproval, cancelling, completed, failed, or cancelled.")]
         string? status = null) =>
         InvokeAuditedAsync("list_workflow_runs", AuditArguments(new("limit", limit), new("status", status)), async () =>
         {
-            var boundedLimit = ClampWorkflowListLimit(limit);
-            if (!await _runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken))
+            var boundedLimit = Math.Clamp(limit ?? DefaultWorkflowListLimit, 1, MaxWorkflowListLimit);
+            if (!await _runtimeSettings.GetGraphWorkflowsEnabledAsync(cancellationToken))
             {
                 return new McpWorkflowRunListResponse
                 {
@@ -32,16 +34,17 @@ public sealed partial class NodeAdminMcpTools
                     Count = 0,
                     Limit = boundedLimit,
                     FailureCode = McpAdminToolFailureCodes.NotAvailable,
-                    DisplayMessage = DevWorkflowsDisabledMessage
+                    DisplayMessage = GraphWorkflowsDisabledMessage
                 };
             }
 
-            DevWorkflowRunStatus? parsedStatus = null;
+            GraphWorkflowRunStatus? parsedStatus = null;
             if (!string.IsNullOrWhiteSpace(status))
             {
-                var canonicalStatus = Enum.GetNames<DevWorkflowRunStatus>()
+                // Matched against the names: Enum.TryParse would also take "99".
+                var canonicalStatus = Enum.GetNames<GraphWorkflowRunStatus>()
                                           .FirstOrDefault(name => string.Equals(name, status, StringComparison.OrdinalIgnoreCase));
-                if (canonicalStatus is null || !Enum.TryParse(canonicalStatus, out DevWorkflowRunStatus value))
+                if (canonicalStatus is null)
                 {
                     return new McpWorkflowRunListResponse
                     {
@@ -50,53 +53,40 @@ public sealed partial class NodeAdminMcpTools
                         Count = 0,
                         Limit = boundedLimit,
                         FailureCode = McpAdminToolFailureCodes.InvalidStatus,
-                        DisplayMessage = $"Cannot list: status must be one of {string.Join(", ", Enum.GetNames<DevWorkflowRunStatus>())}."
+                        DisplayMessage = $"Cannot list: status must be one of {string.Join(", ", Enum.GetNames<GraphWorkflowRunStatus>())}."
                     };
                 }
 
-                parsedStatus = value;
+                parsedStatus = Enum.Parse<GraphWorkflowRunStatus>(canonicalStatus);
             }
 
-            // The work-item list IS the run list here, so filtering needs no second query. Status and limit apply in memory, because the store
-            // filters by a different enum; the ceiling is the node's work-item count — push the filter down only if a store-side run-status list appears.
-            var workItems = await _devWorkflowStore.ListWorkItemsAsync(cancellationToken: cancellationToken);
-            var runs = workItems.Where(item => item.LatestRunId is not null && item.LatestRunStatus is not null)
-                                .Where(item => parsedStatus is null || item.LatestRunStatus == parsedStatus)
-                                .Take(boundedLimit)
-                                .Select(static item => new McpWorkflowRunSummary(item.LatestRunId!.Value.ToString("D"),
-                                    item.Id.ToString("D"),
-                                    item.LatestRunDefinitionName,
-                                    item.LatestRunStatus!.Value.ToString(),
-                                    item.LatestRunNodes.Queued,
-                                    item.LatestRunNodes.Running,
-                                    item.LatestRunNodes.Completed,
-                                    item.LatestRunNodes.Total,
-                                    item.LatestRunNodes.PendingDecisionCount))
-                                .ToArray();
+            var runs = await _graphWorkflowStore.ListRunsAsync(parsedStatus, boundedLimit, cancellationToken);
+            var names = await DefinitionNamesAsync(cancellationToken);
+            McpWorkflowRunSummary[] rows = [.. runs.Select(run => Summary(run, names))];
             return new McpWorkflowRunListResponse
             {
                 Status = "ok",
-                Runs = runs,
-                Count = runs.Length,
+                Runs = rows,
+                Count = rows.Length,
                 Limit = boundedLimit
             };
         }, static response => response.FailureCode is not null);
 
     [McpServerTool(Name = "get_workflow_run", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description(
-        "Get one development workflow run by id: its status, node tallies, pending-decision count, failure class, sanitized terminal reason, start and end timestamps, and one bounded row per node run (key, type, status, attempt, max attempts). The pinned graph, artifact contents, work-session transcripts and host paths are never returned, and nothing here moves the run.")]
+        "Get one Graph workflow run by id: the list row's fields, node tallies, pending-decision count, and one bounded row per node run (key, kind, status, attempt). The pinned graph, node inputs and outputs, transcripts and host paths are never returned, and nothing here moves the run.")]
     public Task<McpWorkflowRunGetResponse> GetWorkflowRunAsync([Description("The canonical hyphenated UUID of the run, as returned by list_workflow_runs.")] string run_id,
         CancellationToken cancellationToken) =>
         InvokeAuditedAsync("get_workflow_run", AuditArguments(new KeyValuePair<string, object?>("run_id", run_id)), async () =>
         {
-            if (!await _runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken))
+            if (!await _runtimeSettings.GetGraphWorkflowsEnabledAsync(cancellationToken))
             {
                 return new McpWorkflowRunGetResponse
                 {
                     Status = McpAdminToolFailureCodes.NotAvailable,
                     Run = null,
                     FailureCode = McpAdminToolFailureCodes.NotAvailable,
-                    DisplayMessage = DevWorkflowsDisabledMessage
+                    DisplayMessage = GraphWorkflowsDisabledMessage
                 };
             }
 
@@ -111,12 +101,12 @@ public sealed partial class NodeAdminMcpTools
                 };
             }
 
-            DevWorkflowRunDetail detail;
+            GraphWorkflowRunSnapshot run;
             try
             {
-                detail = await _devWorkflowRunService.GetAsync(runId, cancellationToken);
+                run = await _graphWorkflowStore.GetRunAsync(runId, cancellationToken);
             }
-            catch (DevWorkflowNotFoundException)
+            catch (GraphWorkflowNotFoundException)
             {
                 return new McpWorkflowRunGetResponse
                 {
@@ -127,39 +117,49 @@ public sealed partial class NodeAdminMcpTools
                 };
             }
 
-            // Names only, over the summary projection that never decrypts a graph blob — the same read the run
-            // detail endpoint uses to label a run.
-            var definitions = await _devWorkflowStore.ListDefinitionsAsync(includeArchived: true, cancellationToken);
-            var run = detail.Run;
+            var nodeRuns = await _graphWorkflowStore.ListNodeRunsAsync(runId, cancellationToken);
+            var summary = Summary(run, await DefinitionNamesAsync(cancellationToken));
             return new McpWorkflowRunGetResponse
             {
                 Status = "ok",
-                Run = new McpWorkflowRunDetail(run.Id.ToString("D"),
-                    run.WorkItemId.ToString("D"),
-                    definitions.FirstOrDefault(definition => definition.Id == run.DefinitionId)?.Name,
-                    run.Status.ToString(),
-                    detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Queued),
-                    detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running),
-                    detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Succeeded),
-                    detail.NodeRuns.Count,
-                    detail.PendingDecisionCount,
-                    run.FailureClass,
-                    run.TerminalReason,
-                    run.StartedAtUtc,
-                    run.EndedAtUtc,
+                Run = new McpWorkflowRunDetail(summary.RunId,
+                    summary.DefinitionId,
+                    summary.DefinitionName,
+                    summary.Status,
+                    summary.FailureClass,
+                    summary.TriggerSource,
+                    summary.CreatedAtUtc,
+                    summary.StartedAtUtc,
+                    summary.CompletedAtUtc,
+                    nodeRuns.Count(static nodeRun => nodeRun.Status is GraphWorkflowNodeRunStatus.Pending or GraphWorkflowNodeRunStatus.Queued),
+                    nodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Running),
+                    nodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Succeeded),
+                    nodeRuns.Count,
+                    nodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.WaitingForApproval),
                     [
-                        .. detail.NodeRuns.Select(static nodeRun => new McpWorkflowNodeRunSummary
+                        .. nodeRuns.Select(static nodeRun => new McpWorkflowNodeRunSummary
                         {
                             NodeKey = nodeRun.NodeKey,
-                            NodeType = nodeRun.NodeType.ToString(),
+                            NodeType = nodeRun.Kind.ToString(),
                             Status = nodeRun.Status.ToString(),
-                            Attempt = nodeRun.Attempt,
-                            MaxAttempts = nodeRun.MaxAttempts
+                            Attempt = nodeRun.Attempt
                         })
                     ])
             };
         }, static response => response.FailureCode is not null);
 
-    private int ClampWorkflowListLimit(int? limit) =>
-        Math.Clamp(limit ?? _devWorkflowOptions.McpDefaultListLimit, 1, _devWorkflowOptions.McpMaxListLimit);
+    /// <summary>Definition names over the summary projection, which never decrypts a graph blob.</summary>
+    private async Task<IReadOnlyDictionary<Guid, string>> DefinitionNamesAsync(CancellationToken cancellationToken) =>
+        (await _graphWorkflowStore.ListDefinitionsAsync(cancellationToken)).ToDictionary(static definition => definition.Id, static definition => definition.Name);
+
+    private static McpWorkflowRunSummary Summary(GraphWorkflowRunSnapshot run, IReadOnlyDictionary<Guid, string> names) =>
+        new(run.Id.ToString("D"),
+            run.DefinitionId.ToString("D"),
+            names.GetValueOrDefault(run.DefinitionId),
+            run.Status.ToString(),
+            run.FailureClass == GraphWorkflowFailureClass.None ? null : run.FailureClass.ToString(),
+            run.TriggerSource.ToString(),
+            run.CreatedAtUtc,
+            run.StartedAtUtc,
+            run.CompletedAtUtc);
 }

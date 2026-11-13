@@ -32,7 +32,6 @@ import {
 	useRemoveDevelopmentTemplate,
 	useStartDevelopmentNextAction,
 } from "@/features/development/queries/useDevelopment";
-import { isTerminalDevWorkflowRunStatus, toDevWorkflowRunStatus } from "@/features/devWorkflows/models/DevWorkflowModels";
 
 export interface DevelopmentPageControllerOptions {
 	/** From the route's optional `?project=` / `?task=`. Both seed the INITIAL selection and nothing else. */
@@ -110,8 +109,9 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	const activeAttempt = attempts.find(isActiveAttempt) ?? null;
 	const [nextActionKey, nextActionDefault] = nextActionLabel(task?.status, latestAttempt?.status);
 	const live = useDevelopmentAttemptHub(detail?.project?.id ?? null, task?.id ?? null, activeAttempt?.id ?? null);
-	// The run that owns this task: its work item for the deep link, and its STATUS for who may apply.
-	const workflowRunQuery = useDevelopmentTaskWorkflowRun(task?.workflowRunId, nodeCapabilities.devWorkflows);
+	// The Graph Workflows run that owns this task: its STATUS decides who may apply. Read only while the module is offered.
+	const workflowEngineEnabled = nodeCapabilities.graphWorkflows;
+	const workflowRunQuery = useDevelopmentTaskWorkflowRun(task?.workflowRunId, workflowEngineEnabled);
 	// A terminal run can never answer another gate — `DecideAsync` refuses anything that is not WaitingForApproval or
 	// Blocked, and the dispatcher does not tick a terminal run at all. So a workflow whose run has ENDED cannot apply
 	// its own validated patch, and if this page had also given its Apply button away that patch would be stranded for
@@ -124,12 +124,11 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	//
 	// With the capability off the query never runs, so the status is unknowable and Dev Mode behaves exactly as it did
 	// before workflows existed: its own apply gate, unchanged.
-	const workflowRunEnded =
-		workflowRunQuery.data !== undefined && isTerminalDevWorkflowRunStatus(toDevWorkflowRunStatus(workflowRunQuery.data.status));
+	const workflowRunEnded = ["Completed", "Failed", "Cancelled"].includes(workflowRunQuery.data?.status ?? "");
 	// React Query keeps the last good `data` through a failed refetch, so a terminal run whose refetch fails is BOTH
 	// ended and errored — and the ended answer is the true one, since a terminal status never changes again.
 	const workflowRunUnreadable = workflowRunQuery.isError && !workflowRunEnded;
-	const workflowOwnsApply = Boolean(task?.workflowRunId) && nodeCapabilities.devWorkflows && !workflowRunEnded;
+	const workflowOwnsApply = Boolean(task?.workflowRunId) && workflowEngineEnabled && !workflowRunEnded;
 	const projectRepository = repositories.find((repository) => repository.id === detail?.project?.selectedFolderId);
 	const repositoryConnectionRequired = detail?.project?.repositoryConnectionRequired === true;
 	const repositoryReady =
@@ -278,7 +277,6 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 		tasks,
 		selectedTaskId: taskDetail?.task?.id ?? null,
 		setSelectedTaskId,
-		workflowWorkItemId: workflowRunQuery.data?.workItemId ?? null,
 		workflowOwnsApply,
 		workflowRunEnded,
 		workflowRunUnreadable,

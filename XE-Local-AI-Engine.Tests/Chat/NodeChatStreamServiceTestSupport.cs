@@ -35,38 +35,11 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 /// <summary>Service construction, scripted runners and fakes shared by the NodeChatStreamService test classes.</summary>
 internal static partial class NodeChatStreamServiceTestSupport
 {
-    /// <summary>The model these two tests pin, so the turn and the early check resolve the same head.</summary>
-    internal const string WriteDeclarationModel = "tool-capable-model";
+    /// <summary>A model the stubbed resolver and the send agree on.</summary>
+    internal const string ToolCapableModel = "tool-capable-model";
 
-    /// <summary>The write/execute tool the widened definition gains — not one of the work-session state tools.</summary>
-    internal const string WriteDeclarationToolName = "write_the_repository";
-
-    /// <summary>
-    ///     A resolver standing in for a definition an operator widens: narrow on its FIRST answer, write-capable on
-    ///     every one after. Two reads of one mutable row are what the race is made of, so the stub answers as that row
-    ///     would.
-    /// </summary>
-    internal static IAgentDefinitionResolver CreateWideningAgentDefinitionResolver(Guid agentDefinitionId)
-    {
-        var resolved = 0;
-        var narrow = new ResolvedAgentRuntime("Persona.", [CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}")], WriteDeclarationModel, null, 1,
-            agentDefinitionId);
-        var widened = narrow with
-        {
-            AllowedTools =
-            [
-                CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
-                CreateLocalToolDto(WriteDeclarationToolName, "{\"type\":\"object\"}", ToolCategory.WriteExecute)
-            ]
-        };
-
-        var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns(_ => Task.FromResult<ResolvedAgentRuntime?>(Interlocked.Increment(ref resolved) == 1 ? narrow : widened));
-        return resolver;
-    }
-
-    internal static NodeChatStreamService CreateWriteDeclarationService(INodeChatPersistenceService persistence,
+    /// <summary>A tool-enabled send service over the resolver and offer the test hands it.</summary>
+    internal static NodeChatStreamService CreateServiceWithResolver(INodeChatPersistenceService persistence,
         ReasoningCapturingInvocationRunner runner,
         RecordingWorkerEventDispatcher dispatcher,
         IAgentDefinitionResolver resolver,

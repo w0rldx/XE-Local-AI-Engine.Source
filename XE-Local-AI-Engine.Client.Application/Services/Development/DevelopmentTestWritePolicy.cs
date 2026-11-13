@@ -23,7 +23,7 @@ internal static class DevelopmentTestWritePolicy
     /// <summary>The refusal, in the words the operator is given.</summary>
     /// <remarks>
     ///     A constant because it is surfaced rather than replaced: the coder runner puts it on the attempt's terminal
-    ///     reason, and the workflow lane's tests script it.
+    ///     reason, and the <c>DevTask</c> lane's tests script it.
     /// </remarks>
     internal const string RefusalSentence =
         "The attempt modified or deleted a test that existed at the base commit, which the Development test-write policy does not permit. "

@@ -452,8 +452,7 @@ Persistence specifics (selected per-column encryption, the migrations under
 - Chat send path, streaming, per-send routing: [Chat](05-chat.md)
 - Scheduler (Quartz) and model-fit advisor: [Scheduler](06-scheduler.md), [Model Fit](07-model-fit.md)
 - The full project inventory and folder conventions: [Project Layout](02-project-layout.md)
-- Sandboxed code execution, benchmarks, graph workflows, External Apps, transcription and Dev Workflows:
-  pages 19–25 below
+- Sandboxed code execution, benchmarks, graph workflows, External Apps and transcription: pages 19–24 below
 
 ---
 
@@ -483,5 +482,4 @@ Persistence specifics (selected per-column encryption, the migrations under
 - [Workflow Engines Divergence Register](22-workflow-engines-divergence-register.md)
 - [External Apps](23-external-apps.md)
 - [Audio Transcription](24-audio-transcription.md)
-- [Dev Workflows](25-dev-workflows.md)
 - ADRs: [0001 — Development Mode restart recovery](../adr/0001-development-mode-restart-recovery.md), [0002 — Development cloud-egress carrier](../adr/0002-development-cloud-egress-carrier.md), [0003 — Six-plan implementation scope](../adr/0003-six-plan-operator-decisions.md), [0004 — Development Mode container execution](../adr/0004-development-mode-container-execution-docker-stopgap.md), [0005 — Training runtime Python exclusivity](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md)

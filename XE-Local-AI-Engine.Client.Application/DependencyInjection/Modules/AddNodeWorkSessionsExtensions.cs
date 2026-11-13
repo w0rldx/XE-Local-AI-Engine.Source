@@ -50,11 +50,8 @@ internal static class AddNodeWorkSessionsExtensions
         builder.Services.AddSingleton<IWorkSessionArtifactBlobStore, ManagedWorkSessionArtifactBlobStore>();
         builder.Services.AddHostedService<WorkSessionStartupReconciler>();
 
-        // The same instance behind both surfaces: one class decides who may move a session's status, and a second instance would let
-        // the two disagree. Both roles resolve the CONCRETE registration: casting the interface throws at host build once it is replaced.
         builder.Services.AddScoped<WorkSessionService>();
         builder.Services.AddScoped<IWorkSessionService>(services => services.GetRequiredService<WorkSessionService>());
-        builder.Services.AddScoped<IWorkflowOwnedWorkSessionLifecycle>(services => services.GetRequiredService<WorkSessionService>());
         builder.Services.AddScoped<WorkSessionCheckpointComposer>();
 
         // Scoped: it reads the conversation through the scoped chat persistence, from the supervisor's per-turn scope.
@@ -63,10 +60,6 @@ internal static class AddNodeWorkSessionsExtensions
         // Scoped for the same reason: it reads the agent definition through the scoped store. Resolved by the REST service on
         // create/repoint AND by the supervisor's per-turn scope, so both judge a session's tool gates the same way.
         builder.Services.AddScoped<WorkSessionToolGate>();
-
-        // Scoped for the same reason, and resolved from the same two places: the development-workflow lane before it
-        // creates a session, and the supervisor's per-turn scope before every step it sends.
-        builder.Services.AddScoped<WorkSessionWriteDeclarationGuard>();
 
         // One instance serving three roles: the supervisor holds the in-flight runs, so a second instance would answer
         // "not running" to every stop and drive a session twice.

@@ -42,6 +42,9 @@ internal sealed record GraphWorkflowAgentConfig(
     /// <summary>Whether a chat-bound run posts this node's answer into the conversation. Read by the chat publisher, never by routing.</summary>
     public bool PublishToChat { get; init; }
 
+    /// <summary>Whether the bound agent's list_files/read_file/search_text read the Development project named by the run input's <c>developmentProjectId</c>.</summary>
+    public bool Repository { get; init; }
+
     /// <summary>Whether the run's chat attachments reach this node's turn. Only legal when the graph's <c>chat.acceptsAttachments</c> is on.</summary>
     public bool IncludeAttachments { get; init; }
 }
@@ -101,6 +104,36 @@ internal sealed record GraphWorkflowDecisionModelConfig : GraphWorkflowNodeConfi
     public required string? Model { get; init; }
 
     public required IReadOnlyDictionary<string, string> InputBindings { get; init; }
+}
+
+/// <summary>
+///     A Development Mode step: <c>implement</c> drives one task in the run's project until it awaits apply; <c>apply</c>
+///     applies the task of the <c>implement</c> node <see cref="TaskNodeKey" /> names.
+/// </summary>
+/// <remarks>
+///     The members of the other action are refused, not ignored. <see cref="InputBindings" /> hand named input data to the
+///     task beside <see cref="Requirements" />, as an <c>LlmCall</c>'s bindings do; <see cref="Instructions" /> reach the Dev
+///     Mode coder and reviewer as workflow policy. Where an <c>apply</c> may sit is <c>DEVTASK-1</c> (docs/wiki/21-graph-workflows.md §4.10).
+/// </remarks>
+internal sealed record GraphWorkflowDevTaskConfig : GraphWorkflowNodeConfig
+{
+    /// <summary><see cref="GraphWorkflowGraph.DevTaskImplement" /> or <see cref="GraphWorkflowGraph.DevTaskApply" />.</summary>
+    public required string Action { get; init; }
+
+    public string? Title { get; init; }
+
+    public string? Requirements { get; init; }
+
+    public IReadOnlyList<string> AcceptanceCriteria { get; init; } = [];
+
+    public string? Instructions { get; init; }
+
+    public IReadOnlyDictionary<string, string> InputBindings { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>Apply only: the key of the <c>implement</c> node whose task this node applies (config member <c>task</c>).</summary>
+    public string? TaskNodeKey { get; init; }
+
+    public bool IsApply => string.Equals(Action, GraphWorkflowGraph.DevTaskApply, StringComparison.Ordinal);
 }
 
 /// <summary>The graph-level <c>chat</c> block. Only a <c>Chat</c> graph may declare one; a Chat graph that omits it reads these defaults.</summary>

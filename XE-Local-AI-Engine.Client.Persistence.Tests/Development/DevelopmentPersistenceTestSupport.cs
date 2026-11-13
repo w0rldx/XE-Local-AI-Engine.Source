@@ -72,8 +72,7 @@ internal sealed class DevelopmentTestFixture : IDisposable
 
     /// <summary>
     ///     A project whose single task the review chain has taken to <c>AwaitingApply</c> — the status a Dev Mode task
-    ///     reaches when its review approved it and only the apply is left. Shared, because the dev-workflows suite needs
-    ///     the same real task to hang a <c>DevTask</c> node run's <c>DevelopmentTaskId</c> off.
+    ///     reaches when its review approved it and only the apply is left.
     /// </summary>
     public static async Task<(DevelopmentCreateProjectCommand Seed, long Version)> SeedTaskAwaitingApplyAsync(IDevelopmentStore store)
     {

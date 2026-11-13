@@ -88,6 +88,7 @@ function renderPanel() {
 const configuredResponse = {
 	configured: true,
 	endpointUrl: "http://127.0.0.1:5000/api/local/v1",
+	anthropicEndpointUrl: "http://127.0.0.1:5000/api/local/v1/proxy",
 	apiKey: {
 		prefix: "xeproxy_abc123",
 		createdAt: "2026-08-11T00:00:00+00:00",
@@ -103,6 +104,7 @@ const generatedResponse = {
 const emptyResponse = {
 	configured: false,
 	endpointUrl: "http://127.0.0.1:5000/api/local/v1",
+	anthropicEndpointUrl: "http://127.0.0.1:5000/api/local/v1/proxy",
 };
 
 describe("LocalModelProxyKeyPanel", () => {
@@ -142,6 +144,9 @@ describe("LocalModelProxyKeyPanel", () => {
 		expect(screen.getByTestId("local-model-proxy-key-prefix").textContent).toContain("xeproxy_abc123");
 		expect(screen.getByTestId("local-model-proxy-key-card").textContent).not.toContain("xeproxy_abc123-the-rest-of-the-secret");
 		expect(screen.getByTestId("local-model-proxy-key-endpoint").textContent).toBe("http://127.0.0.1:5000/api/local/v1");
+		expect(screen.getByTestId("local-model-proxy-key-anthropic-endpoint").textContent).toBe(
+			"http://127.0.0.1:5000/api/local/v1/proxy",
+		);
 	});
 
 	it("tells the operator the configured key cannot be shown again", async () => {

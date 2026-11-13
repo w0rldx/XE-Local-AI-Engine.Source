@@ -298,7 +298,6 @@ internal static class NodeSettingsEndpointDtoMapper
             ComputeEnabled = effective.ComputeEnabled,
             AgentHomeEnabled = effective.AgentHomeEnabled,
             SchedulerEnabled = effective.SchedulerEnabled,
-            DevWorkflowsEnabled = effective.DevWorkflowsEnabled,
             ExecutionPreviewsEnabled = effective.ExecutionPreviewsEnabled,
             RestartRequiredFields = NodeSettingsRestartGate.Fields
         };
@@ -522,7 +521,6 @@ internal static class NodeSettingsEndpointDtoMapper
             ComputeEnabled = Merge(request.ComputeEnabled, currentSettings.ComputeEnabled, request.Clears(nameof(request.ComputeEnabled))),
             AgentHomeEnabled = Merge(request.AgentHomeEnabled, currentSettings.AgentHomeEnabled, request.Clears(nameof(request.AgentHomeEnabled))),
             SchedulerEnabled = Merge(request.SchedulerEnabled, currentSettings.SchedulerEnabled, request.Clears(nameof(request.SchedulerEnabled))),
-            DevWorkflowsEnabled = Merge(request.DevWorkflowsEnabled, currentSettings.DevWorkflowsEnabled, request.Clears(nameof(request.DevWorkflowsEnabled))),
             ExecutionPreviewsEnabled = Merge(request.ExecutionPreviewsEnabled, currentSettings.ExecutionPreviewsEnabled, request.Clears(nameof(request.ExecutionPreviewsEnabled)))
         };
     }

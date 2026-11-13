@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
@@ -1271,6 +1272,47 @@ public sealed class InvocationRunnerTests
 
         AssertEx.True(definition.Participants.All(static participant => participant.DefaultMaxOutputTokens is null), "a frozen run takes no default cap");
         AssertEx.True(definition.Participants.All(static participant => participant.ReasoningBudgets == ReasoningBudgets.Frozen), "a frozen run takes the fixed ladder");
+    }
+
+    /// <summary>
+    ///     Participants run in the runner's own async flow and may pin their own models, which no repository gate judged, so a
+    ///     caller's repository scope (a graph Agent node's <c>repository</c>) must not reach their read tools.
+    /// </summary>
+    [Test]
+    public async Task RunAsync_InsideARepositoryScope_RunsTheOrchestrationWithoutIt()
+    {
+        var rootAtCreate = "not created";
+        var rootsWhileRunning = new List<string?>();
+        var factory = Substitute.For<IOrchestrationAgentFactory>();
+        factory.CreateAsync(Arg.Any<OrchestrationAgentDefinition>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
+               .Returns(_ =>
+               {
+                   rootAtCreate = CoderRepositoryScope.Root;
+#pragma warning disable CA2000 // The runner owns disposal of the session via its `await using`.
+                   return Task.FromResult<IOrchestrationRunSession>(new FakeOrchestrationRunSession(RecordingRoots(rootsWhileRunning)));
+#pragma warning restore CA2000
+               });
+        var runner = CreateRunner(orchestrationAgentFactory: factory);
+        using var repository = CoderRepositoryScope.Begin("/repository/of/the/node");
+
+        await RunPlainAsync(runner, RuntimePackageBuilder.Valid().WithOrchestrationSpec(SampleSpec()).Build());
+
+        AssertEx.Null(rootAtCreate, "the workflow is built, and its run started, without the repository.");
+        AssertEx.True(rootsWhileRunning.Count == 2 && rootsWhileRunning.All(static root => root is null),
+            $"no participant step saw the repository: {string.Join(", ", rootsWhileRunning.Select(static root => root ?? "null"))}");
+        AssertEx.Equal("/repository/of/the/node", CoderRepositoryScope.Root, "the caller's own scope is untouched.");
+    }
+
+    private static async IAsyncEnumerable<OrchestrationUpdate> RecordingRoots(List<string?> roots)
+    {
+        roots.Add(CoderRepositoryScope.Root);
+        await Task.Yield();
+        roots.Add(CoderRepositoryScope.Root);
+        yield return OrchestrationUpdate.TextFragment("Done.", "a", "Triage") with
+        {
+            FinishReason = "stop"
+        };
+        yield return OrchestrationUpdate.Terminal();
     }
 
     /// <summary>

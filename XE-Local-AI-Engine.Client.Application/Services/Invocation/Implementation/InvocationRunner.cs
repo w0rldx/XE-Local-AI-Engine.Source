@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
@@ -1019,6 +1020,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 definition.Participants.Select(participant => participant.ModelId),
                 invocationToken);
         using var participantPins = ExternalProviderBindingPinScope.Begin(resolvedParticipantPins);
+
+        // Same flow, so a caller's repository scope would reach every participant's read tools; their own model pins passed no repository gate.
+        using var noRepository = CoderRepositoryScope.Begin(null);
 
         // The workflow seed is budgeted exactly the way the single-agent path budgets its initial assembly (see TurnPolicy), so a long
         // conversation cannot silently overrun the window any participant is launched with.

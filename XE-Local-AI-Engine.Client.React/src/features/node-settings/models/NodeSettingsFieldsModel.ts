@@ -180,7 +180,7 @@ export interface NodeSettingsFieldsForm {
 	agentHomeRunRetentionMaxRuns: number | string;
 	// Shown and edited in GB (see nodeSettingsDisplayScale).
 	agentHomeRunRetentionMaxTotalBytes: number | string;
-	// The ten feature switches (section "general", Features card). The response carries their effective value.
+	// The nine feature switches (section "general", Features card). The response carries their effective value.
 	developmentEnabled: boolean;
 	workSessionsEnabled: boolean;
 	graphWorkflowsEnabled: boolean;
@@ -189,7 +189,6 @@ export interface NodeSettingsFieldsForm {
 	computeEnabled: boolean;
 	agentHomeEnabled: boolean;
 	schedulerEnabled: boolean;
-	devWorkflowsEnabled: boolean;
 	// Security-widening: lets Preview sandbox mechanisms serve run_python and sandboxed MCP. Turning it on is confirmed in the
 	// save flow (see turnsOnExecutionPreviews).
 	executionPreviewsEnabled: boolean;
@@ -199,7 +198,6 @@ export interface NodeSettingsFieldsForm {
 export const featureSwitchFields = [
 	"developmentEnabled",
 	"workSessionsEnabled",
-	"devWorkflowsEnabled",
 	"graphWorkflowsEnabled",
 	"agentHomeEnabled",
 	"computeEnabled",
@@ -455,7 +453,6 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	computeEnabled: false,
 	agentHomeEnabled: false,
 	schedulerEnabled: true,
-	devWorkflowsEnabled: false,
 	executionPreviewsEnabled: false,
 };
 

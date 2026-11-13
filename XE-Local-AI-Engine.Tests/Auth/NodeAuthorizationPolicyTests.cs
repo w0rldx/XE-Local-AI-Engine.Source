@@ -102,15 +102,23 @@ public sealed class NodeAuthorizationPolicyTests
     }
 
     [Test]
-    public async Task ModelProxyEndpoint_RejectsBothAnonymousAndTheOperatorToken()
+    [Arguments("GET", LocalApiRoutes.Proxy.Models)]
+    [Arguments("POST", LocalApiRoutes.Proxy.ChatCompletions)]
+    [Arguments("POST", LocalApiRoutes.Proxy.Embeddings)]
+    [Arguments("POST", LocalApiRoutes.Proxy.Messages)]
+    [Arguments("POST", LocalApiRoutes.Proxy.MessagesCountTokens)]
+    [Arguments("POST", LocalApiRoutes.Proxy.Responses)]
+    [Arguments("POST", LocalApiRoutes.Proxy.ResponsesInputTokens)]
+    public async Task ModelProxyEndpoint_RejectsBothAnonymousAndTheOperatorToken(string method, string route)
     {
         using var client = Factory.CreateClient();
-        var path = "/" + LocalApiRoutes.Prefix + "/" + LocalApiRoutes.Proxy.Models;
+        var path = "/" + LocalApiRoutes.Prefix + "/" + route;
 
-        using var anonymous = await client.GetAsync(path);
+        using var anonymousRequest = new HttpRequestMessage(new HttpMethod(method), path);
+        using var anonymous = await client.SendAsync(anonymousRequest);
         AssertEx.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        using var request = new HttpRequestMessage(new HttpMethod(method), path);
         Factory.AddNodeBearerToken(request);
         using var withOperatorToken = await client.SendAsync(request);
 

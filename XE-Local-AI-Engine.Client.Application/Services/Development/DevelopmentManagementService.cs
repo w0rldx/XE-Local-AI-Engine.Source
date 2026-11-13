@@ -5,8 +5,8 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
@@ -49,14 +49,14 @@ public interface IDevelopmentManagementService
 
     /// <summary>Puts a task's approved patch into the repository.</summary>
     /// <remarks>
-    ///     <paramref name="onBehalfOfWorkflowRunId" /> names the development-workflow run whose apply lane is asking,
-    ///     and is the only thing that gets an apply past a live run's ownership of that decision. An operator surface
-    ///     passes <see langword="null" />, which makes the refusal server-side rather than a withheld button.
+    ///     <paramref name="onBehalfOfWorkflowRun" /> names the workflow run, engine included, whose apply lane is
+    ///     asking, and is the only thing that gets an apply past a live run's ownership of that decision. An operator
+    ///     surface passes <see langword="null" />, which makes the refusal server-side rather than a withheld button.
     /// </remarks>
     Task<DevelopmentOperationResult> ApplyAsync(Guid projectId,
         Guid taskId,
         Guid operationId,
-        Guid? onBehalfOfWorkflowRunId,
+        DevelopmentWorkflowRunReference? onBehalfOfWorkflowRun,
         CancellationToken cancellationToken = default);
 
     Task<DevelopmentProjectAggregate> ReconnectRepositoryAsync(Guid projectId,
@@ -85,7 +85,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     ///     Records every task-status hop <see cref="StartNextActionAsync" /> decides.
     /// </summary>
     /// <remarks>
-    ///     All three messages — <c>Planned → Ready</c>, the round start and the stand-down at the round cap — carry
+    ///     Every message — <c>Planned → Ready</c>, a retried validation, the round start, the stand-down at the cap — carries
     ///     the literal phrase "task status", so one grep finds every hop. Without them a claim about what the chain
     ///     did is model-quoted rather than a system record.
     /// </remarks>
@@ -101,14 +101,15 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     private readonly INodeRuntimeSettings _runtimeSettings;
 
     /// <summary>
-    ///     Read-only, and for one question: which workflow run — if any — owns the approval for a task.
+    ///     Read-only, and for one question: which Graph workflow run — if any — owns the approval for a task. Its DevTask
+    ///     node runs pin the task they drive.
     /// </summary>
     /// <remarks>
     ///     Asked here rather than at the endpoint layer because this service is the one place a task aggregate is
     ///     built — the project detail loops back through <see cref="GetTaskAsync" /> for every task it carries — so
     ///     composing it above would mean asking at three call sites today and remembering the next one.
     /// </remarks>
-    private readonly IDevWorkflowStore _workflows;
+    private readonly IGraphWorkflowStore _graphWorkflows;
 
     private readonly TimeProvider _timeProvider;
 
@@ -122,7 +123,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         IModelTrustResolver modelTrustResolver,
         IDevelopmentCommandProfileDetector profileDetector,
         IDevelopmentTemplateStore templateStore,
-        IDevWorkflowStore workflows,
+        IGraphWorkflowStore graphWorkflows,
         INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<DevelopmentManagementService> logger)
@@ -150,8 +151,8 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         ArgumentNullException.ThrowIfNull(templateStore);
         _templateStore = templateStore;
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        ArgumentNullException.ThrowIfNull(workflows);
-        _workflows = workflows;
+        ArgumentNullException.ThrowIfNull(graphWorkflows);
+        _graphWorkflows = graphWorkflows;
         ArgumentNullException.ThrowIfNull(timeProvider);
         _timeProvider = timeProvider;
     }
@@ -273,7 +274,8 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
 
         // ONE query for every task's workflow pointer, not one per task: this read always has the whole task list, so
         // asking the single-task question in a loop is a round trip per row on the page that renders most often.
-        var workflowRunIds = await _workflows.FindRunIdsForDevelopmentTasksAsync([.. tasks.Select(static task => task.Id)], cancellationToken);
+        Guid[] taskIds = [.. tasks.Select(static task => task.Id)];
+        var graphRuns = await _graphWorkflows.ListDevelopmentTaskRunsAsync(taskIds, cancellationToken);
         var aggregates = new List<DevelopmentTaskAggregate>(tasks.Count);
         foreach (var task in tasks)
         {
@@ -282,7 +284,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
                 Task = task,
                 Attempts = await _store.ListAttemptsAsync(task.Id, cancellationToken),
                 Artifacts = await _store.ListArtifactsAsync(task.Id, cancellationToken),
-                WorkflowRunId = workflowRunIds.TryGetValue(task.Id, out var runId) ? runId : null
+                WorkflowRun = WorkflowRunOf(task.Id, graphRuns)
             });
         }
 
@@ -307,8 +309,25 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
             Task = task,
             Attempts = await _store.ListAttemptsAsync(taskId, cancellationToken),
             Artifacts = await _store.ListArtifactsAsync(taskId, cancellationToken),
-            WorkflowRunId = await _workflows.FindRunIdForDevelopmentTaskAsync(taskId, cancellationToken)
+            WorkflowRun = WorkflowRunOf(taskId, await _graphWorkflows.ListDevelopmentTaskRunsAsync([taskId], cancellationToken))
         };
+    }
+
+    /// <summary>
+    ///     The run a task page links to and the SPA reads apply authority from: a LIVE owner before an ended one, the
+    ///     newest within each, so the page never offers an Apply the guard refuses.
+    /// </summary>
+    private static DevelopmentWorkflowRunReference? WorkflowRunOf(Guid taskId, IReadOnlyList<GraphWorkflowDevelopmentTaskRun> graphRuns)
+    {
+        var owners = graphRuns.Where(run => run.DevelopmentTaskId == taskId).ToList();
+        var owner = owners.FirstOrDefault(static run => !GraphWorkflowStateMachine.IsTerminal(run.RunStatus)) ?? owners.FirstOrDefault();
+        return owner is null
+            ? null
+            : new DevelopmentWorkflowRunReference
+            {
+                Engine = DevelopmentWorkflowEngine.GraphWorkflow,
+                RunId = owner.RunId
+            };
     }
 
     public async Task<DevelopmentNextActionResult> StartNextActionAsync(Guid projectId,
@@ -357,6 +376,30 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
                 TaskStatus = DevelopmentTaskStatus.Blocked,
                 Role = null
             };
+        }
+
+        // A missing test runner judged nothing and charged no round, so once the runner is installed the same succeeded coder attempt
+        // is validated again (the store's RetryValidation edge checks the rest). ADR 0023 decision 7: never past a live owning run.
+        if (task.Status == DevelopmentTaskStatus.Blocked
+            && task.BlockedReason?.StartsWith($"[{DevelopmentTransitionTaskCommand.RetryValidationFailureCode}]", StringComparison.Ordinal) == true)
+        {
+            await EnsureNoLiveOwnerToContinueAsync(taskId, cancellationToken);
+            var retried = await _coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+                {
+                    TaskId = taskId,
+                    OperationId = DerivedOperationId(operationId, "retry-validation"),
+                    TargetStatus = DevelopmentTaskStatus.InProgress,
+                    ExpectedTaskVersion = task.Version,
+                    RetryValidation = true
+                },
+                cancellationToken);
+            task = (await _store.GetTaskAsync(taskId, cancellationToken)) with
+            {
+                Version = retried.Version
+            };
+            _logger.LogInformation("Development task status moved Blocked to InProgress for task {TaskId} in project {ProjectId} to re-run the validation a missing test runner stopped.",
+                taskId,
+                projectId);
         }
 
         if (task.Status == DevelopmentTaskStatus.Planned)
@@ -587,11 +630,11 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     public async Task<DevelopmentOperationResult> ApplyAsync(Guid projectId,
         Guid taskId,
         Guid operationId,
-        Guid? onBehalfOfWorkflowRunId,
+        DevelopmentWorkflowRunReference? onBehalfOfWorkflowRun,
         CancellationToken cancellationToken = default)
     {
         _ = await RequireTaskAsync(projectId, taskId, cancellationToken);
-        await EnsureApplyAuthorityAsync(taskId, onBehalfOfWorkflowRunId, cancellationToken);
+        await EnsureApplyAuthorityAsync(taskId, onBehalfOfWorkflowRun, cancellationToken);
         var repository = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken);
         return await _applyService.ApplyAsync(taskId, operationId, repository, cancellationToken);
     }
@@ -601,43 +644,50 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     ///     in that run, and this is not it.
     /// </summary>
     /// <remarks>
-    ///     Both apply surfaces — the endpoint and the workflow's <c>DevWorkflowApplyCommands</c> — route through here,
-    ///     because a hidden Apply button is a hint and any client could leave a HumanGate trail describing a decision
-    ///     nobody made. The workflow lane passes by naming the run it applies for, so "on behalf of run X" against run
-    ///     Y's task is refused. An ended run answers no further gate, so authority returns here; and with
-    ///     the DevWorkflows switch off the guard stands down, or a run live at the flip strands its tasks for good.
+    ///     Every apply surface routes through here: a hidden Apply button is a hint. ANY live owning Graph run refuses
+    ///     unless it is the caller. The check ignores the feature switch and fails closed: with Graph Workflows off its
+    ///     run cannot end, so the refusal says to turn it back on. An ended run answers no further gate.
     /// </remarks>
-    private async Task EnsureApplyAuthorityAsync(Guid taskId, Guid? onBehalfOfWorkflowRunId, CancellationToken cancellationToken)
+    private async Task EnsureApplyAuthorityAsync(Guid taskId, DevelopmentWorkflowRunReference? onBehalfOf, CancellationToken cancellationToken)
     {
-        if (!await _runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken))
+        if (await FindLiveOwnerAsync(taskId, onBehalfOf, cancellationToken) is { } owner)
         {
-            return;
+            throw new DevelopmentInvalidTransitionException(await _runtimeSettings.GetGraphWorkflowsEnabledAsync(cancellationToken)
+                ? $"Graph workflow run '{owner.RunId:D}' is driving this task and has not ended, so the approval that lets its patch land is "
+                  + "that run's own pause. Approve it there, or wait for the run to end before applying from here."
+                : GraphWorkflowsOffRefusal(owner.RunId));
+        }
+    }
+
+    /// <summary>The continuation gate: a stood-down task is continued here only once no live run drives it, as the apply gate decides.</summary>
+    private async Task EnsureNoLiveOwnerToContinueAsync(Guid taskId, CancellationToken cancellationToken)
+    {
+        if (await FindLiveOwnerAsync(taskId, onBehalfOf: null, cancellationToken) is { } owner)
+        {
+            throw new DevelopmentInvalidTransitionException(await _runtimeSettings.GetGraphWorkflowsEnabledAsync(cancellationToken)
+                ? $"Graph workflow run '{owner.RunId:D}' is driving this task and has not ended. Wait for the run to end, or cancel it, "
+                  + "before continuing the task from here."
+                : GraphWorkflowsOffRefusal(owner.RunId));
+        }
+    }
+
+    private static string GraphWorkflowsOffRefusal(Guid runId) =>
+        $"Graph workflow run '{runId:D}' is driving this task and has not ended, and Graph Workflows is switched off, so that run "
+        + "can neither finish nor be cancelled. Turn Graph Workflows back on in Node Settings → General → Features to finish or cancel it.";
+
+    /// <summary>The live Graph run that drives the task, other than <paramref name="onBehalfOf" />, or null.</summary>
+    private async Task<DevelopmentWorkflowRunReference?> FindLiveOwnerAsync(Guid taskId, DevelopmentWorkflowRunReference? onBehalfOf, CancellationToken cancellationToken)
+    {
+        foreach (var owner in await _graphWorkflows.ListDevelopmentTaskRunsAsync([taskId], cancellationToken))
+        {
+            var reference = new DevelopmentWorkflowRunReference { Engine = DevelopmentWorkflowEngine.GraphWorkflow, RunId = owner.RunId };
+            if (!GraphWorkflowStateMachine.IsTerminal(owner.RunStatus) && onBehalfOf != reference)
+            {
+                return reference;
+            }
         }
 
-        if (await _workflows.FindRunIdForDevelopmentTaskAsync(taskId, cancellationToken) is not { } runId
-            || runId == onBehalfOfWorkflowRunId)
-        {
-            return;
-        }
-
-        DevWorkflowRunSnapshot run;
-        try
-        {
-            run = await _workflows.GetRunAsync(runId, cancellationToken);
-        }
-        catch (DevWorkflowNotFoundException)
-        {
-            // The run was deleted between the two reads. There is no live owner left to defer to, and answering a 404
-            // about a workflow to somebody applying a Development patch would be the wrong subject entirely.
-            return;
-        }
-
-        if (!DevWorkflowStateMachine.IsTerminal(run.Status))
-        {
-            throw new DevelopmentInvalidTransitionException($"Development workflow run '{runId:D}' is driving this task and has not ended, so the "
-                                                            + "approval that lets its patch land is that run's own gate. Approve it there, or wait "
-                                                            + "for the run to end before applying from here.");
-        }
+        return null;
     }
 
     public async Task<DevelopmentProjectAggregate> ReconnectRepositoryAsync(Guid projectId,

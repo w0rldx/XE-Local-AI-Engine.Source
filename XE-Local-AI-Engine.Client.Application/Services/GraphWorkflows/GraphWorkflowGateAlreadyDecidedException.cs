@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     Neither is the idempotent replay a repeated id is. It carries the answer that STANDS, which is why it is its
 ///     own type rather than another <see cref="GraphWorkflowRunConflictException" />: the second person to click
 ///     needs to be told what was decided, not only that their click failed. <c>ConflictExceptionHandler</c> puts
-///     <see cref="StandingDecision" /> on the 409 body under the member Dev Workflows' equivalent already populates.
+///     <see cref="StandingDecision" /> on the 409 body's <c>standingDecision</c> member.
 /// </remarks>
 public sealed class GraphWorkflowGateAlreadyDecidedException : InvalidOperationException
 {

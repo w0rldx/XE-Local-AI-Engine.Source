@@ -28,8 +28,8 @@ internal static class AddNodeTranscriptionExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // No IValidateOptions<> class: unlike the dev-workflow options there is no cross-section invariant to check,
-        // and the range annotation is the whole check.
+        // No IValidateOptions<> class: there is no cross-section invariant to check, and the range annotation is the
+        // whole check.
         builder.Services.AddOptions<TranscriptionOptions>()
                .Bind(configuration.GetSection(TranscriptionOptions.Section))
 #pragma warning disable MA0045 // Options Configure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.

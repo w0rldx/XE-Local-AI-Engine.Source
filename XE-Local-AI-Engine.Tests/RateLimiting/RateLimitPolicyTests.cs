@@ -241,6 +241,27 @@ public sealed class RateLimitPolicyTests
     }
 
     [Test]
+    [Arguments(LocalApiRoutes.Proxy.Models)]
+    [Arguments(LocalApiRoutes.Proxy.ChatCompletions)]
+    [Arguments(LocalApiRoutes.Proxy.Embeddings)]
+    [Arguments(LocalApiRoutes.Proxy.Messages)]
+    [Arguments(LocalApiRoutes.Proxy.MessagesCountTokens)]
+    [Arguments(LocalApiRoutes.Proxy.Responses)]
+    [Arguments(LocalApiRoutes.Proxy.ResponsesInputTokens)]
+    public void EveryProxyRoute_CarriesTheModelProxyPolicy(string route)
+    {
+        // A route mapped without RequireRateLimiting is unthrottled, and nothing at request time would say so.
+        var pattern = $"/{LocalApiRoutes.Prefix}/{route}";
+        var endpoint = Host.Factory.Services.GetRequiredService<EndpointDataSource>()
+                           .Endpoints
+                           .OfType<RouteEndpoint>()
+                           .SingleOrDefault(candidate => string.Equals(candidate.RoutePattern.RawText, pattern, StringComparison.Ordinal));
+
+        var mapped = AssertEx.NotNull(endpoint, $"{pattern} is not mapped.");
+        AssertEx.Equal(NodeAuthRateLimits.LocalModelProxyPolicy, mapped.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName);
+    }
+
+    [Test]
     public async Task IntegrationApiPolicy_WhenWindowExhausted_Returns429WithRetryAfter()
     {
         using var client = Host.Factory.CreateClient();

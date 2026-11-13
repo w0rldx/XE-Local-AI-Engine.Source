@@ -15,7 +15,6 @@ public sealed class ResourceNotFoundExceptionHandlerTests
     {
         yield return () => new WorkSessionNotFoundException("gone");
         yield return () => new DevelopmentNotFoundException("gone");
-        yield return () => new DevWorkflowNotFoundException("gone");
         yield return () => new GraphWorkflowNotFoundException("gone");
         yield return () => new ExternalAppNotFoundException("gone");
         yield return () => new NodeChatConversationNotFoundException(Guid.NewGuid());

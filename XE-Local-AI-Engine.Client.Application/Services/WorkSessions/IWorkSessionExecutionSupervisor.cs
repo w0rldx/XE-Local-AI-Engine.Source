@@ -22,12 +22,7 @@ internal interface IWorkSessionExecutionSupervisor
     ///     Admits a session and starts driving it. Returns <see langword="false" /> when the feature is off, the
     ///     session is already in flight here, or the admission cap is full.
     /// </summary>
-    /// <remarks>
-    ///     <paramref name="runtime" /> pins what the steps of THIS run use instead of the bound agent's own model and
-    ///     effort, and is held for the run rather than stored: the caller supplies it again on the next start or
-    ///     resume, so nothing here has to survive a restart.
-    /// </remarks>
-    bool TryStart(Guid sessionId, WorkSessionRuntimeOverride? runtime = null);
+    bool TryStart(Guid sessionId);
 
     /// <summary>
     ///     Whether another session could be admitted right now. Read BEFORE a caller moves a session to <c>Running</c>,

@@ -8,7 +8,7 @@ import { graphWorkflowInvalidationKey, graphWorkflowQueryIds } from "@/features/
 
 const HUB_PATH = "graph-workflows/hub";
 const EVENT_NAME = "graphWorkflowChanged";
-/** The dev-workflow fallback cadence, reused: fast enough to feel live, slow enough not to hammer a broken hub. */
+/** The fallback cadence: fast enough to feel live, slow enough not to hammer a broken hub. */
 export const GRAPH_WORKFLOW_POLL_INTERVAL_MS = 3_000;
 
 /**

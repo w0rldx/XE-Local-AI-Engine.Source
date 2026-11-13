@@ -1,5 +1,5 @@
 // Server state for the External Apps surface. Every call goes through the generated hey-api `*Options()` /
-// `*Mutation()`, exactly as `useDevWorkflows.ts` does — no hand-wired axios, no
+// `*Mutation()`, exactly as `useGraphWorkflows.ts` does — no hand-wired axios, no
 // hand-written request types.
 //
 // The generated query keys are single-element arrays `[{ _id: "<operationId>", path, query, … }]`, and TanStack

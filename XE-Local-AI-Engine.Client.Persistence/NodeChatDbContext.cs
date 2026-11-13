@@ -185,24 +185,6 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<AgentWorkSessionEvent> AgentWorkSessionEvents => Set<AgentWorkSessionEvent>();
 
-    internal DbSet<DevWorkflowWorkItem> DevWorkflowWorkItems => Set<DevWorkflowWorkItem>();
-
-    internal DbSet<DevWorkflowDefinition> DevWorkflowDefinitions => Set<DevWorkflowDefinition>();
-
-    internal DbSet<DevWorkflowRuleSet> DevWorkflowRuleSets => Set<DevWorkflowRuleSet>();
-
-    internal DbSet<DevWorkflowRun> DevWorkflowRuns => Set<DevWorkflowRun>();
-
-    internal DbSet<DevWorkflowNodeRun> DevWorkflowNodeRuns => Set<DevWorkflowNodeRun>();
-
-    internal DbSet<DevWorkflowRunEvent> DevWorkflowRunEvents => Set<DevWorkflowRunEvent>();
-
-    internal DbSet<DevWorkflowDecision> DevWorkflowDecisions => Set<DevWorkflowDecision>();
-
-    internal DbSet<DevWorkflowArtifact> DevWorkflowArtifacts => Set<DevWorkflowArtifact>();
-
-    internal DbSet<DevWorkflowArtifactUse> DevWorkflowArtifactUses => Set<DevWorkflowArtifactUse>();
-
     internal DbSet<IntegrationTrigger> IntegrationTriggers => Set<IntegrationTrigger>();
 
     internal DbSet<IntegrationApiKey> IntegrationApiKeys => Set<IntegrationApiKey>();
@@ -707,15 +689,6 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new AgentWorkSessionArtifactConfiguration());
         modelBuilder.ApplyConfiguration(new AgentWorkSessionCheckpointConfiguration());
         modelBuilder.ApplyConfiguration(new AgentWorkSessionEventConfiguration());
-        modelBuilder.ApplyConfiguration(new DevWorkflowWorkItemConfiguration());
-        modelBuilder.ApplyConfiguration(new DevWorkflowDefinitionConfiguration());
-        modelBuilder.ApplyConfiguration(new DevWorkflowRuleSetConfiguration());
-        modelBuilder.ApplyConfiguration(new DevWorkflowRunConfiguration());
-        modelBuilder.ApplyConfiguration(new DevWorkflowNodeRunConfiguration());
-        modelBuilder.ApplyConfiguration(new DevWorkflowRunEventConfiguration());
-        modelBuilder.ApplyConfiguration(new DevWorkflowDecisionConfiguration());
-        modelBuilder.ApplyConfiguration(new DevWorkflowArtifactConfiguration());
-        modelBuilder.ApplyConfiguration(new DevWorkflowArtifactUseConfiguration());
         modelBuilder.ApplyConfiguration(new IntegrationTriggerConfiguration());
         modelBuilder.ApplyConfiguration(new IntegrationApiKeyConfiguration());
         modelBuilder.ApplyConfiguration(new IntegrationSessionConfiguration());

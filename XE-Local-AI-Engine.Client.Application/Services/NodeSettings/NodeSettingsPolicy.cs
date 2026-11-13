@@ -24,7 +24,6 @@ public enum NodeSettingsField
     PlaybookEvalModelName,
     MemoryExtractionModelName,
     WorkSessionsEnabled,
-    DevWorkflowsEnabled,
     AgentHomeEnabled,
     HuggingFaceDefaultQuant,
     RerankerModelName,
@@ -154,23 +153,7 @@ public static class NodeSettingsPolicy
             }
         }
 
-        // The two startup couplings, on the effective merged values: a stored combination either validator refuses would fail the next start.
-        // Blamed on the switch being turned on; when it was already on (the accessor still reads the record before this save), on what took the other away.
-        if ((settings.DevWorkflowsEnabled ?? await runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken))
-            && !(settings.WorkSessionsEnabled ?? await runtimeSettings.GetWorkSessionsEnabledAsync(cancellationToken)))
-        {
-            return
-            [
-                new NodeSettingsValidationError
-                {
-                    Field = await runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken)
-                        ? NodeSettingsField.WorkSessionsEnabled
-                        : NodeSettingsField.DevWorkflowsEnabled,
-                    Message = "Development workflows need work sessions: every workflow agent node runs as a work session. Turn work sessions on, or development workflows off."
-                }
-            ];
-        }
-
+        // The startup coupling, on the effective merged values: a stored combination its validator refuses would fail the next start.
         // The list as the runtime will resolve it after this save: the store normalizes a list with no non-blank name to null, which falls back to the seed.
         if ((settings.AgentHomeEnabled ?? await runtimeSettings.GetAgentHomeEnabledAsync(cancellationToken))
             && settings.ToolCapableModels?.Any(static model => !string.IsNullOrWhiteSpace(model)) != true

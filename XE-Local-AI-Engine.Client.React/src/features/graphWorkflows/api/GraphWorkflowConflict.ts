@@ -5,9 +5,6 @@ import type { ConflictProblemDetails } from "@/core/api/models/ProblemDetails";
  * The `conflictType` discriminators the node's global `ConflictExceptionHandler` writes for this module. They mirror
  * `NodeConflictProblemType` members (XE-Local-AI-Engine.Client/Common/ProblemDetailModels/Enums/), which serialize as
  * the enum NAME — rename one there and these strings must follow.
- *
- * Copied rather than imported from `devWorkflows/api/DevWorkflowConflict.ts`: features never import each other
- * (`no-cross-feature` + `config/dependency-baseline.json`), and the member set is this module's own.
  */
 export const graphWorkflowConflictTypes = {
 	/** A definition write lost the optimistic-concurrency race: someone saved over the row between the read and the write. */

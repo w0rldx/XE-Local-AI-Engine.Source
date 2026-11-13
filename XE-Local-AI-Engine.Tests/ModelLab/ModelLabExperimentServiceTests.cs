@@ -1439,6 +1439,9 @@ public sealed class ModelLabExperimentServiceTests
             });
 
             var checkpoints = Substitute.For<IBaseCheckpointStore>();
+            // The download preflight asks the real disk for checkpoint size plus headroom; a busy temp volume must not decide a test.
+            var freeSpace = Substitute.For<IFreeSpaceProbe>();
+            freeSpace.GetAvailableFreeBytes(Arg.Any<string>()).Returns(long.MaxValue);
 #pragma warning disable CA2000 // LabHost owns it.
             var factory = new TestServerWebAppFactory
             {
@@ -1456,6 +1459,8 @@ public sealed class ModelLabExperimentServiceTests
                     services.AddSingleton(ggufReader);
                     services.RemoveAll<IBaseCheckpointStore>();
                     services.AddSingleton(checkpoints);
+                    services.RemoveAll<IFreeSpaceProbe>();
+                    services.AddSingleton(freeSpace);
                     if (options is not null)
                     {
                         services.RemoveAll<IOptions<ModelLabJobOptions>>();

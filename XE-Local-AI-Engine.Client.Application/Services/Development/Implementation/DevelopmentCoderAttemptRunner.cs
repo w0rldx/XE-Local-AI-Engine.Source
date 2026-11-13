@@ -500,7 +500,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             ? string.Empty
             : string.Concat("\nFeedback from the previous round:\n", previousRound);
 
-    /// <summary>The rule sets a Development workflow resolved for the node run driving this task, when one does.</summary>
+    /// <summary>The instructions a Graph workflow <c>DevTask</c> node recorded for the node run driving this task, when one does.</summary>
     /// <remarks>
     ///     Rendered and bounded by the workflow before it reached the task, so this only decides whether there is a
     ///     section at all: an empty heading governs nothing and would read as a policy that said nothing.

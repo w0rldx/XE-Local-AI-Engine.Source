@@ -33,5 +33,23 @@ public static partial class LocalApiRoutes
 
         /// <summary>OpenAI model list. SYNTHESIZED from the local GGUF catalog (a child only knows the one model it loaded), not a passthrough.</summary>
         public const string Models = "proxy/v1/models";
+
+        /// <summary>
+        ///     The base an Anthropic client configures (<c>ANTHROPIC_BASE_URL</c>): Anthropic SDKs append <c>/v1/messages</c>
+        ///     themselves, so it is one segment above <see cref="OpenAiBase" />.
+        /// </summary>
+        public const string AnthropicBase = "proxy";
+
+        /// <summary>Anthropic Messages passthrough. Forwarded verbatim to the resolved llama-server child's own <c>/v1/messages</c>.</summary>
+        public const string Messages = "proxy/v1/messages";
+
+        /// <summary>Anthropic token-count passthrough. Forwarded verbatim to the child's own <c>/v1/messages/count_tokens</c>.</summary>
+        public const string MessagesCountTokens = "proxy/v1/messages/count_tokens";
+
+        /// <summary>OpenAI Responses passthrough. Forwarded verbatim to the resolved llama-server child's own <c>/v1/responses</c>.</summary>
+        public const string Responses = "proxy/v1/responses";
+
+        /// <summary>OpenAI Responses token-count passthrough. Forwarded verbatim to the child's own <c>/v1/responses/input_tokens</c>.</summary>
+        public const string ResponsesInputTokens = "proxy/v1/responses/input_tokens";
     }
 }

@@ -46,6 +46,7 @@ interface Handlers {
 	readonly tools?: typeof tools;
 	readonly allowsActions?: boolean;
 	readonly decisionModelOptionsReady?: boolean;
+	readonly graphNodes?: readonly GraphWorkflowCanvasNodeData[];
 }
 
 function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {}) {
@@ -71,6 +72,7 @@ function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {})
 				decisionModelOptions={[{ value: "julia-1", label: "Julia-1" }]}
 				decisionModelOptionsReady={handlers.decisionModelOptionsReady}
 				graphSettings={handlers.graphSettings}
+				graphNodes={handlers.graphNodes}
 			/>
 		</ConfirmProvider>,
 	);
@@ -126,6 +128,7 @@ const bodyTestIdByKind: Record<GraphWorkflowNodeKind, string> = {
 	End: "gw-node-config-outcome",
 	ChatInput: "gw-node-config-chat-prompt",
 	DecisionModel: "gw-node-config-question",
+	DevTask: "gw-node-config-devtask-requirements",
 };
 
 describe("GraphWorkflowNodeConfigPanel", () => {
@@ -645,5 +648,74 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 
 			expect(onChange).toHaveBeenCalledWith({ includeAttachments: true });
 		});
+	});
+
+	describe("DevTask form", () => {
+		function devTask(key: string, patch: Record<string, unknown> = {}): GraphWorkflowCanvasNodeData {
+			return { ...defaultNodeData("DevTask", key), ...patch } as GraphWorkflowCanvasNodeData;
+		}
+
+		it("edits an implement node's requirements, title and criteria, and asks for requirements once touched", () => {
+			const onChange = vi.fn();
+			renderPanel(devTask("impl"), { onChange });
+
+			fireEvent.change(screen.getByTestId("gw-node-config-devtask-requirements"), { target: { value: "Add a health route" } });
+			expect(onChange).toHaveBeenLastCalledWith({ requirements: "Add a health route" });
+			fireEvent.change(screen.getByTestId("gw-node-config-devtask-title"), { target: { value: "Health route" } });
+			expect(onChange).toHaveBeenLastCalledWith({ title: "Health route" });
+
+			const criteria = screen.getByTestId("gw-node-config-devtask-criteria");
+			// A comma is part of the sentence, not a separator. TagsInput commits on Enter only while its combobox is open.
+			fireEvent.click(criteria);
+			fireEvent.change(criteria, { target: { value: "Returns 200, with a body" } });
+			fireEvent.keyDown(criteria, { key: "Enter" });
+			expect(onChange).toHaveBeenLastCalledWith({ acceptanceCriteria: ["Returns 200, with a body"] });
+
+			fireEvent.blur(screen.getByTestId("gw-node-config-devtask-requirements"));
+			expect(screen.getByText(en.pages.graphWorkflows.form.requirements.required)).toBeTruthy();
+			expect(screen.queryByTestId("gw-node-config-devtask-task")).toBeNull();
+		});
+
+		it("switches to apply and offers only this graph's implement nodes", async () => {
+			const onChange = vi.fn();
+			const node = devTask("land", { action: "apply" });
+			renderPanel(node, {
+				onChange,
+				graphNodes: [
+					devTask("impl", { label: "Build it" }),
+					devTask("impl-2"),
+					devTask("other-apply", { action: "apply" }),
+					node,
+					defaultNodeData("Pause", "review"),
+					defaultNodeData("Agent", "agent-1"),
+				],
+			});
+
+			expect(screen.queryByTestId("gw-node-config-devtask-requirements")).toBeNull();
+			const input = screen.getByTestId("gw-node-config-devtask-task");
+			fireEvent.click(input);
+			const dropdown = document.getElementById(input.getAttribute("aria-controls") ?? "");
+			const options = await within(dropdown as HTMLElement).findAllByRole("option", { hidden: true });
+
+			expect(options.map((option) => option.textContent)).toEqual(["Build it (impl)", "impl-2"]);
+			fireEvent.click(options[1] as HTMLElement);
+			expect(onChange).toHaveBeenLastCalledWith({ task: "impl-2" });
+		});
+	});
+
+	it("toggles an Agent node's repository option", () => {
+		const onChange = vi.fn();
+		const off = renderPanel(defaultNodeData("Agent", "agent-1"), { onChange });
+
+		const toggle = screen.getByTestId("gw-node-config-repository") as HTMLInputElement;
+		expect(toggle.checked).toBe(false);
+		fireEvent.click(toggle);
+		expect(onChange).toHaveBeenLastCalledWith({ repository: true });
+		off.unmount();
+
+		renderPanel({ ...defaultNodeData("Agent", "agent-1"), repository: true } as GraphWorkflowCanvasNodeData, { onChange });
+		expect((screen.getByTestId("gw-node-config-repository") as HTMLInputElement).checked).toBe(true);
+		fireEvent.click(screen.getByTestId("gw-node-config-repository"));
+		expect(onChange).toHaveBeenLastCalledWith({ repository: false });
 	});
 });

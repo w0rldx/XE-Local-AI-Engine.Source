@@ -10,8 +10,8 @@ family with `GraphWorkflowRunHub`, and the React `features/graphWorkflows/` fold
 
 **Read this if you are** changing the graph contract, a node kind or the dispatcher, or debugging a stuck run or an
 Open Canvas import. **Skip to** [§3](#3-run-lifecycle) for how a run advances; **reference tables** are in
-[§5](#5-api-and-hub) and [§8](#8-limits-and-options); **related pages:** [Dev Workflows](25-dev-workflows.md),
-[Workflow Engines Divergence Register](22-workflow-engines-divergence-register.md).
+[§5](#5-api-and-hub) and [§8](#8-limits-and-options); **related pages:** [Workflow Engines Divergence Register](22-workflow-engines-divergence-register.md) (the
+retired Dev Workflows note).
 
 ## Contents
 
@@ -74,10 +74,10 @@ canvases you care about.
   `allowsActions` (§4.3, [ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md)). A node runs unattended,
   so there is nobody to ask: for an action, the two operator flags and an audit row written before the call stand in
   for the question. No agent and no model ever chooses an action's arguments.
-- **Not Dev Workflows.** [Development Workflows](25-dev-workflows.md) run a fixed template over a code work item with
-  gates, interventions and artifacts. Graph Workflows are free-form graphs with no work item and no artifacts, and
-  several of their types are deliberate copies trimmed of what has no meaning here — there is no `Blocked` node-run
-  state and no `Waived` edge state, because v1 has neither retry routing nor a waiving decision.
+- **The one workflow engine.** Dev Workflows, the engine Graph Workflows was copy-adapted from, is retired
+  ([ADR 0023](../adr/0023-dev-workflows-converge-into-graph-workflows.md)); development work is a graph with `DevTask`
+  nodes (§4.10). There is no work item and no artifact store, no `Blocked` node-run state and no `Waived` edge state,
+  because there is neither retry routing nor a waiving decision.
 
 ---
 
@@ -113,7 +113,7 @@ omits both members when they are absent.
 | Member | Required | Meaning |
 |---|---|---|
 | `key` | yes | 1–64 characters of letters, digits, `_` and `-`. Node and edge keys share **one** namespace. |
-| `kind` | yes | One of `Start`, `LlmCall`, `Agent`, `Tool`, `Condition`, `Parallel`, `Join`, `Pause`, `End`, `ChatInput`, `DecisionModel`, by NAME. |
+| `kind` | yes | One of `Start`, `LlmCall`, `Agent`, `Tool`, `Condition`, `Parallel`, `Join`, `Pause`, `End`, `ChatInput`, `DecisionModel`, `DevTask`, by NAME. |
 | `label` | no | Display text. Defaults to the key. |
 | `joinPolicy` | no | `All` (default) or `Any`. A property of **every** node — see §2.3. |
 | `maxAttempts` | no | Positive. Defaults to **3** for `LlmCall`, `Agent`, `Tool` and `DecisionModel`, **1** for every other kind. |
@@ -213,6 +213,7 @@ Accumulated, per element:
   document a pause actually produces, so the pre-flight rule and the routing cannot disagree;
 - a `ChatInput` node in a graph that is not `Chat`, or one with no **unconditional** out-edge (whatever the user
   types, the run must go somewhere);
+- a `DevTask` node in a `Chat` graph, and an `apply` `DevTask` node that breaks `DEVTASK-1` (§4.10);
 - a second unconditional edge between one pair of nodes.
 
 **Warnings are a second list, and they never refuse.** `GraphWorkflowGraph.Warnings` is computed on the first ask
@@ -233,7 +234,8 @@ A successor whose `joinPolicy` is `Any` is **exempt**, whatever its kind, and th
 a taste one. The advised edge is unconditional, so it stays satisfied when every approval is rejected — an `Any` node
 would then be admitted on the content edge alone and run the branch the rejections were meant to stop. Collecting the
 decision documents is what such a node is *for*, so there is nothing to warn about. An `All` successor waits for the
-approval edges too, so it keeps both the warning and the advice.
+approval edges too, so it keeps both the warning and the advice. An `apply` `DevTask` node is exempt as well: it reads
+its task by key, not its input, and `DEVTASK-1` refuses the edge the advice would add (§4.10).
 
 The second, on an **Agent node** whose `responseJsonSchema` asks for something the runtime it will run on does not
 enforce (`GraphWorkflowGraph.ResponseSchemaWarnings`). It fires on three things: a keyword the
@@ -406,7 +408,8 @@ start, rather than reading at dispatch, keeps every tick and every restart of th
 
 Two checks happen again at start rather than being trusted from save time, because the world moves in between: the
 graph is re-parsed with the same parser, and every `Tool` node's tool is re-checked against the live catalog (§4.3).
-The run also refuses a graph over `MaxNodeRunsPerRun` and an input over `MaxRunInputBytes`.
+The run also refuses a graph over `MaxNodeRunsPerRun` and an input over `MaxRunInputBytes`, and a graph holding a
+`DevTask` node without a resolvable Development project in its input (§4.10).
 
 **Origin and accepted sources** ([ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md)). Every start names
 who starts it: `StartAsync` takes a required `GraphWorkflowRunOrigin` (`Source`, and the audit-only `PrincipalId` and
@@ -513,7 +516,7 @@ run that resumes does not re-pass the admission gate (accepted: the lanes still 
 Standard run parked on a `Pause` too.
 
 Deadlines are re-derived from the row every tick — `started_at_utc` plus the node's `timeoutSeconds` or
-`DefaultNodeTimeoutSeconds` — never armed in memory, so they survive the restart that would otherwise leave a node run
+`DefaultNodeTimeoutSeconds` (no default for a `DevTask` `implement` node, §4.10) — never armed in memory, so they survive the restart that would otherwise leave a node run
 bounded by nothing. `GraphWorkflowDeadline.Grace` adds 30 s before the run ends a row itself: the lane bounds its own
 turn by the same number from a slightly later moment, and ending the row the instant the number is reached would race
 a better answer and sometimes win by milliseconds.
@@ -539,6 +542,9 @@ The verdicts:
   interrupted action is never re-attempted and fails the run. The class written is the plain `Interrupted`
   rather than anything `GraphWorkflowFailures.Classify` would decide, because recovery deliberately never parses the
   run's graph and so cannot see the node's attempt cap — the retry stage, which does, classifies on that first tick.
+- A `Running` **`DevTask`** row collapses to `Pending` like an inline row, keeping its attempt and its
+  `development_task_id`: its work is a durable Development Mode task, so the re-dispatch resumes polling that task
+  instead of creating another (§4.10). Development Mode's own reconciler interrupts the attempt that was running.
 
 That is the same "never resume a provider stream, start a fresh attempt instead" posture Development Mode records in
 [ADR 0001](../adr/0001-development-mode-restart-recovery.md), applied without that design's replacement-attempt rows:
@@ -693,7 +699,8 @@ text through at four times the cap — and a node whose document exceeds it fail
 retryable.
 
 `Pause` and `ChatInput` park on a person (`GraphWorkflowPauseExecutor`); `Agent`, `LlmCall` and `DecisionModel` share
-the model-invocation lane (`GraphWorkflowInvocationExecutor`); `Tool` has its own lane.
+the model-invocation lane (`GraphWorkflowInvocationExecutor`); `Tool` has its own lane; `DevTask` has a lane that holds
+no slot and nothing in flight (`GraphWorkflowDevTaskExecutor`, §4.10).
 `Start`, `End`, `Condition`, `Parallel` and `Join` are **inline** (`GraphWorkflowInlineExecutor`): their work is a
 pure function of rows the tick has already read, so they run inside the tick with no `Queued` hop. They still write
 two rows each, which is what makes the timing of a fan-out visible in the event log.
@@ -737,6 +744,23 @@ is long gone by the time the turn lands.
 | `reasoningEffort` | Optional, one of `none`, `low`, `medium`, `high`. Checked at **save** — its vocabulary is closed and cannot go stale. |
 | `responseJsonSchema` | Optional. Must be an **object** schema (`"type": "object"`), because the parsed answer lands at `output.json` and a condition reads a property off it. |
 | `includeUpstreamOutputs` | Defaults **true**. Inlines the `upstream` map into the prompt, budgeted at `MaxRunInputBytes` and truncated with an explicit marker rather than silently. |
+| `repository` | Defaults **false**. Points the bound agent's `list_files`, `read_file` and `search_text` at the Development project the run input names in `developmentProjectId`, read-only, instead of the AgentHome workspace. Refused at **save** without an `agentDefinitionId`; the run-time refusals follow below. |
+
+**A `repository` node reads the run's Development project.** The run input carries the project as
+`{ "developmentProjectId": "<guid>", … }`; the executor reads it from `run.input` in the node's input document (the run's
+stored input) and resolves the root through `IDevelopmentRepositoryBindingService.ResolveProjectAsync`, then opens
+`CoderRepositoryScope.Begin(root)` around the invocation, the scope the repository tools read. The scope is an
+`AsyncLocal` that reaches the tool handlers the framework calls from inside the runner's tool loop
+(`GraphWorkflowAgentRepositoryTests`). Each of these refuses the node run `ValidationFailed` before capacity, naming the cause and
+never a host path: a cloud effective model without **Let cloud models read local data** (`AllowCloudModelAccess`) or a
+local-data grant on its connection (a repository is node-local data); a bound agent that lists none of the three tools;
+a run input with no `developmentProjectId`; Development Mode off; a binding that does not resolve (reconnect the project
+on the Development page). Without the option the node reads no repository, whatever the run input names. The node's
+output is node-local data too, so it taints its direct consumers like a local-data Tool node (§4.3). A sub-agent the
+bound agent spawns does not inherit the scope (`SubAgentSpawnService` opens `CoderRepositoryScope.Begin(null)` for the
+child), and neither do the participants of an orchestration agent (`InvocationRunner.RunOrchestrationAsync` does the same),
+because their own model pins passed no repository gate. The option is allowed in a `Chat` graph on purpose: the node is single-operator and read-only, so whoever chats
+with a graph whose Start `defaultInput` names a project can have that repository's files read and quoted back.
 
 **In a `Chat` graph every Agent's seed prompt also carries the chat request**, whatever `includeUpstreamOutputs` says:
 after the instructions and before the upstream map, a `## Conversation request` section with `run.input.message` (same
@@ -751,7 +775,9 @@ sends a prompt byte-identical to one before steering existed.
 
 Output: `{ "text": …, "json": … | null, "usage": { inputTokens, outputTokens, totalTokens, reasoningTokens,
 durationMs, finishReason, model } }`. Every usage member is nullable: the runner reports what its provider gave it,
-and no provider reports all of them.
+and no provider reports all of them. `text` is the answer after the turn's last tool call, as chat persists it
+(`NodeChatPartAccumulator.FinalSegment`): the narration a model streams before each call ("Let me read every file")
+is not handed to the next node or the approver.
 
 **What a response schema actually enforces.** llama-server compiles it into a real GBNF grammar and applies that
 grammar from the first output token, so the **structure** is guaranteed: the object shape, the declared types, an
@@ -896,7 +922,8 @@ tool has nobody to ask. Errors are keyed by node key, so the editor draws them o
 
 **A local-data Tool node taints its direct consumers.** A Tool node whose tool returns node-local data is one in the set
 the chat local-data gate withholds from a cloud model (`LocalToolOfferProvider.LocalDataToolNames`: the knowledge-base
-read tools and the coder workspace file tools). `GraphWorkflowToolGate.LocalDataSource` finds such a node among the keys
+read tools and the coder workspace file tools); an Agent node with `repository` taints the same way
+(`GraphWorkflowToolGate.ReadsLocalData`). `GraphWorkflowToolGate.LocalDataSource` finds such a node among the keys
 of the consumer's `upstream` document, which hold only satisfied edges, so a failed one on an `Any` join taints nothing.
 Its Agent, LLM Call or `llm` decision consumer then passes the local-data gate of §4.2 before a cloud model sees the
 output. `web_fetch`, `get_current_time`, `calculate` and action tools are not in the set.
@@ -1171,6 +1198,96 @@ routes: a choice on `output.choice` `eq "billing"`; a yes/no on `output.noul` `g
 node itself (ADR 0021's rejection of a confidence threshold stands). An interrupted `Running` DecisionModel row is
 failed `Interrupted` at startup like every model turn (§3.5).
 
+### 4.10 `DevTask`
+
+A Development Mode step ([ADR 0023](../adr/0023-dev-workflows-converge-into-graph-workflows.md)). Graph Workflows owns no
+workspace and runs no coder: an `implement` node drives one Development Mode task through Dev Mode's own coder,
+validation and review until it awaits apply, and an `apply` node applies that task through
+`IDevelopmentManagementService.ApplyAsync`, so the apply gate is called, never re-implemented. `config.action` picks
+the action, and a member only the other action reads is refused (`GraphWorkflowGraph.ParseDevTask`). The node is
+refused in a `Chat` graph and gets **1** attempt unless it declares `maxAttempts`.
+
+| Action | Config member | Meaning |
+|---|---|---|
+| `implement` | `requirements` | **Required.** What the task must build. |
+| `implement` | `title` | Optional task title. |
+| `implement` | `acceptanceCriteria` | Optional array of non-blank strings. |
+| `implement` | `instructions` | Optional rules the Dev Mode coder and reviewer read for this task. |
+| `implement` | `inputBindings` | Optional, as on `LlmCall` (§4.2a): named input data handed over beside `requirements`, held to the same lint (§2.4). |
+| `apply` | `task` | **Required.** The key of the `implement` node whose task it applies. |
+
+**`DEVTASK-1`**, checked in `GraphWorkflowGraph.ValidateDevTask`, so at save and again at run start (§3.1): an `apply`
+node's `task` names an `implement` node of the graph, and **every** inbound edge of the `apply` node leaves a `Pause`
+node that has that `implement` node as a strict ancestor and fires on `Approve` and on no other answer. "Every inbound
+edge" rather than "a pause on every path": the approval has to be the step in front of the apply and be given after the
+patch exists, so an extra content edge, a `Reject`-routed or unconditional edge out of the pause, a pause on a sibling
+branch, and a pause before the `implement` are each refused, keyed on the `apply` node. Which answer an edge fires on is
+asked of the state machine's routing (`GraphWorkflowStateMachine.DecisionEdgeFires`), as the `Pause` pre-flight rule
+asks it. Unattended runs (schedule, integrations) cannot pass a `Pause`, so they cannot apply. Because an `apply` reads
+its task by key, the pause-context warning (§2.4) is never raised for it: its advice would add the edge `DEVTASK-1`
+refuses.
+
+```jsonc
+{ "key": "impl",  "kind": "DevTask", "config": { "action": "implement", "requirements": "Fix the login bug.",
+                                                  "inputBindings": { "request": "run.input.request" } } },
+{ "key": "review", "kind": "Pause",  "config": { "prompt": "Apply the patch?", "allowedDecisions": ["Approve", "Reject"] } },
+{ "key": "apply", "kind": "DevTask", "config": { "action": "apply", "task": "impl" } }
+// edges: impl → review; review → apply on output.decision Eq "Approve"; review → an End on Eq "Reject"
+```
+
+**Start binding.** A graph holding any `DevTask` node works in one Development project, named by the run input's
+`developmentProjectId` (the key the Agent node's `repository` option reads, §4.2). `GraphWorkflowRunService.StartAsync`
+refuses the start, writing no run, while Development Mode is off on the node (409), when the input carries no
+`developmentProjectId` GUID (400), when the project does not exist (400), and when its repository binding does not
+resolve (409, never naming the host path). A Start `defaultInput` that carries the key binds the project like an
+explicit input does.
+
+**The lane** (`GraphWorkflowDevTaskExecutor`). It holds no slot and no in-flight work: the Development task is durable
+and the row names it, so the lane waits by being polled on every tick (the sweep interval, `DispatchIntervalMilliseconds`),
+and nothing sleeps. It resolves the Development services per call, so Development Mode off fails the node
+`ValidationFailed` rather than the container; the live switch only stops it from starting the next step, so an attempt
+already running finishes.
+
+- **implement.** The first dispatch moves the row to `Running`, renders `requirements` with its `inputBindings` (as an
+  `LlmCall` prompt), creates ONE task in the run's project and pins it with `SetNodeRunDevelopmentTaskAsync` **before**
+  the first `StartNextActionAsync`. The create is keyed on run and node key without the attempt, so a crash between
+  create and pin gets the same task back; a pinned row (re-attempt or restart) never creates. A missing `title` is the
+  node label; empty `acceptanceCriteria` and the review budget come from the project's first task. `instructions` are
+  recorded through `RecordWorkflowPolicyAsync` per attempt and revoked when the row ends. Each poll then reads the task:
+  `AwaitingApply` (or already `Completed`) succeeds with `{ developmentTaskId, taskStatus, reviewRound }`; an attempt in
+  flight waits; an idle task gets the next `StartNextActionAsync`, keyed on what the tick observed. A failed attempt
+  fails `NodeFailed` (`Interrupted` for a restart, `ValidationFailed` for a workspace policy refusal); a `Blocked` task
+  fails `ValidationFailed` with Dev Mode's reason; a cancelled task or attempt ends the row `Cancelled`. Once the run
+  has ended, a task a missing test runner stood down (`[runner_not_installed]`) is continued from the Development page:
+  its next action ("Retry validation") re-validates the same coder attempt through the `RetryValidation` edge, and is
+  refused while any run driving the task is live. A task stood down at its round cap is not continued there.
+- **apply.** Reads the row of the named `implement` node in THIS run; one that has not succeeded with a task fails
+  `ValidationFailed` (a `Pause` with `joinPolicy: Any` can be reached past it). A `Completed` task succeeds with
+  `alreadyApplied: true` without asking. Otherwise it calls `ApplyAsync` with the run as the caller
+  (`DevelopmentWorkflowRunReference { Engine = GraphWorkflow, RunId }`) and an operation id per run, node key and
+  attempt, inside the tick. `ApplyBlocked`, the ownership guard, a stale task and a workspace refusal fail
+  `ValidationFailed` with the sanitized reason; a ledger race fails `NodeFailed`.
+- **Cancel.** A cancel drain polls the row first: the lane cancels the task's running attempt and ends the row
+  `Cancelled`. The Development task survives and is continued from the Development page. A cancel landing between the
+  create and the pin declines the pin, and the lane cancels the task it just created, so no unowned task is left.
+- **Graph Workflows off.** The ownership guard fails closed: the dispatcher stops, so a live run can neither end nor be
+  cancelled, its task stays unapplicable, and the refusal and the Development page banner say to turn Graph Workflows
+  back on to finish or cancel that run.
+- **Timeout.** An `implement` node gets **no** default node timeout (§3.4): a coder, validation and review chain
+  routinely outlasts it, and each Dev Mode attempt carries its own duration budget. Only an explicit `timeoutSeconds` bounds it, and the lane answers that deadline itself, inside the dispatcher's
+  grace: it cancels the running Dev Mode attempt (`IDevelopmentManagementService.CancelAttemptAsync`, the path the
+  Development page's cancel uses) and fails the row `Timeout`, so no coder round outlives the node. A run cancel
+  cancels the attempt the same way.
+
+**In the editor.** The `DevTask` card's panel picks the action, then shows `implement`'s members or, for `apply`, a
+picker of this graph's `implement` nodes; renaming an `implement` node carries an `apply` node's `task` with it, and the
+Pause `context` edge (§4.6) is never drawn into an `apply` node. `DEVTASK-1` is not mirrored client-side: the save
+answers with the server's keyed message. The start dialog shows a start refusal's own sentence (the Development Mode
+409 is a `GraphWorkflowRunConflict`, like the version check); the run input's `developmentProjectId` is typed into the
+generic input editor or carried by the Start `defaultInput`. A settled node run's panel shows its task's stage and links
+to that task on the Development page; the Development page's "driven by a workflow" banner links back by the task's
+`workflowEngine`.
+
 ---
 
 ## 5. API and hub
@@ -1329,6 +1446,27 @@ holds the client half (validator, lossless canvas round trip, bundle keys), and
 `XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowSampleContractTests.cs` parses every file through the real
 `GraphWorkflowGraph.Parse` and also refuses any warning, so a sample never opens with a note the operator did not cause.
 
+The two **Development samples** are how development work starts (ADR 0023) and additionally need
+Development Mode and a project, named by the run input's `developmentProjectId` (their `defaultInput` leaves it empty,
+so the start is refused with the sentence naming the key until it is filled in, §4.10):
+
+| Sample | Shape |
+|---|---|
+| `dev-intake` | Start → `classify` (`DecisionModel`: `change`, `question`, `unclear`) → `question`: `answer` (repository Agent) → End `answered`; `unclear`: `needsinfo` (LLM Call asking the requester's questions) → End `unclear`; `change`: `plan` (repository Agent; feature or bug, plan with "Deviations from the request") → `planapproval` (Pause; Reject → End `plan-rejected`) → `implement` (`DevTask` implement from the plan and the request) → `resultapproval` (Pause; Reject → End `not-applied`) → `apply` (`DevTask` apply) → End `applied`. |
+| `research-plan-approval` | Start → `research` (repository Agent) → `plan` (LLM Call) → `approve` (Pause) → End `approved` or `rejected`. Implements nothing. |
+
+Feature and bug share one `change` label on purpose. An Agent node sees only its direct predecessors, so `plan` and
+`answer` each get an unconditional edge from Start to read the request, and must then take exactly one conditional edge
+from `classify` under the default `All` join: two (feature, bug) would need `Any`, which the Start edge alone would
+satisfy on every path. The `plan` prompt tells feature from bug itself. Their repository Agent nodes ship
+with `repository: true` and no `agentDefinitionId`, which the parser refuses on its own (§4.2), so the dialog binds them
+on create (`bindRepositoryAgent`) to the first agent whose tools are all repository reads: the seeded "Coder
+(read-only)" on a fresh install. With none, the create answers with the parser's sentence. The contract test parses
+the samples bound the same way, and `GraphWorkflowDevelopmentSampleTests` saves and starts every sample on a host and
+runs `dev-intake` end to end over the scripted Development chain. `feature-development-v1` has no sample: it is
+`dev-intake`'s change path, and its decomposition, separate verify agent and post-apply full validation are not carried
+over (ADR 0023).
+
 **Export and import.** A definition travels as one JSON file, `<slug>.graph-workflow.json`, shaped
 `{ "format": "xe-graph-workflow", "formatVersion": 1, "name", "description", "graph" }` where `graph` is the wire graph
 (§2). The editor toolbar's **Export** button calls the export route (§5) for the **saved** definition and downloads the
@@ -1432,7 +1570,7 @@ node settings (**Node Settings → Workspaces**, applied on restart); their keys
 | `MaxNodesPerDefinition` | 200 | Nodes in one definition, enforced when it is **validated** rather than when it runs, and checked against the declared node count **before** the graph is parsed (§2.4). A run that re-parses an already-stored graph is deliberately uncapped. |
 | `MaxNodeRunsPerRun` | 200 | Node runs one run may instantiate. Never below `MaxNodesPerDefinition` — a run that could not instantiate the definition it started from would fail halfway through a graph the operator was allowed to save. |
 | `MaxTotalAttempts` | 50 | Every attempt one run may spend across all its nodes. The guard against a retry storm. |
-| `DefaultNodeTimeoutSeconds` | 600 | One node run's attempt, when its node names no `timeoutSeconds`. Unlike Dev Workflows, a node that declares nothing still has a deadline. |
+| `DefaultNodeTimeoutSeconds` | 600 | One node run's attempt, when its node names no `timeoutSeconds`. A node that declares nothing still has a deadline, except a `DevTask` `implement` node (§4.10). |
 | `MaxOutputJsonBytes` | 262 144 | One node run's composed output document, in UTF-8 bytes, checked before it is encrypted and stored. It also bounds `run.previous` (§3.1): the previous run's result is an End node's output, so the pin adds at most this much to the run row and to each node run's stored input document. |
 | `DispatchIntervalMilliseconds` | 5000 | The safety-sweep cadence when nothing wakes the dispatcher; commands, lane landings and run ends wake it at once (§3.4). Floored at 100 ms. |
 | `MaxConcurrentRuns` | 4 | Executing runs at once — a run parked on a person holds no slot (§3.4) — and the size of both the shared Agent/LLM Call/DecisionModel invocation lane and the Tool lane. Runs above the cap **wait**; they are not refused. |

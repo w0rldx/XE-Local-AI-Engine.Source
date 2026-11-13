@@ -43,7 +43,7 @@ with the same sentence from `AgentModelRequirements.ToolRefusal`, before capacit
 | Inbound MCP saved-agent run | `model_not_available`, only when the binding carries tools (an agentic caller or the seeded Coder); a non-agentic binding is tool-less by design |
 | Work sessions | unchanged: `WorkSessionToolGate` already refuses |
 
-Not checked: Dev Workflows' agent executor, and a graph Agent node with no bound agent (the default persona requires
+Not checked: a graph Agent node with no bound agent (the default persona requires
 nothing). The graph editor warns when a node's model override cannot call tools for a tool-using agent; the agent
 editor's existing tool-capability and orchestration warnings cover its side. The "node default" choice is judged only
 by the server.
@@ -233,7 +233,7 @@ stdout is always redirected so no pager spawns) and are pinned anyway, so adding
 cannot quietly re-open the hole. `core.autocrlf=false` and `core.filemode=false` are *not* in that shared set:
 `AgentHomeGit.WorkspaceArguments` adds them on the command line for the baseline and the export only. On the command
 line because the pre-invocation config rewrite would drop a stored value before the diff; not in the shared set because
-Development Mode, Dev Workflows, knowledge-repository import and host patch apply run `Arguments` against the
+Development Mode, knowledge-repository import and host patch apply run `Arguments` against the
 *operator's own* checkouts, where forcing `core.autocrlf` would change how a patch renders or applies on a repository
 that legitimately stores CRLF — Development Mode derives that policy from the repository's own index
 (`DevelopmentWorkspaceWhitespacePolicy`) precisely so that it is not forced.
@@ -259,7 +259,7 @@ can write both, so `DevelopmentPatchEvidenceService` stages each export in a fre
 provider from the trusted root) and which is created in that checkout's `DevelopmentWorkspaceSession.ObjectFormat`.
 `IDevelopmentWorkspaceProvider.PrepareValidationAsync` builds the tree that validation's commands and the reviewer's
 tools work in: the base commit fetched by id from the operator's checkout, plus the stored patch applied by
-`DevelopmentPatchOverlay.ApplyAsync`, the helper the Dev Workflows overlay shares, with fresh home, tmp and dotnet
+`DevelopmentPatchOverlay.ApplyAsync`, with fresh home, tmp and dotnet
 directories (`DevelopmentWorkspaceSession.ScratchPath`) and a sandbox of its own that the caller kills. What the coder
 can still influence is listed in
 [reference 12](12-sandbox-modes-and-options.md#the-validation-tree-and-what-the-coder-can-still-influence).

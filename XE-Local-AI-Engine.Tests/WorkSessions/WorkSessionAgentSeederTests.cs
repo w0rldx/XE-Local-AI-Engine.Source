@@ -39,12 +39,12 @@ public sealed class WorkSessionAgentSeederTests
         var slugs = await store.ListSeededSlugsAsync();
         AssertEx.Contains(slugs, AgentDefaults.WorkSessionGeneralAgentSeedSlug);
         AssertEx.Contains(slugs, AgentDefaults.WorkSessionResearchAgentSeedSlug);
-        AssertEx.Contains(slugs, AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug);
+        AssertEx.False(slugs.Contains("work-session-repository-research"),
+            "The repository-research persona read the repository a Dev Workflow bound; with that engine retired it is no longer seeded.");
 
         var definitions = await store.ListAsync();
         AssertEx.Equal(expected: 1, definitions.Count(definition => definition.SeedSlug == AgentDefaults.WorkSessionGeneralAgentSeedSlug));
         AssertEx.Equal(expected: 1, definitions.Count(definition => definition.SeedSlug == AgentDefaults.WorkSessionResearchAgentSeedSlug));
-        AssertEx.Equal(expected: 1, definitions.Count(definition => definition.SeedSlug == AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug));
     }
 
     [Test]
@@ -104,28 +104,13 @@ public sealed class WorkSessionAgentSeederTests
         AssertEx.Equal(expected: 9, definition.AllowedToolNames.Count);
     }
 
-    /// <summary>The repository persona reads the bound repository and nothing else: no knowledge base, nothing that writes.</summary>
-    [Test]
-    public async Task RepositoryResearchPersona_AddsTheThreeRepositoryReads()
-    {
-        var definition = await ReadSeededAsync(Host.Factory, AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug);
-
-        AssertEx.Equal(AgentDefaults.WorkSessionRepositoryResearchAgentName, definition.Name);
-        AssertEx.Contains(definition.AllowedToolNames, "list_files");
-        AssertEx.Contains(definition.AllowedToolNames, "read_file");
-        AssertEx.Contains(definition.AllowedToolNames, "search_text");
-        AssertEx.False(definition.AllowedToolNames.Contains(SearchKnowledgeBaseToolDefinition.ToolName, StringComparer.Ordinal));
-        AssertEx.Equal(expected: 9, definition.AllowedToolNames.Count);
-    }
-
     [Test]
     public async Task EveryPersona_ApprovesEveryToolExceptAskUser()
     {
         foreach (var slug in new[]
                  {
                      AgentDefaults.WorkSessionGeneralAgentSeedSlug,
-                     AgentDefaults.WorkSessionResearchAgentSeedSlug,
-                     AgentDefaults.WorkSessionRepositoryResearchAgentSeedSlug
+                     AgentDefaults.WorkSessionResearchAgentSeedSlug
                  })
         {
             var definition = await ReadSeededAsync(Host.Factory, slug);

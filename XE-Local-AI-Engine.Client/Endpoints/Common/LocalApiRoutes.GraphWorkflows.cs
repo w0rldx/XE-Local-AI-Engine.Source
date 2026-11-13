@@ -16,7 +16,7 @@ public static partial class LocalApiRoutes
         public const string Root = "graph-workflows";
 
         /// <summary>
-        ///     The one route carved out of the disabled-node 404 sweep, mirroring <see cref="DevelopmentWorkflows.Capability" />:
+        ///     The one route carved out of the disabled-node 404 sweep, mirroring <see cref="Development.Capability" />:
         ///     it answers <c>enabled: false</c> so the SPA hides the feature and keeps chat sending instead of reading the
         ///     bodyless 404 as a load failure.
         /// </summary>

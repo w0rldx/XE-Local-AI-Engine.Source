@@ -22,6 +22,18 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 > The source version identity in `eng/ReleaseVersion.props` still reads `1.0.0-rc.2` — the version that has already
 > shipped. It is bumped when the next release is cut, at which point this section takes that version's heading.
 
+> **Breaking (pre-release): Dev Workflows is retired (ADR 0023).** Graph Workflows runs development work through its
+> `DevTask` node instead; start from the Graph samples "Development intake" (`dev-intake`) and `research-plan-approval`.
+> - The upgrade drops every stored Dev Workflow row without export: definitions, runs, work items and rule sets, plus the
+>   run artifacts on disk and the Workflow-kind work sessions those runs drove, with their conversations. Development
+>   tasks a run created stay on the Development page.
+> - The `development-workflows` REST family, its run hub and the Dev Workflows feature switch are gone; a saved
+>   `devWorkflowsEnabled` is ignored.
+> - The "Work Session — Repository Research" persona is no longer seeded: no work session reads a bound repository
+>   any more. A node that already has it keeps the row until it is deleted.
+> - The inbound MCP tools `list_workflow_runs` and `get_workflow_run` keep their names but now read Graph workflow runs,
+>   with a new payload (definition ids, trigger source, node kinds; no work items).
+
 > **Breaking (pre-release): the upgrade backfills and legacy-format readers for older data directories are removed.**
 > A data directory written before each change below now gets the visible behavior listed instead of a silent repair;
 > re-create the data directory if that is not acceptable.

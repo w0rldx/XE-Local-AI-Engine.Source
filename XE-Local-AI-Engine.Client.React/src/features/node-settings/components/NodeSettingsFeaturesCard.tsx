@@ -16,9 +16,9 @@ interface Props {
 	readonly onChange: <K extends keyof NodeSettingsFieldsForm>(field: K, value: NodeSettingsFieldsForm[K]) => void;
 }
 
-// The nine node feature switches. Development and Scheduler carry the restart badge (they decide what the host
+// The eight node feature switches. Development and Scheduler carry the restart badge (they decide what the host
 // registers; Development off applies at once, its hint says so); the others apply on the next request.
-// The tenth entry of featureSwitchFields, execution previews, is edited in the Sandbox & isolation section.
+// The ninth entry of featureSwitchFields, execution previews, is edited in the Sandbox & isolation section.
 export function NodeSettingsFeaturesCard({ form, errors, onChange }: Props) {
 	const { t } = useTranslation();
 
@@ -72,15 +72,6 @@ export function NodeSettingsFeaturesCard({ form, errors, onChange }: Props) {
 					t(
 						"pages.nodeSettings.fields.workSessionsEnabled.description",
 						"Long-running agent sessions with their own plan, findings and checkpoints.",
-					),
-				)}
-				{featureSwitch(
-					"devWorkflowsEnabled",
-					"dev-workflows",
-					t("pages.nodeSettings.fields.devWorkflowsEnabled.label", "Development workflows"),
-					t(
-						"pages.nodeSettings.fields.devWorkflowsEnabled.description",
-						"Durable, graph-based work items whose runs survive a restart. Needs work sessions. The built-in workflow definitions are seeded on the next restart.",
 					),
 				)}
 				{featureSwitch(

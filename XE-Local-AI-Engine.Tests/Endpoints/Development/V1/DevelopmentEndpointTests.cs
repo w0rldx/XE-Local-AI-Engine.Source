@@ -138,7 +138,11 @@ public sealed class DevelopmentEndpointTests
         var service = Substitute.For<IDevelopmentManagementService>();
         service.GetTaskAsync(ProjectId, TaskId, Arg.Any<CancellationToken>()).Returns(TaskAggregate(ProjectId, TaskId, []) with
         {
-            WorkflowRunId = runId
+            WorkflowRun = new DevelopmentWorkflowRunReference
+            {
+                Engine = DevelopmentWorkflowEngine.GraphWorkflow,
+                RunId = runId
+            }
         });
         await using var driven = EnabledFactory(service);
         using var drivenClient = driven.CreateClient();
@@ -150,6 +154,7 @@ public sealed class DevelopmentEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, drivenResponse.StatusCode);
         AssertEx.Contains(drivenJson, $"\"workflowRunId\":\"{runId}\"", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Contains(drivenJson, "\"workflowEngine\":\"GraphWorkflow\"", StringComparison.Ordinal);
 
         var undriven = Substitute.For<IDevelopmentManagementService>();
         undriven.GetTaskAsync(ProjectId, TaskId, Arg.Any<CancellationToken>()).Returns(TaskAggregate(ProjectId, TaskId, []));
@@ -290,7 +295,7 @@ public sealed class DevelopmentEndpointTests
                .Returns(Task.FromException<DevelopmentNextActionResult>(failure));
         service.PreviewAsync(ProjectId, TaskId, Arg.Any<CancellationToken>())
                .Returns(Task.FromException<DevelopmentPatchPreviewResult>(failure));
-        service.ApplyAsync(ProjectId, TaskId, Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+        service.ApplyAsync(ProjectId, TaskId, Arg.Any<Guid>(), Arg.Any<DevelopmentWorkflowRunReference?>(), Arg.Any<CancellationToken>())
                .Returns(Task.FromException<DevelopmentOperationResult>(failure));
         service.ReconnectRepositoryAsync(ProjectId, Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
                .Returns(Task.FromException<DevelopmentProjectAggregate>(failure));

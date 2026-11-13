@@ -21,7 +21,7 @@ public class ConflictProblemDetails : ProblemDetails
     public string? ConflictType { get; set; }
 
     /// <summary>
-    ///     Set for <c>DevWorkflowGateAlreadyDecided</c>: the <c>DevWorkflowDecisionKind</c> name that already stands on
+    ///     Set for <c>GraphWorkflowGateAlreadyDecided</c>: the <c>GraphWorkflowDecisionKind</c> name that already stands on
     ///     the node run. Without it the refused second click can only say "conflict", when the useful answer is
     ///     "someone already approved this".
     /// </summary>

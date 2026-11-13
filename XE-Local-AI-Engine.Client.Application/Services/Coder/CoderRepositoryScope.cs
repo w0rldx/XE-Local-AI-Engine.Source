@@ -5,9 +5,9 @@ namespace XE_Local_AI_Engine.Client.Services.Coder;
 ///     workspace, flowed as an <see cref="AsyncLocal{T}" /> like <c>WorkSessionTurnScope</c>.
 /// </summary>
 /// <remarks>
-///     Seeded by the work-session supervisor around a step whose development-workflow node is bound to a Development project,
-///     so a research node reads the repository its work item names. The root is the canonical host path the repository
-///     binding resolved; the reads stay confined to it by the same guards a jail read uses.
+///     Seeded by <c>GraphWorkflowInvocationExecutor</c> around the turn of an Agent node that names a <c>repository</c>, so
+///     it reads the run's Development project. The root is the canonical host path the repository binding resolved; the
+///     reads stay confined to it by the same guards a jail read uses.
 /// </remarks>
 internal static class CoderRepositoryScope
 {

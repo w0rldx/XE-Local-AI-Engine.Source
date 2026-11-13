@@ -34,8 +34,8 @@ the 1.x line, and a breaking change waits for the next major version. A `preview
 | `create_agent` | agentic | stable | Validate and create a saved agent. | Required `name`, `instructions`; optional definition/provenance fields. |
 | `update_agent` | agentic | stable | Fully replace a saved agent by id or exact name. | `agent_id`, required `name`, `instructions`, plus the complete optional definition. |
 | `delete_agent` | agentic | stable | Delete a saved agent by id or exact name. | `agent_id`. |
-| `list_workflow_runs` | agentic | stable | List development workflow runs, one row per work item's latest run, as bounded lifecycle metadata. | Optional bounded `limit` and run `status`. Read-only. |
-| `get_workflow_run` | agentic | stable | Get one workflow run's status, node tallies, terminal reason, and per-node rows. | `run_id`. Read-only; no graph, artifacts, transcripts, or host paths. |
+| `list_workflow_runs` | agentic | stable | List Graph workflow runs, newest first, as bounded lifecycle metadata: run and definition ids, definition name, status, failure class, trigger source, timestamps. | Optional bounded `limit` and run `status`. Read-only. |
+| `get_workflow_run` | agentic | stable | Get one Graph workflow run: the list row's fields, node tallies, pending-decision count, and per-node rows (key, kind, status, attempt). | `run_id`. Read-only; no graph, node inputs or outputs, transcripts, or host paths. |
 
 ## Errors and arguments
 

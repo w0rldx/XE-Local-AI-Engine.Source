@@ -22,9 +22,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         the transport, so an HttpClient is the whole of what it needs.
 ///     </para>
 ///     <para>
-///         Over the graph-workflow create route at its 1 MiB cap rather than the development-workflow one at 2 MiB:
-///         this fixture enables graph workflows and not development workflows, and the mapping is transport-level, so
-///         one capped route proves it for every capped route.
+///         Over the graph-workflow create route at its 1 MiB cap: this fixture enables graph workflows, and the mapping
+///         is transport-level, so one capped route proves it for every capped route.
 ///     </para>
 /// </summary>
 public sealed class RequestBodyLimitE2ETests

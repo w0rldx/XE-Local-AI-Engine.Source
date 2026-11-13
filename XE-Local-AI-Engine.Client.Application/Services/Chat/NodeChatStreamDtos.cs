@@ -105,18 +105,9 @@ public sealed record NodeChatStreamRequest(
     // Opt-in knowledge grounding for a PLAIN-chat turn, off by default: the send path inlines the top-k fused hits as
     // ONE fenced region and records their provenance. Ignored in agent mode, which uses the gated tool instead.
     bool UseKnowledgeBase = false,
-    // Whether ReasoningEffort above is a PIN rather than a preference, which reverses the usual precedence: a
-    // development-workflow node's authored effort IS its session's pin, with no composer behind it.
-    bool ReasoningEffortOverridesAgentPin = false,
     // Whether this turn is a step of a supervised work session rather than a send someone typed, set UNCONDITIONALLY
     // by the supervisor. The runtime package refuses the adaptive-effort model swap on it, since a step is autonomous.
     bool IsWorkSessionTurn = false,
-    // Invariant GRAPH-2, armed by a work session whose node declares no WriteExecute capability: the send refuses
-    // if its own resolved offer carries a writing tool. See docs/wiki/05-chat.md, "Work-session write declaration".
-    bool RefuseUndeclaredWrites = false,
-    // Sent WITHOUT the tools that park on an operator (ask_user, web_fetch, web_search), for a workflow-owned work session,
-    // which has no operator. See docs/wiki/05-chat.md, "Withdrawing operator tools from a workflow-owned session".
-    bool SuppressOperatorTools = false,
     // The conversation's web result review mode: true skips the review card (ADR 0017). Absent means review.
     bool AutoAcceptWebContent = false,
     // The engine execution driving this turn, stamped on its run envelope. SERVER-set: the chat hub clears it.

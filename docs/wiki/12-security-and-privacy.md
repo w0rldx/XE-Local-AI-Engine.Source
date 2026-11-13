@@ -196,7 +196,7 @@ Three authentication schemes are registered. **JWT bearer** is the default and g
 browser touches via the `NodeOperator` policy. **`McpApiKey`** is a second scheme used by exactly one
 endpoint — the inbound MCP transport — via the `McpServer` policy, which lists only that scheme.
 **`LocalModelProxyApiKey`** is a third, applied only by the `LocalModelProxy` policy on the inbound
-OpenAI-compatible model proxy (§3.2.1). Each policy names exactly one scheme, so no principal can
+model proxy (§3.2.1). Each policy names exactly one scheme, so no principal can
 impersonate another: an operator JWT does not open the MCP endpoint or the proxy passthrough, and
 neither key opens the key-management endpoints (or anything else). Both directions are asserted for
 MCP in `XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs`.
@@ -205,7 +205,7 @@ Authorization is deny-by-default in two layers: a global FastEndpoints configura
 
 #### 3.2.1 The inbound model-proxy bearer key
 
-The OpenAI-compatible passthrough (`proxy/v1/{chat/completions,embeddings,models}`) authenticates with one operator-generated `xeprx_` bearer key handled the same way as the MCP key. See [the reference page](reference/12-admin-api-surface.md#321-the-inbound-model-proxy-bearer-key) for its storage, rotation, comparison and rate limit.
+The model passthrough (`proxy/v1/*`: OpenAI Chat Completions, embeddings and models, OpenAI Responses, Anthropic Messages) authenticates with one operator-generated `xeprx_` key handled the same way as the MCP key, accepted as `Authorization: Bearer` or `x-api-key` (both present must agree). See [the reference page](reference/12-admin-api-surface.md#321-the-inbound-model-proxy-bearer-key) for its storage, rotation, comparison and rate limit.
 
 **The bearer key is not the only gate, and that is load-bearing.** The passthrough is hand-mapped
 *inside* the `/api/local/v1` prefix precisely so `LocalApiSecurityMiddleware`'s loopback-peer + Host +
@@ -213,8 +213,11 @@ Origin check has already rejected any non-loopback caller before the handler run
 therefore has to be on this host (or reach it through the operator's own tunnel) — mounting these routes
 outside the prefix would silently remove that layer and leave the key as the only control. `proxy/key`
 itself is an ordinary Operator-gated FastEndpoints family, so key management stays on the browser's
-JWT posture. Requests are forwarded verbatim to the resolved `llama-server` child and never route
-through the operator's cloud credentials. See [API & Hubs](09-api-and-hubs.md).
+JWT posture. Requests are forwarded to the resolved `llama-server` child and never route through the
+operator's cloud credentials. The body is the caller's own, except for the foreground `id_slot` pin and, on
+the Messages routes, system-role messages folded into the top-level `system` (the chat template refuses a
+system message after the first turn). A body that repeats a property name is refused with a 400 before
+anything is provisioned. See [API & Hubs](09-api-and-hubs.md).
 
 Local endpoints are still authenticated and policy-gated; loopback is necessary but not sufficient. `NodeAuthorizationPolicies` (`Services/Auth/NodeAuthorizationPolicies.cs`) defines the `NodeOperator` policy (claim type `role`, `Admin`), and endpoints apply it — e.g. `ListAgentExecutionLogsEndpoint.Configure()` calls `Policies(NodeAuthorizationPolicies.Operator)` (see `ListAgentExecutionLogsEndpoint.Configure()`). JWTs are signed with the separately-derived node JWT key (§2.1). Auth wiring lives in `AddNodeAuthExtensions`. See [API & Hubs](09-api-and-hubs.md) for the full endpoint inventory.
 
@@ -476,8 +479,8 @@ is the decision record.
   (`ToolApprovalCoordinator.RequestWebReviewAsync`): the host retrieves, then parks the turn with a preview, and the
   tool delegate only returns what the review stored in a per-invocation scope — any other caller gets a refusal.
   A per-conversation **auto-accept** mode skips both the consent and the review card (its notice says requests go out
-  unconfirmed); the first time a user enables it they acknowledge a risk notice (stored in their tutorial state). Unattended runs never fetch; orchestration participants, agentic
-  MCP scope and workflow-owned work sessions (no operator to review) are not offered the tools.
+  unconfirmed); the first time a user enables it they acknowledge a risk notice (stored in their tutorial state). Unattended runs never fetch; orchestration participants and the agentic
+  MCP scope (no operator to review) are not offered the tools.
 - **Graphs.** Agent nodes are never offered either tool. A Tool node may run `web_fetch` only against its own
   allowlist of URL prefixes (path-segment boundary; private addresses stay blocked even when listed), which is the
   consent that replaces the review for those URLs.
@@ -621,6 +624,13 @@ Only the final reviewed apply path may change the registered source repository. 
 patch to its expected base and content hashes, and apply revalidates those values immediately before mutation.
 Changes in the detached worktree do not bypass this gate.
 
+A task a Graph workflow run drives is approved at that run's own gate, a `Pause` node's `Approve` decision (a `DevTask`
+`apply` node is reachable only through one, invariant `DEVTASK-1`), so `DevelopmentManagementService` refuses its apply
+from anywhere else while the run is live (`EnsureApplyAuthorityAsync`): any live Graph Workflows run whose node run
+names the task (`development_task_id`) refuses unless that run is the caller. The check ignores the Graph Workflows
+switch and fails closed: with the switch off the run can neither end nor be cancelled, so the refusal says to turn it
+back on. A run that has ended hands the apply back to the Development page.
+
 These controls limit what the **application's Development tools** read, write, preview, and apply. What executed
 repository code can do depends on the host. **Where the process provider measured the bubblewrap chain** (Linux with
 bwrap and unprivileged user namespaces), the coder and validation sandboxes run inside it: the workspace or validation
@@ -716,7 +726,7 @@ Every sandboxed Development command runs with per-task `HOME`, `TMPDIR`, `NUGET_
 
 **The runner is launched isolated, because a repository file once forged a pass.** `python3 -m pytest` puts the working directory first on `sys.path`, so a coder's repository-root `pytest.py` ran instead of pytest on a host without it and printed `5 passed`, which the gate read as green. `-I` drops the working directory, the `PYTHON*` variables and the user site, and an engine-owned bootstrap imports pytest before it puts the workspace and its `src/` on `sys.path`, AFTER the standard library and BEFORE site-packages. Both bounds were found by review: prepended, a root `pdb.py` or `src/unittest/` shadowed the standard-library modules pytest imports later and forged a pass without touching a test; appended, a `pip install -e` copy of the project in the pytest environment was tested instead of the patch. `--import-mode=importlib` stops pytest itself putting the test directories in front. A second round found pytest's configuration discovery walking out of the worktree into an ancestor `pyproject.toml`, so the bootstrap also passes `-c os.devnull` (no configuration file is read, the repository's or any ancestor's, so none can add options or plugins), the command pins `--rootdir` and `--confcutdir` to the workspace (no ancestor `conftest.py` loads), and `PYTEST_DISABLE_PLUGIN_AUTOLOAD` keeps host-installed plugins out. **The repository's own pytest settings are ignored**, which is the accepted pre-release cost. `DevelopmentCommandProfileCatalog.IsRunnerPath` names what pytest still loads as code (`pytest`, `_pytest`, `py` and `pluggy` at any depth, every `conftest.py`, compiled bytecode, and a root or `src/` module named like a standard-library module, an interpreter-startup hook (`sitecustomize`, `usercustomize`) or another pytest dependency), and the test-write policy refuses any change to one, adding it included. That policy only sees the patch, and later rounds forged passes from outside it through the task worktree's own `.git`, which every sandboxed command can write: an ignored `.pyc`, a nested `.git` (also behind `.gitmodules ignore = all`), a replace ref, and skip-worktree or assume-unchanged bits. **Nothing derived from that `.git`, or from the coder's `HOME`, is trusted any more:** the evidence is staged in an engine-owned repository whose objects come from the operator's checkout and whose git reads no `HOME` the coder wrote, and validation runs in a fresh clone of the base commit plus exactly the stored patch, under fresh home, tmp and dotnet directories, after the coder's sandbox is killed, so ignored files, nested repositories, index bits, refs, a planted `.gitconfig` or excludes file and an MSBuild user import never reach it. **This is not a guarantee that no repository file can influence the runner:** the tests themselves are repository code running inside pytest, so a newly added test module can still patch pytest in-process, and the reviewer remains the control for that. On the process provider, Development's default, which has no mount layer and gives Development no filesystem boundary, the package folder stays writable by default and a command can write anything the node's user can; the reference page, "The validation tree, and what the coder can still influence", lists what remains.
 
-**A catalog version bump strands existing projects (pre-release).** A stored profile is re-derived from the catalog on every use and refused when its version differs, with "Re-create this Development project to adopt the current command profiles". Nothing rewrites a confirmed profile or fills a missing one (a project without one is refused with "The Development project has no command profile"), so after an upgrade that moves `CurrentVersion` (now `v3`) the way forward is a new project on the same repository; nothing prevents several projects on one repository. Dev Mode shows the refusal on the next action, and a Dev Workflows DevTask or Tool node blocks with it as a policy failure.
+**A catalog version bump strands existing projects (pre-release).** A stored profile is re-derived from the catalog on every use and refused when its version differs, with "Re-create this Development project to adopt the current command profiles". Nothing rewrites a confirmed profile or fills a missing one (a project without one is refused with "The Development project has no command profile"), so after an upgrade that moves `CurrentVersion` (now `v3`) the way forward is a new project on the same repository; nothing prevents several projects on one repository. Dev Mode shows the refusal on the next action, and a Graph `DevTask` node that drives the task fails `ValidationFailed` with it.
 
 #### The test-write policy's protected-path set
 
@@ -785,6 +795,7 @@ The file documents its own scope: it is the "safe set" — APIs with zero curren
 - [ ] No code path opens an outbound control-plane connection; every egress traces to an operator-enabled feature.
 - [ ] No secret (operator secret, endpoint token, cloud cred, HMAC/JWT key, HF token) is returned to the browser or logged; new credential-bearing fields pass a redactor.
 - [ ] New local-admin routes live under `/api/local/v1`, keep the Host/Origin gate fail-closed, and apply an authorization policy.
+- [ ] A new model-proxy route (any wire format) is mapped inside `/api/local/v1` with the `LocalModelProxy` policy and rate limit, forwards to a fixed upstream subpath, and the key's headers (`Authorization: Bearer`, `x-api-key`) never authenticate an operator.
 - [ ] Production error responses carry no internal detail (message/stack/ids).
 - [ ] At-rest crypto routes through `AesGcmNodeAeadCipher`; AAD context components are preserved.
 - [ ] Analysis/eval/extraction AI runs node-local only.

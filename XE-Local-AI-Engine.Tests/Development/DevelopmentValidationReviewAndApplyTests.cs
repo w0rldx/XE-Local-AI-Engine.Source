@@ -1453,8 +1453,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             new FakeModelTrustResolver(),
             Substitute.For<IDevelopmentCommandProfileDetector>(),
             Substitute.For<IDevelopmentTemplateStore>(),
-            Substitute.For<IDevWorkflowStore>(),
-            StubNodeRuntimeSettings.Create().WithDevWorkflowsEnabled(true).Build(),
+            Substitute.For<IGraphWorkflowStore>(),
+            StubNodeRuntimeSettings.Create().Build(),
             TimeProvider.System,
             NullLogger<DevelopmentManagementService>.Instance);
     }

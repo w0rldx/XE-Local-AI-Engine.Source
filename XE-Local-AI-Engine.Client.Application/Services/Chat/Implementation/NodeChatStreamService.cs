@@ -19,7 +19,6 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 public sealed class NodeChatStreamService : INodeChatStreamService
@@ -164,7 +163,6 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         // Resolved BEFORE the assistant placeholder is minted, because the placeholder is stamped with the resolved
         // agent's id and display name. It reads only conversation, content and path, so the emitted order is unchanged.
         var resolution = await ResolveTurnAsync(request, turn.Conversation, activeModelOverride: null, turn.TrimmedContent, cancellationToken);
-        var declaredWriteOffer = await ResolveDeclaredWriteOfferAsync(request, resolution, cancellationToken);
 
         var assistantPlaceholder = await PersistAssistantPlaceholderAsync(request, resolution, assistantMessageId, requestId, cancellationToken);
 
@@ -220,7 +218,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         using var eventSubscription = new ChatStreamEventForwarder(_eventDispatcher, correlation, requestId, stateChannel.Writer, eventSink, sequence, parts, _timeProvider);
 
         // Staging is the offer's LAST step, so the lease is owned by the await using below the moment it exists.
-        var offer = await PrepareTurnOfferAsync(request, turn.Conversation, resolution, declaredWriteOffer, requestId, runCancellation, cancellationToken);
+        var offer = await PrepareTurnOfferAsync(request, turn.Conversation, resolution, requestId, runCancellation, cancellationToken);
         var staging = offer.Staging;
 
         await using var sandboxPreparationLease = staging?.Preparation;
@@ -338,41 +336,17 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         };
     }
 
-    // GRAPH-2 is asked of the OFFER this turn really hands the model, resolved once here and reused verbatim by
-    // PrepareTurnOfferAsync; only an armed turn resolves early, so a refusal leaves no stranded assistant row.
-    private async Task<ChatToolOffer?> ResolveDeclaredWriteOfferAsync(NodeChatStreamRequest request,
-        ChatTurnResolution resolution,
-        CancellationToken cancellationToken)
-    {
-        ChatToolOffer? declaredWriteOffer = null;
-        if (request.RefuseUndeclaredWrites)
-        {
-            declaredWriteOffer = await ResolveToolOfferAsync(request, resolution, cancellationToken);
-            if (WorkSessionWriteDeclarationGuard.Refuse(declaredWriteOffer.AllowedTools, resolution.Resolved is not null) is { } undeclaredWrite)
-            {
-                throw new WorkSessionUndeclaredWriteException(undeclaredWrite);
-            }
-        }
-
-        return declaredWriteOffer;
-    }
-
     // Settles the offer and the attachment gate, emits the pre-run notices, then stages the sandbox as its last step.
     private async Task<PreparedTurnOffer> PrepareTurnOfferAsync(NodeChatStreamRequest request,
         NodeChatConversationDto conversation,
         ChatTurnResolution resolution,
-        ChatToolOffer? declaredWriteOffer,
         Guid requestId,
         CancellationTokenSource runCancellation,
         CancellationToken cancellationToken)
     {
-        // The armed turn's offer, already settled above and reused verbatim so the rule judged the same list the package
-        // carries; every other turn resolves it right here, exactly where it always did.
-        var toolOffer = declaredWriteOffer ?? await ResolveToolOfferAsync(request, resolution, cancellationToken);
+        var toolOffer = await ResolveToolOfferAsync(request, resolution, cancellationToken);
         var offerTools = toolOffer.OfferTools;
-        // The operator-tool withdrawal applies to the single FINAL list, so it holds whichever resolver produced this offer.
-        // Orchestration participants' own lists ride the compiled spec instead and are filtered where it is built.
-        var allowedTools = request.SuppressOperatorTools ? AskUserToolOffer.WithdrawOperatorTools(toolOffer.AllowedTools) : toolOffer.AllowedTools;
+        var allowedTools = toolOffer.AllowedTools;
 
         var attachmentsAllowed = await AreAttachmentsAllowedAsync(resolution, cancellationToken);
         await ReportPreRunNoticesAsync(request, resolution, toolOffer, attachmentsAllowed, requestId, cancellationToken);
@@ -701,14 +675,9 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     /// <summary>
     ///     The effort this turn runs at: a bound agent's pinned effort wins over the one the send carried.
     /// </summary>
-    /// <remarks>
-    ///     The pin is configuration and the send's value is the composer's selection — unless the caller says its own
-    ///     is a pin too, which is what a development-workflow node's authored effort is.
-    /// </remarks>
+    /// <remarks>The pin is configuration and the send's value is the composer's selection.</remarks>
     private static string? EffectiveReasoningEffort(NodeChatStreamRequest request, string? resolvedEffort) =>
-        request.ReasoningEffortOverridesAgentPin
-            ? request.ReasoningEffort ?? resolvedEffort
-            : resolvedEffort ?? request.ReasoningEffort;
+        resolvedEffort ?? request.ReasoningEffort;
 
     // The send path's offer, resolved through the helper the Default Assistant offer read shares.
     private Task<ChatToolOffer> ResolveToolOfferAsync(NodeChatStreamRequest request, ChatTurnResolution resolution, CancellationToken cancellationToken) =>
@@ -950,7 +919,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                 InvocationTimeoutSeconds = invocationTimeoutSeconds
             },
             ReasoningEffort = EffectiveReasoningEffort(request, resolved?.ReasoningEffort),
-            OrchestrationSpec = request.SuppressOperatorTools ? AskUserToolOffer.WithdrawOperatorTools(resolution.Orchestration?.Spec) : resolution.Orchestration?.Spec,
+            OrchestrationSpec = resolution.Orchestration?.Spec,
             SupportsThinking = resolution.SupportsThinking,
             SamplingOptions = request.SamplingOptions,
             Skills = resolved?.Skills,

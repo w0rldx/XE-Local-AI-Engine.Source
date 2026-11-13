@@ -281,7 +281,8 @@ public sealed partial class GraphWorkflowStore : IGraphWorkflowStore
             CompletedAtUtc = nodeRun.CompletedAtUtc,
             UpdatedAtUtc = nodeRun.UpdatedAtUtc,
             PublishedMessageId = nodeRun.PublishedMessageId,
-            Steering = SteeringOf(nodeRun.SteeringJson)
+            Steering = SteeringOf(nodeRun.SteeringJson),
+            DevelopmentTaskId = nodeRun.DevelopmentTaskId
         };
 
     private async Task RollbackAsync(IDbContextTransaction transaction)

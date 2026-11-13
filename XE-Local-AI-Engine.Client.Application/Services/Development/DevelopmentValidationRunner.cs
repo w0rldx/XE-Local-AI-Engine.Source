@@ -223,7 +223,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
     /// <remarks>
     ///     It is clamped because <c>development_tasks.terminal_reason</c> is <c>HasMaxLength(1024)</c> and the detail
     ///     interpolates a parser message a future adapter could make arbitrarily long. A task-stopping verdict leads with
-    ///     its code in brackets, the prefix the workflow lane classes it on.
+    ///     its code in brackets, the prefix a retried validation is matched on.
     /// </remarks>
     internal static string? ReasonFor(DevelopmentValidationVerdict verdict) =>
         verdict switch

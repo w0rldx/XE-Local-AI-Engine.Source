@@ -6,8 +6,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Pins that a concrete persistence store registered beside a decorator is named only where it is registered.
 /// </summary>
 /// <remarks>
-///     <c>DevWorkflowStore</c> and <c>GraphWorkflowStore</c> are resolved through publishing decorators, so a caller
-///     that constructs or resolves the concrete type commits a change without announcing it — and both went public
+///     <c>GraphWorkflowStore</c> is resolved through a publishing decorator, so a caller that constructs or resolves
+///     the concrete type commits a change without announcing it — and it went public
 ///     when the friend-assembly grant to the application layer was revoked, which put them in reach of the host for
 ///     the first time. Visibility is not the boundary here; this is, exactly as
 ///     <see cref="ProviderMapCoordinationArchitectureTests" /> is for the provider map.
@@ -23,12 +23,11 @@ public sealed class ConcreteStoreConstructionArchitectureTests
     /// <remarks>
     ///     <c>AgentWorkSessionStore</c> has no decorator today, so it is listed pre-emptively rather than to close a
     ///     live bypass: it is registered straight onto its interface, and the moment anyone wraps it the same hazard
-    ///     applies. Keeping all three under one rule means the invariant is simply "the concrete store is named where
+    ///     applies. Keeping both under one rule means the invariant is simply "the concrete store is named where
     ///     it is registered, and nowhere else".
     /// </remarks>
     private static readonly (string TypeName, string RegistrationFile)[] FencedStores =
     [
-        ("DevWorkflowStore", "XE-Local-AI-Engine.Client.Application/DependencyInjection/Modules/AddNodeDevWorkflowsExtensions.cs"),
         ("GraphWorkflowStore", "XE-Local-AI-Engine.Client.Application/DependencyInjection/Modules/AddNodeGraphWorkflowsExtensions.cs"),
         ("AgentWorkSessionStore", "XE-Local-AI-Engine.Client.Application/DependencyInjection/Modules/AddNodeWorkSessionsExtensions.cs")
     ];
@@ -36,10 +35,10 @@ public sealed class ConcreteStoreConstructionArchitectureTests
     [Test]
     public void ProductionCallers_NameAConcreteStoreOnlyWhereItIsRegistered()
     {
-        // The matcher is bare-identifier, so PublishingDevWorkflowStore and DevWorkflowStoreExceptions do not match
-        // DevWorkflowStore. Proved by the two assertions below rather than assumed.
-        AssertEx.True(ContainsIdentifier("GetRequiredService<DevWorkflowStore>()", "DevWorkflowStore"));
-        AssertEx.False(ContainsIdentifier("new PublishingDevWorkflowStore(inner)", "DevWorkflowStore"));
+        // The matcher is bare-identifier, so PublishingGraphWorkflowStore does not match GraphWorkflowStore. Proved by
+        // the two assertions below rather than assumed.
+        AssertEx.True(ContainsIdentifier("GetRequiredService<GraphWorkflowStore>()", "GraphWorkflowStore"));
+        AssertEx.False(ContainsIdentifier("new PublishingGraphWorkflowStore(inner)", "GraphWorkflowStore"));
 
         var allowed = FencedStores.Select(static store => store.RegistrationFile).ToHashSet(StringComparer.Ordinal);
         foreach (var registrationFile in allowed)

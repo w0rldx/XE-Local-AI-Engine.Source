@@ -150,6 +150,16 @@ describe("GraphWorkflowNodeCard body", () => {
 		expect(card.getAttribute("data-kind")).toBe("Agent");
 	});
 
+	it("draws a DevTask node as a work card with its kind label and one handle at each end", () => {
+		renderCard(nodeData("DevTask", "impl"));
+
+		const card = screen.getByTestId("graph-workflow-node-impl");
+		expect(card.getAttribute("data-kind")).toBe("DevTask");
+		expect(card.textContent).toContain(en.pages.graphWorkflows.nodeKind.DevTask);
+		expect(screen.getByTestId("handle-target-default")).toBeTruthy();
+		expect(screen.getByTestId("handle-source-default")).toBeTruthy();
+	});
+
 	it("shows the Any join policy, and nothing when it is the default All", () => {
 		renderCard(nodeData("Join", "merge", { joinPolicy: "Any" }));
 		expect(screen.getByTestId("graph-workflow-node-join-merge").textContent).toBe("First branch wins");

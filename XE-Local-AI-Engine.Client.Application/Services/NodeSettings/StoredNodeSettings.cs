@@ -1369,9 +1369,6 @@ public sealed record StoredNodeSettings
     /// <summary>Whether the AgentHome tools run. Seed: <c>AgentHome:Enabled</c> (off; shipped on). Read per call.</summary>
     public bool? AgentHomeEnabled { get; init; }
 
-    /// <summary>Whether development workflows run. Seed: <c>DevWorkflows:Enabled</c> (off). Read per request and dispatcher tick.</summary>
-    public bool? DevWorkflowsEnabled { get; init; }
-
     /// <summary>
     ///     Whether sandbox launch mechanisms of <c>Preview</c> maturity (the Windows MXC AppContainer boundary) may serve a role. Seed:
     ///     <c>ExecutionPreviews:Enabled</c> (off). Read per call, so turning it off takes effect for the next sandbox created.

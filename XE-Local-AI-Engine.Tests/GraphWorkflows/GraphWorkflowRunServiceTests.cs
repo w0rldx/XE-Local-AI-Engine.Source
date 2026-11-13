@@ -165,7 +165,8 @@ public sealed class GraphWorkflowRunServiceTests
         // The graph carries no Tool node, so the tool gate never reads the catalog: the substitute is here to satisfy
         // the constructor, and a call on it would be a bug this test would rather fail on than hide.
         var runs = new GraphWorkflowRunService(store, signals, Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().Build(), Options.Create(new GraphWorkflowOptions()),
-            Options.Create(new SecurityOptions()));
+            Options.Create(new SecurityOptions()),
+            Substitute.For<IServiceProvider>());
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() =>
             runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null, GraphWorkflowRunOrigin.Manual));
@@ -201,7 +202,8 @@ public sealed class GraphWorkflowRunServiceTests
             new RecordingGraphWorkflowDispatcherSignal(),
             Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().Build(),
             Options.Create(harness.CurrentOptions()),
-            Options.Create(new SecurityOptions()));
+            Options.Create(new SecurityOptions()),
+            Substitute.For<IServiceProvider>());
 
         var refusal = await AssertEx
             .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
@@ -305,7 +307,8 @@ public sealed class GraphWorkflowRunServiceTests
             new RecordingGraphWorkflowDispatcherSignal(),
             Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().Build(),
             Options.Create(harness.CurrentOptions()),
-            Options.Create(new SecurityOptions()));
+            Options.Create(new SecurityOptions()),
+            Substitute.For<IServiceProvider>());
 
     /// <summary>A start against a version that has since been edited answers a conflict rather than running a graph the caller never saw.</summary>
     [Test]
@@ -990,6 +993,12 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
 
     public Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default) =>
         _inner.ListNodeRunsAsync(runId, cancellationToken);
+
+    public Task<GraphWorkflowConditionalWriteResult> SetNodeRunDevelopmentTaskAsync(Guid runId, Guid nodeRunId, Guid developmentTaskId, CancellationToken cancellationToken = default) =>
+        _inner.SetNodeRunDevelopmentTaskAsync(runId, nodeRunId, developmentTaskId, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowDevelopmentTaskRun>> ListDevelopmentTaskRunsAsync(IReadOnlyList<Guid> developmentTaskIds, CancellationToken cancellationToken = default) =>
+        _inner.ListDevelopmentTaskRunsAsync(developmentTaskIds, cancellationToken);
 
     public Task<GraphWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid runId, string nodeKey, CancellationToken cancellationToken = default) =>
         _inner.GetNodeRunAsync(runId, nodeKey, cancellationToken);

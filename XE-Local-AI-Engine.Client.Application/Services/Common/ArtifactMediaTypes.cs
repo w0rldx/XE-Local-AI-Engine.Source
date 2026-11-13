@@ -3,9 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.Common;
 /// <summary>Whether an artifact's bytes can be handed over as text.</summary>
 /// <remarks>
 ///     Decided from the declared MEDIA TYPE and never by sniffing the bytes, so binary content is never delivered as mangled UTF-8 — and so
-///     two producers of the same artifact family cannot disagree about one file. <para> Shared by the work-session and development-workflow
-///     artifact reads because both answer the same wire question (<c>isBase64</c>), and a second copy of the list is a second answer
-///     waiting to drift. </para>
+///     two producers of the same artifact family cannot disagree about one file. <para> Read by the work-session artifact read, which
+///     answers the wire question <c>isBase64</c> from it. </para>
 /// </remarks>
 public static class ArtifactMediaTypes
 {

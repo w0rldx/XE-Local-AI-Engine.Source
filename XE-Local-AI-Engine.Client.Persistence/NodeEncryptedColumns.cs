@@ -296,42 +296,6 @@ internal static class NodeEncryptedColumns
         Entity<AgentWorkSessionEvent>(entity => entity.SessionId, entity => entity.Id)
             .Optional(entity => entity.DetailJson, "work_session_event_detail_json"),
 
-        // The work-session layout: a root row's own id fills both AAD slots, and the owning id the conversation slot on every child row, so a writer cannot
-        // re-parent a run onto another work item, or a node-run onto another run, and have the blob read back as that owner's.
-        Entity<DevWorkflowWorkItem>(entity => entity.Id, entity => entity.Id)
-            .Required(entity => entity.Request, "dev_workflow_work_item_request"),
-
-        // The definition is node-scoped, so the empty conversation id plus its own id — but under an AAD column name
-        // distinct from the run's pinned copy below, so neither ciphertext is presentable as the other.
-        NodeScoped<DevWorkflowDefinition>(entity => entity.Id)
-            .Required(entity => entity.GraphJson, "dev_workflow_definition_graph_json"),
-
-        // A rule set is node-scoped like the definition, so the empty conversation id plus its own id — and its own AAD
-        // column name, so a rule body can never be read back as a definition's graph.
-        NodeScoped<DevWorkflowRuleSet>(entity => entity.Id)
-            .Required(entity => entity.Body, "dev_workflow_rule_set_body"),
-
-        // The owning work item sits in the conversation slot, so a run row re-parented onto another work item
-        // fails the tag check rather than reading back as that work item's executed graph.
-        Entity<DevWorkflowRun>(entity => entity.WorkItemId, entity => entity.Id)
-            .Required(entity => entity.GraphJson, "dev_workflow_run_graph_json"),
-
-        // Three distinct AAD column names on one row, and not cosmetically: a Gate node's decision is a function of output_json, so if these shared a name a
-        // database writer could swap a policy or input blob into the output column and flip a gate without forging a ciphertext or a tag.
-        Entity<DevWorkflowNodeRun>(entity => entity.RunId, entity => entity.Id)
-            .Optional(entity => entity.InputJson, "dev_workflow_node_run_input_json")
-            .Optional(entity => entity.OutputJson, "dev_workflow_node_run_output_json")
-            .Optional(entity => entity.PolicyResolutionJson, "dev_workflow_node_run_policy_json"),
-
-        // The payload is the structured, machine-consumed half of a decision; the comment is free text. Distinct names
-        // so the one that a runtime acts on can never be substituted from the one a human typed.
-        Entity<DevWorkflowDecision>(entity => entity.RunId, entity => entity.Id)
-            .Optional(entity => entity.Comment, "dev_workflow_decision_comment")
-            .Optional(entity => entity.PayloadJson, "dev_workflow_decision_payload_json"),
-
-        Entity<DevWorkflowRunEvent>(entity => entity.RunId, entity => entity.Id)
-            .Optional(entity => entity.DetailJson, "dev_workflow_run_event_detail_json"),
-
         // The one column in the integration family that holds real content: an external.output event carries the tool's payload verbatim, under the owning
         // execution's id. Optional — phase events carry no detail, which is what lets the raw-ADO accept path skip encryption entirely.
         Entity<IntegrationExecutionEvent>(entity => entity.ExecutionId, entity => entity.Id)
@@ -367,9 +331,6 @@ internal static class NodeEncryptedColumns
             // Optional, not required, for one row shape only: an instance installed before the bridge existed
             // carries no token. Every row this engine writes carries one, minted at install.
             .Optional(entity => entity.BridgeToken, "external_app_instance_bridge_token"),
-
-        // The two dev-workflow artifact tables are absent on purpose: the bytes live on disk under the blob store's own AAD
-        // column (dev_workflow_artifact_blob), and every column that stays in the row is structural.
 
         // Session-scoped: the session's own id fills both AAD slots, the same self-consistent layout a conversation title uses. The config blob is required (a
         // session with no options stores an empty object); title and the error pair only encrypt when present.

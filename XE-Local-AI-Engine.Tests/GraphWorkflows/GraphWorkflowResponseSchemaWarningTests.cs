@@ -251,6 +251,20 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
         AssertEx.Contains(warning.Message, "grant local data on the model's external connection");
     }
 
+    /// <summary>An Agent node with <c>repository</c> returns node-local data, so a pinned cloud LLM call bound to it warns like one fed by a knowledge-base Tool.</summary>
+    [Test]
+    public async Task ValidateAsync_WhenACloudLlmCallReadsARepositoryAgent_WarnsAboutLocalData()
+    {
+        var result = await LocalDataService(ExternalProviderCloudGrants.None).ValidateAsync(RepositoryAgentEdgeGraph());
+
+        AssertEx.True(result.IsValid, string.Join(" | ", result.Errors));
+        var warning = AssertEx.NotNull(result.Warnings.SingleOrDefault(warning => warning.Message.Contains("node-local data", StringComparison.Ordinal)),
+            $"one local-data warning expected: {string.Join(" | ", result.Warnings)}");
+        AssertEx.Equal("analyze", warning.Key);
+        AssertEx.Contains(warning.Message, "Agent node 'repo' ('repository')");
+        AssertEx.Contains(warning.Message, "Let cloud models read local data");
+    }
+
     [Test]
     public async Task ValidateAsync_WhenTheCloudLlmCallsConnectionGrantsLocalData_DoesNotWarnAboutLocalData()
     {
@@ -429,6 +443,17 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
                    "edges": [{ "key": "e1", "from": "start", "to": "kb" }, { "key": "e2", "from": "kb", "to": "analyze" }, { "key": "e3", "from": "analyze", "to": "done" }] }
                  """;
     }
+
+    // Start → repo (Agent reading the repository) → analyze (pinned cloud LlmCall bound to repo's output) → End.
+    private static string RepositoryAgentEdgeGraph() =>
+        $$"""
+          { "schemaVersion": 1,
+            "nodes": [{ "key": "start", "kind": "Start" },
+                      { "key": "repo", "kind": "Agent", "config": { "instructions": "Read it.", "agentDefinitionId": "{{Guid.NewGuid()}}", "repository": true } },
+                      { "key": "analyze", "kind": "LlmCall", "config": { "prompt": "Summarize it.", "inputBindings": { "found": "upstream.repo" }, "model": "{{CloudRoutedModel}}" } },
+                      { "key": "done", "kind": "End", "config": { "outcome": "completed" } }],
+            "edges": [{ "key": "e1", "from": "start", "to": "repo" }, { "key": "e2", "from": "repo", "to": "analyze" }, { "key": "e3", "from": "analyze", "to": "done" }] }
+          """;
 
     // Start → kb (Tool) → agent (pinned cloud Agent) → End.
     private static string LocalDataAgentEdgeGraph(bool includeUpstreamOutputs) =>

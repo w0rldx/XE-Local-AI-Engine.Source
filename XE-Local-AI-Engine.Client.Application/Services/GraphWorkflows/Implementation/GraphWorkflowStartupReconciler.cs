@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 /// <remarks>
 ///     Registered BEFORE the dispatcher, whose pumps must not begin admitting rows this has not judged; hosted
-///     services start in registration order, and the work-session and development-workflow reconcilers precede both
-///     because their modules are added first. <see cref="StartAsync" /> catches nothing, deliberately: a store that
+///     services start in registration order, and the work-session reconciler precedes both because its module is added
+///     first. <see cref="StartAsync" /> catches nothing, deliberately: a store that
 ///     cannot be read at boot is a node whose rows would be admitted unjudged, and failing host start is the honest
 ///     answer. What it judges, what a verdict costs and why no run row moves: docs/wiki/21-graph-workflows.md ("Restart").
 /// </remarks>
@@ -111,6 +111,8 @@ internal sealed class GraphWorkflowStartupReconciler : IHostedService
         var verdicts = new List<GraphWorkflowNodeRunVerdict>(interrupted.Count);
         foreach (var nodeRun in interrupted)
         {
+            // DevTask is deliberately not listed: its work is a durable Dev Mode task its row pins, so it resumes as Pending at no
+            // attempt cost and the re-dispatch polls the same task (GraphWorkflowDevTaskExecutor).
             var failed = nodeRun is
             {
                 Status: GraphWorkflowNodeRunStatus.Running, Kind: GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.Tool or GraphWorkflowNodeKind.LlmCall or GraphWorkflowNodeKind.DecisionModel

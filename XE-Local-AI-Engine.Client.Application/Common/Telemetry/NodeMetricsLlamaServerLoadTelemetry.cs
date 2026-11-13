@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     Bridges provider load observations to the application meter, and remembers the VRAM figures of the most recent
-///     SUCCESSFUL load per <c>(model, role)</c> for the dev-workflow cost collector to read back.
+///     SUCCESSFUL load per <c>(model, role)</c>, which <see cref="FindLastReadyLoad" /> reads back.
 /// </summary>
 /// <remarks>
 ///     Process-lifetime singleton; the figures are report-only and never persisted, since they describe one load of one process. Runtime

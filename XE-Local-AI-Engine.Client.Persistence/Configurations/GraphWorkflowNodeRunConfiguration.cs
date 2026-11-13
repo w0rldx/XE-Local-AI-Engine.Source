@@ -35,6 +35,9 @@ internal sealed class GraphWorkflowNodeRunConfiguration : IEntityTypeConfigurati
         builder.Property(entity => entity.PublishedMessageId).HasColumnName("published_message_id");
         builder.Property(entity => entity.SteeringJson).HasColumnName("steering_json");
 
+        // No foreign key, like invocation_id: the task belongs to Development Mode and outlives this run's purge.
+        builder.Property(entity => entity.DevelopmentTaskId).HasColumnName("development_task_id");
+
         builder.HasOne<GraphWorkflowRun>().WithMany().HasForeignKey(entity => entity.RunId).OnDelete(DeleteBehavior.Cascade);
 
         // The node run's identity, not a secondary constraint: one row per node key, with Attempt incrementing in place.
@@ -56,5 +59,10 @@ internal sealed class GraphWorkflowNodeRunConfiguration : IEntityTypeConfigurati
                .HasDatabaseName("ux_graph_workflow_node_runs_decision_operation");
 
         builder.HasIndex(entity => entity.Status).HasDatabaseName("ix_graph_workflow_node_runs_status");
+
+        // The apply guard's task-to-run lookup. Filtered: only DevTask rows carry a task.
+        builder.HasIndex(entity => entity.DevelopmentTaskId)
+               .HasFilter("\"development_task_id\" IS NOT NULL")
+               .HasDatabaseName("ix_graph_workflow_node_runs_development_task");
     }
 }

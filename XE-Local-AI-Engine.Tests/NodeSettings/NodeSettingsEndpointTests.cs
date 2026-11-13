@@ -1755,7 +1755,6 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.True(unsaved.AgentHomeEnabled);
         AssertEx.False(unsaved.TranscriptionEnabled);
         AssertEx.True(unsaved.GraphWorkflowsEnabled, "an unseeded switch reports its code default");
-        AssertEx.False(unsaved.DevWorkflowsEnabled);
         AssertEx.False(unsaved.ExecutionPreviewsEnabled, "execution previews are off unless the operator turns them on");
 
         using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
@@ -1769,7 +1768,6 @@ public sealed class NodeSettingsEndpointTests
             ComputeEnabled = true,
             AgentHomeEnabled = false,
             SchedulerEnabled = false,
-            DevWorkflowsEnabled = true,
             ExecutionPreviewsEnabled = true
         });
         using var putResponse = await client.SendAsync(putRequest);
@@ -1782,7 +1780,6 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(expected: true, saved.ComputeEnabled);
         AssertEx.Equal(expected: false, saved.AgentHomeEnabled);
         AssertEx.Equal(expected: false, saved.SchedulerEnabled);
-        AssertEx.Equal(expected: true, saved.DevWorkflowsEnabled);
         AssertEx.Equal(expected: true, saved.ExecutionPreviewsEnabled);
 
         using var secondGet = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
@@ -1796,37 +1793,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.True(reread.ComputeEnabled);
         AssertEx.False(reread.AgentHomeEnabled);
         AssertEx.False(reread.SchedulerEnabled);
-        AssertEx.True(reread.DevWorkflowsEnabled);
         AssertEx.True(reread.ExecutionPreviewsEnabled);
-    }
-
-    [Test]
-    [Arguments(true, false, "devWorkflowsEnabled")]
-    [Arguments(null, false, "workSessionsEnabled")]
-    public async Task SaveNodeSettings_WhenDevWorkflowsWouldRunWithoutWorkSessions_BindsTheErrorToTheSwitchThatBrokeIt(bool? devWorkflows,
-        bool workSessions,
-        string expectedField)
-    {
-        // Development workflows already stored on, so the second row's request only takes work sessions away.
-        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
-        {
-            DevWorkflowsEnabled = devWorkflows is null ? true : null
-        });
-        await using var factory = CreateFactory(nodeSettingsStore);
-        using var client = factory.CreateClient();
-
-        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
-        {
-            DevWorkflowsEnabled = devWorkflows,
-            WorkSessionsEnabled = workSessions
-        });
-        using var response = await client.SendAsync(request);
-
-        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        AssertEx.Equal(expectedField, document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

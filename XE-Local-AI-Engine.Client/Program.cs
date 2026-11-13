@@ -297,12 +297,7 @@ namespace XE_Local_AI_Engine.Client
             app.MapHub<TranscriptionHub>(LocalApiRoutes.Transcription.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
-            // Mapped unconditionally, like the work-session hub: the DevWorkflows switch is enforced by FeatureSwitchMiddleware
-            // above, which answers 404 for the whole prefix — including this path.
-            app.MapHub<DevWorkflowRunHub>(LocalApiRoutes.DevelopmentWorkflows.Hub)
-               .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-
-            // Same posture for graph workflows: the GraphWorkflows switch is enforced by FeatureSwitchMiddleware
+            // Mapped unconditionally, like the work-session hub: the GraphWorkflows switch is enforced by FeatureSwitchMiddleware
             // above, which answers 404 for the whole prefix — this path included.
             app.MapHub<GraphWorkflowRunHub>(LocalApiRoutes.GraphWorkflows.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);

@@ -152,6 +152,8 @@ describe("GraphWorkflowDefinitionMetaDialog", () => {
 				samples.parallelPerspectives.name,
 				samples.briefWithReviewLoop.name,
 				samples.agentResearchAndCheck.name,
+				samples.devIntake.name,
+				samples.researchPlanApproval.name,
 			]);
 		});
 

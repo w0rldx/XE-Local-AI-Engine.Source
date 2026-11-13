@@ -229,6 +229,14 @@ public sealed class PublishingGraphWorkflowStoreTests
             Method = nameof(IGraphWorkflowStore.IgnoreNodeRunSteeringAsync),
             Kind = GraphWorkflowChangeKind.Node,
             Invoke = store => store.IgnoreNodeRunSteeringAsync(RunId, NodeRunId, Guid.NewGuid())
+        },
+
+        // A DevTask row now names its Development task, which the node panel links to.
+        new()
+        {
+            Method = nameof(IGraphWorkflowStore.SetNodeRunDevelopmentTaskAsync),
+            Kind = GraphWorkflowChangeKind.Node,
+            Invoke = store => store.SetNodeRunDevelopmentTaskAsync(RunId, NodeRunId, Guid.NewGuid())
         }
     ];
 
@@ -247,7 +255,8 @@ public sealed class PublishingGraphWorkflowStoreTests
         store => store.FindNodeRunByDecisionOperationAsync(RunId, Guid.NewGuid()),
         store => store.ListRunsByConversationAsync(Guid.NewGuid(), limit: 5),
         store => store.FindConversationDecisionAsync(Guid.NewGuid(), Guid.NewGuid()),
-        store => store.ListUnpublishedNodeRunsAsync(RunId)
+        store => store.ListUnpublishedNodeRunsAsync(RunId),
+        store => store.ListDevelopmentTaskRunsAsync([Guid.NewGuid()])
     ];
 
     private static IReadOnlyList<Func<IGraphWorkflowStore, Task>> SilentWrites() =>
@@ -346,6 +355,7 @@ public sealed class PublishingGraphWorkflowStoreTests
         inner.MarkNodeRunPublishedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(written);
         inner.AppendNodeRunSteeringAsync(Arg.Any<AppendGraphWorkflowSteeringCommand>(), Arg.Any<CancellationToken>()).Returns(written);
         inner.IgnoreNodeRunSteeringAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(written);
+        inner.SetNodeRunDevelopmentTaskAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(written);
 
         var publisher = Substitute.For<IGraphWorkflowEventPublisher>();
         var store = new PublishingGraphWorkflowStore(inner, publisher, NullLogger<PublishingGraphWorkflowStore>.Instance);

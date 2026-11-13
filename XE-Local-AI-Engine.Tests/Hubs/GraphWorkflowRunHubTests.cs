@@ -479,7 +479,8 @@ public sealed class GraphWorkflowRunHubTests
                 new RecordingGraphWorkflowDispatcherSignal(),
                 Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().Build(),
                 options,
-                Options.Create(new SecurityOptions())),
+                Options.Create(new SecurityOptions()),
+                Substitute.For<IServiceProvider>()),
             registry ?? Substitute.For<IInvocationResumeRegistry>(),
             StubNodeRuntimeSettings.Create().WithGraphWorkflowsEnabled(enabled).Build());
     }

@@ -147,8 +147,8 @@ Continues [Agent Mode](../04-agent-mode.md#54-the-four-state-tools), which keeps
 
 They belong to the **turn**, not the agent. The supervisor sends every step inside `WorkSessionTurnScope`, and
 `AgentDefinitionResolver.ProjectAllowedTools` unions the four in from the profile pool after the
-`AllowedToolNames` intersection, for the Default Assistant as well. A custom agent driving a session, or bound
-to a development-workflow Agent node, therefore gets them without listing them. Before this, such an agent ran
+`AllowedToolNames` intersection, for the Default Assistant as well. A custom agent driving a session therefore gets
+them without listing them. Before this, such an agent ran
 every step tool-less until the step cap. The union lifts from the gated pool, so the tool-capable list still
 decides, and an ordinary chat turn carries no scope and is never offered them.
 
@@ -262,8 +262,8 @@ provider choice rather than a new registration to keep correct.
 Continues [Agent Mode](../04-agent-mode.md#57-the-per-step-consumption-record), which keeps the section introduction.
 
 The names are on the row because it is the only **durable** carrier they have. The scope they are collected in is
-disposed at the end of the step that seeded it, and anything asking later — a Dev Workflow node run settling on a later
-dispatcher tick, in another scope and possibly another process — can read only what was persisted. A name is an
+disposed at the end of the step that seeded it, and anything asking later, in another scope and possibly another
+process, can read only what was persisted. A name is an
 identity, not content: a fixed id for a built-in tool, an operator-authored identifier for an MCP or custom one.
 
 Three things decide how the numbers may be read.
