@@ -30,7 +30,9 @@ internal static class SearchKnowledgeBaseToolDefinition
         + "hit. Use read_document only for a short document or to page deliberately through a long one with offset. Returns "
         + "compact JSON hits with collectionId, documentId, chunkId, content, score, "
         + "scoreKind (Fusion or Rerank: the scale of score, comparable only within one result, not a probability), and "
-        + "chunkIndex; an empty result set means the knowledge base has nothing matching the query.";
+        + "chunkIndex; an empty result set means the knowledge base has nothing matching the query. Omit collectionId to "
+        + "search every collection, or pass one to search only it. When the operator has fixed the chat to one collection, "
+        + "omitting collectionId searches that collection and naming another is refused.";
 
     /// <summary>
     ///     Query is required; limit defaults to the node's <c>KnowledgeSearchDefaultResults</c> and is clamped to its

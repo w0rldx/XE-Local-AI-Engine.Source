@@ -28,7 +28,7 @@ import type {
 	ChatTimelineEntry,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
-import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
+import { turnSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import type { ActiveChatStream, PendingStreamCommit } from "@/features/chat/models/ChatStreamState";
 import {
 	effectiveAgent,
@@ -103,8 +103,8 @@ export interface ChatStreamControllerInput {
 	attachmentFileIds: string[];
 	toolsEnabled: boolean;
 	knowledgeBaseEnabled: boolean;
-	// The collection a grounded send or regenerate searches (the composer's picker).
-	knowledgeCollectionId: string;
+	// The composer's hard-picked collection for every send and regenerate; undefined is "All collections".
+	knowledgeCollectionId: string | undefined;
 	reasoningEffort: ReasoningEffort;
 	/**
 	 * The chat-stream voice tap (barge-in + answer progress). Instantiated by the page, not here: it holds per-turn
@@ -176,7 +176,7 @@ export function useChatStreamController({
 }: ChatStreamControllerInput): ChatStreamController {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
-	// Developer mode + this browser's default sampling overrides, which a conversation's own stored settings replace.
+	// Developer mode + this browser's default sampling overrides (turnSamplingOptions decides which ride a turn).
 	// Read directly from global stores; nothing outside the loops below consumes either.
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const samplingOptions = useChatSamplingPreferencesStore((state) => state.options);
@@ -328,11 +328,9 @@ export function useChatStreamController({
 						// Re-send the conversation's CURRENT (non-deleted) attachment ids on every turn so the server can
 						// ground plain chat (inline extracted text, capped) and stage the files into AgentHome for agent mode.
 						attachmentFileIds: attachmentFileIds.length > 0 ? attachmentFileIds : undefined,
-						// Include sampling overrides only when developer mode is on and at least one field is set.
-						// toWireSamplingOptions returns undefined when all fields are null → omitted from wire payload
-						// (byte-identical invariant: the OFF path is byte-identical to the default non-dev path). The
-						// conversation's own stored settings win; without them this browser's defaults apply.
-						samplingOptions: developerMode ? toWireSamplingOptions(conversation.samplingOptions ?? samplingOptions) : undefined,
+						// The conversation's stored settings ride on every client; this browser's defaults only in developer
+						// mode. Nothing set omits the field, so a chat without overrides sends the same payload as before.
+						samplingOptions: turnSamplingOptions(conversation.samplingOptions, samplingOptions, developerMode),
 						// Read at send time for the conversation the turn actually targets (it may have just been created).
 						autoAcceptWebContent: isWebContentAutoAccepted(conversation.id),
 					},
@@ -474,9 +472,8 @@ export function useChatStreamController({
 					// Send the active conversation-tree path so the regenerated turn's context follows the selected
 					// branch only. Omit when nothing was navigated so the server keeps the stored map.
 					Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined,
-					// Same developer-mode gate the send path applies: overrides ride only when developer mode is on and
-					// at least one field is set, so a plain regenerate stays byte-identical to today.
-					developerMode ? toWireSamplingOptions(conversation.samplingOptions ?? samplingOptions) : undefined,
+					// The send path's rule (turnSamplingOptions).
+					turnSamplingOptions(conversation.samplingOptions, samplingOptions, developerMode),
 					isWebContentAutoAccepted(conversation.id),
 					knowledgeCollectionId,
 					abortController.signal,

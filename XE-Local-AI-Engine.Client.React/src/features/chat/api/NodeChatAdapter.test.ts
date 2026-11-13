@@ -195,12 +195,22 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		expect(connectionMock.state.lastPayload).toMatchObject({ useKnowledgeBase: true, knowledgeCollectionId: "PROJECT-A" });
 	});
 
-	it("leaves the knowledge collection off the payload when the send is not grounded", async () => {
+	it("forwards a hard-picked collection without grounding too, because it also fixes the agent's knowledge tools", async () => {
 		nodeChatAdapter
 			.sendMessage(
 				{ ...streamRequest, useKnowledgeBase: false, knowledgeCollectionId: "PROJECT-A" },
 				new AbortController().signal,
 			)
+			[Symbol.asyncIterator]()
+			.next();
+		await settle();
+
+		expect(connectionMock.state.lastPayload).toMatchObject({ useKnowledgeBase: false, knowledgeCollectionId: "PROJECT-A" });
+	});
+
+	it("leaves the knowledge collection off the payload for All collections", async () => {
+		nodeChatAdapter
+			.sendMessage({ ...streamRequest, useKnowledgeBase: true, knowledgeCollectionId: undefined }, new AbortController().signal)
 			[Symbol.asyncIterator]()
 			.next();
 		await settle();
@@ -422,8 +432,8 @@ describe("nodeChatAdapter SignalR streaming", () => {
 			{ temperature: 0.7, seed: "1234" },
 			// A regenerate in an auto-accept conversation stays in auto.
 			true,
-			// No grounding on this rerun, so the picked collection stays off the wire.
-			null,
+			// No grounding on this rerun, but the hard pick still fixes the agent's knowledge tools.
+			"PROJECT-A",
 		]);
 
 		// Drain the opened stream so the test leaves no pending subscription behind.

@@ -20,11 +20,14 @@ public interface IFtsSearch
     Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query, int limit, Guid? documentId, CancellationToken cancellationToken) =>
         SearchAsync(query, limit, documentId, KnowledgeCollectionScope.DefaultId, cancellationToken);
 
-    /// <summary>Collection-scoped variant used by production retrieval. Implementations must enforce this boundary.</summary>
+    /// <summary>
+    ///     Collection-scoped variant used by production retrieval. Implementations must enforce this boundary; null searches
+    ///     every collection and is passed only for an <see cref="KnowledgeSearchRequest.AllCollections" /> search.
+    /// </summary>
     Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query,
         int limit,
         Guid? documentId,
-        string collectionId,
+        string? collectionId,
         CancellationToken cancellationToken);
 }
 

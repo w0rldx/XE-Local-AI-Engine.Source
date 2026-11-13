@@ -21,7 +21,7 @@ import {
 } from "@/features/chat/components/ContextUsagePopover/ContextUsageBreakdown";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import type { ChatConversationModel, ContextUsageModel } from "@/features/chat/models/ChatModels";
-import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
+import { turnSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
 import { formatTokenCount } from "@/features/chat/models/TokenCountFormatting";
 import { useContextEstimate } from "@/features/chat/queries/useContextEstimate";
@@ -233,10 +233,10 @@ export function ContextUsagePopover({ usage, conversationId, modelName, agentId,
 	const [opened, setOpened] = useState(false);
 	// A last round of another model says nothing about the selected one: fall back to the selected model's estimate.
 	const lastRound = usage.contextWindow && isSnapshotForModel(usage.contextWindow, modelName) ? usage.contextWindow : undefined;
-	// The send path's rule: developer-mode overrides ride the turn, and the output reserve and window change the estimate.
+	// The send path's rule (turnSamplingOptions): the output reserve and window that ride the turn change the estimate.
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const samplingOptions = useChatSamplingPreferencesStore((state) => state.options);
-	// The conversation's own settings win, as on the send path. A cache-only subscription (the chat page owns the fetch)
+	// The conversation's own settings, as on the send path. A cache-only subscription (the chat page owns the fetch)
 	// re-renders this when a save or reload changes them.
 	const { data: conversationSampling } = useQuery({
 		queryKey: nodeChatQueryKeys.conversation(conversationId ?? ""),
@@ -244,7 +244,7 @@ export function ContextUsagePopover({ usage, conversationId, modelName, agentId,
 		enabled: false,
 		select: (conversation: ChatConversationModel) => conversation.samplingOptions,
 	});
-	const wire = developerMode ? toWireSamplingOptions(conversationSampling ?? samplingOptions) : undefined;
+	const wire = turnSamplingOptions(conversationSampling, samplingOptions, developerMode);
 	const estimateQuery = useContextEstimate(
 		{ conversationId, modelName, agentId, useLocalTools, maxOutputTokens: wire?.maxOutputTokens, numCtx: wire?.numCtx },
 		{ enabled: opened && lastRound === undefined },

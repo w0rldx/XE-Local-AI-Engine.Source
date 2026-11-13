@@ -57,10 +57,13 @@ public sealed class NodeChatStreamServiceKnowledgeTests
 
     [Test]
     [Arguments(" project-a ", "PROJECT-A")]
-    [Arguments(null, "DEFAULT")]
-    public async Task SendMessageAsync_GroundsOnTheNormalisedCollectionTheSendPicked(string? picked, string searched)
+    [Arguments("DEFAULT", "DEFAULT")]
+    [Arguments(null, null)]
+    [Arguments("  ", null)]
+    public async Task SendMessageAsync_GroundsOnTheNormalisedCollectionTheSendPicked_AndFixesTheRunsKnowledgeToolsToIt(string? picked, string? pinned)
     {
-        // The composer picks the collection per send; an absent pick is DEFAULT, so an older client keeps its behaviour.
+        // A hard pick grounds on that collection alone and fixes the run's knowledge tools to it; an absent pick is
+        // "All collections": grounding searches every collection and the tools choose their own.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -85,8 +88,11 @@ public sealed class NodeChatStreamServiceKnowledgeTests
             // Drained for the side effect: the grounding search.
         }
 
-        await searchService.Received(1).SearchAsync(Arg.Is<KnowledgeSearchRequest>(request => request.CollectionId == searched),
-            Arg.Any<CancellationToken>());
+        await searchService.Received(1)
+                           .SearchAsync(Arg.Is<KnowledgeSearchRequest>(request => pinned == null ? request.AllCollections : !request.AllCollections && request.CollectionId == pinned),
+                               Arg.Any<CancellationToken>());
+        AssertEx.Equal<string?>(pinned, runner.PinnedCollectionInRun);
+        AssertEx.Null(TurnKnowledgeSourceCollector.PinnedCollectionId, "the turn's pin must not leak into the caller's flow");
     }
 
     [Test]

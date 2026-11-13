@@ -501,10 +501,12 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
-    public async Task RegenerateAsync_GroundsOnTheNormalisedCollectionTheRerunCarries()
+    [Arguments("project-a", "PROJECT-A")]
+    [Arguments(null, null)]
+    public async Task RegenerateAsync_CarriesTheSendsCollectionScope(string? picked, string? pinned)
     {
-        // A rerun carries the composer's collection pick exactly as a send does, so it grounds where the send grounded.
-        await using var provider = await BuildProviderAsync("regeneration-kb-collection.sqlite");
+        // A rerun carries the same scope as a send: a hard pick grounds on it and fixes the tools; absent is All.
+        await using var provider = await BuildProviderAsync($"regeneration-kb-scope-{pinned ?? "all"}.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
         var dispatcher = new RegenRecordingDispatcher();
@@ -520,13 +522,15 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await foreach (var _ in service.RegenerateAsync(conversation.ConversationId,
                            originalId,
                            useKnowledgeBase: true,
-                           knowledgeCollectionId: "project-a"))
+                           knowledgeCollectionId: picked))
         {
-            // Drained for the side effect: the grounding search.
+            // Drained for the side effects: the grounding search and the run.
         }
 
-        await searchService.Received(1).SearchAsync(Arg.Is<KnowledgeSearchRequest>(static request => request.CollectionId == "PROJECT-A"),
-            Arg.Any<CancellationToken>());
+        await searchService.Received(1)
+                           .SearchAsync(Arg.Is<KnowledgeSearchRequest>(request => pinned == null ? request.AllCollections : !request.AllCollections && request.CollectionId == pinned),
+                               Arg.Any<CancellationToken>());
+        AssertEx.Equal<string?>(pinned, runner.PinnedCollectionInRun);
     }
 
     [Test]
@@ -4170,6 +4174,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         public int ActiveInvocationCount => 0;
 
+        // The collection the knowledge-base tools were fixed to while the rerun executed.
+        public string? PinnedCollectionInRun { get; private set; }
+
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             foreach (var hit in ToolHits)
@@ -4177,6 +4184,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                 TurnKnowledgeSourceCollector.Add(hit);
             }
 
+            PinnedCollectionInRun = TurnKnowledgeSourceCollector.PinnedCollectionId;
             LastAutoAcceptWebContent = context.Package.AutoAcceptWebContent;
             LastContext = context.Package.ConversationContext;
             LastReasoningEffort = context.Package.ReasoningEffort;

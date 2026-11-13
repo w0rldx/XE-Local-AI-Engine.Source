@@ -30,8 +30,9 @@ export interface NodeChatStreamRequestDto {
 	// their sources on the assistant turn. Ignored in agent mode.
 	// Hand-typed SignalR stream DTO field (not generated).
 	useKnowledgeBase?: boolean;
-	// The knowledge collection that grounding searches; absent is DEFAULT. Sent only with useKnowledgeBase; the server
-	// refuses an invalid id. Hand-typed SignalR stream DTO field (not generated).
+	// The operator's hard-picked knowledge collection: plain-chat grounding searches only it and the agent's knowledge
+	// tools may read only it. Absent is "All collections"; the server refuses an invalid id. Hand-typed SignalR stream
+	// DTO field (not generated).
 	knowledgeCollectionId?: string;
 	// Developer-mode per-send sampling overrides. Omitted entirely when developer mode is off or all fields
 	// are null — keeps the wire payload byte-identical to the default (non-dev) path.

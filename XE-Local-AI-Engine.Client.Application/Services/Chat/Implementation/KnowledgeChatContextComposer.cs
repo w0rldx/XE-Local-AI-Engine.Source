@@ -88,7 +88,7 @@ internal static class KnowledgeChatContextComposer
             // disclosed as the search tool discloses it, so a last-known-good projection never reads as fresh.
             var metadata = new KeyValuePair<string, string?>[]
             {
-                new("title", hit.Title),
+                new("title", hit.DocumentName ?? hit.Title),
                 new("section", hit.Section),
                 new("source", hit.Source),
                 new("collection", hit.CollectionId),

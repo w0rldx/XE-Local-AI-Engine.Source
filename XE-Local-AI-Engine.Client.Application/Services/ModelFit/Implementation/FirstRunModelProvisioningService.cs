@@ -218,12 +218,12 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         var ticket = await _downloadCoordinator.StartAsync(request, ct);
         _logger.LogInformation("First-run provisioning download started for '{Model}'; waiting for completion.", ticket.ModelName);
 
-        // The download runs detached; wait for it to reach a terminal phase so DefaultModelName is set only once the
-        // file is actually present (a half-downloaded model must not be selected).
+        // The download runs detached; wait for it to complete so DefaultModelName is set only once the file is present
+        // (a half-downloaded model must not be selected). A failed attempt keeps the wait open for its retry.
         var completed = await WaitForDownloadAsync(ticket.ModelName, ct);
         if (!completed)
         {
-            _logger.LogWarning("First-run model '{Model}' did not finish downloading; leaving the picker empty for onboarding.", ticket.ModelName);
+            _logger.LogWarning("First-run model '{Model}' download was cancelled; leaving the picker empty for onboarding.", ticket.ModelName);
             return;
         }
 
@@ -282,16 +282,17 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
     }
 
     /// <summary>
-    ///     Polls the download coordinator's sanitized status until the named download reaches a terminal phase.
+    ///     Polls the download coordinator's sanitized status until the named download completes or is cancelled.
     /// </summary>
     /// <remarks>
-    ///     Returns <see langword="true" /> only when it completed and the file is present, <see langword="false" /> on
-    ///     cancel or failure. It polls rather than blocks because the coordinator runs the download detached and
-    ///     exposes progress through a status registry.
+    ///     Returns <see langword="true" /> only when it completed, <see langword="false" /> on cancel or shutdown. A failure
+    ///     is NOT terminal here: the status is read by name, so a retry of the same download (the Home card's Retry, or the
+    ///     same model from the Models page) is picked up and, once it completes, selected exactly as the first attempt would have been.
     /// </remarks>
     private async Task<bool> WaitForDownloadAsync(string modelName, CancellationToken ct)
     {
         using var timer = new PeriodicTimer(_pollInterval);
+        var failureLogged = false;
 
         while (await timer.WaitForNextTickAsync(ct))
         {
@@ -300,11 +301,21 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             {
                 case GgufDownloadPhase.Completed:
                     return true;
-                case GgufDownloadPhase.Failed:
-                    _logger.LogWarning("First-run model '{Model}' download failed: {Reason}", modelName, status.SanitizedError ?? "unknown reason");
-                    return false;
                 case GgufDownloadPhase.Cancelled:
                     return false;
+                case GgufDownloadPhase.Failed:
+                    if (!failureLogged)
+                    {
+                        _logger.LogWarning("First-run model '{Model}' download failed: {Reason}. A retry of the same download still selects it.", modelName,
+                            status.SanitizedError ?? "unknown reason");
+                        failureLogged = true;
+                    }
+
+                    break;
+                default:
+                    // A retry is running, so its own failure is logged again.
+                    failureLogged = false;
+                    break;
             }
         }
 

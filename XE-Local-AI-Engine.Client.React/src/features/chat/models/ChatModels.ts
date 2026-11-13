@@ -287,7 +287,8 @@ export interface ChatCompactionResult {
 	usedFallbackModel: boolean;
 }
 
-// The composer's knowledge-collection picker: the listed collections (DEFAULT first), the current pick, and its setter.
+// The composer's knowledge-collection picker: the listed collections (DEFAULT first), the current pick (or
+// allKnowledgeCollectionsId, which the picker offers first), and its setter.
 export interface KnowledgeCollectionPicker {
 	readonly options: readonly string[];
 	readonly selected: string;
@@ -384,6 +385,7 @@ export interface ChatDisplayShellProps {
 	onExportConversation?: (conversationId: string, format: ChatExportFormat) => void;
 	onExportAllConversations?: () => void;
 	onImportConversations?: (file: File) => void;
+	importingConversations?: boolean;
 	onBranchFromMessage?: (messageId: string) => void;
 	activeRevisionByGroup?: Readonly<Record<string, string>>;
 	onSelectRevision?: (variantGroupId: string, messageId: string) => void;

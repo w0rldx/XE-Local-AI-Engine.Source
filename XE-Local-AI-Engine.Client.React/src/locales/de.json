@@ -167,6 +167,8 @@
 			"importFailed": "Die Datei konnte nicht importiert werden.",
 			"imported_one": "{{count}} Chat importiert. Anhänge und Tool-Aufrufe sind nicht Teil eines Exports.",
 			"imported_other": "{{count}} Chats importiert. Anhänge und Tool-Aufrufe sind nicht Teil eines Exports.",
+			"importing_one": "{{count}} Chat wird importiert. Ein großer Import kann mehrere Minuten dauern.",
+			"importing_other": "{{count}} Chats werden importiert. Ein großer Import kann mehrere Minuten dauern.",
 			"menuAria": "Chats exportieren oder importieren",
 			"notJson": "Diese Datei ist kein JSON.",
 			"tooLarge": "Diese Datei ist größer als die 64 MB, die ein Import annimmt.",
@@ -178,6 +180,7 @@
 			"wrongFormat": "Diese Datei ist kein Chat-Export."
 		},
 		"knowledgeCollection": {
+			"all": "Alle Wissenssammlungen",
 			"current": "Wissenssammlung: {{collection}}",
 			"label": "Wissenssammlung"
 		},
@@ -231,7 +234,8 @@
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus.",
 		"reasoningMode": "Reasoning-Modus",
 		"search": {
-			"indexing": "Ältere Unterhaltungen werden noch indiziert; Ergebnisse können unvollständig sein."
+			"indexing": "Ältere Unterhaltungen werden noch indiziert; Ergebnisse können unvollständig sein.",
+			"titleMatch": "Treffer im Titel"
 		},
 		"shortcuts": {
 			"keys": {
@@ -2487,8 +2491,8 @@
 			"samplingOptions": {
 				"close": "Schließen",
 				"cloudUnsupported": "Von Cloud-Anbietern nicht unterstützt",
-				"conversationDescription": "Diese Einstellungen werden mit diesem Chat gespeichert und folgen ihm auf jedes Gerät. „Standard verwenden“ stellt die Standards dieses Browsers wieder her.",
-				"description": "Diese Standards überschreiben die Modellstandards für neue Chats und für Chats ohne eigene Einstellungen. Sie werden nur in diesem Browser gespeichert.",
+				"conversationDescription": "Diese Einstellungen werden mit diesem Chat gespeichert und gelten für ihn auf jedem Gerät, mit oder ohne Entwicklermodus. „Standard verwenden“ entfernt sie: Der Chat nutzt dann die Modellstandards oder, wo der Entwicklermodus aktiv ist, die Standards dieses Browsers.",
+				"description": "Solange der Entwicklermodus aktiv ist, überschreiben diese Standards die Modellstandards für neue Chats und für Chats ohne eigene Einstellungen. Sie werden nur in diesem Browser gespeichert.",
 				"frequencyPenalty": "Häufigkeitsstrafe",
 				"frequencyPenaltyDescription": "Bestraft Tokens proportional zur Häufigkeit ihres Auftretens in der Ausgabe.",
 				"groupLimits": "Limits",

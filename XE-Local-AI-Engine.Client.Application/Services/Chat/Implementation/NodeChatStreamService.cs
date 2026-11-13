@@ -146,7 +146,9 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             throw new NodeChatInvalidRequestException(seedError);
         }
 
-        if (!KnowledgeCollectionScope.TryNormalize(request.KnowledgeCollectionId, out var knowledgeCollectionId))
+        // Absent is "All collections"; anything else must normalise, because a hard pick is the knowledge isolation boundary.
+        string? knowledgeCollectionId = null;
+        if (!string.IsNullOrWhiteSpace(request.KnowledgeCollectionId) && !KnowledgeCollectionScope.TryNormalize(request.KnowledgeCollectionId, out knowledgeCollectionId))
         {
             throw new NodeChatInvalidRequestException("The knowledge collection id is invalid.");
         }
@@ -252,8 +254,9 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         Task pumpTask;
         Task runTask;
         using var invocationScope = staging?.Preparation?.EnterInvocationScope();
-        // Seeded before both tasks start, so the run's search-tool hits reach the pump's terminal row as sources.
-        using var knowledgeSourceScope = TurnKnowledgeSourceCollector.BeginScope();
+        // Seeded before both tasks start, so the run's search-tool hits reach the pump's terminal row as sources and the
+        // knowledge-base tools see the turn's hard-picked collection.
+        using var knowledgeSourceScope = TurnKnowledgeSourceCollector.BeginScope(request.KnowledgeCollectionId);
         pumpTask = _invocationStatePump.PumpAsync(stateChannel.Reader,
             eventSink,
             correlation,
@@ -870,7 +873,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             if (UsesKnowledgeBase(request, resolution))
             {
                 var knowledge = await _turnContextBuilder.BuildKnowledgeContextAsync(knowledgeQuery,
-                    request.KnowledgeCollectionId ?? KnowledgeCollectionScope.DefaultId,
+                    request.KnowledgeCollectionId,
                     isRegeneratedTurn: false,
                     runCancellation.Token);
                 if (knowledge is not null)

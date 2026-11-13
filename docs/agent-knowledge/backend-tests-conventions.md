@@ -32,6 +32,10 @@ the browser E2E host.
 
 **Rule:** the copy recipe, and when to keep the from-empty replay, are in `docs/wiki/17-writing-tests.md` ("An EF migration"); never feed `MigrationChainTests` a template. Never "fix" `MigratedDatabaseTemplate` refusing to publish while a `-wal`/`-shm` exists by disabling WAL. **Prevents:** a single-file copy losing rows still in the log, and a vacuous chain test. **Authority:** `MigratedDatabaseTemplate`, `MigratedDatabaseTemplateTests`; `TestServerWebAppFactory.BuildMigratedTemplate`.
 
+### A migration test asserts at its own migration id, never at head
+
+**Rule:** a migration test that asserts a table at head breaks the day a later migration drops that table. Migrate to the migration's own id (`IMigrator.MigrateAsync(id)`) or copy the template at it (`MigratedDatabaseTemplate.CopyChatAtAsync(path, id)`), never head, for anything a later migration may remove. **Prevents:** unrelated migration tests turning red when a feature's tables are dropped. **Authority:** `AddModelReadinessTelemetryMigrationTests`, `AddVramAtLoadTelemetryMigrationTests` (moved off head when `DropDevWorkflows` dropped `dev_workflow_node_runs`).
+
 ### A test host whose content root is the real Client source dir must register a fake `INodeDataDirectory`
 
 **Rule:** a fixture combining the real Client content root with redirected node data removes `INodeDataDirectory` and registers `FakeNodeDataDirectory`. **Prevents:** first-launch migration moving credential and settings files out of the checkout, and teardown deleting them. **Authority:** `ServiceProviderValidationTests.HostCreation_LeavesTheContentRootNodeSettingsWhereItIs`.
@@ -122,5 +126,6 @@ Superseded claims; the entries above are the active rules.
 | Stale belief | Current correction |
 |---|---|
 | Browser E2E is entirely sequential. | It uses disjoint serial and pooled phases (§1). |
+| A migration test may assert its table at head. | It asserts at its own migration id; a later migration may drop the table (§1). |
 | SQLite foreign keys are OFF on the node connection, so cascades never fire and a store's delete order IS the referential integrity. | The node enforces them — it always did, through the bundled native default, and now says so in the connection string and in a pragma on every open. Declared cascades fire; an ordered delete is still required for `Restrict` parents, for links with no foreign key at all, and where order itself matters (§1). |
 | A test fixture with foreign keys ON diverges from production and can hide a missing child delete. | Inverted: a fixture pinned to `Foreign Keys=False` is the one testing a database the node never has (§1, wiki 17). |

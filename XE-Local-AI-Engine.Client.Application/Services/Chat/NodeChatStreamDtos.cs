@@ -112,8 +112,8 @@ public sealed record NodeChatStreamRequest(
     bool AutoAcceptWebContent = false,
     // The engine execution driving this turn, stamped on its run envelope. SERVER-set: the chat hub clears it.
     ExecutionParent? ExecutionParent = null,
-    // The knowledge collection UseKnowledgeBase grounds on; null is DEFAULT. SendMessageAsync normalises it through
-    // KnowledgeCollectionScope and refuses an invalid id, because the collection is the knowledge isolation boundary.
+    // The operator's hard-picked knowledge collection: grounding searches only it and the knowledge-base tools may read
+    // only it. Null is "All collections". SendMessageAsync normalises it and refuses an invalid id (isolation boundary).
     string? KnowledgeCollectionId = null);
 
 /// <summary>

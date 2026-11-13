@@ -1,4 +1,4 @@
-import { Divider, List, Text } from "@mantine/core";
+import { Badge, Divider, Group, List, Text } from "@mantine/core";
 import type { RefObject } from "react";
 import { useCallback } from "react";
 
@@ -51,9 +51,16 @@ function MobileNavigationRootItem({ menuItem, menuReference, to, onOpen }: Mobil
 	return (
 		<div ref={menuReference} className="h-17 flex items-center justify-center">
 			<SidebarMenuItem icon={menuItem.icon} to={to} onClick={onOpen} active={menuItem.active} isMobile={true}>
-				<Text size="sm" fw={500} lh="1.5">
-					{menuItem.label}
-				</Text>
+				<Group gap={6} wrap="nowrap">
+					<Text size="sm" fw={500} lh="1.5">
+						{menuItem.label}
+					</Text>
+					{menuItem.badge ? (
+						<Badge size="xs" variant="light" color="orange">
+							{menuItem.badge}
+						</Badge>
+					) : null}
+				</Group>
 			</SidebarMenuItem>
 		</div>
 	);

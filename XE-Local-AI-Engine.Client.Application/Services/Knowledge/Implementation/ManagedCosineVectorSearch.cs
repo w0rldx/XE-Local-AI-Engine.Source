@@ -54,10 +54,12 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         int vectorDimension,
         int limit,
         Guid? documentId,
-        string collectionId,
+        string? collectionId,
         CancellationToken cancellationToken)
     {
-        if (!KnowledgeCollectionScope.TryNormalize(collectionId, out var normalizedCollectionId))
+        // Null is the explicit every-collection search; any value must normalise or the arm returns nothing.
+        string? normalizedCollectionId = null;
+        if (collectionId is not null && !KnowledgeCollectionScope.TryNormalize(collectionId, out normalizedCollectionId))
         {
             return [];
         }

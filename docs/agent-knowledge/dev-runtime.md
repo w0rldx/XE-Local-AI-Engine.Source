@@ -144,6 +144,10 @@ contract lane without the mise shims first on `PATH`: the Development validation
 
 **Rule:** to profile the node's own CPU during a chat turn, drive the turn from a WebSocket or keep-alive client (the SPA), or subtract the transport frames: `scripts/gpu-smoke-driver.py chat` uses SignalR long polling with a new TLS connection per poll, about 130 requests per turn. **Prevents:** reading Kestrel TLS handshakes, `NodeSecurityStampCheck.IsCurrentAsync` and the middleware pipeline, 60–70 % of the sampled CPU in that setup, as product cost (2026-10-19). **Authority:** `command_chat` and its long-polling client in `scripts/gpu-smoke-driver.py`.
 
+### Exit 9 naming an unknown migration after switching branches is the downgrade guard, not a broken database
+
+**Rule:** a data directory a branch with a newer migration has run on (the AppHost data, a lab) refuses to start under an older checkout: exit 9 and a hint naming the migration. Use a fresh data directory or restore the pre-migration snapshot; never delete the history row. **Prevents:** "repairing" `__EFMigrationsHistory` by hand to get past the guard. **Authority:** `NodeDbRestoreStaging.FindUnknownAppliedMigrationAsync`, `Program.ApplyStartupMigrationsAsync`.
+
 ## Containers, sandbox and External Apps (host side)
 
 ### Locked runtime decisions — do not "helpfully" reintroduce
@@ -318,4 +322,5 @@ Superseded claims; the entries above are the active rules.
 | Docker is gone entirely. | ADR 0004 permits Development Mode only; inference/AgentHome/Coder constraints remain |
 | Process sandbox always shares host network. | Empty netns is used where measured available; other hosts degrade |
 | Hardened containers always use uid 1000 and inspect proves mapping. | Rootless requires uid 0 to map to engine user; verify outcome host-side |
+| Exit 9 at startup means the node database is broken. | It is the downgrade guard: a newer branch migrated that data directory |
 | Node DB is SQLCipher and wrong key fails DB open. | SQLite is plain with per-column AEAD; DataProtection resolver enforces fail-closed key reads. |

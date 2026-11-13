@@ -191,6 +191,9 @@ public static class ConfigureServices
         // push live on KnowledgeBaseHub. IHubContext is singleton-safe, so the scoped ingestion service can resolve this singleton.
         builder.Services.AddSingleton<IKnowledgeIndexingNotifier, KnowledgeIndexingNotifier>();
 
+        // Pushes a conversation-list change on LocalChatHub after the chat metadata endpoints succeed, so other open clients refresh.
+        builder.Services.AddSingleton<LocalChatConversationChangePublisher>();
+
         // Hub-backed image-job event publisher, superseding the no-op AddNodeImages registers so coarse status transitions push live on
         // ImageJobHub. IHubContext is singleton-safe, so the singleton image-job coordinator can resolve it.
         builder.Services.AddSingleton<IImageJobEventPublisher, ImageJobEventPublisher>();
@@ -289,6 +292,7 @@ public static class ConfigureServices
                 settings.SchemaSettings.SchemaProcessors.Add(new JsonStringEnumMemberNameSchemaProcessor());
                 settings.OperationProcessors.Add(new McpServerApiKeyOpenApiOperationProcessor());
                 settings.DocumentProcessors.Add(new DevelopmentOpenApiDocumentProcessor());
+                settings.DocumentProcessors.Add(new ExternalAppsExperimentalOpenApiDocumentProcessor());
             };
 
             options.ExcludeNonFastEndpoints = true;

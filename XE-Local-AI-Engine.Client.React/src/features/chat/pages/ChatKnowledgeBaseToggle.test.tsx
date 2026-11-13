@@ -10,7 +10,7 @@ import { nodeChatStreamEventTypes } from "@/features/chat/api/NodeChatStreamStat
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
-import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { allKnowledgeCollectionsId, useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
@@ -144,7 +144,11 @@ describe("Chat knowledge-base toggle and the send payload", () => {
 
 	afterEach(() => {
 		cleanup();
-		useNodeChatPreferencesStore.setState({ knowledgeBaseEnabled: false, knowledgeCollectionId: "DEFAULT" });
+		useNodeChatPreferencesStore.setState({
+			knowledgeBaseEnabled: false,
+			knowledgeCollectionId: "DEFAULT",
+			agentModeEnabled: false,
+		});
 	});
 
 	it.each([true, false])("sends useKnowledgeBase=%s when the toggle shows that state", async (enabled) => {
@@ -192,12 +196,40 @@ describe("Chat knowledge-base toggle and the send payload", () => {
 		expect(knowledgeDocuments).toHaveBeenLastCalledWith(true, "PROJECT-A");
 	});
 
-	it("falls back to DEFAULT when the remembered collection is no longer listed", async () => {
+	it("falls back to All collections when the remembered collection is no longer listed", async () => {
 		useNodeChatPreferencesStore.setState({ knowledgeBaseEnabled: true, knowledgeCollectionId: "GONE" });
 		renderChat();
 		await screen.findByTestId("conversation-item-conversation-1");
 
 		expect(await sendAndReadFlag()).toBe(true);
-		expect(adapter.sendMessage.mock.calls[0]?.[0].knowledgeCollectionId).toBe("DEFAULT");
+		expect(adapter.sendMessage.mock.calls[0]?.[0].knowledgeCollectionId).toBeUndefined();
+	});
+
+	it("sends no collection for All collections and checks documents across every collection", async () => {
+		useNodeChatPreferencesStore.setState({ knowledgeBaseEnabled: true, knowledgeCollectionId: "PROJECT-A" });
+		renderChat();
+		await screen.findByTestId("conversation-item-conversation-1");
+
+		fireEvent.click(await screen.findByTestId("chat-knowledge-collection-trigger"));
+		fireEvent.click(await screen.findByTestId("chat-knowledge-collection-option-all"));
+
+		expect(await sendAndReadFlag()).toBe(true);
+		expect(adapter.sendMessage.mock.calls[0]?.[0].knowledgeCollectionId).toBeUndefined();
+		expect(useNodeChatPreferencesStore.getState().knowledgeCollectionId).toBe(allKnowledgeCollectionsId);
+		expect(knowledgeDocuments).toHaveBeenLastCalledWith(true, undefined);
+	});
+
+	it("offers the picker in agent mode and sends the hard pick there too", async () => {
+		useNodeChatPreferencesStore.setState({
+			knowledgeBaseEnabled: false,
+			knowledgeCollectionId: "PROJECT-A",
+			agentModeEnabled: true,
+		});
+		renderChat();
+		await screen.findByTestId("conversation-item-conversation-1");
+
+		expect(await screen.findByTestId("chat-knowledge-collection-trigger")).toBeTruthy();
+		await sendAndReadFlag();
+		expect(adapter.sendMessage.mock.calls[0]?.[0].knowledgeCollectionId).toBe("PROJECT-A");
 	});
 });

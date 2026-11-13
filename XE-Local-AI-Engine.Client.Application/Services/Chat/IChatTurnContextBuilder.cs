@@ -65,7 +65,10 @@ public interface IChatTurnContextBuilder
     ///     The top-k fused knowledge-base hits for <paramref name="query" /> in <paramref name="collectionId" />, composed
     ///     into ONE fenced untrusted context message alongside the provenance of the inlined hits.
     /// </summary>
-    /// <param name="collectionId">The normalised collection searched; no other collection's chunks can ground the turn.</param>
+    /// <param name="collectionId">
+    ///     The normalised hard-picked collection, whose chunks alone can ground the turn; <see langword="null" /> searches
+    ///     every collection ("All collections").
+    /// </param>
     /// <param name="isRegeneratedTurn">Picks which retrieval-failure warning is logged, nothing more.</param>
     /// <remarks>
     ///     It returns <see langword="null" /> whenever grounding produces nothing — a blank or oversized query, no
@@ -73,7 +76,7 @@ public interface IChatTurnContextBuilder
     ///     that must never fail the turn. The caller applies the cloud-egress locality gate before calling.
     /// </remarks>
     Task<KnowledgeChatGrounding?> BuildKnowledgeContextAsync(string query,
-        string collectionId,
+        string? collectionId,
         bool isRegeneratedTurn = false,
         CancellationToken cancellationToken = default);
 

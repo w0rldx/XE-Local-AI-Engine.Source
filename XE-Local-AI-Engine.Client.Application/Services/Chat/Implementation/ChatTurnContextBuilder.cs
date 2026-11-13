@@ -289,7 +289,7 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
 
     /// <inheritdoc />
     public async Task<KnowledgeChatGrounding?> BuildKnowledgeContextAsync(string query,
-        string collectionId,
+        string? collectionId,
         bool isRegeneratedTurn = false,
         CancellationToken cancellationToken = default)
     {
@@ -308,7 +308,9 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
                 Limit = limit,
                 DocumentId = null,
                 ExpandNeighbors = false,
-                CollectionId = collectionId
+                CollectionId = collectionId ?? KnowledgeCollectionScope.DefaultId,
+                AllCollections = collectionId is null,
+                IncludeDocumentNames = true
             };
 
             // The hybrid search runs in a FRESH DI scope: IKnowledgeSearchService is scoped and drives a request-scoped

@@ -163,6 +163,10 @@
 #                   (filename, line) and so takes any number of reports.
 #                   COSTS DISK: see "Coverage instrumentation is in-place" below — coverage mode
 #                   clones the ~240 MB test output tree once per concurrent job.
+#   TRX_DIR         when set (and COVERAGE_DIR is not), every unit writes a TRX report, no coverage, to
+#                   <TRX_DIR>/<unit>/<unit>.trx; a unit's directory is cleared before it runs. The
+#                   backend gate sets it to .tmp/backend-test-results/XE-Local-AI-Engine.Tests so the
+#                   per-test durations survive the run. It changes no verdict.
 #   NO_BUILD        when set, skip the Release build
 #   NO_BUILD_LOCK   when set, do NOT take the cross-process build lock (escape hatch; you are then
 #                   relying on the contamination DETECTION alone)
@@ -333,6 +337,10 @@ SETTINGS
     if [[ -n "$SLOT_ROOT" ]]; then
       slot="$(acquire_slot)"; exe="$SLOT_ROOT/$slot/$(basename "$EXE")"
     fi
+  elif [[ -n "${TRX_DIR:-}" ]]; then
+    # TRX only (per-test durations), one directory per unit as in coverage mode; cleared so a rerun overwrites.
+    rm -rf "${TRX_DIR:?}/$ns"
+    report_args=(--report-trx --report-trx-filename "$ns.trx" --results-directory "$TRX_DIR/$ns")
   fi
   local peak=0
   for attempt in 1 2; do

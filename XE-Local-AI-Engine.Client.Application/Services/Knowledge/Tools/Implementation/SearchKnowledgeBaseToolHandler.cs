@@ -112,9 +112,14 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
         // Live node settings; the default is clamped too, so a hand-edited file with default > max still honors the ceiling.
         var maxLimit = await _runtimeSettings.GetKnowledgeSearchMaxResultsAsync(cancellationToken);
         var limit = Math.Clamp(request.Limit ?? await _runtimeSettings.GetKnowledgeSearchDefaultResultsAsync(cancellationToken), MinLimit, maxLimit);
-        if (!KnowledgeCollectionScope.TryNormalize(request.CollectionId, out var collectionId))
+        if (!KnowledgeCollectionScope.TryNormalize(KnowledgeToolCollectionPin.Requested(request.CollectionId), out var collectionId))
         {
             return "search_knowledge_base 'collectionId' is invalid.";
+        }
+
+        if (KnowledgeToolCollectionPin.Refusal(ToolName, collectionId) is { } pinRefusal)
+        {
+            return pinRefusal;
         }
 
         var searchRequest = new KnowledgeSearchRequest
@@ -123,7 +128,11 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             Limit = limit,
             DocumentId = documentId,
             ExpandNeighbors = request.ExpandNeighbors ?? false,
-            CollectionId = collectionId
+            CollectionId = collectionId,
+            // "All collections" (no pin): a call that names no collection searches every one; a named one stays scoped.
+            AllCollections = string.IsNullOrWhiteSpace(request.CollectionId) && TurnKnowledgeSourceCollector.PinnedCollectionId is null,
+            // The model cites the name the operator knows, as read_document already titles a document.
+            IncludeDocumentNames = true
         };
 
         await using var scope = _scopeFactory.CreateAsyncScope();
@@ -166,7 +175,7 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
                 contentTrust = UntrustedContentFraming.UntrustedTrustLabel,
                 content = UntrustedContentFraming.WrapDocument(hit.Content,
                 [
-                    new("title", hit.Title),
+                    new("title", hit.DocumentName ?? hit.Title),
                     new("section", hit.Section),
                     new("source", hit.Source),
                     new("collection", hit.CollectionId),

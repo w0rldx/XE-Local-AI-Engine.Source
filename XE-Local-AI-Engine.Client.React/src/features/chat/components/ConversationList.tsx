@@ -50,6 +50,8 @@ interface ConversationListProps {
 	onExport?: ChatDisplayShellProps["onExportConversation"];
 	onExportAll?: () => void;
 	onImportFile?: (file: File) => void;
+	// An import is running: the action stays disabled until it ends.
+	importing?: boolean;
 }
 
 function matchesQuery(conversation: ChatConversationModel, query: string): boolean {
@@ -88,6 +90,7 @@ export const ConversationList = memo(function ConversationList({
 	onExport,
 	onExportAll,
 	onImportFile,
+	importing = false,
 }: ConversationListProps) {
 	const { t } = useTranslation();
 	const importInput = useRef<HTMLInputElement>(null);
@@ -97,10 +100,14 @@ export const ConversationList = memo(function ConversationList({
 	const normalizedQuery = searchQuery.trim().toLowerCase();
 	const searching = normalizedQuery.length > 0;
 	// Archived conversations only surface when the operator opts in; search always narrows the visible set. The server's
-	// content search covers every conversation and all message text, so its answer replaces the local filter.
+	// content search covers every conversation and all message text, so its answer replaces the local filter. A hit
+	// without a snippet matched only the title: say so instead of the empty-chat preview.
+	const titleMatchPreview = t("chat.search.titleMatch", "Matches the title");
 	const visible =
 		searching && searchResults
-			? searchResults.conversations
+			? searchResults.conversations.map((hit) =>
+					hit.lastMessagePreview ? hit : { ...hit, lastMessagePreview: titleMatchPreview },
+				)
 			: conversations.filter(
 					(conversation) => (showArchived || !conversation.isArchived) && matchesQuery(conversation, normalizedQuery),
 				);
@@ -229,6 +236,7 @@ export const ConversationList = memo(function ConversationList({
 								<Menu.Item
 									leftSection={<IconFileImport size={14} />}
 									onClick={() => importInput.current?.click()}
+									disabled={importing}
 									data-testid="conversation-import"
 								>
 									{t("chat.exportImport.import", "Import chats (JSON)")}

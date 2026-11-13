@@ -26,7 +26,7 @@ public sealed class NoTupleConventionTests
         RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Architecture", "TupleAllowlist.txt");
 
     /// <summary>Today's entry count. Only ever lowered, in the commit that shrinks the list.</summary>
-    private const int MaxEntries = 281;
+    private const int MaxEntries = 255;
 
     /// <summary>The same non-vacuity floor as the positional-record guard, which reads the same walk.</summary>
     private const int EnforcedFileFloor = 4200;

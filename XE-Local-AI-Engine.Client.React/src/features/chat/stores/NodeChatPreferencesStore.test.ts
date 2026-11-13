@@ -2,7 +2,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { binaryReasoningEfforts, clampReasoningEffort, reasoningEfforts } from "@/features/chat/stores/NodeChatPreferencesStore";
+import {
+	allKnowledgeCollectionsId,
+	binaryReasoningEfforts,
+	clampReasoningEffort,
+	reasoningEfforts,
+} from "@/features/chat/stores/NodeChatPreferencesStore";
 
 const SELECTED_MODEL_STORAGE_KEY = "xe-node-chat-selected-model";
 const REASONING_EFFORT_STORAGE_KEY = "xe-node-chat-reasoning-effort";
@@ -248,8 +253,14 @@ describe("NodeChatPreferencesStore", () => {
 		expect(localStorage.getItem(SHOW_TOKENS_PER_SECOND_STORAGE_KEY)).toBe("false");
 	});
 
-	it("defaults the knowledge collection to DEFAULT", async () => {
+	it("defaults the knowledge collection to All collections", async () => {
 		const useStore = await loadStore();
+
+		expect(useStore.getState().knowledgeCollectionId).toBe(allKnowledgeCollectionsId);
+	});
+
+	it("keeps an explicitly stored DEFAULT pick", async () => {
+		const useStore = await loadStore({ [KNOWLEDGE_COLLECTION_STORAGE_KEY]: "DEFAULT" });
 
 		expect(useStore.getState().knowledgeCollectionId).toBe("DEFAULT");
 	});

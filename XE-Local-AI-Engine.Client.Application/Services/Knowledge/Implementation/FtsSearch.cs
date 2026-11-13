@@ -25,7 +25,7 @@ public sealed class FtsSearch : IFtsSearch
     public async Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query,
         int limit,
         Guid? documentId,
-        string collectionId,
+        string? collectionId,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -37,21 +37,22 @@ public sealed class FtsSearch : IFtsSearch
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken);
 
-        if (!KnowledgeCollectionScope.TryNormalize(collectionId, out var normalizedCollectionId))
+        string? normalizedCollectionId = null;
+        if (collectionId is not null && !KnowledgeCollectionScope.TryNormalize(collectionId, out normalizedCollectionId))
         {
             return [];
         }
 
         await using var command = connection.CreateCommand();
         // Identifiers are UNINDEXED and title-bearing metadata carries a larger BM25 weight than body text; the document
-        // join applies the dense arm's collection boundary before ranking, so no cross-project candidate enters fusion.
+        // join applies the dense arm's collection boundary before ranking (none for the explicit every-collection null).
         command.CommandText = """
                               SELECT chunk_fts.chunk_id, chunk_fts.document_id,
                                      bm25(chunk_fts, 0.0, 0.0, 6.0, 3.0, 8.0, 1.0) AS score
                               FROM chunk_fts
                               JOIN knowledge_documents AS d ON d.document_id = chunk_fts.document_id
                               WHERE chunk_fts MATCH $match
-                                AND d.collection_id = $collection_id
+                                AND ($collection_id IS NULL OR d.collection_id = $collection_id)
                                 AND ($document_id IS NULL OR chunk_fts.document_id = $document_id)
                               ORDER BY score ASC
                               LIMIT $limit;

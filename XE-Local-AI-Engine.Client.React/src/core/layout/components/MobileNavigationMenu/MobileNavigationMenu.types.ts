@@ -5,6 +5,8 @@ import type { MenuItemStyles } from "@/core/layout/models/Sidebar";
 interface IMobileNavigationMenuItem {
 	icon: ReactNode;
 	label: string;
+	/** Short tier label rendered beside the label (External Apps: Experimental). */
+	badge?: string;
 	to?: string;
 	onClick?: () => void;
 	active?: boolean;

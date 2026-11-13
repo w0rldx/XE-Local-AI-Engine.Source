@@ -177,6 +177,13 @@ themselves — and wraps each sibling in the assembly guard. `NO_BUILD=1` skips 
 batched module (the shape CI's `siblings` leg uses, through this same script), and `COVERAGE_DIR` adds Cobertura +
 TRX per project.
 
+Without `COVERAGE_DIR` every lane's reports land under the worktree's `.tmp/backend-test-results/`, which the gate
+clears at its start, so each run replaces the last: `<module>/` holds a sibling's TRX and `gate.log`, and
+`XE-Local-AI-Engine.Tests/` holds the batched lane's `gate.log` plus one `<unit>/<unit>.trx` per namespace batch (the
+runner's `TRX_DIR` knob; TRX only, no coverage). Those TRX carry each test's
+duration, so the slowest classes of the big module can be read from a normal gate run instead of a single-process
+`dotnet test`. They change no verdict.
+
 A third lane, `release-contract-tests`, runs
 [`scripts/run-release-contract-tests.sh`](../../scripts/run-release-contract-tests.sh) whenever anything under
 `scripts/`, `publish/` or `.github/workflows/` differs from the merge-base of `HEAD` with `develop` (`origin/develop`
@@ -210,8 +217,8 @@ Rows before 2026-10-28 have sixteen: they lack `Cli`. Rows before 2026-10-23 hav
 on exit 0, else `lock-timeout` (69), `contaminated` (75), `killed` (130/143), `build`, `fail-fast` (the Architecture
 pre-lane), `tests` (a lane red) or `setup`. `skips` groups the finished lanes' skipped tests by reason as
 `<slug>:<count>,...`: a sibling project's slug is its TUnit skip text from the TRX, cut to 24 characters.
-`unreported` counts the skips without a recorded reason, which is every skip of the batched module (its runner writes
-no TRX without `COVERAGE_DIR`). `failed` holds up to three distinct failing test method names and `flakes` the
+`unreported` counts the skips without a recorded reason, which is every skip of the batched module (its per-batch
+TRX are kept but not read for skip reasons). `failed` holds up to three distinct failing test method names and `flakes` the
 known-flakes entries they matched, `-` when none. `ratchets` counts the entries of the five shrink-only allowlists
 (`DbContextUser`, `PositionalRecord`, `Tuple`, `FilePlacement`, `CommentBudget`) under
 `XE-Local-AI-Engine.Tests/Architecture/`, so allowlist drift shows in the history. A failing test

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Hubs;
 
 using System.Net;
+using System.Net.Http.Json;
 using System.Reflection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -9,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.Models;
@@ -167,6 +169,42 @@ public sealed class ServerPushHubTests
 
         var evt = await received.Task.WaitAsync(TestBudgets.Contended);
         AssertEx.True(evt.Sequence >= 1);
+    }
+
+    [Test]
+    public async Task RenameThroughTheApi_PushesAConversationChangeOnTheChatHub()
+    {
+        // An open sidebar in another client refreshes on this push instead of waiting for a reload.
+        var conversationId = Guid.NewGuid();
+        _ = await Factory.Services.GetRequiredService<INodeChatPersistenceService>().EnsureConversationAsync(new NodeChatEnsureConversationRequest
+        {
+            ConversationId = conversationId,
+            Title = "Before",
+            UserId = "operator",
+            CreatedAtUtc = 10,
+            Origin = NodeChatOriginValues.Local
+        });
+        await using var connection = Connect(LocalApiRoutes.LocalChat.Hub);
+        var received = new TaskCompletionSource<ConversationsChangedHubEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = connection.On<ConversationsChangedHubEvent>(LocalChatHubEvents.ConversationsChanged, evt => received.TrySetResult(evt));
+        await connection.StartAndAwaitRegistrationAsync();
+
+        using var client = Factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Patch, $"/api/local/v1/chat/conversations/{conversationId}/rename")
+        {
+            Content = JsonContent.Create(new
+            {
+                Title = "After"
+            })
+        };
+        Factory.AddNodeBearerToken(request);
+        request.Headers.Add("Origin", "http://localhost");
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var evt = await received.Task.WaitAsync(TestBudgets.Contended);
+        AssertEx.Equal(LocalChatHubEvents.ConversationsChanged, evt.EventType);
+        AssertEx.Equal<Guid?>(conversationId, evt.ConversationId);
     }
 
     private HubConnection Connect(string hubPath)

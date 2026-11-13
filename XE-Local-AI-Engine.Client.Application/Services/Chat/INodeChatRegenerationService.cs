@@ -27,7 +27,7 @@ public interface INodeChatRegenerationService
     /// </param>
     /// <param name="autoAcceptWebContent">The conversation's web result review mode, as a send carries it.</param>
     /// <param name="knowledgeCollectionId">
-    ///     The collection a grounded rerun searches, as a send carries it; null is DEFAULT and an invalid id is refused.
+    ///     The rerun's hard-picked collection, as a send carries it; null is "All collections" and an invalid id is refused.
     /// </param>
     IAsyncEnumerable<ChatStreamEvent> RegenerateAsync(Guid conversationId,
         Guid originalMessageId,

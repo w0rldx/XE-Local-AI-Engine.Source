@@ -20,8 +20,9 @@ const SHOW_TOKENS_PER_SECOND_STORAGE_KEY = "xe-node-chat-show-tokens-per-second"
 const KNOWLEDGE_BASE_ENABLED_STORAGE_KEY = "xe-node-chat-knowledge-base-enabled";
 const KNOWLEDGE_COLLECTION_STORAGE_KEY = "xe-node-chat-knowledge-collection";
 
-// The backwards-compatible collection a send grounds on when nothing else was picked.
-export const defaultKnowledgeCollectionId = "DEFAULT";
+// The picker's "All collections" choice and the default: grounding searches every collection and the agent's knowledge
+// tools choose their own. Never sent; "*" is not a valid collection id, so it cannot shadow a real one.
+export const allKnowledgeCollectionsId = "*";
 
 // Graded reasoning efforts, offered for models that advertise the `thinking` capability.
 // "auto" is APPENDED, never prepended: clampReasoningEffort falls back to `available[0]`, so a leading "auto" would
@@ -118,8 +119,9 @@ interface NodeChatPreferencesStore {
 	// top-k knowledge-base hits for the message and inlines them (fenced) into the turn, surfacing their sources.
 	// Global preference stamped per-send, mirroring toolsEnabled. Ignored in agent mode (the agent uses the KB tool).
 	knowledgeBaseEnabled: boolean;
-	// The knowledge collection the composer's picker chose; stamped on each grounded send and regenerate. Chat.tsx falls
-	// back to DEFAULT when the stored id no longer names a listed collection.
+	// The knowledge collection the composer's picker chose, or allKnowledgeCollectionsId (the default). A hard pick is
+	// stamped on each send and regenerate, plain chat and agent mode alike. Chat.tsx falls back to All when the stored id
+	// no longer names a listed collection.
 	knowledgeCollectionId: string;
 	actions: {
 		setSelectedModel: (value: string) => void;
@@ -198,7 +200,8 @@ function readStoredKnowledgeBaseEnabled(): boolean {
 
 function readStoredKnowledgeCollectionId(): string {
 	const stored = readStoredString(KNOWLEDGE_COLLECTION_STORAGE_KEY);
-	return stored && stored.trim().length > 0 ? stored : defaultKnowledgeCollectionId;
+	// Nothing stored is the new default, All; an explicit stored pick (DEFAULT included) stays.
+	return stored && stored.trim().length > 0 ? stored : allKnowledgeCollectionsId;
 }
 
 export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((set) => ({

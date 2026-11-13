@@ -285,16 +285,30 @@ notice. The "Invocation completed" log line carries `FinishReason`, so a silent 
 Plain chat exposes an opt-in **Use knowledge base** toggle when the node capability is enabled. It is
 disabled while no indexed documents exist and hidden in Agent Mode, where the agent reaches the same
 data through the gated `search_knowledge_base` / read tools instead of duplicate inline grounding.
-The preference is forwarded on sends and regenerations.
+The preference is forwarded on sends and regenerations, and a regenerate carries the same collection scope as a send.
 
-Grounding searches one knowledge collection, picked per send. Beside the toggle the composer shows a collection picker
-once `GET knowledge-base/collections` lists more than `DEFAULT`; the pick persists in `NodeChatPreferencesStore`
-(a pick whose collection is no longer listed falls back to `DEFAULT`), and the toggle's "has indexed documents" check
-reads that collection. A grounded send carries it as `NodeChatStreamRequest.KnowledgeCollectionId` and a regenerate as
-the last positional `RegenerateMessage` argument; absent means `DEFAULT`. Both services normalise it through
-`KnowledgeCollectionScope.TryNormalize` before anything runs and refuse an invalid id as a `NodeChatInvalidRequestException`
-(the hub forwards the sentence), because the collection is the isolation boundary: a turn grounded on one collection
-never inlines another's chunks.
+**Collection scope.** The composer shows a collection picker, in plain chat and in Agent Mode, once
+`GET knowledge-base/collections` lists more than `DEFAULT`. Its first option, **All collections**, is the default
+(`allKnowledgeCollectionsId` in `NodeChatPreferencesStore`, never sent); an explicitly stored pick, `DEFAULT` included,
+stays, and a pick whose collection is no longer listed falls back to All. The toggle's "has indexed documents" check
+reads the picked collection, or every collection for All.
+
+- **All** sends no collection. Plain-chat grounding searches every collection (`KnowledgeSearchRequest.AllCollections`),
+  and the agent's knowledge tools choose their collection themselves: a `search_knowledge_base` call that omits
+  `collectionId` searches every collection, one that names a collection searches only it.
+- **A hard pick** rides every send as `NodeChatStreamRequest.KnowledgeCollectionId` and every regenerate as the last
+  positional `RegenerateMessage` argument, whether or not grounding is on. Grounding searches only that collection,
+  and the turn's `TurnKnowledgeSourceCollector` scope carries it as `PinnedCollectionId`, so
+  `search_knowledge_base`, `read_document` and `read_surrounding_chunks` read only it (`KnowledgeToolCollectionPin`): an
+  omitted `collectionId` means the pinned one, and a call naming another is **refused** with a sentence naming the fixed
+  collection rather than silently redirected, so the model never presents one collection's passages as another's.
+  `search_knowledge_base`'s description says so; it stays
+  static because the offer is precomputed byte-identical across sends.
+- **Compatibility.** A client that sends no collection now gets All where it used to get `DEFAULT`; All is a superset,
+  so such a turn still grounds on `DEFAULT`'s chunks. Both services normalise a sent id through
+  `KnowledgeCollectionScope.TryNormalize` before anything runs and refuse an invalid one as a
+  `NodeChatInvalidRequestException` (the hub forwards the sentence), because a hard pick is the isolation boundary.
+  "All" is never a collection value: only the explicit flag widens a search, so no client-supplied id can.
 
 For an opted-in plain-chat turn, `NodeChatStreamService` runs hybrid retrieval using the user message,
 then `KnowledgeChatContextComposer` prepends the highest-ranked excerpts within a character budget.
@@ -369,10 +383,12 @@ stores the wire shape, and `samplingOptions: null` clears it. Its validator boun
 penalty −2–2, max output tokens 1–131072, num_ctx 512–131072, seed −1–2147483647, at most 16 stop sequences of 1–256
 characters). Only an ordinary chat takes them (a work session or integration transcript is a 400), and a branch copies
 them with the plain mode. The conversation read returns them as `samplingOptions`. The node never applies them itself:
-the SPA sends the conversation's settings with each turn and regenerate as above, falling back to this browser's
-`ChatSamplingPreferencesStore` defaults when the conversation has none; a new chat therefore starts from those
-defaults. `ChatSamplingOptionsDialog` edits the open conversation's settings as a draft (Save, Cancel, "Use defaults"
-to clear) and, without a conversation, the browser defaults. The chat export file does not carry them.
+the SPA sends the conversation's settings with each turn and regenerate as above on **every** client, developer mode or
+not (`turnSamplingOptions`). Only when the conversation has none does it fall back to this browser's
+`ChatSamplingPreferencesStore` defaults, and only in developer mode, since only developer mode can see or edit them.
+Developer mode still gates the dialog: `ChatSamplingOptionsDialog` edits the open conversation's settings as a draft
+(Save, Cancel, "Use defaults" to clear) and, without a conversation, the browser defaults. The chat export file does not
+carry them.
 
 ## Reasoning effort + cloud clamp
 
@@ -788,7 +804,7 @@ indicator shows them beside "Loading <model>…" and keeps the plain text when t
 picker's local-default sentinel as no model, as a send does), no agent means the Default Assistant, and
 `useLocalTools` mirrors the composer's "Local tools" toggle (absent means on), so tools are offered only when a
 send would offer them. The toggle gates the node-wide offer (Default Assistant and agents without an allowed-tools list);
-an agent's own allowed-tools list is offered whatever the toggle says. `conversationId` names the conversation the next request goes to; a plain one ignores the agent and the toggle and charges its custom prompt or nothing, and no tools, the same way a send resolves it. In developer mode the SPA also sends the effective sampling settings' (the conversation's own, else the browser defaults) `maxOutputTokens`, which widens the output
+an agent's own allowed-tools list is offered whatever the toggle says. `conversationId` names the conversation the next request goes to; a plain one ignores the agent and the toggle and charges its custom prompt or nothing, and no tools, the same way a send resolves it. The SPA also sends the effective sampling settings' (the conversation's own, else in developer mode the browser defaults) `maxOutputTokens`, which widens the output
 reserve above the node floor by the send path's `TurnPolicy.ResolveReservedOutputTokens` rule, and `numCtx`, the
 requested window, which a known launched window caps and which is otherwise taken as is (`TurnPolicy.WithEffectiveContext`).
 Non-positive values are ignored. The service reuses the send path's turn resolution and tool offer, so the figures follow what a
@@ -978,8 +994,15 @@ chats match only with `includeArchived`. Titles and content are ciphertext at re
   value in `url.query` with `Redacted` by default.
 
 The sidebar search box (`ConversationList`) debounces the query (`useConversationContentSearch`) and shows the
-server's matches with their snippet; until they arrive, or when the request fails, it filters the loaded page by
-title and preview as before.
+server's matches with their snippet; a hit with no snippet matched only the title and says so (`chat.search.titleMatch`).
+Until they arrive, or when the request fails, it filters the loaded page by title and preview as before.
+
+**Other clients' changes.** After `chat/conversations/{id}` rename, pin, archive or delete, or an import, succeeds, the
+endpoint pushes `chat.conversationsChanged` on `LocalChatHub` (`LocalChatConversationChangePublisher`, ids only,
+best-effort), and `useConversationListPush` invalidates the conversation lists, so an open sidebar in another browser or
+the desktop app shows the change without a reload. The endpoints push, not the persistence facade, so an import or an
+integration's internal writes never fan out one push per conversation; an import pushes once. Turns written by another
+client are not pushed.
 
 ### Export and import
 
@@ -987,7 +1010,9 @@ title and preview as before.
 
 `POST chat/import` (`ImportNodeChatConversationsEndpoint`) takes the same document back and creates **new** chats. `ImportNodeChatConversationsRequestValidator` refuses the whole file before anything is written: wrong format or version, more than 5,000 chats or 100,000 messages, a role other than `user` or `assistant` (`tool` and `system` are refused, since the writer has no path for either), an empty message, a title over 200 characters, a creation time that is negative or more than a day past this node's clock. A body over 64 MiB is a 413 before it is read. The export is **not** capped: an export-all of a history beyond those caps is written in full, and this node's import refuses it whole. Each conversation and message gets a fresh id, never one from the file, and is written through `INodeChatPersistenceService.CreateConversationAsync` and `InsertMessageIfAbsentAsync`, so content is encrypted under its new `conversationId + messageId` AAD and anything observing those writes sees the import. Titles, message order, creation times and the archived flag are kept; attachments and tool events are not restored. A write that fails partway purges every chat that import created; a purge that fails too is logged with the conversation id and the rest still run, and the original error is what the request answers. Like any finished assistant row, an imported one carries a thin run envelope ([The run envelope](#the-run-envelope)): usage views show each imported assistant reply as a zero-token run at its original time.
 
-In the SPA, each row's menu in `ConversationList` exports that chat as Markdown or JSON, and the menu beside "New chat" exports every chat or imports a file (`useChatExportImport`; the Markdown is rendered client-side from the JSON by `ChatExportFile.chatExportMarkdown` and names the attachments and tool calls it leaves out).
+In the SPA, each row's menu in `ConversationList` exports that chat as Markdown or JSON, and the menu beside "New chat" exports every chat or imports a file (`useChatExportImport`: the import node answers only
+once every chat is written, minutes for a large file, so a sticky progress notification naming the chat count stays
+until the result replaces it and the import action is disabled meanwhile; the Markdown is rendered client-side from the JSON by `ChatExportFile.chatExportMarkdown` and names the attachments and tool calls it leaves out).
 
 ### Encryption of titles and content (at-rest)
 

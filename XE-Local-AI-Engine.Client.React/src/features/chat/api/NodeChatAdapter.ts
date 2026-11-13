@@ -76,7 +76,7 @@ export interface SendMessageRequest {
 	useLocalTools?: boolean;
 	// Opt-in knowledge-base grounding for a plain-chat turn. Ignored by the server in agent mode.
 	useKnowledgeBase?: boolean;
-	// The collection grounding searches (the composer's pick); forwarded only with useKnowledgeBase.
+	// The composer's hard-picked collection; undefined is "All collections".
 	knowledgeCollectionId?: string;
 	reasoningEffort?: string;
 	selectedPath?: Record<string, string>;
@@ -159,7 +159,7 @@ export interface NodeChatAdapter {
 		samplingOptions: WireSamplingOptions | undefined,
 		// The conversation's web content review mode (true = results reach the model without a review card).
 		autoAcceptWebContent: boolean,
-		// The collection a grounded rerun searches; undefined is DEFAULT.
+		// The rerun's hard-picked collection, as a send carries it; undefined is "All collections".
 		knowledgeCollectionId: string | undefined,
 		signal: AbortSignal,
 	): AsyncIterable<NodeChatStreamEventDto>;
@@ -180,8 +180,8 @@ export function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequ
 		model: request.model,
 		useLocalTools: request.useLocalTools,
 		useKnowledgeBase: request.useKnowledgeBase,
-		// Without grounding the collection means nothing, so it stays off the wire.
-		knowledgeCollectionId: request.useKnowledgeBase === true ? request.knowledgeCollectionId : undefined,
+		// A hard pick rides every send: it fixes plain-chat grounding AND the agent's knowledge tools to one collection.
+		knowledgeCollectionId: request.knowledgeCollectionId,
 		reasoningEffort: request.reasoningEffort,
 		selectedPath: request.selectedPath,
 		agentDefinitionId: request.agentDefinitionId,
@@ -375,7 +375,7 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		// developer-mode sampling overrides via the hub args (RegenerateMessage(conversationId, messageId, effort,
 		// useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, autoAcceptWebContent, knowledgeCollectionId)).
 		// Absent selection/overrides/collection ride as null. The hub binds by position and count, so every argument is
-		// always sent; false = review, a null collection = DEFAULT.
+		// always sent; false = review, a null collection = "All collections".
 		return guardNodeChatStream(
 			streamNodeChatEvents(
 				{
@@ -389,7 +389,7 @@ export const nodeChatAdapter: NodeChatAdapter = {
 						selectedPath ?? null,
 						samplingOptions ?? null,
 						autoAcceptWebContent,
-						useKnowledgeBase ? (knowledgeCollectionId ?? null) : null,
+						knowledgeCollectionId ?? null,
 					],
 				},
 				signal,

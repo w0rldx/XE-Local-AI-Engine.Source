@@ -288,6 +288,27 @@ describe("ConversationList management actions", () => {
 		expect(screen.queryByTestId("conversation-search-indexing")).toBeNull();
 	});
 
+	it("previews a title-only hit as a title match, not as an empty chat", () => {
+		renderWithProviders(
+			<ConversationList
+				conversations={[]}
+				searchQuery="tangerine"
+				searchResults={{
+					conversations: [conversation({ id: "titled", title: "Tangerine notes", lastMessagePreview: undefined })],
+					indexing: false,
+				}}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+				onSearchChange={vi.fn()}
+			/>,
+		);
+
+		const row = screen.getByTestId("conversation-item-titled");
+		expect(row.textContent).toContain("Matches the title");
+		expect(row.textContent).not.toContain("No messages");
+	});
+
 	it("says results may be incomplete while the node is still indexing", () => {
 		renderWithProviders(
 			<ConversationList
@@ -586,6 +607,24 @@ describe("ConversationList export and import", () => {
 		expect(click).toHaveBeenCalledTimes(1);
 		expect(input.accept).toBe(".json,application/json");
 		expect(onImportFile).toHaveBeenCalledWith(picked);
+	});
+
+	it("disables the import while one is running", async () => {
+		renderWithProviders(
+			<ConversationList
+				conversations={[]}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+				onExportAll={vi.fn()}
+				onImportFile={vi.fn()}
+				importing={true}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Export or import chats" }));
+
+		expect((await screen.findByRole("menuitem", { name: "Import chats (JSON)" })).hasAttribute("disabled")).toBe(true);
 	});
 
 	it("offers no export or import when the page wires none", () => {

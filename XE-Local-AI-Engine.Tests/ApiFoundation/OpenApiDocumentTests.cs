@@ -621,6 +621,45 @@ public sealed class OpenApiDocumentTests
     }
 
     /// <summary>
+    ///     External Apps is frozen outside the 1.0 API promise, so every one of its operations, and its tag, says so in
+    ///     the document; the control is that no other operation carries the marker.
+    /// </summary>
+    [Test]
+    public async Task LocalOpenApiDocument_MarksTheExternalAppSurfaceExperimental_AndNothingElse()
+    {
+        using var client = Factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
+        var expected = ExternalAppPaths.SelectMany(static entry => entry.Verbs.Select(verb => $"{verb} {entry.Path}"))
+                                       .ToHashSet(StringComparer.Ordinal);
+        var marked = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject())
+        {
+            foreach (var operation in path.Value.EnumerateObject().Where(static item => HttpVerbs.Contains(item.Name, StringComparer.Ordinal)))
+            {
+                if (operation.Value.TryGetProperty("x-experimental", out var flag) && flag.ValueKind == JsonValueKind.True)
+                {
+                    _ = marked.Add($"{operation.Name} {path.Name}");
+                    AssertEx.Equal("External-Apps", operation.Value.GetProperty("tags")[0].GetString(), $"{operation.Name} {path.Name} tag.");
+                }
+            }
+        }
+
+        AssertEx.Equal(string.Join(Environment.NewLine, expected.Order(StringComparer.Ordinal)),
+            string.Join(Environment.NewLine, marked.Order(StringComparer.Ordinal)));
+
+        var tag = document.RootElement.GetProperty("tags").EnumerateArray()
+                          .Single(static item => item.GetProperty("name").GetString() == "External-Apps");
+        AssertEx.True(tag.GetProperty("x-experimental").GetBoolean(), "The External-Apps tag carries the marker.");
+        AssertEx.True(tag.GetProperty("description").GetString()!.StartsWith("Experimental:", StringComparison.Ordinal),
+            "The External-Apps tag description says it is experimental.");
+    }
+
+    /// <summary>
     ///     The uninstall reads <c>expectedVersion</c> from the QUERY, and the document has to say so. It described a
     ///     request body instead, so the generated client sent the version where the endpoint never looks and every
     ///     delete it made would have 400d on the presence rule. Endpoint tests cannot catch this: they build the

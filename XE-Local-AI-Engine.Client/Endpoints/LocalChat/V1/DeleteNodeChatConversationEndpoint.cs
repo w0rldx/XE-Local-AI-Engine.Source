@@ -2,20 +2,25 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 public sealed class DeleteNodeChatConversationEndpoint : Endpoint<DeleteNodeChatConversationRequest, NodeChatDeleteConversationResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly LocalChatConversationChangePublisher _changePublisher;
     private readonly TimeProvider _timeProvider;
 
     public DeleteNodeChatConversationEndpoint(INodeChatPersistenceService chatPersistence,
+        LocalChatConversationChangePublisher changePublisher,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(changePublisher);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _chatPersistence = chatPersistence;
+        _changePublisher = changePublisher;
         _timeProvider = timeProvider;
     }
 
@@ -43,6 +48,7 @@ public sealed class DeleteNodeChatConversationEndpoint : Endpoint<DeleteNodeChat
             },
             ct);
 
+        await _changePublisher.PublishAsync(req.ConversationId, ct);
         await Send.OkAsync(new NodeChatDeleteConversationResponse
         {
             ConversationId = result.ConversationId,

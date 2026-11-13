@@ -19,6 +19,20 @@ public sealed class KnowledgeSearchRequest
 
     /// <summary>Collection/project namespace. Defaults to the backwards-compatible node corpus.</summary>
     public string CollectionId { get; init; } = KnowledgeCollectionScope.DefaultId;
+
+    /// <summary>When true, <see cref="CollectionId" /> is ignored and every collection is searched.</summary>
+    /// <remarks>
+    ///     A separate flag rather than a collection value, so no client-supplied id can ever widen a search: only the
+    ///     plain-chat grounding of an "All collections" turn and an unpinned agent search that names no collection set it.
+    /// </remarks>
+    public bool AllCollections { get; init; }
+
+    /// <summary>When true, each hit carries its document's decrypted display name in <see cref="KnowledgeSearchHit.DocumentName" />.</summary>
+    /// <remarks>
+    ///     Set only by the model-facing callers (plain-chat grounding, the agent search tool), so the model cites a name
+    ///     the operator recognises. The REST search never sets it, so its response still carries no file name.
+    /// </remarks>
+    public bool IncludeDocumentNames { get; init; }
 }
 
 /// <summary>The structured result of a hybrid knowledge-base search.</summary>
@@ -55,6 +69,9 @@ public sealed class KnowledgeSearchHit
 
     /// <summary>Non-sensitive display title (root heading segment, else the server-generated storage reference).</summary>
     public required string Title { get; init; }
+
+    /// <summary>The document's decrypted display name; <see langword="null" /> unless the request set <see cref="KnowledgeSearchRequest.IncludeDocumentNames" />.</summary>
+    public string? DocumentName { get; init; }
 
     /// <summary>The chunk's heading trail (<c>heading_path</c>), or <see langword="null" /> when there is none.</summary>
     public required string? Section { get; init; }

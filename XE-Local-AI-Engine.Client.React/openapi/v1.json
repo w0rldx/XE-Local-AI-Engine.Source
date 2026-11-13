@@ -9509,7 +9509,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/catalog/refresh": {
@@ -9543,7 +9544,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/catalog/{applicationId}": {
@@ -9590,7 +9592,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/catalog/{applicationId}/install-preview": {
@@ -9637,7 +9640,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/instances": {
@@ -9671,7 +9675,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       },
       "post": {
         "tags": [
@@ -9739,7 +9744,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/instances/{instanceId}": {
@@ -9815,7 +9821,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       },
       "get": {
         "tags": [
@@ -9871,7 +9878,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/instances/{instanceId}/cancel": {
@@ -9932,7 +9940,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/instances/{instanceId}/events": {
@@ -10007,7 +10016,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/instances/{instanceId}/logs": {
@@ -10092,7 +10102,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/instances/{instanceId}/reset": {
@@ -10173,7 +10184,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/instances/{instanceId}/restart": {
@@ -10254,7 +10266,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/instances/{instanceId}/start": {
@@ -10335,7 +10348,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/instances/{instanceId}/stop": {
@@ -10416,7 +10430,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/instances/{instanceId}/update": {
@@ -10497,7 +10512,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/instances/{instanceId}/update-preview": {
@@ -10555,7 +10571,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/instances/{instanceId}/variables": {
@@ -10636,7 +10653,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/runtime": {
@@ -10670,7 +10688,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-apps/runtime/refresh": {
@@ -10737,7 +10756,8 @@
           {
             "Bearer": []
           }
-        ]
+        ],
+        "x-experimental": true
       }
     },
     "/api/local/v1/external-providers/connections": {
@@ -52910,5 +52930,12 @@
         "bearerFormat": "JWT"
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "External-Apps",
+      "description": "Experimental: frozen and outside the 1.0 API promise; it may change or be removed without notice.",
+      "x-experimental": true
+    }
+  ]
 }

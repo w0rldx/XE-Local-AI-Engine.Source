@@ -1,16 +1,17 @@
 // @vitest-environment jsdom
 
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // The generated SDK, the download and the toast surface are mocked: these tests pin what the hook asks for, what it
 // saves and what it tells the operator. No network.
-const { exportMock, importMock, saveBlobMock, toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
+const { exportMock, importMock, saveBlobMock, toastErrorMock, toastSuccessMock, toastProgressMock } = vi.hoisted(() => ({
 	exportMock: vi.fn(),
 	importMock: vi.fn(),
 	saveBlobMock: vi.fn(),
 	toastErrorMock: vi.fn(),
 	toastSuccessMock: vi.fn(),
+	toastProgressMock: vi.fn(),
 }));
 
 vi.mock("@/core/api/generated", () => ({
@@ -21,7 +22,14 @@ vi.mock("@/core/api/generated", () => ({
 vi.mock("@/core/api/utils/DownloadBlob", () => ({ saveBlob: saveBlobMock }));
 
 vi.mock("@/core/ui/notifications/Toast", () => ({
-	toast: { error: toastErrorMock, success: toastSuccessMock, info: vi.fn(), warn: vi.fn(), warning: vi.fn(), progress: vi.fn() },
+	toast: {
+		error: toastErrorMock,
+		success: toastSuccessMock,
+		info: vi.fn(),
+		warn: vi.fn(),
+		warning: vi.fn(),
+		progress: toastProgressMock,
+	},
 }));
 
 import { useChatExportImport } from "@/features/chat/hooks/useChatExportImport";
@@ -136,18 +144,53 @@ describe("useChatExportImport", () => {
 		result.current.importFile(new File([JSON.stringify(exportDocument)], "chats.chat.json", { type: "application/json" }));
 
 		await waitFor(() =>
-			expect(toastSuccessMock).toHaveBeenCalledWith(en.chat.exportImport.imported_one.replace("{{count}}", "1")),
+			expect(toastSuccessMock).toHaveBeenCalledWith(en.chat.exportImport.imported_one.replace("{{count}}", "1"), {
+				id: "chat-import",
+			}),
 		);
 		expect(importMock).toHaveBeenCalledWith({ body: exportDocument });
+	});
+
+	it("stays busy with a sticky notice until the node answers, then replaces the notice with the result", async () => {
+		let answer: (value: unknown) => void = () => undefined;
+		importMock.mockReturnValue(
+			new Promise((resolve) => {
+				answer = resolve;
+			}),
+		);
+		const result = renderExportImport();
+		expect(result.current.importing).toBe(false);
+
+		act(() =>
+			result.current.importFile(new File([JSON.stringify(exportDocument)], "chats.chat.json", { type: "application/json" })),
+		);
+
+		await waitFor(() => expect(importMock).toHaveBeenCalled());
+		expect(result.current.importing).toBe(true);
+		expect(toastProgressMock).toHaveBeenCalledWith({
+			id: "chat-import",
+			message: en.chat.exportImport.importing_one.replace("{{count}}", "1"),
+		});
+		expect(toastSuccessMock).not.toHaveBeenCalled();
+
+		await act(async () =>
+			answer({ data: { conversations: [{ conversationId: "new-1", title: "Trip plan", messageCount: 1 }] } }),
+		);
+
+		await waitFor(() => expect(result.current.importing).toBe(false));
+		expect(toastSuccessMock).toHaveBeenCalledWith(expect.any(String), { id: "chat-import" });
 	});
 
 	it("shows the server's refusal when the import is rejected", async () => {
 		importMock.mockRejectedValue(new Error("Message role 'tool' cannot be imported"));
 		const result = renderExportImport();
 
-		result.current.importFile(new File([JSON.stringify(exportDocument)], "chats.chat.json", { type: "application/json" }));
+		act(() =>
+			result.current.importFile(new File([JSON.stringify(exportDocument)], "chats.chat.json", { type: "application/json" })),
+		);
 
-		await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
+		await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith(expect.any(String), { id: "chat-import" }));
 		expect(toastSuccessMock).not.toHaveBeenCalled();
+		await waitFor(() => expect(result.current.importing).toBe(false));
 	});
 });

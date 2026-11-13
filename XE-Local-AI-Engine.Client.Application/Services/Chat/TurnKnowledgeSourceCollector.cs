@@ -9,7 +9,8 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 /// <remarks>
 ///     Same shape as <c>SpawnContext</c> and <c>ToolRelevanceScope</c>: the slot holds a mutable holder, because an
 ///     <see cref="AsyncLocal{T}" /> write made inside a tool handler never flows back out to the pump. The chat stream
-///     and regeneration services seed it before starting the pump and the run, so both inherit the same holder.
+///     and regeneration services seed it before starting the pump and the run, so both inherit the same holder. It also
+///     carries the collection the operator fixed the turn to, which the knowledge-base tools enforce.
 /// </remarks>
 internal sealed class TurnKnowledgeSourceCollector
 {
@@ -21,12 +22,25 @@ internal sealed class TurnKnowledgeSourceCollector
     private readonly Lock _gate = new();
     private readonly List<NodeChatMessageSource> _sources = [];
     private readonly HashSet<Guid> _chunkIds = [];
+    private readonly string? _pinnedCollectionId;
+
+    private TurnKnowledgeSourceCollector(string? pinnedCollectionId)
+    {
+        _pinnedCollectionId = pinnedCollectionId;
+    }
+
+    /// <summary>
+    ///     The normalised collection the knowledge-base tools are restricted to this turn, or <see langword="null" /> when
+    ///     the operator picked "All collections" (the tools choose) or no turn scope was seeded.
+    /// </summary>
+    public static string? PinnedCollectionId => Ambient.Value?._pinnedCollectionId;
 
     /// <summary>Seeds a fresh collector for the current flow; disposal restores the prior ambient value.</summary>
-    public static IDisposable BeginScope()
+    /// <param name="pinnedCollectionId">The turn's hard-picked collection, already normalised; null is "All collections".</param>
+    public static IDisposable BeginScope(string? pinnedCollectionId = null)
     {
         var previous = Ambient.Value;
-        Ambient.Value = new TurnKnowledgeSourceCollector();
+        Ambient.Value = new TurnKnowledgeSourceCollector(pinnedCollectionId);
         return new Scope(previous);
     }
 

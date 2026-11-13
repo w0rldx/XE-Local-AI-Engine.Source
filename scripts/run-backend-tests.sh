@@ -73,7 +73,7 @@
 #   skips groups every skipped test of the finished lanes by reason: a sibling's reason is the TUnit skip
 #   text from its TRX, lowercased with non-alphanumerics folded to "-" and cut to 24 characters. Empty when
 #   nothing was skipped or no lane finished. unreported counts the skips with no recorded reason, which is
-#   every skip of the batched lane (its runner writes no TRX without COVERAGE_DIR).
+#   every skip of the batched lane (its per-batch TRX are kept but not read for skip reasons).
 #   failed holds up to three distinct failing test method names (parameters dropped) that the "FAILED TEST"
 #   lines printed, flakes the scripts/known-flakes.txt entries they matched; "-" when none. ratchets counts
 #   the entries of the five shrink-only XE-Local-AI-Engine.Tests/Architecture allowlists (DbContextUser,
@@ -169,9 +169,9 @@
 #   COVERAGE_DIR      per-project Cobertura + TRX land under <COVERAGE_DIR>/<module>/, and the batched
 #                     module gets <COVERAGE_DIR>/XE-Local-AI-Engine.Tests/<unit>/ from the runner. A
 #                     relative path is resolved against the directory you ran the script from.
-#                     Unset: no coverage anywhere and TRX for the SIBLINGS ONLY — the batched runner
-#                     is given no reporting arguments without COVERAGE_DIR — under
-#                     .tmp/backend-test-results/, which this script clears first. Each lane's full
+#                     Unset: no coverage anywhere, and TRX under .tmp/backend-test-results/ (cleared
+#                     first): <module>/ per sibling, XE-Local-AI-Engine.Tests/<unit>/<unit>.trx per batch
+#                     of the batched module (the runner's TRX_DIR). Each lane's full
 #                     console output is kept beside its reports as gate.log either way, and printed
 #                     only when that lane fails.
 #   JOBS, PAR         passed through to scripts/run-tests-memory-safe.sh
@@ -254,7 +254,7 @@ history_skips() {
   [[ -n "${LANE_DIR:-}" && -d "$LANE_DIR" ]] || return 0
   cat "$LANE_DIR"/*.skips 2>/dev/null | sort | uniq -c | awk '{ printf "%s%s:%s", (NR > 1 ? "," : ""), $2, $1 }'
 }
-# The skips of every finished lane that no TRX names a reason for (the batched lane writes none).
+# The skips of every finished lane that no TRX names a reason for (the batched lane's TRX are not read).
 history_unreported() {
   local r s n=0
   [[ -n "${LANE_DIR:-}" && -d "$LANE_DIR" ]] || { echo 0; return 0; }
@@ -482,7 +482,7 @@ CONTRACT_LANE=""
 # with both set, so each test must already be immune to them (and is validated that way); scrubbing them
 # here would hide a test that is not. scripts/tests/run-backend-tests.test.sh reads both lists from here.
 CONTRACT_LANE_SCRUB=(
-  JOBS PAR AVAIL_FLOOR TEST_GROUPS TEST_SHARD XE_TEST_PROFILE NO_BUILD NO_BUILD_LOCK NO_GUARD COVERAGE_DIR
+  JOBS PAR AVAIL_FLOOR TEST_GROUPS TEST_SHARD XE_TEST_PROFILE NO_BUILD NO_BUILD_LOCK NO_GUARD COVERAGE_DIR TRX_DIR
   BUILD_LOCK_TIMEOUT XE_GATE_CANCEL_GRACE XE_GATE_CONTRACT_TESTS XE_GATE_FAIL_FAST XE_BACKEND_GATE_LOCKED
   XE_OPENAPI_LIVE_LOCKED
 )
@@ -768,7 +768,11 @@ run_batched_module() {
   # NO_BUILD: this script already built. The runner self-locks (pass-through here) and self-guards,
   # so it must not be wrapped in an outer guard.
   local -a lane_env=(NO_BUILD=1)
-  [[ -n "${COVERAGE_DIR:-}" ]] && lane_env+=("COVERAGE_DIR=$COVERAGE_DIR/$module")
+  if [[ -n "${COVERAGE_DIR:-}" ]]; then
+    lane_env+=("COVERAGE_DIR=$COVERAGE_DIR/$module")
+  else
+    lane_env+=("TRX_DIR=$RESULTS_ROOT/$module")
+  fi
   env "${lane_env[@]}" "$REPO/scripts/run-tests-memory-safe.sh" >"$log" 2>&1
   local rc=$? p f s
   p="$(grep -oE 'TOTAL: pass=[0-9]+' "$log" | grep -oE '[0-9]+' | tail -1)"; p="${p:-0}"

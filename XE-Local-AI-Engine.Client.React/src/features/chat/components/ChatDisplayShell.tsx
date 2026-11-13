@@ -91,6 +91,7 @@ export function ChatDisplayShell({
 	onExportConversation,
 	onExportAllConversations,
 	onImportConversations,
+	importingConversations = false,
 	onBranchFromMessage,
 	activeRevisionByGroup,
 	onSelectRevision,
@@ -210,6 +211,7 @@ export function ChatDisplayShell({
 			onExport={onExportConversation}
 			onExportAll={onExportAllConversations}
 			onImportFile={onImportConversations}
+			importing={importingConversations}
 		/>
 	);
 

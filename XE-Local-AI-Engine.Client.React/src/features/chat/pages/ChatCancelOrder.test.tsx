@@ -16,6 +16,7 @@ import { useChatStreamController } from "@/features/chat/hooks/useChatStreamCont
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
+import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
 import { createProvidersWrapper, renderWithProviders } from "@/test/RenderWithProviders";
 
 // The no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
@@ -559,18 +560,22 @@ describe("Chat cancel ordering", () => {
 		expect(refreshConversation).toHaveBeenCalledTimes(2);
 	});
 
-	it("regenerate reads the full conversation for its own sampling settings, never the list summary", async () => {
-		useDeveloperModeStore.getState().actions.setDeveloperMode(true);
+	// The stored settings ride on every client; this browser's defaults only while developer mode is on.
+	it.each([
+		[true, { temperature: 0.2 }, { temperature: 0.2 }],
+		[false, { temperature: 0.2 }, { temperature: 0.2 }],
+		[true, undefined, { temperature: 0.9 }],
+		[false, undefined, undefined],
+	])("send with developer mode %s and stored settings %o sends %o", async (developerMode, stored, expected) => {
+		useDeveloperModeStore.getState().actions.setDeveloperMode(developerMode);
+		useChatSamplingPreferencesStore.getState().actions.setField("temperature", 0.9);
 		try {
-			const summary: ChatConversationModel = { ...conversation(), messages: [] };
-			adapter.getConversation.mockResolvedValue({ ...conversation(), samplingOptions: { temperature: 0.2 } });
-			adapter.regenerateMessage.mockImplementation(() => ({
+			adapter.sendMessage.mockImplementation(() => ({
 				async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
 					// The stream only has to start: the arguments it was called with are the assertion.
 				},
 			}));
-			const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } } });
-			const { wrapper } = createProvidersWrapper({ queryClient });
+			const { wrapper } = createProvidersWrapper();
 			const { result } = renderHook(
 				() =>
 					useChatStreamController({
@@ -578,10 +583,9 @@ describe("Chat cancel ordering", () => {
 						cacheConversation: vi.fn(),
 						cacheConversationDetail: vi.fn(),
 						refreshConversation: vi.fn(async () => undefined),
-						resolveSendConversation: vi.fn(),
+						resolveSendConversation: vi.fn(async () => ({ ...conversation(), samplingOptions: stored })),
 						selectedConversationId: "conversation-1",
-						// Only the summary is known: the detail cache is empty.
-						displayConversations: [summary],
+						displayConversations: [conversation()],
 						modelOptions: [],
 						cloudModelOptions: [],
 						agentModeEnabled: false,
@@ -600,16 +604,70 @@ describe("Chat cancel ordering", () => {
 				{ wrapper },
 			);
 
-			await act(() => result.current.handleRegenerate("assistant-1"));
+			await act(() => result.current.handleSend("hello", "medium", ""));
 
-			expect(adapter.getConversation).toHaveBeenCalledWith("conversation-1", expect.anything());
-			expect(adapter.regenerateMessage).toHaveBeenCalledTimes(1);
-			// Arguments: id, message, effort, tools, knowledge base, revision path, sampling.
-			expect(adapter.regenerateMessage.mock.calls[0]?.[6]).toEqual(expect.objectContaining({ temperature: 0.2 }));
+			expect(adapter.sendMessage).toHaveBeenCalledTimes(1);
+			expect(adapter.sendMessage.mock.calls[0]?.[0].samplingOptions).toEqual(expected);
 		} finally {
 			useDeveloperModeStore.getState().actions.setDeveloperMode(false);
+			useChatSamplingPreferencesStore.getState().actions.reset();
 		}
 	});
+
+	it.each([true, false])(
+		"regenerate (developer mode %s) reads the full conversation for its own sampling settings, never the list summary",
+		async (developerMode) => {
+			useDeveloperModeStore.getState().actions.setDeveloperMode(developerMode);
+			try {
+				const summary: ChatConversationModel = { ...conversation(), messages: [] };
+				adapter.getConversation.mockResolvedValue({ ...conversation(), samplingOptions: { temperature: 0.2 } });
+				adapter.regenerateMessage.mockImplementation(() => ({
+					async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
+						// The stream only has to start: the arguments it was called with are the assertion.
+					},
+				}));
+				const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } } });
+				const { wrapper } = createProvidersWrapper({ queryClient });
+				const { result } = renderHook(
+					() =>
+						useChatStreamController({
+							setStreamError: vi.fn(),
+							cacheConversation: vi.fn(),
+							cacheConversationDetail: vi.fn(),
+							refreshConversation: vi.fn(async () => undefined),
+							resolveSendConversation: vi.fn(),
+							selectedConversationId: "conversation-1",
+							// Only the summary is known: the detail cache is empty.
+							displayConversations: [summary],
+							modelOptions: [],
+							cloudModelOptions: [],
+							agentModeEnabled: false,
+							selectedAgentId: "",
+							agentOptions: [],
+							activeRevisionByGroup: {},
+							attachmentFileIds: [],
+							toolsEnabled: false,
+							knowledgeBaseEnabled: false,
+							knowledgeCollectionId: "DEFAULT",
+							reasoningEffort: "medium",
+							onVoiceTurnStart: vi.fn(),
+							onVoiceAnswerProgress: vi.fn(),
+							loadedSelectedConversationId: "",
+						}),
+					{ wrapper },
+				);
+
+				await act(() => result.current.handleRegenerate("assistant-1"));
+
+				expect(adapter.getConversation).toHaveBeenCalledWith("conversation-1", expect.anything());
+				expect(adapter.regenerateMessage).toHaveBeenCalledTimes(1);
+				// Arguments: id, message, effort, tools, knowledge base, revision path, sampling.
+				expect(adapter.regenerateMessage.mock.calls[0]?.[6]).toEqual(expect.objectContaining({ temperature: 0.2 }));
+			} finally {
+				useDeveloperModeStore.getState().actions.setDeveloperMode(false);
+			}
+		},
+	);
 
 	const hubRefusal = (token: string): Error =>
 		new Error(`An error occurred on the server while streaming results. HubException: ${token}: refused by the node.`);

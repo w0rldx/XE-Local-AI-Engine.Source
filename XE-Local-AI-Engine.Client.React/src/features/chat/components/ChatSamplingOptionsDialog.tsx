@@ -262,11 +262,11 @@ export function ChatSamplingOptionsDialog({
 					{conversation
 						? t(
 								"pages.chat.samplingOptions.conversationDescription",
-								"These settings are saved with this conversation, so they follow it to every device. Use defaults returns it to this browser's defaults.",
+								"These settings are saved with this conversation and apply to it on every device, with or without developer mode. Use defaults removes them: the conversation then uses the model defaults, or this browser's defaults where developer mode is on.",
 							)
 						: t(
 								"pages.chat.samplingOptions.description",
-								"These defaults override the model defaults for new conversations and for conversations without their own settings. They are stored in this browser only.",
+								"While developer mode is on, these defaults override the model defaults for new conversations and for conversations without their own settings. They are stored in this browser only.",
 							)}
 				</Text>
 				{saveError ? (

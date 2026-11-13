@@ -111,6 +111,40 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
     }
 
     [Test]
+    public async Task ExecuteAsync_AsksForDocumentNames_AndTitlesEachHitWithItsDocumentsName()
+    {
+        // The model cites what it is given: the document's name, not the storage reference a heading-less chunk is titled by.
+        var storageReference = Guid.NewGuid().ToString("D") + ".txt";
+        var searchService = new CapturingKnowledgeSearchService(new KnowledgeSearchResult
+        {
+            Results =
+            [
+                new KnowledgeSearchHit
+                {
+                    DocumentId = Guid.NewGuid(),
+                    ChunkId = Guid.NewGuid(),
+                    Title = storageReference,
+                    DocumentName = "falcon-brief.txt",
+                    Section = null,
+                    Content = "falcon body",
+                    Source = "knowledge-base",
+                    Score = 1.0,
+                    ChunkIndex = 0,
+                    DocumentStatus = KnowledgeDocumentStatus.Indexed,
+                    ServingLastKnownGood = false
+                }
+            ]
+        });
+        var handler = CreateHandler(searchService);
+
+        var json = await handler.ExecuteAsync("""{"query":"falcon"}""");
+
+        AssertEx.True(AssertEx.NotNull(searchService.LastRequest).IncludeDocumentNames, "the tool must ask for document names");
+        AssertEx.Contains(json, "falcon-brief.txt", StringComparison.Ordinal);
+        AssertEx.False(json.Contains(storageReference, StringComparison.Ordinal), "the storage reference must not be the model's title");
+    }
+
+    [Test]
     public async Task ExecuteAsync_FollowsTheKnowledgeToolsSwitchLive()
     {
         var searchService = new CapturingKnowledgeSearchService(new KnowledgeSearchResult

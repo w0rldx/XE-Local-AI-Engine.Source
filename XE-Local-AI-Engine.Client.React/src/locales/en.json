@@ -167,6 +167,8 @@
 			"importFailed": "Could not import the file.",
 			"imported_one": "Imported {{count}} chat. Attachments and tool calls are not part of an export.",
 			"imported_other": "Imported {{count}} chats. Attachments and tool calls are not part of an export.",
+			"importing_one": "Importing {{count}} chat. A large import can take several minutes.",
+			"importing_other": "Importing {{count}} chats. A large import can take several minutes.",
 			"menuAria": "Export or import chats",
 			"notJson": "This file is not JSON.",
 			"tooLarge": "This file is larger than the 64 MB an import accepts.",
@@ -178,6 +180,7 @@
 			"wrongFormat": "This file is not a chat export."
 		},
 		"knowledgeCollection": {
+			"all": "All collections",
 			"current": "Knowledge collection: {{collection}}",
 			"label": "Knowledge collection"
 		},
@@ -231,7 +234,8 @@
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting.",
 		"reasoningMode": "Reasoning Mode",
 		"search": {
-			"indexing": "Still indexing older conversations; results may be incomplete."
+			"indexing": "Still indexing older conversations; results may be incomplete.",
+			"titleMatch": "Matches the title"
 		},
 		"shortcuts": {
 			"keys": {
@@ -2487,8 +2491,8 @@
 			"samplingOptions": {
 				"close": "Close",
 				"cloudUnsupported": "Not supported by cloud providers",
-				"conversationDescription": "These settings are saved with this conversation, so they follow it to every device. Use defaults returns it to this browser's defaults.",
-				"description": "These defaults override the model defaults for new conversations and for conversations without their own settings. They are stored in this browser only.",
+				"conversationDescription": "These settings are saved with this conversation and apply to it on every device, with or without developer mode. Use defaults removes them: the conversation then uses the model defaults, or this browser's defaults where developer mode is on.",
+				"description": "While developer mode is on, these defaults override the model defaults for new conversations and for conversations without their own settings. They are stored in this browser only.",
 				"frequencyPenalty": "Frequency penalty",
 				"frequencyPenaltyDescription": "Penalizes tokens proportionally to how often they have already appeared in the output.",
 				"groupLimits": "Limits",

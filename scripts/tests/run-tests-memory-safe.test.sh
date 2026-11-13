@@ -31,13 +31,14 @@ EOF
 cat >"$BIN/XE-Local-AI-Engine.Tests" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-max="" filter="" results="" coverage=""
+max="" filter="" results="" coverage="" trxname=""
 while (($#)); do
   case "$1" in
     --maximum-parallel-tests) max="$2"; shift 2 ;;
     --treenode-filter) filter="$2"; shift 2 ;;
     --results-directory) results="$2"; shift 2 ;;
     --coverage-output) coverage="$2"; shift 2 ;;
+    --report-trx-filename) trxname="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
@@ -62,6 +63,11 @@ if [[ -n "$coverage" ]]; then
     done
     printf '</packages></coverage>\n'; } >"$results/$coverage"
   : >"$results/fake.trx"
+fi
+# A named TRX is written whatever the verdict, as MTP does; the log line proves no coverage rode along.
+if [[ -n "$trxname" ]]; then
+  mkdir -p "$results" && : >"$results/$trxname"
+  printf 'trx=%s/%s coverage=%s\n' "$results" "$trxname" "$coverage" >>"$FAKE_LOG"
 fi
 # FAKE_SUMMARY picks the MTP summary: passed (default), failed, skipped (all skipped), none.
 case "${FAKE_SUMMARY:-passed}" in
@@ -228,6 +234,31 @@ if grep -Fq 'coverage lost' <<<"$output"; then echo "fine pack ran the sentinel 
 run_red contaminated env FAKE_GUARD_VERIFY_EXIT=1 FAKE_SUMMARY=failed
 [[ "$status" -eq 75 ]] || { echo "contaminated case exited $status" >&2; exit 1; }
 grep -Fq 'RESULT VOID' <<<"$output"
+
+# --- TRX_DIR: one TRX per unit, named after it, in its own directory; no coverage; a rerun replaces it ---
+write_namespaces XE_Local_AI_Engine.Tests.GraphWorkflows XE_Local_AI_Engine.Tests.Ordinary
+mkdir -p "$TMP/trx/XE_Local_AI_Engine.Tests.Ordinary" && : >"$TMP/trx/XE_Local_AI_Engine.Tests.Ordinary/stale.trx"
+run_case trx env TRX_DIR="$TMP/trx"
+for ns in GraphWorkflows Ordinary; do
+  unit="XE_Local_AI_Engine.Tests.$ns"
+  grep -Fqx "trx=$TMP/trx/$unit/$unit.trx coverage=" "$TMP/trx.log"
+  [[ "$(find "$TMP/trx/$unit" -type f)" == "$TMP/trx/$unit/$unit.trx" ]] \
+    || { echo "trx: $unit holds $(find "$TMP/trx/$unit" -type f)" >&2; exit 1; }
+done
+# Grouped units are named after the group, which is what the summary's FAILED line names too.
+write_namespaces XE_Local_AI_Engine.Tests.Ordinary
+run_case trx-grouped env TRX_DIR="$TMP/trx-grouped" TEST_GROUPS=1
+[[ -f "$TMP/trx-grouped/group0[Ordinary+0]/group0[Ordinary+0].trx" ]]
+# A red batch keeps its TRX and its verdict: same exit, same FAILED line as without TRX_DIR.
+run_red trx-failed env TRX_DIR="$TMP/trx-red" FAKE_SUMMARY=failed
+[[ "$status" -eq 1 ]] || { echo "trx-failed case exited $status" >&2; exit 1; }
+grep -Fq 'FAILED namespaces: XE_Local_AI_Engine.Tests.Ordinary' <<<"$output"
+grep -Fq 'TOTAL: pass=1 fail=2 skip=0' <<<"$output"
+[[ -f "$TMP/trx-red/XE_Local_AI_Engine.Tests.Ordinary/XE_Local_AI_Engine.Tests.Ordinary.trx" ]]
+# COVERAGE_DIR already writes a TRX per unit and wins: nothing lands under TRX_DIR.
+run_case trx-coverage env TRX_DIR="$TMP/trx-cov" COVERAGE_DIR="$TMP/cov-trx"
+[[ ! -e "$TMP/trx-cov" ]] || { echo "TRX_DIR used beside COVERAGE_DIR" >&2; exit 1; }
+[[ -f "$TMP/cov-trx/XE_Local_AI_Engine.Tests.Ordinary/fake.trx" ]]
 
 # --- TEST_SHARD strides the groups by modulo: four shards of four groups partition the module ---
 write_namespaces XE_Local_AI_Engine.Tests.ShardA XE_Local_AI_Engine.Tests.ShardB \

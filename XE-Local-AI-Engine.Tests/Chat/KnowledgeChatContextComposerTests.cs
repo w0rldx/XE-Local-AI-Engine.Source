@@ -64,6 +64,33 @@ public sealed class KnowledgeChatContextComposerTests
     }
 
     [Test]
+    public void Compose_TitlesTheExcerptWithTheDocumentsName_AndKeepsTheDerivedTitleInTheSource()
+    {
+        var storageReference = Guid.NewGuid().ToString("D") + ".txt";
+        var hit = new KnowledgeSearchHit
+        {
+            DocumentId = Guid.NewGuid(),
+            ChunkId = Guid.NewGuid(),
+            Title = storageReference,
+            DocumentName = "falcon-brief.txt",
+            Section = null,
+            Content = "Falcon launches in May.",
+            Source = "knowledge-base",
+            Score = 0.9,
+            ChunkIndex = 0,
+            DocumentStatus = KnowledgeDocumentStatus.Indexed,
+            ServingLastKnownGood = false
+        };
+
+        var result = AssertEx.NotNull(KnowledgeChatContextComposer.Compose([hit], charBudget: 10_000));
+
+        AssertEx.Contains(result.Context, "title: falcon-brief.txt");
+        AssertEx.False(result.Context.Contains(storageReference, StringComparison.Ordinal), "the model must not be shown the storage reference");
+        // The persisted source keeps the non-sensitive title; the client labels it from its own document list.
+        AssertEx.Equal(storageReference, result.Sources[0].Title);
+    }
+
+    [Test]
     [Arguments(KnowledgeScoreKind.Fusion)]
     [Arguments(KnowledgeScoreKind.Rerank)]
     public void Compose_SourcesCarryTheHitScoreKind(KnowledgeScoreKind scoreKind)

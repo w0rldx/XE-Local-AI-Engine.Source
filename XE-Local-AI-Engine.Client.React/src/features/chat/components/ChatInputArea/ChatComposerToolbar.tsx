@@ -28,6 +28,7 @@ import { ContextUsagePopover } from "@/features/chat/components/ContextUsagePopo
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
 import type { ContextUsageModel, KnowledgeCollectionPicker, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { effectiveAgent } from "@/features/chat/models/ChatTurnResolution";
+import { allKnowledgeCollectionsId } from "@/features/chat/stores/NodeChatPreferencesStore";
 import { VoiceComposerControls } from "@/features/voice/components/VoiceComposerControls";
 
 interface ChatComposerToolbarProps {
@@ -153,18 +154,23 @@ export function ChatComposerToolbar({
 			? t("pages.chat.knowledgeBaseEnabled", "Knowledge base enabled")
 			: t("pages.chat.knowledgeBaseDisabled", "Knowledge base disabled");
 	const knowledgeCollectionLabel = t("chat.knowledgeCollection.label", "Knowledge collection");
+	const allKnowledgeCollectionsLabel = t("chat.knowledgeCollection.all", "All collections");
 	const knowledgeCollectionItems = knowledgeCollection ? (
 		<>
 			<Menu.Label>{knowledgeCollectionLabel}</Menu.Label>
-			{knowledgeCollection.options.map((collectionId) => (
+			{[allKnowledgeCollectionsId, ...knowledgeCollection.options].map((collectionId) => (
 				<Menu.Item
 					key={collectionId}
-					data-testid={`chat-knowledge-collection-option-${collectionId}`}
+					data-testid={
+						collectionId === allKnowledgeCollectionsId
+							? "chat-knowledge-collection-option-all"
+							: `chat-knowledge-collection-option-${collectionId}`
+					}
 					disabled={disabled || isSending}
 					rightSection={collectionId === knowledgeCollection.selected ? <IconCheck size={15} /> : null}
 					onClick={() => knowledgeCollection.onChange(collectionId)}
 				>
-					{collectionId}
+					{collectionId === allKnowledgeCollectionsId ? allKnowledgeCollectionsLabel : collectionId}
 				</Menu.Item>
 			))}
 		</>
@@ -375,7 +381,10 @@ export function ChatComposerToolbar({
 						<Menu.Target>
 							<Tooltip
 								label={t("chat.knowledgeCollection.current", "Knowledge collection: {{collection}}", {
-									collection: knowledgeCollection.selected,
+									collection:
+										knowledgeCollection.selected === allKnowledgeCollectionsId
+											? allKnowledgeCollectionsLabel
+											: knowledgeCollection.selected,
 								})}
 							>
 								<ActionIcon

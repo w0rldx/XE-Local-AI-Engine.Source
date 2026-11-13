@@ -202,5 +202,7 @@ than left for the reader to guess.
 Operator ruling: External Apps is frozen and experimental. It takes bug fixes only, and the runtime layer, the
 catalog, the manifest schema and its `/api/local/v1` routes sit outside the 1.0 API promise and may change or be cut.
 The Decision above stands as the description of what ships; no new consumer, catalog entry or capability lands while
-the freeze holds. The SPA marks the page and its navigation entry Experimental. The same ruling covers
+the freeze holds. The SPA marks the page and its navigation entry (desktop rail and mobile drawer) Experimental, and
+the OpenAPI document marks every External Apps operation and its `External-Apps` tag `x-experimental: true`
+(`ExternalAppsExperimentalOpenApiDocumentProcessor`). The same ruling covers
 [ADR 0011](0011-container-bridge-listener.md).

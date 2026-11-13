@@ -107,7 +107,9 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
             };
         }
 
-        if (!KnowledgeCollectionScope.TryNormalize(request.CollectionId, out var collectionId))
+        // Null searches every collection: only the explicit AllCollections flag yields it, never a collection value.
+        string? collectionId = null;
+        if (!request.AllCollections && !KnowledgeCollectionScope.TryNormalize(request.CollectionId, out collectionId))
         {
             return new KnowledgeSearchResult
             {
@@ -194,6 +196,8 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         var contents = await ResolveContentsAsync(selections, request.ExpandNeighbors, cancellationToken);
 
         var hits = new List<KnowledgeSearchHit>(selections.Count);
+        // Decrypted once per document, and only for the model-facing callers that ask (the REST search never does).
+        var documentNames = request.IncludeDocumentNames ? new Dictionary<Guid, string>() : null;
         var embedderChanged = pinnedModelMissing;
         for (var index = 0; index < selections.Count; index++)
         {
@@ -211,6 +215,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
                 DocumentId = selection.Row.DocumentId,
                 ChunkId = selection.ChunkId,
                 Title = DeriveTitle(selection.Row.HeadingPath, selection.Row.StoragePath),
+                DocumentName = documentNames is null ? null : DocumentName(documentNames, selection.Row),
                 Section = selection.Row.HeadingPath,
                 Content = contents[index],
                 Source = SourceTag,
@@ -253,7 +258,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
     private async Task<IReadOnlyList<FtsSearchHit>> RunFtsArmAsync(string query,
         int candidatePool,
         Guid? documentId,
-        string collectionId,
+        string? collectionId,
         CancellationToken cancellationToken)
     {
         var start = Stopwatch.GetTimestamp();
@@ -337,7 +342,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
     private static async Task<List<ChunkSelection>> HydratePoolAsync(DbConnection connection,
         IReadOnlyList<RankFusionEntry> fused,
         int candidatePool,
-        string collectionId,
+        string? collectionId,
         CancellationToken cancellationToken)
     {
         var pooled = fused.Take(candidatePool).ToList();
@@ -537,7 +542,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         Justification = "Only internally-generated $idN placeholder names are interpolated; every chunk id is a bound parameter, so no user input reaches the command text.")]
     private static async Task<IReadOnlyDictionary<Guid, HydratedChunk>> HydrateChunksAsync(DbConnection connection,
         IReadOnlyList<Guid> chunkIds,
-        string collectionId,
+        string? collectionId,
         CancellationToken cancellationToken)
     {
         var start = Stopwatch.GetTimestamp();
@@ -567,10 +572,10 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
                                    SELECT c.chunk_id, c.document_id, c.chunk_index, c.content, c.heading_path,
                                           d.storage_path, d.status, d.vector_identity, d.collection_id,
                                           c.source_path, c.content_kind, c.language, c.symbol, c.page_number,
-                                          c.start_offset, c.end_offset
+                                          c.start_offset, c.end_offset, d.original_file_name
                                    FROM knowledge_document_chunks c
                                    JOIN knowledge_documents d ON d.document_id = c.document_id
-                                   WHERE d.collection_id = $collection_id
+                                   WHERE ($collection_id IS NULL OR d.collection_id = $collection_id)
                                      AND c.chunk_id IN ({string.Join(", ", placeholders)});
                                    """;
             AddParameter(command, "$collection_id", collectionId);
@@ -598,7 +603,8 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
                     Symbol = await reader.IsDBNullAsync(12, cancellationToken) ? null : reader.GetString(12),
                     PageNumber = await reader.IsDBNullAsync(13, cancellationToken) ? null : reader.GetInt32(13),
                     StartOffset = reader.GetInt32(14),
-                    EndOffset = reader.GetInt32(15)
+                    EndOffset = reader.GetInt32(15),
+                    EncryptedFileName = await reader.GetFieldValueAsync<byte[]>(16, cancellationToken)
                 };
             }
         }
@@ -616,8 +622,19 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
             : KnowledgeDocumentStatus.Pending;
     }
 
-    // Non-sensitive display title: the encrypted original file name must never leak into a search result, so this is the
-    // heading trail's root segment, else the server-generated storage reference, which carries no user content.
+    private string DocumentName(Dictionary<Guid, string> names, HydratedChunk row)
+    {
+        if (!names.TryGetValue(row.DocumentId, out var name))
+        {
+            name = _dbContext.DecryptKnowledgeFileName(row.EncryptedFileName, row.DocumentId);
+            names[row.DocumentId] = name;
+        }
+
+        return name;
+    }
+
+    // Non-sensitive display title: the original file name stays out of the title (only DocumentName, on request, carries
+    // it), so this is the heading trail's root segment, else the server-generated storage reference.
     private static string DeriveTitle(string? headingPath, string storagePath)
     {
         if (string.IsNullOrWhiteSpace(headingPath))
@@ -660,6 +677,8 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         public required int StartOffset { get; init; }
 
         public required int EndOffset { get; init; }
+
+        public required byte[] EncryptedFileName { get; init; }
     }
 
     // One selected candidate carried from ranking to hit-building: the chunk id, its hydrated row, and the score to

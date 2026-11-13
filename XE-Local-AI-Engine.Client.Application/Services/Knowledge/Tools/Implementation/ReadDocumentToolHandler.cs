@@ -64,9 +64,14 @@ internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
             return "read_document requires a valid 'documentId'.";
         }
 
-        if (!KnowledgeCollectionScope.TryNormalize(request.CollectionId, out var collectionId))
+        if (!KnowledgeCollectionScope.TryNormalize(KnowledgeToolCollectionPin.Requested(request.CollectionId), out var collectionId))
         {
             return "read_document requires a valid 'collectionId'.";
+        }
+
+        if (KnowledgeToolCollectionPin.Refusal(ToolName, collectionId) is { } pinRefusal)
+        {
+            return pinRefusal;
         }
 
         await using var scope = _scopeFactory.CreateAsyncScope();

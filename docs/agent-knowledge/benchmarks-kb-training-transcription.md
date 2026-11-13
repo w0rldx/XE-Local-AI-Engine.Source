@@ -27,7 +27,7 @@ type, the knowledge base, `Services/Training` or `Services/Transcription`. Archi
 
 ### Benchmark quant fidelity — perplexity and KL divergence (2026-08-26)
 
-**Rule:** the work-item CHECK rewrite is a SQLite table rebuild; `DropCheckConstraint`/`AddCheckConstraint` must carry `queue_sequence` (the FIFO position) through, asserted in the migration test. A fidelity work item pins `attempt = 1`: a base-logit lease held by another process waits on the `BenchmarkAdmissionRetry` cadence and then `IBenchmarkStore.RequeueFidelityAsync` returns item and attempt to Queued; never fail it. Replayed placement flags include `-ctk`/`-ctv`, so a KV-quantized run is measured under its own KV. **Prevents:** reordered pending work; a lost measurement behind a message promising a retry. **Authority:** `BenchmarkFidelityExecutor`, `BenchmarkWorkKindLifecycleTests`. [evidence](../agent-knowledge-evidence.md#benchmark-quant-fidelity--perplexity-and-kl-divergence-2026-08-26)
+**Rule:** the work-item CHECK rewrite is a SQLite table rebuild; `DropCheckConstraint`/`AddCheckConstraint` must carry `queue_sequence` (the FIFO position) through, asserted in the migration test. A fidelity work item pins `attempt = 1`: a base-logit lease held by another process waits on the `BenchmarkAdmissionRetry` cadence and then `IBenchmarkFidelityStore.RequeueFidelityAsync` returns item and attempt to Queued; never fail it. Replayed placement flags include `-ctk`/`-ctv`, so a KV-quantized run is measured under its own KV. **Prevents:** reordered pending work; a lost measurement behind a message promising a retry. **Authority:** `BenchmarkFidelityExecutor`, `BenchmarkWorkKindLifecycleTests`. [evidence](../agent-knowledge-evidence.md#benchmark-quant-fidelity--perplexity-and-kl-divergence-2026-08-26)
 
 ### Benchmark pairwise judging and Bradley-Terry (2026-08-26)
 
@@ -69,6 +69,10 @@ type, the knowledge base, `Services/Training` or `Services/Transcription`. Archi
 
 **Rule:** `training.index`, `training.datasets` and `training.comparisons` are flat sibling routes, each with its own capability `beforeLoad`; never nest them under a parent, because a parent route without `<Outlet>` swallows its children. The navigation flag is UI-only; the endpoints stay Operator-gated. **Prevents:** child pages that route but render nothing; a hidden nav item mistaken for access control. **Authority:** `XE-Local-AI-Engine.Client.React/src/routes/_layout/training.*.tsx`.
 
+### A PyTorch source graph from `torch.export` on the meta device is the reference path, not the GPU path
+
+**Rule:** treat a Model Lab PyTorch graph as the code that defines the model's maths, never as what a GPU run executes: on the meta device `torch.export` follows transformers' reference implementation, while a GPU run may switch to fused kernels (SDPA or flash attention, causal-conv1d, flash-linear-attention) the graph does not show. Say so wherever a graph or its lines are presented. **Prevents:** reading a graph node as a kernel that ran, or "fixing" a missing fused op in the index. **Authority:** `ModelLabPyTorchSourceService`, `modellab.py` source job.
+
 ## Live transcription
 
 ### NAudio's `CaptureAsync` starts the client itself and silently drops Silent packets
@@ -89,6 +93,7 @@ Superseded claims; the entries above are the active rules.
 
 | Stale belief | Current correction |
 |---|---|
+| A Model Lab PyTorch graph shows the kernels a GPU run executes. | It is the `torch.export` reference path on the meta device; fused GPU kernels do not appear in it. |
 | There is no speech-to-text in this repo. | whisper.cpp ships: batch upload, live sessions over `TranscriptionHub`, and browser capture in the SPA (§6). |
 | A benchmark project asks one question. | A project holds 1..N task items; a single item is the degenerate case (§3). |
 | A run is the unit that ranks. | The CELL ranks — one model x KV type x repeat over the whole item suite — and a run reports its cell's rank (§3). |

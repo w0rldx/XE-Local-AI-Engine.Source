@@ -62,7 +62,7 @@ EOF
 
 cat >"$FAKE/scripts/run-tests-memory-safe.sh" <<'EOF'
 #!/usr/bin/env bash
-echo "runner NO_BUILD=${NO_BUILD:-} COVERAGE_DIR=${COVERAGE_DIR:-} JOBS=${JOBS:-} PAR=${PAR:-}" >>"$FAKE_LOG"
+echo "runner NO_BUILD=${NO_BUILD:-} COVERAGE_DIR=${COVERAGE_DIR:-} JOBS=${JOBS:-} PAR=${PAR:-} TRX_DIR=${TRX_DIR:-}" >>"$FAKE_LOG"
 if [[ -n "${FAKE_RECORD_ORDER:-}" ]]; then
   echo runner-start >>"$FAKE_LOG"
   echo runner-end >>"$FAKE_LOG"
@@ -263,6 +263,8 @@ grep -Fq 'Enrolled test project: XE-Local-AI-Engine.AI.Agent.Tests/' <<<"$output
 refute_grep -F 'E2ETests' <<<"$output"
 refute_grep -F 'E2ETests' "$TMP/enrol.log"
 grep -Fq 'runner NO_BUILD=1 COVERAGE_DIR=' "$TMP/enrol.log"
+# The batched module keeps its per-batch TRX beside the siblings' reports.
+grep -q '^runner .* TRX_DIR=.*/\.tmp/backend-test-results/XE-Local-AI-Engine\.Tests$' "$TMP/enrol.log"
 # One `dotnet test` per sibling, none for the batched module.
 [[ "$(grep -c '^test project=' "$TMP/enrol.log")" -eq 2 ]]
 refute_grep '^test project=XE-Local-AI-Engine.Tests/' "$TMP/enrol.log"
@@ -617,6 +619,8 @@ run_gate coverage env COVERAGE_DIR="$TMP/cov"
 grep -q 'results=.*/cov/XE-Local-AI-Engine.AI.Agent.Tests coverage=1' "$TMP/coverage.log"
 grep -Fq 'COVERAGE_DIR=' "$TMP/coverage.log"
 grep -Fq "COVERAGE_DIR=$TMP/cov/XE-Local-AI-Engine.Tests" "$TMP/coverage.log"
+# Coverage mode already writes TRX per unit, so no TRX_DIR on top.
+grep -q '^runner .* TRX_DIR=$' "$TMP/coverage.log"
 refute_grep '^guard .* -- dotnet test ' "$TMP/coverage.log"
 # The pre-lane stays guarded: it runs before any lane instruments anything.
 grep -q '^guard guard --test-bins -- .*/XE-Local-AI-Engine.Tests --treenode-filter' "$TMP/coverage.log"

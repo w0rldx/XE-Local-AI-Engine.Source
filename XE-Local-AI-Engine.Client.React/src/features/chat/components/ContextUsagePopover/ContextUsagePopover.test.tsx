@@ -243,43 +243,46 @@ describe("ContextUsagePopover", () => {
 			expect(requested?.searchParams.get("numCtx")).toBe("16384");
 		});
 
-		it("follows the conversation's own settings, including a save that lands while it is mounted", async () => {
-			useDeveloperModeStore.getState().actions.setDeveloperMode(true);
-			const requested: URL[] = [];
-			server.use(
-				http.get(localApiPath("chat/context-estimate"), ({ request }) => {
-					requested.push(new URL(request.url));
-					return HttpResponse.json(preSend);
-				}),
-			);
-			const conversationId = "0f7f6d5e-1c1a-4a54-9c0c-3f0a2b6f7a12";
-			const queryClient = createTestQueryClient();
-			queryClient.setQueryData(nodeChatQueryKeys.conversation(conversationId), {
-				id: conversationId,
-				samplingOptions: { maxOutputTokens: 1_024 },
-			});
-			renderWithProviders(
-				<ContextUsagePopover
-					usage={usage({ usedTokens: undefined, isAuthoritative: false })}
-					conversationId={conversationId}
-					modelName="qwen3-4b"
-					useLocalTools={true}
-				/>,
-				{ queryClient },
-			);
-			const dropdown = await open();
-			await within(dropdown).findByTestId("context-usage-row-systemPrompt");
-			expect(requested.at(-1)?.searchParams.get("maxOutputTokens")).toBe("1024");
-
-			act(() => {
+		it.each([true, false])(
+			"follows the conversation's own settings (developer mode %s), including a save that lands while it is mounted",
+			async (developerMode) => {
+				useDeveloperModeStore.getState().actions.setDeveloperMode(developerMode);
+				const requested: URL[] = [];
+				server.use(
+					http.get(localApiPath("chat/context-estimate"), ({ request }) => {
+						requested.push(new URL(request.url));
+						return HttpResponse.json(preSend);
+					}),
+				);
+				const conversationId = "0f7f6d5e-1c1a-4a54-9c0c-3f0a2b6f7a12";
+				const queryClient = createTestQueryClient();
 				queryClient.setQueryData(nodeChatQueryKeys.conversation(conversationId), {
 					id: conversationId,
-					samplingOptions: { maxOutputTokens: 4_096 },
+					samplingOptions: { maxOutputTokens: 1_024 },
 				});
-			});
+				renderWithProviders(
+					<ContextUsagePopover
+						usage={usage({ usedTokens: undefined, isAuthoritative: false })}
+						conversationId={conversationId}
+						modelName="qwen3-4b"
+						useLocalTools={true}
+					/>,
+					{ queryClient },
+				);
+				const dropdown = await open();
+				await within(dropdown).findByTestId("context-usage-row-systemPrompt");
+				expect(requested.at(-1)?.searchParams.get("maxOutputTokens")).toBe("1024");
 
-			await waitFor(() => expect(requested.at(-1)?.searchParams.get("maxOutputTokens")).toBe("4096"));
-		});
+				act(() => {
+					queryClient.setQueryData(nodeChatQueryKeys.conversation(conversationId), {
+						id: conversationId,
+						samplingOptions: { maxOutputTokens: 4_096 },
+					});
+				});
+
+				await waitFor(() => expect(requested.at(-1)?.searchParams.get("maxOutputTokens")).toBe("4096"));
+			},
+		);
 
 		it("sends neither override when developer mode is off, as the send path does", async () => {
 			const requested = await requestedEstimate();

@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -14,6 +14,8 @@ import {
 	chatExportMarkdown,
 	parseChatExportFile,
 } from "@/features/chat/models/ChatExportFile";
+
+const importToastId = "chat-import";
 
 function saveJson(value: unknown, fileName: string): void {
 	saveBlob(new Blob([`${JSON.stringify(value, null, 2)}\n`], { type: "application/json" }), fileName);
@@ -57,12 +59,15 @@ export function useChatExportImport() {
 			.catch(exportFailed);
 	}, [exportFailed]);
 
+	// One import at a time: the node answers a large file only once every chat is written, minutes later.
+	const [importing, setImporting] = useState(false);
 	const importFile = useCallback(
 		(file: File): void => {
 			if (file.size > CHAT_IMPORT_READ_LIMIT_BYTES) {
 				toast.error(t("chat.exportImport.tooLarge", "This file is larger than the 64 MB an import accepts."));
 				return;
 			}
+			setImporting(true);
 			file
 				.text()
 				.then(async (text) => {
@@ -77,16 +82,24 @@ export function useChatExportImport() {
 						);
 						return;
 					}
+					// Sticky until the success or error below replaces it under the same id.
+					toast.progress({
+						id: importToastId,
+						message: t("chat.exportImport.importing", { count: parsed.document.conversations.length }),
+					});
 					const { data } = await importNodeChatConversations({ body: parsed.document });
 					await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversationLists() });
-					toast.success(t("chat.exportImport.imported", { count: data.conversations.length }));
+					toast.success(t("chat.exportImport.imported", { count: data.conversations.length }), { id: importToastId });
 				})
 				.catch((error: unknown) =>
-					toast.error(apiErrorMessage(error, t("chat.exportImport.importFailed", "Could not import the file."))),
-				);
+					toast.error(apiErrorMessage(error, t("chat.exportImport.importFailed", "Could not import the file.")), {
+						id: importToastId,
+					}),
+				)
+				.finally(() => setImporting(false));
 		},
 		[queryClient, t],
 	);
 
-	return { exportConversation, exportAll, importFile };
+	return { exportConversation, exportAll, importFile, importing };
 }

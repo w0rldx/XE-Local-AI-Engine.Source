@@ -69,6 +69,9 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         var escapedDocumentFilter = await search.SearchAsync("needle", limit: 10, documentB, CollectionA, CancellationToken.None);
         AssertEx.Empty(escapedDocumentFilter,
             "A document id from another collection must not bypass the collection predicate in the lexical arm.");
+
+        var everyCollection = await search.SearchAsync("needle", limit: 10, documentId: null, collectionId: null, CancellationToken.None);
+        AssertEx.Equal(expected: 2, everyCollection.Count, "the explicit every-collection null reaches both collections");
     }
 
     [Test]
@@ -119,6 +122,16 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
             CancellationToken.None);
         AssertEx.Empty(escapedDocumentFilter,
             "A document id from another collection must not bypass the collection predicate in the dense arm.");
+
+        var everyCollection = await search.SearchAsync(query,
+            EmbeddingModel,
+            VectorIdentity,
+            vectorDimension: 4,
+            limit: 10,
+            documentId: null,
+            collectionId: null,
+            CancellationToken.None);
+        AssertEx.Equal(expected: 2, everyCollection.Count, "the explicit every-collection null reaches both collections");
     }
 
     [Test]
@@ -204,11 +217,13 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
     }
 
     [Test]
-    public async Task ChatGrounding_InlinesOnlyThePickedCollection()
+    [Arguments(CollectionA, "alpha")]
+    [Arguments(null, "alpha,bravo,charlie")]
+    public async Task ChatGrounding_InlinesOnlyThePickedCollection_OrEveryCollectionForAll(string? picked, string expectedGrounded)
     {
-        // The chat composer's collection pick is an isolation boundary: a grounded turn inlines the picked collection's
-        // chunk and never an equally matching chunk from another collection or from DEFAULT.
-        var databasePath = GetDatabasePath("chat-grounding-namespace.sqlite");
+        // The collection pick is an isolation boundary: a grounded turn inlines only the picked collection's chunk, never
+        // an equal match from another collection or DEFAULT. "All collections" (null) grounds on every collection's match.
+        var databasePath = GetDatabasePath($"chat-grounding-namespace-{picked ?? "all"}.sqlite");
         var documentA = Guid.NewGuid();
         var documentB = Guid.NewGuid();
         var documentDefault = Guid.NewGuid();
@@ -236,13 +251,110 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
             runtimeSettings,
             NullLogger<ChatTurnContextBuilder>.Instance);
 
-        var grounding = await builder.BuildKnowledgeContextAsync("needle", CollectionA);
+        var grounding = await builder.BuildKnowledgeContextAsync("needle", picked);
 
         var grounded = AssertEx.NotNull(grounding);
-        AssertEx.Equal(chunkA.ToString(), string.Join(',', grounded.Sources.Select(static source => source.ChunkId)));
-        AssertEx.True(grounded.Message.Content.Contains("alpha grounding needle", StringComparison.Ordinal), "the picked chunk is inlined");
-        AssertEx.False(grounded.Message.Content.Contains("bravo", StringComparison.Ordinal), "another project's chunk reached the turn");
-        AssertEx.False(grounded.Message.Content.Contains("charlie", StringComparison.Ordinal), "a DEFAULT chunk reached the turn");
+        var expected = expectedGrounded.Split(',');
+        AssertEx.Equal(expected.Length, grounded.Sources.Count);
+        if (picked is not null)
+        {
+            AssertEx.Equal(chunkA, grounded.Sources[0].ChunkId);
+        }
+
+        foreach (var name in new[] { "alpha", "bravo", "charlie" })
+        {
+            AssertEx.Equal(expected.Contains(name, StringComparer.Ordinal),
+                grounded.Message.Content.Contains($"{name} grounding needle", StringComparison.Ordinal),
+                $"whether the '{name}' chunk reached the turn");
+        }
+
+        // The model is told the document's name, never the storage reference; the persisted source keeps the
+        // non-sensitive derived title (the client labels it from its own document list).
+        var storageReference = documentA.ToString("D") + ".txt";
+        AssertEx.True(grounded.Message.Content.Contains("document.txt", StringComparison.Ordinal), "the grounding names the document");
+        AssertEx.False(grounded.Message.Content.Contains(storageReference, StringComparison.Ordinal), "the grounding never shows the storage reference");
+        if (picked is not null)
+        {
+            AssertEx.Equal(storageReference, grounded.Sources[0].Title);
+        }
+    }
+
+    [Test]
+    public async Task KnowledgeSearch_CarriesTheDocumentsDisplayNameOnlyWhenAsked()
+    {
+        // The model-facing callers ask for the decrypted name so a citation reads "falcon-brief.txt"; the REST search
+        // does not ask, so its hits keep only the non-sensitive storage-reference title.
+        var databasePath = GetDatabasePath("search-document-name.sqlite");
+        var documentId = Guid.NewGuid();
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId, CollectionA, fileName: "falcon-brief.txt");
+        await SeedChunkAsync(databasePath, documentId, Guid.NewGuid(), chunkIndex: 0, content: "falcon needle");
+        await SeedChunkAsync(databasePath, documentId, Guid.NewGuid(), chunkIndex: 1, content: "second falcon needle");
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateLexicalSearchService(context);
+
+        async Task<IReadOnlyList<KnowledgeSearchHit>> SearchAsync(bool includeDocumentNames)
+        {
+            var result = await service.SearchAsync(new KnowledgeSearchRequest
+            {
+                Query = "needle",
+                Limit = 10,
+                CollectionId = CollectionA,
+                IncludeDocumentNames = includeDocumentNames
+            }, CancellationToken.None);
+            return result.Results;
+        }
+
+        var named = await SearchAsync(includeDocumentNames: true);
+        AssertEx.Equal(expected: 2, named.Count);
+        foreach (var hit in named)
+        {
+            AssertEx.Equal("falcon-brief.txt", hit.DocumentName);
+        }
+
+        var unnamed = await SearchAsync(includeDocumentNames: false);
+        AssertEx.Equal(expected: 2, unnamed.Count);
+        foreach (var hit in unnamed)
+        {
+            AssertEx.Null(hit.DocumentName);
+            AssertEx.Equal(documentId.ToString("D") + ".txt", hit.Title);
+        }
+    }
+
+    [Test]
+    public async Task KnowledgeSearch_OnlyTheAllCollectionsFlagWidensTheSearch_NeverACollectionValue()
+    {
+        // "All collections" is a separate flag so no client-supplied id can widen a search: the sentinel the SPA uses
+        // and an empty id both stay scoped (refused or DEFAULT), while the flag reaches every collection.
+        var databasePath = GetDatabasePath("search-all-collections.sqlite");
+        var documentA = Guid.NewGuid();
+        var documentB = Guid.NewGuid();
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentA, CollectionA);
+        await SeedDocumentAsync(databasePath, documentB, CollectionB);
+        await SeedChunkAsync(databasePath, documentA, Guid.NewGuid(), chunkIndex: 0, content: "wide needle");
+        await SeedChunkAsync(databasePath, documentB, Guid.NewGuid(), chunkIndex: 0, content: "wide needle too");
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateLexicalSearchService(context);
+
+        async Task<string> SearchedCollectionsAsync(string collectionId, bool allCollections)
+        {
+            var result = await service.SearchAsync(new KnowledgeSearchRequest
+            {
+                Query = "needle",
+                Limit = 10,
+                CollectionId = collectionId,
+                AllCollections = allCollections
+            }, CancellationToken.None);
+            return string.Join(',', result.Results.Select(static hit => hit.CollectionId).Order(StringComparer.Ordinal));
+        }
+
+        AssertEx.Equal($"{CollectionA},{CollectionB}", await SearchedCollectionsAsync(KnowledgeCollectionScope.DefaultId, allCollections: true));
+        AssertEx.Equal(string.Empty, await SearchedCollectionsAsync("*", allCollections: false));
+        AssertEx.Equal(string.Empty, await SearchedCollectionsAsync(string.Empty, allCollections: false));
+        AssertEx.Equal(CollectionB, await SearchedCollectionsAsync("project-b", allCollections: false));
     }
 
     [Test]
@@ -306,12 +418,12 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
-    private async Task SeedDocumentAsync(string databasePath, Guid documentId, string collectionId)
+    private async Task SeedDocumentAsync(string databasePath, Guid documentId, string collectionId, string fileName = "document.txt")
     {
         byte[] encryptedName;
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            encryptedName = context.EncryptKnowledgeFileName("document.txt", documentId);
+            encryptedName = context.EncryptKnowledgeFileName(fileName, documentId);
         }
 
         await using var connection = await OpenConnectionAsync(databasePath);

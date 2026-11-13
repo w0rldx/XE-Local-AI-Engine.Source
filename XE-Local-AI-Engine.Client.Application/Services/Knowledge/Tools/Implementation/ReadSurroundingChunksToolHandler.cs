@@ -61,9 +61,14 @@ internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
             return "read_surrounding_chunks requires a valid 'documentId'.";
         }
 
-        if (!KnowledgeCollectionScope.TryNormalize(request.CollectionId, out var collectionId))
+        if (!KnowledgeCollectionScope.TryNormalize(KnowledgeToolCollectionPin.Requested(request.CollectionId), out var collectionId))
         {
             return "read_surrounding_chunks requires a valid 'collectionId'.";
+        }
+
+        if (KnowledgeToolCollectionPin.Refusal(ToolName, collectionId) is { } pinRefusal)
+        {
+            return pinRefusal;
         }
 
         if (request.ChunkIndex is not { } chunkIndex || chunkIndex < 0)

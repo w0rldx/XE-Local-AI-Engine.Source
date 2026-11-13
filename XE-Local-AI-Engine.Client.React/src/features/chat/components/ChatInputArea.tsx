@@ -87,7 +87,7 @@ interface ChatInputAreaProps {
 	// visible whenever the feature is on but is disabled (with a "no documents" tooltip) until there is something to
 	// search — grounding on an empty corpus is a no-op. Defaults to true so callers that don't wire it keep it enabled.
 	knowledgeBaseHasDocuments?: boolean;
-	// The knowledge-collection picker beside the toggle; shown only with the toggle and while there is a choice to make.
+	// The knowledge-collection picker beside the toggle, in plain chat and agent mode, while there is a choice to make.
 	knowledgeCollection?: KnowledgeCollectionPicker;
 	agentControlsAvailable?: boolean;
 	agentModeEnabled?: boolean;
@@ -186,9 +186,10 @@ export function ChatInputArea({
 	// The knowledge-base grounding toggle shows for plain chat only: agent mode reaches the knowledge base through the
 	// search_knowledge_base tool, so an extra inline-grounding toggle there would be redundant and confusing.
 	const showKnowledgeBaseControls = capabilities.showKnowledgeBaseControls && !agentModeEnabled;
-	// With only DEFAULT listed there is nothing to pick, so the picker stays off the row.
+	// The picker also shows in agent mode, where a hard pick fixes the agent's knowledge tools to that collection. With
+	// only DEFAULT listed there is nothing to pick, so the picker stays off the row.
 	const knowledgeCollectionPicker =
-		showKnowledgeBaseControls && knowledgeCollection !== undefined && knowledgeCollection.options.length > 1
+		capabilities.showKnowledgeBaseControls && knowledgeCollection !== undefined && knowledgeCollection.options.length > 1
 			? knowledgeCollection
 			: undefined;
 	// Pre-send mirror of the node's message-size cap. Measured against `trimmed` — the string the send path actually

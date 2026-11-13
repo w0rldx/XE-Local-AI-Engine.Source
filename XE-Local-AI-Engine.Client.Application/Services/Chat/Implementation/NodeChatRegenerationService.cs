@@ -131,7 +131,9 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
             throw new NodeChatInvalidRequestException(seedError);
         }
 
-        if (!KnowledgeCollectionScope.TryNormalize(knowledgeCollectionId, out var normalizedCollectionId))
+        // The send path's rule: absent is "All collections", a hard pick must normalise.
+        string? normalizedCollectionId = null;
+        if (!string.IsNullOrWhiteSpace(knowledgeCollectionId) && !KnowledgeCollectionScope.TryNormalize(knowledgeCollectionId, out normalizedCollectionId))
         {
             throw new NodeChatInvalidRequestException("The knowledge collection id is invalid.");
         }
@@ -156,7 +158,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         IReadOnlyDictionary<Guid, Guid>? requestedSelectedPath,
         SamplingOptions? samplingOptions,
         bool autoAcceptWebContent,
-        string knowledgeCollectionId,
+        string? knowledgeCollectionId,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var turn = await LoadRegenerationTurnAsync(conversationId, originalMessageId, requestedSelectedPath, cancellationToken);
@@ -263,8 +265,9 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                 autoAcceptWebContent);
             var onTerminal = BuildTerminalHook(turn, resolution, package);
 
-            // Seeded before both tasks start, so the run's search-tool hits reach the pump's terminal row as sources.
-            using var knowledgeSourceScope = TurnKnowledgeSourceCollector.BeginScope();
+            // Seeded before both tasks start, so the run's search-tool hits reach the pump's terminal row as sources and the
+            // knowledge-base tools see the rerun's hard-picked collection, exactly as on a send.
+            using var knowledgeSourceScope = TurnKnowledgeSourceCollector.BeginScope(knowledgeCollectionId);
             pumpTask = _invocationStatePump.PumpAsync(stateChannel.Reader,
                 eventSink,
                 correlation,
@@ -469,7 +472,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
     private async Task<KnowledgeChatGrounding?> GroundOnKnowledgeBaseAsync(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto original,
         ChatTurnResolution resolution,
-        string knowledgeCollectionId,
+        string? knowledgeCollectionId,
         Guid requestId,
         CancellationToken runCancellationToken,
         CancellationToken cancellationToken)

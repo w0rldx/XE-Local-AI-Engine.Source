@@ -1445,10 +1445,14 @@ internal static partial class NodeChatStreamServiceTestSupport
 
         public int ActiveInvocationCount => 0;
 
+        // The collection the knowledge-base tools were fixed to while the run executed.
+        public string? PinnedCollectionInRun { get; private set; }
+
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             CapturedContext = context.Package.ConversationContext;
             CaptureObserved = true;
+            PinnedCollectionInRun = TurnKnowledgeSourceCollector.PinnedCollectionId;
             foreach (var hit in ToolHits)
             {
                 TurnKnowledgeSourceCollector.Add(hit);

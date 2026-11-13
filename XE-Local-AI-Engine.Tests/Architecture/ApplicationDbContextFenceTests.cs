@@ -35,7 +35,7 @@ public sealed class ApplicationDbContextFenceTests
         RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Architecture", "DbContextUserAllowlist.txt");
 
     /// <summary>Today's entry count. Only ever lowered, in the commit that shrinks the list.</summary>
-    private const int MaxEntries = 31;
+    private const int MaxEntries = 28;
 
     /// <summary>The two node contexts, by full type name.</summary>
     /// <remarks>

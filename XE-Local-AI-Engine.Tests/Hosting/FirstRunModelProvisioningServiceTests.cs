@@ -222,7 +222,7 @@ public sealed class FirstRunModelProvisioningServiceTests
     }
 
     [Test]
-    public async Task DownloadFails_LeavesOnboarding_DoesNotSelect_AndDoesNotThrow()
+    public async Task DownloadFails_ThenIsCancelled_LeavesOnboarding_DoesNotSelect_AndDoesNotThrow()
     {
         var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Failed);
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
@@ -232,11 +232,116 @@ public sealed class FirstRunModelProvisioningServiceTests
             coordinator,
             settingsStore);
 
-        // Must not throw — offline-tolerance keeps startup alive with the empty-picker onboarding fallback.
-        await RunAsync(service);
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            await AssertEx.EventuallyAsync(() => coordinator.FailedReads > 1, TimeSpan.FromSeconds(10), "the service must observe the failure");
+            AssertEx.Null(settingsStore.Saved, "a failed download must not select a model");
+            AssertEx.False(service.ExecuteTask!.IsCompleted, "a failure keeps the wait open for a retry");
+
+            coordinator.Phase = GgufDownloadPhase.Cancelled;
+
+            // Must not throw — offline-tolerance keeps startup alive with the empty-picker onboarding fallback.
+            await service.ExecuteTask.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
 
         AssertEx.Equal(expected: 1, coordinator.StartCalls.Count);
-        AssertEx.Null(settingsStore.Saved, "a failed download must not select a model");
+        AssertEx.Null(settingsStore.Saved, "a cancelled download must not select a model");
+    }
+
+    [Test]
+    public async Task DownloadFails_ThenARetryCompletes_SelectsTheModelLikeTheFirstAttempt()
+    {
+        // The Home card's Retry replays the same request, so the coordinator's newest row for the same name moves on
+        // from Failed; the first-run wait must still be open to select it, or the retried model installs unselected.
+        var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Failed);
+        var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
+        using var service = BuildService(isDesktop: true,
+            [],
+            new RecordingBinaryManager(),
+            coordinator,
+            settingsStore);
+
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            await AssertEx.EventuallyAsync(() => coordinator.FailedReads > 0, TimeSpan.FromSeconds(10), "the service must observe the failure");
+            coordinator.Phase = GgufDownloadPhase.Completed;
+            await service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+
+        AssertEx.Equal(expected: 1, coordinator.StartCalls.Count, "the retry is the operator's, not a second first-run start");
+        AssertEx.Equal(DefaultGguf, settingsStore.Current.DefaultModelName);
+    }
+
+    [Test]
+    public async Task DownloadFails_ThenARetryCompletes_TheNewDefaultIsLiveWithNoPendingRestart()
+    {
+        // The default model is read per turn, so the default a retried first-run download selects must apply at once:
+        // the next turn's read sees it and the pending-restart banner stays empty.
+        var boot = new StoredNodeSettings();
+        var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Failed);
+        var settingsStore = new FakeNodeSettingsStore(boot);
+        var runtimeSettings = SeededNodeRuntimeSettings.Create(stored: () => settingsStore.Current);
+        using var service = BuildService(isDesktop: true,
+            [],
+            new RecordingBinaryManager(),
+            coordinator,
+            settingsStore);
+
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            await AssertEx.EventuallyAsync(() => coordinator.FailedReads > 0, TimeSpan.FromSeconds(10), "the service must observe the failure");
+            coordinator.Phase = GgufDownloadPhase.Completed;
+            await service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+
+        AssertEx.Equal(DefaultGguf, await runtimeSettings.GetDefaultModelNameAsync());
+        AssertEx.Empty(new PendingRestartRegistry(boot, runtimeSettings.ResolveEffectiveValues).GetPendingFields(settingsStore.Current));
+    }
+
+    [Test]
+    public async Task DownloadFails_OperatorPicksAnotherDefault_ThenARetryCompletes_KeepsTheOperatorsChoice()
+    {
+        var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Failed);
+        var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
+        using var service = BuildService(isDesktop: true,
+            [],
+            new RecordingBinaryManager(),
+            coordinator,
+            settingsStore);
+
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            await AssertEx.EventuallyAsync(() => coordinator.FailedReads > 0, TimeSpan.FromSeconds(10), "the service must observe the failure");
+            await settingsStore.SaveAsync(settingsStore.Current with
+            {
+                DefaultModelName = "operator/picked:Q8_0"
+            });
+            coordinator.Phase = GgufDownloadPhase.Completed;
+            await service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+
+        AssertEx.Equal("operator/picked:Q8_0", settingsStore.Current.DefaultModelName,
+            "a default picked between the failure and the retry must not be overwritten by the first-run model.");
     }
 
     [Test]
@@ -768,17 +873,28 @@ public sealed class FirstRunModelProvisioningServiceTests
         }
     }
 
-    /// <summary>A coordinator that records Start requests and reports a fixed terminal phase for any model name.</summary>
+    /// <summary>A coordinator that records Start requests and reports <see cref="Phase" /> for any model name.</summary>
     private sealed class FakeDownloadCoordinator : IGgufDownloadCoordinator
     {
-        private readonly GgufDownloadPhase _terminalPhase;
+        private int _failedReads;
+        private volatile GgufDownloadPhase _phase;
 
         public FakeDownloadCoordinator(GgufDownloadPhase terminalPhase)
         {
-            _terminalPhase = terminalPhase;
+            _phase = terminalPhase;
         }
 
         public List<GgufModelRequest> StartCalls { get; } = [];
+
+        /// <summary>The phase every status read reports; a test flips it to stand in for a retry of the same download.</summary>
+        public GgufDownloadPhase Phase
+        {
+            get => _phase;
+            set => _phase = value;
+        }
+
+        /// <summary>How many status reads reported <see cref="GgufDownloadPhase.Failed" />.</summary>
+        public int FailedReads => Volatile.Read(ref _failedReads);
 
         /// <summary>Simulates a provisioning step failing AFTER the runtime was successfully acquired.</summary>
         public bool ThrowOnStart { get; init; }
@@ -806,13 +922,19 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         public GgufDownloadStatus? GetStatus(string modelName)
         {
+            var phase = Phase;
+            if (phase == GgufDownloadPhase.Failed)
+            {
+                Interlocked.Increment(ref _failedReads);
+            }
+
             return new GgufDownloadStatus
             {
                 ModelName = modelName,
-                Phase = _terminalPhase,
+                Phase = phase,
                 CompletedBytes = null,
                 TotalBytes = null,
-                SanitizedError = _terminalPhase == GgufDownloadPhase.Failed ? "Download failed." : null
+                SanitizedError = phase == GgufDownloadPhase.Failed ? "Download failed." : null
             };
         }
 

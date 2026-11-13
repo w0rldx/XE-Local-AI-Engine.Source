@@ -4,6 +4,7 @@ using FastEndpoints;
 using Microsoft.AspNetCore.Mvc;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
+using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
@@ -16,13 +17,18 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 public sealed class ImportNodeChatConversationsEndpoint : Endpoint<NodeChatExportDocument, NodeChatImportResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly LocalChatConversationChangePublisher _changePublisher;
     private readonly TimeProvider _timeProvider;
 
-    public ImportNodeChatConversationsEndpoint(INodeChatPersistenceService chatPersistence, TimeProvider timeProvider)
+    public ImportNodeChatConversationsEndpoint(INodeChatPersistenceService chatPersistence,
+        LocalChatConversationChangePublisher changePublisher,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(changePublisher);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _chatPersistence = chatPersistence;
+        _changePublisher = changePublisher;
         _timeProvider = timeProvider;
     }
 
@@ -79,6 +85,8 @@ public sealed class ImportNodeChatConversationsEndpoint : Endpoint<NodeChatExpor
             throw;
         }
 
+        // One push for the whole file, not one per chat.
+        await _changePublisher.PublishAsync(conversationId: null, ct);
         await Send.OkAsync(new NodeChatImportResponse
             {
                 Conversations = imported
