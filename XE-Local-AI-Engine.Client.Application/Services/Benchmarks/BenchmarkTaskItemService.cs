@@ -42,32 +42,38 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
     /// </remarks>
     public const int MaxTaskItems = 20;
 
-    private readonly IBenchmarkStore _benchmarkStore;
+    private readonly IBenchmarkTaskItemStore _taskItemStore;
+    private readonly IBenchmarkProjectStore _projectStore;
+    private readonly IBenchmarkJudgeStore _judgeStore;
 
-    public BenchmarkTaskItemService(IBenchmarkStore benchmarkStore)
+    public BenchmarkTaskItemService(IBenchmarkTaskItemStore taskItemStore, IBenchmarkProjectStore projectStore, IBenchmarkJudgeStore judgeStore)
     {
-        ArgumentNullException.ThrowIfNull(benchmarkStore);
-        _benchmarkStore = benchmarkStore;
+        ArgumentNullException.ThrowIfNull(taskItemStore);
+        ArgumentNullException.ThrowIfNull(projectStore);
+        ArgumentNullException.ThrowIfNull(judgeStore);
+        _taskItemStore = taskItemStore;
+        _projectStore = projectStore;
+        _judgeStore = judgeStore;
     }
 
     public Task<IReadOnlyList<BenchmarkTaskItemRecord>> ListAsync(Guid projectId, CancellationToken cancellationToken = default) =>
-        _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken);
+        _taskItemStore.ListTaskItemsAsync(projectId, cancellationToken);
 
     public Task<IReadOnlyList<BenchmarkTaskItemRecord>> GetOrCreateItemsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
-        _benchmarkStore.GetOrCreateItemsAsync(projectId, cancellationToken);
+        _taskItemStore.GetOrCreateItemsAsync(projectId, cancellationToken);
 
     public async Task<BenchmarkTaskItemRecord> CreateAsync(Guid projectId,
         long expectedProjectVersion,
         BenchmarkTaskItemDraft draft,
         CancellationToken cancellationToken = default)
     {
-        var existing = await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken);
+        var existing = await _taskItemStore.ListTaskItemsAsync(projectId, cancellationToken);
 
         // The generator's id is minted HERE rather than by the store, because every case it expands into is derived
         // from it: the id is the seed material that makes one probe's haystacks its own.
         var (input, children) = await ToInputAsync(projectId, Guid.NewGuid(), draft, cancellationToken);
         EnsureLeafCap(existing, children?.Count ?? 1);
-        return await _benchmarkStore.CreateTaskItemAsync(projectId, expectedProjectVersion, input, children, cancellationToken);
+        return await _taskItemStore.CreateTaskItemAsync(projectId, expectedProjectVersion, input, children, cancellationToken);
     }
 
     public async Task<BenchmarkTaskItemRecord> UpdateAsync(Guid projectId,
@@ -76,7 +82,7 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
         BenchmarkTaskItemDraft draft,
         CancellationToken cancellationToken = default)
     {
-        var existing = await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken);
+        var existing = await _taskItemStore.ListTaskItemsAsync(projectId, cancellationToken);
         EnsureNotGenerated(existing, itemId);
         var (input, children) = await ToInputAsync(projectId, itemId, draft, cancellationToken);
         if (children is not null)
@@ -85,20 +91,20 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
             EnsureLeafCap(existing, children.Count - existing.Count(item => item.ParentItemId == itemId));
         }
 
-        return await _benchmarkStore.UpdateTaskItemAsync(projectId, itemId, expectedVersion, input, children, cancellationToken);
+        return await _taskItemStore.UpdateTaskItemAsync(projectId, itemId, expectedVersion, input, children, cancellationToken);
     }
 
     public async Task DeleteAsync(Guid projectId, Guid itemId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        var existing = await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken);
+        var existing = await _taskItemStore.ListTaskItemsAsync(projectId, cancellationToken);
         EnsureNotGenerated(existing, itemId);
-        await _benchmarkStore.DeleteTaskItemAsync(projectId, itemId, expectedVersion, cancellationToken);
+        await _taskItemStore.DeleteTaskItemAsync(projectId, itemId, expectedVersion, cancellationToken);
     }
 
     public Task<IReadOnlyList<BenchmarkTaskItemRecord>> ReorderAsync(Guid projectId,
         IReadOnlyList<Guid> orderedItemIds,
         CancellationToken cancellationToken = default) =>
-        _benchmarkStore.ReorderTaskItemsAsync(projectId, orderedItemIds, cancellationToken);
+        _taskItemStore.ReorderTaskItemsAsync(projectId, orderedItemIds, cancellationToken);
 
     /// <summary>The prompt of one item, decoded from the stored payload the same way the project's core task is.</summary>
     public static string DecodePrompt(ReadOnlySpan<byte> payload) =>
@@ -108,7 +114,7 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
     ///     The task item a run answered, or <see langword="null" /> for a single-task run or a deleted item. Pointwise
     ///     and pairwise judging both read it here, so they judge against the same reference answer.
     /// </summary>
-    internal static async Task<BenchmarkTaskItemRecord?> FindTaskItemAsync(IBenchmarkStore store, BenchmarkRunRecord run, CancellationToken cancellationToken)
+    internal static async Task<BenchmarkTaskItemRecord?> FindTaskItemAsync(IBenchmarkTaskItemStore store, BenchmarkRunRecord run, CancellationToken cancellationToken)
     {
         if (run.TaskItemId is not { } itemId)
         {
@@ -244,7 +250,7 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
             return;
         }
 
-        var revision = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
+        var revision = await _judgeStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
         if (revision?.PolicyJson is not { } policyJson)
         {
             return;
@@ -346,7 +352,7 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
 
         // The project's window is the refusal's other number, and it is read here so the operator is told while still
         // looking at the form. The freeze re-checks it anyway: a project's context can be edited after expansion.
-        var project = await _benchmarkStore.GetProjectAsync(projectId, cancellationToken)
+        var project = await _projectStore.GetProjectAsync(projectId, cancellationToken)
                       ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
         var criterionId = BenchmarkNiahGenerator.CriterionIdOf(config);
         return

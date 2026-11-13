@@ -71,6 +71,10 @@ internal sealed class NodeConversationConfiguration : IEntityTypeConfiguration<N
         builder.Property(entity => entity.PlainSystemPrompt)
                .HasColumnName("plain_system_prompt");
 
+        // Per-conversation sampling settings: nullable plain JSON, not encrypted (numbers and stop sequences).
+        builder.Property(entity => entity.SamplingOptionsJson)
+               .HasColumnName("sampling_options_json");
+
         // Non-destructive compaction synopsis (encrypted BLOB) + the highest message sequence it folds in + its
         // last-updated timestamp. All nullable and additive; a pre-feature conversation reads all three as NULL.
         builder.Property(entity => entity.CompactionSummary)

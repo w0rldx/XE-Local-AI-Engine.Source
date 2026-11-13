@@ -148,6 +148,20 @@ public sealed class ListKnowledgeDocumentsResponse
     public required bool EmbeddingModelAvailable { get; init; }
 }
 
+/// <summary>One collection namespace and how many documents (any status) it holds.</summary>
+public sealed class KnowledgeCollectionResponse
+{
+    public required string CollectionId { get; init; }
+
+    public required int DocumentCount { get; init; }
+}
+
+/// <summary>Response envelope for <c>GET knowledge-base/collections</c>: <c>DEFAULT</c> first, then by id.</summary>
+public sealed class ListKnowledgeCollectionsResponse
+{
+    public required IReadOnlyList<KnowledgeCollectionResponse> Items { get; init; }
+}
+
 /// <summary>One chunk of a document, for the detail drawer.</summary>
 public sealed class KnowledgeDocumentChunkResponse
 {

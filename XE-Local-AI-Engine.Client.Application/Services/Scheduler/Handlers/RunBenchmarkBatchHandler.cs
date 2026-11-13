@@ -148,10 +148,11 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = scope.ServiceProvider;
-        var store = services.GetRequiredService<IBenchmarkStore>();
+        var projectStore = services.GetRequiredService<IBenchmarkProjectStore>();
+        var queueStore = services.GetRequiredService<IBenchmarkQueueStore>();
         var freezeService = services.GetRequiredService<IBenchmarkRunFreezeService>();
 
-        var project = await store.GetProjectAsync(parameters.ProjectId, cancellationToken);
+        var project = await projectStore.GetProjectAsync(parameters.ProjectId, cancellationToken);
         if (project is null)
         {
             throw new ScheduledJobExecutionException("The scheduled benchmark project could not be found. It may have been deleted.");
@@ -159,7 +160,7 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
 
         // Refuse to pile up, reported as a skipped fire rather than a failure: the schedule is fine, the node is busy. Counted over
         // WORK ITEMS of every kind, since judging, fidelity and pairwise work outlives runs that already read Succeeded.
-        var active = await store.CountActiveWorkAsync(parameters.ProjectId, cancellationToken);
+        var active = await queueStore.CountActiveWorkAsync(parameters.ProjectId, cancellationToken);
         var activeCount = active.Values.Sum();
         if (activeCount > 0)
         {

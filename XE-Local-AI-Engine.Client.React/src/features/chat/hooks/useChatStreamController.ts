@@ -103,6 +103,8 @@ export interface ChatStreamControllerInput {
 	attachmentFileIds: string[];
 	toolsEnabled: boolean;
 	knowledgeBaseEnabled: boolean;
+	// The collection a grounded send or regenerate searches (the composer's picker).
+	knowledgeCollectionId: string;
 	reasoningEffort: ReasoningEffort;
 	/**
 	 * The chat-stream voice tap (barge-in + answer progress). Instantiated by the page, not here: it holds per-turn
@@ -165,6 +167,7 @@ export function useChatStreamController({
 	attachmentFileIds,
 	toolsEnabled,
 	knowledgeBaseEnabled,
+	knowledgeCollectionId,
 	reasoningEffort,
 	onVoiceTurnStart,
 	onVoiceAnswerProgress,
@@ -173,8 +176,8 @@ export function useChatStreamController({
 }: ChatStreamControllerInput): ChatStreamController {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
-	// Developer mode + per-send sampling overrides. Read directly from global stores; nothing outside the loops
-	// below consumes either, so the subscriptions live here rather than on the page.
+	// Developer mode + this browser's default sampling overrides, which a conversation's own stored settings replace.
+	// Read directly from global stores; nothing outside the loops below consumes either.
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const samplingOptions = useChatSamplingPreferencesStore((state) => state.options);
 
@@ -316,6 +319,7 @@ export function useChatStreamController({
 						useLocalTools: toolsEnabled,
 						// Opt-in knowledge-base grounding for plain chat. The server ignores it in agent mode.
 						useKnowledgeBase: knowledgeBaseEnabled,
+						knowledgeCollectionId,
 						reasoningEffort: effort,
 						// Send the active conversation-tree path so the server assembles context from the selected
 						// branch only. Omit when nothing was navigated this turn so the server keeps the stored map.
@@ -326,8 +330,9 @@ export function useChatStreamController({
 						attachmentFileIds: attachmentFileIds.length > 0 ? attachmentFileIds : undefined,
 						// Include sampling overrides only when developer mode is on and at least one field is set.
 						// toWireSamplingOptions returns undefined when all fields are null → omitted from wire payload
-						// (byte-identical invariant: the OFF path is byte-identical to the default non-dev path).
-						samplingOptions: developerMode ? toWireSamplingOptions(samplingOptions) : undefined,
+						// (byte-identical invariant: the OFF path is byte-identical to the default non-dev path). The
+						// conversation's own stored settings win; without them this browser's defaults apply.
+						samplingOptions: developerMode ? toWireSamplingOptions(conversation.samplingOptions ?? samplingOptions) : undefined,
 						// Read at send time for the conversation the turn actually targets (it may have just been created).
 						autoAcceptWebContent: isWebContentAutoAccepted(conversation.id),
 					},
@@ -405,6 +410,7 @@ export function useChatStreamController({
 			t,
 			toolsEnabled,
 			knowledgeBaseEnabled,
+			knowledgeCollectionId,
 			onVoiceTurnStart,
 			onVoiceAnswerProgress,
 		],
@@ -416,9 +422,21 @@ export function useChatStreamController({
 				return;
 			}
 
+			// The full read, never the list summary: only it carries the conversation's own sampling settings, and a
+			// summary would send this browser's defaults instead. fetchQuery joins the selection's in-flight load.
 			const conversation =
 				queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(selectedConversationId)) ??
-				displayConversations.find((item) => item.id === selectedConversationId);
+				(displayConversations.some((item) => item.id === selectedConversationId)
+					? await queryClient
+							.fetchQuery({
+								queryKey: nodeChatQueryKeys.conversation(selectedConversationId),
+								queryFn: ({ signal }) => nodeChatAdapter.getConversation(selectedConversationId, { signal }),
+							})
+							.catch(() => undefined)
+					: undefined);
+			if (activeStream.current) {
+				return;
+			}
 			if (!conversation || conversation.origin === "remote") {
 				setStreamError(t("pages.chat.actions.regenerateUnavailable", "Unable to regenerate this message."));
 				return;
@@ -458,8 +476,9 @@ export function useChatStreamController({
 					Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined,
 					// Same developer-mode gate the send path applies: overrides ride only when developer mode is on and
 					// at least one field is set, so a plain regenerate stays byte-identical to today.
-					developerMode ? toWireSamplingOptions(samplingOptions) : undefined,
+					developerMode ? toWireSamplingOptions(conversation.samplingOptions ?? samplingOptions) : undefined,
 					isWebContentAutoAccepted(conversation.id),
+					knowledgeCollectionId,
 					abortController.signal,
 				)) {
 					// The conversation was deleted mid-stream: drop any batched commit and stop touching its cache so
@@ -519,6 +538,7 @@ export function useChatStreamController({
 			developerMode,
 			displayConversations,
 			knowledgeBaseEnabled,
+			knowledgeCollectionId,
 			queryClient,
 			reasoningEffort,
 			refreshConversation,

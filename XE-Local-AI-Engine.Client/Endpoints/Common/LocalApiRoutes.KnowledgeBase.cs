@@ -20,6 +20,9 @@ public static partial class LocalApiRoutes
         // parsed as one.
         public const string DocumentReindex = "knowledge-base/documents/{documentId}/reindex";
 
+        // The collection namespaces that hold documents, with their document counts (GET). DEFAULT is always listed.
+        public const string Collections = "knowledge-base/collections";
+
         // Corpus-wide reindex of every stale-model document. A distinct top-level literal keeps it off the document-id
         // surface.
         public const string Reindex = "knowledge-base/reindex";

@@ -21,20 +21,22 @@ import { useChatAgentSelection } from "@/features/chat/hooks/useChatAgentSelecti
 import { useChatConversationActions } from "@/features/chat/hooks/useChatConversationActions";
 import { emptyConversationList, useChatConversationCache } from "@/features/chat/hooks/useChatConversationCache";
 import { useChatConversationSelection } from "@/features/chat/hooks/useChatConversationSelection";
+import { useChatExportImport } from "@/features/chat/hooks/useChatExportImport";
 import { useChatMessageActions } from "@/features/chat/hooks/useChatMessageActions";
 import { useChatModelSelection } from "@/features/chat/hooks/useChatModelSelection";
 import { useChatRevisionSelection } from "@/features/chat/hooks/useChatRevisionSelection";
 import { useChatStreamController } from "@/features/chat/hooks/useChatStreamController";
 import { inFlightAssistantMessageId } from "@/features/chat/models/ChatConversationDerivations";
 import { chatErrorMessage } from "@/features/chat/models/ChatErrorMessage";
-import type { ChatConversationListModel, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import type { ChatConversationListModel, KnowledgeCollectionPicker, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { effectiveAgent } from "@/features/chat/models/ChatTurnResolution";
 import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
-import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { useConversationContentSearch } from "@/features/chat/queries/useConversationContentSearch";
+import { defaultKnowledgeCollectionId, useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 import { forgetWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
 import { useChatWorkflow } from "@/features/chat/workflow/useChatWorkflow";
-import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
+import { useKnowledgeCollections, useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import { useVoicePlayback } from "@/features/voice/hooks/useVoicePlayback";
 import { useVoiceRuntime } from "@/features/voice/hooks/VoiceRuntimeContext";
 
@@ -56,11 +58,13 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 	// the last-selected conversation against the loaded list (a stale id falls back to the first conversation).
 	const toolsEnabled = useNodeChatPreferencesStore((state) => state.toolsEnabled);
 	const knowledgeBaseEnabled = useNodeChatPreferencesStore((state) => state.knowledgeBaseEnabled);
+	const storedKnowledgeCollectionId = useNodeChatPreferencesStore((state) => state.knowledgeCollectionId);
 	const requestedConversationId = useNodeChatPreferencesStore((state) => state.selectedConversationId);
 	const collapsed = useNodeChatPreferencesStore((state) => state.sidebarCollapsed);
 	const {
 		toggleTools,
 		toggleKnowledgeBase,
+		setKnowledgeCollectionId,
 		setSelectedConversationId: setSelectedConversationIdPreference,
 		toggleSidebar,
 		clearSelectedAgent,
@@ -100,9 +104,18 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 	// empty corpus is a no-op, so the toggle stays visible but disabled until at least one document is INDEXED. The
 	// list is fetched only when the KB surface is on (Chat is authed-mounted, so this gate matches the feature gate);
 	// an indexed doc is one that is Ready to search — status Indexed, or any row still serving last-known-good chunks.
-	// Plain-chat grounding currently targets the backwards-compatible DEFAULT collection. Scope availability to that
-	// same namespace so documents in project collections never enable a toggle whose backend search would return none.
-	const { data: knowledgeDocuments } = useKnowledgeDocuments(chatUiCapabilities.showKnowledgeBaseControls, "DEFAULT");
+	// Grounding searches the collection picked in the composer, so availability is scoped to that same namespace. A
+	// stored pick that no longer names a listed collection (its documents were deleted) falls back to DEFAULT.
+	const { data: knowledgeCollections } = useKnowledgeCollections(chatUiCapabilities.showKnowledgeBaseControls);
+	const knowledgeCollectionId =
+		knowledgeCollections === undefined || knowledgeCollections.includes(storedKnowledgeCollectionId)
+			? storedKnowledgeCollectionId
+			: defaultKnowledgeCollectionId;
+	const knowledgeCollectionPicker = useMemo<KnowledgeCollectionPicker>(
+		() => ({ options: knowledgeCollections ?? [], selected: knowledgeCollectionId, onChange: setKnowledgeCollectionId }),
+		[knowledgeCollections, knowledgeCollectionId, setKnowledgeCollectionId],
+	);
+	const { data: knowledgeDocuments } = useKnowledgeDocuments(chatUiCapabilities.showKnowledgeBaseControls, knowledgeCollectionId);
 	const knowledgeBaseHasDocuments = useMemo(
 		() => (knowledgeDocuments ?? []).some((document) => document.status === "Indexed" || document.chunkCount > 0),
 		[knowledgeDocuments],
@@ -175,6 +188,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 	const contextAgentLabel = effectiveAgent(sendAgentModeEnabled, selectedAgentId, agentOptions)?.name;
 	const [streamError, setStreamError] = useState<string | undefined>();
 	const [conversationSearchQuery, setConversationSearchQuery] = useState("");
+	const conversationSearchResults = useConversationContentSearch(conversationSearchQuery, showArchivedConversations);
 
 	const createConversationMutation = useMutation({
 		mutationFn: () => nodeChatAdapter.createConversation({ title: "New conversation" }),
@@ -292,6 +306,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 		attachmentFileIds,
 		toolsEnabled,
 		knowledgeBaseEnabled,
+		knowledgeCollectionId,
 		reasoningEffort,
 		onVoiceTurnStart,
 		onVoiceAnswerProgress,
@@ -352,6 +367,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 		handleToggleConversationArchived,
 		handleToggleConversationMemoryExcluded,
 		handleSetConversationPlain,
+		handleSetConversationSamplingOptions,
 		handleDeleteConversation,
 	} = useChatConversationActions({
 		cacheConversation,
@@ -364,6 +380,8 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 		markConversationDeleted,
 		unmarkConversationDeleted,
 	});
+
+	const chatExportImport = useChatExportImport();
 
 	const { handleSelectRevision, handleBranch, handleSubmitFeedback, pendingFeedbackMessageId } = useChatMessageActions({
 		selectedConversationId,
@@ -484,6 +502,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 					toolsEnabled={toolsEnabled}
 					knowledgeBaseEnabled={knowledgeBaseEnabled}
 					knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}
+					knowledgeCollection={knowledgeCollectionPicker}
 					capabilities={chatUiCapabilities}
 					contextUsage={{
 						usedTokens: usedContextTokens,
@@ -512,6 +531,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 						sendDisabled: selectedConversationIsLoading || isRemoteConversation || scope?.composerDisabled === true,
 					}}
 					conversationSearchQuery={conversationSearchQuery}
+					conversationSearchResults={conversationSearchResults}
 					showArchivedConversations={showArchivedConversations}
 					conversationListTruncated={isConversationListTruncated}
 					onShowAllConversations={showAllConversations}
@@ -548,7 +568,12 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 					boundAgentMemoryEnabled={boundAgentMemoryEnabled}
 					onToggleConversationMemoryExcluded={handleToggleConversationMemoryExcluded}
 					onSetConversationPlain={isScoped || isRemoteConversation ? undefined : handleSetConversationPlain}
+					onSetConversationSamplingOptions={isScoped || isRemoteConversation ? undefined : handleSetConversationSamplingOptions}
+					selectedConversationLoaded={loadedSelectedConversation !== undefined && !selectedConversationIsPlaceholderData}
 					onDeleteConversation={isScoped ? undefined : handleDeleteConversation}
+					onExportConversation={isScoped ? undefined : chatExportImport.exportConversation}
+					onExportAllConversations={isScoped ? undefined : chatExportImport.exportAll}
+					onImportConversations={isScoped ? undefined : chatExportImport.importFile}
 					onBranchFromMessage={isScoped || isRemoteConversation ? undefined : handleBranch}
 					activeRevisionByGroup={activeRevisionByGroup}
 					onSelectRevision={handleSelectRevision}

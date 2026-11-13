@@ -5,8 +5,8 @@ using Serilog.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Redacts <c>access_token</c> in every log event's <c>QueryString</c> property, so the SignalR JWT a browser sends
-///     in the query never reaches a sink.
+///     Redacts <c>access_token</c> and <c>query</c> in every log event's <c>QueryString</c> property, so neither the
+///     SignalR JWT nor a conversation search text a browser sends in the query reaches a sink.
 /// </summary>
 /// <remarks>
 ///     The framework's <c>Microsoft.AspNetCore.Hosting.Diagnostics</c> "Request starting" and "Request finished" events
@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     rendered message is built from the property, so rewriting the property is enough. The Serilog request-completion
 ///     line is already redacted in <c>Program.ConfigureRequestLogging</c>; redacting it again is a no-op.
 /// </remarks>
-internal sealed class AccessTokenQueryLogEnricher : ILogEventEnricher
+internal sealed class SensitiveQueryLogEnricher : ILogEventEnricher
 {
     private const string QueryStringProperty = "QueryString";
 
@@ -26,7 +26,7 @@ internal sealed class AccessTokenQueryLogEnricher : ILogEventEnricher
             return;
         }
 
-        var redacted = AccessTokenQueryRedactor.Redact(query);
+        var redacted = SensitiveQueryRedactor.Redact(query);
         if (!string.Equals(redacted, query, StringComparison.Ordinal))
         {
             logEvent.AddOrUpdateProperty(new LogEventProperty(QueryStringProperty, new ScalarValue(redacted)));

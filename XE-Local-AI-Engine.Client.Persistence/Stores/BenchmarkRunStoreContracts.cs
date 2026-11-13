@@ -58,7 +58,7 @@ public sealed record BenchmarkStartRunCommand
 }
 
 /// <summary>
-///     Application-owned dependency guard executed by <see cref="IBenchmarkStore.StartRunAsync" /> inside the same
+///     Application-owned dependency guard executed by <see cref="IBenchmarkRunStore.StartRunAsync" /> inside the same
 ///     transaction that verifies the project version and inserts the run/work rows. Returning <see langword="false" />
 ///     aborts the transaction with <c>FreezeDependencyChanged</c>.
 /// </summary>

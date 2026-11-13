@@ -22,20 +22,26 @@ public interface IBenchmarkReviewService
 /// <inheritdoc />
 public sealed class BenchmarkReviewService : IBenchmarkReviewService
 {
-    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkReviewStore _reviewStore;
+    private readonly IBenchmarkRunStore _runStore;
+    private readonly IBenchmarkJudgeStore _judgeStore;
 
-    public BenchmarkReviewService(IBenchmarkStore store)
+    public BenchmarkReviewService(IBenchmarkReviewStore reviewStore, IBenchmarkRunStore runStore, IBenchmarkJudgeStore judgeStore)
     {
-        ArgumentNullException.ThrowIfNull(store);
-        _store = store;
+        ArgumentNullException.ThrowIfNull(reviewStore);
+        ArgumentNullException.ThrowIfNull(runStore);
+        ArgumentNullException.ThrowIfNull(judgeStore);
+        _reviewStore = reviewStore;
+        _runStore = runStore;
+        _judgeStore = judgeStore;
     }
 
     public async Task<BenchmarkRunRecord> SubmitAsync(BenchmarkReviewCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        var run = await _store.GetRunAsync(command.RunId, cancellationToken)
+        var run = await _runStore.GetRunAsync(command.RunId, cancellationToken)
                   ?? throw new BenchmarkNotFoundException("Benchmark run was not found.");
-        var revision = await _store.GetCurrentJudgePolicyRevisionAsync(run.ProjectId, cancellationToken);
+        var revision = await _judgeStore.GetCurrentJudgePolicyRevisionAsync(run.ProjectId, cancellationToken);
         var policy = BenchmarkJudgeSerialization.DeserializeRevisionPolicy(revision);
         if (revision is null || policy is null)
         {
@@ -44,7 +50,7 @@ public sealed class BenchmarkReviewService : IBenchmarkReviewService
                 throw new BenchmarkValidationException("A project without a judge policy is reviewed with one overall score, not per criterion.");
             }
 
-            return await _store.SubmitReviewAsync(command with
+            return await _reviewStore.SubmitReviewAsync(command with
             {
                 PolicyRevisionId = null
             }, cancellationToken);
@@ -65,7 +71,7 @@ public sealed class BenchmarkReviewService : IBenchmarkReviewService
                 : BenchmarkJudgeScoreCalculator.Compute(policy.Rubric, criteria);
         }
 
-        return await _store.SubmitReviewAsync(command with
+        return await _reviewStore.SubmitReviewAsync(command with
         {
             Score = overall,
             Criteria = criteria?.Select(static score => new BenchmarkReviewCriterionScore
@@ -146,7 +152,7 @@ public sealed class BenchmarkReviewService : IBenchmarkReviewService
             return scores;
         }
 
-        var attempt = await _store.GetJudgeAttemptAsync(attemptId, cancellationToken);
+        var attempt = await _judgeStore.GetJudgeAttemptAsync(attemptId, cancellationToken);
         var results = BenchmarkJudgeSerialization.DeserializeResult(attempt?.ResultJson)?.Verifiers ?? [];
         foreach (var id in verifiable)
         {

@@ -8,6 +8,7 @@ import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { isNodeChatReadOnlyConflict } from "@/features/chat/api/NodeChatConflict";
 import { chatErrorMessage, chatWriteErrorMessage } from "@/features/chat/models/ChatErrorMessage";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
+import { type ChatSamplingOptions, toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import { forgetWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
 
 interface ChatConversationActionsInput {
@@ -22,7 +23,7 @@ interface ChatConversationActionsInput {
 	unmarkConversationDeleted: (conversationId: string) => void;
 }
 
-/** The conversation list's writes: rename, pin, archive, temporary, plain and delete. */
+/** The conversation list's writes: rename, pin, archive, temporary, plain, sampling settings and delete. */
 export function useChatConversationActions({
 	cacheConversation,
 	refreshConversation,
@@ -114,6 +115,25 @@ export function useChatConversationActions({
 		[queryClient, runConversationMutation, setStreamError],
 	);
 
+	// Store (or, with undefined, clear) the conversation's own sampling settings. An empty object is kept as "model
+	// defaults", which differs from clearing: a cleared conversation follows this browser's defaults again.
+	// It rejects on a refused write, so the sampling dialog can show the error and keep the draft.
+	const handleSetConversationSamplingOptions = useCallback(
+		async (conversationId: string, samplingOptions: ChatSamplingOptions | undefined): Promise<void> => {
+			const updated = await nodeChatAdapter.setConversationSamplingOptions(
+				conversationId,
+				samplingOptions === undefined ? undefined : (toWireSamplingOptions(samplingOptions) ?? {}),
+			);
+			cacheConversation(updated);
+			await Promise.all([
+				refreshConversation(conversationId),
+				// The estimate's key carries the output reserve and window the old settings sent.
+				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.contextEstimates(conversationId) }),
+			]);
+		},
+		[cacheConversation, queryClient, refreshConversation],
+	);
+
 	const deleteConversationMutation = useMutation({
 		mutationFn: (conversationId: string) => nodeChatAdapter.deleteConversation(conversationId),
 		onSuccess: async (_result, conversationId) => {
@@ -189,6 +209,7 @@ export function useChatConversationActions({
 		handleToggleConversationArchived,
 		handleToggleConversationMemoryExcluded,
 		handleSetConversationPlain,
+		handleSetConversationSamplingOptions,
 		handleDeleteConversation,
 	};
 }

@@ -6781,6 +6781,84 @@
         ]
       }
     },
+    "/api/local/v1/chat/conversations/{conversationId}/sampling-options": {
+      "patch": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "setNodeChatConversationSamplingOptions",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "SetNodeChatConversationSamplingOptionsRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatConversationSamplingOptionsRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/chat/conversations/{conversationId}/selected-path": {
       "put": {
         "tags": [
@@ -7037,6 +7115,121 @@
         ]
       }
     },
+    "/api/local/v1/chat/export": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "exportNodeChatConversations",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatExportDocument"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/import": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "importNodeChatConversations",
+        "requestBody": {
+          "x-name": "NodeChatExportDocument",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatExportDocument"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatImportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/chat/messages/{messageId}/answer-now": {
       "post": {
         "tags": [
@@ -7124,6 +7317,77 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveUserQuestionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/search": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "searchNodeChatConversations",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1SearchNodeChatConversationsResponse"
                 }
               }
             }
@@ -14407,6 +14671,40 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsInvocationsV1InvocationMonitorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/knowledge-base/collections": {
+      "get": {
+        "tags": [
+          "Knowledge-Base"
+        ],
+        "operationId": "listKnowledgeCollections",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1ListKnowledgeCollectionsResponse"
                 }
               }
             }
@@ -37869,6 +38167,23 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsKnowledgeV1KnowledgeCollectionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "collectionId",
+          "documentCount"
+        ],
+        "properties": {
+          "collectionId": {
+            "type": "string"
+          },
+          "documentCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -38148,6 +38463,21 @@
           "endOffset": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsKnowledgeV1ListKnowledgeCollectionsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1KnowledgeCollectionResponse"
+            }
           }
         }
       },
@@ -38463,6 +38793,10 @@
             "type": "boolean"
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1ExportNodeChatConversationsRequest": {
+        "type": "object",
+        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsLocalChatV1GetNodeChatContextEstimateRequest": {
         "type": "object",
@@ -38917,11 +39251,64 @@
             "type": "string",
             "nullable": true
           },
+          "samplingOptions": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatSamplingOptionsDto"
+              }
+            ]
+          },
           "messages": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatMessageResponse"
             }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationSearchHitResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "matchedIn",
+          "createdAtUtc",
+          "lastSeenUtc",
+          "origin",
+          "isPinned",
+          "archived"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "snippet": {
+            "type": "string",
+            "nullable": true
+          },
+          "matchedIn": {
+            "type": "string"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "lastSeenUtc": {
+            "type": "integer"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "isPinned": {
+            "type": "boolean"
+          },
+          "archived": {
+            "type": "boolean"
           }
         }
       },
@@ -38992,6 +39379,150 @@
           },
           "purged": {
             "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatExportAttachment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fileName"
+        ],
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string",
+            "nullable": true
+          },
+          "sizeBytes": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatExportConversation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "createdAtUtc",
+          "messages"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatExportAttachment"
+            }
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatExportMessage"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatExportDocument": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "format",
+          "formatVersion",
+          "conversations"
+        ],
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "formatVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "exportedAtUtc": {
+            "type": "integer"
+          },
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatExportConversation"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatExportMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "content",
+          "createdAtUtc"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "model": {
+            "type": "string",
+            "nullable": true
+          },
+          "toolCallCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatImportResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversations"
+        ],
+        "properties": {
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatImportedConversationResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatImportedConversationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "title",
+          "messageCount"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "messageCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -39211,6 +39742,73 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatSamplingOptionsDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "temperature": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          },
+          "topP": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          },
+          "topK": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minP": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          },
+          "maxOutputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "repeatPenalty": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          },
+          "repeatLastN": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "presencePenalty": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          },
+          "frequencyPenalty": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          },
+          "seed": {
+            "type": "string",
+            "nullable": true
+          },
+          "stop": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "numCtx": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatSelectedPathResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -39356,6 +39954,29 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1SearchNodeChatConversationsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1SearchNodeChatConversationsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "indexing"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationSearchHitResponse"
+            }
+          },
+          "indexing": {
+            "type": "boolean"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -39377,6 +39998,20 @@
             "maxLength": 16000,
             "minLength": 0,
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatConversationSamplingOptionsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "samplingOptions": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatSamplingOptionsDto"
+              }
+            ]
           }
         }
       },

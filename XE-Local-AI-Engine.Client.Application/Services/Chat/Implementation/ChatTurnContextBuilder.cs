@@ -288,7 +288,10 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
     }
 
     /// <inheritdoc />
-    public async Task<KnowledgeChatGrounding?> BuildKnowledgeContextAsync(string query, bool isRegeneratedTurn = false, CancellationToken cancellationToken = default)
+    public async Task<KnowledgeChatGrounding?> BuildKnowledgeContextAsync(string query,
+        string collectionId,
+        bool isRegeneratedTurn = false,
+        CancellationToken cancellationToken = default)
     {
         var validation = KnowledgeQueryLimits.ValidateAndNormalize(query, out var normalizedQuery);
         if (validation != KnowledgeQueryValidation.Valid)
@@ -304,7 +307,8 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
                 Query = normalizedQuery,
                 Limit = limit,
                 DocumentId = null,
-                ExpandNeighbors = false
+                ExpandNeighbors = false,
+                CollectionId = collectionId
             };
 
             // The hybrid search runs in a FRESH DI scope: IKnowledgeSearchService is scoped and drives a request-scoped

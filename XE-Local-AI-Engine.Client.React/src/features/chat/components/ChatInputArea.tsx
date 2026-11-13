@@ -12,14 +12,19 @@ import type { ModelOption } from "@/core/models/ModelOption";
 import { usePendingComposerTextStore } from "@/core/ui/stores/PendingComposerTextStore";
 import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
 import { ChatComposerToolbar } from "@/features/chat/components/ChatInputArea/ChatComposerToolbar";
-import { ChatSamplingOptionsDialog } from "@/features/chat/components/ChatSamplingOptionsDialog";
+import { ChatSamplingOptionsDialog, type ConversationSamplingTarget } from "@/features/chat/components/ChatSamplingOptionsDialog";
 import { SlashCommandAutocomplete } from "@/features/chat/components/SlashCommandAutocomplete";
 import { useComposerToolbarHeight } from "@/features/chat/hooks/useComposerToolbarHeight";
 import { isFileDrag } from "@/features/chat/hooks/usePaneFileDrop";
 import { useSlashCommandAutocomplete } from "@/features/chat/hooks/useSlashCommandAutocomplete";
 import { ATTACHMENT_ACCEPT } from "@/features/chat/models/AttachmentAccept";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
-import type { ChatWorkflowSlots, ContextUsageModel, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import type {
+	ChatWorkflowSlots,
+	ContextUsageModel,
+	KnowledgeCollectionPicker,
+	ReasoningEffort,
+} from "@/features/chat/models/ChatModels";
 import { evaluateComposerSize, toDisplayKb } from "@/features/chat/models/ComposerSizeLimit";
 import { fitComposerToolbar } from "@/features/chat/models/ComposerToolbarFit";
 import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";
@@ -66,6 +71,9 @@ interface ChatInputAreaProps {
 	activeModelToolCapable?: boolean;
 	// The conversation the composer sends into ("" for a draft without one yet); keys the per-conversation web review mode.
 	conversationId?: string;
+	// The open conversation's own sampling settings and their save; absent (a draft, a scoped or remote chat), the
+	// sampling dialog edits this browser's defaults instead.
+	conversationSampling?: ConversationSamplingTarget;
 	toolsEnabled?: boolean;
 	// Whether the active model has a local mmproj vision projector. Combined with the node-wide capability
 	// (showImageAttachmentControls) to gate whether the composer accepts image attachments — mirrors
@@ -79,6 +87,8 @@ interface ChatInputAreaProps {
 	// visible whenever the feature is on but is disabled (with a "no documents" tooltip) until there is something to
 	// search — grounding on an empty corpus is a no-op. Defaults to true so callers that don't wire it keep it enabled.
 	knowledgeBaseHasDocuments?: boolean;
+	// The knowledge-collection picker beside the toggle; shown only with the toggle and while there is a choice to make.
+	knowledgeCollection?: KnowledgeCollectionPicker;
 	agentControlsAvailable?: boolean;
 	agentModeEnabled?: boolean;
 	conversationAgentBound?: boolean;
@@ -126,10 +136,12 @@ export function ChatInputArea({
 	reasoningEffort,
 	activeModelToolCapable = false,
 	conversationId = "",
+	conversationSampling,
 	toolsEnabled = false,
 	activeModelMultimodal = false,
 	knowledgeBaseEnabled = false,
 	knowledgeBaseHasDocuments = true,
+	knowledgeCollection,
 	agentControlsAvailable = false,
 	agentModeEnabled = false,
 	conversationAgentBound = false,
@@ -174,6 +186,11 @@ export function ChatInputArea({
 	// The knowledge-base grounding toggle shows for plain chat only: agent mode reaches the knowledge base through the
 	// search_knowledge_base tool, so an extra inline-grounding toggle there would be redundant and confusing.
 	const showKnowledgeBaseControls = capabilities.showKnowledgeBaseControls && !agentModeEnabled;
+	// With only DEFAULT listed there is nothing to pick, so the picker stays off the row.
+	const knowledgeCollectionPicker =
+		showKnowledgeBaseControls && knowledgeCollection !== undefined && knowledgeCollection.options.length > 1
+			? knowledgeCollection
+			: undefined;
 	// Pre-send mirror of the node's message-size cap. Measured against `trimmed` — the string the send path actually
 	// puts on the wire — so the byte count matches what LocalChatHub.EnsureMessageWithinSizeCap will measure. (A draft
 	// that resolves to a slash command sends the command's prompt instead, but such a draft is a few characters long,
@@ -215,6 +232,7 @@ export function ChatInputArea({
 					localTools: showLocalToolControls,
 					webReview: showLocalToolControls && toolsEnabled && webReviewShown,
 					knowledgeBase: showKnowledgeBaseControls,
+					knowledgeCollection: knowledgeCollectionPicker !== undefined,
 					agentPicker: agentControlsAvailable,
 					workflowPicker: workflow?.selector !== undefined,
 					attachments: attachmentControlsAvailable,
@@ -372,6 +390,7 @@ export function ChatInputArea({
 			knowledgeBaseEnabled={knowledgeBaseEnabled}
 			knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}
 			onToggleKnowledgeBase={onToggleKnowledgeBase}
+			knowledgeCollection={knowledgeCollectionPicker}
 			agentControlsAvailable={agentControlsAvailable}
 			agentOptions={agentOptions}
 			agentModeEnabled={agentModeEnabled}
@@ -413,6 +432,7 @@ export function ChatInputArea({
 				<ChatSamplingOptionsDialog
 					opened={samplingDialogOpen}
 					onClose={() => setSamplingDialogOpen(false)}
+					conversation={conversationSampling}
 					maxContextTokens={contextUsage?.maxTokens}
 					/* The cloud sections of the model picker are the same list the model-selection hook resolves the
 					   selection against, so membership here needs no extra prop threaded down. */

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
@@ -27,6 +28,46 @@ public sealed class NodeChatConversationSummaryDto
     public bool IsPinned { get; init; }
 
     public bool Archived { get; init; }
+}
+
+/// <summary>One conversation a content search matched, with a short excerpt around the first hit.</summary>
+public sealed class NodeChatConversationSearchHitDto
+{
+    public required Guid ConversationId { get; init; }
+
+    public required string? Title { get; init; }
+
+    /// <summary>Whitespace-collapsed text around the first content hit; null when the terms matched only the title.</summary>
+    public required string? Snippet { get; init; }
+
+    /// <summary><see cref="NodeChatSearchMatchValues.Title" /> or <see cref="NodeChatSearchMatchValues.Content" />.</summary>
+    public required string MatchedIn { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long LastSeenUtc { get; init; }
+
+    public required string Origin { get; init; }
+
+    public required bool IsPinned { get; init; }
+
+    public required bool Archived { get; init; }
+}
+
+/// <summary>The matches, newest first, and whether the start-up backfill is still filling the index.</summary>
+public sealed class NodeChatConversationSearchResultDto
+{
+    public required IReadOnlyList<NodeChatConversationSearchHitDto> Items { get; init; }
+
+    /// <summary>True until every conversation stored before this process started has been indexed.</summary>
+    public required bool Indexing { get; init; }
+}
+
+/// <summary>Where a search hit was found first.</summary>
+public static class NodeChatSearchMatchValues
+{
+    public const string Title = "title";
+    public const string Content = "content";
 }
 
 /// <summary>A conversation's plain mode and its decrypted custom system prompt, read without its messages.</summary>
@@ -75,6 +116,9 @@ public sealed record NodeChatConversationDto
 
     /// <summary>The decrypted custom system prompt of a plain conversation; null sends no system prompt.</summary>
     public string? PlainSystemPrompt { get; init; }
+
+    /// <summary>The conversation's own sampling settings; null means the client's defaults apply. Stored, never applied here.</summary>
+    public SamplingOptions? SamplingOptions { get; init; }
 
     // The decrypted compaction synopsis plus the highest ANCHOR sequence it folds in, never a chosen sibling's own
     // sequence. Null until compacted; the send path substitutes it for the covered messages, which stay in Messages.

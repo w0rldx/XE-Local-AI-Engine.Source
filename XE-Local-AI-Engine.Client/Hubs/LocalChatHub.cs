@@ -125,9 +125,8 @@ public sealed class LocalChatHub : Hub
     /// <remarks>
     ///     Mints the variant placeholder, drives it through the shared runner/pump, and persists INTO that placeholder —
     ///     never overwriting the original. Throws for an Origin=Remote (view-only) conversation or an unknown
-    ///     conversation/message. <paramref name="samplingOptions" /> is the LAST wire argument on purpose: the client
-    ///     passes the same developer-gated overrides a send carries, and appending keeps the positional order intact.
-    ///     <paramref name="autoAcceptWebContent" /> is appended AFTER it for the same reason.
+    ///     conversation/message. The hub binds by position, so each later wire argument (sampling overrides, web review
+    ///     mode, knowledge collection) was APPENDED to keep the order intact; the client always sends all of them.
     /// </remarks>
     public IAsyncEnumerable<ChatStreamEvent> RegenerateMessage(Guid conversationId,
         Guid originalMessageId,
@@ -137,6 +136,7 @@ public sealed class LocalChatHub : Hub
         IReadOnlyDictionary<Guid, Guid>? selectedPath,
         SamplingOptions? samplingOptions,
         bool autoAcceptWebContent,
+        string? knowledgeCollectionId,
         CancellationToken cancellationToken)
     {
         return TrackAttachment(RejectInvalidRequest(() =>
@@ -148,6 +148,7 @@ public sealed class LocalChatHub : Hub
                     selectedPath,
                     samplingOptions,
                     autoAcceptWebContent,
+                    knowledgeCollectionId,
                     cancellationToken)),
             sourceOwnsRun: true,
             cancellationToken);

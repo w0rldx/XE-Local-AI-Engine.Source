@@ -8,6 +8,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Hosting;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -78,6 +81,38 @@ public sealed class ServiceProviderValidationTests
         {
             AssertEx.NotNull(hostedService);
         }
+    }
+
+    /// <summary>The backfill is what makes chats stored before a restart searchable; every other suite builds it by hand.</summary>
+    [Test]
+    public async Task ConversationSearchBackfill_IsHostedExactlyOnce()
+    {
+        await using var host = await ValidatedHost.CreateAsync();
+
+        AssertEx.Equal(expected: 1, host.App.Services.GetServices<IHostedService>().OfType<ConversationSearchBackfillService>().Count(),
+            "Without the hosted backfill, chats written before a restart never reach the search index.");
+    }
+
+    /// <summary>Every benchmark store role is one scoped <c>BenchmarkStore</c>, so roles used together share one DbContext unit.</summary>
+    [Test]
+    public async Task BenchmarkStoreRoles_ResolveToOneStorePerScope()
+    {
+        await using var host = await ValidatedHost.CreateAsync();
+        using var scope = host.App.Services.CreateScope();
+        using var otherScope = host.App.Services.CreateScope();
+        var services = scope.ServiceProvider;
+        var store = services.GetRequiredService<BenchmarkStore>();
+
+        object[] roles =
+        [
+            services.GetRequiredService<IBenchmarkProjectStore>(), services.GetRequiredService<IBenchmarkTaskItemStore>(),
+            services.GetRequiredService<IBenchmarkRunStore>(), services.GetRequiredService<IBenchmarkQueueStore>(),
+            services.GetRequiredService<IBenchmarkJudgeStore>(), services.GetRequiredService<IBenchmarkFidelityStore>(),
+            services.GetRequiredService<IBenchmarkPairwiseStore>(), services.GetRequiredService<IBenchmarkReviewStore>()
+        ];
+
+        AssertEx.True(roles.All(role => ReferenceEquals(role, store)), "All eight roles must resolve to the scope's one BenchmarkStore.");
+        AssertEx.False(ReferenceEquals(store, otherScope.ServiceProvider.GetRequiredService<IBenchmarkRunStore>()), "Another scope gets its own store.");
     }
 
     [Test]

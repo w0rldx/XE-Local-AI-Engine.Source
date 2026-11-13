@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Tests.Telemetry;
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -37,6 +39,26 @@ public sealed class NodeMetricsInstrumentPublicationTests
         AssertEx.Equal(expected: 1, measurements.Count);
         AssertEx.Equal(expected: 42.0, measurements[0].Value);
         AssertEx.Equal("remote", (string?)measurements[0].Tag("provider"));
+    }
+
+    [Test]
+    public void ConversationSearchIndex_ReportsItsConversationsAndCharacters_AsTheyAreStoredReplacedAndDropped()
+    {
+        using var capture = new NodeMeterCapture();
+        var index = new ConversationSearchIndex();
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+
+        index.Store(first, SearchDocument("abc", "0123456789"));
+        index.Store(second, SearchDocument(title: null, "12345"));
+        index.Store(first, SearchDocument("abc", "01234"));
+        AssertEx.Equal(expected: 2L, capture.CountLong("chat_search_indexed_conversations"));
+        AssertEx.Equal(expected: 13L, capture.CountLong("chat_search_indexed_chars"), "Title and content of every held conversation; a replacement counts only its own size.");
+
+        index.Store(first, document: null);
+        index.Store(first, document: null);
+        AssertEx.Equal(expected: 1L, capture.CountLong("chat_search_indexed_conversations"), "A drop of an absent conversation changes nothing.");
+        AssertEx.Equal(expected: 5L, capture.CountLong("chat_search_indexed_chars"));
     }
 
     [Test]
@@ -97,6 +119,17 @@ public sealed class NodeMetricsInstrumentPublicationTests
 
     // Captures increments/records of the node meter's instruments for the duration of a test, retaining the tag set of
     // each measurement so both value and dimension can be asserted. Filters to "XE.Node" so unrelated meters are ignored.
+    private static ConversationSearchDocument SearchDocument(string? title, string content) => new()
+    {
+        Title = title,
+        Content = content,
+        CreatedAtUtc = 0,
+        LastSeenUtc = 0,
+        Origin = NodeChatOriginValues.Local,
+        IsPinned = false,
+        Archived = false
+    };
+
     private sealed class NodeMeterCapture : IDisposable
     {
         private readonly ConcurrentBag<(string Name, CapturedMeasurement Measurement)> _doubles = [];

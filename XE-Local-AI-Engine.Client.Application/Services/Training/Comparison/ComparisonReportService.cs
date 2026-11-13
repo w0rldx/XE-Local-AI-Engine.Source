@@ -32,13 +32,13 @@ public interface IComparisonReportService
 /// </summary>
 public sealed class ComparisonReportService : IComparisonReportService
 {
-    private readonly IBenchmarkStore _benchmarks;
+    private readonly IBenchmarkRunStore _benchmarks;
     private readonly ITrainingEvaluationStore _evaluations;
     private readonly ITrainingRunStore _runs;
 
     public ComparisonReportService(ITrainingEvaluationStore evaluations,
         ITrainingRunStore runs,
-        IBenchmarkStore benchmarks)
+        IBenchmarkRunStore benchmarks)
     {
         ArgumentNullException.ThrowIfNull(benchmarks);
         ArgumentNullException.ThrowIfNull(evaluations);

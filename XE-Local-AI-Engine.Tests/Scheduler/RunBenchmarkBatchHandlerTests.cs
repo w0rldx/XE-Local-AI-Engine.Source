@@ -196,7 +196,7 @@ public sealed class RunBenchmarkBatchHandlerTests
     public async Task ExecuteAsync_WhenProjectIsMissing_FailsWithSanitizedReason()
     {
         var harness = new Harness();
-        harness.Store.GetProjectAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BenchmarkProjectRecord?)null);
+        harness.ProjectStore.GetProjectAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BenchmarkProjectRecord?)null);
 
         var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() =>
             harness.Handler.ExecuteAsync(harness.Fire(TwoByTwoMatrix()), CancellationToken.None));
@@ -305,7 +305,7 @@ public sealed class RunBenchmarkBatchHandlerTests
 
         public Harness(TimeProvider? timeProvider = null)
         {
-            Store.GetProjectAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            ProjectStore.GetProjectAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                  .Returns(new BenchmarkProjectRecord
                  {
                      Id = ProjectId,
@@ -337,7 +337,8 @@ public sealed class RunBenchmarkBatchHandlerTests
                   });
 
             var services = new ServiceCollection();
-            services.AddSingleton(Store);
+            services.AddSingleton(ProjectStore);
+            services.AddSingleton(QueueStore);
             services.AddSingleton(Freeze);
             var provider = services.BuildServiceProvider();
 
@@ -346,7 +347,8 @@ public sealed class RunBenchmarkBatchHandlerTests
                 NullLogger<RunBenchmarkBatchHandler>.Instance);
         }
 
-        public IBenchmarkStore Store { get; } = Substitute.For<IBenchmarkStore>();
+        public IBenchmarkProjectStore ProjectStore { get; } = Substitute.For<IBenchmarkProjectStore>();
+        public IBenchmarkQueueStore QueueStore { get; } = Substitute.For<IBenchmarkQueueStore>();
 
         public IBenchmarkRunFreezeService Freeze { get; } = Substitute.For<IBenchmarkRunFreezeService>();
 
@@ -361,7 +363,7 @@ public sealed class RunBenchmarkBatchHandlerTests
         /// <summary>The project's active (queued or running) work per kind. No call at all means an idle project.</summary>
         public void SetActiveWork(params (BenchmarkWorkKind Kind, int Count)[] work)
         {
-            Store.CountActiveWorkAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            QueueStore.CountActiveWorkAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                  .Returns<IReadOnlyDictionary<BenchmarkWorkKind, int>>(work.ToDictionary(static entry => entry.Kind, static entry => entry.Count));
         }
 

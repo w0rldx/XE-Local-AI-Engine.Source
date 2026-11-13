@@ -1,9 +1,20 @@
 import { ActionIcon, Badge, Group, Menu, Paper, Stack, Text, TextInput, Tooltip, UnstyledButton } from "@mantine/core";
-import { IconArchive, IconArchiveOff, IconDots, IconPencil, IconPin, IconPinned, IconTrash } from "@tabler/icons-react";
+import {
+	IconArchive,
+	IconArchiveOff,
+	IconDots,
+	IconJson,
+	IconMarkdown,
+	IconPencil,
+	IconPin,
+	IconPinned,
+	IconTrash,
+} from "@tabler/icons-react";
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import type { ChatExportFormat } from "@/features/chat/models/ChatExportFile";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 
 function formatRelative(iso?: string): string {
@@ -44,6 +55,8 @@ interface ConversationListItemProps {
 	onTogglePin?: (conversationId: string, isPinned: boolean) => void;
 	onToggleArchive?: (conversationId: string, archived: boolean) => void;
 	onDelete?: (conversationId: string, skipConfirm: boolean) => void;
+	// A read, so offered for a remote (view-only) conversation too.
+	onExport?: (conversationId: string, format: ChatExportFormat) => void;
 }
 
 export function ConversationListItem({
@@ -62,10 +75,12 @@ export function ConversationListItem({
 	onTogglePin,
 	onToggleArchive,
 	onDelete,
+	onExport,
 }: ConversationListItemProps) {
 	const { t } = useTranslation();
 	const isRemote = conversation.origin === "remote";
 	const canManage = !isRemote && (Boolean(onRename) || Boolean(onTogglePin) || Boolean(onToggleArchive) || Boolean(onDelete));
+	const showMenu = canManage || Boolean(onExport);
 	const title = conversation.title.trim() || t("pages.chat.conversationList.untitled", "Untitled conversation");
 
 	const activate = (): void => {
@@ -126,7 +141,7 @@ export function ConversationListItem({
 							<Text size="xs" c="dimmed">
 								{formatRelative(conversation.lastActivity ?? conversation.updatedAt)}
 							</Text>
-							{canManage ? (
+							{showMenu ? (
 								<Menu position="bottom-end" withinPortal={true} disabled={isMutating}>
 									<Menu.Target>
 										<ActionIcon
@@ -142,7 +157,7 @@ export function ConversationListItem({
 										</ActionIcon>
 									</Menu.Target>
 									<Menu.Dropdown onClick={(event) => event.stopPropagation()}>
-										{onRename ? (
+										{canManage && onRename ? (
 											<Menu.Item
 												leftSection={<IconPencil size={14} />}
 												onClick={() => onBeginRename(conversation)}
@@ -151,7 +166,7 @@ export function ConversationListItem({
 												{t("pages.chat.conversationList.rename", "Rename")}
 											</Menu.Item>
 										) : null}
-										{onTogglePin ? (
+										{canManage && onTogglePin ? (
 											<Menu.Item
 												leftSection={conversation.isPinned ? <IconPinned size={14} /> : <IconPin size={14} />}
 												onClick={() => onTogglePin(conversation.id, !conversation.isPinned)}
@@ -162,7 +177,7 @@ export function ConversationListItem({
 													: t("pages.chat.conversationList.pin", "Pin")}
 											</Menu.Item>
 										) : null}
-										{onToggleArchive ? (
+										{canManage && onToggleArchive ? (
 											<Menu.Item
 												leftSection={conversation.isArchived ? <IconArchiveOff size={14} /> : <IconArchive size={14} />}
 												onClick={() => onToggleArchive(conversation.id, !conversation.isArchived)}
@@ -173,7 +188,25 @@ export function ConversationListItem({
 													: t("pages.chat.conversationList.archive", "Archive")}
 											</Menu.Item>
 										) : null}
-										{onDelete ? (
+										{onExport ? (
+											<>
+												<Menu.Item
+													leftSection={<IconMarkdown size={14} />}
+													onClick={() => onExport(conversation.id, "markdown")}
+													data-testid={`conversation-export-markdown-${conversation.id}`}
+												>
+													{t("chat.exportImport.exportMarkdown", "Export as Markdown")}
+												</Menu.Item>
+												<Menu.Item
+													leftSection={<IconJson size={14} />}
+													onClick={() => onExport(conversation.id, "json")}
+													data-testid={`conversation-export-json-${conversation.id}`}
+												>
+													{t("chat.exportImport.exportJson", "Export as JSON")}
+												</Menu.Item>
+											</>
+										) : null}
+										{canManage && onDelete ? (
 											<Tooltip
 												label={t("pages.chat.conversationList.deleteShiftHint", "Shift+Click to skip confirm")}
 												position="left"

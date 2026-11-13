@@ -31,11 +31,14 @@ public sealed class BenchmarkComparisonExecutorTests
     [Test]
     public async Task Execute_ForAComparisonFrozenUnderAnOlderIdentityScheme_FailsWithTheSupersededReason()
     {
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetComparisonAsync(ComparisonId, Arg.Any<CancellationToken>())
+        var pairwiseStore = Substitute.For<IBenchmarkPairwiseStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        pairwiseStore.GetComparisonAsync(ComparisonId, Arg.Any<CancellationToken>())
              .Returns(Comparison(launchIdentityScheme: null));
         string? failureMessage = null;
-        store.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(message => failureMessage = message), Arg.Any<CancellationToken>())
+        pairwiseStore.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(message => failureMessage = message), Arg.Any<CancellationToken>())
              .Returns(Task.CompletedTask);
         var runner = Substitute.For<IInvocationRunner>();
         var work = new BenchmarkClaimedWork
@@ -49,11 +52,11 @@ public sealed class BenchmarkComparisonExecutorTests
             ComparisonId = ComparisonId
         };
 
-        await Executor(store, runner).ExecuteAsync(work, CancellationToken.None);
+        await Executor(pairwiseStore, judgeStore, runStore, taskItemStore, runner).ExecuteAsync(work, CancellationToken.None);
 
         AssertEx.Contains(AssertEx.NotNull(failureMessage), BenchmarkLaunchIdentityScheme.SupersededReason);
         await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
-        await store.DidNotReceive().GetJudgePolicyRevisionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await judgeStore.DidNotReceive().GetJudgePolicyRevisionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -61,10 +64,13 @@ public sealed class BenchmarkComparisonExecutorTests
     {
         // The guard is a no-op for current work: execution continues and fails later, on the policy revision it then
         // cannot find — which is exactly the reach the guard must not shorten.
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetComparisonAsync(ComparisonId, Arg.Any<CancellationToken>()).Returns(Comparison());
+        var pairwiseStore = Substitute.For<IBenchmarkPairwiseStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        pairwiseStore.GetComparisonAsync(ComparisonId, Arg.Any<CancellationToken>()).Returns(Comparison());
         string? failureMessage = null;
-        store.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(message => failureMessage = message), Arg.Any<CancellationToken>())
+        pairwiseStore.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(message => failureMessage = message), Arg.Any<CancellationToken>())
              .Returns(Task.CompletedTask);
         var work = new BenchmarkClaimedWork
         {
@@ -77,11 +83,11 @@ public sealed class BenchmarkComparisonExecutorTests
             ComparisonId = ComparisonId
         };
 
-        await Executor(store, Substitute.For<IInvocationRunner>()).ExecuteAsync(work, CancellationToken.None);
+        await Executor(pairwiseStore, judgeStore, runStore, taskItemStore, Substitute.For<IInvocationRunner>()).ExecuteAsync(work, CancellationToken.None);
 
         AssertEx.False(AssertEx.NotNull(failureMessage).Contains(BenchmarkLaunchIdentityScheme.SupersededReason, StringComparison.Ordinal),
             "a comparison frozen under the current scheme must reach the rest of the executor untouched.");
-        await store.Received(1).GetJudgePolicyRevisionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await judgeStore.Received(1).GetJudgePolicyRevisionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -156,22 +162,28 @@ public sealed class BenchmarkComparisonExecutorTests
         ], BenchmarkPairwisePolicy.MaximumRuns);
         var comparisons = plan.Slots.Select((slot, index) => BenchmarkPairwiseSuiteEndToEndTests.Comparison(slot, order: 0, installed, index + 1)).ToArray();
 
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetJudgePolicyRevisionAsync(BenchmarkPairwiseSuiteEndToEndTests.RevisionId, Arg.Any<CancellationToken>())
+        var pairwiseStore = Substitute.For<IBenchmarkPairwiseStore>();
+
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        judgeStore.GetJudgePolicyRevisionAsync(BenchmarkPairwiseSuiteEndToEndTests.RevisionId, Arg.Any<CancellationToken>())
              .Returns(BenchmarkPairwiseSuiteEndToEndTests.Revision("policy reference"));
-        store.ListTaskItemsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns([Item(ItemZero, 0, "reference zero")]);
+        taskItemStore.ListTaskItemsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns([Item(ItemZero, 0, "reference zero")]);
         foreach (var run in runs)
         {
-            store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+            runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         }
 
         foreach (var comparison in comparisons)
         {
-            store.GetComparisonAsync(comparison.Id, Arg.Any<CancellationToken>()).Returns(comparison);
+            pairwiseStore.GetComparisonAsync(comparison.Id, Arg.Any<CancellationToken>()).Returns(comparison);
         }
 
         List<string> failures = [];
-        store.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(failures.Add), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        pairwiseStore.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(failures.Add), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
@@ -189,7 +201,7 @@ public sealed class BenchmarkComparisonExecutorTests
                   return Task.CompletedTask;
               });
         await using var lease = new BenchmarkJudgeExecutorTests.FakeLease(installed);
-        var executor = BenchmarkPairwiseSuiteEndToEndTests.Executor(store, snapshot, lease, dispatcher, runner);
+        var executor = BenchmarkPairwiseSuiteEndToEndTests.Executor(pairwiseStore, judgeStore, runStore, taskItemStore, snapshot, lease, dispatcher, runner);
 
         foreach (var comparison in comparisons)
         {
@@ -234,22 +246,28 @@ public sealed class BenchmarkComparisonExecutorTests
         ], BenchmarkPairwisePolicy.MaximumRuns);
         var comparisons = plan.Slots.Select((slot, index) => BenchmarkPairwiseSuiteEndToEndTests.Comparison(slot, order: 0, installed, index + 1)).ToArray();
 
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetJudgePolicyRevisionAsync(BenchmarkPairwiseSuiteEndToEndTests.RevisionId, Arg.Any<CancellationToken>())
+        var pairwiseStore = Substitute.For<IBenchmarkPairwiseStore>();
+
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        judgeStore.GetJudgePolicyRevisionAsync(BenchmarkPairwiseSuiteEndToEndTests.RevisionId, Arg.Any<CancellationToken>())
              .Returns(BenchmarkPairwiseSuiteEndToEndTests.Revision(policyReference));
-        store.ListTaskItemsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns([Item(ItemZero, 0, zeroReference), Item(ItemOne, 1, oneReference)]);
+        taskItemStore.ListTaskItemsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns([Item(ItemZero, 0, zeroReference), Item(ItemOne, 1, oneReference)]);
         foreach (var run in runs)
         {
-            store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+            runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         }
 
         foreach (var comparison in comparisons)
         {
-            store.GetComparisonAsync(comparison.Id, Arg.Any<CancellationToken>()).Returns(comparison);
+            pairwiseStore.GetComparisonAsync(comparison.Id, Arg.Any<CancellationToken>()).Returns(comparison);
         }
 
         List<string> failures = [];
-        store.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(failures.Add), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        pairwiseStore.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(failures.Add), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
@@ -269,7 +287,7 @@ public sealed class BenchmarkComparisonExecutorTests
                   return Task.CompletedTask;
               });
         await using var lease = new BenchmarkJudgeExecutorTests.FakeLease(installed);
-        var executor = BenchmarkPairwiseSuiteEndToEndTests.Executor(store, snapshot, lease, dispatcher, runner);
+        var executor = BenchmarkPairwiseSuiteEndToEndTests.Executor(pairwiseStore, judgeStore, runStore, taskItemStore, snapshot, lease, dispatcher, runner);
 
         Dictionary<Guid, string?> seen = [];
         foreach (var comparison in comparisons)
@@ -313,8 +331,15 @@ public sealed class BenchmarkComparisonExecutorTests
             UpdatedAtUtc = 0
         };
 
-    private static BenchmarkComparisonExecutor Executor(IBenchmarkStore store, IInvocationRunner runner) =>
-        new(store,
+    private static BenchmarkComparisonExecutor Executor(IBenchmarkPairwiseStore pairwiseStore,
+        IBenchmarkJudgeStore judgeStore,
+        IBenchmarkRunStore runStore,
+        IBenchmarkTaskItemStore taskItemStore,
+        IInvocationRunner runner) =>
+        new(pairwiseStore,
+            judgeStore,
+            runStore,
+            taskItemStore,
             Substitute.For<IBenchmarkRuntimeSnapshotFactory>(),
             Substitute.For<IBenchmarkInstalledModelLeaseProvider>(),
             Substitute.For<ICapacityService>(),

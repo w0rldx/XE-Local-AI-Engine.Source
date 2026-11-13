@@ -22,7 +22,7 @@ public sealed class BenchmarkRunHubTests
     [Test]
     public async Task Subscribe_JoinsBeforeSendingRetainedEvents()
     {
-        var store = Substitute.For<IBenchmarkStore>();
+        var store = Substitute.For<IBenchmarkRunStore>();
         var events = Buffer();
         var runId = Guid.NewGuid();
         var retained = events.Append(runId,
@@ -48,7 +48,7 @@ public sealed class BenchmarkRunHubTests
     [Test]
     public async Task Subscribe_WhenOnlyPersistentTerminalCursorExists_SendsReplayReset()
     {
-        var store = Substitute.For<IBenchmarkStore>();
+        var store = Substitute.For<IBenchmarkRunStore>();
         var events = Buffer();
         var runId = Guid.NewGuid();
         store.GetRunAsync(runId, Arg.Any<CancellationToken>()).Returns(Run(runId, lastStreamSequence: 7));
@@ -67,7 +67,7 @@ public sealed class BenchmarkRunHubTests
     [Test]
     public async Task Subscribe_ReplaysReasoningAndToolPartEventKinds()
     {
-        var store = Substitute.For<IBenchmarkStore>();
+        var store = Substitute.For<IBenchmarkRunStore>();
         var events = Buffer();
         var runId = Guid.NewGuid();
         var reasoning = events.Append(runId, BenchmarkRunStreamEventKind.ReasoningDelta, new BenchmarkRunStreamPayload
@@ -112,7 +112,7 @@ public sealed class BenchmarkRunHubTests
     [Test]
     public async Task Subscribe_AfterTerminalPlaintextEviction_SendsReplayResetAndNoPlaintextEvents()
     {
-        var store = Substitute.For<IBenchmarkStore>();
+        var store = Substitute.For<IBenchmarkRunStore>();
         var events = Buffer();
         var runId = Guid.NewGuid();
         var retained = events.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload
@@ -157,7 +157,7 @@ public sealed class BenchmarkRunHubTests
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "HubFixture takes ownership of the constructed hub and every test disposes the fixture.")]
-    private static HubFixture CreateHub(IBenchmarkStore store, IBenchmarkEventBuffer events)
+    private static HubFixture CreateHub(IBenchmarkRunStore store, IBenchmarkEventBuffer events)
     {
         var context = Substitute.For<HubCallerContext>();
         context.ConnectionId.Returns("connection");
@@ -171,7 +171,15 @@ public sealed class BenchmarkRunHubTests
             new NullNodeSqliteKeyHolder());
         // The real pass-through service over the substituted store: wrapping BenchmarkRecordService rather than
         // substituting it keeps every assertion below on the store call the hub actually causes.
-        var hub = new BenchmarkRunHub(new BenchmarkRecordService(store, artifactBlobs, NullLogger<BenchmarkRecordService>.Instance), events)
+        var records = new BenchmarkRecordService(Substitute.For<IBenchmarkProjectStore>(),
+            Substitute.For<IBenchmarkTaskItemStore>(),
+            store,
+            Substitute.For<IBenchmarkJudgeStore>(),
+            Substitute.For<IBenchmarkFidelityStore>(),
+            Substitute.For<IBenchmarkReviewStore>(),
+            artifactBlobs,
+            NullLogger<BenchmarkRecordService>.Instance);
+        var hub = new BenchmarkRunHub(records, events)
         {
             Context = context,
             Groups = groups,

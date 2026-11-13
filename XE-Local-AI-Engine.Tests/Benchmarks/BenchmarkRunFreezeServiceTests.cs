@@ -903,15 +903,17 @@ public sealed class BenchmarkRunFreezeServiceTests
             TaskItems = probeContextTokens is null
                 ? [.. (itemPrompts ?? ["exact task"]).Select((prompt, index) => Item(_project.Id, index, prompt))]
                 : [.. probeContextTokens.Select((contextTokens, index) => ProbeCase(_project.Id, index, contextTokens))];
-            var store = Substitute.For<IBenchmarkStore>();
-            store.GetProjectAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(_project);
-            store.ListTaskItemsAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(TaskItems);
+            var projectStore = Substitute.For<IBenchmarkProjectStore>();
+            var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+            var runStore = Substitute.For<IBenchmarkRunStore>();
+            projectStore.GetProjectAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(_project);
+            taskItemStore.ListTaskItemsAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(TaskItems);
             // Only reached by a project frozen before task items existed; a test that sees it called has found the
             // freeze writing on a path that should only read.
-            store.GetOrCreateItemsAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(TaskItems);
+            taskItemStore.GetOrCreateItemsAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(TaskItems);
             // ONE store call per freeze, however many repeats: the group is inserted atomically, so a mid-group
             // conflict cannot leave orphan runs queued behind an exception the caller reads as "nothing started".
-            store.StartRunsAsync(Arg.Do<IReadOnlyList<BenchmarkStartRunCommand>>(batch =>
+            runStore.StartRunsAsync(Arg.Do<IReadOnlyList<BenchmarkStartRunCommand>>(batch =>
                      {
                          StoreCalls++;
                          Command = batch[^1];
@@ -972,7 +974,9 @@ public sealed class BenchmarkRunFreezeServiceTests
             snapshots.Serialize(Arg.Any<BenchmarkRuntimeSnapshotV1>()).Returns([1, 2, 3]);
 
             LaunchInspector = Inspector(inspectedVariant ?? variant, probeSucceeded, supportsQuantizedKv, inspectionFails);
-            _service = new BenchmarkRunFreezeService(store,
+            _service = new BenchmarkRunFreezeService(projectStore,
+                taskItemStore,
+                runStore,
                 definitions,
                 Resolver,
                 capabilities,

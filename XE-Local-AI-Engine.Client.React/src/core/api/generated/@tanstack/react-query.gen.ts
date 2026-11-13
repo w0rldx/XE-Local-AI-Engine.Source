@@ -142,6 +142,7 @@ import {
 	exportBenchmarkProject,
 	exportBenchmarkProjectCsv,
 	exportGraphWorkflowDefinition,
+	exportNodeChatConversations,
 	exportTrainingDataset,
 	freezeInferenceProfile,
 	generateIntegrationApiKey,
@@ -261,6 +262,7 @@ import {
 	importAgentTemplates,
 	importGraphWorkflowDefinition,
 	importKnowledgeRepository,
+	importNodeChatConversations,
 	inspectGgufRepository,
 	inspectImageRepository,
 	installExternalApp,
@@ -308,6 +310,7 @@ import {
 	listIntegrationExecutions,
 	listIntegrationSessions,
 	listIntegrationTriggers,
+	listKnowledgeCollections,
 	listKnowledgeDocuments,
 	listLocalModels,
 	listMcpServers,
@@ -408,6 +411,7 @@ import {
 	saveTutorialState,
 	scoreBenchmarkRun,
 	searchKnowledge,
+	searchNodeChatConversations,
 	selectLocalModel,
 	selectTranscriptionModel,
 	sendGraphWorkflowChatMessage,
@@ -417,6 +421,7 @@ import {
 	setMcpServerEnabled,
 	setNodeChatConversationMemoryExcluded,
 	setNodeChatConversationPlain,
+	setNodeChatConversationSamplingOptions,
 	setNodeChatMessageFeedback,
 	setNodeChatSelectedPath,
 	startBenchmarkRun,
@@ -825,6 +830,8 @@ import type {
 	ExportBenchmarkProjectResponse,
 	ExportGraphWorkflowDefinitionData,
 	ExportGraphWorkflowDefinitionResponse,
+	ExportNodeChatConversationsData,
+	ExportNodeChatConversationsResponse,
 	ExportTrainingDatasetData,
 	ExportTrainingDatasetResponse,
 	FreezeInferenceProfileData,
@@ -1095,6 +1102,9 @@ import type {
 	ImportKnowledgeRepositoryData,
 	ImportKnowledgeRepositoryError,
 	ImportKnowledgeRepositoryResponse,
+	ImportNodeChatConversationsData,
+	ImportNodeChatConversationsError,
+	ImportNodeChatConversationsResponse,
 	InspectGgufRepositoryData,
 	InspectGgufRepositoryResponse,
 	InspectImageRepositoryData,
@@ -1207,6 +1217,8 @@ import type {
 	ListIntegrationSessionsResponse,
 	ListIntegrationTriggersData,
 	ListIntegrationTriggersResponse,
+	ListKnowledgeCollectionsData,
+	ListKnowledgeCollectionsResponse,
 	ListKnowledgeDocumentsData,
 	ListKnowledgeDocumentsResponse,
 	ListLocalModelsData,
@@ -1458,6 +1470,9 @@ import type {
 	SearchKnowledgeData,
 	SearchKnowledgeError,
 	SearchKnowledgeResponse,
+	SearchNodeChatConversationsData,
+	SearchNodeChatConversationsError,
+	SearchNodeChatConversationsResponse,
 	SelectLocalModelData,
 	SelectLocalModelError,
 	SelectLocalModelResponse,
@@ -1482,6 +1497,9 @@ import type {
 	SetNodeChatConversationPlainData,
 	SetNodeChatConversationPlainError,
 	SetNodeChatConversationPlainResponse,
+	SetNodeChatConversationSamplingOptionsData,
+	SetNodeChatConversationSamplingOptionsError,
+	SetNodeChatConversationSamplingOptionsResponse,
 	SetNodeChatMessageFeedbackData,
 	SetNodeChatMessageFeedbackError,
 	SetNodeChatMessageFeedbackResponse,
@@ -4361,6 +4379,30 @@ export const renameNodeChatConversationMutation = (
 	return mutationOptions;
 };
 
+export const setNodeChatConversationSamplingOptionsMutation = (
+	options?: Partial<Options<SetNodeChatConversationSamplingOptionsData>>,
+): UseMutationOptions<
+	SetNodeChatConversationSamplingOptionsResponse,
+	AxiosError<SetNodeChatConversationSamplingOptionsError>,
+	Options<SetNodeChatConversationSamplingOptionsData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		SetNodeChatConversationSamplingOptionsResponse,
+		AxiosError<SetNodeChatConversationSamplingOptionsError>,
+		Options<SetNodeChatConversationSamplingOptionsData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await setNodeChatConversationSamplingOptions({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const setNodeChatSelectedPathMutation = (
 	options?: Partial<Options<SetNodeChatSelectedPathData>>,
 ): UseMutationOptions<
@@ -4455,6 +4497,52 @@ export const deleteConversationFileMutation = (
 	return mutationOptions;
 };
 
+export const exportNodeChatConversationsQueryKey = (options?: Options<ExportNodeChatConversationsData>) =>
+	createQueryKey("exportNodeChatConversations", options, false, ["Chat"]);
+
+export const exportNodeChatConversationsOptions = (options?: Options<ExportNodeChatConversationsData>) =>
+	queryOptions<
+		ExportNodeChatConversationsResponse,
+		AxiosError<DefaultError>,
+		ExportNodeChatConversationsResponse,
+		ReturnType<typeof exportNodeChatConversationsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await exportNodeChatConversations({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: exportNodeChatConversationsQueryKey(options),
+	});
+
+export const importNodeChatConversationsMutation = (
+	options?: Partial<Options<ImportNodeChatConversationsData>>,
+): UseMutationOptions<
+	ImportNodeChatConversationsResponse,
+	AxiosError<ImportNodeChatConversationsError>,
+	Options<ImportNodeChatConversationsData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ImportNodeChatConversationsResponse,
+		AxiosError<ImportNodeChatConversationsError>,
+		Options<ImportNodeChatConversationsData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await importNodeChatConversations({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const answerNowNodeChatMessageMutation = (
 	options?: Partial<Options<AnswerNowNodeChatMessageData>>,
 ): UseMutationOptions<
@@ -4498,6 +4586,28 @@ export const resolveUserQuestionMutation = (
 	};
 	return mutationOptions;
 };
+
+export const searchNodeChatConversationsQueryKey = (options: Options<SearchNodeChatConversationsData>) =>
+	createQueryKey("searchNodeChatConversations", options, false, ["Chat"]);
+
+export const searchNodeChatConversationsOptions = (options: Options<SearchNodeChatConversationsData>) =>
+	queryOptions<
+		SearchNodeChatConversationsResponse,
+		AxiosError<SearchNodeChatConversationsError>,
+		SearchNodeChatConversationsResponse,
+		ReturnType<typeof searchNodeChatConversationsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await searchNodeChatConversations({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: searchNodeChatConversationsQueryKey(options),
+	});
 
 export const clearCloudSettingsMutation = (
 	options?: Partial<Options<ClearCloudSettingsData>>,
@@ -7620,6 +7730,28 @@ export const getInvocationMonitorOptions = (options?: Options<GetInvocationMonit
 			return data;
 		},
 		queryKey: getInvocationMonitorQueryKey(options),
+	});
+
+export const listKnowledgeCollectionsQueryKey = (options?: Options<ListKnowledgeCollectionsData>) =>
+	createQueryKey("listKnowledgeCollections", options, false, ["Knowledge-Base"]);
+
+export const listKnowledgeCollectionsOptions = (options?: Options<ListKnowledgeCollectionsData>) =>
+	queryOptions<
+		ListKnowledgeCollectionsResponse,
+		AxiosError<DefaultError>,
+		ListKnowledgeCollectionsResponse,
+		ReturnType<typeof listKnowledgeCollectionsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listKnowledgeCollections({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listKnowledgeCollectionsQueryKey(options),
 	});
 
 export const listKnowledgeDocumentsQueryKey = (options?: Options<ListKnowledgeDocumentsData>) =>

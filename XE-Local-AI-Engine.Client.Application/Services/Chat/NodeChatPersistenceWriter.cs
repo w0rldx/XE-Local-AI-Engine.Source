@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 /// <summary>
 ///     Serializes node chat persistence writes under a per-conversation lock hierarchy, so contiguous unique message
@@ -28,6 +29,12 @@ public sealed class NodeChatPersistenceWriter
         _scopeFactory = scopeFactory;
     }
 
+    /// <summary>The conversation search index. Every exclusive or message-update operation marks its conversation stale.</summary>
+    internal ConversationSearchIndex SearchIndex { get; } = new();
+
+    /// <summary>The writer's logger, shared with the read model on this writer; null when none was supplied.</summary>
+    internal ILogger? Logger => _logger;
+
     /// <summary>
     ///     Runs <paramref name="persistenceOperation" /> under the conversation's exclusive (writer) lock. Use for
     ///     sequence allocation + message insert, conversation-lifecycle writes, and delete/purge.
@@ -48,6 +55,8 @@ public sealed class NodeChatPersistenceWriter
             }
             finally
             {
+                // Marked on failure too: a re-read is idempotent, and a write that committed before throwing must not go unseen.
+                SearchIndex.MarkStale(conversationId);
                 gate.Lock.ExitWrite();
             }
         }
@@ -117,6 +126,7 @@ public sealed class NodeChatPersistenceWriter
                     }
                     finally
                     {
+                        SearchIndex.MarkStale(conversationId);
                         messageLock.Release();
                     }
                 }

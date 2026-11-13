@@ -6,6 +6,9 @@ public static partial class LocalApiRoutes
     {
         public const string Hub = "/api/local/v1/chat/hub";
         public const string Conversations = "chat/conversations";
+
+        // Content search over chat titles and message text. GET, query-only; its own literal segment keeps it off {conversationId}.
+        public const string SearchConversations = "chat/search";
         public const string ConversationById = "chat/conversations/{conversationId}";
         public const string RenameConversation = "chat/conversations/{conversationId}/rename";
         public const string PinConversation = "chat/conversations/{conversationId}/pin";
@@ -18,6 +21,9 @@ public static partial class LocalApiRoutes
         // Per-conversation plain mode (no agent, persona, tools, knowledge base, skills or memory) plus its optional custom
         // system prompt. PATCH, literal "plain" segment.
         public const string PlainConversation = "chat/conversations/{conversationId}/plain";
+
+        // The conversation's own sampling settings (null body field clears them). PATCH, literal "sampling-options" segment.
+        public const string SamplingOptionsConversation = "chat/conversations/{conversationId}/sampling-options";
 
         // Non-destructive compaction: summarize the older turns into a synopsis sent in their place. POST (an action that
         // mutates derived state), distinct literal "compact" segment.
@@ -38,6 +44,10 @@ public static partial class LocalApiRoutes
         public const string ConversationUploads = "chat/conversations/{conversationId}/uploads";
         public const string ConversationUploadById = "chat/conversations/{conversationId}/uploads/{fileId}";
         public const string Cancel = "chat/cancel";
+
+        // The text-only chat export file: GET exports one chat (?conversationId=) or every chat, POST imports one as new chats.
+        public const string Export = "chat/export";
+        public const string Import = "chat/import";
 
         // "Answer now": ends the running turn's reasoning block so the model answers, without stopping the turn. Keyed by the assistant
         // message the stream is writing; a sibling of Cancel, which stops the turn outright.

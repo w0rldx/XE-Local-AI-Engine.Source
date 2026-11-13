@@ -107,7 +107,7 @@ Several redactors enforce "secrets never surface":
 
 | Redactor | Purpose | Location |
 |---|---|---|
-| `AccessTokenQueryRedactor` | strips `access_token=` from request query strings before Serilog logs them | `Services/Auth/AccessTokenQueryRedactor.cs`, wired by the `UseSerilogRequestLogging` request-path projection in `Program.Logging.cs` (`ConfigureRequestLogging`) |
+| `SensitiveQueryRedactor` | redacts the `access_token` and `query` (conversation search text) values in request query strings before Serilog logs them | `Services/Auth/SensitiveQueryRedactor.cs`, wired by the `UseSerilogRequestLogging` request-path projection in `Program.Logging.cs` (`ConfigureRequestLogging`) and by `SensitiveQueryLogEnricher` for the hosting request events |
 | `MemoryProposalSecretScanner` | rejects/redacts secrets in agent-memory proposals before persistence (PEM keys, GitHub/AWS/Azure/Slack tokens, JWTs, high-entropy bearers; ReDoS-guarded with a 2s regex timeout) | `Services/AgentHome/Implementation/MemoryProposalSecretScanner.cs` |
 | `McpFailureDescriber.SafeMessage` | clamps MCP connection failures, sandbox refusals included, to one fixed message per failure reason so a command path/URL/protected host path/secret never reaches the UI; the exception is logged at Warning. Two reasons show text written for the operator instead: a Sandboxed command missing from the jail `PATH` (`ServerNotFound`, the message names the jail `PATH`) and a server that exited during or after startup (`ServerStartupFailed`/`ServerExited`, with its `stderr` tail). That text is scrubbed of the registration's own environment, header and argument values of 8 or more characters (`SecretValueRedactor`), and the sandbox already redacts environment values as it captures the tail (`SandboxStderrTail`); host paths a server prints are **not** stripped | `McpFailureDescriber.SafeMessage` / `DescribeFailure` in `Services/Mcp/Implementation/McpFailureDescriber.cs` |
 | `InvocationFailureClassifier.RedactAgentRuntimeMessage` | sanitizes agent runtime failure messages before surfacing | `InvocationFailureClassifier.RedactAgentRuntimeMessage` (private) in `Services/Invocation/Implementation/InvocationFailureClassifier.cs` |
@@ -117,7 +117,7 @@ The request-logging enricher is the canonical example. It replaces the raw query
 
 ```csharp
 // Program.Logging.cs, ConfigureRequestLogging (EnrichDiagnosticContext)
-var redactedQuery = AccessTokenQueryRedactor.Redact(httpContext.Request.QueryString.Value);
+var redactedQuery = SensitiveQueryRedactor.Redact(httpContext.Request.QueryString.Value);
 var path = LogValueSanitizer.Sanitize(httpContext.Request.Path.Value);
 diagnosticContext.Set("RequestPathWithRedactedQuery", $"{path}{redactedQuery}");
 diagnosticContext.Set("QueryString", redactedQuery);

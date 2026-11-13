@@ -74,7 +74,7 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
                 if (admitted)
                 {
                     await using var claimScope = _scopeFactory.CreateAsyncScope();
-                    var store = claimScope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
+                    var store = claimScope.ServiceProvider.GetRequiredService<IBenchmarkQueueStore>();
                     work = await store.ClaimNextAsync(stoppingToken);
                 }
 
@@ -149,14 +149,13 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
     {
         var reason = $"Benchmark work of kind {work.Kind} is not supported by this build.";
         _logger.LogError("Benchmark queue claimed unsupported {Kind} work for run {RunId}; failing it closed.", work.Kind, work.RunId);
-        var store = services.GetRequiredService<IBenchmarkStore>();
         if (work.Kind == BenchmarkWorkKind.Comparison)
         {
-            await store.MarkComparisonFailedAsync(work.QueueSequence, work.Version, reason, cancellationToken);
+            await services.GetRequiredService<IBenchmarkPairwiseStore>().MarkComparisonFailedAsync(work.QueueSequence, work.Version, reason, cancellationToken);
             return;
         }
 
-        _ = await store.MarkFidelityFailedAsync(work.RunId, work.Version, reason, cancellationToken);
+        _ = await services.GetRequiredService<IBenchmarkFidelityStore>().MarkFidelityFailedAsync(work.RunId, work.Version, reason, cancellationToken);
     }
 
     /// <summary>
@@ -174,7 +173,7 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
-            var store = scope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
+            var store = scope.ServiceProvider.GetRequiredService<IBenchmarkQueueStore>();
             var recovered = await store.RecoverRunsOnStartupAsync(cancellationToken);
             foreach (var run in recovered)
             {

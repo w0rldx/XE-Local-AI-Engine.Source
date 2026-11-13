@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -49,6 +50,16 @@ public sealed class NodeChatListConversationsRequest
     public bool IncludeArchived { get; init; }
 
     public int? Limit { get; init; }
+}
+
+/// <summary>A content search over chat conversations: every whitespace-separated term must occur, case-insensitively.</summary>
+public sealed class NodeChatSearchConversationsRequest
+{
+    public required string Query { get; init; }
+
+    public bool IncludeArchived { get; init; }
+
+    public required int Limit { get; init; }
 }
 
 public sealed class NodeChatPersistUserMessageRequest
@@ -319,6 +330,16 @@ public sealed class NodeChatSetConversationPlainRequest
     public required bool IsPlain { get; init; }
 
     public required string? PlainSystemPrompt { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+/// <summary>Sets the conversation's own sampling settings; null clears them so the client's defaults apply again.</summary>
+public sealed class NodeChatSetConversationSamplingOptionsRequest
+{
+    public required Guid ConversationId { get; init; }
+
+    public required SamplingOptions? SamplingOptions { get; init; }
 
     public required long UpdatedAtUtc { get; init; }
 }

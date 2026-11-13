@@ -36,7 +36,7 @@ public sealed record BenchmarkJudgeAttemptSeed
     public bool SeedPointwiseAttempts { get; init; } = true;
 }
 
-/// <inheritdoc cref="IBenchmarkStore.EnqueueJudgeAttemptAsync" />
+/// <inheritdoc cref="IBenchmarkJudgeStore.EnqueueJudgeAttemptAsync" />
 public sealed record BenchmarkEnqueueJudgeAttemptCommand
 {
     public required Guid RunId { get; init; }

@@ -40,7 +40,7 @@ public sealed class BenchmarkQueueHostedServiceTests
 
         await harness.RunToIdleAsync();
 
-        _ = await harness.Store.Received(1).RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>());
+        _ = await harness.QueueStore.Received(1).RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>());
         harness.Events.Received(1).EvictPlaintext(firstRunId);
         harness.Events.Received(1).EvictPlaintext(secondRunId);
     }
@@ -89,7 +89,7 @@ public sealed class BenchmarkQueueHostedServiceTests
 
         await harness.RunToIdleAsync();
 
-        _ = await harness.Store.Received(1)
+        _ = await harness.FidelityStore.Received(1)
                          .MarkFidelityFailedAsync(fromANewerBuild.RunId,
                              fromANewerBuild.Version,
                              Arg.Is<string>(reason => reason.Contains("not supported by this build", StringComparison.Ordinal)),
@@ -130,7 +130,7 @@ public sealed class BenchmarkQueueHostedServiceTests
         var work = Work(BenchmarkWorkKind.Primary);
         harness.Enqueue(work);
         var attempts = 0;
-        _ = harness.Store.RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>())
+        _ = harness.QueueStore.RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>())
                    .Returns(_ => ++attempts == 1
                        ? Task.FromException<IReadOnlyList<BenchmarkRunRecord>>(new InvalidOperationException("recovery failed"))
                        : Task.FromResult<IReadOnlyList<BenchmarkRunRecord>>([]));
@@ -151,7 +151,7 @@ public sealed class BenchmarkQueueHostedServiceTests
     {
         using var harness = new Harness();
         harness.Enqueue(Work(BenchmarkWorkKind.Primary));
-        _ = harness.Store.RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>())
+        _ = harness.QueueStore.RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>())
                    .Returns(_ => Task.FromException<IReadOnlyList<BenchmarkRunRecord>>(new InvalidOperationException("recovery failed")));
         harness.Signal.CancelOnWaitNumber = 3;
 
@@ -241,7 +241,7 @@ public sealed class BenchmarkQueueHostedServiceTests
 
         await harness.RunToIdleAsync();
 
-        _ = await harness.Store.Received(1).RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>());
+        _ = await harness.QueueStore.Received(1).RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>());
         await harness.RunExecutor.Received(1).ExecuteAsync(work, Arg.Any<CancellationToken>());
         AssertEx.True(harness.Logger.HasEntry(LogLevel.Warning, "pairwise reconciliation"),
             "A skipped reconciliation must be reported, not silently dropped.");
@@ -354,9 +354,9 @@ public sealed class BenchmarkQueueHostedServiceTests
 
         public Harness(IBenchmarkPairwisePlanner? pairwisePlanner = null)
         {
-            Store.RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>())
+            QueueStore.RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>())
                  .Returns(_ => Task.FromResult<IReadOnlyList<BenchmarkRunRecord>>(Recovered));
-            Store.ClaimNextAsync(Arg.Any<CancellationToken>())
+            QueueStore.ClaimNextAsync(Arg.Any<CancellationToken>())
                  .Returns(_ =>
                  {
                      ClaimCount++;
@@ -370,7 +370,9 @@ public sealed class BenchmarkQueueHostedServiceTests
                  });
 
             var services = new ServiceCollection();
-            _ = services.AddSingleton(Store);
+            _ = services.AddSingleton(QueueStore);
+            _ = services.AddSingleton(FidelityStore);
+            _ = services.AddSingleton(PairwiseStore);
             _ = services.AddSingleton(RunExecutor);
             _ = services.AddSingleton(JudgeExecutor);
             if (pairwisePlanner is not null)
@@ -381,7 +383,9 @@ public sealed class BenchmarkQueueHostedServiceTests
             _provider = services.BuildServiceProvider();
         }
 
-        public IBenchmarkStore Store { get; } = Substitute.For<IBenchmarkStore>();
+        public IBenchmarkQueueStore QueueStore { get; } = Substitute.For<IBenchmarkQueueStore>();
+        public IBenchmarkFidelityStore FidelityStore { get; } = Substitute.For<IBenchmarkFidelityStore>();
+        public IBenchmarkPairwiseStore PairwiseStore { get; } = Substitute.For<IBenchmarkPairwiseStore>();
         public IBenchmarkEventBuffer Events { get; } = Substitute.For<IBenchmarkEventBuffer>();
         public IBenchmarkRunExecutor RunExecutor { get; } = Substitute.For<IBenchmarkRunExecutor>();
         public IBenchmarkJudgeExecutor JudgeExecutor { get; } = Substitute.For<IBenchmarkJudgeExecutor>();

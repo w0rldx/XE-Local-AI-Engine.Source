@@ -287,6 +287,15 @@ disabled while no indexed documents exist and hidden in Agent Mode, where the ag
 data through the gated `search_knowledge_base` / read tools instead of duplicate inline grounding.
 The preference is forwarded on sends and regenerations.
 
+Grounding searches one knowledge collection, picked per send. Beside the toggle the composer shows a collection picker
+once `GET knowledge-base/collections` lists more than `DEFAULT`; the pick persists in `NodeChatPreferencesStore`
+(a pick whose collection is no longer listed falls back to `DEFAULT`), and the toggle's "has indexed documents" check
+reads that collection. A grounded send carries it as `NodeChatStreamRequest.KnowledgeCollectionId` and a regenerate as
+the last positional `RegenerateMessage` argument; absent means `DEFAULT`. Both services normalise it through
+`KnowledgeCollectionScope.TryNormalize` before anything runs and refuse an invalid id as a `NodeChatInvalidRequestException`
+(the hub forwards the sentence), because the collection is the isolation boundary: a turn grounded on one collection
+never inlines another's chunks.
+
 For an opted-in plain-chat turn, `NodeChatStreamService` runs hybrid retrieval using the user message,
 then `KnowledgeChatContextComposer` prepends the highest-ranked excerpts within a character budget.
 Each excerpt is fenced as untrusted data; lower-ranked excerpts are dropped first when the budget is
@@ -349,7 +358,21 @@ The chat-side tap is `useVoicePlayback` (`features/voice/hooks/useVoicePlayback.
 
 Developer-mode per-send sampling overrides ride the send request end-to-end. The React shape is `ChatSamplingOptions` (`src/features/chat/models/ChatSamplingOptions.ts`): `temperature`, `topP`, `topK`, `minP`, `maxOutputTokens`, `repeatPenalty`, `repeatLastN`, `presencePenalty`, `frequencyPenalty`, `seed`, `stop[]`, `numCtx`. The `samplingFieldGroups` metadata drives the `ChatSamplingOptionsDialog` inputs (ranges, sliders, decimal scale). `toWireSamplingOptions` normalizes finite numbers; the adapter forwards `samplingOptions` only when present (`NodeChatAdapter.ts`).
 
-On the backend the value flows straight onto the runtime package: `LocalChatRuntimePackageRequest(... SamplingOptions: request.SamplingOptions ...)` (`NodeChatStreamService.cs`). The wire JSON field (`samplingOptions`, camelCase) matches the backend `SamplingOptions` record. These overrides are intentionally **not** part of the config hash (per repo memory) so they don't invalidate caching. Regenerate carries the same block: the client passes it as the trailing `RegenerateMessage` hub argument and `NodeChatRegenerationService` puts it on the package, so a rerun uses the knobs the original send used.
+On the backend the value flows straight onto the runtime package: `LocalChatRuntimePackageRequest(... SamplingOptions: request.SamplingOptions ...)` (`NodeChatStreamService.cs`). The wire JSON field (`samplingOptions`, camelCase) matches the backend `SamplingOptions` record. These overrides are intentionally **not** part of the config hash (per repo memory) so they don't invalidate caching. Regenerate carries the same block: the client passes it as a positional `RegenerateMessage` hub argument and `NodeChatRegenerationService` puts it on the package, so a rerun uses the knobs the original send used.
+
+**Per-conversation settings.** A conversation can keep its own sampling settings on the node, so they follow the chat
+between the desktop app and a browser. They live in the nullable plain-JSON column `conversations.sampling_options_json`
+(not encrypted: numbers and stop sequences are not secret; unset knobs are omitted). `PATCH
+chat/conversations/{conversationId}/sampling-options` (`SetNodeChatConversationSamplingOptionsEndpoint`, Operator-gated)
+stores the wire shape, and `samplingOptions: null` clears it. Its validator bounds every knob to the dialog's range
+(temperature 0–2, top P and min P 0–1, top K 1–200, repeat penalty 0–2, repeat last N −1–512, presence and frequency
+penalty −2–2, max output tokens 1–131072, num_ctx 512–131072, seed −1–2147483647, at most 16 stop sequences of 1–256
+characters). Only an ordinary chat takes them (a work session or integration transcript is a 400), and a branch copies
+them with the plain mode. The conversation read returns them as `samplingOptions`. The node never applies them itself:
+the SPA sends the conversation's settings with each turn and regenerate as above, falling back to this browser's
+`ChatSamplingPreferencesStore` defaults when the conversation has none; a new chat therefore starts from those
+defaults. `ChatSamplingOptionsDialog` edits the open conversation's settings as a draft (Save, Cancel, "Use defaults"
+to clear) and, without a conversation, the browser defaults. The chat export file does not carry them.
 
 ## Reasoning effort + cloud clamp
 
@@ -765,7 +788,7 @@ indicator shows them beside "Loading <model>…" and keeps the plain text when t
 picker's local-default sentinel as no model, as a send does), no agent means the Default Assistant, and
 `useLocalTools` mirrors the composer's "Local tools" toggle (absent means on), so tools are offered only when a
 send would offer them. The toggle gates the node-wide offer (Default Assistant and agents without an allowed-tools list);
-an agent's own allowed-tools list is offered whatever the toggle says. `conversationId` names the conversation the next request goes to; a plain one ignores the agent and the toggle and charges its custom prompt or nothing, and no tools, the same way a send resolves it. In developer mode the SPA also sends the sampling preferences' `maxOutputTokens`, which widens the output
+an agent's own allowed-tools list is offered whatever the toggle says. `conversationId` names the conversation the next request goes to; a plain one ignores the agent and the toggle and charges its custom prompt or nothing, and no tools, the same way a send resolves it. In developer mode the SPA also sends the effective sampling settings' (the conversation's own, else the browser defaults) `maxOutputTokens`, which widens the output
 reserve above the node floor by the send path's `TurnPolicy.ResolveReservedOutputTokens` rule, and `numCtx`, the
 requested window, which a known launched window caps and which is otherwise taken as is (`TurnPolicy.WithEffectiveContext`).
 Non-positive values are ignored. The service reuses the send path's turn resolution and tool offer, so the figures follow what a
@@ -922,6 +945,50 @@ The `metadata_json` blob (`NodeChatMessageMetadata`, serialized by `NodeChatMeta
 
 Anchoring by group rather than by each message's own sequence is what makes late regenerations branch correctly: regenerating an early turn *after* later turns exist mints a sibling whose sequence lands past them, yet that sibling still belongs to the early turn and must branch at the early position. The same holds for the cutoff itself and for the caller-supplied selected-revision map, which is validated on the group anchor, not on the selected message's sequence. A group with no valid selection falls back to its newest member, and the branch-point turn always contributes exactly the cutoff message, overriding any caller entry for its group. Without the collapse the copied siblings would render as duplicate stacked assistant turns, since `variant_group_id` is dropped on copy. The branch inherits [plain mode](#plain-conversations) and its custom prompt.
 
+### Conversation search (in-memory index)
+
+`GET chat/search?query=…` (`SearchNodeChatConversationsEndpoint`, Operator policy) matches chat conversations whose
+title or user/assistant message text contains every whitespace-separated term, case-insensitively, and returns them
+newest first (capped, default 50, at most 100) with a short snippet around the first content hit, where the hit was
+(`title` or `content`) and an `indexing` flag. Like the list it filters `kind = 'chat'` and `purged = 0`, and archived
+chats match only with `includeArchived`. Titles and content are ciphertext at rest, so there is no SQL search:
+`ConversationSearchIndex` holds each chat's decrypted title and message text in process memory and is never persisted.
+
+- **Always current.** `NodeChatPersistenceWriter` owns the index and marks a conversation stale after every exclusive
+  or message-update operation, so every write path (send, stream flush, terminal, regenerate and revision variants,
+  rename, archive, branch, create, delete, purge, and any future writer such as import) is covered without a hook per
+  caller. A search first re-reads the stale conversations through `NodeChatReadModel`; a mark carries a stamp and is
+  cleared only if no later write re-marked it, and one gate serializes every read-then-store pass. A delete or purge
+  (including the retention sweep) also drops the entry as soon as it commits, so a deleted chat's plaintext does not
+  wait in memory for the next search.
+- **Restart.** `ConversationSearchBackfillService` indexes every stored chat newest first, in batches of 50, after the
+  host has started, so readiness never waits on it. Until it finishes, `indexing` is true and the sidebar says results
+  may be incomplete. A failed pass is logged and retried with capped exponential backoff (5 s doubling to 5 min) until
+  it succeeds or the host stops; chats already indexed are skipped. A single chat the pass cannot read is logged by id
+  and skipped, so the pass still completes for every other chat and `indexing` turns false; the service keeps retrying
+  that chat on the same backoff, and its next write indexes it too. A search treats a stale chat it cannot read the
+  same way: it logs the id, keeps the stale mark so the next search retries it, and answers with the other chats.
+- **Memory.** At most `ConversationSearchIndex.MaxIndexedCharsPerConversation` (200,000) characters of message text per
+  conversation are indexed, the newest kept; reasoning, tool output and attachments are not. There is no global cap and
+  no eviction, since an evicted chat would be unfindable: the index's total memory grows with the chat history, at
+  about two bytes per character for every chat's title and text (up to roughly 400 KB per long chat). The
+  `XE.Node` meter reports it as `chat_search_indexed_conversations` and `chat_search_indexed_chars`.
+- **Logs.** The search text travels in the `query` query parameter, so the request log redacts that parameter like
+  `access_token` (`SensitiveQueryRedactor`); the ASP.NET Core tracing instrumentation already replaces every query
+  value in `url.query` with `Redacted` by default.
+
+The sidebar search box (`ConversationList`) debounces the query (`useConversationContentSearch`) and shows the
+server's matches with their snippet; until they arrive, or when the request fails, it filters the loaded page by
+title and preview as before.
+
+### Export and import
+
+`GET chat/export` (`ExportNodeChatConversationsEndpoint`) writes the chat export file: format `xe-chat-export`, `formatVersion` 1 (`NodeChatExportFile`). With `?conversationId=` it holds one chat; without it every chat, archived ones included and flagged `archived`. It reads through the chat list query, so it carries `kind = chat`, unpurged conversations only; a by-id request for a work-session or integration transcript is a 404 like a missing one. The export is **text only**: each chat is flattened to its selected path in anchor order, keeping user and assistant messages that have text (a failed reply with no text is dropped), with each message's role, content, time and model. Attachments are listed by file name, type and size, and each turn carries a `toolCallCount`; neither their bytes nor tool arguments and results are exported, and reasoning is not exported either.
+
+`POST chat/import` (`ImportNodeChatConversationsEndpoint`) takes the same document back and creates **new** chats. `ImportNodeChatConversationsRequestValidator` refuses the whole file before anything is written: wrong format or version, more than 5,000 chats or 100,000 messages, a role other than `user` or `assistant` (`tool` and `system` are refused, since the writer has no path for either), an empty message, a title over 200 characters, a creation time that is negative or more than a day past this node's clock. A body over 64 MiB is a 413 before it is read. The export is **not** capped: an export-all of a history beyond those caps is written in full, and this node's import refuses it whole. Each conversation and message gets a fresh id, never one from the file, and is written through `INodeChatPersistenceService.CreateConversationAsync` and `InsertMessageIfAbsentAsync`, so content is encrypted under its new `conversationId + messageId` AAD and anything observing those writes sees the import. Titles, message order, creation times and the archived flag are kept; attachments and tool events are not restored. A write that fails partway purges every chat that import created; a purge that fails too is logged with the conversation id and the rest still run, and the original error is what the request answers. Like any finished assistant row, an imported one carries a thin run envelope ([The run envelope](#the-run-envelope)): usage views show each imported assistant reply as a zero-token run at its original time.
+
+In the SPA, each row's menu in `ConversationList` exports that chat as Markdown or JSON, and the menu beside "New chat" exports every chat or imports a file (`useChatExportImport`; the Markdown is rendered client-side from the JSON by `ChatExportFile.chatExportMarkdown` and names the attachments and tool calls it leaves out).
+
 ### Encryption of titles and content (at-rest)
 
 Conversation titles, message **content**, and the **`metadata_json`** blob are all **AES-encrypted at rest**, not stored in plaintext. `NodeChatDbContext` (`Client.Persistence/NodeChatDbContext.cs`) holds the node key via `INodeSqliteKeyHolder` and exposes `EncryptConversationTitle` / `DecryptConversationTitle`, plus `EncryptMessageContent` / `DecryptMessageContent` and `EncryptMessageMetadata` / `DecryptMessageMetadata`. Encryption goes through `NodePayloadProtector.Encrypt/Decrypt` with **per-record AAD**: for a title, `conversationId` is bound as both conversation and record id with column tag `"title"`; for message content/metadata, `conversationId + messageId + "content"` (or `"metadata_json"`). Both the raw-ADO persistence path and the EF interceptors write and read through the identical AAD scheme.
@@ -936,8 +1003,8 @@ Organized by concern:
 |---|---|
 | `api/` | `NodeChatAdapter` (REST via hey-api generated clients + the SignalR streaming bridge), `NodeChatConnection` (the persistent local hub connection), `NodeChatMapper` (DTO → view model), `NodeChatStreamGuard` / `NodeChatStreamState` (stream state machine) / `NodeChatStreamParts` (its pure `parts[]` accumulator), `useNodeChatConnectionReadiness` |
 | `components/` | `ChatInputArea`, `ChatMessage` / `ChatMessageList`, `ChatSourcesStrip`, `ModelSelectorCard`, `ChatSamplingOptionsDialog`, `StreamingIndicator` / `StreamCaret`, `ContextUsageBadge` (the trigger of `ContextUsagePopover`), `ContextUsagePopover` (`components/ContextUsagePopover/`, with the pure `ContextUsageBreakdown` helpers), `CompactButton` (manual compaction, beside the badge), `ContextStatePanel` (read-only drawer over the distilled state, opened beside `CompactButton` in `ChatInputArea/ChatComposerToolbar`), `MessageFeedbackControl`, `ChatNotice` (`chatNotice`, a plain function so "no notice" stays `undefined`) |
-| `hooks/` | `useChatStreamController` (the race-coupled send, regenerate, resume and cancel loops), `useChatConversationCache` (cache writers, `refreshConversation`, the `resolveSendConversation` wrong-conversation guard), `useChatConversationActions` (rename, pin, archive, temporary, plain, delete), `useChatMessageActions` (revision, branch, feedback), and the selection hooks for conversation, model, agent and revision |
-| `models/` | `ChatModels`, `ChatSamplingOptions`, `MessageParts`, `MessageRevisionGrouping`, `ContextUsageDerivation`, `ContextWindowModels` (the context snapshot view types), and the pure `ChatConversationDerivations` helpers for selected-detail merging, cold-resume row selection, title derivation, and temporary regenerate grouping; `ChatTurnResolution` for the send path's request model, effective agent, first-send title and failure message rules |
+| `hooks/` | `useChatStreamController` (the race-coupled send, regenerate, resume and cancel loops), `useChatConversationCache` (cache writers, `refreshConversation`, the `resolveSendConversation` wrong-conversation guard), `useChatConversationActions` (rename, pin, archive, temporary, plain, delete), `useChatExportImport` (export and import, see [Export and import](#export-and-import)), `useChatMessageActions` (revision, branch, feedback), and the selection hooks for conversation, model, agent and revision |
+| `models/` | `ChatModels`, `ChatExportFile` (the export file's parse check, file names and Markdown), `ChatSamplingOptions`, `MessageParts`, `MessageRevisionGrouping`, `ContextUsageDerivation`, `ContextWindowModels` (the context snapshot view types), and the pure `ChatConversationDerivations` helpers for selected-detail merging, cold-resume row selection, title derivation, and temporary regenerate grouping; `ChatTurnResolution` for the send path's request model, effective agent, first-send title and failure message rules |
 | `pages/` | `Chat.tsx` (hook wiring whose order is load-bearing, readiness gate, `ChatDisplayShell` prop assembly), model-picker filters; the option mapping (`ChatModelOptions`, `ModelOption`) lives in `core/models/` |
 | `queries/` | `useCodexModelOptions`, `useContextEstimate` (the pre-send estimate, fetched only while the popover is open with no snapshot); the key factory `NodeChatQueryKeys` lives in `core/chat/queries/` |
 | `stores/` | `NodeChatPreferencesStore` (model/effort/local-tools selection + `clampReasoningEffort`), `ChatSamplingPreferencesStore` |

@@ -48,9 +48,11 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4, primaryStopReason: "length");
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed);
-        store.MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>())
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed);
+        judgeStore.MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
@@ -79,7 +81,7 @@ public sealed class BenchmarkJudgeExecutorTests
                       new InvocationStateChangedEventArgs(State(invocationId, JudgeReply)));
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner, PassthroughSupervisor());
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner, PassthroughSupervisor());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
         {
@@ -96,7 +98,7 @@ public sealed class BenchmarkJudgeExecutorTests
         AssertEx.Equal(BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated: true), package.ResolvedSystemPrompt);
         using var promptPayload = JsonDocument.Parse(package.ConversationContext[0].Content);
         AssertEx.True(promptPayload.RootElement.GetProperty("primaryOutputTruncated").GetBoolean());
-        _ = store.Received(1).MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>());
+        _ = judgeStore.Received(1).MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -105,10 +107,12 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed);
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed);
         BenchmarkJudgeSuccessCommand? command = null;
-        store.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
@@ -141,7 +145,7 @@ public sealed class BenchmarkJudgeExecutorTests
               });
         await using var lease = new FakeLease(installed);
         var supervisor = PassthroughSupervisor();
-        var executor = Executor(store, snapshot, lease, capacity, dispatcher, runner, supervisor);
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, capacity, dispatcher, runner, supervisor);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
         {
@@ -212,11 +216,13 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed, promptVersion: BenchmarkJudgePolicyVersions.PromptVersion - 1);
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed, promptVersion: BenchmarkJudgePolicyVersions.PromptVersion - 1);
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? failureMessage = null;
-        store.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
@@ -224,7 +230,7 @@ public sealed class BenchmarkJudgeExecutorTests
              });
         var runner = Substitute.For<IInvocationRunner>();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow),
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow),
             Substitute.For<IWorkerEventDispatcher>(), runner);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -251,11 +257,13 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed, launchIdentityScheme: null);
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed, launchIdentityScheme: null);
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? failureMessage = null;
-        store.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
@@ -263,7 +271,7 @@ public sealed class BenchmarkJudgeExecutorTests
              });
         var runner = Substitute.For<IInvocationRunner>();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow),
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow),
             Substitute.For<IWorkerEventDispatcher>(), runner);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -289,11 +297,13 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed);
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed);
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? failureMessage = null;
-        store.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
@@ -313,7 +323,7 @@ public sealed class BenchmarkJudgeExecutorTests
                   return Task.CompletedTask;
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner, PassthroughSupervisor());
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner, PassthroughSupervisor());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
         {
@@ -338,11 +348,13 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed);
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed);
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         BenchmarkRunRecord? failed = null;
-        store.MarkJudgeFailedAsync(run.Id,
+        judgeStore.MarkJudgeFailedAsync(run.Id,
                  2,
                  Arg.Any<string>(),
                  Arg.Any<long>(),
@@ -357,7 +369,7 @@ public sealed class BenchmarkJudgeExecutorTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var runner = Substitute.For<IInvocationRunner>();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, capacity, dispatcher, runner);
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, capacity, dispatcher, runner);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
         {
@@ -388,11 +400,13 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed);
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed);
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? failureMessage = null;
-        store.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
@@ -403,7 +417,7 @@ public sealed class BenchmarkJudgeExecutorTests
             CapacityVerdict.Allow);
         var runner = Substitute.For<IInvocationRunner>();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store,
+        var executor = Executor(judgeStore, runStore, taskItemStore,
             snapshot,
             lease,
             capacity,
@@ -439,11 +453,13 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed);
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed);
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? failureMessage = null;
-        store.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
@@ -458,7 +474,7 @@ public sealed class BenchmarkJudgeExecutorTests
         };
         var runner = Substitute.For<IInvocationRunner>();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store,
+        var executor = Executor(judgeStore, runStore, taskItemStore,
             snapshot,
             lease,
             capacity,
@@ -501,10 +517,12 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed, frozenKvCacheType);
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.MarkJudgeFailedAsync(run.Id, 2, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed, frozenKvCacheType);
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        judgeStore.MarkJudgeFailedAsync(run.Id, 2, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
@@ -513,7 +531,7 @@ public sealed class BenchmarkJudgeExecutorTests
         var capacity = new JudgeCapacityService(CapacityVerdict.RejectInsufficient);
         var logger = new RecordingLogger<BenchmarkJudgeExecutor>();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store,
+        var executor = Executor(judgeStore, runStore, taskItemStore,
             snapshot,
             lease,
             capacity,
@@ -556,10 +574,12 @@ public sealed class BenchmarkJudgeExecutorTests
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 7);
         const int workVersion = 2;
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed);
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.MarkJudgeCancelledAsync(run.Id, workVersion, Arg.Any<long>(), Arg.Any<CancellationToken>())
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed);
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        judgeStore.MarkJudgeCancelledAsync(run.Id, workVersion, Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Cancelled),
@@ -576,7 +596,9 @@ public sealed class BenchmarkJudgeExecutorTests
             return Task.FromCanceled(call.ArgAt<CancellationToken>(1));
         });
         await using var lease = new FakeLease(installed);
-        var executor = new BenchmarkJudgeExecutor(store,
+        var executor = new BenchmarkJudgeExecutor(judgeStore,
+            runStore,
+            taskItemStore,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
             new JudgeCapacityService(CapacityVerdict.Allow),
@@ -609,7 +631,7 @@ public sealed class BenchmarkJudgeExecutorTests
             JudgeAttemptId = AttemptId
         }, CancellationToken.None);
 
-        _ = store.Received(1).MarkJudgeCancelledAsync(run.Id, workVersion, Arg.Any<long>(), Arg.Any<CancellationToken>());
+        _ = judgeStore.Received(1).MarkJudgeCancelledAsync(run.Id, workVersion, Arg.Any<long>(), Arg.Any<CancellationToken>());
         AssertEx.False(cancellations.TryCancel(run.Id, BenchmarkWorkKind.Judge));
     }
 
@@ -619,14 +641,16 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed);
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed);
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         BenchmarkLaunchReceiptCommand? checkpoint = null;
-        store.MarkJudgeLaunchReadyAsync(AttemptId, 2, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint = command), Arg.Any<string?>(),
+        judgeStore.MarkJudgeLaunchReadyAsync(AttemptId, 2, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint = command), Arg.Any<string?>(),
                  Arg.Any<CancellationToken>())
              .Returns(true);
-        store.MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
@@ -647,7 +671,7 @@ public sealed class BenchmarkJudgeExecutorTests
                   return Task.CompletedTask;
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner);
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
         {
@@ -663,7 +687,7 @@ public sealed class BenchmarkJudgeExecutorTests
         AssertEx.True(checkpointedBeforeInference, "The judge launch evidence must be durable before the first token is generated.");
         AssertEx.Equal(BenchmarkKvCacheType.SourceAuto, AssertEx.NotNull(checkpoint).KvCacheTypeSource);
         AssertEx.NotNullOrEmpty(checkpoint!.EnvironmentFactsHash);
-        _ = store.Received(1)
+        _ = judgeStore.Received(1)
                  .MarkJudgeLaunchReadyAsync(AttemptId, 2, 2, Arg.Any<BenchmarkLaunchReceiptCommand>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
@@ -676,10 +700,12 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed, rubric: VerifiableRubric());
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed, rubric: VerifiableRubric());
         BenchmarkJudgeSuccessCommand? command = null;
-        store.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
@@ -690,7 +716,7 @@ public sealed class BenchmarkJudgeExecutorTests
         var capacity = new JudgeCapacityService(CapacityVerdict.Allow);
         var supervisor = PassthroughSupervisor();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, capacity, dispatcher, runner, supervisor);
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, capacity, dispatcher, runner, supervisor);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
         {
@@ -736,8 +762,10 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed, rubric: new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed, rubric: new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
         [
             new BenchmarkJudgeRubricCriterionV1("exact_answer", "Exact", "The answer text is exact.", 40,
                 BenchmarkJudgeCriterionKinds.Exact, """{"expected":"answer"}"""),
@@ -745,7 +773,7 @@ public sealed class BenchmarkJudgeExecutorTests
                 BenchmarkJudgeCriterionKinds.SceneSpec, "{}")
         ]));
         BenchmarkJudgeSuccessCommand? command = null;
-        store.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
@@ -753,7 +781,7 @@ public sealed class BenchmarkJudgeExecutorTests
              });
         var runner = Substitute.For<IInvocationRunner>();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(), runner,
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(), runner,
             PassthroughSupervisor());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -786,10 +814,12 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed, rubric: MixedRubric());
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed, rubric: MixedRubric());
         BenchmarkJudgeSuccessCommand? command = null;
-        store.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
@@ -810,7 +840,7 @@ public sealed class BenchmarkJudgeExecutorTests
                   return Task.CompletedTask;
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner, PassthroughSupervisor());
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner, PassthroughSupervisor());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
         {
@@ -853,17 +883,19 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store,
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore,
             installed,
             rubric: new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
             [
                 new BenchmarkJudgeRubricCriterionV1("broken", "Broken", "A config no validator would have passed.", 100,
                     BenchmarkJudgeCriterionKinds.MathAnswer, """{"expected":"not a number"}""")
             ]));
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? failureMessage = null;
-        store.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Failed),
@@ -871,7 +903,7 @@ public sealed class BenchmarkJudgeExecutorTests
              });
         var supervisor = PassthroughSupervisor();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store,
+        var executor = Executor(judgeStore, runStore, taskItemStore,
             snapshot,
             lease,
             new JudgeCapacityService(CapacityVerdict.Allow),
@@ -890,7 +922,7 @@ public sealed class BenchmarkJudgeExecutorTests
             JudgeAttemptId = AttemptId
         }, CancellationToken.None);
 
-        _ = await store.DidNotReceiveWithAnyArgs().MarkJudgeSucceededAsync(default!, default);
+        _ = await judgeStore.DidNotReceiveWithAnyArgs().MarkJudgeSucceededAsync(default!, default);
         _ = supervisor.DidNotReceive()
                       .RunExclusiveBenchmarkAsync(Arg.Any<string>(),
                           Arg.Any<ModelRole>(),
@@ -917,10 +949,12 @@ public sealed class BenchmarkJudgeExecutorTests
         {
             TaskItemId = itemId
         };
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed);
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.ListTaskItemsAsync(run.ProjectId, Arg.Any<CancellationToken>())
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed);
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        taskItemStore.ListTaskItemsAsync(run.ProjectId, Arg.Any<CancellationToken>())
              .Returns(new[]
              {
                  new BenchmarkTaskItemRecord
@@ -943,7 +977,7 @@ public sealed class BenchmarkJudgeExecutorTests
                  }
              });
         string? failureMessage = null;
-        store.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
@@ -951,7 +985,7 @@ public sealed class BenchmarkJudgeExecutorTests
              });
         var supervisor = PassthroughSupervisor();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store,
+        var executor = Executor(judgeStore, runStore, taskItemStore,
             snapshot,
             lease,
             new JudgeCapacityService(CapacityVerdict.Allow),
@@ -970,7 +1004,7 @@ public sealed class BenchmarkJudgeExecutorTests
             JudgeAttemptId = AttemptId
         }, CancellationToken.None);
 
-        _ = await store.DidNotReceiveWithAnyArgs().MarkJudgeSucceededAsync(default!, default);
+        _ = await judgeStore.DidNotReceiveWithAnyArgs().MarkJudgeSucceededAsync(default!, default);
         _ = supervisor.DidNotReceive()
                       .RunExclusiveBenchmarkAsync(Arg.Any<string>(),
                           Arg.Any<ModelRole>(),
@@ -991,11 +1025,13 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed, rubric: PythonTestsRubric(withLlmCriterion: false));
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed, rubric: PythonTestsRubric(withLlmCriterion: false));
         IReadOnlyList<BenchmarkRunArtifactCommand>? recorded = null;
         var blobsBeforeRow = new List<BenchmarkRunArtifactBlobReadStatus>();
-        store.AddRunArtifactsAsync(run.Id, AttemptId, Arg.Any<IReadOnlyList<BenchmarkRunArtifactCommand>>(), Arg.Any<CancellationToken>())
+        judgeStore.AddRunArtifactsAsync(run.Id, AttemptId, Arg.Any<IReadOnlyList<BenchmarkRunArtifactCommand>>(), Arg.Any<CancellationToken>())
              .Returns(async call =>
              {
                  recorded = call.ArgAt<IReadOnlyList<BenchmarkRunArtifactCommand>>(2);
@@ -1006,14 +1042,14 @@ public sealed class BenchmarkJudgeExecutorTests
 
                  return (IReadOnlyList<BenchmarkRunArtifactRecord>)[];
              });
-        store.MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
                  Version = 5
              });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(),
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(),
             Substitute.For<IInvocationRunner>(), pythonTests: PythonTestsVerifier("raw stdout ✓\n", "Traceback: candidate-controlled\n"), artifacts: artifacts);
 
         await executor.ExecuteAsync(JudgeWork(run), CancellationToken.None);
@@ -1031,7 +1067,7 @@ public sealed class BenchmarkJudgeExecutorTests
         var stderrBytes = (await artifacts.ReadAsync(run.Id, stderr.Id, stderr.ContentHash, stderr.ByteCount)).Content;
         AssertEx.Equal("raw stdout ✓\n", Encoding.UTF8.GetString(stdoutBytes.Span));
         AssertEx.Equal("Traceback: candidate-controlled\n", Encoding.UTF8.GetString(stderrBytes.Span));
-        _ = await store.Received(1).MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>());
+        _ = await judgeStore.Received(1).MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -1043,13 +1079,15 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed, rubric: PythonTestsRubric(withLlmCriterion: false));
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed, rubric: PythonTestsRubric(withLlmCriterion: false));
         IReadOnlyList<BenchmarkRunArtifactCommand>? recorded = null;
-        store.AddRunArtifactsAsync(run.Id, AttemptId, Arg.Do<IReadOnlyList<BenchmarkRunArtifactCommand>>(value => recorded = value), Arg.Any<CancellationToken>())
+        judgeStore.AddRunArtifactsAsync(run.Id, AttemptId, Arg.Do<IReadOnlyList<BenchmarkRunArtifactCommand>>(value => recorded = value), Arg.Any<CancellationToken>())
              .Returns([]);
         BenchmarkJudgeSuccessCommand? success = null;
-        store.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => success = value), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => success = value), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
@@ -1058,7 +1096,7 @@ public sealed class BenchmarkJudgeExecutorTests
         // A multi-byte character straddles the cut, so the head must back off to a UTF-8 boundary.
         var stdout = new string('é', BenchmarkRunArtifactBlobStore.MaxArtifactBytes);
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(),
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(),
             Substitute.For<IInvocationRunner>(), pythonTests: PythonTestsVerifier(stdout, "err"), artifacts: artifacts);
 
         await executor.ExecuteAsync(JudgeWork(run), CancellationToken.None);
@@ -1081,11 +1119,13 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed, rubric: PythonTestsRubric(withLlmCriterion: false));
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed, rubric: PythonTestsRubric(withLlmCriterion: false));
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? failureMessage = null;
-        store.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Failed),
@@ -1095,14 +1135,14 @@ public sealed class BenchmarkJudgeExecutorTests
         verifier.VerifyAsync(Arg.Any<BenchmarkJudgeRubricCriterionV1>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns<BenchmarkPythonTestsOutcome>(_ => throw new BenchmarkExecutionException(BenchmarkRunJudgeStates.VerifierUnavailablePrefix + "Compute is off."));
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(),
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(),
             Substitute.For<IInvocationRunner>(), pythonTests: verifier,
             artifacts: new BenchmarkRunArtifactBlobStore(new FakeNodeDataDirectory(root.Path), KeyHolder));
 
         await executor.ExecuteAsync(JudgeWork(run), CancellationToken.None);
 
         AssertEx.True(AssertEx.NotNull(failureMessage).StartsWith(BenchmarkRunJudgeStates.VerifierUnavailablePrefix, StringComparison.Ordinal));
-        _ = await store.DidNotReceiveWithAnyArgs().AddRunArtifactsAsync(Guid.Empty, Guid.Empty, default!, default);
+        _ = await judgeStore.DidNotReceiveWithAnyArgs().AddRunArtifactsAsync(Guid.Empty, Guid.Empty, default!, default);
         AssertEx.False(Directory.Exists(Path.Combine(root.Path, "benchmarks")), "A refusal produced no outcome, so no blob may exist.");
     }
 
@@ -1114,26 +1154,28 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed, rubric: PythonTestsRubric(withLlmCriterion: true));
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed, rubric: PythonTestsRubric(withLlmCriterion: true));
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         IReadOnlyList<BenchmarkRunArtifactCommand>? recorded = null;
-        store.AddRunArtifactsAsync(run.Id, AttemptId, Arg.Do<IReadOnlyList<BenchmarkRunArtifactCommand>>(value => recorded = value), Arg.Any<CancellationToken>())
+        judgeStore.AddRunArtifactsAsync(run.Id, AttemptId, Arg.Do<IReadOnlyList<BenchmarkRunArtifactCommand>>(value => recorded = value), Arg.Any<CancellationToken>())
              .Returns([]);
-        store.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Failed),
                  Version = 5
              });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(),
+        var executor = Executor(judgeStore, runStore, taskItemStore, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), Substitute.For<IWorkerEventDispatcher>(),
             Substitute.For<IInvocationRunner>(), RefusingSupervisor(), pythonTests: PythonTestsVerifier("out", "err"), artifacts: artifacts);
 
         await executor.ExecuteAsync(JudgeWork(run), CancellationToken.None);
 
-        _ = await store.Received(1).MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
-        _ = await store.DidNotReceiveWithAnyArgs().MarkJudgeSucceededAsync(default!, default);
+        _ = await judgeStore.Received(1).MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
+        _ = await judgeStore.DidNotReceiveWithAnyArgs().MarkJudgeSucceededAsync(default!, default);
         var rows = AssertEx.NotNull(recorded, "The artifacts are recorded before the model step that failed.");
         AssertEx.Equal(2, rows.Count);
         foreach (var row in rows)
@@ -1204,11 +1246,13 @@ public sealed class BenchmarkJudgeExecutorTests
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
-        StubJudgeAttempt(store, installed);
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var taskItemStore = Substitute.For<IBenchmarkTaskItemStore>();
+        StubJudgeAttempt(judgeStore, installed);
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? failureMessage = null;
-        store.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        judgeStore.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  Judge = JudgeView(BenchmarkRunJudgeStates.Failed),
@@ -1216,7 +1260,7 @@ public sealed class BenchmarkJudgeExecutorTests
              });
         var supervisor = RefusingSupervisor();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store,
+        var executor = Executor(judgeStore, runStore, taskItemStore,
             snapshot,
             lease,
             new JudgeCapacityService(CapacityVerdict.Allow),
@@ -1265,7 +1309,9 @@ public sealed class BenchmarkJudgeExecutorTests
         return supervisor;
     }
 
-    private static BenchmarkJudgeExecutor Executor(IBenchmarkStore store,
+    private static BenchmarkJudgeExecutor Executor(IBenchmarkJudgeStore judgeStore,
+        IBenchmarkRunStore runStore,
+        IBenchmarkTaskItemStore taskItemStore,
         BenchmarkRuntimeSnapshotV1 snapshot,
         FakeLease lease,
         ICapacityService capacity,
@@ -1277,7 +1323,9 @@ public sealed class BenchmarkJudgeExecutorTests
         BenchmarkAdmissionRetry? admissionRetry = null,
         IBenchmarkPythonTestsVerifier? pythonTests = null,
         BenchmarkRunArtifactBlobStore? artifacts = null) =>
-        new(store,
+        new(judgeStore,
+            runStore,
+            taskItemStore,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
             capacity,
@@ -1309,15 +1357,15 @@ public sealed class BenchmarkJudgeExecutorTests
     ///     Wires the reads the executor makes before it spawns: the attempt it was handed and the policy revision that
     ///     attempt was enqueued under. Both carry the payloads the executor deserializes.
     /// </summary>
-    private static void StubJudgeAttempt(IBenchmarkStore store,
+    private static void StubJudgeAttempt(IBenchmarkJudgeStore judgeStore,
         InstalledModelSnapshot installed,
         string? kvCacheType = null,
         int? promptVersion = null,
         BenchmarkJudgeRubricV1? rubric = null,
         int? launchIdentityScheme = LlamaServerLaunchProjection.IdentitySchemeVersion)
     {
-        store.GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).Returns(Attempt(installed, kvCacheType, launchIdentityScheme));
-        store.GetJudgePolicyRevisionAsync(RevisionId, Arg.Any<CancellationToken>()).Returns(Revision(promptVersion, rubric));
+        judgeStore.GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).Returns(Attempt(installed, kvCacheType, launchIdentityScheme));
+        judgeStore.GetJudgePolicyRevisionAsync(RevisionId, Arg.Any<CancellationToken>()).Returns(Revision(promptVersion, rubric));
     }
 
     private static BenchmarkJudgeAttemptRecord Attempt(InstalledModelSnapshot installed,

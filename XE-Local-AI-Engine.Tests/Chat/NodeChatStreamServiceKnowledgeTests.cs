@@ -56,6 +56,63 @@ public sealed class NodeChatStreamServiceKnowledgeTests
     }
 
     [Test]
+    [Arguments(" project-a ", "PROJECT-A")]
+    [Arguments(null, "DEFAULT")]
+    public async Task SendMessageAsync_GroundsOnTheNormalisedCollectionTheSendPicked(string? picked, string searched)
+    {
+        // The composer picks the collection per send; an absent pick is DEFAULT, so an older client keeps its behaviour.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+        var searchService = Substitute.For<IKnowledgeSearchService>();
+        searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
+                     .Returns(new KnowledgeSearchResult
+                     {
+                         Results = [KnowledgeHit("Runbook", "Restart the service with the eject command.", score: 0.91)]
+                     });
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, CreateScopeFactory(searchService));
+
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "how do I restart the service?",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseKnowledgeBase: true,
+                           KnowledgeCollectionId: picked)))
+        {
+            // Drained for the side effect: the grounding search.
+        }
+
+        await searchService.Received(1).SearchAsync(Arg.Is<KnowledgeSearchRequest>(request => request.CollectionId == searched),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WithAnInvalidKnowledgeCollection_IsRefusedBeforeAnythingIsPersisted()
+    {
+        // The collection is the knowledge isolation boundary: a malformed id is refused, never widened to DEFAULT.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, CreateKnowledgeScopeFactory());
+
+        var exception = AssertEx.Throws<NodeChatInvalidRequestException>(() => _ = service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+            "how do I restart the service?",
+            MessageId: assistantMessageId,
+            RequestId: requestId,
+            UseKnowledgeBase: true,
+            KnowledgeCollectionId: "../other")));
+
+        AssertEx.Equal("The knowledge collection id is invalid.", exception.Message);
+        await persistence.DidNotReceiveWithAnyArgs().PersistUserMessageAsync(default!, default);
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenTheRunsSearchToolReturnsHits_MergesThemAfterThePreTurnSources()
     {
         // The agent tool path persists its sources too: hits recorded inside the run reach the terminal row after the

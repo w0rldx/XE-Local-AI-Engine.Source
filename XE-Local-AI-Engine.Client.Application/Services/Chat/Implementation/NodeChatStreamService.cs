@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
@@ -145,7 +146,16 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             throw new NodeChatInvalidRequestException(seedError);
         }
 
-        return SendMessageCoreAsync(request, cancellationToken);
+        if (!KnowledgeCollectionScope.TryNormalize(request.KnowledgeCollectionId, out var knowledgeCollectionId))
+        {
+            throw new NodeChatInvalidRequestException("The knowledge collection id is invalid.");
+        }
+
+        return SendMessageCoreAsync(request with
+            {
+                KnowledgeCollectionId = knowledgeCollectionId
+            },
+            cancellationToken);
     }
 
     private async IAsyncEnumerable<ChatStreamEvent> SendMessageCoreAsync(NodeChatStreamRequest request,
@@ -859,7 +869,10 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             // encodes the locality gate). Retrieval failure degrades to no context — the turn still proceeds.
             if (UsesKnowledgeBase(request, resolution))
             {
-                var knowledge = await _turnContextBuilder.BuildKnowledgeContextAsync(knowledgeQuery, isRegeneratedTurn: false, runCancellation.Token);
+                var knowledge = await _turnContextBuilder.BuildKnowledgeContextAsync(knowledgeQuery,
+                    request.KnowledgeCollectionId ?? KnowledgeCollectionScope.DefaultId,
+                    isRegeneratedTurn: false,
+                    runCancellation.Token);
                 if (knowledge is not null)
                 {
                     knowledgeContext = knowledge.Message;

@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Tests.Benchmarks;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Integration)]
@@ -65,10 +66,10 @@ public sealed class BenchmarkEndpointTests
     public async Task ListCells_ReturnsTheCellTableWithItsPerItemBreakdown()
     {
         await using var context = CreateContext();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: true));
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: true));
         var runId = Guid.Parse("00000000-0000-0000-0000-0000000000aa");
         var itemId = Guid.Parse("00000000-0000-0000-0000-0000000000bb");
-        context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Runs.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkCellPage
                {
                    Cells =
@@ -146,8 +147,8 @@ public sealed class BenchmarkEndpointTests
     public async Task ListProjects_ReturnsSafeSummariesWithoutCoreTask()
     {
         await using var context = CreateContext();
-        context.Store.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns([Project(isFrozen: true)]);
-        context.Store.CountRunsByProjectAsync(Arg.Any<CancellationToken>())
+        context.Stores.Projects.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns([Project(isFrozen: true)]);
+        context.Stores.Runs.CountRunsByProjectAsync(Arg.Any<CancellationToken>())
                .Returns<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>
                {
                    [ProjectId] = 1
@@ -170,7 +171,7 @@ public sealed class BenchmarkEndpointTests
         // — not a missing row and not a second query.
         var unusedProjectId = Guid.Parse("00000000-0000-0000-0000-0000000000aa");
         await using var context = CreateContext();
-        context.Store.ListProjectsAsync(Arg.Any<CancellationToken>())
+        context.Stores.Projects.ListProjectsAsync(Arg.Any<CancellationToken>())
                .Returns([
                    Project(isFrozen: true), Project(isFrozen: false) with
                    {
@@ -178,7 +179,7 @@ public sealed class BenchmarkEndpointTests
                        Name = "Never run"
                    }
                ]);
-        context.Store.CountRunsByProjectAsync(Arg.Any<CancellationToken>())
+        context.Stores.Runs.CountRunsByProjectAsync(Arg.Any<CancellationToken>())
                .Returns<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>
                {
                    [ProjectId] = 7
@@ -194,15 +195,15 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Equal(expected: 2, items.GetArrayLength());
         AssertEx.Equal(expected: 7, items[0].GetProperty("runCount").GetInt32());
         AssertEx.Equal(expected: 0, items[1].GetProperty("runCount").GetInt32(), "A project absent from the grouped count has no runs.");
-        await context.Store.Received(1).CountRunsByProjectAsync(Arg.Any<CancellationToken>());
-        await context.Store.DidNotReceive().CountRunsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await context.Stores.Runs.Received(1).CountRunsByProjectAsync(Arg.Any<CancellationToken>());
+        await context.Stores.Runs.DidNotReceive().CountRunsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task GetRun_ReturnsPersistentOutputButNeverRuntimeSnapshot()
     {
         await using var context = CreateContext();
-        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(output: "[{\"type\":\"text\",\"text\":\"ok\"}]"));
+        context.Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(output: "[{\"type\":\"text\",\"text\":\"ok\"}]"));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
         using var response = await client.SendAsync(request);
@@ -223,7 +224,7 @@ public sealed class BenchmarkEndpointTests
         // a stored rate can never drift out of step with the counts it was computed from. pp is 123 tokens over
         // 456.5 ms and tg is 89 over 1011.5 ms; a single blended figure could produce neither.
         await using var context = CreateContext();
-        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
+        context.Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>())
                .Returns(Run(BenchmarkPrimaryStatus.Succeeded,
                    throughput: new BenchmarkRunThroughput
                    {
@@ -258,7 +259,7 @@ public sealed class BenchmarkEndpointTests
         // A runtime that reports no timings must not be given a zero: the API says "not measured", and the UI shows a
         // dash rather than a number nobody produced.
         await using var context = CreateContext();
-        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(BenchmarkPrimaryStatus.Succeeded));
+        context.Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(BenchmarkPrimaryStatus.Succeeded));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
         using var response = await client.SendAsync(request);
@@ -294,9 +295,9 @@ public sealed class BenchmarkEndpointTests
             "solid answer",
             80,
             "v1:aggregate"));
-        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
+        context.Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>())
                .Returns(Run(BenchmarkPrimaryStatus.Succeeded, BenchmarkRunJudgeStates.Succeeded, judgeAttemptId: attemptId));
-        context.Store.GetJudgeAttemptAsync(attemptId, Arg.Any<CancellationToken>())
+        context.Stores.Judging.GetJudgeAttemptAsync(attemptId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkJudgeAttemptRecord
                {
                    Id = attemptId,
@@ -1077,7 +1078,7 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         var receipt = "{\"executableSha256\":\"exe-sha\",\"auxAssets\":{\"hasLora\":true,\"hasMmproj\":false,\"hasDraft\":false}}";
-        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
+        context.Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>())
                .Returns(Run(intent: new BenchmarkRunLaunchIntent
                    {
                        Variant = "cuda",
@@ -1155,7 +1156,7 @@ public sealed class BenchmarkEndpointTests
     public async Task GetRun_ExposesTheStopReasonAndTheTruncatedRankExclusion()
     {
         await using var context = CreateContext();
-        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
+        context.Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>())
                .Returns(Run(BenchmarkPrimaryStatus.Succeeded,
                    output: "[{\"kind\":\"output\",\"content\":\"cut\"}]",
                    primaryStopReason: "length",
@@ -1177,7 +1178,7 @@ public sealed class BenchmarkEndpointTests
     public async Task GetProject_ExposesTheRunBudgetsAndTheMutationCarriesThemToTheDraft()
     {
         await using var context = CreateContext();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(Project(isFrozen: false, maxOutputTokens: 2048, invocationTimeoutSeconds: 1800));
         BenchmarkProjectDraft? draft = null;
         context.Projects.CreateAsync(Arg.Do<BenchmarkProjectDraft>(value => draft = value), Arg.Any<CancellationToken>())
@@ -1237,7 +1238,7 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         // The delete reads the project's run ids first, to remove their artifact bytes once the rows are gone.
-        context.Store.ListAllRunsAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Runs.ListAllRunsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkRunPage
                {
                    Items = [],
@@ -1259,14 +1260,14 @@ public sealed class BenchmarkEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        await context.Store.Received(1).DeleteProjectAsync(ProjectId, 7, Arg.Any<CancellationToken>());
+        await context.Stores.Projects.Received(1).DeleteProjectAsync(ProjectId, 7, Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task DeleteProject_WhileARunIsActive_ReturnsConflictNamingTheRunNotTheFreeze()
     {
         await using var context = CreateContext();
-        context.Store.DeleteProjectAsync(ProjectId, 7, Arg.Any<CancellationToken>())
+        context.Stores.Projects.DeleteProjectAsync(ProjectId, 7, Arg.Any<CancellationToken>())
                .Returns<Task>(_ => throw new BenchmarkConflictException("ActiveRun"));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Delete, Api + $"/projects/{ProjectId}", new
@@ -1284,7 +1285,7 @@ public sealed class BenchmarkEndpointTests
     public async Task ScoreRun_WhenScoreIsInvalid_ReturnsBadRequest()
     {
         await using var context = CreateContext();
-        context.Store.SetUserScoreAsync(RunId, 6, 3, Arg.Any<CancellationToken>())
+        context.Stores.Runs.SetUserScoreAsync(RunId, 6, 3, Arg.Any<CancellationToken>())
                .Returns<Task<BenchmarkRunRecord>>(_ => throw new BenchmarkValidationException("Score must be between 1 and 5."));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Put, Api + $"/runs/{RunId}/score", new
@@ -1344,8 +1345,8 @@ public sealed class BenchmarkEndpointTests
             BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
             BenchmarkJudgeRubricDefaults.Default(),
             ReferenceAnswer: null);
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false));
-        context.Store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false));
+        context.Stores.Judging.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkJudgePolicyRevisionRecord
                {
                    Id = Guid.NewGuid(),
@@ -1367,7 +1368,7 @@ public sealed class BenchmarkEndpointTests
         // taken from the ONE builder every other display gate reads; a second expression here would let
         // numbers measured against different corpora compare as equal.
         await using var context = CreateContext();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false, fidelity: true));
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false, fidelity: true));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
         using var response = await client.SendAsync(request);
@@ -1392,7 +1393,7 @@ public sealed class BenchmarkEndpointTests
         // Null is the honest answer: a project that measures no KL divergence has nothing for a stored figure to be
         // compared against, and an emitted digest would invite a comparison that means nothing.
         await using var context = CreateContext();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false));
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
         using var response = await client.SendAsync(request);
@@ -1408,8 +1409,8 @@ public sealed class BenchmarkEndpointTests
     {
         // The listing stays a flat scan. The fidelity block is detail-only, exactly as coreTask and the judge are.
         await using var context = CreateContext();
-        context.Store.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns([Project(isFrozen: false, fidelity: true)]);
-        context.Store.CountRunsByProjectAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>());
+        context.Stores.Projects.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns([Project(isFrozen: false, fidelity: true)]);
+        context.Stores.Runs.CountRunsByProjectAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>());
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/projects");
         using var response = await client.SendAsync(request);
@@ -1426,8 +1427,8 @@ public sealed class BenchmarkEndpointTests
         // has runs can never turn fidelity on at all, which is the hole this route exists to close.
         await using var context = CreateContext();
         var queued = Guid.NewGuid();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: true, fidelity: true));
-        context.Store.CountRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(3);
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: true, fidelity: true));
+        context.Stores.Runs.CountRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(3);
         BenchmarkProjectFidelitySettings? settings = null;
         var measureExisting = false;
         context.Projects.UpdateFidelityAsync(ProjectId, 4, Arg.Do<BenchmarkProjectFidelitySettings>(value => settings = value),
@@ -1465,7 +1466,7 @@ public sealed class BenchmarkEndpointTests
     public async Task GetProject_WhenMissing_ReturnsProblemDetailsNotFound()
     {
         await using var context = CreateContext();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns((BenchmarkProjectRecord?)null);
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns((BenchmarkProjectRecord?)null);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
         using var response = await client.SendAsync(request);
@@ -1674,14 +1675,14 @@ public sealed class BenchmarkEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        _ = context.Store.DidNotReceive().SetUserScoreAsync(Arg.Any<Guid>(), Arg.Any<int?>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
+        _ = context.Stores.Runs.DidNotReceive().SetUserScoreAsync(Arg.Any<Guid>(), Arg.Any<int?>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task ScoreRun_AcceptsZeroAndClearsWithDelete()
     {
         await using var context = CreateContext();
-        context.Store.SetUserScoreAsync(RunId, Arg.Any<int?>(), 3, Arg.Any<CancellationToken>()).Returns(Run());
+        context.Stores.Runs.SetUserScoreAsync(RunId, Arg.Any<int?>(), 3, Arg.Any<CancellationToken>()).Returns(Run());
         using var client = context.Factory.CreateClient();
         using var scoreRequest = Authorized(context.Factory, HttpMethod.Put, Api + $"/runs/{RunId}/score", new
         {
@@ -1697,8 +1698,8 @@ public sealed class BenchmarkEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, scoreResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.OK, clearResponse.StatusCode);
-        _ = context.Store.Received(1).SetUserScoreAsync(RunId, 0, 3, Arg.Any<CancellationToken>());
-        _ = context.Store.Received(1).SetUserScoreAsync(RunId, null, 3, Arg.Any<CancellationToken>());
+        _ = context.Stores.Runs.Received(1).SetUserScoreAsync(RunId, 0, 3, Arg.Any<CancellationToken>());
+        _ = context.Stores.Runs.Received(1).SetUserScoreAsync(RunId, null, 3, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -1713,9 +1714,9 @@ public sealed class BenchmarkEndpointTests
             "solid answer",
             80,
             "v1:aggregate"));
-        context.Store.SetUserScoreAsync(RunId, Arg.Any<int?>(), 3, Arg.Any<CancellationToken>())
+        context.Stores.Runs.SetUserScoreAsync(RunId, Arg.Any<int?>(), 3, Arg.Any<CancellationToken>())
                .Returns(Run(BenchmarkPrimaryStatus.Succeeded, BenchmarkRunJudgeStates.Succeeded, judgeAttemptId: attemptId));
-        context.Store.GetJudgeAttemptAsync(attemptId, Arg.Any<CancellationToken>())
+        context.Stores.Judging.GetJudgeAttemptAsync(attemptId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkJudgeAttemptRecord
                {
                    Id = attemptId,
@@ -1793,7 +1794,7 @@ public sealed class BenchmarkEndpointTests
     {
         var enqueued = Guid.NewGuid();
         await using var context = CreateContext();
-        context.Store.CountRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(2);
+        context.Stores.Runs.CountRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(2);
         context.Projects.UpdateJudgePolicyAsync(ProjectId, 4, Arg.Any<BenchmarkJudgePolicyDraft?>(), true, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkJudgePolicyChange
                {
@@ -1911,8 +1912,8 @@ public sealed class BenchmarkEndpointTests
     public async Task ListRuns_ProjectsTheRankCohortAndTheRunsQualityScore()
     {
         await using var context = CreateContext();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: true));
-        context.Store.ListRunsAsync(ProjectId, 0, 50, null, true, Arg.Any<CancellationToken>())
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: true));
+        context.Stores.Runs.ListRunsAsync(ProjectId, 0, 50, null, true, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkRunPage
                {
                    Items =
@@ -1970,7 +1971,7 @@ public sealed class BenchmarkEndpointTests
 
     private sealed class Context : IAsyncDisposable
     {
-        public IBenchmarkStore Store { get; } = Substitute.For<IBenchmarkStore>();
+        public BenchmarkStoreSubstitutes Stores { get; } = new();
         public IBenchmarkProjectService Projects { get; } = Substitute.For<IBenchmarkProjectService>();
         public IBenchmarkRunFreezeService RunFreeze { get; } = Substitute.For<IBenchmarkRunFreezeService>();
         public IBenchmarkCatalogService Catalog { get; } = Substitute.For<IBenchmarkCatalogService>();
@@ -1990,12 +1991,11 @@ public sealed class BenchmarkEndpointTests
                         services.AddSingleton<TimeProvider>(clock);
                     }
 
-                    services.RemoveAll<IBenchmarkStore>();
+                    Stores.ReplaceIn(services);
                     services.RemoveAll<IBenchmarkProjectService>();
                     services.RemoveAll<IBenchmarkRunFreezeService>();
                     services.RemoveAll<IBenchmarkCatalogService>();
                     services.RemoveAll<IBenchmarkCancellationService>();
-                    services.AddSingleton(Store);
                     services.AddSingleton(Projects);
                     services.AddSingleton(RunFreeze);
                     services.AddSingleton(Catalog);

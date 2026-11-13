@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { localDefaultModelValue } from "@/core/models/NodeChatModelSelection";
 import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
 
-/* eslint-disable react-doctor/auth-token-in-web-storage -- The nine xe-node-chat-* keys below hold composer UI preferences only (selected model, reasoning effort, tools/agent-mode/knowledge-base/tokens-per-second toggles, sidebar collapse, selected conversation and agent ids); no credential or session token is persisted here. */
+/* eslint-disable react-doctor/auth-token-in-web-storage -- The ten xe-node-chat-* keys below hold composer UI preferences only (selected model, reasoning effort, tools/agent-mode/knowledge-base/tokens-per-second toggles, knowledge collection, sidebar collapse, selected conversation and agent ids); no credential or session token is persisted here. */
 
 // Persisted chat composer selections, mirroring the platform ToolCallingStore (zustand + guarded
 // globalThis.localStorage). Keys are global (not per-conversation) like the platform client. The raw
@@ -18,6 +18,10 @@ const AGENT_MODE_ENABLED_STORAGE_KEY = "xe-node-chat-agent-mode";
 const SELECTED_AGENT_STORAGE_KEY = "xe-node-chat-selected-agent";
 const SHOW_TOKENS_PER_SECOND_STORAGE_KEY = "xe-node-chat-show-tokens-per-second";
 const KNOWLEDGE_BASE_ENABLED_STORAGE_KEY = "xe-node-chat-knowledge-base-enabled";
+const KNOWLEDGE_COLLECTION_STORAGE_KEY = "xe-node-chat-knowledge-collection";
+
+// The backwards-compatible collection a send grounds on when nothing else was picked.
+export const defaultKnowledgeCollectionId = "DEFAULT";
 
 // Graded reasoning efforts, offered for models that advertise the `thinking` capability.
 // "auto" is APPENDED, never prepended: clampReasoningEffort falls back to `available[0]`, so a leading "auto" would
@@ -114,6 +118,9 @@ interface NodeChatPreferencesStore {
 	// top-k knowledge-base hits for the message and inlines them (fenced) into the turn, surfacing their sources.
 	// Global preference stamped per-send, mirroring toolsEnabled. Ignored in agent mode (the agent uses the KB tool).
 	knowledgeBaseEnabled: boolean;
+	// The knowledge collection the composer's picker chose; stamped on each grounded send and regenerate. Chat.tsx falls
+	// back to DEFAULT when the stored id no longer names a listed collection.
+	knowledgeCollectionId: string;
 	actions: {
 		setSelectedModel: (value: string) => void;
 		setReasoningEffort: (value: ReasoningEffort) => void;
@@ -131,6 +138,7 @@ interface NodeChatPreferencesStore {
 		setShowTokensPerSecond: (value: boolean) => void;
 		setKnowledgeBaseEnabled: (value: boolean) => void;
 		toggleKnowledgeBase: () => void;
+		setKnowledgeCollectionId: (value: string) => void;
 	};
 }
 
@@ -188,6 +196,11 @@ function readStoredKnowledgeBaseEnabled(): boolean {
 	return readStoredString(KNOWLEDGE_BASE_ENABLED_STORAGE_KEY) === "true";
 }
 
+function readStoredKnowledgeCollectionId(): string {
+	const stored = readStoredString(KNOWLEDGE_COLLECTION_STORAGE_KEY);
+	return stored && stored.trim().length > 0 ? stored : defaultKnowledgeCollectionId;
+}
+
 export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((set) => ({
 	selectedModel: readStoredModel(),
 	reasoningEffort: readStoredReasoningEffort(),
@@ -198,6 +211,7 @@ export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((s
 	selectedAgentId: readStoredSelectedAgentId(),
 	showTokensPerSecond: readStoredShowTokensPerSecond(),
 	knowledgeBaseEnabled: readStoredKnowledgeBaseEnabled(),
+	knowledgeCollectionId: readStoredKnowledgeCollectionId(),
 	actions: {
 		setSelectedModel: (value) => {
 			writeStoredValue(SELECTED_MODEL_STORAGE_KEY, value);
@@ -270,6 +284,10 @@ export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((s
 
 				return { knowledgeBaseEnabled: nextValue };
 			});
+		},
+		setKnowledgeCollectionId: (value) => {
+			writeStoredValue(KNOWLEDGE_COLLECTION_STORAGE_KEY, value);
+			set({ knowledgeCollectionId: value });
 		},
 	},
 }));

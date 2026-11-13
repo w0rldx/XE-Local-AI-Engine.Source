@@ -49,7 +49,8 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
     private static readonly TimeSpan DefaultMeasurementTimeout = TimeSpan.FromHours(2);
 
     private readonly TimeSpan _measurementTimeout;
-    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkFidelityStore _fidelityStore;
+    private readonly IBenchmarkProjectStore _projectStore;
     private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
     private readonly IGgufModelStore _ggufModels;
@@ -63,7 +64,8 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
     private readonly BenchmarkAdmissionRetry _admissionRetry;
     private readonly ILogger<BenchmarkFidelityExecutor> _logger;
 
-    public BenchmarkFidelityExecutor(IBenchmarkStore store,
+    public BenchmarkFidelityExecutor(IBenchmarkFidelityStore fidelityStore,
+        IBenchmarkProjectStore projectStore,
         IBenchmarkRuntimeSnapshotFactory snapshots,
         IBenchmarkInstalledModelLeaseProvider installedModels,
         IGgufModelStore ggufModels,
@@ -78,7 +80,8 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         ILogger<BenchmarkFidelityExecutor> logger,
         TimeSpan? measurementTimeout = null)
     {
-        _store = store;
+        _fidelityStore = fidelityStore;
+        _projectStore = projectStore;
         _snapshots = snapshots;
         _installedModels = installedModels;
         _ggufModels = ggufModels;
@@ -111,10 +114,10 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         var token = registration.Token;
         try
         {
-            var attempt = await _store.GetFidelityAttemptAsync(attemptId, token)
+            var attempt = await _fidelityStore.GetFidelityAttemptAsync(attemptId, token)
                           ?? throw new BenchmarkExecutionException("The fidelity attempt is no longer available.");
             var command = await MeasureAsync(work, attempt, token);
-            _ = await _store.MarkFidelitySucceededAsync(command, CancellationToken.None);
+            _ = await _fidelityStore.MarkFidelitySucceededAsync(command, CancellationToken.None);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -122,14 +125,14 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         }
         catch (OperationCanceledException)
         {
-            _ = await _store.MarkFidelityCancelledAsync(work.RunId, work.Version, CancellationToken.None);
+            _ = await _fidelityStore.MarkFidelityCancelledAsync(work.RunId, work.Version, CancellationToken.None);
         }
         catch (BenchmarkFidelityRequeueException exception)
         {
             // NOT a failure: the blocker is another process's work, and it clears itself. The item goes back to Queued
             // carrying the reason, so the consumer moves on to whatever else is waiting and comes back to this.
             _logger.LogInformation("Benchmark fidelity work {RunId} was requeued: {Reason}", work.RunId, exception.Message);
-            _ = await _store.RequeueFidelityAsync(work.RunId, work.Version, exception.Message, CancellationToken.None);
+            _ = await _fidelityStore.RequeueFidelityAsync(work.RunId, work.Version, exception.Message, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -137,7 +140,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
 
             // Fail CLOSED. A measurement that could not be taken is recorded as a failure with a reason, never as a
             // success carrying nulls — a null perplexity beside a real one reads as "this quant has no loss".
-            _ = await _store.MarkFidelityFailedAsync(work.RunId,
+            _ = await _fidelityStore.MarkFidelityFailedAsync(work.RunId,
                 work.Version,
                 exception is BenchmarkExecutionException or BenchmarkSnapshotException or LlamaRuntimeException
                     ? exception.Message
@@ -151,7 +154,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         CancellationToken token)
     {
         var snapshot = _snapshots.Deserialize(work.Run.RuntimeSnapshotJson.Span);
-        var project = await _store.GetProjectAsync(work.Run.ProjectId, token)
+        var project = await _projectStore.GetProjectAsync(work.Run.ProjectId, token)
                       ?? throw new BenchmarkExecutionException("The benchmark project is no longer available.");
         var corpus = BenchmarkFidelityCorpus.Require();
         var chunks = BenchmarkFidelityPolicy.ClampChunks(project.FidelityChunks);
@@ -351,7 +354,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
             BestEffortFile.TryDeleteFile(tempPath);
         }
 
-        _ = _cache.Trim(await _runtimeSettings.GetBenchmarkKldCacheMaxBytesAsync(token), await _store.ListLiveFidelityDigestsAsync(token));
+        _ = _cache.Trim(await _runtimeSettings.GetBenchmarkKldCacheMaxBytesAsync(token), await _fidelityStore.ListLiveFidelityDigestsAsync(token));
         return new KldPreparation
         {
             Key = key,

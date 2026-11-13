@@ -26,6 +26,9 @@ public interface INodeChatRegenerationService
     ///     byte-identical.
     /// </param>
     /// <param name="autoAcceptWebContent">The conversation's web result review mode, as a send carries it.</param>
+    /// <param name="knowledgeCollectionId">
+    ///     The collection a grounded rerun searches, as a send carries it; null is DEFAULT and an invalid id is refused.
+    /// </param>
     IAsyncEnumerable<ChatStreamEvent> RegenerateAsync(Guid conversationId,
         Guid originalMessageId,
         string? reasoningEffort = null,
@@ -34,6 +37,7 @@ public interface INodeChatRegenerationService
         IReadOnlyDictionary<Guid, Guid>? selectedPath = null,
         SamplingOptions? samplingOptions = null,
         bool autoAcceptWebContent = false,
+        string? knowledgeCollectionId = null,
         CancellationToken cancellationToken = default);
 }
 

@@ -111,7 +111,10 @@ public sealed record NodeChatStreamRequest(
     // The conversation's web result review mode: true skips the review card (ADR 0017). Absent means review.
     bool AutoAcceptWebContent = false,
     // The engine execution driving this turn, stamped on its run envelope. SERVER-set: the chat hub clears it.
-    ExecutionParent? ExecutionParent = null);
+    ExecutionParent? ExecutionParent = null,
+    // The knowledge collection UseKnowledgeBase grounds on; null is DEFAULT. SendMessageAsync normalises it through
+    // KnowledgeCollectionScope and refuses an invalid id, because the collection is the knowledge isolation boundary.
+    string? KnowledgeCollectionId = null);
 
 /// <summary>
 ///     The engine execution that drove a chat turn, recorded on the turn's run envelope so a reader can join the

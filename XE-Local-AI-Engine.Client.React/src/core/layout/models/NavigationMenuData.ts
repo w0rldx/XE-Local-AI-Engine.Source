@@ -79,6 +79,8 @@ export interface INavigationLink {
 	// Only a top-level LEAF carries this; a group's visibility in Simple mode is decided by its surviving children, so
 	// setting it on a group would be a second, contradictable authority. The test enforces both halves of that rule.
 	simple?: boolean;
+	// A short tier label shown beside the entry's own label in the expanded desktop rail (External Apps: Experimental).
+	badgeTranslationKey?: string;
 }
 
 // Full link set with the related node pages collapsed into groups (Models / Settings / Automation / Preview). A group
@@ -219,6 +221,8 @@ export const allNavigationLinks: INavigationLink[] = [
 		id: "externalApps",
 		icon: IconApps,
 		translationKey: "navigation.externalAppsGroup",
+		// Frozen and experimental (ADR 0010/0011 amendment 2026-11-12): bug fixes only, outside the 1.0 API promise.
+		badgeTranslationKey: "pages.externalApps.experimental.badge",
 		links: [
 			{
 				translationKey: "navigation.externalAppsCatalog",

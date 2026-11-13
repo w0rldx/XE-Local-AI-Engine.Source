@@ -1,12 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Represents access token query redactor.
+///     Redacts the values of the query parameters that must never reach a log: <c>access_token</c> (the SignalR JWT)
+///     and <c>query</c> (the conversation search text, plaintext of encrypted chats).
 /// </summary>
-public static class AccessTokenQueryRedactor
+public static class SensitiveQueryRedactor
 {
-    private const string AccessTokenParameter = "access_token";
     private const string RedactedValue = "[REDACTED]";
+
+    private static readonly string[] SensitiveParameters = ["access_token", "query"];
 
     public static string Redact(string? queryString)
     {
@@ -30,7 +32,8 @@ public static class AccessTokenQueryRedactor
             var separatorIndex = segment.IndexOf(value: '=', StringComparison.Ordinal);
             var key = separatorIndex >= 0 ? segment[..separatorIndex] : segment;
 
-            if (!string.Equals(key, AccessTokenParameter, StringComparison.OrdinalIgnoreCase))
+            // Compared decoded: the server binds a percent-encoded key ("%71uery") as the parameter it spells.
+            if (!SensitiveParameters.Contains(Uri.UnescapeDataString(key), StringComparer.OrdinalIgnoreCase))
             {
                 continue;
             }

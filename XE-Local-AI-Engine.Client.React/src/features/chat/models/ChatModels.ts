@@ -13,6 +13,8 @@ export type { ReasoningEffort };
 
 import type { ChatMessagePart, ToolCallState } from "@/core/models/ChatMessageParts";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
+import type { ChatExportFormat } from "@/features/chat/models/ChatExportFile";
+import type { ChatSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
 import type { ChatTurnThroughput } from "@/features/chat/models/NodeChatStreamTypes";
 
@@ -157,6 +159,9 @@ export interface ChatConversationModel {
 	// (or no system prompt when it is unset).
 	isPlain?: boolean;
 	plainSystemPrompt?: string;
+	// The conversation's own sampling settings, stored on the node so they follow the chat to every client. Unset means
+	// this browser's defaults (ChatSamplingPreferencesStore) apply to its sends.
+	samplingOptions?: ChatSamplingOptions;
 	// The agent the conversation is bound to; a send that picks no agent of its own runs as this one.
 	agentDefinitionId?: string;
 	origin?: ChatOrigin;
@@ -260,6 +265,13 @@ export interface ChatConversationListModel {
 	maxUploadFileSizeMb?: number;
 }
 
+// A content search's matches as list rows, newest first (the snippet stands in for the preview), and whether the node
+// is still indexing conversations stored before it started.
+export interface ChatConversationSearchModel {
+	conversations: ChatConversationModel[];
+	indexing: boolean;
+}
+
 // Result of a manual, non-destructive compaction. `outcome` mirrors the backend ConversationCompactionOutcome names
 // ("Compacted", "NothingToCompact", "NoLocalModel", "SummarizerReturnedNothing", "TimedOut", "ConversationNotFound"); the remaining
 // fields are populated only when a synopsis was produced.
@@ -273,6 +285,13 @@ export interface ChatCompactionResult {
 	// cloud/unknown selection was downgraded to a node-local model). Drives the "summarized on-device" notice.
 	modelUsed?: string;
 	usedFallbackModel: boolean;
+}
+
+// The composer's knowledge-collection picker: the listed collections (DEFAULT first), the current pick, and its setter.
+export interface KnowledgeCollectionPicker {
+	readonly options: readonly string[];
+	readonly selected: string;
+	readonly onChange: (collectionId: string) => void;
 }
 
 export interface ChatDisplayShellProps {
@@ -297,6 +316,8 @@ export interface ChatDisplayShellProps {
 	// Whether the node has at least one indexed knowledge document; gates whether the composer's KB toggle is enabled
 	// (an empty corpus disables it with a "no documents" tooltip). Defaults to true when absent.
 	knowledgeBaseHasDocuments?: boolean;
+	// The composer's knowledge-collection picker. Absent → no picker; grounding then searches DEFAULT.
+	knowledgeCollection?: KnowledgeCollectionPicker;
 	contextUsage?: ContextUsageModel;
 	// The node's message-size cap in KB, forwarded to the composer's size pre-check. Absent → no pre-check.
 	maxMessageSizeKb?: number;
@@ -305,6 +326,8 @@ export interface ChatDisplayShellProps {
 	capabilities: ChatUiCapabilities;
 	inputStatus: ChatInputStatus;
 	conversationSearchQuery?: string;
+	// The server's content search for the query; absent until it answers, when the sidebar filters what it has loaded.
+	conversationSearchResults?: ChatConversationSearchModel;
 	showArchivedConversations?: boolean;
 	// The sidebar holds only the most recent page; it then offers "Show all" through onShowAllConversations.
 	conversationListTruncated?: boolean;
@@ -350,7 +373,17 @@ export interface ChatDisplayShellProps {
 	onToggleConversationMemoryExcluded?: (conversationId: string, memoryExcluded: boolean) => void;
 	// Set the selected conversation's plain mode and custom system prompt; renders the plain controls when wired.
 	onSetConversationPlain?: (conversationId: string, isPlain: boolean, plainSystemPrompt: string | undefined) => void;
+	// Store (or clear with undefined) the selected conversation's own sampling settings, rejecting on a refused write;
+	// unwired, the sampling dialog edits this browser's defaults only.
+	onSetConversationSamplingOptions?: (conversationId: string, samplingOptions: ChatSamplingOptions | undefined) => Promise<void>;
+	// True once the selected conversation's full read (not just its list summary) is on screen; its stored sampling
+	// settings are known only then.
+	selectedConversationLoaded?: boolean;
 	onDeleteConversation?: (conversationId: string, skipConfirm: boolean) => void;
+	// The chat export file: one chat as Markdown or JSON, every chat as JSON, and a JSON import.
+	onExportConversation?: (conversationId: string, format: ChatExportFormat) => void;
+	onExportAllConversations?: () => void;
+	onImportConversations?: (file: File) => void;
 	onBranchFromMessage?: (messageId: string) => void;
 	activeRevisionByGroup?: Readonly<Record<string, string>>;
 	onSelectRevision?: (variantGroupId: string, messageId: string) => void;

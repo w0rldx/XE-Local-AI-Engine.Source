@@ -403,6 +403,9 @@ import type {
 	ExportGraphWorkflowDefinitionData,
 	ExportGraphWorkflowDefinitionErrors,
 	ExportGraphWorkflowDefinitionResponses,
+	ExportNodeChatConversationsData,
+	ExportNodeChatConversationsErrors,
+	ExportNodeChatConversationsResponses,
 	ExportTrainingDatasetData,
 	ExportTrainingDatasetErrors,
 	ExportTrainingDatasetResponses,
@@ -760,6 +763,9 @@ import type {
 	ImportKnowledgeRepositoryData,
 	ImportKnowledgeRepositoryErrors,
 	ImportKnowledgeRepositoryResponses,
+	ImportNodeChatConversationsData,
+	ImportNodeChatConversationsErrors,
+	ImportNodeChatConversationsResponses,
 	InspectGgufRepositoryData,
 	InspectGgufRepositoryErrors,
 	InspectGgufRepositoryResponses,
@@ -901,6 +907,9 @@ import type {
 	ListIntegrationTriggersData,
 	ListIntegrationTriggersErrors,
 	ListIntegrationTriggersResponses,
+	ListKnowledgeCollectionsData,
+	ListKnowledgeCollectionsErrors,
+	ListKnowledgeCollectionsResponses,
 	ListKnowledgeDocumentsData,
 	ListKnowledgeDocumentsErrors,
 	ListKnowledgeDocumentsResponses,
@@ -1198,6 +1207,9 @@ import type {
 	SearchKnowledgeData,
 	SearchKnowledgeErrors,
 	SearchKnowledgeResponses,
+	SearchNodeChatConversationsData,
+	SearchNodeChatConversationsErrors,
+	SearchNodeChatConversationsResponses,
 	SelectLocalModelData,
 	SelectLocalModelErrors,
 	SelectLocalModelResponses,
@@ -1225,6 +1237,9 @@ import type {
 	SetNodeChatConversationPlainData,
 	SetNodeChatConversationPlainErrors,
 	SetNodeChatConversationPlainResponses,
+	SetNodeChatConversationSamplingOptionsData,
+	SetNodeChatConversationSamplingOptionsErrors,
+	SetNodeChatConversationSamplingOptionsResponses,
 	SetNodeChatMessageFeedbackData,
 	SetNodeChatMessageFeedbackErrors,
 	SetNodeChatMessageFeedbackResponses,
@@ -1538,6 +1553,7 @@ import {
 	zExportBenchmarkProjectCsvResponse,
 	zExportBenchmarkProjectResponse,
 	zExportGraphWorkflowDefinitionResponse,
+	zExportNodeChatConversationsResponse,
 	zExportTrainingDatasetResponse,
 	zFreezeInferenceProfileResponse,
 	zGenerateIntegrationApiKeyResponse,
@@ -1657,6 +1673,7 @@ import {
 	zImportAgentTemplatesResponse,
 	zImportGraphWorkflowDefinitionResponse,
 	zImportKnowledgeRepositoryResponse,
+	zImportNodeChatConversationsResponse,
 	zInspectGgufRepositoryResponse,
 	zInspectImageRepositoryResponse,
 	zInstallExternalAppResponse,
@@ -1704,6 +1721,7 @@ import {
 	zListIntegrationExecutionsResponse,
 	zListIntegrationSessionsResponse,
 	zListIntegrationTriggersResponse,
+	zListKnowledgeCollectionsResponse,
 	zListKnowledgeDocumentsResponse,
 	zListLocalModelsResponse,
 	zListMcpServersResponse,
@@ -1802,6 +1820,7 @@ import {
 	zSaveTutorialStateResponse,
 	zScoreBenchmarkRunResponse,
 	zSearchKnowledgeResponse,
+	zSearchNodeChatConversationsResponse,
 	zSelectLocalModelResponse,
 	zSelectTranscriptionModelResponse,
 	zSendGraphWorkflowChatMessageResponse,
@@ -1811,6 +1830,7 @@ import {
 	zSetMcpServerEnabledResponse,
 	zSetNodeChatConversationMemoryExcludedResponse,
 	zSetNodeChatConversationPlainResponse,
+	zSetNodeChatConversationSamplingOptionsResponse,
 	zSetNodeChatMessageFeedbackResponse,
 	zSetNodeChatSelectedPathResponse,
 	zStartBenchmarkRunBatchResponse,
@@ -4474,6 +4494,36 @@ export const renameNodeChatConversation = <ThrowOnError extends boolean = true>(
 		},
 	});
 
+export const setNodeChatConversationSamplingOptions = <ThrowOnError extends boolean = true>(
+	options: Options<SetNodeChatConversationSamplingOptionsData, ThrowOnError>,
+): RequestResult<SetNodeChatConversationSamplingOptionsResponses, SetNodeChatConversationSamplingOptionsErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		SetNodeChatConversationSamplingOptionsResponses,
+		SetNodeChatConversationSamplingOptionsErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		responseValidator: async (data) => await zSetNodeChatConversationSamplingOptionsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/sampling-options",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const setNodeChatSelectedPath = <ThrowOnError extends boolean = true>(
 	options: Options<SetNodeChatSelectedPathData, ThrowOnError>,
 ): RequestResult<SetNodeChatSelectedPathResponses, SetNodeChatSelectedPathErrors, ThrowOnError> =>
@@ -4570,6 +4620,54 @@ export const deleteConversationFile = <ThrowOnError extends boolean = true>(
 		...options,
 	});
 
+export const exportNodeChatConversations = <ThrowOnError extends boolean = true>(
+	options?: Options<ExportNodeChatConversationsData, ThrowOnError>,
+): RequestResult<ExportNodeChatConversationsResponses, ExportNodeChatConversationsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ExportNodeChatConversationsResponses, ExportNodeChatConversationsErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zExportNodeChatConversationsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/chat/export",
+		...options,
+	});
+
+export const importNodeChatConversations = <ThrowOnError extends boolean = true>(
+	options: Options<ImportNodeChatConversationsData, ThrowOnError>,
+): RequestResult<ImportNodeChatConversationsResponses, ImportNodeChatConversationsErrors, ThrowOnError> =>
+	(options.client ?? client).post<ImportNodeChatConversationsResponses, ImportNodeChatConversationsErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zImportNodeChatConversationsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/chat/import",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const answerNowNodeChatMessage = <ThrowOnError extends boolean = true>(
 	options: Options<AnswerNowNodeChatMessageData, ThrowOnError>,
 ): RequestResult<AnswerNowNodeChatMessageResponses, AnswerNowNodeChatMessageErrors, ThrowOnError> =>
@@ -4615,6 +4713,28 @@ export const resolveUserQuestion = <ThrowOnError extends boolean = true>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const searchNodeChatConversations = <ThrowOnError extends boolean = true>(
+	options: Options<SearchNodeChatConversationsData, ThrowOnError>,
+): RequestResult<SearchNodeChatConversationsResponses, SearchNodeChatConversationsErrors, ThrowOnError> =>
+	(options.client ?? client).get<SearchNodeChatConversationsResponses, SearchNodeChatConversationsErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zSearchNodeChatConversationsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/chat/search",
+		...options,
 	});
 
 export const clearCloudSettings = <ThrowOnError extends boolean = true>(
@@ -7736,6 +7856,28 @@ export const getInvocationMonitor = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/invocations",
+		...options,
+	});
+
+export const listKnowledgeCollections = <ThrowOnError extends boolean = true>(
+	options?: Options<ListKnowledgeCollectionsData, ThrowOnError>,
+): RequestResult<ListKnowledgeCollectionsResponses, ListKnowledgeCollectionsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListKnowledgeCollectionsResponses, ListKnowledgeCollectionsErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zListKnowledgeCollectionsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/knowledge-base/collections",
 		...options,
 	});
 

@@ -156,6 +156,31 @@
 			"submit": "Antwort senden",
 			"title": "Der Assistent braucht Ihre Eingabe"
 		},
+		"exportImport": {
+			"assistant": "Assistent",
+			"attachmentsOmitted": "Angehängte Dateien, nicht enthalten: {{names}}",
+			"exportAll": "Alle Chats exportieren (JSON)",
+			"exportFailed": "Export fehlgeschlagen.",
+			"exportJson": "Als JSON exportieren",
+			"exportMarkdown": "Als Markdown exportieren",
+			"import": "Chats importieren (JSON)",
+			"importFailed": "Die Datei konnte nicht importiert werden.",
+			"imported_one": "{{count}} Chat importiert. Anhänge und Tool-Aufrufe sind nicht Teil eines Exports.",
+			"imported_other": "{{count}} Chats importiert. Anhänge und Tool-Aufrufe sind nicht Teil eines Exports.",
+			"menuAria": "Chats exportieren oder importieren",
+			"notJson": "Diese Datei ist kein JSON.",
+			"tooLarge": "Diese Datei ist größer als die 64 MB, die ein Import annimmt.",
+			"toolCallsOmitted_one": "{{count}} Tool-Aufruf, nicht enthalten",
+			"toolCallsOmitted_other": "{{count}} Tool-Aufrufe, nicht enthalten",
+			"unsupportedVersion": "Dieser Chat-Export hat eine Formatversion, die diese App nicht lesen kann.",
+			"untitled": "Unbenannter Chat",
+			"user": "Benutzer",
+			"wrongFormat": "Diese Datei ist kein Chat-Export."
+		},
+		"knowledgeCollection": {
+			"current": "Wissenssammlung: {{collection}}",
+			"label": "Wissenssammlung"
+		},
 		"notices": {
 			"agentUnavailable": "Agent nicht verfügbar",
 			"agentUnavailableText": "Der Agent dieses Chats existiert nicht mehr, deshalb hat der Standard-Assistent geantwortet.",
@@ -205,6 +230,9 @@
 		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus.",
 		"reasoningMode": "Reasoning-Modus",
+		"search": {
+			"indexing": "Ältere Unterhaltungen werden noch indiziert; Ergebnisse können unvollständig sein."
+		},
 		"shortcuts": {
 			"keys": {
 				"ctrl": "Strg",
@@ -2459,7 +2487,8 @@
 			"samplingOptions": {
 				"close": "Schließen",
 				"cloudUnsupported": "Von Cloud-Anbietern nicht unterstützt",
-				"description": "Diese Parameter überschreiben die Modellstandards für die nächste Nachricht. Sie werden nur in diesem Browser gespeichert, nicht pro Chat.",
+				"conversationDescription": "Diese Einstellungen werden mit diesem Chat gespeichert und folgen ihm auf jedes Gerät. „Standard verwenden“ stellt die Standards dieses Browsers wieder her.",
+				"description": "Diese Standards überschreiben die Modellstandards für neue Chats und für Chats ohne eigene Einstellungen. Sie werden nur in diesem Browser gespeichert.",
 				"frequencyPenalty": "Häufigkeitsstrafe",
 				"frequencyPenaltyDescription": "Bestraft Tokens proportional zur Häufigkeit ihres Auftretens in der Ausgabe.",
 				"groupLimits": "Limits",
@@ -2484,13 +2513,15 @@
 				"seedDescription": "Zufalls-Seed für Reproduzierbarkeit. -1 verwendet einen zufälligen Seed.",
 				"stop": "Stop-Sequenzen",
 				"stopDescription": "Eine Stop-Sequenz pro Zeile. Das Modell hält an, wenn es eine dieser Zeichenfolgen ausgibt.",
+				"stopLimit": "Höchstens {{count}} Stop-Sequenzen mit jeweils bis zu {{length}} Zeichen.",
 				"temperature": "Temperatur",
 				"temperatureDescription": "Steuert die Zufälligkeit. Niedrigere Werte sind deterministischer; höhere Werte sind kreativer.",
 				"title": "Erweiterte Sampling-Optionen",
 				"topK": "Top K",
 				"topKDescription": "Begrenzt das Sampling auf die Top-K wahrscheinlichsten Tokens.",
 				"topP": "Top P",
-				"topPDescription": "Schwellenwert für Nucleus-Sampling. Nur Tokens, deren kumulierte Wahrscheinlichkeit diesen Wert erreicht, werden berücksichtigt."
+				"topPDescription": "Schwellenwert für Nucleus-Sampling. Nur Tokens, deren kumulierte Wahrscheinlichkeit diesen Wert erreicht, werden berücksichtigt.",
+				"useDefaults": "Standard verwenden"
 			},
 			"send": "Senden",
 			"sources": {
@@ -3613,6 +3644,10 @@
 				},
 				"loadMore": "Weitere Ereignisse laden",
 				"title": "Verlauf"
+			},
+			"experimental": {
+				"badge": "Experimentell",
+				"tooltip": "External Apps ist eingefroren: Es gibt nur noch Fehlerbehebungen, die 1.0-API-Zusage gilt hier nicht, und die Funktion kann sich ändern oder entfernt werden."
 			},
 			"failure": {
 				"Cancelled": "Der Vorgang wurde abgebrochen, bevor er abgeschlossen war.",
@@ -5381,6 +5416,7 @@
 			"collection": {
 				"description": "Uploads, Repository-Importe, Dokumentlisten und Suchen bleiben innerhalb dieses Namensraums.",
 				"invalid": "Verwenden Sie 1–128 Zeichen: Buchstaben, Ziffern, Punkte, Unterstriche oder Bindestriche.",
+				"known": "Vorhandene Sammlungen",
 				"label": "Sammlung",
 				"open": "Sammlung öffnen"
 			},

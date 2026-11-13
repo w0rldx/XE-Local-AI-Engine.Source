@@ -1,4 +1,4 @@
-import { Collapse, Menu, ScrollArea, Text, Tooltip, UnstyledButton } from "@mantine/core";
+import { Badge, Collapse, Group, Menu, ScrollArea, Text, Tooltip, UnstyledButton } from "@mantine/core";
 import { IconChevronRight, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand } from "@tabler/icons-react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { m } from "framer-motion";
@@ -58,6 +58,7 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 						id: link.id,
 						icon: link.icon,
 						label: t(link.translationKey),
+						badge: link.badgeTranslationKey ? t(link.badgeTranslationKey) : undefined,
 						to: link.to,
 						onClick: link.onClick,
 						nestedLinks: link.links.map((nestedLink) => ({
@@ -74,6 +75,7 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 						id: link.id,
 						icon: link.icon,
 						label: t(link.translationKey),
+						badge: link.badgeTranslationKey ? t(link.badgeTranslationKey) : undefined,
 						to: link.to,
 						onClick: link.onClick,
 					});
@@ -146,9 +148,16 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 					<item.icon size={20} />
 				</span>
 				<m.div variants={labelVariants} initial={false} className={classes["control-label-motion"]}>
-					<Text size="sm" fw={500}>
-						{item.label}
-					</Text>
+					<Group gap={6} wrap="nowrap">
+						<Text size="sm" fw={500}>
+							{item.label}
+						</Text>
+						{item.badge ? (
+							<Badge size="xs" variant="light" color="orange" data-testid={`nav-badge-${item.id}`}>
+								{item.badge}
+							</Badge>
+						) : null}
+					</Group>
 				</m.div>
 				{/* Chevron is only meaningful for an expandable group in the expanded rail; the collapsed rail
 				    swaps in a flyout menu (below) so children stay reachable without the chevron. */}

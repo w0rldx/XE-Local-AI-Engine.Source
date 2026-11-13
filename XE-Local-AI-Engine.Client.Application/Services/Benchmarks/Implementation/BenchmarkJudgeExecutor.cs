@@ -47,7 +47,9 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
     /// </summary>
     private static readonly JsonElement JudgeResponseFormatSchema = ParseJudgeResponseFormatSchema();
 
-    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkJudgeStore _judgeStore;
+    private readonly IBenchmarkRunStore _runStore;
+    private readonly IBenchmarkTaskItemStore _taskItemStore;
     private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
     private readonly ICapacityService _capacity;
@@ -65,7 +67,9 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
     private readonly BenchmarkRunArtifactBlobStore _artifacts;
     private readonly ILogger<BenchmarkJudgeExecutor> _logger;
 
-    public BenchmarkJudgeExecutor(IBenchmarkStore store,
+    public BenchmarkJudgeExecutor(IBenchmarkJudgeStore judgeStore,
+        IBenchmarkRunStore runStore,
+        IBenchmarkTaskItemStore taskItemStore,
         IBenchmarkRuntimeSnapshotFactory snapshots,
         IBenchmarkInstalledModelLeaseProvider installedModels,
         ICapacityService capacity,
@@ -83,7 +87,9 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
         BenchmarkRunArtifactBlobStore artifacts,
         ILogger<BenchmarkJudgeExecutor> logger)
     {
-        _store = store;
+        _judgeStore = judgeStore;
+        _runStore = runStore;
+        _taskItemStore = taskItemStore;
         _snapshots = snapshots;
         _installedModels = installedModels;
         _capacity = capacity;
@@ -129,11 +135,11 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
         try
         {
             _events.BeginActivePhase(work.RunId, work.Run.LastStreamSequence);
-            attempt = await _store.GetJudgeAttemptAsync(attemptId, token)
+            attempt = await _judgeStore.GetJudgeAttemptAsync(attemptId, token)
                       ?? throw new BenchmarkExecutionException("The judge attempt is no longer available.");
             // An attempt frozen under a different launch-identity scheme is failed before it launches.
             BenchmarkLaunchIdentityScheme.RequireCurrent(attempt.LaunchIntent);
-            var revision = await _store.GetJudgePolicyRevisionAsync(attempt.PolicyRevisionId, token)
+            var revision = await _judgeStore.GetJudgePolicyRevisionAsync(attempt.PolicyRevisionId, token)
                            ?? throw new BenchmarkExecutionException("The judge policy revision is no longer available.");
             policyHash = revision.PolicyHash;
             var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
@@ -355,7 +361,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
                 State = BenchmarkRunJudgeStates.Succeeded,
                 RunVersion = work.Run.Version + 1
             });
-        var persisted = await _store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
+        var persisted = await _judgeStore.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
         {
             RunId = work.RunId,
             ExpectedWorkVersion = work.Version,
@@ -396,7 +402,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             artifacts.Add(await WriteArtifactAsync(runId, outcome.Result.Id, BenchmarkRunArtifactKinds.PythonTestsStderr, outcome.StandardError, cancellationToken));
         }
 
-        _ = await _store.AddRunArtifactsAsync(runId, attemptId, artifacts, cancellationToken);
+        _ = await _judgeStore.AddRunArtifactsAsync(runId, attemptId, artifacts, cancellationToken);
     }
 
     private async Task<BenchmarkRunArtifactCommand> WriteArtifactAsync(Guid runId,
@@ -452,7 +458,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
     /// </remarks>
     private async Task<BenchmarkJudgePolicyV1> ApplyItemOverridesAsync(BenchmarkJudgePolicyV1 policy, BenchmarkRunRecord run, CancellationToken cancellationToken)
     {
-        var item = await BenchmarkTaskItemService.FindTaskItemAsync(_store, run, cancellationToken);
+        var item = await BenchmarkTaskItemService.FindTaskItemAsync(_taskItemStore, run, cancellationToken);
         if (item is null)
         {
             // No item, or it was deleted after the run was frozen. The ranking read already excludes such a run as item-set-revised,
@@ -663,7 +669,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
 
         try
         {
-            _ = await _store.MarkJudgeLaunchReadyAsync(attempt.Id,
+            _ = await _judgeStore.MarkJudgeLaunchReadyAsync(attempt.Id,
                 work.QueueSequence,
                 work.Version,
                 command,
@@ -685,7 +691,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
     {
         await CheckpointAsync(work, attempt, policyHash, receipt: null, environment);
         var runId = work.RunId;
-        var run = await _store.GetRunAsync(runId, CancellationToken.None);
+        var run = await _runStore.GetRunAsync(runId, CancellationToken.None);
         if (run is null || run.Judge?.State != BenchmarkRunJudgeStates.Running)
         {
             _events.EvictPlaintext(runId);
@@ -701,7 +707,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             });
         try
         {
-            var persisted = await _store.MarkJudgeCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None);
+            var persisted = await _judgeStore.MarkJudgeCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None);
             _events.PublishReserved(terminal with
             {
                 Payload = terminal.Payload with
@@ -712,7 +718,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
         }
         catch (BenchmarkConflictException)
         {
-            var current = await _store.GetRunAsync(runId, CancellationToken.None);
+            var current = await _runStore.GetRunAsync(runId, CancellationToken.None);
             if (current?.Judge?.State != BenchmarkRunJudgeStates.Cancelled)
             {
                 throw;
@@ -730,7 +736,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
     {
         await CheckpointAsync(work, attempt, policyHash, receipt: null, environment);
         var runId = work.RunId;
-        var run = await _store.GetRunAsync(runId, CancellationToken.None);
+        var run = await _runStore.GetRunAsync(runId, CancellationToken.None);
         if (run is null
             || run.Judge?.State is BenchmarkRunJudgeStates.Succeeded or BenchmarkRunJudgeStates.Failed or BenchmarkRunJudgeStates.Cancelled)
         {
@@ -745,7 +751,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
                 State = BenchmarkRunJudgeStates.Failed,
                 RunVersion = run.Version + 1
             });
-        var persisted = await _store.MarkJudgeFailedAsync(runId, work.Version, message, terminal.Sequence, CancellationToken.None);
+        var persisted = await _judgeStore.MarkJudgeFailedAsync(runId, work.Version, message, terminal.Sequence, CancellationToken.None);
         _events.PublishReserved(terminal with
         {
             Payload = terminal.Payload with

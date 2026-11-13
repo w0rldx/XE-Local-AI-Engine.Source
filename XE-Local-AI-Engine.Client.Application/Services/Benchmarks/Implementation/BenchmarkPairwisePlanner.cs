@@ -5,24 +5,28 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <inheritdoc />
 public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
 {
-    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkPairwiseStore _pairwiseStore;
+    private readonly IBenchmarkJudgeStore _judgeStore;
     private readonly IBenchmarkJudgeRuntimeResolver _judgeRuntimeResolver;
     private readonly IBenchmarkPairwiseFitter _fitter;
     private readonly IBenchmarkQueueSignal _queueSignal;
     private readonly ILogger<BenchmarkPairwisePlanner> _logger;
 
-    public BenchmarkPairwisePlanner(IBenchmarkStore store,
+    public BenchmarkPairwisePlanner(IBenchmarkPairwiseStore pairwiseStore,
+        IBenchmarkJudgeStore judgeStore,
         IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
         IBenchmarkPairwiseFitter fitter,
         IBenchmarkQueueSignal queueSignal,
         ILogger<BenchmarkPairwisePlanner> logger)
     {
-        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(pairwiseStore);
+        ArgumentNullException.ThrowIfNull(judgeStore);
         ArgumentNullException.ThrowIfNull(judgeRuntimeResolver);
         ArgumentNullException.ThrowIfNull(fitter);
         ArgumentNullException.ThrowIfNull(queueSignal);
         ArgumentNullException.ThrowIfNull(logger);
-        _store = store;
+        _pairwiseStore = pairwiseStore;
+        _judgeStore = judgeStore;
         _judgeRuntimeResolver = judgeRuntimeResolver;
         _fitter = fitter;
         _queueSignal = queueSignal;
@@ -88,7 +92,7 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
             return 0;
         }
 
-        var cohort = await _store.GetPairwiseCohortAsync(projectId, cancellationToken);
+        var cohort = await _pairwiseStore.GetPairwiseCohortAsync(projectId, cancellationToken);
         if (cohort.PolicyRevisionId is null)
         {
             return 0;
@@ -120,7 +124,7 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
             return 0;
         }
 
-        var created = await _store.EnsureComparisonsAsync(projectId,
+        var created = await _pairwiseStore.EnsureComparisonsAsync(projectId,
             plan.Slots,
             new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime)),
             resolution.Intent,
@@ -135,7 +139,7 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
 
     public async Task ReconcilePairwiseAsync(CancellationToken cancellationToken)
     {
-        var projectIds = await _store.ListJudgedProjectIdsAsync(cancellationToken);
+        var projectIds = await _pairwiseStore.ListJudgedProjectIdsAsync(cancellationToken);
         foreach (var projectId in projectIds)
         {
             try
@@ -155,11 +159,11 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
 
     public async Task<BenchmarkPairwiseEstimate> EstimateAsync(Guid projectId, CancellationToken cancellationToken)
     {
-        var cohort = await _store.GetPairwiseCohortAsync(projectId, cancellationToken);
+        var cohort = await _pairwiseStore.GetPairwiseCohortAsync(projectId, cancellationToken);
         var plan = Plan(cohort.Candidates, BenchmarkPairwisePolicy.MaximumRuns);
         var paired = plan.PairedRunIds.Count;
         var calls = plan.Slots.Count * 2;
-        var median = await _store.GetMedianJudgeDurationSecondsAsync(projectId, cancellationToken);
+        var median = await _pairwiseStore.GetMedianJudgeDurationSecondsAsync(projectId, cancellationToken);
         return new BenchmarkPairwiseEstimate
         {
             EligibleRuns = cohort.Candidates.Count,
@@ -174,7 +178,7 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
     /// <summary>The project's current judge policy when it judges pairwise, otherwise <see langword="null" />.</summary>
     private async Task<BenchmarkJudgePolicyV1?> ReadPairwisePolicyAsync(Guid projectId, CancellationToken cancellationToken)
     {
-        var revision = await _store.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
+        var revision = await _judgeStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
         if (revision?.PolicyJson is not { } policyJson)
         {
             return null;

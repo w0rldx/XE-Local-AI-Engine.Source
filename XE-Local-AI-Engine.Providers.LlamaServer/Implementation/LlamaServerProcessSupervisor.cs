@@ -334,27 +334,6 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         }
     }
 
-    /// <summary>Ticks residency when a registered process dies on its own, instead of when the reaper next prunes the corpse.</summary>
-    /// <remarks>A deliberate teardown completes the wait too; that extra tick is harmless. Shutdown ends the wait silently.</remarks>
-    private async Task NotifyResidencyOnExitAsync(Task<bool> exit)
-    {
-        try
-        {
-            await exit.ConfigureAwait(false);
-        }
-        catch (Exception exception) when (exception is OperationCanceledException or ObjectDisposedException)
-        {
-            return;
-        }
-        catch (Exception exception)
-        {
-            // Fire-and-forget, so it must not fault: the process state is unknown, and a re-read is the safe answer.
-            _logger.LogDebug("The llama-server exit wait failed ({ErrorClass}); ticking residency anyway.", exception.GetType().Name);
-        }
-
-        _residencyNotifier.NotifyChanged();
-    }
-
     /// <inheritdoc />
     public Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct)
     {
@@ -733,7 +712,11 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             return existing.Endpoint;
         }
 
-        var responsive = await ProbeResponsiveWithTimeoutAsync(existing.Endpoint.BaseAddress, ct).ConfigureAwait(false);
+        var baseAddress = existing.Endpoint.BaseAddress;
+        var responsive = await ProcessLivenessProbe.CheckResponsiveWithinAsync(token => _healthProbe.CheckResponsiveAsync(baseAddress, token),
+                                                                               _options.ReuseLivenessProbeTimeout,
+                                                                               ct)
+                                                   .ConfigureAwait(false);
         if (responsive)
         {
             existing.ResetLivenessFailures();
@@ -756,27 +739,6 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             key.ModelName, key.Role, failures);
         await _reaper.RemoveProcessAsync(key, existing).ConfigureAwait(false);
         return null;
-    }
-
-    /// <summary>
-    ///     Runs one liveness probe bounded by <see cref="LlamaServerSupervisorOptions.ReuseLivenessProbeTimeout" />, so a
-    ///     hung server that accepts the socket but never answers cannot stall the reuse hot path for the whole
-    ///     HTTP-client timeout.
-    /// </summary>
-    /// <remarks>A probe that times out (the caller's own token is NOT cancelled) counts as unresponsive.</remarks>
-    private async Task<bool> ProbeResponsiveWithTimeoutAsync(Uri baseAddress, CancellationToken ct)
-    {
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeoutCts.CancelAfter(_options.ReuseLivenessProbeTimeout);
-        try
-        {
-            return await _healthProbe.CheckResponsiveAsync(baseAddress, timeoutCts.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            // The probe exceeded its own budget (not a caller cancellation) — treat the server as unresponsive.
-            return false;
-        }
     }
 
     /// <inheritdoc />
@@ -1080,11 +1042,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         // Only ever compared for equality, so wraparound is not a real concern; 0 means "no teardown owns this".
         private static long s_nextEvictionClaim;
 
-        private long _lastUsedTicks;
-
-        // Seeded to the spawn time so a freshly-ready process is not re-probed until one full interval has passed.
-        private long _lastLivenessProbeTicks;
-        private int _consecutiveLivenessFailures;
+        private readonly ProcessLiveness _liveness;
         private int _profilingPinned;
         private int _activeLeases;
 
@@ -1097,8 +1055,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
         public RunningProcess(IProcessTreeHandle handle, LlamaServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
         {
-            _lastUsedTicks = startedUtc.UtcTicks;
-            _lastLivenessProbeTicks = startedUtc.UtcTicks;
+            _liveness = new ProcessLiveness(startedUtc);
             ReadyUtc = startedUtc;
             Handle = handle;
             Endpoint = endpoint;
@@ -1142,7 +1099,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         /// </remarks>
         public bool IsProfilingOwned { get; init; }
 
-        public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
+        public DateTimeOffset LastUsedUtc => _liveness.LastUsedUtc;
 
         /// <summary>When the process was registered, i.e. became ready.</summary>
         public DateTimeOffset ReadyUtc { get; }
@@ -1310,49 +1267,18 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         }
 
         /// <summary>Refreshes the idle clock only; unlike <see cref="MarkUsed" /> it never touches the transient mark.</summary>
-        public void StampLastUsed(DateTimeOffset now)
-        {
-            Interlocked.Exchange(ref _lastUsedTicks, now.UtcTicks);
-        }
+        public void StampLastUsed(DateTimeOffset now) => _liveness.MarkUsed(now);
 
         public void ClearTransient()
         {
             Volatile.Write(ref _transient, value: 0);
         }
 
-        /// <summary>
-        ///     Atomically claims the right to run the reuse-path liveness probe: succeeds, advancing the probe clock to
-        ///     <paramref name="now" />, only when at least <paramref name="interval" /> has elapsed since the last claim.
-        /// </summary>
-        /// <remarks>Serializes probes across concurrent reuses, so at most one HTTP probe runs per process per interval.</remarks>
-        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval)
-        {
-            while (true)
-            {
-                var last = Interlocked.Read(ref _lastLivenessProbeTicks);
-                if (now.UtcTicks - last < interval.Ticks)
-                {
-                    return false;
-                }
+        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval) => _liveness.TryClaimLivenessProbe(now, interval);
 
-                if (Interlocked.CompareExchange(ref _lastLivenessProbeTicks, now.UtcTicks, last) == last)
-                {
-                    return true;
-                }
-            }
-        }
+        public void ResetLivenessFailures() => _liveness.ResetLivenessFailures();
 
-        /// <summary>Resets the consecutive-failure count after a successful liveness probe.</summary>
-        public void ResetLivenessFailures()
-        {
-            Interlocked.Exchange(ref _consecutiveLivenessFailures, value: 0);
-        }
-
-        /// <summary>Records a failed liveness probe and returns the new consecutive-failure count.</summary>
-        public int RecordLivenessFailure()
-        {
-            return Interlocked.Increment(ref _consecutiveLivenessFailures);
-        }
+        public int RecordLivenessFailure() => _liveness.RecordLivenessFailure();
 
         /// <summary>Reserves this process for a profiling benchmark, exempting it from idle eviction.</summary>
         public void Pin()

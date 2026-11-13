@@ -12,6 +12,7 @@ const SELECTED_CONVERSATION_STORAGE_KEY = "xe-node-chat-selected-conversation";
 const AGENT_MODE_ENABLED_STORAGE_KEY = "xe-node-chat-agent-mode";
 const SELECTED_AGENT_STORAGE_KEY = "xe-node-chat-selected-agent";
 const SHOW_TOKENS_PER_SECOND_STORAGE_KEY = "xe-node-chat-show-tokens-per-second";
+const KNOWLEDGE_COLLECTION_STORAGE_KEY = "xe-node-chat-knowledge-collection";
 
 // The store reads localStorage once at module-init, so each test seeds storage then re-imports the module
 // with a fresh registry to exercise the init path.
@@ -245,6 +246,24 @@ describe("NodeChatPreferencesStore", () => {
 		useStore.getState().actions.setShowTokensPerSecond(false);
 		expect(useStore.getState().showTokensPerSecond).toBe(false);
 		expect(localStorage.getItem(SHOW_TOKENS_PER_SECOND_STORAGE_KEY)).toBe("false");
+	});
+
+	it("defaults the knowledge collection to DEFAULT", async () => {
+		const useStore = await loadStore();
+
+		expect(useStore.getState().knowledgeCollectionId).toBe("DEFAULT");
+	});
+
+	it("remembers the picked knowledge collection across a reload", async () => {
+		const useStore = await loadStore();
+
+		useStore.getState().actions.setKnowledgeCollectionId("PROJECT-A");
+		expect(useStore.getState().knowledgeCollectionId).toBe("PROJECT-A");
+
+		const reloaded = await loadStore({
+			[KNOWLEDGE_COLLECTION_STORAGE_KEY]: localStorage.getItem(KNOWLEDGE_COLLECTION_STORAGE_KEY) ?? "",
+		});
+		expect(reloaded.getState().knowledgeCollectionId).toBe("PROJECT-A");
 	});
 });
 

@@ -10,13 +10,26 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 public sealed class BenchmarkComparisonService
 {
     private readonly ILogger<BenchmarkComparisonService> _logger;
-    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkProjectStore _projectStore;
+    private readonly IBenchmarkTaskItemStore _taskItemStore;
+    private readonly IBenchmarkRunStore _runStore;
+    private readonly IBenchmarkPairwiseStore _pairwiseStore;
 
-    public BenchmarkComparisonService(IBenchmarkStore store, ILogger<BenchmarkComparisonService> logger)
+    public BenchmarkComparisonService(IBenchmarkProjectStore projectStore,
+        IBenchmarkTaskItemStore taskItemStore,
+        IBenchmarkRunStore runStore,
+        IBenchmarkPairwiseStore pairwiseStore,
+        ILogger<BenchmarkComparisonService> logger)
     {
-        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(projectStore);
+        ArgumentNullException.ThrowIfNull(taskItemStore);
+        ArgumentNullException.ThrowIfNull(runStore);
+        ArgumentNullException.ThrowIfNull(pairwiseStore);
         ArgumentNullException.ThrowIfNull(logger);
-        _store = store;
+        _projectStore = projectStore;
+        _taskItemStore = taskItemStore;
+        _runStore = runStore;
+        _pairwiseStore = pairwiseStore;
         _logger = logger;
     }
 
@@ -30,11 +43,11 @@ public sealed class BenchmarkComparisonService
         BenchmarkPairedBootstrap.ValidateCellSelection(cellKeys);
         await EnsureProjectAsync(projectId, cancellationToken);
 
-        var page = await _store.ListCellsAsync(projectId, cancellationToken);
+        var page = await _runStore.ListCellsAsync(projectId, cancellationToken);
 
         // Which leaves count toward a quality number: a NIAH case is judged, but its score is a recall figure on its own axis that never enters the cell mean, so it
         // must not enter a paired delta either. Only the item rows can answer that, at one extra decrypting read - acceptable by hand; if it stops being, put the scorable id set on the ranking.
-        var items = await _store.ListTaskItemsAsync(projectId, cancellationToken);
+        var items = await _taskItemStore.ListTaskItemsAsync(projectId, cancellationToken);
         var scorable = items.Where(static item => item.IsLeaf && item.CountsTowardScore).Select(static item => item.Id).ToHashSet();
         var byKey = page.Cells.ToDictionary(static cell => cell.CellKey, StringComparer.Ordinal);
         var selected = new List<BenchmarkCellRecord>(cellKeys.Count);
@@ -69,8 +82,8 @@ public sealed class BenchmarkComparisonService
     {
         await EnsureProjectAsync(projectId, cancellationToken);
 
-        var cohort = await _store.GetPairwiseCohortAsync(projectId, cancellationToken);
-        var fit = await _store.GetActivePairwiseFitAsync(projectId, cancellationToken);
+        var cohort = await _pairwiseStore.GetPairwiseCohortAsync(projectId, cancellationToken);
+        var fit = await _pairwiseStore.GetActivePairwiseFitAsync(projectId, cancellationToken);
         return new BenchmarkComparisonsView
         {
             Cohort = cohort,
@@ -92,7 +105,7 @@ public sealed class BenchmarkComparisonService
     /// </summary>
     private async Task EnsureProjectAsync(Guid projectId, CancellationToken cancellationToken)
     {
-        if (await _store.GetProjectAsync(projectId, cancellationToken) is null)
+        if (await _projectStore.GetProjectAsync(projectId, cancellationToken) is null)
         {
             throw new BenchmarkNotFoundException("Benchmark project was not found.");
         }

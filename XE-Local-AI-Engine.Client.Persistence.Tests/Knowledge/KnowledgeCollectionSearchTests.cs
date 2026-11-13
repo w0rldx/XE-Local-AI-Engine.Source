@@ -2,13 +2,18 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Knowledge;
 
 using System.Runtime.InteropServices;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -196,6 +201,48 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         AssertEx.Equal(expected: 120, hit.StartOffset);
         AssertEx.Equal(expected: 341, hit.EndOffset);
         AssertEx.Equal("WidgetService > ExecuteAsync", hit.Section);
+    }
+
+    [Test]
+    public async Task ChatGrounding_InlinesOnlyThePickedCollection()
+    {
+        // The chat composer's collection pick is an isolation boundary: a grounded turn inlines the picked collection's
+        // chunk and never an equally matching chunk from another collection or from DEFAULT.
+        var databasePath = GetDatabasePath("chat-grounding-namespace.sqlite");
+        var documentA = Guid.NewGuid();
+        var documentB = Guid.NewGuid();
+        var documentDefault = Guid.NewGuid();
+        var chunkA = Guid.NewGuid();
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentA, CollectionA);
+        await SeedDocumentAsync(databasePath, documentB, CollectionB);
+        await SeedDocumentAsync(databasePath, documentDefault, KnowledgeCollectionScope.DefaultId);
+        await SeedChunkAsync(databasePath, documentA, chunkA, chunkIndex: 0, content: "alpha grounding needle");
+        await SeedChunkAsync(databasePath, documentB, Guid.NewGuid(), chunkIndex: 0, content: "bravo grounding needle");
+        await SeedChunkAsync(databasePath, documentDefault, Guid.NewGuid(), chunkIndex: 0, content: "charlie grounding needle");
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        await using var services = new ServiceCollection()
+                                   .AddSingleton<IKnowledgeSearchService>(CreateLexicalSearchService(context))
+                                   .BuildServiceProvider();
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+        runtimeSettings.GetKnowledgeChatTopKAsync(Arg.Any<CancellationToken>()).Returns(10);
+        var fenceSeedProvider = Substitute.For<IUntrustedContentFenceSeedProvider>();
+        fenceSeedProvider.DeriveSeed(Arg.Any<Guid>()).Returns("collection-isolation-seed");
+        var builder = new ChatTurnContextBuilder(Substitute.For<IConversationUploadedFileStore>(),
+            fenceSeedProvider,
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Options.Create(new LocalChatAgentOptions()),
+            runtimeSettings,
+            NullLogger<ChatTurnContextBuilder>.Instance);
+
+        var grounding = await builder.BuildKnowledgeContextAsync("needle", CollectionA);
+
+        var grounded = AssertEx.NotNull(grounding);
+        AssertEx.Equal(chunkA.ToString(), string.Join(',', grounded.Sources.Select(static source => source.ChunkId)));
+        AssertEx.True(grounded.Message.Content.Contains("alpha grounding needle", StringComparison.Ordinal), "the picked chunk is inlined");
+        AssertEx.False(grounded.Message.Content.Contains("bravo", StringComparison.Ordinal), "another project's chunk reached the turn");
+        AssertEx.False(grounded.Message.Content.Contains("charlie", StringComparison.Ordinal), "a DEFAULT chunk reached the turn");
     }
 
     [Test]

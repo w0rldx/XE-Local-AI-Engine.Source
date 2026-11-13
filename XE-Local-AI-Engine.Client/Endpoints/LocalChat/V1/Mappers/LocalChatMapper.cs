@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1.Mappers;
 
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 internal static class LocalChatMapper
@@ -25,7 +26,73 @@ internal static class LocalChatMapper
             MemoryExcluded = conversation.MemoryExcluded,
             IsPlain = conversation.IsPlain,
             PlainSystemPrompt = conversation.PlainSystemPrompt,
+            SamplingOptions = conversation.SamplingOptions is { } sampling ? sampling.ToDto() : null,
             Messages = conversation.Messages.Select(static message => message.ToResponse()).ToArray()
+        };
+    }
+
+    public static NodeChatSamplingOptionsDto ToDto(this SamplingOptions sampling)
+    {
+        ArgumentNullException.ThrowIfNull(sampling);
+
+        return new NodeChatSamplingOptionsDto
+        {
+            Temperature = sampling.Temperature,
+            TopP = sampling.TopP,
+            TopK = sampling.TopK,
+            MinP = sampling.MinP,
+            MaxOutputTokens = sampling.MaxOutputTokens,
+            RepeatPenalty = sampling.RepeatPenalty,
+            RepeatLastN = sampling.RepeatLastN,
+            PresencePenalty = sampling.PresencePenalty,
+            FrequencyPenalty = sampling.FrequencyPenalty,
+            Seed = sampling.Seed,
+            Stop = sampling.Stop,
+            NumCtx = sampling.NumCtx
+        };
+    }
+
+    public static SamplingOptions ToSamplingOptions(this NodeChatSamplingOptionsDto sampling)
+    {
+        ArgumentNullException.ThrowIfNull(sampling);
+
+        return new SamplingOptions
+        {
+            Temperature = sampling.Temperature,
+            TopP = sampling.TopP,
+            TopK = sampling.TopK,
+            MinP = sampling.MinP,
+            MaxOutputTokens = sampling.MaxOutputTokens,
+            RepeatPenalty = sampling.RepeatPenalty,
+            RepeatLastN = sampling.RepeatLastN,
+            PresencePenalty = sampling.PresencePenalty,
+            FrequencyPenalty = sampling.FrequencyPenalty,
+            Seed = sampling.Seed,
+            Stop = sampling.Stop,
+            NumCtx = sampling.NumCtx
+        };
+    }
+
+    public static SearchNodeChatConversationsResponse ToResponse(this NodeChatConversationSearchResultDto result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return new SearchNodeChatConversationsResponse
+        {
+            Items = result.Items.Select(static hit => new NodeChatConversationSearchHitResponse
+                          {
+                              ConversationId = hit.ConversationId,
+                              Title = hit.Title,
+                              Snippet = hit.Snippet,
+                              MatchedIn = hit.MatchedIn,
+                              CreatedAtUtc = hit.CreatedAtUtc,
+                              LastSeenUtc = hit.LastSeenUtc,
+                              Origin = hit.Origin,
+                              IsPinned = hit.IsPinned,
+                              Archived = hit.Archived
+                          })
+                          .ToArray(),
+            Indexing = result.Indexing
         };
     }
 

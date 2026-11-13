@@ -7,6 +7,8 @@
   stored or reconciled.
 - **Authority:** Operator rulings on the container bridge.
 - **Amends:** nothing. It closes a gap ADR 0010 disclosed rather than solved.
+- **Amended 2026-11-12:** frozen and experimental, by operator ruling; see
+  [the amendment](#amendment-2026-11-12-frozen-and-experimental).
 
 ## Context
 
@@ -204,6 +206,13 @@ there and host filtering defaults to `*`. `ContainerBridgeHostFilteringTests` is
 real `HostFilteringMiddleware` over the real shipped allow list in front of the real bridge branch, asserts a
 container's `Host` header reaches the token gate with the widening and is answered 400 without it, and reads
 `Program.cs` to assert the composition root still makes the call.
+
+## Amendment 2026-11-12: frozen and experimental
+
+Operator ruling: the container bridge is frozen and experimental together with
+[ADR 0010](0010-external-apps-container-execution.md#amendment-2026-11-12-frozen-and-experimental). It takes bug fixes
+only and sits outside the 1.0 API promise. A security fix to the listener, the peer guard or the token gate is a bug
+fix and still lands; widening what the bridge serves does not.
 
 ## Related
 

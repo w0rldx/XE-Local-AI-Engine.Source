@@ -14,6 +14,7 @@ export interface IViewableNavigationLink {
 	id: string;
 	icon: INavigationLink["icon"];
 	label: string;
+	badge?: string;
 	to?: string;
 	onClick?: () => void;
 	nestedLinks?: IViewableNavigationNestedLink[];

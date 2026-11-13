@@ -192,7 +192,7 @@ public sealed class ChatTurnContextBuilderTests
                      });
         var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService));
 
-        var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?");
+        var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?", KnowledgeCollectionScope.DefaultId);
 
         AssertEx.NotNull(grounding);
         AssertEx.True(grounding!.Message.Content.Contains("restart the service", StringComparison.Ordinal));
@@ -212,7 +212,7 @@ public sealed class ChatTurnContextBuilderTests
         var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService),
             runtimeSettings: StubNodeRuntimeSettings.Create().WithKnowledgeChatTopK(3).Build());
 
-        _ = await builder.BuildKnowledgeContextAsync("how do I restart it?");
+        _ = await builder.BuildKnowledgeContextAsync("how do I restart it?", KnowledgeCollectionScope.DefaultId);
 
         await searchService.Received(1).SearchAsync(Arg.Is<KnowledgeSearchRequest>(static request => request.Limit == 3), Arg.Any<CancellationToken>());
     }
@@ -243,7 +243,7 @@ public sealed class ChatTurnContextBuilderTests
         var logger = new RecordingLogger<ChatTurnContextBuilder>();
         var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService), logger: logger);
 
-        var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?");
+        var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?", KnowledgeCollectionScope.DefaultId);
 
         AssertEx.Null(grounding);
         AssertEx.True(logger.AllText.Contains("failed for the plain-chat turn", StringComparison.Ordinal));
@@ -260,7 +260,7 @@ public sealed class ChatTurnContextBuilderTests
         var logger = new RecordingLogger<ChatTurnContextBuilder>();
         var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService), logger: logger);
 
-        var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?", isRegeneratedTurn: true);
+        var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?", KnowledgeCollectionScope.DefaultId, isRegeneratedTurn: true);
 
         AssertEx.Null(grounding);
         AssertEx.True(logger.AllText.Contains("failed for the regenerated plain-chat turn", StringComparison.Ordinal));
@@ -272,7 +272,7 @@ public sealed class ChatTurnContextBuilderTests
         var searchService = Substitute.For<IKnowledgeSearchService>();
         var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService));
 
-        var grounding = await builder.BuildKnowledgeContextAsync("   ");
+        var grounding = await builder.BuildKnowledgeContextAsync("   ", KnowledgeCollectionScope.DefaultId);
 
         AssertEx.Null(grounding);
         await searchService.DidNotReceive().SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>());

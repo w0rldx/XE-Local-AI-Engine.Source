@@ -24,7 +24,8 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
     /// <summary>How many times a judge-policy change is re-resolved before the first attempt is committed as failed.</summary>
     private const int JudgePolicyResolutionAttempts = 3;
 
-    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkRunStore _runStore;
+    private readonly IBenchmarkJudgeStore _judgeStore;
     private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
     private readonly ICapacityService _capacity;
@@ -42,7 +43,8 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
     private readonly BenchmarkAdmissionRetry _admissionRetry;
     private readonly ILogger<BenchmarkRunExecutor> _logger;
 
-    public BenchmarkRunExecutor(IBenchmarkStore store,
+    public BenchmarkRunExecutor(IBenchmarkRunStore runStore,
+        IBenchmarkJudgeStore judgeStore,
         IBenchmarkRuntimeSnapshotFactory snapshots,
         IBenchmarkInstalledModelLeaseProvider installedModels,
         ICapacityService capacity,
@@ -60,7 +62,8 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
         BenchmarkAdmissionRetry admissionRetry,
         ILogger<BenchmarkRunExecutor> logger)
     {
-        _store = store;
+        _runStore = runStore;
+        _judgeStore = judgeStore;
         _snapshots = snapshots;
         _installedModels = installedModels;
         _capacity = capacity;
@@ -335,15 +338,15 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
     {
         for (var round = 1; round <= JudgePolicyResolutionAttempts; round++)
         {
-            var revision = await _store.GetCurrentJudgePolicyRevisionAsync(work.Run.ProjectId, CancellationToken.None);
+            var revision = await _judgeStore.GetCurrentJudgePolicyRevisionAsync(work.Run.ProjectId, CancellationToken.None);
             if (revision is null)
             {
-                return await _store.MarkPrimarySucceededAsync(command, CancellationToken.None);
+                return await _runStore.MarkPrimarySucceededAsync(command, CancellationToken.None);
             }
 
             try
             {
-                return await _store.MarkPrimarySucceededAsync(command with
+                return await _runStore.MarkPrimarySucceededAsync(command with
                 {
                     JudgeAttempt = await ResolveJudgeSeedAsync(revision)
                 }, CancellationToken.None);
@@ -356,7 +359,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
 
         // The bounded retry is exhausted. Still atomic: the run keeps its measurement and carries a failed first
         // attempt the operator can re-judge, rather than losing the measurement to a judge-configuration race.
-        return await _store.MarkPrimarySucceededAsync(command with
+        return await _runStore.MarkPrimarySucceededAsync(command with
         {
             JudgeAttempt = new BenchmarkJudgeAttemptSeed
             {
@@ -500,7 +503,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
 
         try
         {
-            _ = await _store.MarkPrimaryLaunchReadyAsync(work.RunId, work.QueueSequence, work.Version, command, CancellationToken.None);
+            _ = await _runStore.MarkPrimaryLaunchReadyAsync(work.RunId, work.QueueSequence, work.Version, command, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -514,7 +517,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
     {
         await CheckpointAsync(work, receipt: null, environment);
         var runId = work.RunId;
-        var run = await _store.GetRunAsync(runId, CancellationToken.None);
+        var run = await _runStore.GetRunAsync(runId, CancellationToken.None);
         if (run is null || run.PrimaryStatus == BenchmarkPrimaryStatus.Cancelled)
         {
             _events.EvictPlaintext(runId);
@@ -534,7 +537,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
                 State = BenchmarkPrimaryStatus.Cancelled.ToString(),
                 RunVersion = run.Version + 1
             });
-        var persisted = await _store.MarkPrimaryCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None);
+        var persisted = await _runStore.MarkPrimaryCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None);
         _events.PublishReserved(terminal with
         {
             Payload = terminal.Payload with
@@ -552,7 +555,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
     {
         await CheckpointAsync(work, receipt: null, environment);
         var runId = work.RunId;
-        var run = await _store.GetRunAsync(runId, CancellationToken.None);
+        var run = await _runStore.GetRunAsync(runId, CancellationToken.None);
         if (run is null || run.PrimaryStatus is BenchmarkPrimaryStatus.Succeeded or BenchmarkPrimaryStatus.Failed or BenchmarkPrimaryStatus.Cancelled)
         {
             _events.EvictPlaintext(runId);
@@ -566,7 +569,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
                 State = BenchmarkPrimaryStatus.Failed.ToString(),
                 RunVersion = run.Version + 1
             });
-        var persisted = await _store.MarkPrimaryFailedAsync(runId, work.Version, message, terminal.Sequence, primaryStopReason, CancellationToken.None);
+        var persisted = await _runStore.MarkPrimaryFailedAsync(runId, work.Version, message, terminal.Sequence, primaryStopReason, CancellationToken.None);
         _events.PublishReserved(terminal with
         {
             Payload = terminal.Payload with

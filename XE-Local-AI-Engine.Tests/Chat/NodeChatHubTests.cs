@@ -93,9 +93,10 @@ public sealed class NodeChatHubTests
     }
 
     [Test]
-    public async Task RegenerateMessage_CarriesTheWebReviewModeAsTheArgumentAfterSamplingOptions()
+    public async Task RegenerateMessage_CarriesTheWebReviewModeThenTheKnowledgeCollectionAfterSamplingOptions()
     {
-        // Positional over the wire: autoAcceptWebContent is appended AFTER samplingOptions, and the order is the contract.
+        // Positional over the wire: autoAcceptWebContent, then knowledgeCollectionId, are appended AFTER samplingOptions,
+        // and the order is the contract.
         var regeneration = Substitute.For<INodeChatRegenerationService>();
         regeneration.RegenerateAsync(Arg.Any<Guid>(),
                         Arg.Any<Guid>(),
@@ -105,6 +106,7 @@ public sealed class NodeChatHubTests
                         Arg.Any<IReadOnlyDictionary<Guid, Guid>?>(),
                         Arg.Any<SamplingOptions?>(),
                         Arg.Any<bool>(),
+                        Arg.Any<string?>(),
                         Arg.Any<CancellationToken>())
                     .Returns(AsyncEnumerable.Empty<ChatStreamEvent>());
         await using var factory = new TestServerWebAppFactory
@@ -128,7 +130,8 @@ public sealed class NodeChatHubTests
                                 false,
                                 null,
                                 null,
-                                true)
+                                true,
+                                "PROJECT-A")
                             .ToListAsync();
 
         _ = regeneration.Received(1)
@@ -140,20 +143,38 @@ public sealed class NodeChatHubTests
                             null,
                             null,
                             true,
+                            "PROJECT-A",
                             Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task RegenerateMessage_WithoutTheWebReviewModeArgument_IsRejectedByTheHubProtocol()
+    public async Task RegenerateMessage_WithoutTheKnowledgeCollectionArgument_IsRejectedByTheHubProtocol()
     {
-        // SignalR binds hub arguments by position and count, so a client sending the pre-web-access seven arguments fails.
+        // SignalR binds hub arguments by position and count, so a client sending the pre-collection eight arguments fails.
         await using var factory = new TestServerWebAppFactory();
         await using var connection = CreateHubConnection(factory);
         await connection.StartAsync();
 
         _ = await AssertEx.ThrowsAsync<HubException>(async () =>
-            _ = await connection.StreamAsync<ChatStreamEvent>("RegenerateMessage", Guid.NewGuid(), Guid.NewGuid(), null, true, false, null, null)
+            _ = await connection.StreamAsync<ChatStreamEvent>("RegenerateMessage", Guid.NewGuid(), Guid.NewGuid(), null, true, false, null, null, false)
                                 .ToListAsync());
+    }
+
+    [Test]
+    public async Task SendMessage_WithAnInvalidKnowledgeCollection_IsRefusedWithTheSentence()
+    {
+        // The collection is the knowledge isolation boundary, so a malformed id is refused before anything runs rather than
+        // silently searching DEFAULT; the real service throws eagerly and the hub forwards the sentence.
+        await using var factory = new TestServerWebAppFactory();
+        await using var connection = CreateHubConnection(factory);
+        await connection.StartAsync();
+
+        var exception = await AssertEx.ThrowsAsync<HubException>(async () =>
+            _ = await connection.StreamAsync<ChatStreamEvent>("SendMessage",
+                                    new NodeChatStreamRequest(Guid.NewGuid(), "hi", UseKnowledgeBase: true, KnowledgeCollectionId: "../other"))
+                                .ToListAsync());
+
+        AssertEx.Contains(exception.Message, "The knowledge collection id is invalid.");
     }
 
     [Test]

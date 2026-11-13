@@ -48,6 +48,51 @@ public sealed class ListNodeChatConversationsResponse
     public required int MaxUploadFileSizeMb { get; init; }
 }
 
+public sealed class SearchNodeChatConversationsRequest
+{
+    /// <summary>Whitespace-separated terms; a conversation matches when every term occurs in its title or message text.</summary>
+    [QueryParam]
+    public string Query { get; init; } = string.Empty;
+
+    [QueryParam]
+    public bool IncludeArchived { get; init; }
+
+    [QueryParam]
+    public int? Limit { get; init; }
+}
+
+public sealed class SearchNodeChatConversationsResponse
+{
+    /// <summary>Matching conversations, newest first.</summary>
+    public required IReadOnlyList<NodeChatConversationSearchHitResponse> Items { get; init; }
+
+    /// <summary>True while the start-up backfill is still indexing older conversations, so results may be incomplete.</summary>
+    public required bool Indexing { get; init; }
+}
+
+public sealed class NodeChatConversationSearchHitResponse
+{
+    public required Guid ConversationId { get; init; }
+
+    public string? Title { get; init; }
+
+    /// <summary>Text around the first content hit; null when only the title matched.</summary>
+    public string? Snippet { get; init; }
+
+    /// <summary><c>title</c> or <c>content</c>.</summary>
+    public required string MatchedIn { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long LastSeenUtc { get; init; }
+
+    public required string Origin { get; init; }
+
+    public required bool IsPinned { get; init; }
+
+    public required bool Archived { get; init; }
+}
+
 public sealed class GetNodeChatConversationRequest
 {
     public Guid ConversationId { get; init; }
@@ -103,6 +148,48 @@ public sealed class SetNodeChatConversationPlainRequest
     public bool IsPlain { get; init; }
 
     public string? PlainSystemPrompt { get; init; }
+}
+
+/// <summary>
+///     Sets the conversation's own sampling settings. The conversation id travels in the route; a null
+///     <see cref="SamplingOptions" /> clears them so the client's defaults apply again.
+/// </summary>
+public sealed class SetNodeChatConversationSamplingOptionsRequest
+{
+    public Guid ConversationId { get; init; }
+
+    public NodeChatSamplingOptionsDto? SamplingOptions { get; init; }
+}
+
+/// <summary>
+///     A conversation's sampling settings, the wire shape a chat send carries; a null field keeps the model default.
+/// </summary>
+/// <remarks>The seed is a string, so a 64-bit value keeps its precision in JSON.</remarks>
+public sealed class NodeChatSamplingOptionsDto
+{
+    public float? Temperature { get; init; }
+
+    public float? TopP { get; init; }
+
+    public int? TopK { get; init; }
+
+    public float? MinP { get; init; }
+
+    public int? MaxOutputTokens { get; init; }
+
+    public float? RepeatPenalty { get; init; }
+
+    public int? RepeatLastN { get; init; }
+
+    public float? PresencePenalty { get; init; }
+
+    public float? FrequencyPenalty { get; init; }
+
+    public string? Seed { get; init; }
+
+    public IReadOnlyList<string>? Stop { get; init; }
+
+    public int? NumCtx { get; init; }
 }
 
 /// <summary>
@@ -436,6 +523,9 @@ public sealed class NodeChatConversationResponse
 
     /// <summary>The plain conversation's custom system prompt; null means a plain turn sends no system prompt.</summary>
     public string? PlainSystemPrompt { get; init; }
+
+    /// <summary>The conversation's own sampling settings; null means the client's defaults apply.</summary>
+    public NodeChatSamplingOptionsDto? SamplingOptions { get; init; }
 
     public required IReadOnlyList<NodeChatMessageResponse> Messages { get; init; }
 }

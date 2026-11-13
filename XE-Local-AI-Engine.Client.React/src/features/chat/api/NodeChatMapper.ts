@@ -1,5 +1,6 @@
 import type {
 	XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse,
+	XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSearchHitResponse,
 	XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse,
 	XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse,
 	XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse,
@@ -8,7 +9,6 @@ import type {
 	XeLocalAiEngineClientServicesChatNodeChatMessageSource,
 } from "@/core/api/generated";
 import type { ChatMessagePart, ToolCallState } from "@/core/models/ChatMessageParts";
-import { persistableReasoningEfforts } from "@/features/chat/stores/NodeChatPreferencesStore";
 import type {
 	ChatConversationModel,
 	ChatFeedbackRating,
@@ -22,12 +22,15 @@ import type {
 	MessageStatus,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
+import { fromWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import { type NodeChatStreamEventDto, nodeChatToolStreamEventTypes } from "@/features/chat/models/NodeChatStreamTypes";
+import { persistableReasoningEfforts } from "@/features/chat/stores/NodeChatPreferencesStore";
 
 // Local aliases for the generated REST response types (the backend OpenAPI is the single source of truth). Every
 // generated field is optional (`x?: T`), so each mapper coalesces missing values to the prior default below.
 type NodeChatConversationResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
 type NodeChatConversationSummaryResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse;
+type NodeChatConversationSearchHitResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSearchHitResponse;
 type NodeChatMessageResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse;
 type NodeChatMessagePartDto = XeLocalAiEngineClientServicesChatNodeChatMessagePart;
 type NodeChatMessageSourceDto = XeLocalAiEngineClientServicesChatNodeChatMessageSource;
@@ -267,6 +270,24 @@ export function mapConversationSummary(dto: NodeChatConversationSummaryResponseD
 	};
 }
 
+// A search hit renders as a list row; its snippet stands in for the preview so the row shows where the match was.
+export function mapConversationSearchHit(dto: NodeChatConversationSearchHitResponseDto): ChatConversationModel {
+	const lastSeen = toIso(dto.lastSeenUtc ?? 0);
+
+	return {
+		id: dto.conversationId ?? "",
+		title: titleOrFallback(dto.title),
+		createdAt: toIso(dto.createdAtUtc ?? 0),
+		updatedAt: lastSeen,
+		lastActivity: lastSeen,
+		lastMessagePreview: dto.snippet ?? undefined,
+		isPinned: dto.isPinned ?? false,
+		isArchived: dto.archived ?? false,
+		origin: toOrigin(dto.origin),
+		messages: [],
+	};
+}
+
 // The summary list carries a server-computed lastMessagePreview; the full conversation payload does not. Derive
 // an equivalent preview from the loaded messages so that when the selected conversation is merged into the list
 // (mergeSelectedConversation swaps the summary for the full model) its list item keeps a preview instead of
@@ -308,6 +329,7 @@ export function mapConversation(dto: NodeChatConversationResponseDto): ChatConve
 		memoryExcluded: dto.memoryExcluded ?? false,
 		isPlain: dto.isPlain ?? false,
 		plainSystemPrompt: dto.plainSystemPrompt ?? undefined,
+		samplingOptions: dto.samplingOptions ? fromWireSamplingOptions(dto.samplingOptions) : undefined,
 		agentDefinitionId: dto.agentDefinitionId ?? undefined,
 		origin: toOrigin(dto.origin),
 		branchOfConversationId: dto.branchOfConversationId ?? undefined,

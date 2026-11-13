@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Tests.Benchmarks;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -50,7 +51,7 @@ public sealed class BenchmarkExportEndpointTests
     public async Task Export_ForAnUnknownProject_ReturnsNotFound(string suffix)
     {
         await using var context = CreateContext();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns((BenchmarkProjectRecord?)null);
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns((BenchmarkProjectRecord?)null);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}{suffix}");
 
@@ -137,8 +138,8 @@ public sealed class BenchmarkExportEndpointTests
         };
         ArrangeProject(context);
         ArrangeRuns(context, summary);
-        context.Store.GetRunAsync(summary.Id, Arg.Any<CancellationToken>()).Returns(full);
-        context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Runs.GetRunAsync(summary.Id, Arg.Any<CancellationToken>()).Returns(full);
+        context.Stores.TaskItems.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns([
                    new BenchmarkTaskItemRecord
                    {
@@ -159,7 +160,7 @@ public sealed class BenchmarkExportEndpointTests
                        UpdatedAtUtc = 20
                    }
                ]);
-        context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Runs.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkCellPage
                {
                    Cells =
@@ -402,7 +403,7 @@ public sealed class BenchmarkExportEndpointTests
         // digest is still written, because that is the evidence for the withholding.
         await using var context = CreateContext();
         var stale = Guid.Parse("60000000-0000-0000-0000-000000000006");
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(Project() with
                {
                    FidelityEnabled = true,
@@ -421,7 +422,7 @@ public sealed class BenchmarkExportEndpointTests
             {
                 Fidelity = Fidelity("v1:" + new string('9', 64))
             });
-        context.Store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Pairwise.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(Fit(RunId, stale));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
@@ -467,7 +468,7 @@ public sealed class BenchmarkExportEndpointTests
             BootstrapReplicates = 1000,
             CreatedAtUtc = 99
         };
-        context.Store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(fit);
+        context.Stores.Pairwise.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(fit);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}{suffix}");
 
@@ -506,7 +507,7 @@ public sealed class BenchmarkExportEndpointTests
         var fit = Fit(RunId, Guid.NewGuid(), "[null,"
                                              + JsonSerializer.Serialize(new BenchmarkPairwiseScoreEntry(RunId, 62, 55, 69, 6, 1000, null), PairwiseScoreOptions) + ","
                                              + JsonSerializer.Serialize(new BenchmarkPairwiseScoreEntry(RunId, 10, 5, 15, 6, 1000, null), PairwiseScoreOptions) + "]");
-        context.Store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(fit);
+        context.Stores.Pairwise.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(fit);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}{suffix}");
 
@@ -582,7 +583,7 @@ public sealed class BenchmarkExportEndpointTests
         // superseded policy is stale, then the stored decision, then a pending reason.
         await using var context = CreateContext();
         ArrangeEmptySuite(context);
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project() with
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project() with
         {
             RequiresReview = true
         });
@@ -789,7 +790,7 @@ public sealed class BenchmarkExportEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(expected: 0, context.Snapshots.Deserialized,
             "CSV contains only listing columns and must not deserialize a frozen runtime snapshot.");
-        _ = context.Store.DidNotReceive().GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        _ = context.Stores.Runs.DidNotReceive().GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -797,7 +798,7 @@ public sealed class BenchmarkExportEndpointTests
     {
         await using var context = CreateContext();
         var secondRunId = Guid.Parse("60000000-0000-0000-0000-000000000006");
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(Project() with
                {
                    FidelityEnabled = true,
@@ -851,7 +852,7 @@ public sealed class BenchmarkExportEndpointTests
             BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
             BenchmarkJudgeRubricDefaults.Default(),
             ReferenceAnswer: null);
-        context.Store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Judging.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkJudgePolicyRevisionRecord
                {
                    Id = Guid.NewGuid(),
@@ -878,7 +879,7 @@ public sealed class BenchmarkExportEndpointTests
 
     private static void ArrangeProject(Context context)
     {
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
         ArrangeEmptySuite(context);
     }
 
@@ -886,8 +887,8 @@ public sealed class BenchmarkExportEndpointTests
     {
         // The suite sections of schema 4. A project with no item rows is the pre-suite shape these tests describe, so
         // both come back empty rather than absent — the export still has to say what the ranking counted.
-        context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns([]);
-        context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.TaskItems.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns([]);
+        context.Stores.Runs.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkCellPage
                {
                    Cells = [],
@@ -905,7 +906,7 @@ public sealed class BenchmarkExportEndpointTests
 
     private static void ArrangeRuns(Context context, params BenchmarkRunRecord[] runs)
     {
-        context.Store.ListAllRunsAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Runs.ListAllRunsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkRunPage
                {
                    Items = runs.Select(static run => run with
@@ -924,7 +925,7 @@ public sealed class BenchmarkExportEndpointTests
                });
         foreach (var run in runs)
         {
-            context.Store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+            context.Stores.Runs.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         }
     }
 
@@ -935,7 +936,7 @@ public sealed class BenchmarkExportEndpointTests
             "solid answer",
             80,
             "v1:aggregate"));
-        context.Store.GetJudgeAttemptAsync(attemptId, Arg.Any<CancellationToken>())
+        context.Stores.Judging.GetJudgeAttemptAsync(attemptId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkJudgeAttemptRecord
                {
                    Id = attemptId,
@@ -1201,7 +1202,7 @@ public sealed class BenchmarkExportEndpointTests
 
     private sealed class Context : IAsyncDisposable
     {
-        public IBenchmarkStore Store { get; } = Substitute.For<IBenchmarkStore>();
+        public BenchmarkStoreSubstitutes Stores { get; } = new();
 
         /// <summary>Counts snapshot reads, which is the only way to see that the export stopped paying for one per run.</summary>
         public CountingSnapshotFactory Snapshots { get; } = new();
@@ -1215,8 +1216,7 @@ public sealed class BenchmarkExportEndpointTests
             {
                 ConfigureAdditionalTestServices = services =>
                 {
-                    services.RemoveAll<IBenchmarkStore>();
-                    services.AddSingleton(Store);
+                    Stores.ReplaceIn(services);
                     services.RemoveAll<IBenchmarkRuntimeSnapshotFactory>();
                     services.AddSingleton<IBenchmarkRuntimeSnapshotFactory>(Snapshots);
                     services.AddSingleton<ILogger<BenchmarkExportQuery>>(Logger);

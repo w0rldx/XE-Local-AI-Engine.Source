@@ -3369,6 +3369,11 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryRe
 	queueCapacityReached: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeCollectionResponse = {
+	collectionId: string;
+	documentCount: number;
+};
+
 export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkResponse = {
 	chunkIndex: number;
 	headingPath?: string | null;
@@ -3440,6 +3445,10 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse 
 	pageNumber?: number | null;
 	startOffset: number;
 	endOffset: number;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeCollectionsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeCollectionResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsRequest = {
@@ -3539,6 +3548,10 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1DeleteConversationUploadReq
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationRequest = {
 	purgeImmediately?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ExportNodeChatConversationsRequest = {
+	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatContextEstimateRequest = {
@@ -3671,7 +3684,20 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationRespons
 	agentDefinitionId?: string | null;
 	isPlain: boolean;
 	plainSystemPrompt?: string | null;
+	samplingOptions?: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatSamplingOptionsDto | null;
 	messages: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSearchHitResponse = {
+	conversationId: string;
+	title?: string | null;
+	snippet?: string | null;
+	matchedIn: string;
+	createdAtUtc: number;
+	lastSeenUtc: number;
+	origin: string;
+	isPinned: boolean;
+	archived: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse = {
@@ -3691,6 +3717,45 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatDeleteConversationR
 	conversationId: string;
 	cancelRequested: boolean;
 	purged: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportAttachment = {
+	fileName: string;
+	mimeType?: string | null;
+	sizeBytes?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportConversation = {
+	title?: string | null;
+	createdAtUtc: number;
+	archived?: boolean;
+	attachments?: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportAttachment>;
+	messages: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportMessage>;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportDocument = {
+	format: string;
+	formatVersion: number;
+	exportedAtUtc?: number;
+	conversations: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportConversation>;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportMessage = {
+	role: string;
+	content: string;
+	createdAtUtc: number;
+	model?: string | null;
+	toolCallCount?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatImportResponse = {
+	conversations: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatImportedConversationResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatImportedConversationResponse = {
+	conversationId: string;
+	title: string | null;
+	messageCount: number;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse = {
@@ -3741,6 +3806,21 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsRes
 	variants: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse>;
 };
 
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatSamplingOptionsDto = {
+	temperature?: number | null;
+	topP?: number | null;
+	topK?: number | null;
+	minP?: number | null;
+	maxOutputTokens?: number | null;
+	repeatPenalty?: number | null;
+	repeatLastN?: number | null;
+	presencePenalty?: number | null;
+	frequencyPenalty?: number | null;
+	seed?: string | null;
+	stop?: Array<string> | null;
+	numCtx?: number | null;
+};
+
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatSelectedPathResponse = {
 	conversationId: string;
 	selectedPath: {
@@ -3783,6 +3863,15 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionResponse
 	answerCount: number;
 };
 
+export type XeLocalAiEngineClientEndpointsLocalChatV1SearchNodeChatConversationsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1SearchNodeChatConversationsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSearchHitResponse>;
+	indexing: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest = {
 	memoryExcluded?: boolean;
 };
@@ -3790,6 +3879,10 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemo
 export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationPlainRequest = {
 	isPlain?: boolean;
 	plainSystemPrompt?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationSamplingOptionsRequest = {
+	samplingOptions?: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatSamplingOptionsDto | null;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest = {
@@ -11053,6 +11146,44 @@ export type RenameNodeChatConversationResponses = {
 
 export type RenameNodeChatConversationResponse = RenameNodeChatConversationResponses[keyof RenameNodeChatConversationResponses];
 
+export type SetNodeChatConversationSamplingOptionsData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationSamplingOptionsRequest;
+	path: {
+		conversationId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/chat/conversations/{conversationId}/sampling-options";
+};
+
+export type SetNodeChatConversationSamplingOptionsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type SetNodeChatConversationSamplingOptionsError =
+	SetNodeChatConversationSamplingOptionsErrors[keyof SetNodeChatConversationSamplingOptionsErrors];
+
+export type SetNodeChatConversationSamplingOptionsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
+};
+
+export type SetNodeChatConversationSamplingOptionsResponse =
+	SetNodeChatConversationSamplingOptionsResponses[keyof SetNodeChatConversationSamplingOptionsResponses];
+
 export type SetNodeChatSelectedPathData = {
 	body: XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathRequest;
 	path: {
@@ -11184,6 +11315,75 @@ export type DeleteConversationFileResponses = {
 
 export type DeleteConversationFileResponse = DeleteConversationFileResponses[keyof DeleteConversationFileResponses];
 
+export type ExportNodeChatConversationsData = {
+	body?: never;
+	path?: never;
+	query?: {
+		conversationId?: string | null;
+	};
+	url: "/api/local/v1/chat/export";
+};
+
+export type ExportNodeChatConversationsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type ExportNodeChatConversationsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportDocument;
+};
+
+export type ExportNodeChatConversationsResponse =
+	ExportNodeChatConversationsResponses[keyof ExportNodeChatConversationsResponses];
+
+export type ImportNodeChatConversationsData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportDocument;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/chat/import";
+};
+
+export type ImportNodeChatConversationsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ImportNodeChatConversationsError = ImportNodeChatConversationsErrors[keyof ImportNodeChatConversationsErrors];
+
+export type ImportNodeChatConversationsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatImportResponse;
+};
+
+export type ImportNodeChatConversationsResponse =
+	ImportNodeChatConversationsResponses[keyof ImportNodeChatConversationsResponses];
+
 export type AnswerNowNodeChatMessageData = {
 	body?: never;
 	path: {
@@ -11256,6 +11456,44 @@ export type ResolveUserQuestionResponses = {
 };
 
 export type ResolveUserQuestionResponse = ResolveUserQuestionResponses[keyof ResolveUserQuestionResponses];
+
+export type SearchNodeChatConversationsData = {
+	body?: never;
+	path?: never;
+	query: {
+		query: string;
+		includeArchived: boolean;
+		limit?: number | null;
+	};
+	url: "/api/local/v1/chat/search";
+};
+
+export type SearchNodeChatConversationsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type SearchNodeChatConversationsError = SearchNodeChatConversationsErrors[keyof SearchNodeChatConversationsErrors];
+
+export type SearchNodeChatConversationsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1SearchNodeChatConversationsResponse;
+};
+
+export type SearchNodeChatConversationsResponse =
+	SearchNodeChatConversationsResponses[keyof SearchNodeChatConversationsResponses];
 
 export type ClearCloudSettingsData = {
 	body?: never;
@@ -15621,6 +15859,33 @@ export type GetInvocationMonitorResponses = {
 };
 
 export type GetInvocationMonitorResponse = GetInvocationMonitorResponses[keyof GetInvocationMonitorResponses];
+
+export type ListKnowledgeCollectionsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/knowledge-base/collections";
+};
+
+export type ListKnowledgeCollectionsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListKnowledgeCollectionsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeCollectionsResponse;
+};
+
+export type ListKnowledgeCollectionsResponse = ListKnowledgeCollectionsResponses[keyof ListKnowledgeCollectionsResponses];
 
 export type ListKnowledgeDocumentsData = {
 	body?: never;

@@ -4,11 +4,11 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
+using XE_Local_AI_Engine.Tests.Benchmarks;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -254,8 +254,8 @@ public sealed class BenchmarkCompareEndpointTests
         // never a 500 — and the Warning names the fit without quoting the blob.
         await using var context = new Context();
         var fitId = Guid.NewGuid();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
-        context.Store.GetPairwiseCohortAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
+        context.Stores.Pairwise.GetPairwiseCohortAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkPairwiseCohortState
                {
                    PolicyRevisionId = Guid.NewGuid(),
@@ -266,7 +266,7 @@ public sealed class BenchmarkCompareEndpointTests
                    Candidates = [],
                    Comparisons = []
                });
-        context.Store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Pairwise.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkPairwiseFitRecord
                {
                    Id = fitId,
@@ -312,8 +312,8 @@ public sealed class BenchmarkCompareEndpointTests
         var fitId = Guid.NewGuid();
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
-        context.Store.GetPairwiseCohortAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
+        context.Stores.Pairwise.GetPairwiseCohortAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkPairwiseCohortState
                {
                    PolicyRevisionId = Guid.NewGuid(),
@@ -324,7 +324,7 @@ public sealed class BenchmarkCompareEndpointTests
                    Candidates = [],
                    Comparisons = []
                });
-        context.Store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Pairwise.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkPairwiseFitRecord
                {
                    Id = fitId,
@@ -372,10 +372,10 @@ public sealed class BenchmarkCompareEndpointTests
                            .Distinct()
                            .Order()
                            .ToArray();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
-        context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
+        context.Stores.TaskItems.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns([.. indexes.Select(index => TaskItem(index, !displayOnlyIndexes.Contains(index)))]);
-        context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Runs.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkCellPage
                {
                    Cells = cells,
@@ -477,7 +477,7 @@ public sealed class BenchmarkCompareEndpointTests
 
     private sealed class Context : IAsyncDisposable
     {
-        public IBenchmarkStore Store { get; } = Substitute.For<IBenchmarkStore>();
+        public BenchmarkStoreSubstitutes Stores { get; } = new();
 
         public RecordingLogger<BenchmarkComparisonService> Logger { get; } = new();
 
@@ -489,8 +489,7 @@ public sealed class BenchmarkCompareEndpointTests
             {
                 ConfigureAdditionalTestServices = services =>
                 {
-                    services.RemoveAll<IBenchmarkStore>();
-                    services.AddSingleton(Store);
+                    Stores.ReplaceIn(services);
                     services.AddSingleton<ILogger<BenchmarkComparisonService>>(Logger);
                 }
             };

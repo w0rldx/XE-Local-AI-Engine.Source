@@ -21,6 +21,9 @@ export const nodeChatQueryKeys = {
 	// `limited`: the most-recent page versus every conversation ("Show all"); the two variants cache separately.
 	conversationList: (includeArchived: boolean, limited: boolean) =>
 		[...nodeChatQueryKeys.conversationLists(), includeArchived, limited] as const,
+	// Content search over every conversation. Under the list prefix, so whatever refreshes the sidebar refreshes it too.
+	conversationSearch: (query: string, includeArchived: boolean) =>
+		[...nodeChatQueryKeys.conversationLists(), "search", query, includeArchived] as const,
 	conversation: (conversationId: string) => [...nodeChatQueryKeys.conversations(), conversationId] as const,
 	// Per-conversation uploaded-file (attachment) list. Keyed by conversation id so switching conversations
 	// loads that thread's own attachments and a brand-new conversation starts empty.

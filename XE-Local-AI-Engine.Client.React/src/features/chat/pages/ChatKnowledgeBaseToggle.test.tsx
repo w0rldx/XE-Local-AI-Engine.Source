@@ -11,6 +11,7 @@ import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
@@ -76,13 +77,24 @@ vi.mock("@/features/chat/api/NodeChatConnection", () => ({
 	},
 }));
 
-// One indexed document in DEFAULT, so the composer's knowledge-base toggle is enabled.
+// One indexed document in whichever collection is asked for, so the composer's knowledge-base toggle is enabled; two
+// collections listed, so the collection picker has a choice to offer.
 vi.mock("@/features/knowledge/queries/useKnowledgeDocuments", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/features/knowledge/queries/useKnowledgeDocuments")>()),
 	useKnowledgeDocuments: vi.fn(() => ({ data: [{ status: "Indexed", chunkCount: 1 }] })),
+	useKnowledgeCollections: vi.fn(() => ({ data: ["DEFAULT", "PROJECT-A"] })),
 }));
 
 const adapter = vi.mocked(nodeChatAdapter);
+const knowledgeDocuments = vi.mocked(useKnowledgeDocuments);
+
+function renderChat(): void {
+	renderWithProviders(
+		<ConfirmContext.Provider value={{ confirm: vi.fn().mockResolvedValue(true) }}>
+			<Chat />
+		</ConfirmContext.Provider>,
+	);
+}
 
 const conversation: ChatConversationModel = {
 	id: "conversation-1",
@@ -132,7 +144,7 @@ describe("Chat knowledge-base toggle and the send payload", () => {
 
 	afterEach(() => {
 		cleanup();
-		useNodeChatPreferencesStore.setState({ knowledgeBaseEnabled: false });
+		useNodeChatPreferencesStore.setState({ knowledgeBaseEnabled: false, knowledgeCollectionId: "DEFAULT" });
 	});
 
 	it.each([true, false])("sends useKnowledgeBase=%s when the toggle shows that state", async (enabled) => {
@@ -163,5 +175,29 @@ describe("Chat knowledge-base toggle and the send payload", () => {
 		await waitFor(() => expect(toggle.getAttribute("aria-pressed")).toBe(String(!initial)));
 
 		expect(await sendAndReadFlag()).toBe(!initial);
+	});
+
+	it("sends the collection picked in the composer and remembers it", async () => {
+		useNodeChatPreferencesStore.setState({ knowledgeBaseEnabled: true });
+		renderChat();
+		await screen.findByTestId("conversation-item-conversation-1");
+
+		fireEvent.click(await screen.findByTestId("chat-knowledge-collection-trigger"));
+		fireEvent.click(await screen.findByTestId("chat-knowledge-collection-option-PROJECT-A"));
+
+		expect(await sendAndReadFlag()).toBe(true);
+		expect(adapter.sendMessage.mock.calls[0]?.[0].knowledgeCollectionId).toBe("PROJECT-A");
+		expect(useNodeChatPreferencesStore.getState().knowledgeCollectionId).toBe("PROJECT-A");
+		// The toggle's "has indexed documents" check reads the picked collection, not DEFAULT.
+		expect(knowledgeDocuments).toHaveBeenLastCalledWith(true, "PROJECT-A");
+	});
+
+	it("falls back to DEFAULT when the remembered collection is no longer listed", async () => {
+		useNodeChatPreferencesStore.setState({ knowledgeBaseEnabled: true, knowledgeCollectionId: "GONE" });
+		renderChat();
+		await screen.findByTestId("conversation-item-conversation-1");
+
+		expect(await sendAndReadFlag()).toBe(true);
+		expect(adapter.sendMessage.mock.calls[0]?.[0].knowledgeCollectionId).toBe("DEFAULT");
 	});
 });

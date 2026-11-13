@@ -17,6 +17,12 @@ public interface INodeChatPersistenceService
 
     Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Searches chat conversations (kind <c>chat</c>, not deleted) by title and message text, newest first, from the
+    ///     in-memory index; content written by a call that has returned is always found.
+    /// </summary>
+    Task<NodeChatConversationSearchResultDto> SearchConversationsAsync(NodeChatSearchConversationsRequest request, CancellationToken cancellationToken = default);
+
     Task<NodeChatConversationDto?> GetConversationAsync(Guid conversationId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -113,6 +119,12 @@ public interface INodeChatPersistenceService
     ///     throws <see cref="NodeChatConversationNotFoundException" /> when it does not exist or was purged.
     /// </summary>
     Task<NodeChatConversationDto> SetConversationPlainAsync(NodeChatSetConversationPlainRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Sets (or clears with null) the conversation's own sampling settings and returns the conversation. Throws
+    ///     <see cref="NodeChatConversationNotFoundException" /> when it does not exist or was purged.
+    /// </summary>
+    Task<NodeChatConversationDto> SetConversationSamplingOptionsAsync(NodeChatSetConversationSamplingOptionsRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Writes (or clears with a null summary) the conversation's non-destructive compaction synopsis.

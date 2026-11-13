@@ -91,12 +91,12 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
 
         await harness.Executor().ExecuteAsync(harness.Work(), CancellationToken.None);
 
-        _ = await harness.Store.Received(1)
+        _ = await harness.Stores.Fidelity.Received(1)
                          .MarkFidelityFailedAsync(harness.RunId,
                              Harness.WorkVersion,
                              BenchmarkFidelityExecutor.PerplexityUnavailableMessage,
                              Arg.Any<CancellationToken>());
-        _ = await harness.Store.DidNotReceiveWithAnyArgs().MarkFidelitySucceededAsync(default!, default);
+        _ = await harness.Stores.Fidelity.DidNotReceiveWithAnyArgs().MarkFidelitySucceededAsync(default!, default);
     }
 
     [Test]
@@ -108,12 +108,12 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         await harness.Executor().ExecuteAsync(harness.Work(), CancellationToken.None);
 
         // Fail closed, and quote what the tool said — a null-scored success would publish "no measurable loss".
-        _ = await harness.Store.Received(1)
+        _ = await harness.Stores.Fidelity.Received(1)
                          .MarkFidelityFailedAsync(harness.RunId,
                              Harness.WorkVersion,
                              Arg.Is<string>(message => message.Contains("unable to allocate CUDA0 buffer", StringComparison.Ordinal)),
                              Arg.Any<CancellationToken>());
-        _ = await harness.Store.DidNotReceiveWithAnyArgs().MarkFidelitySucceededAsync(default!, default);
+        _ = await harness.Stores.Fidelity.DidNotReceiveWithAnyArgs().MarkFidelitySucceededAsync(default!, default);
     }
 
     [Test]
@@ -121,7 +121,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
     {
         var harness = new Harness(_root);
         BenchmarkFidelitySuccessCommand? command = null;
-        _ = harness.Store.MarkFidelitySucceededAsync(Arg.Do<BenchmarkFidelitySuccessCommand>(value => command = value), Arg.Any<CancellationToken>());
+        _ = harness.Stores.Fidelity.MarkFidelitySucceededAsync(Arg.Do<BenchmarkFidelitySuccessCommand>(value => command = value), Arg.Any<CancellationToken>());
 
         await harness.Executor().ExecuteAsync(harness.Work(), CancellationToken.None);
 
@@ -150,7 +150,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         harness.ScriptedOutputs.Enqueue(BasePhaseOutput);
         harness.ScriptedOutputs.Enqueue(KlDivergenceOutput);
         BenchmarkFidelitySuccessCommand? command = null;
-        _ = harness.Store.MarkFidelitySucceededAsync(Arg.Do<BenchmarkFidelitySuccessCommand>(value => command = value), Arg.Any<CancellationToken>());
+        _ = harness.Stores.Fidelity.MarkFidelitySucceededAsync(Arg.Do<BenchmarkFidelitySuccessCommand>(value => command = value), Arg.Any<CancellationToken>());
 
         await harness.Executor().ExecuteAsync(harness.Work(), CancellationToken.None);
 
@@ -191,11 +191,11 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
 
         await harness.Executor().ExecuteAsync(harness.Work(), CancellationToken.None);
 
-        _ = await harness.Store.Received(1)
+        _ = await harness.Stores.Fidelity.Received(1)
                          .RequeueFidelityAsync(harness.RunId, Harness.WorkVersion, Arg.Any<string>(), Arg.Any<CancellationToken>());
-        _ = await harness.Store.DidNotReceive()
+        _ = await harness.Stores.Fidelity.DidNotReceive()
                          .MarkFidelityFailedAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-        _ = await harness.Store.DidNotReceiveWithAnyArgs().MarkFidelitySucceededAsync(default!, default);
+        _ = await harness.Stores.Fidelity.DidNotReceiveWithAnyArgs().MarkFidelitySucceededAsync(default!, default);
     }
 
     /// <summary>
@@ -211,14 +211,14 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         harness.ScriptedOutputs.Enqueue(BasePhaseOutput);
         harness.ScriptedOutputs.Enqueue(KlDivergenceOutput);
         string? reason = null;
-        _ = harness.Store.MarkFidelityFailedAsync(harness.RunId, Harness.WorkVersion, Arg.Do<string>(value => reason = value), Arg.Any<CancellationToken>());
+        _ = harness.Stores.Fidelity.MarkFidelityFailedAsync(harness.RunId, Harness.WorkVersion, Arg.Do<string>(value => reason = value), Arg.Any<CancellationToken>());
 
         await harness.Executor().ExecuteAsync(harness.Work(), CancellationToken.None);
 
         AssertEx.Contains(AssertEx.NotNull(reason, "the fidelity is marked failed"), $"'{Harness.BaseModelName}' is not the same model as 'quant.gguf' (40 vs 64 layers)");
         AssertEx.Equal(expected: 0, harness.CapacityRequests.Count, "nothing is reserved for a measurement that cannot mean anything");
         AssertEx.Equal(expected: 2, harness.ScriptedOutputs.Count, "llama-perplexity never ran");
-        _ = await harness.Store.DidNotReceiveWithAnyArgs().MarkFidelitySucceededAsync(default!, default);
+        _ = await harness.Stores.Fidelity.DidNotReceiveWithAnyArgs().MarkFidelitySucceededAsync(default!, default);
     }
 
     /// <summary>
@@ -233,12 +233,12 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
 
         await harness.Executor(new HangingPerplexity(), TimeSpan.FromMilliseconds(50)).ExecuteAsync(harness.Work(), CancellationToken.None);
 
-        _ = await harness.Store.Received(1)
+        _ = await harness.Stores.Fidelity.Received(1)
                          .MarkFidelityFailedAsync(harness.RunId,
                              Harness.WorkVersion,
                              BenchmarkFidelityExecutor.MeasurementTimedOutMessage,
                              Arg.Any<CancellationToken>());
-        _ = await harness.Store.DidNotReceive().MarkFidelityCancelledAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
+        _ = await harness.Stores.Fidelity.DidNotReceive().MarkFidelityCancelledAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
     }
 
     private const string BasePhaseOutput = """
@@ -307,8 +307,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
             File.WriteAllText(Path.Combine(_withTool, LlamaCppToolBinaries.PerplexityFileName), "perplexity");
             File.WriteAllText(Path.Combine(_withoutTool, "llama-server"), "server");
 
-            Store = Substitute.For<IBenchmarkStore>();
-            _ = Store.GetFidelityAttemptAsync(AttemptId, Arg.Any<CancellationToken>())
+            _ = Stores.Fidelity.GetFidelityAttemptAsync(AttemptId, Arg.Any<CancellationToken>())
                      .Returns(new BenchmarkFidelityAttemptRecord
                      {
                          Id = AttemptId,
@@ -332,7 +331,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                          StartedAtUtc = null,
                          CompletedAtUtc = null
                      });
-            _ = Store.GetProjectAsync(_run.ProjectId, Arg.Any<CancellationToken>())
+            _ = Stores.Projects.GetProjectAsync(_run.ProjectId, Arg.Any<CancellationToken>())
                      .Returns(new BenchmarkProjectRecord
                      {
                          Id = _run.ProjectId,
@@ -354,7 +353,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                          FidelityKldBaseModelName = BaseModelName,
                          FidelityKldBaseFingerprint = BaseFingerprint
                      });
-            _ = Store.ListLiveFidelityDigestsAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlySet<string>>(_ => new HashSet<string>(StringComparer.Ordinal));
+            _ = Stores.Fidelity.ListLiveFidelityDigestsAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlySet<string>>(_ => new HashSet<string>(StringComparer.Ordinal));
             _leases = new Dictionary<string, IBenchmarkInstalledModelLease>(StringComparer.Ordinal)
             {
                 [installed.ModelName] = new StubLease(installed),
@@ -370,7 +369,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
 
         public static string BaseFingerprint { get; } = "v1:" + new string('e', 64);
         public static Guid AttemptId { get; } = new("44444444-4444-4444-4444-444444444444");
-        public IBenchmarkStore Store { get; }
+        public BenchmarkStoreSubstitutes Stores { get; } = new();
         public Guid RunId { get; }
         public IGgufModelStore Gguf { get; }
 
@@ -436,7 +435,8 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         }
 
         public BenchmarkFidelityExecutor Executor(ILlamaPerplexityRunner? runner = null, TimeSpan? measurementTimeout = null) =>
-            new(Store,
+            new(Stores.Fidelity,
+                Stores.Projects,
                 new FixedSnapshots(_snapshot),
                 new NamedLeases(_leases),
                 Gguf,

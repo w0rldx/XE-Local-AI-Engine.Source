@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
@@ -120,6 +121,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         IReadOnlyDictionary<Guid, Guid>? selectedPath = null,
         SamplingOptions? samplingOptions = null,
         bool autoAcceptWebContent = false,
+        string? knowledgeCollectionId = null,
         CancellationToken cancellationToken = default)
     {
         // The sampling seed rides the wire as a string, so a malformed value is rejected here rather than dropped
@@ -129,7 +131,21 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
             throw new NodeChatInvalidRequestException(seedError);
         }
 
-        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, autoAcceptWebContent, cancellationToken);
+        if (!KnowledgeCollectionScope.TryNormalize(knowledgeCollectionId, out var normalizedCollectionId))
+        {
+            throw new NodeChatInvalidRequestException("The knowledge collection id is invalid.");
+        }
+
+        return RegenerateCoreAsync(conversationId,
+            originalMessageId,
+            reasoningEffort,
+            useLocalTools,
+            useKnowledgeBase,
+            selectedPath,
+            samplingOptions,
+            autoAcceptWebContent,
+            normalizedCollectionId,
+            cancellationToken);
     }
 
     private async IAsyncEnumerable<ChatStreamEvent> RegenerateCoreAsync(Guid conversationId,
@@ -140,6 +156,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         IReadOnlyDictionary<Guid, Guid>? requestedSelectedPath,
         SamplingOptions? samplingOptions,
         bool autoAcceptWebContent,
+        string knowledgeCollectionId,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var turn = await LoadRegenerationTurnAsync(conversationId, originalMessageId, requestedSelectedPath, cancellationToken);
@@ -232,7 +249,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
             // A regenerated plain-chat turn honors the same opt-in grounding and cloud-egress gate as a send, so a
             // rerun does not lose its sources strip. Agent mode grounds through the gated tool instead, never inline.
             var knowledge = useKnowledgeBase && !offer.OfferTools && !resolution.IsPlain
-                ? await GroundOnKnowledgeBaseAsync(conversation, original, resolution, requestId, runCancellation.Token, cancellationToken)
+                ? await GroundOnKnowledgeBaseAsync(conversation, original, resolution, knowledgeCollectionId, requestId, runCancellation.Token, cancellationToken)
                 : null;
 
             var package = await BuildRegenerationPackageAsync(turn,
@@ -452,6 +469,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
     private async Task<KnowledgeChatGrounding?> GroundOnKnowledgeBaseAsync(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto original,
         ChatTurnResolution resolution,
+        string knowledgeCollectionId,
         Guid requestId,
         CancellationToken runCancellationToken,
         CancellationToken cancellationToken)
@@ -481,7 +499,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         var retrievalQuery = ResolvePrecedingUserTurnContent(conversation, original);
         return string.IsNullOrWhiteSpace(retrievalQuery)
             ? null
-            : await _turnContextBuilder.BuildKnowledgeContextAsync(retrievalQuery, isRegeneratedTurn: true, runCancellationToken);
+            : await _turnContextBuilder.BuildKnowledgeContextAsync(retrievalQuery, knowledgeCollectionId, isRegeneratedTurn: true, runCancellationToken);
     }
 
     // Drains the run after the SSE consumer is gone. The pump is observed FIRST: a persistence fault faults here, so

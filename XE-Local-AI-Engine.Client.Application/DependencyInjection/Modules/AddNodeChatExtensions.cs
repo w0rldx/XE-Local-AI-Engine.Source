@@ -74,6 +74,9 @@ internal static class AddNodeChatExtensions
         // and only this layer may reach a persistence store, so it is registered here rather than in the host.
         builder.Services.AddHostedService<RetentionSweeperService>();
 
+        // Fills the in-memory conversation search index in the background; the writer keeps it current after that.
+        builder.Services.AddHostedService<ConversationSearchBackfillService>();
+
         return builder;
     }
 }

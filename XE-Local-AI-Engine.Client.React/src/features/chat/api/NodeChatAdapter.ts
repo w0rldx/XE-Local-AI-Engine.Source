@@ -13,8 +13,10 @@ import {
 	listNodeChatMessageRevisions,
 	pinNodeChatConversation,
 	renameNodeChatConversation,
+	searchNodeChatConversations,
 	setNodeChatConversationMemoryExcluded,
 	setNodeChatConversationPlain,
+	setNodeChatConversationSamplingOptions,
 	setNodeChatMessageFeedback,
 	setNodeChatSelectedPath,
 	type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse,
@@ -23,6 +25,7 @@ import {
 import type { ContextEstimateRequest } from "@/core/chat/queries/NodeChatQueryKeys";
 import {
 	mapConversation,
+	mapConversationSearchHit,
 	mapConversationSummary,
 	mapMessageFeedback,
 	mapMessageRevisions,
@@ -33,6 +36,7 @@ import type {
 	ChatCompactionResult,
 	ChatConversationListModel,
 	ChatConversationModel,
+	ChatConversationSearchModel,
 	ChatFeedbackRating,
 	ChatMessageFeedback,
 	ChatMessageRevisions,
@@ -72,6 +76,8 @@ export interface SendMessageRequest {
 	useLocalTools?: boolean;
 	// Opt-in knowledge-base grounding for a plain-chat turn. Ignored by the server in agent mode.
 	useKnowledgeBase?: boolean;
+	// The collection grounding searches (the composer's pick); forwarded only with useKnowledgeBase.
+	knowledgeCollectionId?: string;
 	reasoningEffort?: string;
 	selectedPath?: Record<string, string>;
 	// Agent to resolve for this turn. Absent → Default Assistant (today's built-in chat path). Only included when
@@ -90,6 +96,7 @@ export interface SendMessageRequest {
 
 export interface NodeChatAdapter {
 	listConversations(options?: ListConversationsOptions): Promise<ChatConversationListModel>;
+	searchConversations(query: string, includeArchived: boolean, options?: RequestOptions): Promise<ChatConversationSearchModel>;
 	getConversation(conversationId: string, options?: RequestOptions): Promise<ChatConversationModel>;
 	createConversation(request?: CreateConversationRequest, options?: RequestOptions): Promise<ChatConversationModel>;
 	deleteConversation(conversationId: string, purgeImmediately?: boolean, options?: RequestOptions): Promise<void>;
@@ -111,6 +118,12 @@ export interface NodeChatAdapter {
 		conversationId: string,
 		isPlain: boolean,
 		plainSystemPrompt: string | undefined,
+		options?: RequestOptions,
+	): Promise<ChatConversationModel>;
+	// Undefined clears the conversation's own settings, so this browser's defaults apply to it again.
+	setConversationSamplingOptions(
+		conversationId: string,
+		samplingOptions: WireSamplingOptions | undefined,
 		options?: RequestOptions,
 	): Promise<ChatConversationModel>;
 	branchConversation(
@@ -146,6 +159,8 @@ export interface NodeChatAdapter {
 		samplingOptions: WireSamplingOptions | undefined,
 		// The conversation's web content review mode (true = results reach the model without a review card).
 		autoAcceptWebContent: boolean,
+		// The collection a grounded rerun searches; undefined is DEFAULT.
+		knowledgeCollectionId: string | undefined,
 		signal: AbortSignal,
 	): AsyncIterable<NodeChatStreamEventDto>;
 	resumeConversation(conversationId: string, signal: AbortSignal): AsyncIterable<NodeChatStreamEventDto>;
@@ -165,6 +180,8 @@ export function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequ
 		model: request.model,
 		useLocalTools: request.useLocalTools,
 		useKnowledgeBase: request.useKnowledgeBase,
+		// Without grounding the collection means nothing, so it stays off the wire.
+		knowledgeCollectionId: request.useKnowledgeBase === true ? request.knowledgeCollectionId : undefined,
 		reasoningEffort: request.reasoningEffort,
 		selectedPath: request.selectedPath,
 		agentDefinitionId: request.agentDefinitionId,
@@ -188,6 +205,10 @@ export const nodeChatAdapter: NodeChatAdapter = {
 			maxMessageSizeKb: data.maxMessageSizeKb,
 			maxUploadFileSizeMb: data.maxUploadFileSizeMb,
 		};
+	},
+	async searchConversations(query, includeArchived, options) {
+		const { data } = await searchNodeChatConversations({ query: { query, includeArchived }, signal: options?.signal });
+		return { conversations: (data.items ?? []).map(mapConversationSearchHit), indexing: data.indexing ?? false };
 	},
 	async getConversation(conversationId, options) {
 		const { data } = await getNodeChatConversation({ path: { conversationId }, signal: options?.signal });
@@ -275,6 +296,14 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		});
 		return mapConversation(data);
 	},
+	async setConversationSamplingOptions(conversationId, samplingOptions, options) {
+		const { data } = await setNodeChatConversationSamplingOptions({
+			path: { conversationId },
+			body: { samplingOptions: samplingOptions ?? null },
+			signal: options?.signal,
+		});
+		return mapConversation(data);
+	},
 	async branchConversation(conversationId, messageId, selectedRevisions, options) {
 		// The ids bind from the route; the body carries the optional selected-revision map so the branched thread
 		// matches the revisions the user was viewing (variantGroupId -> selectedMessageId). Omitting it (undefined)
@@ -337,14 +366,16 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		selectedPath,
 		samplingOptions,
 		autoAcceptWebContent,
+		knowledgeCollectionId,
 		signal,
 	) {
 		// Server mints the sibling variant + drives the run (assistant revision flow); the variant messageId + requestId arrive
 		// on the stream events and are latched for reconnect/resume. Streams exactly like a send, and honors the
 		// current reasoning + local-tools + knowledge-base selection, the active conversation-tree path, and the
 		// developer-mode sampling overrides via the hub args (RegenerateMessage(conversationId, messageId, effort,
-		// useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, autoAcceptWebContent)). Absent selection/overrides
-		// ride as null. The hub binds by position and count, so the web review mode is always sent; false = review.
+		// useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, autoAcceptWebContent, knowledgeCollectionId)).
+		// Absent selection/overrides/collection ride as null. The hub binds by position and count, so every argument is
+		// always sent; false = review, a null collection = DEFAULT.
 		return guardNodeChatStream(
 			streamNodeChatEvents(
 				{
@@ -358,6 +389,7 @@ export const nodeChatAdapter: NodeChatAdapter = {
 						selectedPath ?? null,
 						samplingOptions ?? null,
 						autoAcceptWebContent,
+						useKnowledgeBase ? (knowledgeCollectionId ?? null) : null,
 					],
 				},
 				signal,

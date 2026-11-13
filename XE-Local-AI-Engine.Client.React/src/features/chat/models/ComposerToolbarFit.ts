@@ -29,6 +29,8 @@ export interface ComposerToolbarControls {
 	/** The web review toggle is on screen (local tools on AND the node allows web access); inline in every layout. */
 	readonly webReview: boolean;
 	readonly knowledgeBase: boolean;
+	/** The knowledge-collection picker beside the toggle; folds into the overflow menu with it. */
+	readonly knowledgeCollection: boolean;
 	readonly agentPicker: boolean;
 	readonly workflowPicker: boolean;
 	readonly attachments: boolean;
@@ -75,6 +77,7 @@ function rowWidth(controls: ComposerToolbarControls, layout: ComposerToolbarFit)
 		!compact && controls.localTools,
 		controls.webReview,
 		!compact && controls.knowledgeBase,
+		!compact && controls.knowledgeCollection,
 		controls.attachments,
 		!compact && controls.samplingOptions,
 		controls.voice,

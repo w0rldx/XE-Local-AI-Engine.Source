@@ -32,10 +32,11 @@ public sealed class BenchmarkRunExecutorTests
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var expected = Installed("model.gguf", 'a');
         var actual = Installed("model.gguf", 'b');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         BenchmarkRunRecord? failed = null;
-        store.MarkPrimaryFailedAsync(run.Id,
+        runStore.MarkPrimaryFailedAsync(run.Id,
                  run.Version,
                  Arg.Do<string>(message => AssertEx.Contains(message, "installed model changed")),
                  Arg.Do<long>(sequence => AssertEx.True(sequence > 0)),
@@ -53,7 +54,8 @@ public sealed class BenchmarkRunExecutorTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var runner = Substitute.For<IInvocationRunner>();
         await using var lease = new FakeLease(actual);
-        var executor = new BenchmarkRunExecutor(store,
+        var executor = new BenchmarkRunExecutor(runStore,
+            judgeStore,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
             capacity,
@@ -103,10 +105,11 @@ public sealed class BenchmarkRunExecutorTests
             PrimaryLaunchIntent = Intent(launchIdentityScheme: null)
         };
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? failureMessage = null;
-        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(),
+        runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(),
                  Arg.Any<string?>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
@@ -117,7 +120,7 @@ public sealed class BenchmarkRunExecutorTests
         var capacity = new RecordingCapacityService();
         var runner = Substitute.For<IInvocationRunner>();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed), lease, capacity, Substitute.For<IWorkerEventDispatcher>(), runner,
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, capacity, Substitute.For<IWorkerEventDispatcher>(), runner,
             new BenchmarkCancellationRegistry());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -151,10 +154,11 @@ public sealed class BenchmarkRunExecutorTests
             {
                 PrimaryLaunchIntent = intent
             };
-            var store = Substitute.For<IBenchmarkStore>();
-            store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+            var runStore = Substitute.For<IBenchmarkRunStore>();
+            var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+            runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
             string? failureMessage = null;
-            store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(),
+            runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(),
                      Arg.Any<string?>(), Arg.Any<CancellationToken>())
                  .Returns(call => run with
                  {
@@ -163,7 +167,7 @@ public sealed class BenchmarkRunExecutorTests
                      Version = run.Version + 1
                  });
             await using var lease = new FakeLease(Installed("model.gguf", 'b'));
-            var executor = Executor(store, Snapshot(Installed("model.gguf", 'a')), lease, new RecordingCapacityService(),
+            var executor = Executor(runStore, judgeStore, Snapshot(Installed("model.gguf", 'a')), lease, new RecordingCapacityService(),
                 Substitute.For<IWorkerEventDispatcher>(), Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry());
 
             await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -187,9 +191,10 @@ public sealed class BenchmarkRunExecutorTests
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
-        store.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+        runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
@@ -225,7 +230,7 @@ public sealed class BenchmarkRunExecutorTests
         await using var lease = new FakeLease(installed);
         var cancellationRegistry = new BenchmarkCancellationRegistry();
         var supervisor = PassthroughSupervisor();
-        var executor = Executor(store, Snapshot(installed), lease, capacity, dispatcher, runner, cancellationRegistry, supervisor);
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, capacity, dispatcher, runner, cancellationRegistry, supervisor);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
         {
@@ -265,7 +270,7 @@ public sealed class BenchmarkRunExecutorTests
             Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
             Arg.Any<CancellationToken>());
         AssertEx.False(cancellationRegistry.TryCancel(run.Id, BenchmarkWorkKind.Primary));
-        _ = store.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
+        _ = runStore.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -276,9 +281,10 @@ public sealed class BenchmarkRunExecutorTests
         // tokens/second must now mean decode speed (tg): 89 tokens over 1011.5 ms, NOT 20 tokens over 100 ms.
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
-        store.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+        runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
@@ -316,7 +322,7 @@ public sealed class BenchmarkRunExecutorTests
                       new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "answer", 20, 100, "stop", throughput)));
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -353,9 +359,10 @@ public sealed class BenchmarkRunExecutorTests
         // real — so the stop reason is the only thing that can carry the truth downstream.
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
-        store.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+        runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
@@ -383,7 +390,7 @@ public sealed class BenchmarkRunExecutorTests
                       new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "cut off mid-", 16384, 100, "length")));
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -400,7 +407,7 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.Equal("length", persisted.PrimaryStopReason);
         // Reaching MarkPrimarySucceededAsync at all is the assertion: the failure path terminalizes through
         // MarkPrimaryFailedAsync instead and never gets here.
-        _ = store.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
+        _ = runStore.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -411,9 +418,10 @@ public sealed class BenchmarkRunExecutorTests
         // that answered. Only the node can see the difference, so only the node can record it.
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
-        store.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+        runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
@@ -435,7 +443,7 @@ public sealed class BenchmarkRunExecutorTests
                           thinkingContent: "Let me think about this for a very long time.")));
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -451,7 +459,7 @@ public sealed class BenchmarkRunExecutorTests
         var persisted = AssertEx.NotNull(command);
         AssertEx.Equal(BenchmarkPrimaryStopReasons.Incomplete, persisted.PrimaryStopReason,
             "a turn that emitted only reasoning answered nothing, whatever the provider called it");
-        _ = store.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
+        _ = runStore.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -461,9 +469,10 @@ public sealed class BenchmarkRunExecutorTests
         // downstream as a finished answer even though the agent is still waiting for a result that never came.
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
-        store.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+        runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
@@ -496,7 +505,7 @@ public sealed class BenchmarkRunExecutorTests
                           "tool_calls")));
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -577,9 +586,10 @@ public sealed class BenchmarkRunExecutorTests
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
-        store.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+        runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
@@ -601,7 +611,7 @@ public sealed class BenchmarkRunExecutorTests
                       new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "The answer is 42.", 4096, 100, "stop")));
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -625,10 +635,11 @@ public sealed class BenchmarkRunExecutorTests
         // still runs out of it says so instead of failing with an unattributable "the invocation failed".
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2, invocationTimeoutSeconds: 1800);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? stopReason = null;
-        store.MarkPrimaryFailedAsync(run.Id,
+        runStore.MarkPrimaryFailedAsync(run.Id,
                  run.Version,
                  Arg.Any<string>(),
                  Arg.Any<long>(),
@@ -655,7 +666,7 @@ public sealed class BenchmarkRunExecutorTests
                   return Task.CompletedTask;
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -681,11 +692,12 @@ public sealed class BenchmarkRunExecutorTests
         // reserved on top). The run reserves exactly its cap, and a refused run names its window and the remedy, never chat advice.
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? message = null;
         var stopReasons = new List<string?>();
-        store.MarkPrimaryFailedAsync(run.Id,
+        runStore.MarkPrimaryFailedAsync(run.Id,
                  run.Version,
                  Arg.Do<string>(value => message = value),
                  Arg.Any<long>(),
@@ -718,7 +730,7 @@ public sealed class BenchmarkRunExecutorTests
                 reasoningBudgetTokens: null,
                 reasoningBudgetEnforceable: null)
         };
-        var executor = Executor(store, snapshot, lease, new RecordingCapacityService(), dispatcher, runner,
+        var executor = Executor(runStore, judgeStore, snapshot, lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -747,8 +759,9 @@ public sealed class BenchmarkRunExecutorTests
         // one there would advertise a cap that never held.
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
@@ -776,7 +789,7 @@ public sealed class BenchmarkRunExecutorTests
                 reasoningBudgetTokens: 2048,
                 reasoningBudgetEnforceable: false)
         };
-        var executor = Executor(store, snapshot, lease, new RecordingCapacityService(), dispatcher, runner,
+        var executor = Executor(runStore, judgeStore, snapshot, lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -802,9 +815,10 @@ public sealed class BenchmarkRunExecutorTests
         // `length` here sends the operator to the output budget, which is not what ran out.
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
-        store.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+        runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
@@ -825,7 +839,7 @@ public sealed class BenchmarkRunExecutorTests
                           thinkingContent: "still thinking when the budget ran out")));
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -850,9 +864,10 @@ public sealed class BenchmarkRunExecutorTests
         // releasing its VRAM, typically. The run must wait for that instead of terminalizing on the first no.
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.MarkPrimaryFailedAsync(run.Id,
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        runStore.MarkPrimaryFailedAsync(run.Id,
                  run.Version,
                  Arg.Any<string>(),
                  Arg.Any<long>(),
@@ -868,7 +883,7 @@ public sealed class BenchmarkRunExecutorTests
             CapacityVerdict.Allow);
         var runner = Substitute.For<IInvocationRunner>();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store,
+        var executor = Executor(runStore, judgeStore,
             Snapshot(installed),
             lease,
             capacity,
@@ -902,10 +917,11 @@ public sealed class BenchmarkRunExecutorTests
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         BenchmarkRunRecord? cancelled = null;
-        store.MarkPrimaryCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>())
+        runStore.MarkPrimaryCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => cancelled = run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Cancelled,
@@ -926,7 +942,7 @@ public sealed class BenchmarkRunExecutorTests
                   return Task.FromCanceled(call.ArgAt<CancellationToken>(1));
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store,
+        var executor = Executor(runStore, judgeStore,
             Snapshot(installed),
             lease,
             capacity,
@@ -961,15 +977,16 @@ public sealed class BenchmarkRunExecutorTests
         var planner = Substitute.For<IBenchmarkPairwisePlanner>();
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        runStore.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
                  Version = 3
              });
-        store.MarkPrimaryCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>())
+        runStore.MarkPrimaryCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Cancelled,
@@ -1005,7 +1022,7 @@ public sealed class BenchmarkRunExecutorTests
                       new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "answer", 20, 100, "stop")));
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner, cancellations,
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner, cancellations,
             pairwisePlanner: planner);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -1038,7 +1055,8 @@ public sealed class BenchmarkRunExecutorTests
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         var capacity = new RecordingCapacityService();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
@@ -1048,7 +1066,7 @@ public sealed class BenchmarkRunExecutorTests
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
               .Returns(call => Task.FromCanceled(call.ArgAt<CancellationToken>(1)));
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store,
+        var executor = Executor(runStore, judgeStore,
             Snapshot(installed),
             lease,
             capacity,
@@ -1069,8 +1087,8 @@ public sealed class BenchmarkRunExecutorTests
                 Run = run
             }, stopping.Token));
 
-        _ = store.DidNotReceive().MarkPrimaryCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>());
-        _ = store.DidNotReceive().MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        _ = runStore.DidNotReceive().MarkPrimaryCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>());
+        _ = runStore.DidNotReceive().MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
         AssertEx.True(assignment.Disposed);
         AssertEx.True(AssertEx.NotNull(capacity.Reservation).Disposed);
         AssertEx.True(lease.Disposed);
@@ -1094,11 +1112,12 @@ public sealed class BenchmarkRunExecutorTests
             }
         };
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkLaunchReceiptCommand? checkpoint = null;
-        store.MarkPrimaryLaunchReadyAsync(run.Id, 1, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint ??= command), Arg.Any<CancellationToken>())
+        runStore.MarkPrimaryLaunchReadyAsync(run.Id, 1, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint ??= command), Arg.Any<CancellationToken>())
              .Returns(true);
-        store.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
+        runStore.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
@@ -1129,7 +1148,7 @@ public sealed class BenchmarkRunExecutorTests
                       new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "answer", 20, 100)));
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed), lease, capacity, dispatcher, runner, new BenchmarkCancellationRegistry(),
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, capacity, dispatcher, runner, new BenchmarkCancellationRegistry(),
             PassthroughSupervisor(Receipt()), environmentFacts);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -1162,12 +1181,13 @@ public sealed class BenchmarkRunExecutorTests
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.MarkPrimaryLaunchReadyAsync(run.Id, 1, 2, Arg.Any<BenchmarkLaunchReceiptCommand>(), Arg.Any<CancellationToken>())
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        runStore.MarkPrimaryLaunchReadyAsync(run.Id, 1, 2, Arg.Any<BenchmarkLaunchReceiptCommand>(), Arg.Any<CancellationToken>())
              .Returns<bool>(_ => throw new BenchmarkConflictException("VersionConflict"));
         BenchmarkPrimarySuccessCommand? succeeded = null;
-        store.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(command => succeeded = command), Arg.Any<CancellationToken>())
+        runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(command => succeeded = command), Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
@@ -1194,7 +1214,7 @@ public sealed class BenchmarkRunExecutorTests
                       new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "answer", 20, 100)));
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor(Receipt()));
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -1208,7 +1228,7 @@ public sealed class BenchmarkRunExecutorTests
         }, CancellationToken.None);
 
         AssertEx.NotNull(succeeded, "A checkpoint that loses a version race must not cost the run its measurement.");
-        _ = store.DidNotReceiveWithAnyArgs().MarkPrimaryFailedAsync(Guid.Empty, default, default!, default, default, default);
+        _ = runStore.DidNotReceiveWithAnyArgs().MarkPrimaryFailedAsync(Guid.Empty, default, default!, default, default, default);
     }
 
     [Test]
@@ -1216,9 +1236,10 @@ public sealed class BenchmarkRunExecutorTests
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Failed,
@@ -1230,7 +1251,7 @@ public sealed class BenchmarkRunExecutorTests
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
         var runner = Substitute.For<IInvocationRunner>();
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed, frozenContextTokens: 12288), lease, capacity, dispatcher, runner,
+        var executor = Executor(runStore, judgeStore, Snapshot(installed, frozenContextTokens: 12288), lease, capacity, dispatcher, runner,
             new BenchmarkCancellationRegistry());
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -1253,9 +1274,10 @@ public sealed class BenchmarkRunExecutorTests
         // and frozen contexts differ here on purpose, so a line that logged the wrong one is distinguishable.
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Failed,
@@ -1267,7 +1289,7 @@ public sealed class BenchmarkRunExecutorTests
         await using var assignment = new TrackingAsyncDisposable();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store,
+        var executor = Executor(runStore, judgeStore,
             Snapshot(installed, frozenContextTokens: 12288, frozenKvCacheType: "q4_0"),
             lease,
             capacity,
@@ -1309,9 +1331,10 @@ public sealed class BenchmarkRunExecutorTests
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Failed,
@@ -1323,7 +1346,7 @@ public sealed class BenchmarkRunExecutorTests
         await using var assignment = new TrackingAsyncDisposable();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed), lease, capacity, dispatcher, Substitute.For<IInvocationRunner>(),
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, capacity, dispatcher, Substitute.For<IInvocationRunner>(),
             new BenchmarkCancellationRegistry(), logger: logger);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -1346,13 +1369,14 @@ public sealed class BenchmarkRunExecutorTests
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         BenchmarkLaunchReceiptCommand? checkpoint = null;
-        store.MarkPrimaryLaunchReadyAsync(run.Id, 1, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint = command), Arg.Any<CancellationToken>())
+        runStore.MarkPrimaryLaunchReadyAsync(run.Id, 1, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint = command), Arg.Any<CancellationToken>())
              .Returns(true);
         string? failure = null;
-        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failure = message), Arg.Any<long>(), Arg.Any<string?>(),
+        runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failure = message), Arg.Any<long>(), Arg.Any<string?>(),
                  Arg.Any<CancellationToken>())
              .Returns(run with
              {
@@ -1368,7 +1392,7 @@ public sealed class BenchmarkRunExecutorTests
                       Arg.Any<CancellationToken>())
                   .Returns<bool>(_ => throw new LlamaRuntimeException("llama-server exited before it became ready."));
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), Substitute.For<IWorkerEventDispatcher>(),
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, new RecordingCapacityService(), Substitute.For<IWorkerEventDispatcher>(),
             Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry(), supervisor);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork
@@ -1403,8 +1427,9 @@ public sealed class BenchmarkRunExecutorTests
         // queued work whose attempt pins to 1, so the operator loses the measurement to a request that was ending.
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
@@ -1417,7 +1442,7 @@ public sealed class BenchmarkRunExecutorTests
         var runner = CompletingRunner(dispatcher);
         await using var lease = new FakeLease(installed);
         var supervisor = RefusingSupervisor(refusals: 1);
-        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), supervisor,
             admissionRetry: new BenchmarkAdmissionRetry
             {
@@ -1441,8 +1466,8 @@ public sealed class BenchmarkRunExecutorTests
             Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
             Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
             Arg.Any<CancellationToken>());
-        _ = store.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
-        _ = store.DidNotReceiveWithAnyArgs().MarkPrimaryFailedAsync(Guid.Empty, default, default!, default, default, default);
+        _ = runStore.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
+        _ = runStore.DidNotReceiveWithAnyArgs().MarkPrimaryFailedAsync(Guid.Empty, default, default!, default, default, default);
     }
 
     [Test]
@@ -1450,10 +1475,11 @@ public sealed class BenchmarkRunExecutorTests
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? failure = null;
-        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failure = message), Arg.Any<long>(), Arg.Any<string?>(),
+        runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failure = message), Arg.Any<long>(), Arg.Any<string?>(),
                  Arg.Any<CancellationToken>())
              .Returns(run with
              {
@@ -1462,7 +1488,7 @@ public sealed class BenchmarkRunExecutorTests
              });
         await using var lease = new FakeLease(installed);
         var supervisor = RefusingSupervisor(refusals: int.MaxValue);
-        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), Substitute.For<IWorkerEventDispatcher>(),
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, new RecordingCapacityService(), Substitute.For<IWorkerEventDispatcher>(),
             Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry(), supervisor,
             admissionRetry: new BenchmarkAdmissionRetry
             {
@@ -1499,9 +1525,10 @@ public sealed class BenchmarkRunExecutorTests
         // budget. Two capacity retries out of three leave the spawn exactly one: two calls, not four.
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
+        runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Failed,
@@ -1512,7 +1539,7 @@ public sealed class BenchmarkRunExecutorTests
             CapacityVerdict.Allow);
         await using var lease = new FakeLease(installed);
         var supervisor = RefusingSupervisor(refusals: int.MaxValue);
-        var executor = Executor(store, Snapshot(installed), lease, capacity, Substitute.For<IWorkerEventDispatcher>(),
+        var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, capacity, Substitute.For<IWorkerEventDispatcher>(),
             Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry(), supervisor,
             admissionRetry: new BenchmarkAdmissionRetry
             {
@@ -1661,7 +1688,8 @@ public sealed class BenchmarkRunExecutorTests
             LaunchIdentityScheme = launchIdentityScheme
         };
 
-    private static BenchmarkRunExecutor Executor(IBenchmarkStore store,
+    private static BenchmarkRunExecutor Executor(IBenchmarkRunStore runStore,
+        IBenchmarkJudgeStore judgeStore,
         BenchmarkRuntimeSnapshotV1 snapshot,
         FakeLease lease,
         ICapacityService capacity,
@@ -1673,7 +1701,8 @@ public sealed class BenchmarkRunExecutorTests
         ILogger<BenchmarkRunExecutor>? logger = null,
         BenchmarkAdmissionRetry? admissionRetry = null,
         IBenchmarkPairwisePlanner? pairwisePlanner = null) =>
-        new(store,
+        new(runStore,
+            judgeStore,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
             capacity,

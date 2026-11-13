@@ -5,8 +5,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -48,7 +46,7 @@ public sealed class BenchmarkReviewEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        _ = context.Store.DidNotReceive().SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
+        _ = context.Stores.Reviews.DidNotReceive().SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -56,10 +54,10 @@ public sealed class BenchmarkReviewEndpointTests
     {
         // The positive control for the 403 above. No judge policy, so the reviewer gives the overall alone and the revision stamp is null.
         await using var context = new Context();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
-        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run());
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
+        context.Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run());
         BenchmarkReviewCommand? submitted = null;
-        context.Store.SubmitReviewAsync(Arg.Do<BenchmarkReviewCommand>(command => submitted = command), Arg.Any<CancellationToken>())
+        context.Stores.Reviews.SubmitReviewAsync(Arg.Do<BenchmarkReviewCommand>(command => submitted = command), Arg.Any<CancellationToken>())
                .Returns(Run() with
                {
                    Version = 4,
@@ -117,11 +115,11 @@ public sealed class BenchmarkReviewEndpointTests
     public async Task GetRun_WhenTheProjectsPolicyMovedOn_ReportsTheReviewAsNotCurrent()
     {
         await using var context = new Context();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project() with
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project() with
         {
             CurrentJudgePolicyRevisionId = Guid.NewGuid()
         });
-        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run() with
+        context.Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run() with
         {
             Review = Review(RevisionId)
         });
@@ -141,7 +139,7 @@ public sealed class BenchmarkReviewEndpointTests
     public async Task PutScore_WhenProjectRequiresReview_Returns409()
     {
         await using var context = new Context();
-        context.Store.SetUserScoreAsync(RunId, 55, 3, Arg.Any<CancellationToken>())
+        context.Stores.Runs.SetUserScoreAsync(RunId, 55, 3, Arg.Any<CancellationToken>())
                .Returns<Task<BenchmarkRunRecord>>(_ => throw new BenchmarkConflictException("ReviewRequired"));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Put, Api + $"/runs/{RunId}/score", new
@@ -160,7 +158,7 @@ public sealed class BenchmarkReviewEndpointTests
     {
         // The clear goes through the same SetUserScoreAsync guard, so a review project's approved score cannot be cleared around the review either.
         await using var context = new Context();
-        context.Store.SetUserScoreAsync(RunId, null, 3, Arg.Any<CancellationToken>())
+        context.Stores.Runs.SetUserScoreAsync(RunId, null, 3, Arg.Any<CancellationToken>())
                .Returns<Task<BenchmarkRunRecord>>(_ => throw new BenchmarkConflictException("ReviewRequired"));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Delete, Api + $"/runs/{RunId}/score", new
@@ -178,8 +176,8 @@ public sealed class BenchmarkReviewEndpointTests
     {
         // Under a judge policy a run is reviewable only once its current judging succeeded: the reviewer re-judges first, never overrules a failure.
         await using var context = new Context();
-        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(judgeState: BenchmarkRunJudgeStates.Failed));
-        context.Store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(judgeState: BenchmarkRunJudgeStates.Failed));
+        context.Stores.Judging.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkJudgePolicyRevisionRecord
                {
                    Id = RevisionId,
@@ -209,7 +207,7 @@ public sealed class BenchmarkReviewEndpointTests
         using var response = await client.SendAsync(request);
 
         await AssertProblemAsync(response, HttpStatusCode.Conflict, BenchmarkErrorCode.NotReviewable);
-        _ = context.Store.DidNotReceive().SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
+        _ = context.Stores.Reviews.DidNotReceive().SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -233,7 +231,7 @@ public sealed class BenchmarkReviewEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        _ = context.Store.DidNotReceive().GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        _ = context.Stores.Runs.DidNotReceive().GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -253,7 +251,7 @@ public sealed class BenchmarkReviewEndpointTests
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, body);
         AssertEx.Contains(body, BenchmarkReviewLimits.MaxNotesCharacters.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
-        _ = context.Store.DidNotReceive().GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        _ = context.Stores.Runs.DidNotReceive().GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -262,7 +260,7 @@ public sealed class BenchmarkReviewEndpointTests
         // Which runs are reviewable is the store's predicate; the route's job is to ask for exactly the requested state, project and page.
         await using var context = new Context();
         BenchmarkReviewQuery? asked = null;
-        context.Store.ListReviewQueueAsync(Arg.Do<BenchmarkReviewQuery>(query => asked = query), Arg.Any<CancellationToken>())
+        context.Stores.Reviews.ListReviewQueueAsync(Arg.Do<BenchmarkReviewQuery>(query => asked = query), Arg.Any<CancellationToken>())
                .Returns(new BenchmarkReviewQueuePage
                {
                    Items =
@@ -308,7 +306,7 @@ public sealed class BenchmarkReviewEndpointTests
     {
         // The real store refuses the state; the substitute stands in for that refusal.
         await using var context = new Context();
-        context.Store.ListReviewQueueAsync(Arg.Any<BenchmarkReviewQuery>(), Arg.Any<CancellationToken>())
+        context.Stores.Reviews.ListReviewQueueAsync(Arg.Any<BenchmarkReviewQuery>(), Arg.Any<CancellationToken>())
                .Returns<Task<BenchmarkReviewQueuePage>>(_ => throw new BenchmarkValidationException("Review state must be pending, approved, rejected or stale."));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/reviews?state=maybe");
@@ -430,12 +428,11 @@ public sealed class BenchmarkReviewEndpointTests
             {
                 ConfigureAdditionalTestServices = services =>
                 {
-                    services.RemoveAll<IBenchmarkStore>();
-                    services.AddSingleton(Store);
+                    Stores.ReplaceIn(services);
                 }
             };
 
-        public IBenchmarkStore Store { get; } = Substitute.For<IBenchmarkStore>();
+        public BenchmarkStoreSubstitutes Stores { get; } = new();
 
         public TestServerWebAppFactory Factory { get; }
 

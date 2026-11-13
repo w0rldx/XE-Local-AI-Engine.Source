@@ -44,7 +44,7 @@ The host configures Serilog console logging and, outside the `Testing` environme
 | Retention | Seven rolled files | `LoggerExtensions.RetainedLogFileCount` |
 | Startup failures | The startup logger uses the rolling file so pre-host failures can be retained | `LoggerExtensions.CreateStartupLogger` |
 | Request logging | Routine success, 401, and 404 traffic is reduced to `Debug`; failures remain louder | `XE-Local-AI-Engine.Client/Program.cs` |
-| Query-token handling | Request query strings are processed by `AccessTokenQueryRedactor` before request-log enrichment | `Program.cs`; `XE-Local-AI-Engine.Client.Application/Services/Auth/AccessTokenQueryRedactor.cs` |
+| Query-token handling | Request query strings are processed by `SensitiveQueryRedactor` before request-log enrichment | `Program.cs`; `XE-Local-AI-Engine.Client.Application/Services/Auth/SensitiveQueryRedactor.cs` |
 
 The code-defined file cap limits local growth. It does not establish log shipping, immutable retention, clock synchronization, alerting, review ownership, or evidence preservation after an incident. No log sample or retention-operation sample was supplied.
 

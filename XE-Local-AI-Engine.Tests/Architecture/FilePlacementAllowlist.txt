@@ -21,7 +21,6 @@ XE-Local-AI-Engine.AI.Agent/Invocation/ToolRelevanceScope.cs|4
 XE-Local-AI-Engine.AI.Agent/Tools/IMcpToolRegistry.cs|2
 XE-Local-AI-Engine.AI.Agent/Tools/IToolRelevanceSelector.cs|3
 XE-Local-AI-Engine.Client.Application/Common/Telemetry/InvocationEfficiencyTelemetry.cs|2
-XE-Local-AI-Engine.Client.Application/Common/Telemetry/NodeMetricsLlamaServerLoadTelemetry.cs|2
 XE-Local-AI-Engine.Client.Application/Configuration/NodeAuthOptions.cs|2
 XE-Local-AI-Engine.Client.Application/Models/ConversationMessageDto.cs|3
 XE-Local-AI-Engine.Client.Application/Models/OrchestrationSpec.cs|3

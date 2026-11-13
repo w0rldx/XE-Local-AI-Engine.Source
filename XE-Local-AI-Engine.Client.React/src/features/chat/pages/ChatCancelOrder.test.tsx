@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
+import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import type { ChatScope } from "@/core/models/ChatScope";
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
@@ -442,6 +443,7 @@ describe("Chat cancel ordering", () => {
 					attachmentFileIds: [],
 					toolsEnabled: false,
 					knowledgeBaseEnabled: false,
+					knowledgeCollectionId: "DEFAULT",
 					reasoningEffort: "medium",
 					onVoiceTurnStart: vi.fn(),
 					onVoiceAnswerProgress: vi.fn(),
@@ -535,6 +537,7 @@ describe("Chat cancel ordering", () => {
 					attachmentFileIds: [],
 					toolsEnabled: false,
 					knowledgeBaseEnabled: false,
+					knowledgeCollectionId: "DEFAULT",
 					reasoningEffort: "medium",
 					onVoiceTurnStart: vi.fn(),
 					onVoiceAnswerProgress: vi.fn(),
@@ -554,6 +557,58 @@ describe("Chat cancel ordering", () => {
 
 		expect(adapter.sendMessage).toHaveBeenCalledTimes(1);
 		expect(refreshConversation).toHaveBeenCalledTimes(2);
+	});
+
+	it("regenerate reads the full conversation for its own sampling settings, never the list summary", async () => {
+		useDeveloperModeStore.getState().actions.setDeveloperMode(true);
+		try {
+			const summary: ChatConversationModel = { ...conversation(), messages: [] };
+			adapter.getConversation.mockResolvedValue({ ...conversation(), samplingOptions: { temperature: 0.2 } });
+			adapter.regenerateMessage.mockImplementation(() => ({
+				async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
+					// The stream only has to start: the arguments it was called with are the assertion.
+				},
+			}));
+			const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } } });
+			const { wrapper } = createProvidersWrapper({ queryClient });
+			const { result } = renderHook(
+				() =>
+					useChatStreamController({
+						setStreamError: vi.fn(),
+						cacheConversation: vi.fn(),
+						cacheConversationDetail: vi.fn(),
+						refreshConversation: vi.fn(async () => undefined),
+						resolveSendConversation: vi.fn(),
+						selectedConversationId: "conversation-1",
+						// Only the summary is known: the detail cache is empty.
+						displayConversations: [summary],
+						modelOptions: [],
+						cloudModelOptions: [],
+						agentModeEnabled: false,
+						selectedAgentId: "",
+						agentOptions: [],
+						activeRevisionByGroup: {},
+						attachmentFileIds: [],
+						toolsEnabled: false,
+						knowledgeBaseEnabled: false,
+						knowledgeCollectionId: "DEFAULT",
+						reasoningEffort: "medium",
+						onVoiceTurnStart: vi.fn(),
+						onVoiceAnswerProgress: vi.fn(),
+						loadedSelectedConversationId: "",
+					}),
+				{ wrapper },
+			);
+
+			await act(() => result.current.handleRegenerate("assistant-1"));
+
+			expect(adapter.getConversation).toHaveBeenCalledWith("conversation-1", expect.anything());
+			expect(adapter.regenerateMessage).toHaveBeenCalledTimes(1);
+			// Arguments: id, message, effort, tools, knowledge base, revision path, sampling.
+			expect(adapter.regenerateMessage.mock.calls[0]?.[6]).toEqual(expect.objectContaining({ temperature: 0.2 }));
+		} finally {
+			useDeveloperModeStore.getState().actions.setDeveloperMode(false);
+		}
 	});
 
 	const hubRefusal = (token: string): Error =>
@@ -637,6 +692,7 @@ describe("Chat cancel ordering", () => {
 						attachmentFileIds: [],
 						toolsEnabled: false,
 						knowledgeBaseEnabled: false,
+						knowledgeCollectionId: "DEFAULT",
 						reasoningEffort: "medium",
 						onVoiceTurnStart: vi.fn(),
 						onVoiceAnswerProgress: vi.fn(),

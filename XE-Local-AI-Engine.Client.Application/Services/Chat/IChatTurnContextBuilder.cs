@@ -62,16 +62,20 @@ public interface IChatTurnContextBuilder
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The top-k fused knowledge-base hits for <paramref name="query" />, composed into ONE fenced untrusted
-    ///     context message alongside the provenance of the inlined hits.
+    ///     The top-k fused knowledge-base hits for <paramref name="query" /> in <paramref name="collectionId" />, composed
+    ///     into ONE fenced untrusted context message alongside the provenance of the inlined hits.
     /// </summary>
+    /// <param name="collectionId">The normalised collection searched; no other collection's chunks can ground the turn.</param>
     /// <param name="isRegeneratedTurn">Picks which retrieval-failure warning is logged, nothing more.</param>
     /// <remarks>
     ///     It returns <see langword="null" /> whenever grounding produces nothing — a blank or oversized query, no
     ///     matching chunks, an empty compose, or ANY retrieval failure — because grounding is a best-effort supplement
     ///     that must never fail the turn. The caller applies the cloud-egress locality gate before calling.
     /// </remarks>
-    Task<KnowledgeChatGrounding?> BuildKnowledgeContextAsync(string query, bool isRegeneratedTurn = false, CancellationToken cancellationToken = default);
+    Task<KnowledgeChatGrounding?> BuildKnowledgeContextAsync(string query,
+        string collectionId,
+        bool isRegeneratedTurn = false,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Whether an embedding model is installed for the knowledge base, resolved exactly as ingestion and search

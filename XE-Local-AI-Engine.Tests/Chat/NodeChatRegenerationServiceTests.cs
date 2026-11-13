@@ -501,6 +501,52 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RegenerateAsync_GroundsOnTheNormalisedCollectionTheRerunCarries()
+    {
+        // A rerun carries the composer's collection pick exactly as a send does, so it grounds where the send grounded.
+        await using var provider = await BuildProviderAsync("regeneration-kb-collection.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
+        var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var searchService = Substitute.For<IKnowledgeSearchService>();
+        searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
+                     .Returns(new KnowledgeSearchResult
+                     {
+                         Results = []
+                     });
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, CreateScopeFactory(searchService));
+
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId,
+                           originalId,
+                           useKnowledgeBase: true,
+                           knowledgeCollectionId: "project-a"))
+        {
+            // Drained for the side effect: the grounding search.
+        }
+
+        await searchService.Received(1).SearchAsync(Arg.Is<KnowledgeSearchRequest>(static request => request.CollectionId == "PROJECT-A"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WithAnInvalidKnowledgeCollection_IsRefusedBeforeTheRerunStarts()
+    {
+        await using var provider = await BuildProviderAsync("regeneration-kb-invalid-collection.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
+        var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, CreateKnowledgeScopeFactory());
+
+        var exception = AssertEx.Throws<NodeChatInvalidRequestException>(() =>
+            _ = service.RegenerateAsync(conversation.ConversationId, originalId, useKnowledgeBase: true, knowledgeCollectionId: "a b"));
+
+        AssertEx.Equal("The knowledge collection id is invalid.", exception.Message);
+        AssertEx.Null(runner.LastContext, "A refused rerun never runs.");
+    }
+
+    [Test]
     public async Task RegenerateAsync_WhenTheRunsSearchToolReturnsHits_RecordsThemAsTheVariantsSources()
     {
         // Parity with the send path: hits the rerun's search tool returned land on the regenerated variant.
@@ -913,7 +959,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.Equal("Plain lab prompt.", runner.LastSystemPrompt);
         AssertEx.Empty(runner.LastAllowedTools, "A plain rerun offers no tools.");
         await resolver.DidNotReceiveWithAnyArgs().ResolveAsync(default(Guid?), default, default, default, default, default, default);
-        await turnContextBuilder.DidNotReceiveWithAnyArgs().BuildKnowledgeContextAsync(default!, default, default);
+        await turnContextBuilder.DidNotReceiveWithAnyArgs().BuildKnowledgeContextAsync(default!, default!, default, default);
     }
 
     [Test]

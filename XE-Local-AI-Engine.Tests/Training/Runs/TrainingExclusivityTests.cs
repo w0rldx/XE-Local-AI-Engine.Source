@@ -51,7 +51,7 @@ public sealed class TrainingExclusivityTests
         var gate = new ObservedGpuWorkGate(new GpuWorkGate());
         AssertEx.Succeeded(gate.TryBeginExclusive(GpuWorkKind.Export, out var held), "Something exclusive holds the gate.");
         using var heldScope = held;
-        var benchmarks = Substitute.For<IBenchmarkStore>();
+        var benchmarks = Substitute.For<IBenchmarkQueueStore>();
         var datasets = Substitute.For<ITrainingDatasetStore>();
         var benchmarkClaimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var generationClaimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -123,7 +123,7 @@ public sealed class TrainingExclusivityTests
         AssertEx.Succeeded(gate.TryBeginExclusive(GpuWorkKind.TrainingRun, out var held), "The run acquires the gate exclusively.");
         using var heldScope = held;
 
-        var benchmarks = Substitute.For<IBenchmarkStore>();
+        var benchmarks = Substitute.For<IBenchmarkQueueStore>();
         var datasets = Substitute.For<ITrainingDatasetStore>();
         var benchmarkAsked = gate.Asked(GpuWorkKind.Benchmark);
         var generationAsked = gate.Asked(GpuWorkKind.DatasetGeneration);
@@ -144,7 +144,7 @@ public sealed class TrainingExclusivityTests
     public async Task Exclusivity_WhenNoRunIsActive_BenchmarkAndGenerationClaimAsUsual()
     {
         var gate = new GpuWorkGate();
-        var benchmarks = Substitute.For<IBenchmarkStore>();
+        var benchmarks = Substitute.For<IBenchmarkQueueStore>();
         var datasets = Substitute.For<ITrainingDatasetStore>();
         var benchmarkClaimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var generationClaimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -277,7 +277,7 @@ public sealed class TrainingExclusivityTests
                            return parked.Task;
                        });
 
-        var benchmarks = Substitute.For<IBenchmarkStore>();
+        var benchmarks = Substitute.For<IBenchmarkQueueStore>();
         var datasets = Substitute.For<ITrainingDatasetStore>();
         var claimedAfterRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _ = datasets.ClaimNextAsync(Arg.Any<CancellationToken>())
@@ -468,7 +468,7 @@ public sealed class TrainingExclusivityTests
             }
         };
 
-    private static BenchmarkQueueHostedService BuildBenchmarkQueue(IBenchmarkStore store, IBenchmarkQueueSignal signal, IGpuWorkGate gate)
+    private static BenchmarkQueueHostedService BuildBenchmarkQueue(IBenchmarkQueueStore store, IBenchmarkQueueSignal signal, IGpuWorkGate gate)
     {
         var scopeFactory = ScopeFactory(services =>
         {

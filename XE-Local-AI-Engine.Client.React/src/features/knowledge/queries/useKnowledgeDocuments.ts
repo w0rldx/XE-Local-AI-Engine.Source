@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import {
 	deleteKnowledgeDocumentMutation,
 	getKnowledgeDocumentOptions,
+	listKnowledgeCollectionsOptions,
 	listKnowledgeDocumentsOptions,
 	reindexCorpusMutation,
 	reindexKnowledgeDocumentMutation,
@@ -21,6 +22,7 @@ import type { KnowledgeDocument, KnowledgeDocumentDetail } from "@/features/know
 export const knowledgeQueryIds = {
 	listDocuments: "listKnowledgeDocuments",
 	getDocument: "getKnowledgeDocument",
+	listCollections: "listKnowledgeCollections",
 } as const;
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one KB endpoint. */
@@ -38,6 +40,18 @@ export function useKnowledgeDocuments(enabled = true, collectionId?: string) {
 	return useQuery({
 		...listKnowledgeDocumentsOptions({ query: collectionId ? { collectionId } : undefined }),
 		select: (data): readonly KnowledgeDocument[] => data.items ?? [],
+		enabled,
+	});
+}
+
+/**
+ * The collection ids that hold documents, DEFAULT first (the server always lists it). Shared by the chat composer's
+ * collection picker and the knowledge page's collection box; `enabled` gates the chat fetch like the document list.
+ */
+export function useKnowledgeCollections(enabled = true) {
+	return useQuery({
+		...listKnowledgeCollectionsOptions(),
+		select: (data): readonly string[] => data.items.map((item) => item.collectionId),
 		enabled,
 	});
 }
@@ -79,6 +93,7 @@ function useInvalidateKnowledge(): () => Promise<void> {
 			Promise.all([
 				queryClient.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listDocuments) }),
 				queryClient.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.getDocument) }),
+				queryClient.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listCollections) }),
 			]).then(() => undefined),
 		[queryClient],
 	);

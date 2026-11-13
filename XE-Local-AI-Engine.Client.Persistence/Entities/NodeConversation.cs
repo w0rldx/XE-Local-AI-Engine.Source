@@ -91,6 +91,15 @@ internal sealed record class NodeConversation
     public byte[]? PlainSystemPrompt { get; set; }
 
     /// <summary>
+    ///     The conversation's own sampling settings as plain JSON; null means the client's defaults apply.
+    /// </summary>
+    /// <remarks>
+    ///     Plaintext: numeric knobs and stop sequences are not secret. The SPA reads them and sends them with each
+    ///     turn; the server stores and copies them on branch but never applies them itself.
+    /// </remarks>
+    public string? SamplingOptionsJson { get; set; }
+
+    /// <summary>
     ///     Derived, non-destructive compaction synopsis: a local-model summary of the older turns, sent in their place
     ///     so a long conversation keeps its gist within the context window. Null until the user compacts.
     /// </summary>

@@ -185,6 +185,29 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		expect((connectionMock.state.lastPayload as { attachmentFileIds?: unknown }).attachmentFileIds).toBeUndefined();
 	});
 
+	it("forwards the knowledge collection with a grounded send", async () => {
+		nodeChatAdapter
+			.sendMessage({ ...streamRequest, useKnowledgeBase: true, knowledgeCollectionId: "PROJECT-A" }, new AbortController().signal)
+			[Symbol.asyncIterator]()
+			.next();
+		await settle();
+
+		expect(connectionMock.state.lastPayload).toMatchObject({ useKnowledgeBase: true, knowledgeCollectionId: "PROJECT-A" });
+	});
+
+	it("leaves the knowledge collection off the payload when the send is not grounded", async () => {
+		nodeChatAdapter
+			.sendMessage(
+				{ ...streamRequest, useKnowledgeBase: false, knowledgeCollectionId: "PROJECT-A" },
+				new AbortController().signal,
+			)
+			[Symbol.asyncIterator]()
+			.next();
+		await settle();
+
+		expect((connectionMock.state.lastPayload as { knowledgeCollectionId?: unknown }).knowledgeCollectionId).toBeUndefined();
+	});
+
 	it("resumes via ResumeMessage after a reconnect and remaps the message id", async () => {
 		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
 		const first = iterator.next();
@@ -338,6 +361,7 @@ describe("nodeChatAdapter SignalR streaming", () => {
 				undefined,
 				undefined,
 				false,
+				"PROJECT-A",
 				new AbortController().signal,
 			)
 			[Symbol.asyncIterator]();
@@ -346,10 +370,20 @@ describe("nodeChatAdapter SignalR streaming", () => {
 
 		expect(connectionMock.state.lastMethod).toBe("RegenerateMessage");
 		// Hub args are (conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath,
-		// samplingOptions, autoAcceptWebContent): the current reasoning, local-tools, knowledge-base, conversation-tree, and
-		// developer-mode sampling selections all travel as positional args so regenerate honors them like a send. An absent
-		// selection map or sampling block is sent as null; the web review mode is always sent (false = review).
-		expect(connectionMock.state.lastArgs).toEqual(["conversation-1", "assistant-1", "high", true, true, null, null, false]);
+		// samplingOptions, autoAcceptWebContent, knowledgeCollectionId): every selection travels as a positional arg so
+		// regenerate honors it like a send. An absent selection map or sampling block is sent as null; the web review mode
+		// is always sent (false = review), and a grounded rerun carries the picked collection last.
+		expect(connectionMock.state.lastArgs).toEqual([
+			"conversation-1",
+			"assistant-1",
+			"high",
+			true,
+			true,
+			null,
+			null,
+			false,
+			"PROJECT-A",
+		]);
 		expect(connectionMock.state.lastPayload).toBe("conversation-1");
 
 		// The server mints a fresh variant id + requestId; the adapter surfaces it unchanged on the fresh stream.
@@ -371,6 +405,7 @@ describe("nodeChatAdapter SignalR streaming", () => {
 				{ "group-1": "variant-1" },
 				{ temperature: 0.7, seed: "1234" },
 				true,
+				"PROJECT-A",
 				new AbortController().signal,
 			)
 			[Symbol.asyncIterator]();
@@ -385,8 +420,10 @@ describe("nodeChatAdapter SignalR streaming", () => {
 			false,
 			{ "group-1": "variant-1" },
 			{ temperature: 0.7, seed: "1234" },
-			// The conversation's web review mode rides last; a regenerate in an auto-accept conversation stays in auto.
+			// A regenerate in an auto-accept conversation stays in auto.
 			true,
+			// No grounding on this rerun, so the picked collection stays off the wire.
+			null,
 		]);
 
 		// Drain the opened stream so the test leaves no pending subscription behind.
@@ -406,6 +443,7 @@ describe("nodeChatAdapter SignalR streaming", () => {
 				undefined,
 				undefined,
 				false,
+				undefined,
 				new AbortController().signal,
 			)
 			[Symbol.asyncIterator]();

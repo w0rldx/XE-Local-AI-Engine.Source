@@ -60,23 +60,23 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
         var comparisons = Enumerable.Range(0, plan.Slots.Count * 2)
                                     .Select(index => Comparison(plan.Slots[index / 2], index % 2, installed, index + 1))
                                     .ToArray();
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetJudgePolicyRevisionAsync(RevisionId, Arg.Any<CancellationToken>()).Returns(Revision());
+        var store = new BenchmarkStoreSubstitutes();
+        store.Judging.GetJudgePolicyRevisionAsync(RevisionId, Arg.Any<CancellationToken>()).Returns(Revision());
         foreach (var run in runs)
         {
-            store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+            store.Runs.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         }
 
         foreach (var comparison in comparisons)
         {
-            store.GetComparisonAsync(comparison.Id, Arg.Any<CancellationToken>()).Returns(comparison);
+            store.Pairwise.GetComparisonAsync(comparison.Id, Arg.Any<CancellationToken>()).Returns(comparison);
         }
 
         List<string> failures = [];
-        store.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(failures.Add), Arg.Any<CancellationToken>())
+        store.Pairwise.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(failures.Add), Arg.Any<CancellationToken>())
              .Returns(Task.CompletedTask);
         Dictionary<long, string> verdicts = [];
-        store.MarkComparisonSucceededAsync(Arg.Do<BenchmarkComparisonSuccessCommand>(command => verdicts[command.QueueSequence] = command.Verdict),
+        store.Pairwise.MarkComparisonSucceededAsync(Arg.Do<BenchmarkComparisonSuccessCommand>(command => verdicts[command.QueueSequence] = command.Verdict),
                  Arg.Any<CancellationToken>())
              .Returns(Task.CompletedTask);
 
@@ -97,7 +97,7 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
                   return Task.CompletedTask;
               });
         await using var lease = new BenchmarkJudgeExecutorTests.FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, dispatcher, runner);
+        var executor = Executor(store.Pairwise, store.Judging, store.Runs, store.TaskItems, snapshot, lease, dispatcher, runner);
 
         foreach (var comparison in comparisons)
         {
@@ -120,9 +120,9 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
         var judged = Enumerable.Range(0, plan.Slots.Count * 2)
                                .Select(index => Comparison(plan.Slots[index / 2], index % 2, installed, index + 1, verdicts[index + 1]))
                                .ToArray();
-        var fitStore = Substitute.For<IBenchmarkStore>();
-        fitStore.GetCurrentJudgePolicyRevisionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Revision());
-        fitStore.GetPairwiseCohortAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+        var fitStore = new BenchmarkStoreSubstitutes();
+        fitStore.Judging.GetCurrentJudgePolicyRevisionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Revision());
+        fitStore.Pairwise.GetPairwiseCohortAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                 .Returns(new BenchmarkPairwiseCohortState
                 {
                     PolicyRevisionId = RevisionId,
@@ -133,11 +133,11 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
                     Candidates = candidates,
                     Comparisons = judged
                 });
-        fitStore.GetActivePairwiseFitAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BenchmarkPairwiseFitRecord?)null);
+        fitStore.Pairwise.GetActivePairwiseFitAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BenchmarkPairwiseFitRecord?)null);
         BenchmarkPairwiseFitCommand? fit = null;
-        fitStore.PublishPairwiseFitAsync(Arg.Do<BenchmarkPairwiseFitCommand>(command => fit = command), Arg.Any<CancellationToken>()).Returns(true);
+        fitStore.Pairwise.PublishPairwiseFitAsync(Arg.Do<BenchmarkPairwiseFitCommand>(command => fit = command), Arg.Any<CancellationToken>()).Returns(true);
 
-        AssertEx.True(await new BenchmarkPairwiseFitter(fitStore, NullLogger<BenchmarkPairwiseFitter>.Instance).TryPublishAsync(snapshot.ProjectId, CancellationToken.None));
+        AssertEx.True(await new BenchmarkPairwiseFitter(fitStore.Pairwise, fitStore.Judging, NullLogger<BenchmarkPairwiseFitter>.Instance).TryPublishAsync(snapshot.ProjectId, CancellationToken.None));
 
         var scores = (JsonSerializer.Deserialize<BenchmarkPairwiseScoreEntry[]>(AssertEx.NotNull(fit).ScoresJson, ScoreOptions) ?? [])
             .ToDictionary(static entry => entry.RunId);
@@ -159,9 +159,9 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
                 CellKey = "repeat-cell"
             }
         ];
-        var store = Substitute.For<IBenchmarkStore>();
-        store.GetCurrentJudgePolicyRevisionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Revision());
-        store.GetPairwiseCohortAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+        var store = new BenchmarkStoreSubstitutes();
+        store.Judging.GetCurrentJudgePolicyRevisionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Revision());
+        store.Pairwise.GetPairwiseCohortAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
              .Returns(new BenchmarkPairwiseCohortState
              {
                  PolicyRevisionId = RevisionId,
@@ -182,20 +182,21 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
                  ],
                  Comparisons = []
              });
-        store.GetActivePairwiseFitAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BenchmarkPairwiseFitRecord?)null);
+        store.Pairwise.GetActivePairwiseFitAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BenchmarkPairwiseFitRecord?)null);
         BenchmarkPairwiseFitCommand? fit = null;
-        store.PublishPairwiseFitAsync(Arg.Do<BenchmarkPairwiseFitCommand>(command => fit = command), Arg.Any<CancellationToken>()).Returns(true);
+        store.Pairwise.PublishPairwiseFitAsync(Arg.Do<BenchmarkPairwiseFitCommand>(command => fit = command), Arg.Any<CancellationToken>()).Returns(true);
         var runtimes = Substitute.For<IBenchmarkJudgeRuntimeResolver>();
-        var planner = new BenchmarkPairwisePlanner(store,
+        var planner = new BenchmarkPairwisePlanner(store.Pairwise,
+            store.Judging,
             runtimes,
-            new BenchmarkPairwiseFitter(store, NullLogger<BenchmarkPairwiseFitter>.Instance),
+            new BenchmarkPairwiseFitter(store.Pairwise, store.Judging, NullLogger<BenchmarkPairwiseFitter>.Instance),
             Substitute.For<IBenchmarkQueueSignal>(),
             NullLogger<BenchmarkPairwisePlanner>.Instance);
 
         AssertEx.Equal(expected: 0, await planner.EnsurePairsAsync(snapshot.ProjectId, CancellationToken.None));
 
         await runtimes.DidNotReceiveWithAnyArgs().ResolveAsync(default!, default);
-        await store.DidNotReceive().EnsureComparisonsAsync(Arg.Any<Guid>(), Arg.Any<IReadOnlyList<BenchmarkPairwiseSlot>>(), Arg.Any<ReadOnlyMemory<byte>?>(),
+        await store.Pairwise.DidNotReceive().EnsureComparisonsAsync(Arg.Any<Guid>(), Arg.Any<IReadOnlyList<BenchmarkPairwiseSlot>>(), Arg.Any<ReadOnlyMemory<byte>?>(),
             Arg.Any<BenchmarkRunLaunchIntent?>(), Arg.Any<CancellationToken>());
         var scores = JsonSerializer.Deserialize<BenchmarkPairwiseScoreEntry[]>(AssertEx.NotNull(fit, "The live path publishes the refusal row.").ScoresJson, ScoreOptions) ?? [];
         AssertEx.Equal(expected: 3, scores.Length);
@@ -271,12 +272,18 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
             CreatedAtUtc = 1
         };
 
-    internal static BenchmarkComparisonExecutor Executor(IBenchmarkStore store,
+    internal static BenchmarkComparisonExecutor Executor(IBenchmarkPairwiseStore pairwiseStore,
+        IBenchmarkJudgeStore judgeStore,
+        IBenchmarkRunStore runStore,
+        IBenchmarkTaskItemStore taskItemStore,
         BenchmarkRuntimeSnapshotV1 snapshot,
         BenchmarkJudgeExecutorTests.FakeLease lease,
         IWorkerEventDispatcher dispatcher,
         IInvocationRunner runner) =>
-        new(store,
+        new(pairwiseStore,
+            judgeStore,
+            runStore,
+            taskItemStore,
             new BenchmarkJudgeExecutorTests.FixedSnapshotFactory(snapshot),
             new BenchmarkJudgeExecutorTests.FixedLeaseProvider(lease),
             new BenchmarkJudgeExecutorTests.JudgeCapacityService(CapacityVerdict.Allow),

@@ -6,6 +6,8 @@
   enforces and does not touch the sandbox SPI.
 - **Authority:** Operator rulings on External Apps, stated in the Decision section below.
 - **Amends:** nothing.
+- **Amended 2026-11-12:** frozen and experimental, by operator ruling; see
+  [the amendment](#amendment-2026-11-12-frozen-and-experimental).
 
 ## Context
 
@@ -194,3 +196,11 @@ non-unconfined profile passes this check.
 **`daemonIsRootless` shapes the operator prose only.** No rule reads differently on a rootless daemon, but a path or a
 binding that looks wrong under one is diagnosed completely differently, so the mode is named in the violation rather
 than left for the reader to guess.
+
+## Amendment 2026-11-12: frozen and experimental
+
+Operator ruling: External Apps is frozen and experimental. It takes bug fixes only, and the runtime layer, the
+catalog, the manifest schema and its `/api/local/v1` routes sit outside the 1.0 API promise and may change or be cut.
+The Decision above stands as the description of what ships; no new consumer, catalog entry or capability lands while
+the freeze holds. The SPA marks the page and its navigation entry Experimental. The same ruling covers
+[ADR 0011](0011-container-bridge-listener.md).

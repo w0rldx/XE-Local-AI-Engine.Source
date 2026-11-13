@@ -57,7 +57,7 @@ public sealed class BenchmarkNiahTaskItemTests
     public async Task Create_CasesCountIndividuallyAgainstTheItemCap()
     {
         var store = StoreWith(contextTokens: 65536, existingLeaves: 15);
-        var service = new BenchmarkTaskItemService(store);
+        var service = new BenchmarkTaskItemService(store.TaskItems, store.Projects, store.Judging);
 
         var failure = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId,
             expectedProjectVersion: 1,
@@ -71,17 +71,17 @@ public sealed class BenchmarkNiahTaskItemTests
     {
         var store = StoreWith(contextTokens: 65536);
         var probeId = Guid.NewGuid();
-        _ = store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
+        _ = store.TaskItems.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
                  .Returns([Item(probeId, BenchmarkTaskItemKinds.Niah, null), Item(Guid.NewGuid(), BenchmarkTaskItemKinds.NiahCase, probeId)]);
         IReadOnlyList<BenchmarkTaskItemInput>? children = null;
-        _ = store.UpdateTaskItemAsync(ProjectId,
+        _ = store.TaskItems.UpdateTaskItemAsync(ProjectId,
                      probeId,
                      Arg.Any<long>(),
                      Arg.Any<BenchmarkTaskItemInput>(),
                      Arg.Do<IReadOnlyList<BenchmarkTaskItemInput>?>(value => children = value),
                      Arg.Any<CancellationToken>())
                  .Returns(call => Record(call.Arg<BenchmarkTaskItemInput>()));
-        var service = new BenchmarkTaskItemService(store);
+        var service = new BenchmarkTaskItemService(store.TaskItems, store.Projects, store.Judging);
 
         _ = await service.UpdateAsync(ProjectId, probeId, expectedVersion: 1, Draft("{\"contextTokens\":[4096],\"needleDepthPercent\":[25,75]}"));
 
@@ -101,9 +101,9 @@ public sealed class BenchmarkNiahTaskItemTests
         var store = StoreWith(contextTokens: 16384);
         var probeId = Guid.NewGuid();
         var caseId = Guid.NewGuid();
-        _ = store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
+        _ = store.TaskItems.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
                  .Returns([Item(probeId, BenchmarkTaskItemKinds.Niah, null), Item(caseId, BenchmarkTaskItemKinds.NiahCase, probeId)]);
-        var service = new BenchmarkTaskItemService(store);
+        var service = new BenchmarkTaskItemService(store.TaskItems, store.Projects, store.Judging);
 
         var edit = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.UpdateAsync(ProjectId, caseId, expectedVersion: 1, new BenchmarkTaskItemDraft
         {
@@ -113,14 +113,14 @@ public sealed class BenchmarkNiahTaskItemTests
 
         AssertEx.Contains(edit.Message, "generated", StringComparison.OrdinalIgnoreCase);
         AssertEx.Contains(delete.Message, "generated", StringComparison.OrdinalIgnoreCase);
-        await store.DidNotReceive().DeleteTaskItemAsync(ProjectId, caseId, Arg.Any<long>(), Arg.Any<CancellationToken>());
+        await store.TaskItems.DidNotReceive().DeleteTaskItemAsync(ProjectId, caseId, Arg.Any<long>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task Create_AProbeWithoutItsGeneratorConfiguration_IsRefused()
     {
         var store = StoreWith(contextTokens: 16384);
-        var service = new BenchmarkTaskItemService(store);
+        var service = new BenchmarkTaskItemService(store.TaskItems, store.Projects, store.Judging);
 
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId,
             expectedProjectVersion: 1,
@@ -136,7 +136,7 @@ public sealed class BenchmarkNiahTaskItemTests
     public async Task Create_AProbeLongerThanTheProjectWindow_IsRefusedAtExpansion()
     {
         var store = StoreWith(contextTokens: 8192);
-        var service = new BenchmarkTaskItemService(store);
+        var service = new BenchmarkTaskItemService(store.TaskItems, store.Projects, store.Judging);
 
         var failure = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId,
             expectedProjectVersion: 1,
@@ -144,7 +144,7 @@ public sealed class BenchmarkNiahTaskItemTests
 
         AssertEx.Contains(failure.Message, "32768");
         AssertEx.Contains(failure.Message, "8192");
-        await store.DidNotReceive().CreateTaskItemAsync(ProjectId,
+        await store.TaskItems.DidNotReceive().CreateTaskItemAsync(ProjectId,
             Arg.Any<long>(),
             Arg.Any<BenchmarkTaskItemInput>(),
             Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(),
@@ -156,7 +156,7 @@ public sealed class BenchmarkNiahTaskItemTests
     public async Task Create_ACaseKindWrittenByHand_IsRefused()
     {
         var store = StoreWith(contextTokens: 16384);
-        var service = new BenchmarkTaskItemService(store);
+        var service = new BenchmarkTaskItemService(store.TaskItems, store.Projects, store.Judging);
 
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId,
             expectedProjectVersion: 1,
@@ -192,14 +192,14 @@ public sealed class BenchmarkNiahTaskItemTests
     {
         var store = StoreWith(contextTokens: 16384,
             rubric: new BenchmarkJudgeRubricCriterionV1("correctness", "Correctness", "Is it right?", 40));
-        var service = new BenchmarkTaskItemService(store);
+        var service = new BenchmarkTaskItemService(store.TaskItems, store.Projects, store.Judging);
 
         var failure = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId,
             expectedProjectVersion: 1,
             Draft("{\"contextTokens\":[4096],\"needleDepthPercent\":[50],\"criterionId\":\"needle\"}")));
 
         AssertEx.Contains(failure.Message, "needle", message: "The refusal names the criterion the cases would have overridden.");
-        _ = store.DidNotReceive().CreateTaskItemAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkTaskItemInput>(),
+        _ = store.TaskItems.DidNotReceive().CreateTaskItemAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkTaskItemInput>(),
             Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
     }
 
@@ -216,18 +216,18 @@ public sealed class BenchmarkNiahTaskItemTests
         AssertEx.Equal(1, AssertEx.NotNull(children).Count);
     }
 
-    private static async Task<(BenchmarkTaskItemInput Input, IReadOnlyList<BenchmarkTaskItemInput>? Children)> CreateProbeAsync(IBenchmarkStore store,
+    private static async Task<(BenchmarkTaskItemInput Input, IReadOnlyList<BenchmarkTaskItemInput>? Children)> CreateProbeAsync(BenchmarkStoreSubstitutes store,
         string generatorConfigJson)
     {
         BenchmarkTaskItemInput? input = null;
         IReadOnlyList<BenchmarkTaskItemInput>? children = null;
-        _ = store.CreateTaskItemAsync(ProjectId,
+        _ = store.TaskItems.CreateTaskItemAsync(ProjectId,
                      Arg.Any<long>(),
                      Arg.Do<BenchmarkTaskItemInput>(value => input = value),
                      Arg.Do<IReadOnlyList<BenchmarkTaskItemInput>?>(value => children = value),
                      Arg.Any<CancellationToken>())
                  .Returns(call => Record(call.Arg<BenchmarkTaskItemInput>()));
-        var service = new BenchmarkTaskItemService(store);
+        var service = new BenchmarkTaskItemService(store.TaskItems, store.Projects, store.Judging);
 
         _ = await service.CreateAsync(ProjectId, expectedProjectVersion: 1, Draft(generatorConfigJson));
 
@@ -245,12 +245,12 @@ public sealed class BenchmarkNiahTaskItemTests
         };
     }
 
-    private static IBenchmarkStore StoreWith(int contextTokens, int existingLeaves = 0, BenchmarkJudgeRubricCriterionV1? rubric = null)
+    private static BenchmarkStoreSubstitutes StoreWith(int contextTokens, int existingLeaves = 0, BenchmarkJudgeRubricCriterionV1? rubric = null)
     {
-        var store = Substitute.For<IBenchmarkStore>();
-        _ = store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
+        var store = new BenchmarkStoreSubstitutes();
+        _ = store.TaskItems.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
                  .Returns(Enumerable.Range(0, existingLeaves).Select(_ => Item(Guid.NewGuid(), BenchmarkTaskItemKinds.Prompt, null)).ToArray());
-        _ = store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(contextTokens));
+        _ = store.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(contextTokens));
 
         // No revision unless a test asks for one: a disabled judge has no rubric an override can be checked against,
         // which is the state every case-shape test above is written in.
@@ -263,7 +263,7 @@ public sealed class BenchmarkNiahTaskItemTests
                 BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
                 new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion, [rubric]),
                 ReferenceAnswer: null);
-            _ = store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
+            _ = store.Judging.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
                      .Returns(new BenchmarkJudgePolicyRevisionRecord
                      {
                          Id = Guid.NewGuid(),

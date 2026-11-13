@@ -60,7 +60,7 @@ public sealed class NodeChatStreamServicePlainTests
         AssertEx.Null(placeholder.AgentName);
 
         // The knowledge base is ignored; the attachments still travel.
-        await harness.TurnContextBuilder.DidNotReceiveWithAnyArgs().BuildKnowledgeContextAsync(default!, default, default);
+        await harness.TurnContextBuilder.DidNotReceiveWithAnyArgs().BuildKnowledgeContextAsync(default!, default!, default, default);
         await harness.TurnContextBuilder.DidNotReceiveWithAnyArgs().IsKnowledgeEmbeddingAvailableAsync(default);
         await harness.TurnContextBuilder.Received(1).BuildAttachmentContextAsync(harness.ConversationId, Arg.Any<IReadOnlyList<Guid>?>(), Arg.Any<CancellationToken>());
 

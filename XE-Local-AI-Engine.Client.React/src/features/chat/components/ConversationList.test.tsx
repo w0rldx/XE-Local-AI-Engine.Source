@@ -264,6 +264,65 @@ describe("ConversationList management actions", () => {
 		expect(screen.queryByTestId("conversation-item-gamma")).toBeNull();
 	});
 
+	it("shows the server's content matches, snippet included, in place of the local filter once they arrive", () => {
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "alpha", title: "Alpha planning" })]}
+				searchQuery="granada"
+				searchResults={{
+					conversations: [
+						conversation({ id: "older", title: "Trip notes", lastMessagePreview: "…visit the Alhambra in Granada…" }),
+					],
+					indexing: false,
+				}}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+				onSearchChange={vi.fn()}
+			/>,
+		);
+
+		// "older" is not among the loaded rows: only the server could have found it, by message text.
+		expect(screen.getByTestId("conversation-item-older").textContent).toContain("Alhambra in Granada");
+		expect(screen.queryByTestId("conversation-item-alpha")).toBeNull();
+		expect(screen.queryByTestId("conversation-search-indexing")).toBeNull();
+	});
+
+	it("says results may be incomplete while the node is still indexing", () => {
+		renderWithProviders(
+			<ConversationList
+				conversations={[]}
+				searchQuery="granada"
+				searchResults={{ conversations: [], indexing: true }}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+				onSearchChange={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId("conversation-search-indexing").textContent).toContain("Still indexing");
+		expect(screen.getByTestId("conversation-list-empty").textContent).toContain("No conversations match");
+	});
+
+	it("ignores stale server results once the search box is cleared", () => {
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "alpha", title: "Alpha planning" })]}
+				searchQuery=""
+				searchResults={{ conversations: [conversation({ id: "older" })], indexing: true }}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+				onSearchChange={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId("conversation-item-alpha")).toBeTruthy();
+		expect(screen.queryByTestId("conversation-item-older")).toBeNull();
+		expect(screen.queryByTestId("conversation-search-indexing")).toBeNull();
+	});
+
 	it("hides archived conversations until show-archived is enabled", () => {
 		const archivedConversation = conversation({ id: "archived-1", isArchived: true });
 		const { rerender } = renderWithProviders(
@@ -464,5 +523,76 @@ describe("ConversationList new conversation button", () => {
 		fireEvent.click(screen.getByRole("button", { name: "New chat" }));
 
 		expect(onCreateConversation).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("ConversationList export and import", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	it.each([
+		["markdown", "Export as Markdown"],
+		["json", "Export as JSON"],
+	] as const)("exports one chat as %s from its menu, a remote one included", async (format, label) => {
+		const onExport = vi.fn();
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "remote-1", origin: "remote" })]}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+				onRename={vi.fn()}
+				onExport={onExport}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("conversation-actions-remote-1"));
+		fireEvent.click(await screen.findByRole("menuitem", { name: label }));
+
+		expect(onExport).toHaveBeenCalledWith("remote-1", format);
+		// Export is a read; the view-only conversation still offers no write.
+		expect(screen.queryByTestId("conversation-rename-remote-1")).toBeNull();
+	});
+
+	it("exports every chat and opens a JSON picker whose file goes to the import", async () => {
+		const onExportAll = vi.fn();
+		const onImportFile = vi.fn();
+		renderWithProviders(
+			<ConversationList
+				conversations={[]}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+				onExportAll={onExportAll}
+				onImportFile={onImportFile}
+			/>,
+		);
+		const input = screen.getByTestId<HTMLInputElement>("conversation-import-file");
+		const click = vi.spyOn(input, "click");
+
+		fireEvent.click(screen.getByRole("button", { name: "Export or import chats" }));
+		fireEvent.click(await screen.findByRole("menuitem", { name: "Export all chats (JSON)" }));
+		fireEvent.click(screen.getByRole("button", { name: "Export or import chats" }));
+		fireEvent.click(await screen.findByRole("menuitem", { name: "Import chats (JSON)" }));
+		const picked = new File(["{}"], "chats.chat.json", { type: "application/json" });
+		fireEvent.change(input, { target: { files: [picked] } });
+
+		expect(onExportAll).toHaveBeenCalledTimes(1);
+		expect(click).toHaveBeenCalledTimes(1);
+		expect(input.accept).toBe(".json,application/json");
+		expect(onImportFile).toHaveBeenCalledWith(picked);
+	});
+
+	it("offers no export or import when the page wires none", () => {
+		renderWithProviders(
+			<ConversationList conversations={[]} onCreateConversation={vi.fn()} onSelect={vi.fn()} onToggleCollapse={vi.fn()} />,
+		);
+
+		expect(screen.queryByTestId("conversation-export-import")).toBeNull();
 	});
 });

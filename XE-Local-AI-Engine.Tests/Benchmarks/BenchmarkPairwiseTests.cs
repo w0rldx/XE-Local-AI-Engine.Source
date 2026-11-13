@@ -324,7 +324,7 @@ public sealed class BenchmarkPairwiseTests
         var store = StubStore(out _, firstComparisonStatus: BenchmarkJudgeAttemptStatus.Queued);
 
         AssertEx.False(await Fitter(store).TryPublishAsync(ProjectId, CancellationToken.None));
-        await store.DidNotReceive().PublishPairwiseFitAsync(Arg.Any<BenchmarkPairwiseFitCommand>(), Arg.Any<CancellationToken>());
+        await store.Pairwise.DidNotReceive().PublishPairwiseFitAsync(Arg.Any<BenchmarkPairwiseFitCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -334,7 +334,7 @@ public sealed class BenchmarkPairwiseTests
         // the planner must stay a no-op for a pointwise one — otherwise switching back would leave comparisons queued
         // against a revision whose ranking never reads them.
         var store = StubStore(out _);
-        store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
+        store.Judging.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
              .Returns(new BenchmarkJudgePolicyRevisionRecord
              {
                  Id = RevisionId,
@@ -351,25 +351,25 @@ public sealed class BenchmarkPairwiseTests
                  ComparisonSetVersion = 7
              });
         var runtimes = Substitute.For<IBenchmarkJudgeRuntimeResolver>();
-        var planner = new BenchmarkPairwisePlanner(store, runtimes, Fitter(store), Substitute.For<IBenchmarkQueueSignal>(),
+        var planner = new BenchmarkPairwisePlanner(store.Pairwise, store.Judging, runtimes, Fitter(store), Substitute.For<IBenchmarkQueueSignal>(),
             NullLogger<BenchmarkPairwisePlanner>.Instance);
 
         AssertEx.Equal(expected: 0, await planner.EnsurePairsAsync(ProjectId, CancellationToken.None));
 
-        await store.DidNotReceiveWithAnyArgs()
+        await store.Pairwise.DidNotReceiveWithAnyArgs()
                    .EnsureComparisonsAsync(Arg.Any<Guid>(), Arg.Any<IReadOnlyList<BenchmarkPairwiseSlot>>(), Arg.Any<ReadOnlyMemory<byte>?>(),
                        Arg.Any<BenchmarkRunLaunchIntent?>(), Arg.Any<CancellationToken>());
         await runtimes.DidNotReceiveWithAnyArgs().ResolveAsync(default!, default);
     }
 
-    private static BenchmarkPairwiseFitter Fitter(IBenchmarkStore store) =>
-        new(store, NullLogger<BenchmarkPairwiseFitter>.Instance);
+    private static BenchmarkPairwiseFitter Fitter(BenchmarkStoreSubstitutes store) =>
+        new(store.Pairwise, store.Judging, NullLogger<BenchmarkPairwiseFitter>.Instance);
 
     private static BenchmarkPairwiseScoreEntry[] Entries(BenchmarkPairwiseFitCommand command) =>
         JsonSerializer.Deserialize<BenchmarkPairwiseScoreEntry[]>(command.ScoresJson, ScoreOptions) ?? [];
 
     /// <summary>A two-run cohort whose four comparisons all succeeded, with the knobs each refusal test needs.</summary>
-    private static IBenchmarkStore StubStore(out Captured<BenchmarkPairwiseFitCommand> published,
+    private static BenchmarkStoreSubstitutes StubStore(out Captured<BenchmarkPairwiseFitCommand> published,
         string? referenceExecutionKey = ExecutionKey,
         bool mismatchedKeyOnFirstComparison = false,
         bool truncateFirstComparison = false,
@@ -385,15 +385,15 @@ public sealed class BenchmarkPairwiseTests
         return StubCohort(out published, Candidates(runA, runB), comparisons, referenceExecutionKey);
     }
 
-    private static IBenchmarkStore StubCohort(out Captured<BenchmarkPairwiseFitCommand> published,
+    private static BenchmarkStoreSubstitutes StubCohort(out Captured<BenchmarkPairwiseFitCommand> published,
         BenchmarkPairwiseCandidate[] candidates,
         BenchmarkComparisonRecord[] comparisons,
         string? referenceExecutionKey = ExecutionKey)
     {
-        var store = Substitute.For<IBenchmarkStore>();
+        var store = new BenchmarkStoreSubstitutes();
         var capture = new Captured<BenchmarkPairwiseFitCommand>();
         published = capture;
-        store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
+        store.Judging.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
              .Returns(new BenchmarkJudgePolicyRevisionRecord
              {
                  Id = RevisionId,
@@ -406,7 +406,7 @@ public sealed class BenchmarkPairwiseTests
                  CreatedAtUtc = 1,
                  ComparisonSetVersion = 7
              });
-        store.GetPairwiseCohortAsync(ProjectId, Arg.Any<CancellationToken>())
+        store.Pairwise.GetPairwiseCohortAsync(ProjectId, Arg.Any<CancellationToken>())
              .Returns(new BenchmarkPairwiseCohortState
              {
                  PolicyRevisionId = RevisionId,
@@ -417,8 +417,8 @@ public sealed class BenchmarkPairwiseTests
                  Candidates = candidates,
                  Comparisons = comparisons
              });
-        store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>()).Returns((BenchmarkPairwiseFitRecord?)null);
-        store.PublishPairwiseFitAsync(Arg.Do<BenchmarkPairwiseFitCommand>(command => capture.Value = command), Arg.Any<CancellationToken>())
+        store.Pairwise.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>()).Returns((BenchmarkPairwiseFitRecord?)null);
+        store.Pairwise.PublishPairwiseFitAsync(Arg.Do<BenchmarkPairwiseFitCommand>(command => capture.Value = command), Arg.Any<CancellationToken>())
              .Returns(true);
         return store;
     }

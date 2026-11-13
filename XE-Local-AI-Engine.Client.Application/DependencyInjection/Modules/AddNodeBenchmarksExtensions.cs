@@ -13,11 +13,20 @@ internal static class AddNodeBenchmarksExtensions
     public static IHostApplicationBuilder AddNodeBenchmarks(this IHostApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        builder.Services.AddScoped<IBenchmarkStore, BenchmarkStore>();
+        // One scoped BenchmarkStore per scope behind every role, so roles resolved together share one DbContext unit.
+        builder.Services.AddScoped<BenchmarkStore>();
+        builder.Services.AddScoped<IBenchmarkProjectStore>(static services => services.GetRequiredService<BenchmarkStore>());
+        builder.Services.AddScoped<IBenchmarkTaskItemStore>(static services => services.GetRequiredService<BenchmarkStore>());
+        builder.Services.AddScoped<IBenchmarkRunStore>(static services => services.GetRequiredService<BenchmarkStore>());
+        builder.Services.AddScoped<IBenchmarkQueueStore>(static services => services.GetRequiredService<BenchmarkStore>());
+        builder.Services.AddScoped<IBenchmarkJudgeStore>(static services => services.GetRequiredService<BenchmarkStore>());
+        builder.Services.AddScoped<IBenchmarkFidelityStore>(static services => services.GetRequiredService<BenchmarkStore>());
+        builder.Services.AddScoped<IBenchmarkPairwiseStore>(static services => services.GetRequiredService<BenchmarkStore>());
+        builder.Services.AddScoped<IBenchmarkReviewStore>(static services => services.GetRequiredService<BenchmarkStore>());
         builder.Services.AddScoped<IBenchmarkInstalledModelLeaseProvider, BenchmarkInstalledModelLeaseProvider>();
         builder.Services.AddScoped<IBenchmarkProjectService, BenchmarkProjectService>();
 
-        // Scoped because the store it fronts is: this is the Benchmarks endpoints' only door onto IBenchmarkStore
+        // Scoped because the store it fronts is: this is the Benchmarks endpoints' only door onto the store roles
         // under the endpoint-dependency rule, and it holds nothing of its own between calls.
         builder.Services.AddScoped<BenchmarkRecordService>();
         builder.Services.AddScoped<BenchmarkComparisonService>();

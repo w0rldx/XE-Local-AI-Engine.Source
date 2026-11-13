@@ -43,6 +43,7 @@ export function ChatDisplayShell({
 	toolsEnabled = false,
 	knowledgeBaseEnabled = false,
 	knowledgeBaseHasDocuments = true,
+	knowledgeCollection,
 	contextUsage,
 	maxMessageSizeKb,
 	streamingMessage,
@@ -50,6 +51,7 @@ export function ChatDisplayShell({
 	capabilities = defaultChatUiCapabilities,
 	inputStatus,
 	conversationSearchQuery,
+	conversationSearchResults,
 	showArchivedConversations,
 	conversationListTruncated = false,
 	onShowAllConversations,
@@ -83,7 +85,12 @@ export function ChatDisplayShell({
 	boundAgentMemoryEnabled = false,
 	onToggleConversationMemoryExcluded,
 	onSetConversationPlain,
+	onSetConversationSamplingOptions,
+	selectedConversationLoaded = false,
 	onDeleteConversation,
+	onExportConversation,
+	onExportAllConversations,
+	onImportConversations,
 	onBranchFromMessage,
 	activeRevisionByGroup,
 	onSelectRevision,
@@ -186,6 +193,7 @@ export function ChatDisplayShell({
 			embedded={isMobile}
 			disabled={inputStatus.chatInputDisabled}
 			searchQuery={conversationSearchQuery}
+			searchResults={conversationSearchResults}
 			showArchived={showArchivedConversations}
 			truncated={conversationListTruncated}
 			onShowAll={onShowAllConversations}
@@ -199,6 +207,9 @@ export function ChatDisplayShell({
 			onTogglePin={onToggleConversationPinned}
 			onToggleArchive={onToggleConversationArchived}
 			onDelete={onDeleteConversation}
+			onExport={onExportConversation}
+			onExportAll={onExportAllConversations}
+			onImportFile={onImportConversations}
 		/>
 	);
 
@@ -352,9 +363,20 @@ export function ChatDisplayShell({
 					activeModelToolCapable={activeModelToolCapable}
 					activeModelMultimodal={activeModelMultimodal}
 					conversationId={selectedConversationId}
+					conversationSampling={
+						onSetConversationSamplingOptions && conversation
+							? {
+									// A list summary carries no settings, so they are passed (and Save allowed) only once the full read is here.
+									options: selectedConversationLoaded ? conversation.samplingOptions : undefined,
+									loaded: selectedConversationLoaded,
+									onSave: (samplingOptions) => onSetConversationSamplingOptions(conversation.id, samplingOptions),
+								}
+							: undefined
+					}
 					toolsEnabled={toolsEnabled}
 					knowledgeBaseEnabled={knowledgeBaseEnabled}
 					knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}
+					knowledgeCollection={knowledgeCollection}
 					agentControlsAvailable={agentControlsAvailable && !isPlainConversation}
 					agentModeEnabled={agentModeEnabled && !isPlainConversation}
 					conversationAgentBound={conversationAgentBound}

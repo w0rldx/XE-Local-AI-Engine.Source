@@ -2,17 +2,25 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 
 /// <summary>
 ///     Shared serialization helpers for the node chat raw-ADO persistence path: content byte encoding, the
-///     <c>metadata_json</c> blob and the conversation <c>selected_path_json</c> map.
+///     <c>metadata_json</c> blob, the conversation <c>selected_path_json</c> map and its <c>sampling_options_json</c>.
 /// </summary>
 /// <remarks>Pure functions; every persistence collaborator consumes them via <c>using static</c>.</remarks>
 internal static class NodeChatMetadataSerializer
 {
     private static readonly JsonSerializerOptions MetadataJsonOptions = JsonSerializerOptions.Web;
     private static readonly JsonSerializerOptions SelectedPathJsonOptions = JsonSerializerOptions.Web;
+
+    // Unset knobs are left out, so the stored JSON names only what the conversation overrides.
+    private static readonly JsonSerializerOptions SamplingOptionsJsonOptions = new(JsonSerializerOptions.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
     internal static byte[] Encode(string value)
     {
@@ -90,6 +98,34 @@ internal static class NodeChatMetadataSerializer
         // parsed by any platform without depending on a Guid dictionary-key converter.
         var serializable = selectedPath.ToDictionary(pair => pair.Key.ToString(), pair => pair.Value.ToString(), StringComparer.Ordinal);
         return JsonSerializer.Serialize(serializable, SelectedPathJsonOptions);
+    }
+
+    internal static string? SerializeSamplingOptions(SamplingOptions? samplingOptions)
+    {
+        return samplingOptions is null ? null : JsonSerializer.Serialize(samplingOptions, SamplingOptionsJsonOptions);
+    }
+
+    /// <summary>
+    ///     Reads a conversation's stored sampling settings. Unparseable JSON reads as null (the client's defaults) and
+    ///     logs only the conversation id, so one bad row never fails every read of that chat.
+    /// </summary>
+    internal static SamplingOptions? DeserializeSamplingOptions(string? samplingOptionsJson, ILoggerFactory loggerFactory, Guid conversationId)
+    {
+        if (string.IsNullOrWhiteSpace(samplingOptionsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<SamplingOptions>(samplingOptionsJson, SamplingOptionsJsonOptions);
+        }
+        catch (JsonException)
+        {
+            loggerFactory.CreateLogger(typeof(NodeChatMetadataSerializer))
+                         .LogWarning("Conversation {ConversationId} has stored sampling settings that could not be read; using the client's defaults.", conversationId);
+            return null;
+        }
     }
 
     internal static IReadOnlyDictionary<Guid, Guid>? DeserializeSelectedPath(string? selectedPathJson)

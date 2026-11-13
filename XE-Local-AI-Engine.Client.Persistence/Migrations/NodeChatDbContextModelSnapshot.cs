@@ -5510,6 +5510,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("purged");
 
+                    b.Property<string>("SamplingOptionsJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("sampling_options_json");
+
                     b.Property<string>("SelectedPathJson")
                         .HasColumnType("TEXT")
                         .HasColumnName("selected_path_json");

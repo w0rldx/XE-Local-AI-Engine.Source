@@ -16,7 +16,7 @@ public sealed partial class Program
 
         options.EnrichDiagnosticContext = static (diagnosticContext, httpContext) =>
         {
-            var redactedQuery = AccessTokenQueryRedactor.Redact(httpContext.Request.QueryString.Value);
+            var redactedQuery = SensitiveQueryRedactor.Redact(httpContext.Request.QueryString.Value);
             var path = LogValueSanitizer.Sanitize(httpContext.Request.Path.Value);
             diagnosticContext.Set("RequestPathWithRedactedQuery", $"{path}{redactedQuery}");
             diagnosticContext.Set("QueryString", redactedQuery);

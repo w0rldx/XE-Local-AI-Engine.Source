@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using ProcessKey = LlamaServerProcessSupervisor.ProcessKey;
 using RunningProcess = LlamaServerProcessSupervisor.RunningProcess;
 
@@ -107,23 +108,9 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     ///     Background reaper: evicts processes idle beyond <see cref="LlamaServerSupervisorOptions.IdleTimeToLive" />, or
     ///     beyond the shorter transient lifetime for a transient process.
     /// </summary>
-    internal async Task ReapIdleLoopAsync(CancellationToken ct)
-    {
-        // Re-check at a fraction of the shorter TTL so eviction latency stays bounded without busy-spinning.
-        var interval = TimeSpan.FromTicks(Math.Max(_options.EffectiveTransientIdleTimeToLive.Ticks / 4, TimeSpan.FromSeconds(1).Ticks));
-        try
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                await Task.Delay(interval, _timeProvider, ct).ConfigureAwait(false);
-                await ReapIdleOnceAsync().ConfigureAwait(false);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Normal shutdown.
-        }
-    }
+    /// <remarks>Paced by the shorter, transient TTL, so a transient process is reaped on time too.</remarks>
+    internal Task ReapIdleLoopAsync(CancellationToken ct) =>
+        IdleReapLoop.RunAsync(_options.EffectiveTransientIdleTimeToLive, _timeProvider, ReapIdleOnceAsync, ct);
 
     internal async Task ReapIdleOnceAsync()
     {

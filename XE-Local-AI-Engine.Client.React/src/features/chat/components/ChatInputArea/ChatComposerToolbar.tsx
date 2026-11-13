@@ -6,6 +6,7 @@ import {
 	IconCheck,
 	IconDeviceDesktop,
 	IconDots,
+	IconFolder,
 	IconPaperclip,
 	IconPlayerStopFilled,
 	IconSend,
@@ -25,7 +26,7 @@ import { CompactButton } from "@/features/chat/components/CompactButton";
 import { ContextStateButton } from "@/features/chat/components/ContextStatePanel";
 import { ContextUsagePopover } from "@/features/chat/components/ContextUsagePopover/ContextUsagePopover";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
-import type { ContextUsageModel, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import type { ContextUsageModel, KnowledgeCollectionPicker, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { effectiveAgent } from "@/features/chat/models/ChatTurnResolution";
 import { VoiceComposerControls } from "@/features/voice/components/VoiceComposerControls";
 
@@ -60,6 +61,8 @@ interface ChatComposerToolbarProps {
 	knowledgeBaseEnabled: boolean;
 	knowledgeBaseHasDocuments: boolean;
 	onToggleKnowledgeBase?: () => void;
+	/** The collection picker beside the knowledge-base toggle; undefined hides it. */
+	knowledgeCollection?: KnowledgeCollectionPicker;
 	agentControlsAvailable: boolean;
 	agentOptions: readonly AgentOption[];
 	agentModeEnabled: boolean;
@@ -116,6 +119,7 @@ export function ChatComposerToolbar({
 	knowledgeBaseEnabled,
 	knowledgeBaseHasDocuments,
 	onToggleKnowledgeBase,
+	knowledgeCollection,
 	agentControlsAvailable,
 	agentOptions,
 	agentModeEnabled,
@@ -148,6 +152,23 @@ export function ChatComposerToolbar({
 		: knowledgeBaseEnabled
 			? t("pages.chat.knowledgeBaseEnabled", "Knowledge base enabled")
 			: t("pages.chat.knowledgeBaseDisabled", "Knowledge base disabled");
+	const knowledgeCollectionLabel = t("chat.knowledgeCollection.label", "Knowledge collection");
+	const knowledgeCollectionItems = knowledgeCollection ? (
+		<>
+			<Menu.Label>{knowledgeCollectionLabel}</Menu.Label>
+			{knowledgeCollection.options.map((collectionId) => (
+				<Menu.Item
+					key={collectionId}
+					data-testid={`chat-knowledge-collection-option-${collectionId}`}
+					disabled={disabled || isSending}
+					rightSection={collectionId === knowledgeCollection.selected ? <IconCheck size={15} /> : null}
+					onClick={() => knowledgeCollection.onChange(collectionId)}
+				>
+					{collectionId}
+				</Menu.Item>
+			))}
+		</>
+	) : null;
 	const reasoningItems = (
 		<>
 			<Menu.Label>{reasoningLabel}</Menu.Label>
@@ -225,7 +246,9 @@ export function ChatComposerToolbar({
 			</Menu.Target>
 			<Menu.Dropdown>
 				{reasoningItems}
-				{showLocalToolControls || showKnowledgeBaseControls || showSamplingOptions ? <Menu.Divider /> : null}
+				{showLocalToolControls || showKnowledgeBaseControls || knowledgeCollection || showSamplingOptions ? (
+					<Menu.Divider />
+				) : null}
 				{showLocalToolControls ? (
 					<Menu.Item
 						leftSection={<IconDeviceDesktop size={15} />}
@@ -248,6 +271,7 @@ export function ChatComposerToolbar({
 						{knowledgeBaseStateLabel}
 					</Menu.Item>
 				) : null}
+				{knowledgeCollectionItems}
 				{showSamplingOptions ? (
 					<Menu.Item
 						leftSection={<IconAdjustments size={15} />}
@@ -345,6 +369,29 @@ export function ChatComposerToolbar({
 							<IconBooks size={15} />
 						</ActionIcon>
 					</DisabledReasonTooltip>
+				) : null}
+				{knowledgeCollection && !compact ? (
+					<Menu position="top-start" offset={8} withinPortal={true} disabled={disabled || isSending}>
+						<Menu.Target>
+							<Tooltip
+								label={t("chat.knowledgeCollection.current", "Knowledge collection: {{collection}}", {
+									collection: knowledgeCollection.selected,
+								})}
+							>
+								<ActionIcon
+									size={36}
+									variant="subtle"
+									color="gray"
+									disabled={disabled || isSending}
+									aria-label={knowledgeCollectionLabel}
+									data-testid="chat-knowledge-collection-trigger"
+								>
+									<IconFolder size={15} />
+								</ActionIcon>
+							</Tooltip>
+						</Menu.Target>
+						<Menu.Dropdown>{knowledgeCollectionItems}</Menu.Dropdown>
+					</Menu>
 				) : null}
 				{agentControlsAvailable ? (
 					<AgentSelectorCard

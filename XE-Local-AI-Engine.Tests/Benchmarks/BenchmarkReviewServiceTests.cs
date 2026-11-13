@@ -41,7 +41,7 @@ public sealed class BenchmarkReviewServiceTests
 
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.SubmitAsync(Approve(Score("accuracy", 8))));
 
-        _ = context.Store.DidNotReceive().SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
+        _ = context.Stores.Reviews.DidNotReceive().SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -64,7 +64,7 @@ public sealed class BenchmarkReviewServiceTests
         AssertEx.Equal(expected: 2, criteria.Single(static score => score.CriterionId == "accuracy").Score,
             "What was sent is kept; the unscored llm criterion is simply absent.");
         AssertEx.False(criteria.Any(static score => score.CriterionId == "clarity"));
-        _ = context.Store.Received(1).SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
+        _ = context.Stores.Reviews.Received(1).SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -86,7 +86,7 @@ public sealed class BenchmarkReviewServiceTests
 
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.SubmitAsync(Approve(Score("exact_answer", 3))));
 
-        _ = context.Store.DidNotReceive().SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
+        _ = context.Stores.Reviews.DidNotReceive().SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -136,7 +136,7 @@ public sealed class BenchmarkReviewServiceTests
         var submitted = AssertEx.NotNull(context.Submitted);
         AssertEx.Equal<int?>(55, submitted.Score, "Without a rubric the reviewer's overall is the score.");
         AssertEx.Null(submitted.PolicyRevisionId);
-        _ = context.Store.Received(1).SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
+        _ = context.Stores.Reviews.Received(1).SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -148,7 +148,7 @@ public sealed class BenchmarkReviewServiceTests
             context.Service.SubmitAsync(Approve(Score("accuracy", 8), Score("clarity", 4), Score("exact_answer", 0))));
 
         AssertEx.True(refusal.Message.Contains("exact_answer", StringComparison.Ordinal), "The refusal names the criterion the verifier decided.");
-        _ = context.Store.DidNotReceive().SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
+        _ = context.Stores.Reviews.DidNotReceive().SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -173,7 +173,7 @@ public sealed class BenchmarkReviewServiceTests
 
         AssertEx.Equal("NotReviewable", notSucceeded.Code, "The operator re-judges first.");
         AssertEx.Equal("NotReviewable", underOldRubric.Code, "A judging under a superseded revision verified a rubric the reviewer is no longer scoring.");
-        _ = failed.Store.DidNotReceive().SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
+        _ = failed.Stores.Reviews.DidNotReceive().SubmitReviewAsync(Arg.Any<BenchmarkReviewCommand>(), Arg.Any<CancellationToken>());
     }
 
     private static BenchmarkReviewCriterionScore Score(string criterionId, int score) =>
@@ -200,8 +200,8 @@ public sealed class BenchmarkReviewServiceTests
             BenchmarkJudgeRubricV1? rubric = null)
         {
             var run = Run(withPolicy, judgeState, judgeRevisionId ?? RevisionId);
-            Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(run);
-            Store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
+            Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(run);
+            Stores.Judging.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
                  .Returns(withPolicy
                      ? new BenchmarkJudgePolicyRevisionRecord
                      {
@@ -215,12 +215,12 @@ public sealed class BenchmarkReviewServiceTests
                          CreatedAtUtc = 1
                      }
                      : null);
-            Store.GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).Returns(Attempt());
-            Store.SubmitReviewAsync(Arg.Do<BenchmarkReviewCommand>(command => Submitted = command), Arg.Any<CancellationToken>()).Returns(run);
-            Service = new BenchmarkReviewService(Store);
+            Stores.Judging.GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).Returns(Attempt());
+            Stores.Reviews.SubmitReviewAsync(Arg.Do<BenchmarkReviewCommand>(command => Submitted = command), Arg.Any<CancellationToken>()).Returns(run);
+            Service = new BenchmarkReviewService(Stores.Reviews, Stores.Runs, Stores.Judging);
         }
 
-        public IBenchmarkStore Store { get; } = Substitute.For<IBenchmarkStore>();
+        public BenchmarkStoreSubstitutes Stores { get; } = new();
 
         public IBenchmarkReviewService Service { get; }
 

@@ -81,6 +81,15 @@ describe("DesktopNavigationBar", () => {
 		expect(chat.getAttribute("href")).toBe("/chat");
 	});
 
+	// External Apps is frozen and experimental (ADR 0010 amendment 2026-11-12); its entry says so where it is chosen.
+	it("marks the External Apps group as experimental, and only that entry", async () => {
+		renderNavigationBar();
+
+		const badge = await screen.findByTestId("nav-badge-externalApps");
+		expect(badge.textContent).toBe("Experimental");
+		expect(screen.getAllByText("Experimental")).toHaveLength(1);
+	});
+
 	// Nested children are destinations too, so the same rule applies one level down.
 	it("renders a group's nested destinations as links carrying their routes", async () => {
 		renderNavigationBar();

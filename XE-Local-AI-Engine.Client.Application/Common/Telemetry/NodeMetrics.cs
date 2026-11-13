@@ -77,6 +77,20 @@ public static class NodeMetrics
         Meter.CreateCounter<long>("chat_detached_invocation_reaped_total",
             description: "Number of detached invocations cancelled after their disconnect grace expired.");
 
+    /// <summary>Chat conversations currently held in the in-memory conversation search index.</summary>
+    /// <remarks>Content-free (a count only). Read with <see cref="ChatSearchIndexedChars" /> for the index's memory.</remarks>
+    public static readonly UpDownCounter<long> ChatSearchIndexedConversations =
+        Meter.CreateUpDownCounter<long>("chat_search_indexed_conversations",
+            unit: "conversations",
+            description: "Number of chat conversations held in the in-memory conversation search index.");
+
+    /// <summary>Decrypted title and message characters currently held in the in-memory conversation search index.</summary>
+    /// <remarks>Content-free (a count only). Each char is two bytes of process memory; the index is never evicted.</remarks>
+    public static readonly UpDownCounter<long> ChatSearchIndexedChars =
+        Meter.CreateUpDownCounter<long>("chat_search_indexed_chars",
+            unit: "chars",
+            description: "Number of decrypted title and message characters held in the in-memory conversation search index.");
+
     /// <summary>
     ///     Incremented when an invocation fails before producing output.
     ///     Labels: source (failure category, e.g. timeout | agent_runtime | provider_unreachable | unexpected).

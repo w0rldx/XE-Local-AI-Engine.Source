@@ -44,7 +44,7 @@ public sealed class ComparisonReportServiceTests
         _ = evaluations.CreateComparisonAsync(Arg.Do<TrainingComparisonInput>(input => captured = input), Arg.Any<CancellationToken>())
                        .Returns(callInfo => Report(callInfo.Arg<TrainingComparisonInput>()));
 
-        var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), Substitute.For<IBenchmarkStore>());
+        var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), Substitute.For<IBenchmarkRunStore>());
         var report = await service.CreateAsync(new CreateComparisonCommand
         {
             Name = "base vs tuned",
@@ -208,7 +208,7 @@ public sealed class ComparisonReportServiceTests
         _ = evaluations.GetAsync(tunedEvaluation.Id, Arg.Any<CancellationToken>()).Returns(tunedEvaluation);
         _ = evaluations.CreateComparisonAsync(Arg.Any<TrainingComparisonInput>(), Arg.Any<CancellationToken>())
                        .Returns(callInfo => Report(callInfo.Arg<TrainingComparisonInput>()));
-        var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), Substitute.For<IBenchmarkStore>());
+        var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), Substitute.For<IBenchmarkRunStore>());
 
         var report = await service.CreateAsync(new CreateComparisonCommand
         {
@@ -230,7 +230,7 @@ public sealed class ComparisonReportServiceTests
         var evaluations = Substitute.For<ITrainingEvaluationStore>();
         _ = evaluations.GetAsync(baseEvaluation.Id, Arg.Any<CancellationToken>()).Returns(baseEvaluation);
         _ = evaluations.GetAsync(tunedEvaluation.Id, Arg.Any<CancellationToken>()).Returns(tunedEvaluation);
-        var benchmarks = Substitute.For<IBenchmarkStore>();
+        var benchmarks = Substitute.For<IBenchmarkRunStore>();
         _ = benchmarks.GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BenchmarkRunRecord?)null);
 
         var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), benchmarks);
@@ -256,7 +256,7 @@ public sealed class ComparisonReportServiceTests
         var evaluations = Substitute.For<ITrainingEvaluationStore>();
         _ = evaluations.ListAsync(runId, Arg.Any<CancellationToken>()).Returns<IReadOnlyList<TrainingEvaluationRecord>>([]);
 
-        var service = new ComparisonReportService(evaluations, runs, Substitute.For<IBenchmarkStore>());
+        var service = new ComparisonReportService(evaluations, runs, Substitute.For<IBenchmarkRunStore>());
         var unpromoted = await service.SuggestAsync(runId);
 
         AssertEx.Equal("base-model", unpromoted.BaseModelName!);
@@ -292,7 +292,7 @@ public sealed class ComparisonReportServiceTests
         var evaluations = Substitute.For<ITrainingEvaluationStore>();
         _ = evaluations.ListAsync(runId, Arg.Any<CancellationToken>()).Returns<IReadOnlyList<TrainingEvaluationRecord>>([]);
 
-        var service = new ComparisonReportService(evaluations, runs, Substitute.For<IBenchmarkStore>());
+        var service = new ComparisonReportService(evaluations, runs, Substitute.For<IBenchmarkRunStore>());
         var suggestion = await service.SuggestAsync(runId);
 
         AssertEx.Null(suggestion.BaseModelName);
@@ -350,7 +350,7 @@ public sealed class ComparisonReportServiceTests
             }, TrainingJson.Options)
         };
         _ = runs.ListArtifactsAsync(runId, Arg.Any<CancellationToken>()).Returns<IReadOnlyList<TrainingArtifactRecord>>([artifact]);
-        var service = new ComparisonReportService(evaluations, runs, Substitute.For<IBenchmarkStore>());
+        var service = new ComparisonReportService(evaluations, runs, Substitute.For<IBenchmarkRunStore>());
 
         _ = await AssertEx.ThrowsAsync<EvaluationRejectedException>(() => service.DeleteAsync(historicalComparisonId, expectedVersion: 1));
 
@@ -379,7 +379,7 @@ public sealed class ComparisonReportServiceTests
         _ = evaluations.GetAsync(baseEvaluation.Id, Arg.Any<CancellationToken>()).Returns(baseEvaluation);
         _ = evaluations.GetAsync(tunedEvaluation.Id, Arg.Any<CancellationToken>()).Returns(tunedEvaluation);
 
-        var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), Substitute.For<IBenchmarkStore>());
+        var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), Substitute.For<IBenchmarkRunStore>());
         var rejection = await AssertEx.ThrowsAsync<EvaluationRejectedException>(() => service.CreateAsync(new CreateComparisonCommand
             {
                 Name = "mismatched",

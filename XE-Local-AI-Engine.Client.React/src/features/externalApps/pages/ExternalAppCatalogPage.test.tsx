@@ -55,6 +55,15 @@ function baseRoutes(catalog = externalAppCatalog(), runtime = externalAppRuntime
 }
 
 describe("ExternalAppCatalogPage", () => {
+	// Frozen and experimental (ADR 0010 amendment 2026-11-12): the page says so before anything is installed.
+	it("marks the page as experimental", async () => {
+		server.use(...baseRoutes());
+		renderPage();
+
+		const badge = await screen.findByTestId("external-apps-experimental-badge");
+		expect(badge.textContent).toBe("Experimental");
+	});
+
 	it("renders a card with name, summary, tested version and permission chips", async () => {
 		server.use(...baseRoutes());
 		renderPage();

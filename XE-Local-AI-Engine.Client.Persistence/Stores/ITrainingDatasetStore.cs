@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     generation queue.
 /// </summary>
 /// <remarks>
-///     Mirrors <see cref="IBenchmarkStore" />'s conventions — hand-bumped <c>Version</c> concurrency tokens compared
+///     Mirrors the benchmark store's conventions — hand-bumped <c>Version</c> concurrency tokens compared
 ///     against a caller-supplied <c>expectedVersion</c>, explicit SQLite transactions around every multi-row mutation,
 ///     and explicit ordered child deletes: the references that block a delete declare <c>Restrict</c> and the node
 ///     connection enforces them, so the order is what makes the delete legal.

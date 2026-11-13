@@ -8,6 +8,7 @@ import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import { ExternalAppStatusBadge } from "@/features/externalApps/components/ExternalAppStatusBadge";
+import { ExternalAppsExperimentalBadge } from "@/features/externalApps/components/ExternalAppsExperimentalBadge";
 import { InstanceActions } from "@/features/externalApps/components/InstanceActions";
 import { toExternalAppStatus } from "@/features/externalApps/models/ExternalAppModels";
 import { useExternalAppInstances } from "@/features/externalApps/queries/useExternalApps";
@@ -33,7 +34,12 @@ export function ExternalAppsInstalledPage() {
 
 	return (
 		<PageShell data-testid="external-apps-installed-page">
-			<PageHeader title={t(`${keyPrefix}.title`)} subtitle={t(`${keyPrefix}.subtitle`)} icon={<IconApps size={24} />} />
+			<PageHeader
+				title={t(`${keyPrefix}.title`)}
+				subtitle={t(`${keyPrefix}.subtitle`)}
+				icon={<IconApps size={24} />}
+				actions={<ExternalAppsExperimentalBadge />}
+			/>
 
 			{instancesQuery.isLoading ? (
 				<Stack gap="sm" data-testid="external-apps-installed-loading">

@@ -65,8 +65,8 @@ internal sealed class NodeChatVariantBranchService
                 await using var conversationCommand = dbContext.Database.GetDbConnection().CreateCommand();
                 conversationCommand.Transaction = dbTransaction;
                 conversationCommand.CommandText = """
-                                                  INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, is_plain, plain_system_prompt)
-                                                  VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, 0, 0, $branch_of_conversation_id, $is_plain, $plain_system_prompt);
+                                                  INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, is_plain, plain_system_prompt, sampling_options_json)
+                                                  VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, 0, 0, $branch_of_conversation_id, $is_plain, $plain_system_prompt, $sampling_options_json);
                                                   """;
                 AddParameter(conversationCommand, "$conversation_id", branchedConversationId);
                 AddParameter(conversationCommand, "$title", EncryptTitle(source.Title, dbContext, branchedConversationId));
@@ -80,6 +80,8 @@ internal sealed class NodeChatVariantBranchService
                 // re-encrypted for the branch, like the title above.
                 AddParameter(conversationCommand, "$is_plain", source.IsPlain ? 1 : 0);
                 AddParameter(conversationCommand, "$plain_system_prompt", dbContext.EncryptConversationPlainSystemPrompt(source.PlainSystemPrompt, branchedConversationId));
+                // Plain JSON, so the sampling settings copy as they are: the branch keeps sampling like its source.
+                AddParameter(conversationCommand, "$sampling_options_json", SerializeSamplingOptions(source.SamplingOptions));
                 await OpenIfNeededAsync(conversationCommand.Connection, token);
                 await conversationCommand.ExecuteNonQueryAsync(token);
 

@@ -141,6 +141,7 @@ setupMswServer(
 	jsonRoute("get", "automation/commands", { items: [] }),
 	jsonRoute("get", "agents", { items: [] }),
 	jsonRoute("get", "knowledge-base/documents", { items: [], embeddingModel: "nomic-embed-text", embeddingModelAvailable: true }),
+	jsonRoute("get", "knowledge-base/collections", { items: [{ collectionId: "DEFAULT", documentCount: 0 }] }),
 	jsonRoute("get", `chat/conversations/${conversationId}/uploads`, { items: [] }),
 	jsonRoute("get", "graph-workflows/capability", { enabled: true }),
 	jsonRoute("get", "graph-workflows/definitions", {

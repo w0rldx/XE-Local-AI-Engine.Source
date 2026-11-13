@@ -196,6 +196,36 @@ function toFiniteNumber(raw: unknown): number | undefined {
 	return Number.isFinite(n) ? n : undefined;
 }
 
+// The reverse of toWireSamplingOptions, for settings stored on the node: null and non-finite entries stay unset, and
+// the string seed becomes a number again (the dialog bounds it well inside the safe-integer range).
+export function fromWireSamplingOptions(
+	wire: { [K in keyof WireSamplingOptions]?: WireSamplingOptions[K] | null },
+): ChatSamplingOptions {
+	const result: ChatSamplingOptions = {};
+	for (const key of [
+		"temperature",
+		"topP",
+		"topK",
+		"minP",
+		"maxOutputTokens",
+		"repeatPenalty",
+		"repeatLastN",
+		"presencePenalty",
+		"frequencyPenalty",
+		"seed",
+		"numCtx",
+	] as const) {
+		const n = toFiniteNumber(wire[key]);
+		if (n !== undefined) {
+			result[key] = n;
+		}
+	}
+	if (wire.stop != null && wire.stop.length > 0) {
+		result.stop = [...wire.stop];
+	}
+	return result;
+}
+
 // Wire-safe serialization: coerces every numeric field to a real JS number and drops any that are
 // not finite (covers string-typed store entries from partial Mantine NumberInput input). Drops null/
 // undefined values and empty arrays. Returns undefined when nothing is set, signaling the caller to

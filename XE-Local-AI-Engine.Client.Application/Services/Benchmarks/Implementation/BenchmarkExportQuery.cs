@@ -6,31 +6,47 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
 {
     private readonly IBenchmarkExportFactsResolver _factsResolver;
     private readonly ILogger<BenchmarkExportQuery> _logger;
-    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkProjectStore _projectStore;
+    private readonly IBenchmarkTaskItemStore _taskItemStore;
+    private readonly IBenchmarkRunStore _runStore;
+    private readonly IBenchmarkJudgeStore _judgeStore;
+    private readonly IBenchmarkPairwiseStore _pairwiseStore;
 
-    public BenchmarkExportQuery(IBenchmarkStore store,
+    public BenchmarkExportQuery(IBenchmarkProjectStore projectStore,
+        IBenchmarkTaskItemStore taskItemStore,
+        IBenchmarkRunStore runStore,
+        IBenchmarkJudgeStore judgeStore,
+        IBenchmarkPairwiseStore pairwiseStore,
         IBenchmarkExportFactsResolver factsResolver,
         ILogger<BenchmarkExportQuery> logger)
     {
         ArgumentNullException.ThrowIfNull(factsResolver);
-        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(projectStore);
+        ArgumentNullException.ThrowIfNull(taskItemStore);
+        ArgumentNullException.ThrowIfNull(runStore);
+        ArgumentNullException.ThrowIfNull(judgeStore);
+        ArgumentNullException.ThrowIfNull(pairwiseStore);
         ArgumentNullException.ThrowIfNull(logger);
         _factsResolver = factsResolver;
-        _store = store;
+        _projectStore = projectStore;
+        _taskItemStore = taskItemStore;
+        _runStore = runStore;
+        _judgeStore = judgeStore;
+        _pairwiseStore = pairwiseStore;
         _logger = logger;
     }
 
     public async Task<BenchmarkJsonExportQueryResult> GetJsonAsync(Guid projectId, CancellationToken ct)
     {
-        var project = await _store.GetProjectAsync(projectId, ct) ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
+        var project = await _projectStore.GetProjectAsync(projectId, ct) ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
 
-        var page = await _store.ListAllRunsAsync(projectId, ct);
+        var page = await _runStore.ListAllRunsAsync(projectId, ct);
         var firstOfMeasuredGroups = FirstOfMeasuredGroups(page.Items);
         var runs = new List<BenchmarkExportRunQueryItem>(page.Items.Count);
         var facts = new Dictionary<Guid, BenchmarkExportRunFacts>(firstOfMeasuredGroups.Count);
         foreach (var summary in page.Items)
         {
-            var full = await _store.GetRunAsync(summary.Id, ct);
+            var full = await _runStore.GetRunAsync(summary.Id, ct);
             if (full is null)
             {
                 continue;
@@ -48,29 +64,29 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
             }
         }
 
-        var pairwiseFit = await _store.GetActivePairwiseFitAsync(projectId, ct);
+        var pairwiseFit = await _pairwiseStore.GetActivePairwiseFitAsync(projectId, ct);
         return new BenchmarkJsonExportQueryResult
         {
             Project = project,
             Summaries = page.Items,
             Runs = runs,
             RankCohort = page.RankCohort,
-            JudgePolicyRevision = await _store.GetCurrentJudgePolicyRevisionAsync(projectId, ct),
+            JudgePolicyRevision = await _judgeStore.GetCurrentJudgePolicyRevisionAsync(projectId, ct),
             PairwiseFit = pairwiseFit,
             PairwiseScores = BenchmarkPairwiseFitScores.Read(pairwiseFit, _logger),
             Fidelity = _factsResolver.ResolveProject(project),
             Facts = facts,
-            TaskItems = await _store.ListTaskItemsAsync(projectId, ct),
-            Cells = await _store.ListCellsAsync(projectId, ct)
+            TaskItems = await _taskItemStore.ListTaskItemsAsync(projectId, ct),
+            Cells = await _runStore.ListCellsAsync(projectId, ct)
         };
     }
 
     public async Task<BenchmarkCsvExportQueryResult> GetCsvAsync(Guid projectId, CancellationToken ct)
     {
-        var project = await _store.GetProjectAsync(projectId, ct) ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
+        var project = await _projectStore.GetProjectAsync(projectId, ct) ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
 
-        var page = await _store.ListAllRunsAsync(projectId, ct);
-        var pairwiseFit = await _store.GetActivePairwiseFitAsync(projectId, ct);
+        var page = await _runStore.ListAllRunsAsync(projectId, ct);
+        var pairwiseFit = await _pairwiseStore.GetActivePairwiseFitAsync(projectId, ct);
         return new BenchmarkCsvExportQueryResult
         {
             Project = project,
@@ -97,7 +113,7 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
             return null;
         }
 
-        var attempt = await _store.GetJudgeAttemptAsync(attemptId, ct);
+        var attempt = await _judgeStore.GetJudgeAttemptAsync(attemptId, ct);
         return BenchmarkJudgeSerialization.DeserializeResult(attempt?.ResultJson);
     }
 }

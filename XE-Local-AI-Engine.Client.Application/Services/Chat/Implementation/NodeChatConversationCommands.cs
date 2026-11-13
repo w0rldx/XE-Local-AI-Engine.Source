@@ -332,6 +332,10 @@ internal sealed class NodeChatConversationCommands
             },
             cancellationToken);
 
+        // Committed: drop the plaintext now rather than at the next search. A refresh racing this delete is corrected by
+        // the stale mark the writer left, which outlives the refresh's older stamp.
+        _writer.SearchIndex.Store(request.ConversationId, document: null);
+
         if (request.PurgeImmediately && _uploadedFileStore is not null)
         {
             // The encrypted upload bytes and cached extracted text live on disk, not in a column, so the FK cascade /
@@ -523,6 +527,33 @@ internal sealed class NodeChatConversationCommands
                 if (updated == 0 && await ReadConversationRowAsync(dbContext, request.ConversationId, token) is { Purged: false })
                 {
                     throw new NodeChatInvalidRequestException("Only an ordinary chat conversation can be plain.");
+                }
+
+                return await ReadUpdatedConversationAsync(dbContext, updated, request.ConversationId, token);
+            },
+            cancellationToken);
+    }
+
+    public async Task<NodeChatConversationDto> SetConversationSamplingOptionsAsync(NodeChatSetConversationSamplingOptionsRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
+            async (dbContext, token) =>
+            {
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                // Same kind guard as plain mode: a work session's or integration's turns are not sent from the chat composer.
+                command.CommandText =
+                    "UPDATE conversations SET sampling_options_json = $sampling, last_seen_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0 AND kind = $kind;";
+                AddParameter(command, "$sampling", SerializeSamplingOptions(request.SamplingOptions));
+                AddParameter(command, "$last_seen_utc", request.UpdatedAtUtc);
+                AddParameter(command, "$conversation_id", request.ConversationId);
+                AddParameter(command, "$kind", NodeConversationKind.Chat);
+                await OpenIfNeededAsync(command.Connection, token);
+                var updated = await command.ExecuteNonQueryAsync(token);
+                if (updated == 0 && await ReadConversationRowAsync(dbContext, request.ConversationId, token) is { Purged: false })
+                {
+                    throw new NodeChatInvalidRequestException("Only an ordinary chat conversation has its own sampling settings.");
                 }
 
                 return await ReadUpdatedConversationAsync(dbContext, updated, request.ConversationId, token);

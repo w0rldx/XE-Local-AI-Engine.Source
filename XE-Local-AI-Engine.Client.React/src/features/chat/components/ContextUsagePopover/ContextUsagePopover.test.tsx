@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { ContextUsagePopover } from "@/features/chat/components/ContextUsagePopover/ContextUsagePopover";
 import type { ContextUsageModel } from "@/features/chat/models/ChatModels";
@@ -11,7 +12,7 @@ import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindow
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
 import en from "@/locales/en.json";
 import { jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
-import { renderWithProviders } from "@/test/RenderWithProviders";
+import { createTestQueryClient, renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
 // The pre-send estimate runs against MSW through the shared generated client. A test that must not fetch declares no
@@ -240,6 +241,44 @@ describe("ContextUsagePopover", () => {
 
 			expect(requested?.searchParams.get("maxOutputTokens")).toBe("2048");
 			expect(requested?.searchParams.get("numCtx")).toBe("16384");
+		});
+
+		it("follows the conversation's own settings, including a save that lands while it is mounted", async () => {
+			useDeveloperModeStore.getState().actions.setDeveloperMode(true);
+			const requested: URL[] = [];
+			server.use(
+				http.get(localApiPath("chat/context-estimate"), ({ request }) => {
+					requested.push(new URL(request.url));
+					return HttpResponse.json(preSend);
+				}),
+			);
+			const conversationId = "0f7f6d5e-1c1a-4a54-9c0c-3f0a2b6f7a12";
+			const queryClient = createTestQueryClient();
+			queryClient.setQueryData(nodeChatQueryKeys.conversation(conversationId), {
+				id: conversationId,
+				samplingOptions: { maxOutputTokens: 1_024 },
+			});
+			renderWithProviders(
+				<ContextUsagePopover
+					usage={usage({ usedTokens: undefined, isAuthoritative: false })}
+					conversationId={conversationId}
+					modelName="qwen3-4b"
+					useLocalTools={true}
+				/>,
+				{ queryClient },
+			);
+			const dropdown = await open();
+			await within(dropdown).findByTestId("context-usage-row-systemPrompt");
+			expect(requested.at(-1)?.searchParams.get("maxOutputTokens")).toBe("1024");
+
+			act(() => {
+				queryClient.setQueryData(nodeChatQueryKeys.conversation(conversationId), {
+					id: conversationId,
+					samplingOptions: { maxOutputTokens: 4_096 },
+				});
+			});
+
+			await waitFor(() => expect(requested.at(-1)?.searchParams.get("maxOutputTokens")).toBe("4096"));
 		});
 
 		it("sends neither override when developer mode is off, as the send path does", async () => {

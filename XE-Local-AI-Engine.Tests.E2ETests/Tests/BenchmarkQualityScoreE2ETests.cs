@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///         the ranking SQL and the whole page are production code. What a browser host structurally cannot do is run a
 ///         model: it boots with <c>RemoveAll&lt;IHostedService&gt;</c> (no benchmark queue worker), its <c>llamacpp</c>
 ///         provider is a substitute, and no GGUF is installed — so the primary invocation and the judge model call are
-///         driven here through the same <see cref="IBenchmarkStore" /> transitions the executors use, with a canned
+///         driven here through the same benchmark store-role transitions the executors use, with a canned
 ///         rubric verdict. The two DI seams that make that possible are documented on
 ///         <see cref="BenchmarkE2ETestDoubles" />. Real models on real hardware are covered by the live 5090 pass, not
 ///         by this suite.
@@ -156,31 +156,34 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
         }
 
         await using var scope = Factory.Services.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
+        var queueStore = scope.ServiceProvider.GetRequiredService<IBenchmarkQueueStore>();
+        var judgeStore = scope.ServiceProvider.GetRequiredService<IBenchmarkJudgeStore>();
+        var runStore = scope.ServiceProvider.GetRequiredService<IBenchmarkRunStore>();
+        var projectStore = scope.ServiceProvider.GetRequiredService<IBenchmarkProjectStore>();
 
         // A project refuses deletion while any of its work is non-terminal, so a test that failed part way through
         // must not leave the node-wide empty state permanently occupied for the pooled phase.
-        while (await store.ClaimNextAsync() is { } work)
+        while (await queueStore.ClaimNextAsync() is { } work)
         {
             if (work.Kind == BenchmarkWorkKind.Judge)
             {
-                _ = await store.MarkJudgeCancelledAsync(work.RunId, work.Version);
+                _ = await judgeStore.MarkJudgeCancelledAsync(work.RunId, work.Version);
                 continue;
             }
 
-            _ = await store.MarkPrimaryCancelledAsync(work.RunId, work.Version);
+            _ = await runStore.MarkPrimaryCancelledAsync(work.RunId, work.Version);
         }
 
         // A project refuses deletion while it still has runs, so the runs go first — the same order the page's
         // own delete controls impose on the operator.
-        foreach (var run in (await store.ListRunsAsync(_projectId, skip: 0, take: 100)).Items)
+        foreach (var run in (await runStore.ListRunsAsync(_projectId, skip: 0, take: 100)).Items)
         {
-            await store.DeleteRunAsync(run.Id, run.Version);
+            await runStore.DeleteRunAsync(run.Id, run.Version);
         }
 
-        if (await store.GetProjectAsync(_projectId) is { } project)
+        if (await projectStore.GetProjectAsync(_projectId) is { } project)
         {
-            await store.DeleteProjectAsync(_projectId, project.Version);
+            await projectStore.DeleteProjectAsync(_projectId, project.Version);
         }
 
         _projectId = Guid.Empty;
@@ -199,10 +202,12 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
     private async Task<int> SeedProjectWithTwoJudgedRunsAsync()
     {
         await using var scope = Factory.Services.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
+        var services = scope.ServiceProvider;
+        var projectStore = services.GetRequiredService<IBenchmarkProjectStore>();
+        var judgeStore = services.GetRequiredService<IBenchmarkJudgeStore>();
 
         _projectId = Guid.NewGuid();
-        var project = await store.CreateProjectAsync(new BenchmarkProjectInput
+        var project = await projectStore.CreateProjectAsync(new BenchmarkProjectInput
         {
             Id = _projectId,
             Name = ProjectName,
@@ -212,30 +217,33 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
         });
 
         var policy = BenchmarkE2ETestDoubles.Policy(BenchmarkJudgeRubricDefaults.Default(), ReferenceAnswer);
-        var activation = await store.ActivateJudgePolicyAsync(_projectId,
+        var activation = await judgeStore.ActivateJudgePolicyAsync(_projectId,
             project.Version,
             BenchmarkJudgeSerialization.SerializePolicy(policy),
             BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(policy));
 
         // One run at a time, primary then its automatic first judging: the work queue is global FIFO, so starting the
         // second run before the first run's judge work is drained would hand the next claim the wrong work item.
-        _runA = await SucceededRunAsync(store, activation.Revision.Id, policy, BenchmarkE2ETestDoubles.ModelName, 'a', criterionScore: 9);
-        var scoreA = (await CompleteQueuedJudgeWorkAsync(store))[_runA];
-        _runB = await SucceededRunAsync(store, activation.Revision.Id, policy, SecondaryModelName, 'b', criterionScore: 6);
-        _ = await CompleteQueuedJudgeWorkAsync(store);
+        _runA = await SucceededRunAsync(services, activation.Revision.Id, policy, BenchmarkE2ETestDoubles.ModelName, 'a', criterionScore: 9);
+        var scoreA = (await CompleteQueuedJudgeWorkAsync(services))[_runA];
+        _runB = await SucceededRunAsync(services, activation.Revision.Id, policy, SecondaryModelName, 'b', criterionScore: 6);
+        _ = await CompleteQueuedJudgeWorkAsync(services);
         return scoreA;
     }
 
-    private async Task<Guid> SucceededRunAsync(IBenchmarkStore store,
+    private async Task<Guid> SucceededRunAsync(IServiceProvider services,
         Guid revisionId,
         BenchmarkJudgePolicyV1 policy,
         string modelName,
         char fingerprintFill,
         int criterionScore)
     {
-        var project = await store.GetProjectAsync(_projectId)
+        var projectStore = services.GetRequiredService<IBenchmarkProjectStore>();
+        var runStore = services.GetRequiredService<IBenchmarkRunStore>();
+        var queueStore = services.GetRequiredService<IBenchmarkQueueStore>();
+        var project = await projectStore.GetProjectAsync(_projectId)
                       ?? throw new InvalidOperationException("The seeded benchmark project disappeared.");
-        var run = await store.StartRunAsync(new BenchmarkStartRunCommand
+        var run = await runStore.StartRunAsync(new BenchmarkStartRunCommand
         {
             RunId = Guid.NewGuid(),
             ProjectId = _projectId,
@@ -249,10 +257,10 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
             RequestedContextTokens = 4096
         });
 
-        var primary = await store.ClaimNextAsync()
+        var primary = await queueStore.ClaimNextAsync()
                       ?? throw new InvalidOperationException("The seeded run enqueued no primary work.");
         var resolution = await new BenchmarkE2ETestDoubles.JudgeRuntimeResolver().ResolveAsync(policy, CancellationToken.None);
-        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        _ = await runStore.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
         {
             RunId = run.Id,
             ExpectedWorkVersion = primary.Version,
@@ -276,7 +284,7 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
     private async Task<int> CompleteQueuedJudgeWorkAsync()
     {
         await using var scope = Factory.Services.CreateAsyncScope();
-        var scores = await CompleteQueuedJudgeWorkAsync(scope.ServiceProvider.GetRequiredService<IBenchmarkStore>());
+        var scores = await CompleteQueuedJudgeWorkAsync(scope.ServiceProvider);
         return scores[_runA];
     }
 
@@ -285,16 +293,18 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
     ///     checkpoint with this cohort's execution key, then commit a parsed rubric verdict — with the model call
     ///     replaced by fixed per-criterion scores. The weighted 0..100 roll-up is still the product's own calculator.
     /// </summary>
-    private async Task<Dictionary<Guid, int>> CompleteQueuedJudgeWorkAsync(IBenchmarkStore store)
+    private async Task<Dictionary<Guid, int>> CompleteQueuedJudgeWorkAsync(IServiceProvider services)
     {
+        var queueStore = services.GetRequiredService<IBenchmarkQueueStore>();
+        var judgeStore = services.GetRequiredService<IBenchmarkJudgeStore>();
         var scores = new Dictionary<Guid, int>();
-        while (await store.ClaimNextAsync() is { Kind: BenchmarkWorkKind.Judge } work)
+        while (await queueStore.ClaimNextAsync() is { Kind: BenchmarkWorkKind.Judge } work)
         {
             var attemptId = work.JudgeAttemptId
                             ?? throw new InvalidOperationException("Judge work carried no attempt id.");
-            var attempt = await store.GetJudgeAttemptAsync(attemptId)
+            var attempt = await judgeStore.GetJudgeAttemptAsync(attemptId)
                           ?? throw new InvalidOperationException("The claimed judge attempt disappeared.");
-            var revision = await store.GetJudgePolicyRevisionAsync(attempt.PolicyRevisionId)
+            var revision = await judgeStore.GetJudgePolicyRevisionAsync(attempt.PolicyRevisionId)
                            ?? throw new InvalidOperationException("The attempt's judge policy revision disappeared.");
             var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
 
@@ -308,7 +318,7 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
                                  .ToArray();
             var score = BenchmarkJudgeScoreCalculator.Compute(policy.Rubric, criteria);
 
-            _ = await store.MarkJudgeLaunchReadyAsync(attemptId,
+            _ = await judgeStore.MarkJudgeLaunchReadyAsync(attemptId,
                 work.QueueSequence,
                 work.Version,
                 new BenchmarkLaunchReceiptCommand
@@ -326,7 +336,7 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
                     KvCacheTypeSource = "auto"
                 },
                 ExecutionKey);
-            _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
+            _ = await judgeStore.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
             {
                 RunId = work.RunId,
                 ExpectedWorkVersion = work.Version,

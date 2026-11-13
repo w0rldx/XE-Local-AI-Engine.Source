@@ -6,7 +6,14 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-public sealed partial class BenchmarkStore : IBenchmarkStore
+public sealed partial class BenchmarkStore : IBenchmarkProjectStore,
+    IBenchmarkTaskItemStore,
+    IBenchmarkRunStore,
+    IBenchmarkQueueStore,
+    IBenchmarkJudgeStore,
+    IBenchmarkFidelityStore,
+    IBenchmarkPairwiseStore,
+    IBenchmarkReviewStore
 {
     private const string InterruptedMessage = "Interrupted by application restart.";
     internal const string FidelityKindPerplexity = "ppl";

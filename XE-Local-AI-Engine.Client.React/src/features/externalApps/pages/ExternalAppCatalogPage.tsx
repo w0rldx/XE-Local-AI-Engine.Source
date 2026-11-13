@@ -10,6 +10,7 @@ import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { toast } from "@/core/ui/notifications/Toast";
 import { ExternalAppCatalogCard } from "@/features/externalApps/components/ExternalAppCatalogCard";
+import { ExternalAppsExperimentalBadge } from "@/features/externalApps/components/ExternalAppsExperimentalBadge";
 import { InstallDialog } from "@/features/externalApps/components/InstallDialog";
 import { RuntimeStatusCard } from "@/features/externalApps/components/RuntimeStatusCard";
 import type { ExternalAppSummaryView } from "@/features/externalApps/models/ExternalAppModels";
@@ -88,14 +89,17 @@ export function ExternalAppCatalogPage() {
 				subtitle={t("pages.externalApps.catalog.subtitle")}
 				icon={<IconApps size={24} />}
 				actions={
-					<Button
-						variant="default"
-						loading={refresh.isPending}
-						onClick={refreshCatalog}
-						data-testid="external-app-catalog-refresh"
-					>
-						{t("pages.externalApps.catalog.refresh")}
-					</Button>
+					<>
+						<ExternalAppsExperimentalBadge />
+						<Button
+							variant="default"
+							loading={refresh.isPending}
+							onClick={refreshCatalog}
+							data-testid="external-app-catalog-refresh"
+						>
+							{t("pages.externalApps.catalog.refresh")}
+						</Button>
+					</>
 				}
 			/>
 

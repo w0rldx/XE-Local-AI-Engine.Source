@@ -96,7 +96,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         // simply off — the composition root injects the real singleton shared with the llama-server supervisor.
         _loadAdmission = loadAdmission ?? new NoOpGpuModelLoadAdmission();
 
-        _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token), _shutdownCts.Token);
+        _reaperLoop = Task.Run(() => IdleReapLoop.RunAsync(_options.IdleTimeToLive, _timeProvider, ReapIdleOnceAsync, _shutdownCts.Token), _shutdownCts.Token);
     }
 
     /// <inheritdoc />
@@ -315,7 +315,11 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             return existing.Endpoint;
         }
 
-        var responsive = await ProbeResponsiveWithTimeoutAsync(existing.Endpoint.BaseAddress, ct).ConfigureAwait(false);
+        var baseAddress = existing.Endpoint.BaseAddress;
+        var responsive = await ProcessLivenessProbe.CheckResponsiveWithinAsync(token => _readinessProbe.CheckResponsiveAsync(baseAddress, token),
+                                                                               _options.ReuseLivenessProbeTimeout,
+                                                                               ct)
+                                                   .ConfigureAwait(false);
         if (responsive)
         {
             existing.ResetLivenessFailures();
@@ -338,29 +342,6 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             modelName, failures);
         await RemoveProcessAsync(modelName, existing).ConfigureAwait(false);
         return null;
-    }
-
-    /// <summary>
-    ///     Runs one liveness probe bounded by <see cref="StableDiffusionRuntimeOptions.ReuseLivenessProbeTimeout" />.
-    /// </summary>
-    /// <remarks>
-    ///     The bound stops a hung daemon that accepts the socket but never answers from stalling the reuse hot path for
-    ///     the whole HTTP-client timeout. A probe that times out — the caller's own token is NOT cancelled — counts as
-    ///     not-responsive.
-    /// </remarks>
-    private async Task<bool> ProbeResponsiveWithTimeoutAsync(Uri baseAddress, CancellationToken ct)
-    {
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeoutCts.CancelAfter(_options.ReuseLivenessProbeTimeout);
-        try
-        {
-            return await _readinessProbe.CheckResponsiveAsync(baseAddress, timeoutCts.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            // The probe exceeded its own budget (not a caller cancellation) — treat the daemon as unresponsive.
-            return false;
-        }
     }
 
     private async Task<ImageServerEndpoint> SpawnUnderGateAsync(string modelName, bool evictFirst, CancellationToken ct)
@@ -483,7 +464,10 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             }
 
             _residencyNotifier.NotifyChanged();
-            _ = NotifyResidencyOnExitAsync(handle.WaitForExitAsync(Timeout.InfiniteTimeSpan, _shutdownCts.Token));
+            _ = ResidencyExitNotification.TickOnExitAsync(handle.WaitForExitAsync(Timeout.InfiniteTimeSpan, _shutdownCts.Token),
+                _residencyNotifier,
+                _logger,
+                "sd-server");
             return running;
         }
         catch (Exception ex)
@@ -543,23 +527,6 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             : string.Empty;
         var tail = handle.StderrTail is { } stderrTail ? " Last output: " + stderrTail : string.Empty;
         return code + tail;
-    }
-
-    private async Task ReapIdleLoopAsync(CancellationToken ct)
-    {
-        var interval = TimeSpan.FromTicks(Math.Max(_options.IdleTimeToLive.Ticks / 4, TimeSpan.FromSeconds(1).Ticks));
-        try
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                await Task.Delay(interval, _timeProvider, ct).ConfigureAwait(false);
-                await ReapIdleOnceAsync().ConfigureAwait(false);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Normal shutdown.
-        }
     }
 
     private async Task ReapIdleOnceAsync()
@@ -765,27 +732,6 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         return running;
     }
 
-    /// <summary>Ticks residency when a registered daemon dies on its own, instead of when the reaper next prunes the corpse.</summary>
-    /// <remarks>A deliberate teardown completes the wait too; that extra tick is harmless. Shutdown ends the wait silently.</remarks>
-    private async Task NotifyResidencyOnExitAsync(Task<bool> exit)
-    {
-        try
-        {
-            await exit.ConfigureAwait(false);
-        }
-        catch (Exception exception) when (exception is OperationCanceledException or ObjectDisposedException)
-        {
-            return;
-        }
-        catch (Exception exception)
-        {
-            // Fire-and-forget, so it must not fault: the daemon state is unknown, and a re-read is the safe answer.
-            _logger.LogDebug("The sd-server exit wait failed ({ErrorClass}); ticking residency anyway.", exception.GetType().Name);
-        }
-
-        _residencyNotifier.NotifyChanged();
-    }
-
     /// <summary>
     ///     Logs a registered daemon's own death once, whichever path notices it first: a job lease polling a dead daemon,
     ///     a respawn or the reaper detaching the corpse. Mirrors the whisper supervisor's exit line.
@@ -898,11 +844,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     /// <summary>A live, registered daemon and its last-used timestamp (drives idle-TTL eviction).</summary>
     private sealed class RunningServer
     {
-        private long _lastUsedTicks;
-
-        // Seeded to the spawn time so a freshly-ready daemon is not re-probed until one full interval has passed.
-        private long _lastLivenessProbeTicks;
-        private int _consecutiveLivenessFailures;
+        private readonly ProcessLiveness _liveness;
 
         // Lease/eviction state, mutated only by atomic CAS: >= 0 counts the in-flight generations holding this daemon, -1 is the terminal "evicting" latch the idle reaper / cap evictor sets. A lease
         // and an eviction decision transition the SAME word, so they can never both win. See docs/wiki/14-image-generation.md ("Daemon leases and the teardown races").
@@ -919,8 +861,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             string partsFingerprint)
         {
             PartsFingerprint = partsFingerprint;
-            _lastUsedTicks = startedUtc.UtcTicks;
-            _lastLivenessProbeTicks = startedUtc.UtcTicks;
+            _liveness = new ProcessLiveness(startedUtc);
             Handle = handle;
             ResidentLease = residentLease;
             Endpoint = endpoint;
@@ -941,48 +882,15 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
         public int Port { get; }
 
-        public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
+        public DateTimeOffset LastUsedUtc => _liveness.LastUsedUtc;
 
-        public void MarkUsed(DateTimeOffset now)
-        {
-            Interlocked.Exchange(ref _lastUsedTicks, now.UtcTicks);
-        }
+        public void MarkUsed(DateTimeOffset now) => _liveness.MarkUsed(now);
 
-        /// <summary>
-        ///     Atomically claims the right to run the reuse-path liveness probe: it succeeds, advancing the probe clock
-        ///     to <paramref name="now" />, only when at least <paramref name="interval" /> has elapsed since the last claim.
-        /// </summary>
-        /// <remarks>
-        ///     Serializes probes across concurrent reuses so at most one HTTP probe runs per daemon per interval.
-        /// </remarks>
-        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval)
-        {
-            while (true)
-            {
-                var last = Interlocked.Read(ref _lastLivenessProbeTicks);
-                if (now.UtcTicks - last < interval.Ticks)
-                {
-                    return false;
-                }
+        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval) => _liveness.TryClaimLivenessProbe(now, interval);
 
-                if (Interlocked.CompareExchange(ref _lastLivenessProbeTicks, now.UtcTicks, last) == last)
-                {
-                    return true;
-                }
-            }
-        }
+        public void ResetLivenessFailures() => _liveness.ResetLivenessFailures();
 
-        /// <summary>Resets the consecutive-failure count after a successful liveness probe.</summary>
-        public void ResetLivenessFailures()
-        {
-            Interlocked.Exchange(ref _consecutiveLivenessFailures, value: 0);
-        }
-
-        /// <summary>Records a failed liveness probe and returns the new consecutive-failure count.</summary>
-        public int RecordLivenessFailure()
-        {
-            return Interlocked.Increment(ref _consecutiveLivenessFailures);
-        }
+        public int RecordLivenessFailure() => _liveness.RecordLivenessFailure();
 
         /// <summary>
         ///     Atomically registers an in-flight generation against this daemon, unless it is already latched for

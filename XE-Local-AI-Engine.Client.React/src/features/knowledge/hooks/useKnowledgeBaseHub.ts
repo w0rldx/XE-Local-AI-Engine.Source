@@ -51,6 +51,10 @@ export function useKnowledgeBaseHub(): void {
 				.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listDocuments) })
 				.catch(() => undefined);
 			queryClient.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.getDocument) }).catch(() => undefined);
+			// An upload into a new collection, or a delete emptying one, changes the collection list too.
+			queryClient
+				.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listCollections) })
+				.catch(() => undefined);
 		};
 
 		const applyDocumentChanged = (event: KnowledgeDocumentChangedEvent | undefined): void => {

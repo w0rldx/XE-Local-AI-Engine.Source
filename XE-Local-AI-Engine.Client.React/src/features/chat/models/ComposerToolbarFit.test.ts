@@ -6,6 +6,7 @@ const plainChat: ComposerToolbarControls = {
 	localTools: false,
 	webReview: false,
 	knowledgeBase: true,
+	knowledgeCollection: false,
 	agentPicker: true,
 	workflowPicker: true,
 	attachments: true,

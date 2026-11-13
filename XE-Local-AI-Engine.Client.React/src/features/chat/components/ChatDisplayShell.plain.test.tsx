@@ -7,6 +7,7 @@ import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGates";
+import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import type { ChatConversationModel, ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
@@ -158,5 +159,33 @@ describe("ChatDisplayShell plain conversations", () => {
 		fireEvent.click(screen.getByTestId("chat-plain-prompt-save"));
 
 		expect(onSetConversationPlain).toHaveBeenCalledWith("conversation-1", true, undefined);
+	});
+
+	describe("the conversation's sampling settings", () => {
+		afterEach(() => {
+			useDeveloperModeStore.getState().actions.setDeveloperMode(false);
+		});
+
+		it.each([
+			[false, true],
+			[true, false],
+		])("with the full read loaded=%s, the dialog's Save stays disabled=%s", (loaded, saveDisabled) => {
+			useDeveloperModeStore.getState().actions.setDeveloperMode(true);
+			renderWithProviders(
+				<ChatDisplayShell
+					{...shellProps({
+						conversations: [{ ...conversation, samplingOptions: { temperature: 0.3 } }],
+						onSetConversationSamplingOptions: vi.fn().mockResolvedValue(undefined),
+						selectedConversationLoaded: loaded,
+					})}
+				/>,
+			);
+
+			fireEvent.click(screen.getByTestId("chat-sampling-options-trigger"));
+			fireEvent.click(screen.getByTestId("chat-sampling-reset-temperature"));
+
+			// Before the full read, the row is a list summary, so the stored settings are unknown and never overwritten.
+			expect(screen.getByTestId("chat-sampling-save-button").hasAttribute("disabled")).toBe(saveDisabled);
+		});
 	});
 });

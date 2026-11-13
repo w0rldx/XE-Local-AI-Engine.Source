@@ -49,6 +49,14 @@ function listRoute(items: readonly ExternalAppInstanceView[]) {
 }
 
 describe("ExternalAppsInstalledPage", () => {
+	it("marks the page as experimental", async () => {
+		server.use(listRoute([]));
+		renderPage();
+
+		const badge = await screen.findByTestId("external-apps-experimental-badge");
+		expect(badge.textContent).toBe("Experimental");
+	});
+
 	it("renders a row's badge, version and address without reading the instance again", async () => {
 		let instanceReads = 0;
 		server.use(

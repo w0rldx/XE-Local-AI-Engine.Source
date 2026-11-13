@@ -28,6 +28,7 @@ import {
 import { knowledgeErrorMessage } from "@/features/knowledge/queries/KnowledgeErrorMessage";
 import {
 	useDeleteKnowledgeDocument,
+	useKnowledgeCollections,
 	useKnowledgeDocumentDetail,
 	useKnowledgeDocuments,
 	useKnowledgeEmbeddingAvailability,
@@ -51,6 +52,9 @@ export function KnowledgeBase() {
 	const [collectionId, setCollectionId] = useState(KNOWLEDGE_DEFAULT_COLLECTION_ID);
 	const [collectionDraft, setCollectionDraft] = useState(KNOWLEDGE_DEFAULT_COLLECTION_ID);
 	const normalizedCollectionDraft = normalizeKnowledgeCollectionId(collectionDraft);
+	// The collections the node already holds documents in, offered beside the free-text box; the open one is the badge.
+	const { data: knownCollections } = useKnowledgeCollections();
+	const otherCollections = (knownCollections ?? []).filter((id) => id !== collectionId);
 
 	// Live indexing-status invalidation for the lifetime of this page.
 	useKnowledgeBaseHub();
@@ -135,16 +139,19 @@ export function KnowledgeBase() {
 		reindexCorpusMutation.isPending ||
 		repositoryImportMutation.isPending;
 
-	const applyCollection = useCallback((): void => {
-		if (!normalizedCollectionDraft || normalizedCollectionDraft === collectionId) {
-			return;
-		}
-		setCollectionId(normalizedCollectionDraft);
-		setCollectionDraft(normalizedCollectionDraft);
-		search.reset();
-		closeDrawer();
-		setDetailDocumentId(undefined);
-	}, [closeDrawer, collectionId, normalizedCollectionDraft, search]);
+	const openCollection = useCallback(
+		(next: string | undefined): void => {
+			if (!next || next === collectionId) {
+				return;
+			}
+			setCollectionId(next);
+			setCollectionDraft(next);
+			search.reset();
+			closeDrawer();
+			setDetailDocumentId(undefined);
+		},
+		[closeDrawer, collectionId, search],
+	);
 
 	const openDetail = useCallback(
 		(documentId: string): void => {
@@ -248,13 +255,25 @@ export function KnowledgeBase() {
 						</Badge>
 						<Button
 							variant="light"
-							onClick={applyCollection}
+							onClick={() => openCollection(normalizedCollectionDraft)}
 							disabled={!normalizedCollectionDraft || normalizedCollectionDraft === collectionId}
 						>
 							{t("pages.knowledgeBase.collection.open", "Open collection")}
 						</Button>
 					</Group>
 				</Group>
+				{otherCollections.length > 0 ? (
+					<Group gap="xs" mt="sm" role="group" aria-label={t("pages.knowledgeBase.collection.known", "Known collections")}>
+						<Text size="xs" c="dimmed">
+							{t("pages.knowledgeBase.collection.known", "Known collections")}
+						</Text>
+						{otherCollections.map((id) => (
+							<Button key={id} size="compact-xs" variant="default" onClick={() => openCollection(id)}>
+								{id}
+							</Button>
+						))}
+					</Group>
+				) : null}
 			</SectionCard>
 
 			<SectionCard title={t("pages.knowledgeBase.upload.heading", "Add documents")} data-tour="knowledge-upload">

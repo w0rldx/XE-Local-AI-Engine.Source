@@ -89,6 +89,20 @@ public interface IKnowledgeDocumentCatalogService
 
     /// <summary>Up to <paramref name="limit" /> distinct embedding model names the Indexed documents were built with.</summary>
     Task<IReadOnlyList<string>> ListIndexedEmbeddingModelsAsync(int limit, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Every collection that holds a document, with its document count, ordered by id; the
+    ///     <see cref="KnowledgeCollectionScope.DefaultId" /> collection is always first, even when empty.
+    /// </summary>
+    Task<IReadOnlyList<KnowledgeCollectionSummary>> ListCollectionsAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>One knowledge collection namespace and how many documents (any status) it holds.</summary>
+public sealed class KnowledgeCollectionSummary
+{
+    public required string CollectionId { get; init; }
+
+    public required int DocumentCount { get; init; }
 }
 
 /// <summary>Documents plus the embedding model ingestion would embed them with right now.</summary>

@@ -378,7 +378,7 @@ A maintainer must preserve these. Each is enforced or anchored in code today:
    checks); see [Security & Privacy §1](12-security-and-privacy.md#1-egress-invariant-the-node-has-no-control-plane-channel).
 2. **Secrets stay local.** Worker creds, cloud-provider creds, and HMAC/endpoint tokens are never
    returned to the browser and never logged (request-log query redaction in `Program.cs`,
-   `AccessTokenQueryRedactor`). See [Security & Privacy](12-security-and-privacy.md).
+   `SensitiveQueryRedactor`). See [Security & Privacy](12-security-and-privacy.md).
 3. **Local admin surface is loopback/local-only, authenticated, strict on Host/Origin, secret-redacted.**
    `LocalApiSecurityMiddleware` + JWT operator policy + antiforgery + rate limiting (`Program.cs`,
    `ConfigureServices.cs`).

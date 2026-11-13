@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
+using XE_Local_AI_Engine.Tests.Benchmarks;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -39,7 +40,7 @@ public sealed class BenchmarkRunArtifactEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        _ = context.Store.DidNotReceive().GetRunArtifactsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        _ = context.Stores.Judging.DidNotReceive().GetRunArtifactsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -121,7 +122,7 @@ public sealed class BenchmarkRunArtifactEndpointTests
         var currentAttemptId = Guid.NewGuid();
         var current = Artifact(Guid.NewGuid(), currentAttemptId);
         await using var context = new Context();
-        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run() with
+        context.Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run() with
         {
             Judge = Judge(currentAttemptId),
             Artifacts = [Artifact(Guid.NewGuid(), Guid.NewGuid()), current]
@@ -143,7 +144,7 @@ public sealed class BenchmarkRunArtifactEndpointTests
     public async Task GetRun_WithoutAJudgeAttempt_ListsNoArtifacts()
     {
         await using var context = new Context();
-        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run() with
+        context.Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run() with
         {
             Artifacts = [Artifact(Guid.NewGuid(), Guid.NewGuid())]
         });
@@ -171,7 +172,7 @@ public sealed class BenchmarkRunArtifactEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        _ = context.Store.Received(1).DeleteRunAsync(RunId, 3, Arg.Any<CancellationToken>());
+        _ = context.Stores.Runs.Received(1).DeleteRunAsync(RunId, 3, Arg.Any<CancellationToken>());
         AssertEx.False(Directory.Exists(Path.GetDirectoryName(context.BlobPath(RunId, ArtifactId))), "The run's whole artifact directory goes with its row.");
     }
 
@@ -180,7 +181,7 @@ public sealed class BenchmarkRunArtifactEndpointTests
     {
         await using var context = new Context();
         await context.ArrangeArtifactAsync();
-        context.Store.DeleteRunAsync(RunId, 3, Arg.Any<CancellationToken>())
+        context.Stores.Runs.DeleteRunAsync(RunId, 3, Arg.Any<CancellationToken>())
                .Returns<Task>(_ => throw new BenchmarkConflictException("VersionConflict"));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Delete, Api + $"/runs/{RunId}", new
@@ -199,7 +200,7 @@ public sealed class BenchmarkRunArtifactEndpointTests
     {
         await using var context = new Context();
         await context.ArrangeArtifactAsync();
-        context.Store.ListAllRunsAsync(ProjectId, Arg.Any<CancellationToken>())
+        context.Stores.Runs.ListAllRunsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkRunPage
                {
                    Items = [Run()],
@@ -222,7 +223,7 @@ public sealed class BenchmarkRunArtifactEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        _ = context.Store.Received(1).DeleteProjectAsync(ProjectId, 4, Arg.Any<CancellationToken>());
+        _ = context.Stores.Projects.Received(1).DeleteProjectAsync(ProjectId, 4, Arg.Any<CancellationToken>());
         AssertEx.False(Directory.Exists(Path.GetDirectoryName(context.BlobPath(RunId, ArtifactId))));
     }
 
@@ -314,15 +315,14 @@ public sealed class BenchmarkRunArtifactEndpointTests
             {
                 ConfigureAdditionalTestServices = services =>
                 {
-                    services.RemoveAll<IBenchmarkStore>();
-                    services.AddSingleton(Store);
+                    Stores.ReplaceIn(services);
                     services.RemoveAll<BenchmarkRunArtifactBlobStore>();
                     services.AddSingleton(Blobs);
                 }
             };
         }
 
-        public IBenchmarkStore Store { get; } = Substitute.For<IBenchmarkStore>();
+        public BenchmarkStoreSubstitutes Stores { get; } = new();
 
         public BenchmarkRunArtifactBlobStore Blobs { get; }
 
@@ -331,7 +331,7 @@ public sealed class BenchmarkRunArtifactEndpointTests
         public async Task ArrangeArtifactAsync()
         {
             var hash = await Blobs.WriteAsync(RunId, ArtifactId, Content);
-            Store.GetRunArtifactsAsync(RunId, Arg.Any<CancellationToken>())
+            Stores.Judging.GetRunArtifactsAsync(RunId, Arg.Any<CancellationToken>())
                  .Returns([
                      new BenchmarkRunArtifactRecord
                      {

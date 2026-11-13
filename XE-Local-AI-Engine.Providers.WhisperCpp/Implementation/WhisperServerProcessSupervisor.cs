@@ -98,7 +98,15 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         // is simply off. The composition root injects the real singleton shared with the other supervisors.
         _loadAdmission = loadAdmission ?? new NoOpGpuModelLoadAdmission();
 
-        _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token), _shutdownCts.Token);
+        _reaperLoop = Task.Run(() => IdleReapLoop.RunAsync(_options.IdleTimeToLive,
+                _timeProvider,
+                () =>
+                {
+                    ReapIdleOnce();
+                    return Task.CompletedTask;
+                },
+                _shutdownCts.Token),
+            _shutdownCts.Token);
     }
 
     /// <inheritdoc />
@@ -408,7 +416,11 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             return existing.Endpoint;
         }
 
-        var responsive = await ProbeResponsiveWithTimeoutAsync(existing.Endpoint.BaseAddress, ct).ConfigureAwait(false);
+        var baseAddress = existing.Endpoint.BaseAddress;
+        var responsive = await ProcessLivenessProbe.CheckResponsiveWithinAsync(token => _readinessProbe.CheckResponsiveAsync(baseAddress, token),
+                                                                               _options.ReuseLivenessProbeTimeout,
+                                                                               ct)
+                                                   .ConfigureAwait(false);
         if (responsive)
         {
             existing.ResetLivenessFailures();
@@ -431,21 +443,6 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             existing.ModelId, failures);
         TearDownCurrent();
         return null;
-    }
-
-    private async Task<bool> ProbeResponsiveWithTimeoutAsync(Uri baseAddress, CancellationToken ct)
-    {
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeoutCts.CancelAfter(_options.ReuseLivenessProbeTimeout);
-        try
-        {
-            return await _readinessProbe.CheckResponsiveAsync(baseAddress, timeoutCts.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            // The probe exceeded its own budget rather than the caller's: treat the daemon as unresponsive.
-            return false;
-        }
     }
 
     /// <summary>Resolves the model, backend and binary, launches, readiness-gates and registers the daemon.</summary>
@@ -534,7 +531,10 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             }
 
             _residencyNotifier.NotifyChanged();
-            _ = NotifyResidencyOnExitAsync(handle.WaitForExitAsync(Timeout.InfiniteTimeSpan, _shutdownCts.Token));
+            _ = ResidencyExitNotification.TickOnExitAsync(handle.WaitForExitAsync(Timeout.InfiniteTimeSpan, _shutdownCts.Token),
+                _residencyNotifier,
+                _logger,
+                "whisper-server");
             return running;
         }
         catch (Exception ex)
@@ -719,23 +719,6 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         await ProcessReadinessRace.RunAsync(handle, token => _readinessProbe.WaitForReadyAsync(baseAddress, budget, token), _timeProvider, ct)
                                   .ConfigureAwait(false) == ProcessReadinessOutcome.Ready;
 
-    private async Task ReapIdleLoopAsync(CancellationToken ct)
-    {
-        var interval = TimeSpan.FromTicks(Math.Max(_options.IdleTimeToLive.Ticks / 4, TimeSpan.FromSeconds(1).Ticks));
-        try
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                await Task.Delay(interval, _timeProvider, ct).ConfigureAwait(false);
-                ReapIdleOnce();
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Normal shutdown.
-        }
-    }
-
     private void ReapIdleOnce()
     {
         var running = Current;
@@ -791,27 +774,6 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         }
 
         return running;
-    }
-
-    /// <summary>Ticks residency when the registered daemon dies on its own, instead of when the reaper next notices the corpse.</summary>
-    /// <remarks>A deliberate teardown completes the wait too; that extra tick is harmless. Shutdown ends the wait silently.</remarks>
-    private async Task NotifyResidencyOnExitAsync(Task<bool> exit)
-    {
-        try
-        {
-            await exit.ConfigureAwait(false);
-        }
-        catch (Exception exception) when (exception is OperationCanceledException or ObjectDisposedException)
-        {
-            return;
-        }
-        catch (Exception exception)
-        {
-            // Fire-and-forget, so it must not fault: the daemon state is unknown, and a re-read is the safe answer.
-            _logger.LogDebug("The whisper-server exit wait failed ({ErrorClass}); ticking residency anyway.", exception.GetType().Name);
-        }
-
-        _residencyNotifier.NotifyChanged();
     }
 
     /// <summary>
@@ -925,11 +887,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     private sealed class RunningServer
     {
         private readonly Lock _endpointGate = new();
-        private int _consecutiveLivenessFailures;
-
-        // Seeded to the spawn time, so a freshly ready daemon is not re-probed until a full interval has passed.
-        private long _lastLivenessProbeTicks;
-        private long _lastUsedTicks;
+        private readonly ProcessLiveness _liveness;
 
         // Lease state, mutated only by atomic compare-and-swap: >= 0 counts in-flight transcriptions; -1 is a terminal latch set by the idle reaper, an eviction or a model switch. A new lease and a
         // teardown decision therefore transition the SAME word and can never both win.
@@ -944,8 +902,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             DateTimeOffset startedUtc,
             IRuntimeActivityLease residentLease)
         {
-            _lastLivenessProbeTicks = startedUtc.UtcTicks;
-            _lastUsedTicks = startedUtc.UtcTicks;
+            _liveness = new ProcessLiveness(startedUtc);
             _endpoint = endpoint;
             Handle = handle;
             Binary = binary;
@@ -974,7 +931,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
         public string ModelId => Endpoint.ModelId;
 
-        public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
+        public DateTimeOffset LastUsedUtc => _liveness.LastUsedUtc;
 
         public bool ServesModel(string modelId) =>
             string.Equals(Endpoint.ModelId, modelId, StringComparison.OrdinalIgnoreCase);
@@ -998,35 +955,13 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             }
         }
 
-        public void MarkUsed(DateTimeOffset now) =>
-            Interlocked.Exchange(ref _lastUsedTicks, now.UtcTicks);
+        public void MarkUsed(DateTimeOffset now) => _liveness.MarkUsed(now);
 
-        /// <summary>
-        ///     Atomically claims the right to run the reuse-path liveness probe, succeeding only once per interval, so
-        ///     concurrent reuses share one probe rather than each issuing their own.
-        /// </summary>
-        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval)
-        {
-            while (true)
-            {
-                var last = Interlocked.Read(ref _lastLivenessProbeTicks);
-                if (now.UtcTicks - last < interval.Ticks)
-                {
-                    return false;
-                }
+        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval) => _liveness.TryClaimLivenessProbe(now, interval);
 
-                if (Interlocked.CompareExchange(ref _lastLivenessProbeTicks, now.UtcTicks, last) == last)
-                {
-                    return true;
-                }
-            }
-        }
+        public void ResetLivenessFailures() => _liveness.ResetLivenessFailures();
 
-        public void ResetLivenessFailures() =>
-            Interlocked.Exchange(ref _consecutiveLivenessFailures, value: 0);
-
-        public int RecordLivenessFailure() =>
-            Interlocked.Increment(ref _consecutiveLivenessFailures);
+        public int RecordLivenessFailure() => _liveness.RecordLivenessFailure();
 
         /// <summary>Registers an in-flight transcription unless the daemon is latched for teardown or a switch.</summary>
         public bool TryAcquireTranscription()

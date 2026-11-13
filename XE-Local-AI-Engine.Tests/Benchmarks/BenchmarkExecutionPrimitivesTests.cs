@@ -179,7 +179,7 @@ public sealed class BenchmarkExecutionPrimitivesTests
             PrimaryStatus = BenchmarkPrimaryStatus.CancelRequested,
             Version = 5
         };
-        var store = Substitute.For<IBenchmarkStore>();
+        var store = Substitute.For<IBenchmarkRunStore>();
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         store.CancelAsync(run.Id, run.Version, Arg.Any<CancellationToken>()).Returns(requested);
         var registry = new BenchmarkCancellationRegistry();
@@ -197,7 +197,7 @@ public sealed class BenchmarkExecutionPrimitivesTests
     public async Task CancellationService_RejectsJudgeCancellationWhilePrimaryIsRunning()
     {
         var run = Run(BenchmarkPrimaryStatus.Running, BenchmarkRunJudgeStates.None, version: 4);
-        var store = Substitute.For<IBenchmarkStore>();
+        var store = Substitute.For<IBenchmarkRunStore>();
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         var service = new BenchmarkCancellationService(store, new BenchmarkCancellationRegistry());
 

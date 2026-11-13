@@ -41,7 +41,10 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
     internal const string CrossCaseMessage = "The two runs of this comparison no longer answer the same task case.";
 
     private static readonly JsonElement PairwiseResponseFormatSchema = ParseResponseFormatSchema();
-    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkPairwiseStore _pairwiseStore;
+    private readonly IBenchmarkJudgeStore _judgeStore;
+    private readonly IBenchmarkRunStore _runStore;
+    private readonly IBenchmarkTaskItemStore _taskItemStore;
     private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
     private readonly ICapacityService _capacity;
@@ -58,7 +61,10 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
     private readonly BenchmarkAdmissionRetry _admissionRetry;
     private readonly ILogger<BenchmarkComparisonExecutor> _logger;
 
-    public BenchmarkComparisonExecutor(IBenchmarkStore store,
+    public BenchmarkComparisonExecutor(IBenchmarkPairwiseStore pairwiseStore,
+        IBenchmarkJudgeStore judgeStore,
+        IBenchmarkRunStore runStore,
+        IBenchmarkTaskItemStore taskItemStore,
         IBenchmarkRuntimeSnapshotFactory snapshots,
         IBenchmarkInstalledModelLeaseProvider installedModels,
         ICapacityService capacity,
@@ -75,7 +81,10 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
         BenchmarkAdmissionRetry admissionRetry,
         ILogger<BenchmarkComparisonExecutor> logger)
     {
-        _store = store;
+        _pairwiseStore = pairwiseStore;
+        _judgeStore = judgeStore;
+        _runStore = runStore;
+        _taskItemStore = taskItemStore;
         _snapshots = snapshots;
         _installedModels = installedModels;
         _capacity = capacity;
@@ -119,11 +128,11 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
         string? policyHash = null;
         try
         {
-            comparison = await _store.GetComparisonAsync(comparisonId, token)
+            comparison = await _pairwiseStore.GetComparisonAsync(comparisonId, token)
                          ?? throw new BenchmarkExecutionException("The comparison is no longer available.");
             // A comparison frozen under a different launch-identity scheme is failed before it launches.
             BenchmarkLaunchIdentityScheme.RequireCurrent(comparison.LaunchIntent);
-            var revision = await _store.GetJudgePolicyRevisionAsync(comparison.PolicyRevisionId, token)
+            var revision = await _judgeStore.GetJudgePolicyRevisionAsync(comparison.PolicyRevisionId, token)
                            ?? throw new BenchmarkExecutionException("The judge policy revision is no longer available.");
             policyHash = revision.PolicyHash;
             var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
@@ -155,7 +164,7 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
             // The item's own reference answer, exactly as pointwise judging resolves it; only the reference, because a verifier override has no meaning for a pairwise verdict.
             policy = policy with
             {
-                ReferenceAnswer = BenchmarkTaskItemService.ResolveReferenceAnswer(policy, await BenchmarkTaskItemService.FindTaskItemAsync(_store, runA, token))
+                ReferenceAnswer = BenchmarkTaskItemService.ResolveReferenceAnswer(policy, await BenchmarkTaskItemService.FindTaskItemAsync(_taskItemStore, runA, token))
             };
 
             // HALF the judge window each, because both answers plus the task, the reference answer and the verdict have to fit one context.
@@ -247,7 +256,7 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
             }
 
             var parsed = BenchmarkPairwiseResultParser.Parse(terminal.StreamedContent);
-            await _store.MarkComparisonSucceededAsync(new BenchmarkComparisonSuccessCommand
+            await _pairwiseStore.MarkComparisonSucceededAsync(new BenchmarkComparisonSuccessCommand
             {
                 QueueSequence = work.QueueSequence,
                 ExpectedWorkVersion = work.Version,
@@ -297,7 +306,7 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
 
     private async Task<BenchmarkRunRecord> RequireAnsweredRunAsync(Guid runId, BenchmarkClaimedWork work, CancellationToken token)
     {
-        var run = work.Run.Id == runId ? work.Run : await _store.GetRunAsync(runId, token);
+        var run = work.Run.Id == runId ? work.Run : await _runStore.GetRunAsync(runId, token);
         if (run is null || run.PrimaryStatus != BenchmarkPrimaryStatus.Succeeded || run.OutputPartsJson is null)
         {
             throw new BenchmarkExecutionException("A run of this comparison has no benchmark result to judge.");
@@ -369,7 +378,7 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
 
         try
         {
-            _ = await _store.MarkComparisonLaunchReadyAsync(comparison.Id,
+            _ = await _pairwiseStore.MarkComparisonLaunchReadyAsync(comparison.Id,
                 work.QueueSequence,
                 work.Version,
                 command,
@@ -399,11 +408,11 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
         {
             if (cancelled)
             {
-                await _store.MarkComparisonCancelledAsync(work.QueueSequence, work.Version, CancellationToken.None);
+                await _pairwiseStore.MarkComparisonCancelledAsync(work.QueueSequence, work.Version, CancellationToken.None);
             }
             else
             {
-                await _store.MarkComparisonFailedAsync(work.QueueSequence, work.Version, message ?? InvocationFailedMessage, CancellationToken.None);
+                await _pairwiseStore.MarkComparisonFailedAsync(work.QueueSequence, work.Version, message ?? InvocationFailedMessage, CancellationToken.None);
             }
         }
         catch (BenchmarkStoreException exception)

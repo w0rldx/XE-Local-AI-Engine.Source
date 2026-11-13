@@ -126,7 +126,7 @@ public sealed class BenchmarkComparisonSuccessCommand
     public required bool AnswerBTruncated { get; init; }
 }
 
-/// <inheritdoc cref="IBenchmarkStore.PublishPairwiseFitAsync" />
+/// <inheritdoc cref="IBenchmarkPairwiseStore.PublishPairwiseFitAsync" />
 public sealed class BenchmarkPairwiseFitCommand
 {
     public required Guid ProjectId { get; init; }

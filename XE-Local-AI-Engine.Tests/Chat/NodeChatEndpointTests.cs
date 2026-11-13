@@ -231,6 +231,52 @@ public sealed class NodeChatEndpointTests
         AssertEx.Equal(chosenId, persisted[groupId]);
     }
 
+    [Test]
+    public async Task Search_FindsAConversationByItsMessageText_WithASnippet()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
+        var marker = "endpointsearch" + Guid.NewGuid().ToString("N");
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Search target",
+            UserId = "local-operator",
+            CreatedAtUtc = 10
+        });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            Content = $"Remember the {marker} for later.",
+            CreatedAtUtc = 11
+        });
+
+        using var request = CreateRequest(factory, HttpMethod.Get, $"/api/local/v1/chat/search?query={marker.ToUpperInvariant()}&limit=5");
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<SearchNodeChatConversationsResponse>(response);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(1, body.Items.Count);
+        AssertEx.Equal(conversation.ConversationId, body.Items[0].ConversationId);
+        AssertEx.Equal("content", body.Items[0].MatchedIn);
+        AssertEx.Contains(body.Items[0].Snippet, marker);
+    }
+
+    [Test]
+    [Arguments("/api/local/v1/chat/search?query=%20%20")]
+    [Arguments("/api/local/v1/chat/search?query=x&limit=101")]
+    public async Task Search_RejectsABlankQueryOrAnOversizedLimit(string uri)
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, uri);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     private static HttpRequestMessage CreateJsonRequest<T>(TestServerWebAppFactory factory, HttpMethod method, string uri, T content)
     {
         var request = CreateRequest(factory, method, uri);

@@ -89,6 +89,43 @@ public sealed class ExceptionHandlerLogSanitizationTests
     }
 
     [Test]
+    [Arguments(StatusCodes.Status400BadRequest)]
+    [Arguments(StatusCodes.Status500InternalServerError)]
+    public async Task SerilogRequestCompletion_RedactsTheConversationSearchText(int statusCode)
+    {
+        const string searchText = "my%20private%20diagnosis";
+        var sink = new CapturingSink();
+        using var logger = new LoggerConfiguration().MinimumLevel.Verbose().WriteTo.Sink(sink).CreateLogger();
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton(new DiagnosticContext(logger));
+
+        await using var app = builder.Build();
+        app.UseSerilogRequestLogging(options =>
+        {
+            Program.ConfigureRequestLogging(options);
+            options.Logger = logger;
+        });
+        app.Run(context =>
+        {
+            context.Response.StatusCode = statusCode;
+            return Task.CompletedTask;
+        });
+        await app.StartAsync();
+
+        await app.GetTestServer().SendAsync(static context =>
+        {
+            context.Request.Path = "/api/local/v1/chat/search";
+            context.Request.QueryString = new QueryString($"?query={searchText}&includeArchived=true&limit=5");
+        });
+
+        var completion = sink.Events.Single();
+        var logged = string.Join('\n', completion.Properties.Values.Select(static value => value.ToString()).Append(completion.RenderMessage(CultureInfo.InvariantCulture)));
+        AssertEx.False(logged.Contains("private", StringComparison.OrdinalIgnoreCase), "The search text is chat plaintext and must never reach the request log.");
+        AssertEx.Equal("?query=[REDACTED]&includeArchived=true&limit=5", GetScalarString(completion, "QueryString"));
+    }
+
+    [Test]
     public async Task DefaultHandler_SanitizesRequestLogProperties()
     {
         var logger = new StructuredCapturingLogger<DefaultExceptionHandler>();

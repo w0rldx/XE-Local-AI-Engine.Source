@@ -703,7 +703,10 @@ public sealed partial class LlamaServerProcessSupervisor
         };
         _processes[key] = running;
         _residencyNotifier.NotifyChanged();
-        _ = NotifyResidencyOnExitAsync(handle.WaitForExitAsync(Timeout.InfiniteTimeSpan, _shutdownCts.Token));
+        _ = ResidencyExitNotification.TickOnExitAsync(handle.WaitForExitAsync(Timeout.InfiniteTimeSpan, _shutdownCts.Token),
+            _residencyNotifier,
+            _logger,
+            "llama-server");
 
         if (candidate.AttemptKind == LlamaServerLoadAttemptKind.SafeRetry)
         {

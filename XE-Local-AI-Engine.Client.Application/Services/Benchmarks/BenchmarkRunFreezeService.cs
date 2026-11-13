@@ -65,7 +65,9 @@ public interface IBenchmarkRunFreezeService
 public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
 {
     private readonly ILogger<BenchmarkRunFreezeService> _logger;
-    private readonly IBenchmarkStore _benchmarkStore;
+    private readonly IBenchmarkProjectStore _projectStore;
+    private readonly IBenchmarkTaskItemStore _taskItemStore;
+    private readonly IBenchmarkRunStore _runStore;
     private readonly IAgentDefinitionStore _agentDefinitions;
     private readonly IAgentDefinitionResolver _agentResolver;
     private readonly IGgufModelCapabilityResolver _modelCapabilities;
@@ -115,7 +117,9 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
     /// <summary>The ceiling the chat sampling UI already enforces.</summary>
     public const double MaxAnswerVarianceTemperature = 2d;
 
-    public BenchmarkRunFreezeService(IBenchmarkStore benchmarkStore,
+    public BenchmarkRunFreezeService(IBenchmarkProjectStore projectStore,
+        IBenchmarkTaskItemStore taskItemStore,
+        IBenchmarkRunStore runStore,
         IAgentDefinitionStore agentDefinitions,
         IAgentDefinitionResolver agentResolver,
         IGgufModelCapabilityResolver modelCapabilities,
@@ -135,7 +139,9 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         IBenchmarkQueueSignal? queueSignal = null)
     {
         ArgumentNullException.ThrowIfNull(logger);
-        ArgumentNullException.ThrowIfNull(benchmarkStore);
+        ArgumentNullException.ThrowIfNull(projectStore);
+        ArgumentNullException.ThrowIfNull(taskItemStore);
+        ArgumentNullException.ThrowIfNull(runStore);
         ArgumentNullException.ThrowIfNull(agentDefinitions);
         ArgumentNullException.ThrowIfNull(agentResolver);
         ArgumentNullException.ThrowIfNull(modelCapabilities);
@@ -152,7 +158,9 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _logger = logger;
-        _benchmarkStore = benchmarkStore;
+        _projectStore = projectStore;
+        _taskItemStore = taskItemStore;
+        _runStore = runStore;
         _agentDefinitions = agentDefinitions;
         _agentResolver = agentResolver;
         _modelCapabilities = modelCapabilities;
@@ -211,7 +219,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
             throw new BenchmarkValidationException($"This request would start {commands.Length} runs across {plans.Count} models. The maximum is {MaxRunsPerRequest}.");
         }
 
-        var runs = await _benchmarkStore.StartRunsAsync(commands, first.ExpectedProjectVersion, cancellationToken);
+        var runs = await _runStore.StartRunsAsync(commands, first.ExpectedProjectVersion, cancellationToken);
         _queueSignal?.Wake();
 
         // Split back per plan. StartRunsAsync returns the runs in the order the commands were given, so each plan's
@@ -253,7 +261,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
             throw new BenchmarkValidationException("The requested KV-cache type is not supported.");
         }
 
-        var project = await _benchmarkStore.GetProjectAsync(request.ProjectId, cancellationToken)
+        var project = await _projectStore.GetProjectAsync(request.ProjectId, cancellationToken)
                       ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
         if (project.Version != request.ExpectedProjectVersion)
         {
@@ -430,10 +438,10 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
     {
         // A project created before task suites has no item rows until something materializes item 0 from its core task; that lazy
         // backfill is the only remaining reason a freeze writes.
-        var items = await _benchmarkStore.ListTaskItemsAsync(project.Id, cancellationToken);
+        var items = await _taskItemStore.ListTaskItemsAsync(project.Id, cancellationToken);
         if (items.Count == 0)
         {
-            items = await _benchmarkStore.GetOrCreateItemsAsync(project.Id, cancellationToken);
+            items = await _taskItemStore.GetOrCreateItemsAsync(project.Id, cancellationToken);
         }
 
         // A generator is never a run target; the cases it expanded into are.

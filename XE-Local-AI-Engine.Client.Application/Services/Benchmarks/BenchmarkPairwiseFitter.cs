@@ -30,20 +30,23 @@ public interface IBenchmarkPairwiseFitter
 /// </remarks>
 public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
 {
-    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkPairwiseStore _pairwiseStore;
+    private readonly IBenchmarkJudgeStore _judgeStore;
     private readonly ILogger<BenchmarkPairwiseFitter> _logger;
 
-    public BenchmarkPairwiseFitter(IBenchmarkStore store, ILogger<BenchmarkPairwiseFitter> logger)
+    public BenchmarkPairwiseFitter(IBenchmarkPairwiseStore pairwiseStore, IBenchmarkJudgeStore judgeStore, ILogger<BenchmarkPairwiseFitter> logger)
     {
-        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(pairwiseStore);
+        ArgumentNullException.ThrowIfNull(judgeStore);
         ArgumentNullException.ThrowIfNull(logger);
-        _store = store;
+        _pairwiseStore = pairwiseStore;
+        _judgeStore = judgeStore;
         _logger = logger;
     }
 
     public async Task<bool> TryPublishAsync(Guid projectId, CancellationToken cancellationToken)
     {
-        var revision = await _store.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
+        var revision = await _judgeStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
         if (revision?.PolicyJson is not { } policyJson)
         {
             return false;
@@ -55,7 +58,7 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
             return false;
         }
 
-        var cohort = await _store.GetPairwiseCohortAsync(projectId, cancellationToken);
+        var cohort = await _pairwiseStore.GetPairwiseCohortAsync(projectId, cancellationToken);
 
         // Several runs but no pair to judge: every run is one cell (one model with repeats). Nothing will ever complete,
         // so the cohort publishes a refusal instead of reading pending forever behind a fit from an older rule.
@@ -76,7 +79,7 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
                               .OrderBy(static comparison => comparison.Sequence)
                               .ToArray();
         var fitKey = ComputeFitKey(policy, revisionId, cohort);
-        var active = await _store.GetActivePairwiseFitAsync(projectId, cancellationToken);
+        var active = await _pairwiseStore.GetActivePairwiseFitAsync(projectId, cancellationToken);
         if (string.Equals(active?.FitKey, fitKey, StringComparison.Ordinal))
         {
             return false;
@@ -107,7 +110,7 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
             Iterations = fit is { Iterations: > 0 } ? fit.Iterations : BenchmarkBradleyTerry.MaximumIterations,
             BootstrapReplicates = BenchmarkBradleyTerry.DefaultReplicates
         };
-        var published = await _store.PublishPairwiseFitAsync(command, cancellationToken);
+        var published = await _pairwiseStore.PublishPairwiseFitAsync(command, cancellationToken);
         if (published)
         {
             _logger.LogInformation("Benchmark project {ProjectId}: published pairwise fit over {VerdictCount} verdicts{Refusal}.",

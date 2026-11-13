@@ -6,7 +6,7 @@
 // the alert and closes the dropzone, and the alert's button reaches the recommended-download endpoint. That verdict
 // rides the document list because that endpoint resolves the model the ingestion lane will actually embed with.
 
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -36,6 +36,7 @@ setupMswServer(
 	jsonRoute("get", "development/repositories", { items: [] }),
 	jsonRoute("get", "model-fit/gguf/downloads", { items: [] }),
 	jsonRoute("get", "model-fit/gguf/imports", { items: [] }),
+	jsonRoute("get", "knowledge-base/collections", { items: [{ collectionId: "DEFAULT", documentCount: 0 }] }),
 );
 
 const embeddingMissing = en.pages.knowledgeBase.embeddingMissing;
@@ -131,5 +132,29 @@ describe("KnowledgeBase embedding-model precondition", () => {
 		fireEvent.click(await screen.findByTestId("knowledge-embedding-download-recommended"));
 
 		await waitFor(() => expect(requested).toHaveBeenCalledTimes(1));
+	});
+});
+
+describe("KnowledgeBase known collections", () => {
+	it("offers the node's other collections and opens one on click", async () => {
+		server.use(
+			jsonRoute("get", "knowledge-base/collections", {
+				items: [
+					{ collectionId: "DEFAULT", documentCount: 2 },
+					{ collectionId: "RESEARCH", documentCount: 1 },
+				],
+			}),
+		);
+
+		renderPage();
+
+		const known = await screen.findByRole("group", { name: en.pages.knowledgeBase.collection.known });
+		// The open collection is the badge, so only the others are offered.
+		expect(within(known).queryByRole("button", { name: "DEFAULT" })).toBeNull();
+		fireEvent.click(within(known).getByRole("button", { name: "RESEARCH" }));
+
+		await waitFor(() => expect(screen.getByTestId("knowledge-active-collection").textContent).toBe("RESEARCH"));
+		expect(screen.getByTestId<HTMLInputElement>("knowledge-collection-input").value).toBe("RESEARCH");
+		expect(await within(known).findByRole("button", { name: "DEFAULT" })).toBeDefined();
 	});
 });

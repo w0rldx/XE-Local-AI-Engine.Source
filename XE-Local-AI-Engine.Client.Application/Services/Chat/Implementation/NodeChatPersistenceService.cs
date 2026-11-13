@@ -59,6 +59,11 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         return _readModel.ListConversationsAsync(request, cancellationToken);
     }
 
+    public Task<NodeChatConversationSearchResultDto> SearchConversationsAsync(NodeChatSearchConversationsRequest request, CancellationToken cancellationToken = default)
+    {
+        return _readModel.SearchConversationsAsync(request, cancellationToken);
+    }
+
     public Task<NodeChatConversationDto?> GetConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
         return _readModel.GetConversationAsync(conversationId, cancellationToken);
@@ -193,6 +198,13 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         ArgumentNullException.ThrowIfNull(request);
         await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
         return await _conversations.SetConversationPlainAsync(request, cancellationToken);
+    }
+
+    public async Task<NodeChatConversationDto> SetConversationSamplingOptionsAsync(NodeChatSetConversationSamplingOptionsRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+        return await _conversations.SetConversationSamplingOptionsAsync(request, cancellationToken);
     }
 
     public Task<NodeChatGuardedWriteOutcome> SetCompactionSummaryAsync(NodeChatSetCompactionSummaryRequest request, CancellationToken cancellationToken = default)

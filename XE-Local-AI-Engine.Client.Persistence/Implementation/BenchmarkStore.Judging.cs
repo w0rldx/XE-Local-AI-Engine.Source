@@ -79,7 +79,7 @@ public sealed partial class BenchmarkStore
         var project = await RequireProjectAsync(projectId, cancellationToken);
         EnsureVersion(project.Version, expectedProjectVersion);
 
-        // No freeze check, on purpose. See IBenchmarkStore: a frozen project refuses edits to what its runs were measured AGAINST, while these settings decide what
+        // No freeze check, on purpose. See IBenchmarkFidelityStore: a frozen project refuses edits to what its runs were measured AGAINST, while these settings decide what
         // gets measured next, and every stored number keeps the comparability digest it was measured under, so a change here makes old figures stale, not wrong.
         var now = Now();
         project.FidelityEnabled = input.FidelityEnabled;

@@ -1,8 +1,10 @@
 import { Badge, Box, Group, Popover, Progress, ScrollArea, Stack, Text, UnstyledButton } from "@mantine/core";
+import { useQuery } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 
 import { ContextUsageBadge } from "@/features/chat/components/ContextUsageBadge";
@@ -17,7 +19,8 @@ import {
 	remainingTokens,
 	type ToolGroup,
 } from "@/features/chat/components/ContextUsagePopover/ContextUsageBreakdown";
-import type { ContextUsageModel } from "@/features/chat/models/ChatModels";
+import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
+import type { ChatConversationModel, ContextUsageModel } from "@/features/chat/models/ChatModels";
 import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
 import { formatTokenCount } from "@/features/chat/models/TokenCountFormatting";
@@ -233,7 +236,15 @@ export function ContextUsagePopover({ usage, conversationId, modelName, agentId,
 	// The send path's rule: developer-mode overrides ride the turn, and the output reserve and window change the estimate.
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const samplingOptions = useChatSamplingPreferencesStore((state) => state.options);
-	const wire = developerMode ? toWireSamplingOptions(samplingOptions) : undefined;
+	// The conversation's own settings win, as on the send path. A cache-only subscription (the chat page owns the fetch)
+	// re-renders this when a save or reload changes them.
+	const { data: conversationSampling } = useQuery({
+		queryKey: nodeChatQueryKeys.conversation(conversationId ?? ""),
+		queryFn: ({ signal }) => nodeChatAdapter.getConversation(conversationId ?? "", { signal }),
+		enabled: false,
+		select: (conversation: ChatConversationModel) => conversation.samplingOptions,
+	});
+	const wire = developerMode ? toWireSamplingOptions(conversationSampling ?? samplingOptions) : undefined;
 	const estimateQuery = useContextEstimate(
 		{ conversationId, modelName, agentId, useLocalTools, maxOutputTokens: wire?.maxOutputTokens, numCtx: wire?.numCtx },
 		{ enabled: opened && lastRound === undefined },

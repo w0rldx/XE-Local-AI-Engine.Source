@@ -427,6 +427,43 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         return models;
     }
 
+    public async Task<IReadOnlyList<KnowledgeCollectionSummary>> ListCollectionsAsync(CancellationToken cancellationToken)
+    {
+        var connection = _dbContext.Database.GetDbConnection();
+        await OpenIfNeededAsync(connection, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT collection_id, COUNT(*) FROM knowledge_documents GROUP BY collection_id ORDER BY collection_id;";
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var collections = new List<KnowledgeCollectionSummary>
+        {
+            new()
+            {
+                CollectionId = KnowledgeCollectionScope.DefaultId,
+                DocumentCount = 0
+            }
+        };
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var summary = new KnowledgeCollectionSummary
+            {
+                CollectionId = reader.GetString(0),
+                DocumentCount = reader.GetInt32(1)
+            };
+            if (string.Equals(summary.CollectionId, KnowledgeCollectionScope.DefaultId, StringComparison.Ordinal))
+            {
+                collections[0] = summary;
+            }
+            else
+            {
+                collections.Add(summary);
+            }
+        }
+
+        return collections;
+    }
+
     private static async Task<IReadOnlyList<KnowledgeDocumentChunkView>> ReadChunksAsync(DbConnection connection, Guid documentId, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();

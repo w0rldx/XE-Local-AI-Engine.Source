@@ -136,6 +136,7 @@ public sealed class RetentionSweeperService : BackgroundService
                 cancellationToken);
             if (deleted)
             {
+                _writer.SearchIndex.Store(conversationId, document: null);
                 deletedConversations.Add(new DeletedConversation(conversationId, workSession?.Id));
             }
         }

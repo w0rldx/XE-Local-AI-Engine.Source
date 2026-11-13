@@ -90,7 +90,7 @@ Upload ──▶ Uploaded ──▶ Extracting ──▶ Chunking ──▶ Embe
 
 ## Collections and repository ingestion
 
-Every document, section, chunk, FTS row, vector candidate, and hydrated hit belongs to a canonical `CollectionId`. Missing collection input maps to `DEFAULT` for backward compatibility; explicit ids are trimmed, upper-cased, limited to 128 ASCII letters/digits plus `-`, `_`, and `.`, and applied independently to both lexical and dense retrieval. A `DocumentId` from another collection returns no results rather than weakening the collection boundary. This is a local namespace/isolation boundary, not a multi-tenant authorization system.
+Every document, section, chunk, FTS row, vector candidate, and hydrated hit belongs to a canonical `CollectionId`. Missing collection input maps to `DEFAULT` for backward compatibility; explicit ids are trimmed, upper-cased, limited to 128 ASCII letters/digits plus `-`, `_`, and `.`, and applied independently to both lexical and dense retrieval. A `DocumentId` from another collection returns no results rather than weakening the collection boundary. This is a local namespace/isolation boundary, not a multi-tenant authorization system. Plain-chat grounding searches the collection the composer picked per send and refuses an invalid id rather than widening to `DEFAULT` ([Chat](05-chat.md#plain-chat-knowledge-base-grounding)).
 
 Development Mode can import a previously registered local Git repository through `ImportKnowledgeRepositoryEndpoint`. The request carries only the registered selected-folder id and collection id—never an arbitrary path. `KnowledgeRepositoryImportService` revalidates the registered folder as a local Git top-level, refuses reparse/symlink escapes, skips sensitive/generated directories and files, enforces per-file plus aggregate byte limits, revalidates the opened file before accepting its bytes, preserves only relative source paths, and sends eligible source files through the normal encrypted-blob/background-ingestion pipeline. Repository identity is collection + normalized source path: re-import updates a changed path in place, identical bytes at two paths keep distinct provenance, unchanged paths are not requeued, and a successfully completed scan purges repository documents whose paths were deleted or renamed. Uploads retain collection-scoped content-hash deduplication.
 
@@ -173,6 +173,7 @@ Routes under `knowledge-base/*` (`LocalApiRoutes.KnowledgeBase` in `XE-Local-AI-
 |---|---|
 | `UploadKnowledgeDocumentEndpoint` | Upload a document; returns immediately, ingestion runs async. |
 | `ListKnowledgeDocumentsEndpoint` | List documents with their ingestion status. |
+| `ListKnowledgeCollectionsEndpoint` | GET `knowledge-base/collections`: every collection holding a document with its document count, `DEFAULT` first even when empty. Feeds the chat composer's collection picker and the Knowledge page's "Known collections" buttons beside its collection box. |
 | `GetKnowledgeDocumentEndpoint` | One document's detail. |
 | `DeleteKnowledgeDocumentEndpoint` | Delete a document and its chunks/index rows, then its encrypted blob. |
 | `SearchKnowledgeEndpoint` | Hybrid search over the corpus (or a single document). |

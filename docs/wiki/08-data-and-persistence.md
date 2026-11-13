@@ -84,7 +84,7 @@ Each entity's encrypted columns are registered explicitly with their AAD identit
 
 | Entity | Encrypted column(s) | AAD (conversationId, recordId, column) |
 |---|---|---|
-| `NodeConversation` | `title` (optional), `compaction_summary` (optional), `conversation_state` (optional) | (ConversationId, ConversationId, `title` / `compaction_summary` / `conversation_state`) |
+| `NodeConversation` | `title` (optional), `compaction_summary` (optional), `conversation_state` (optional), `plain_system_prompt` (optional) | (ConversationId, ConversationId, `title` / `compaction_summary` / `conversation_state` / `plain_system_prompt`) |
 | `NodeMessage` | `content` (required), `metadata_json` (optional) | (ConversationId, MessageId, …) |
 | `NodeToolEvent` | `plaintext_args`, `plaintext_result` (both optional) | (ConversationId, ToolCallId, …) |
 | `NodeSelectedFolder` | `host_path` (required) | (`Guid.Empty`, Id, `host_path`) — node-scoped |
@@ -115,6 +115,13 @@ Encrypted columns are mapped as `BLOB` in the entity configurations and model sn
 
 > **Uploaded-file blobs are encrypted off the column path.** The `ConversationUploadedFile` row only encrypts the display name (`original_file_name`) through the interceptor; the bulk payloads — the raw file bytes and the cached extracted Markdown — are **too large for the column path** and live on disk under `INodeDataDirectory.Root/uploaded-files/conversations/{conversation_id}/`, AES-256-GCM-encrypted by `UploadedFileBlobProtector` (`Client.Application/Services/DocumentIngestion/Implementation/UploadedFileBlobProtector.cs`). That protector lives in the application layer (the DB-column `NodePayloadProtector` is `internal` to Persistence), so it re-uses the public `AesGcmNodeAeadCipher` primitive and replicates the exact `nonce ‖ ciphertext ‖ tag` framing + AAD layout, binding each blob with a distinct column name (`file_bytes`, `file_md`) so a bytes blob can never be swapped for an extracted-text blob under the same key. The Markdown companion is named `extracted-<fileId>.md` so it can never share a path with a `.md` upload's `<fileId>.md` bytes blob, and every Markdown reader, the staging snapshot included, reads it only for rows whose `extraction_status` is `Extracted`. See [Security & Privacy](12-security-and-privacy.md).
 
+### Decrypted text in memory
+
+Decrypted chat text may live in process memory but never at rest. The one long-lived holder is the conversation search
+index (`ConversationSearchIndex`, [Chat](05-chat.md#conversation-search-in-memory-index)): it is rebuilt from the
+encrypted rows at every start and is never written to the database, a cache file or a log. A feature that wants
+plaintext search or a plaintext cache follows the same rule rather than adding a plaintext column.
+
 ### The content envelope
 
 *Encrypted and legacy plaintext rows in one column.*
@@ -131,7 +138,7 @@ Entities live in `Entities/` with mapping in the matching `Configurations/*Confi
 
 | Entity | Table | Area | Notes |
 |---|---|---|---|
-| `NodeConversation` | `conversations` | Chat ([05](05-chat.md)) | `title`, compaction summary and distilled conversation state (migration `AddConversationState`) all encrypted; pin/archive/selected-path + compaction/state coverage columns added by later migrations. Selecting a path or minting a regenerate variant clears the compaction summary AND the conversation state together in one statement; the state's timestamp is stamped, not nulled, so a guarded distillation write (`GuardUnchanged`) from before the clear is rejected |
+| `NodeConversation` | `conversations` | Chat ([05](05-chat.md)) | `title`, compaction summary and distilled conversation state (migration `AddConversationState`) all encrypted; pin/archive/selected-path + compaction/state coverage columns added by later migrations. Plain mode adds `is_plain` and the encrypted `plain_system_prompt` (migration `AddPlainConversations`); `sampling_options_json` (migration `AddConversationSamplingOptions`) holds the chat's own sampling settings as plain JSON, unencrypted by design (numbers and stop strings the operator typed, no chat text), and an unreadable value reads as null. Selecting a path or minting a regenerate variant clears the compaction summary AND the conversation state together in one statement; the state's timestamp is stamped, not nulled, so a guarded distillation write (`GuardUnchanged`) from before the clear is rejected |
 | `NodeMessage` | messages | Chat | `content` encrypted (BLOB); `metadata_json` encrypted; lifecycle + branch/variant + `agent_definition_id` columns |
 | `NodeToolEvent` | tool events | Chat | encrypted tool args/result |
 | `NodeMessageFeedback` | feedback | Chat | 👍/👎 per message; carries agent attribution |

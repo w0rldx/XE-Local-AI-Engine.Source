@@ -1,11 +1,24 @@
-import { ActionIcon, Button, Group, Paper, ScrollArea, Stack, Switch, Text, TextInput, Tooltip } from "@mantine/core";
-import { IconArchive, IconChevronLeft, IconPinnedFilled, IconPlus, IconSearch } from "@tabler/icons-react";
-import { type KeyboardEvent, memo, useState } from "react";
+import { ActionIcon, Button, Group, Menu, Paper, ScrollArea, Stack, Switch, Text, TextInput, Tooltip } from "@mantine/core";
+import {
+	IconArchive,
+	IconChevronLeft,
+	IconDotsVertical,
+	IconFileExport,
+	IconFileImport,
+	IconPinnedFilled,
+	IconPlus,
+	IconSearch,
+} from "@tabler/icons-react";
+import { type KeyboardEvent, memo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ConversationListCollapsedRail } from "@/features/chat/components/ConversationList/ConversationListCollapsedRail";
 import { ConversationListItem } from "@/features/chat/components/ConversationList/ConversationListItem";
-import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
+import type {
+	ChatConversationModel,
+	ChatConversationSearchModel,
+	ChatDisplayShellProps,
+} from "@/features/chat/models/ChatModels";
 
 /* eslint-disable react-doctor/no-giant-component -- The list and its row menus share selection, mutation, and responsive-collapse state; splitting them would duplicate that coordination. */
 
@@ -18,6 +31,8 @@ interface ConversationListProps {
 	embedded?: boolean;
 	disabled?: boolean;
 	searchQuery?: string;
+	// The server's content search for searchQuery; until it answers, the loaded rows are filtered locally.
+	searchResults?: ChatConversationSearchModel;
 	showArchived?: boolean;
 	// Only the most recent page is loaded; a footer offers onShowAll to load every conversation.
 	truncated?: boolean;
@@ -32,6 +47,9 @@ interface ConversationListProps {
 	onTogglePin?: (conversationId: string, isPinned: boolean) => void;
 	onToggleArchive?: (conversationId: string, archived: boolean) => void;
 	onDelete?: (conversationId: string, skipConfirm: boolean) => void;
+	onExport?: ChatDisplayShellProps["onExportConversation"];
+	onExportAll?: () => void;
+	onImportFile?: (file: File) => void;
 }
 
 function matchesQuery(conversation: ChatConversationModel, query: string): boolean {
@@ -53,6 +71,7 @@ export const ConversationList = memo(function ConversationList({
 	embedded = false,
 	disabled = false,
 	searchQuery = "",
+	searchResults,
 	showArchived = false,
 	truncated = false,
 	onShowAll,
@@ -66,16 +85,25 @@ export const ConversationList = memo(function ConversationList({
 	onTogglePin,
 	onToggleArchive,
 	onDelete,
+	onExport,
+	onExportAll,
+	onImportFile,
 }: ConversationListProps) {
 	const { t } = useTranslation();
+	const importInput = useRef<HTMLInputElement>(null);
 	const [renamingId, setRenamingId] = useState<string | undefined>();
 	const [renameDraft, setRenameDraft] = useState("");
 
 	const normalizedQuery = searchQuery.trim().toLowerCase();
-	// Archived conversations only surface when the operator opts in; search always narrows the visible set.
-	const visible = conversations.filter(
-		(conversation) => (showArchived || !conversation.isArchived) && matchesQuery(conversation, normalizedQuery),
-	);
+	const searching = normalizedQuery.length > 0;
+	// Archived conversations only surface when the operator opts in; search always narrows the visible set. The server's
+	// content search covers every conversation and all message text, so its answer replaces the local filter.
+	const visible =
+		searching && searchResults
+			? searchResults.conversations
+			: conversations.filter(
+					(conversation) => (showArchived || !conversation.isArchived) && matchesQuery(conversation, normalizedQuery),
+				);
 	const pinned = visible.filter((conversation) => conversation.isPinned && !conversation.isArchived);
 	const recent = visible.filter((conversation) => !conversation.isPinned && !conversation.isArchived);
 	const archived = visible.filter((conversation) => conversation.isArchived);
@@ -180,6 +208,51 @@ export const ConversationList = memo(function ConversationList({
 				>
 					<IconPlus size={15} />
 				</ActionIcon>
+				{onExportAll && onImportFile ? (
+					<>
+						<Menu position="bottom-end" withinPortal={true}>
+							<Menu.Target>
+								<ActionIcon
+									variant="subtle"
+									color="gray"
+									size={30}
+									aria-label={t("chat.exportImport.menuAria", "Export or import chats")}
+									data-testid="conversation-export-import"
+								>
+									<IconDotsVertical size={15} />
+								</ActionIcon>
+							</Menu.Target>
+							<Menu.Dropdown>
+								<Menu.Item leftSection={<IconFileExport size={14} />} onClick={onExportAll} data-testid="conversation-export-all">
+									{t("chat.exportImport.exportAll", "Export all chats (JSON)")}
+								</Menu.Item>
+								<Menu.Item
+									leftSection={<IconFileImport size={14} />}
+									onClick={() => importInput.current?.click()}
+									data-testid="conversation-import"
+								>
+									{t("chat.exportImport.import", "Import chats (JSON)")}
+								</Menu.Item>
+							</Menu.Dropdown>
+						</Menu>
+						{/* Outside the menu, which unmounts its dropdown on close and would take a picker inside it along. */}
+						<input
+							ref={importInput}
+							type="file"
+							accept=".json,application/json"
+							hidden={true}
+							onChange={(event) => {
+								const file = event.currentTarget.files?.[0];
+								// Cleared so picking the same file again still fires a change.
+								event.currentTarget.value = "";
+								if (file) {
+									onImportFile(file);
+								}
+							}}
+							data-testid="conversation-import-file"
+						/>
+					</>
+				) : null}
 			</Group>
 			{onToggleShowArchived ? (
 				<Group px="md" pb="xs">
@@ -194,9 +267,14 @@ export const ConversationList = memo(function ConversationList({
 			) : null}
 			<ScrollArea style={{ flex: 1, minHeight: 0 }} type="auto" px="xs">
 				<Stack gap={2} pb="md">
+					{searching && searchResults?.indexing ? (
+						<Text size="xs" c="dimmed" px="sm" pt="xs" data-testid="conversation-search-indexing">
+							{t("chat.search.indexing", "Still indexing older conversations; results may be incomplete.")}
+						</Text>
+					) : null}
 					{visible.length === 0 ? (
 						<Text size="xs" c="dimmed" px="sm" py="md" data-testid="conversation-list-empty">
-							{normalizedQuery.length > 0
+							{searching
 								? t("pages.chat.conversationList.noMatches", "No conversations match your search.")
 								: t("pages.chat.conversationList.empty", "No conversations yet.")}
 						</Text>
@@ -228,6 +306,7 @@ export const ConversationList = memo(function ConversationList({
 										onTogglePin={onTogglePin}
 										onToggleArchive={onToggleArchive}
 										onDelete={onDelete}
+										onExport={onExport}
 									/>
 								))}
 							</Stack>
