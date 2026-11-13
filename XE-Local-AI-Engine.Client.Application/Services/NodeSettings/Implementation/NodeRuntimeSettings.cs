@@ -692,9 +692,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public async Task<long> GetAgentHomeRunRetentionMaxTotalBytesAsync(CancellationToken cancellationToken = default) =>
         (await LoadAsync(cancellationToken)).AgentHomeRunRetentionMaxTotalBytes ?? _agentHomeRunRetentionMaxTotalBytesSeed;
 
-    public string GetDefaultModelName() =>
-        ResolveDefaultModelName(LoadStored());
-
     public IReadOnlyList<string> GetToolCapableModels() =>
         ResolveToolCapableModels(LoadStored());
 

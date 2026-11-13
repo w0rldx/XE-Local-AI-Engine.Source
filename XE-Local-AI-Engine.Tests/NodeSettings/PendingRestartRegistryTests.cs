@@ -77,6 +77,19 @@ public sealed class PendingRestartRegistryTests
     }
 
     [Test]
+    public void GetPendingFields_WhenTheDefaultModelChanged_IsEmpty()
+    {
+        // The node writes its own default after boot (first-run provisioning, the ext: reconciler) and reads it per send,
+        // so a changed default is live and must not raise the pending-restart banner.
+        var sut = new PendingRestartRegistry(Boot, Resolve);
+
+        AssertEx.Empty(sut.GetPendingFields(Boot with
+        {
+            DefaultModelName = "provisioned-chat"
+        }));
+    }
+
+    [Test]
     public void GetPendingFields_WhenTheBootValueIsRestored_ClearsTheField()
     {
         var sut = new PendingRestartRegistry(Boot, Resolve);

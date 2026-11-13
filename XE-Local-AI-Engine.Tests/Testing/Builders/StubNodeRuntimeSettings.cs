@@ -824,7 +824,6 @@ public sealed class StubNodeRuntimeSettings
 
         // Synchronous twins (composition/ctor path) must mirror the async values so consumers repointed onto the sync
         // getters (e.g. InvocationRunner, the DI factory seeds) observe the same configured knobs.
-        settings.GetDefaultModelName().Returns(_defaultModelName);
         settings.GetToolCapableModels().Returns(_toolCapableModels);
         settings.GetToolCapableModelsSeed().Returns(_ => _toolCapableModelsSeed);
         settings.GetHuggingFaceDefaultQuant().Returns(_huggingFaceDefaultQuant);

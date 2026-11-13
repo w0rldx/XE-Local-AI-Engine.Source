@@ -33,7 +33,7 @@ public sealed partial class InvocationRunner
         var participants = new List<OrchestrationParticipant>(spec.Participants.Count);
         foreach (var participant in spec.Participants)
         {
-            var participantModel = ResolveModel(participant.ModelId ?? resolvedModel);
+            var participantModel = await ResolveModelAsync(participant.ModelId ?? resolvedModel, invocationToken);
 
             // Resolve THIS participant's launched effective context window so its inner provider-round budgeter
             // sizes against it, not the shared configured default.
@@ -151,12 +151,15 @@ public sealed partial class InvocationRunner
         return string.IsNullOrWhiteSpace(update.ToolName) ? "tool" : update.ToolName;
     }
 
-    /// <summary>The requested model, or the node's default when none was requested. Each provider validates its own models when it serves them.</summary>
-    private string ResolveModel(string? requestedModel)
+    /// <summary>
+    ///     The requested model, or the node's default when none was requested, read live so a stored default change applies to the next
+    ///     turn. Each provider validates its own models when it serves them.
+    /// </summary>
+    private async Task<string> ResolveModelAsync(string? requestedModel, CancellationToken cancellationToken)
     {
         var trimmedModel = requestedModel?.Trim();
 
-        return string.IsNullOrWhiteSpace(trimmedModel) ? _defaultModel : trimmedModel;
+        return string.IsNullOrWhiteSpace(trimmedModel) ? await _runtimeSettings.GetDefaultModelNameAsync(cancellationToken) : trimmedModel;
     }
 
     /// <summary>

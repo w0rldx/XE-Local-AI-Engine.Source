@@ -122,7 +122,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly IExternalProviderRegistry _externalProviderRegistry;
     private readonly IConversationContextBudgeter _contextBudgeter;
     private readonly ConversationContextBudgetOptions _contextBudgetOptions;
-    private readonly string _defaultModel;
     private readonly Lazy<IWorkerEventDispatcher> _eventDispatcher;
     private readonly ApiToolCallBridge _apiToolCallBridge;
     private readonly IInvocationAgentFactory _invocationAgentFactory;
@@ -209,8 +208,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
         // Read once at singleton construction from INodeRuntimeSettings (stored > appsettings seed > default) into plain fields the hot
-        // streaming/cleanup loops read, so an operator edit applies on the next restart.
-        _defaultModel = runtimeSettings.GetDefaultModelName();
+        // streaming/cleanup loops read, so an operator edit applies on the next restart. The default model is read per turn instead.
         _maxResponseSizeBytes = runtimeSettings.GetMaxResponseSizeMb() * 1024 * 1024;
         _maxPendingToolCallAge = TimeSpan.FromMinutes(runtimeSettings.GetMaxPendingToolCallAgeMinutes());
     }
@@ -423,7 +421,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             _logger.LogDebug("Tool-relevance filtering is ACTIVE for invocation {InvocationId}.", package.InvocationId);
         }
 
-        var resolvedModel = ResolveModel(package.ModelProfile);
+        var resolvedModel = await ResolveModelAsync(package.ModelProfile, invocationToken);
 
         // `auto` resolves into a concrete {model, effort} HERE, between model resolution and the local warm, so an admitted small-model swap is what
         // gets warmed. Declared FIRST so `using` disposes it LAST, after the ledger reservation made inside it; AsyncServiceScope's `default` is unsafe to dispose.

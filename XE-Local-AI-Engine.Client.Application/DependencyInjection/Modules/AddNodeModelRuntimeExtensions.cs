@@ -259,12 +259,9 @@ internal static class AddNodeModelRuntimeExtensions
     private static ModelRoutingLocalChatClient CreateLocalChatClient(IServiceProvider serviceProvider)
     {
         // The local branch routes per-send by ChatOptions.ModelId through the provider resolver, superseding the fixed-model
-        // ILocalModelProvider.CreateChatClient path; the node default (the same read as InvocationRunner) is the fallback ModelId when a request omits one.
-        var runtimeSettings = serviceProvider.GetRequiredService<INodeRuntimeSettings>();
-#pragma warning disable MA0045 // The containing method is only ever reached from an AddSingleton(sp => …) DI factory delegate, which is synchronous by contract; the INodeRuntimeSettings sync twins are the designated composition-path reads.
+        // ILocalModelProvider.CreateChatClient path; the node default, read live per send like InvocationRunner's, is the fallback ModelId.
         return new ModelRoutingLocalChatClient(serviceProvider.GetRequiredService<ILocalModelProviderResolver>(),
-            runtimeSettings.GetDefaultModelName());
-#pragma warning restore MA0045
+            serviceProvider.GetRequiredService<INodeRuntimeSettings>());
     }
 
     /// <summary>

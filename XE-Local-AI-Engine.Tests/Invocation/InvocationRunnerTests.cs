@@ -1625,7 +1625,7 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var runner = CreateRunner(factory,
             eventDispatcher: dispatcher,
-            configureRuntimeSettings: settings => settings.GetDefaultModelName().Returns("node-default-model"));
+            configureRuntimeSettings: settings => settings.GetDefaultModelNameAsync(Arg.Any<CancellationToken>()).Returns("node-default-model"));
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().WithModel(requested).Build());
 

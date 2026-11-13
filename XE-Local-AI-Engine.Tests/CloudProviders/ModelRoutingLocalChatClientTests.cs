@@ -7,9 +7,11 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Models.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The model-routing client routes each send by <see cref="ChatOptions.ModelId" /> to the mapped provider (or the
@@ -38,7 +40,7 @@ public sealed class ModelRoutingLocalChatClientTests
             {
                 ["remote-model"] = ExternalProvider
             });
-        using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
+        using var router = new ModelRoutingLocalChatClient(resolver, StoredDefault(DefaultModel));
 
         await router.GetResponseAsync(Message, new ChatOptions
         {
@@ -66,7 +68,7 @@ public sealed class ModelRoutingLocalChatClientTests
     {
         var llamacpp = new RecordingLocalModelProvider(LlamaProvider);
         var resolver = BuildResolver([llamacpp], LlamaProvider, new Dictionary<string, string>());
-        using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
+        using var router = new ModelRoutingLocalChatClient(resolver, StoredDefault(DefaultModel));
 
         await router.GetResponseAsync(Message, new ChatOptions
         {
@@ -88,12 +90,35 @@ public sealed class ModelRoutingLocalChatClientTests
     {
         var llamacpp = new RecordingLocalModelProvider(LlamaProvider);
         var resolver = BuildResolver([llamacpp], LlamaProvider, new Dictionary<string, string>());
-        using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
+        using var router = new ModelRoutingLocalChatClient(resolver, StoredDefault(DefaultModel));
 
         await router.GetResponseAsync(Message);
 
         AssertEx.Equal(expected: 1, llamacpp.CreatedClients.Count);
         AssertEx.Equal(DefaultModel, llamacpp.CreatedClients[0].ModelName);
+    }
+
+    [Test]
+    public async Task GetResponse_WhenTheStoredDefaultChangesAfterConstruction_FallsBackToTheNewDefault()
+    {
+        // The node rewrites its own default after boot (first-run provisioning, the ext: reconciler, "Set default"), so a
+        // request with no model must reach the default stored NOW, not the one this singleton was built with.
+        var llamacpp = new RecordingLocalModelProvider(LlamaProvider);
+        var resolver = BuildResolver([llamacpp], LlamaProvider, new Dictionary<string, string>());
+        var stored = new StoredNodeSettings
+        {
+            DefaultModelName = DefaultModel
+        };
+        using var router = new ModelRoutingLocalChatClient(resolver, SeededNodeRuntimeSettings.Create(stored: () => stored));
+
+        await router.GetResponseAsync(Message);
+        stored = stored with
+        {
+            DefaultModelName = "provisioned-chat"
+        };
+        await router.GetResponseAsync(Message);
+
+        AssertEx.Equal(DefaultModel + ",provisioned-chat", string.Join(',', llamacpp.CreatedClients.Select(client => client.ModelName)));
     }
 
     [Test]
@@ -107,7 +132,7 @@ public sealed class ModelRoutingLocalChatClientTests
             {
                 ["gguf-model"] = "external"
             });
-        using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
+        using var router = new ModelRoutingLocalChatClient(resolver, StoredDefault(DefaultModel));
         using var scope = NodeManagedLlamaRoutingScope.Begin("gguf-model");
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(() => router.GetResponseAsync(Message, new ChatOptions
@@ -130,7 +155,7 @@ public sealed class ModelRoutingLocalChatClientTests
             {
                 ["gguf-model"] = "external"
             });
-        using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
+        using var router = new ModelRoutingLocalChatClient(resolver, StoredDefault(DefaultModel));
         using var scope = NodeManagedLlamaRoutingScope.Begin("gguf-model");
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
@@ -153,7 +178,7 @@ public sealed class ModelRoutingLocalChatClientTests
     {
         var llamacpp = new RecordingLocalModelProvider(LlamaProvider);
         var resolver = BuildResolver([llamacpp], LlamaProvider, new Dictionary<string, string>());
-        var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
+        var router = new ModelRoutingLocalChatClient(resolver, StoredDefault(DefaultModel));
 
         await router.GetResponseAsync(Message, new ChatOptions
         {
@@ -166,6 +191,13 @@ public sealed class ModelRoutingLocalChatClientTests
 
         AssertEx.True(resolvedDuringSend.IsDisposed, "Disposing the router disposes the clients it cached.");
     }
+
+    // The real stored-else-seed default resolution over a fixed stored default.
+    private static INodeRuntimeSettings StoredDefault(string modelName) =>
+        SeededNodeRuntimeSettings.Create(stored: () => new StoredNodeSettings
+        {
+            DefaultModelName = modelName
+        });
 
     private static ILocalModelProviderResolver BuildResolver(IEnumerable<ILocalModelProvider> providers,
         string defaultProviderName,

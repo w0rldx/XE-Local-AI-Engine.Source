@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
@@ -25,21 +26,20 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
         + "processes are owned by the provider/supervisor. Disposing a resolved client per-call would be incorrect.";
 
     private readonly ConcurrentDictionary<ProviderModelKey, IChatClient> _clientsByProviderAndModel = new();
-    private readonly string _defaultModelName;
 
     private readonly ILocalModelProviderResolver _resolver;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     private int _disposed;
 
     /// <summary>
-    ///     Creates the router over the provider resolver and the default model used when a request omits
-    ///     <see cref="ChatOptions.ModelId" /> (mirrors the previous fixed-model local client's configured default).
+    ///     Creates the router over the provider resolver and the node settings whose default model, read per send, stands in
+    ///     when a request omits <see cref="ChatOptions.ModelId" />.
     /// </summary>
-    public ModelRoutingLocalChatClient(ILocalModelProviderResolver resolver, string defaultModelName)
+    public ModelRoutingLocalChatClient(ILocalModelProviderResolver resolver, INodeRuntimeSettings runtimeSettings)
     {
         _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
-        ArgumentException.ThrowIfNullOrWhiteSpace(defaultModelName);
-        _defaultModelName = defaultModelName;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     /// <inheritdoc />
@@ -108,7 +108,9 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
 
     private async Task<IChatClient> ResolveClientAsync(ChatOptions? options, CancellationToken cancellationToken)
     {
-        var modelName = string.IsNullOrWhiteSpace(options?.ModelId) ? _defaultModelName : options.ModelId;
+        var modelName = string.IsNullOrWhiteSpace(options?.ModelId)
+            ? await _runtimeSettings.GetDefaultModelNameAsync(cancellationToken)
+            : options.ModelId;
         var providerName = await _resolver.ResolveProviderNameForModelAsync(modelName, cancellationToken);
         if (NodeManagedLlamaRoutingScope.CurrentModel is { } requiredModel
             && (!string.Equals(modelName, requiredModel, StringComparison.OrdinalIgnoreCase)

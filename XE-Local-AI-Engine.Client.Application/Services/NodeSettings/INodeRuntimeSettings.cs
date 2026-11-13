@@ -364,9 +364,6 @@ public interface INodeRuntimeSettings
     // Synchronous twins for the composition/startup path and for structurally synchronous request-time call sites. Prefer the async getters:
     // a sync twin on a per-TOKEN path, or a captured result in a singleton field, is NOT acceptable. Rules and reasons: docs/wiki/08-data-and-persistence.md.
 
-    /// <inheritdoc cref="GetDefaultModelNameAsync" />
-    string GetDefaultModelName();
-
     /// <inheritdoc cref="GetToolCapableModelsAsync" />
     IReadOnlyList<string> GetToolCapableModels();
 

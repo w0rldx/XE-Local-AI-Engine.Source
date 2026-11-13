@@ -23,7 +23,7 @@ public sealed record NodeSettingsResponse
 
     public int MaxAllowedMessageRequestTimeoutSeconds { get; init; }
 
-    /// <summary>Local chat model a request falls back to when it names none. Applies after a node restart.</summary>
+    /// <summary>Local chat model a request falls back to when it names none.</summary>
     public string? DefaultModelName { get; init; }
 
     public bool? EnableTools { get; init; }
@@ -803,7 +803,7 @@ public sealed record SaveNodeSettingsRequest
 
     public int? MaxMessageRequestTimeoutSeconds { get; init; }
 
-    /// <summary>Local chat model a request falls back to when it names none. Applies after a node restart.</summary>
+    /// <summary>Local chat model a request falls back to when it names none.</summary>
     public string? DefaultModelName { get; init; }
 
     public bool? EnableTools { get; init; }

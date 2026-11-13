@@ -61,7 +61,6 @@ function installJsdomEnvironmentMocks(): void {
 
 // The node's restart gate as the settings response serves it (`restartRequiredFields`, NodeSettingsRestartGate.Fields).
 const nodeRestartGate: ReadonlySet<string> = new Set([
-	"defaultModelName",
 	"huggingFaceDefaultQuant",
 	"huggingFaceDiskMarginBytes",
 	"huggingFaceDownloadConnections",
@@ -478,10 +477,6 @@ describe("NodeSettingsFieldsCard — restart-required badge", () => {
 		const badge = screen.getByTestId("node-settings-restart-badge-chatCacheReuse");
 		expect(badge.textContent?.trim()).toBe("Needs restart");
 		expect(badge.getAttribute("title")).toBe("Takes effect after the node restarts.");
-		cleanup();
-
-		renderCard({ section: "chat" });
-		expect(screen.getByTestId("node-settings-restart-badge-defaultModelName")).toBeTruthy();
 	});
 
 	it("badges exactly the fields the node lists, not a list of its own", () => {
@@ -494,8 +489,9 @@ describe("NodeSettingsFieldsCard — restart-required badge", () => {
 	it("does not mark a field that is read live on every call", () => {
 		renderCard({ section: "chat" });
 
-		// toolCapableModels is re-read per invocation (OrchestrationResolver) — labeling it would be a lie.
+		// toolCapableModels is re-read per invocation (OrchestrationResolver) and defaultModelName per turn — labeling either would be a lie.
 		expect(screen.queryByTestId("node-settings-restart-badge-toolCapableModels")).toBeNull();
+		expect(screen.queryByTestId("node-settings-restart-badge-defaultModelName")).toBeNull();
 		expect(screen.queryByTestId("node-settings-restart-badge-enableTools")).toBeNull();
 		cleanup();
 
