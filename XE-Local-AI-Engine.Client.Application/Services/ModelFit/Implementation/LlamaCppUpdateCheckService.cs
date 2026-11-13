@@ -48,12 +48,18 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
         ILogger<LlamaCppUpdateCheckService> logger,
         TimeSpan startupDelay)
     {
-        _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
-        _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
-        _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
-        _updateState = updateState ?? throw new ArgumentNullException(nameof(updateState));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(nodeRuntimeSettings);
+        _nodeRuntimeSettings = nodeRuntimeSettings;
+        ArgumentNullException.ThrowIfNull(catalog);
+        _catalog = catalog;
+        ArgumentNullException.ThrowIfNull(installedRuntimeStore);
+        _installedRuntimeStore = installedRuntimeStore;
+        ArgumentNullException.ThrowIfNull(updateState);
+        _updateState = updateState;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _startupDelay = startupDelay;
     }
 

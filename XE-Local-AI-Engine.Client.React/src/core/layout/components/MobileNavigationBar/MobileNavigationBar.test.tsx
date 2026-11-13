@@ -27,4 +27,18 @@ describe("MobileNavigationBar", () => {
 		expect(badge.closest("button")?.textContent).toContain("External Apps");
 		expect(screen.getAllByText("Experimental")).toHaveLength(1);
 	});
+
+	// The drawer has no visible title (its header is the logo), so without a label it announced as a bare "dialog".
+	it("names the navigation drawer", async () => {
+		renderWithProviders(
+			<MobileNavigationBar
+				drawerOpen={true}
+				setDrawerOpen={vi.fn()}
+				drawerActions={{ reportProblem: vi.fn(), reportProblemPending: false, openAbout: vi.fn() }}
+			/>,
+			{ route: "/" },
+		);
+
+		expect(await screen.findByRole("dialog", { name: "Main navigation" })).toBeTruthy();
+	});
 });

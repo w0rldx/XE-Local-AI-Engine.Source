@@ -25,10 +25,14 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
         TimeProvider timeProvider,
         ILogger<NodeTutorialStateService> logger)
     {
-        _identityStore = identityStore ?? throw new ArgumentNullException(nameof(identityStore));
-        _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(identityStore);
+        _identityStore = identityStore;
+        ArgumentNullException.ThrowIfNull(userManager);
+        _userManager = userManager;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<TutorialStateEntry>> GetEntriesAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)

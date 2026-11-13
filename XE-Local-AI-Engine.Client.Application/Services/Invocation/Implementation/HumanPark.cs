@@ -22,8 +22,10 @@ public sealed class HumanPark
 
     public HumanPark(InvocationLifecycleTracker tracker, IWorkerEventDispatcher dispatcher, Guid invocationId, ILogger? logger = null)
     {
-        _tracker = tracker ?? throw new ArgumentNullException(nameof(tracker));
-        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        ArgumentNullException.ThrowIfNull(tracker);
+        _tracker = tracker;
+        ArgumentNullException.ThrowIfNull(dispatcher);
+        _dispatcher = dispatcher;
         _invocationId = invocationId;
         _logger = logger;
     }

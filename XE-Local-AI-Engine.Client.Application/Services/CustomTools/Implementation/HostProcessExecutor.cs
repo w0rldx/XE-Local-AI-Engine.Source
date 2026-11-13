@@ -54,10 +54,14 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         TimeProvider timeProvider,
         ILogger<HostProcessExecutor> logger)
     {
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _concurrencyLimiter = concurrencyLimiter ?? throw new ArgumentNullException(nameof(concurrencyLimiter));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(concurrencyLimiter);
+        _concurrencyLimiter = concurrencyLimiter;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public CustomToolKind Kind => CustomToolKind.Command;

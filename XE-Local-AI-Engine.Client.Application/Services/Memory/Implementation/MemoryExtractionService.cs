@@ -37,12 +37,14 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
         _extractionAgent = extractionAgent;
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
         ArgumentNullException.ThrowIfNull(playbookActionStore);
         _playbookActionStore = playbookActionStore;
         ArgumentNullException.ThrowIfNull(semanticDeduplicator);
         _semanticDeduplicator = semanticDeduplicator;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     public async Task<MemoryExtractionOutcome> ExtractAsync(MemoryExtractionRunInput run, CancellationToken cancellationToken = default)

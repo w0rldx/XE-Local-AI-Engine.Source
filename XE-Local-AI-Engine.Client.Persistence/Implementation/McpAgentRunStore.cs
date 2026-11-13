@@ -40,7 +40,8 @@ public sealed partial class McpAgentRunStore : IMcpAgentRunStore
     public McpAgentRunStore(NodeChatDbContext dbContext, McpAgentRunPayloadProtector protector)
     {
         ArgumentNullException.ThrowIfNull(dbContext);
-        _protector = protector ?? throw new ArgumentNullException(nameof(protector));
+        ArgumentNullException.ThrowIfNull(protector);
+        _protector = protector;
         _connectionString = dbContext.Database.GetConnectionString()
                             ?? throw new InvalidOperationException("The MCP run store requires a configured SQLite connection string.");
     }

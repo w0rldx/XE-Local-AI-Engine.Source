@@ -1,5 +1,5 @@
 import { Box, Code, Table, Text } from "@mantine/core";
-import { memo, useMemo } from "react";
+import { createContext, memo, use, useMemo } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 
@@ -70,33 +70,24 @@ const gfmOnly = [remarkGfm];
 // The non-caret map has no content dependency at all, so it is built once for every chat bubble in the app.
 const staticChatComponents: Components = { ...markdownComponents, ...chatWordBreakOverrides };
 
-// Build a components map that injects a StreamCaret at the end of the last
-// paragraph when `withCaret` is true. All other renderers delegate to the
-// shared markdownComponents from MarkdownView, layered with the chat-only
-// word-break overrides above.
-function buildComponents(content: string, withCaret: boolean): Components {
-	if (!withCaret) {
-		return staticChatComponents;
-	}
+// End offset of the trimmed markdown while the caret shows. The caret `p` reads it from context so the renderer
+// itself keeps one module-level identity: a per-content `p` made react-markdown remount every paragraph on each
+// streamed frame (caret animation restarted, a selection inside the streaming answer was lost).
+const CaretEndContext = createContext(-1);
 
-	// Only `p` is rebuilt per content — the caret rides the last paragraph, so it depends on the trim offset.
-	// Every other renderer (including `code`, the expensive one) keeps its module-level identity, so the
-	// streaming turn's code blocks are no longer remounted and re-tokenized on each frame.
-	const trimmedEnd = content.trimEnd().length;
-	return {
-		...staticChatComponents,
-		p({ children, node }) {
-			const endOffset = node?.position?.end?.offset ?? -1;
-			const isLastParagraph = endOffset >= trimmedEnd;
-			return (
-				<Text size="sm" style={{ whiteSpace: "pre-wrap", margin: 0, overflowWrap: "anywhere" }}>
-					{children}
-					{isLastParagraph ? <StreamCaret /> : null}
-				</Text>
-			);
-		},
-	};
-}
+const caretChatComponents: Components = {
+	...staticChatComponents,
+	p: function CaretParagraph({ children, node }) {
+		const caretEnd = use(CaretEndContext);
+		const endOffset = node?.position?.end?.offset ?? -1;
+		return (
+			<Text size="sm" style={{ whiteSpace: "pre-wrap", margin: 0, overflowWrap: "anywhere" }}>
+				{children}
+				{endOffset >= caretEnd ? <StreamCaret /> : null}
+			</Text>
+		);
+	},
+};
 
 interface ChatMarkdownProps {
 	content: string;
@@ -108,23 +99,20 @@ export const ChatMarkdown = memo(function ChatMarkdown({ content, withCaret = fa
 	const mathMarkdown = useMemo(() => normalizeMath(content), [content]);
 	const math = useMathPlugins(mathMarkdown.includes("$$"));
 	const markdown = math ? mathMarkdown : content;
-	// Memoize the component map so a re-render that changes neither content nor withCaret reuses it. With
-	// withCaret false this is the module-level staticChatComponents; the caret variant re-wraps it with a
-	// content-dependent `p`, so only that one renderer churns while the streaming text grows — every other
-	// entry, including `code`, keeps a stable identity across frames.
-	const components = useMemo(() => buildComponents(markdown, withCaret), [markdown, withCaret]);
 	return (
 		// minWidth: 0 lets this shrink inside its flex-item bubble instead of forcing the bubble wider; overflowWrap
 		// is a fallback for elements without their own word-breaking style (headings, blockquotes, strong/em).
 		<div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
-			<ReactMarkdown
-				components={components}
-				remarkPlugins={math ? [...gfmOnly, ...math.mathRemarkPlugins] : gfmOnly}
-				rehypePlugins={math?.mathRehypePlugins}
-				urlTransform={markdownImageUrlTransform}
-			>
-				{markdown}
-			</ReactMarkdown>
+			<CaretEndContext value={markdown.trimEnd().length}>
+				<ReactMarkdown
+					components={withCaret ? caretChatComponents : staticChatComponents}
+					remarkPlugins={math ? [...gfmOnly, ...math.mathRemarkPlugins] : gfmOnly}
+					rehypePlugins={math?.mathRehypePlugins}
+					urlTransform={markdownImageUrlTransform}
+				>
+					{markdown}
+				</ReactMarkdown>
+			</CaretEndContext>
 		</div>
 	);
 });

@@ -91,7 +91,7 @@ public sealed partial class McpToolsReferenceDriftTests
     }
 
     [Test]
-    public void McpToolsReference_SettingsWhitelist_MatchesTheUpdateToolParameters()
+    public void McpToolsReference_SettingsAllowlist_MatchesTheUpdateToolParameters()
     {
         var registered = typeof(NodeAdminMcpTools).GetMethods(BindingFlags.Instance | BindingFlags.Public)
                                                   .Single(static method =>
@@ -103,31 +103,31 @@ public sealed partial class McpToolsReferenceDriftTests
                                                   .ToArray();
         var reference = RepositoryPaths.Combine("skills", "xe-local-ai-engine", "references", "mcp-tools.md");
         var referenceText = File.ReadAllText(reference);
-        var documented = WhitelistFieldsRegex().Matches(WhitelistSection(referenceText))
+        var documented = AllowlistFieldsRegex().Matches(AllowlistSection(referenceText))
                                                .Select(static match => match.Groups["field"].Value)
                                                .ToArray();
 
-        AssertEx.NotEmpty(documented, "The MCP reference contained no parsed whitelist fields; refusing a vacuous drift pass.");
+        AssertEx.NotEmpty(documented, "The MCP reference contained no parsed allowlist fields; refusing a vacuous drift pass.");
         AssertEx.Empty(registered.Except(documented, StringComparer.Ordinal).Order().ToArray(),
-            $"update_node_settings parameters missing from the documented whitelist: {string.Join(", ", registered.Except(documented, StringComparer.Ordinal).Order())}");
+            $"update_node_settings parameters missing from the documented allowlist: {string.Join(", ", registered.Except(documented, StringComparer.Ordinal).Order())}");
         AssertEx.Empty(documented.Except(registered, StringComparer.Ordinal).Order().ToArray(),
-            $"Documented whitelist fields that update_node_settings does not accept: {string.Join(", ", documented.Except(registered, StringComparer.Ordinal).Order())}");
+            $"Documented allowlist fields that update_node_settings does not accept: {string.Join(", ", documented.Except(registered, StringComparer.Ordinal).Order())}");
 
         // The two prose counts drift independently of the list itself, so they are pinned separately.
         var count = registered.Length;
-        AssertEx.Contains(referenceText, $"the exact {count}-field whitelist");
+        AssertEx.Contains(referenceText, $"the exact {count}-field allowlist");
         AssertEx.Contains(referenceText, $"accepts only these {count} optional fields");
         AssertEx.Contains(File.ReadAllText(RepositoryPaths.Combine("skills", "xe-local-ai-engine", "SKILL.md")),
-            $"outside the {count}-field whitelist");
+            $"outside the {count}-field allowlist");
     }
 
-    private static string WhitelistSection(string referenceText)
+    private static string AllowlistSection(string referenceText)
     {
-        // Slice from after the count sentence so the tool's own name is not read as a whitelist field.
+        // Slice from after the count sentence so the tool's own name is not read as a allowlist field.
         var start = referenceText.IndexOf("optional fields:", StringComparison.Ordinal);
-        AssertEx.True(start >= 0, "The MCP reference has no settings-whitelist field list.");
+        AssertEx.True(start >= 0, "The MCP reference has no settings-allowlist field list.");
         var end = referenceText.IndexOf("`CustomToolsEnabled`", start, StringComparison.Ordinal);
-        AssertEx.True(end > start, "The MCP reference whitelist section has no terminating CustomToolsEnabled paragraph.");
+        AssertEx.True(end > start, "The MCP reference allowlist section has no terminating CustomToolsEnabled paragraph.");
         return referenceText[start..end];
     }
 
@@ -161,7 +161,7 @@ public sealed partial class McpToolsReferenceDriftTests
     private static partial Regex ToolCellRegex();
 
     [GeneratedRegex(@"`(?<field>[a-z][a-z0-9_]*_[a-z0-9_]+)`")]
-    private static partial Regex WhitelistFieldsRegex();
+    private static partial Regex AllowlistFieldsRegex();
 
     private sealed record DocumentedTool
     {

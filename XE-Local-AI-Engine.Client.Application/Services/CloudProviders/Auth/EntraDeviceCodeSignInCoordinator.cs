@@ -18,6 +18,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
     private const string TokenCachePersistenceName = "XE-Local-AI-Engine.Client.AzureFoundry.EntraId";
 
     private readonly ICloudCredentialStore _credentialStore;
+    private readonly Func<DeviceCodeCredentialOptions, DeviceCodeCredential> _credentialFactory;
     private readonly IEntraLiveCredentialCache _liveCredentialCache;
     private readonly Lock _gate = new();
     private readonly ILogger<EntraDeviceCodeSignInCoordinator> _logger;
@@ -43,16 +44,29 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
         IEntraLiveCredentialCache liveCredentialCache,
         ILogger<EntraDeviceCodeSignInCoordinator> logger,
         Action? onSignInSucceeded = null)
+        : this(credentialStore, tokenCacheStore, liveCredentialCache, logger, static options => new DeviceCodeCredential(options), onSignInSucceeded)
+    {
+    }
+
+    /// <summary>Test seam: <paramref name="credentialFactory" /> stands in for Entra so a test can script the device-code flow.</summary>
+    internal EntraDeviceCodeSignInCoordinator(ICloudCredentialStore credentialStore,
+        IEntraTokenCacheStore tokenCacheStore,
+        IEntraLiveCredentialCache liveCredentialCache,
+        ILogger<EntraDeviceCodeSignInCoordinator> logger,
+        Func<DeviceCodeCredentialOptions, DeviceCodeCredential> credentialFactory,
+        Action? onSignInSucceeded)
     {
         ArgumentNullException.ThrowIfNull(credentialStore);
         ArgumentNullException.ThrowIfNull(tokenCacheStore);
         ArgumentNullException.ThrowIfNull(liveCredentialCache);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(credentialFactory);
 
         _credentialStore = credentialStore;
         _tokenCacheStore = tokenCacheStore;
         _liveCredentialCache = liveCredentialCache;
         _logger = logger;
+        _credentialFactory = credentialFactory;
         _onSignInSucceeded = onSignInSucceeded;
     }
 
@@ -76,7 +90,19 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
             CancelPending(superseded);
         }
 
-        var (deviceCodeInfo, credential, completion) = await BeginDeviceCodeFlowAsync(connection, allowPersistence: true, newCts.Token);
+        DeviceCodeFlowHandle flow;
+        try
+        {
+            flow = await BeginDeviceCodeFlowAsync(connection, allowPersistence: true, newCts.Token);
+        }
+        catch
+        {
+            // No tracking task will ever own this attempt's CTS, so release it here (superseded, disposed or failed).
+            ReleasePending(newCts);
+            throw;
+        }
+
+        var (deviceCodeInfo, credential, completion) = flow;
 
         lock (_gate)
         {
@@ -134,7 +160,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
     {
         var deviceCodeReady = new TaskCompletionSource<DeviceCodeInfo>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var credential = new DeviceCodeCredential(new DeviceCodeCredentialOptions
+        var credential = _credentialFactory(new DeviceCodeCredentialOptions
         {
             TenantId = connection.EntraTenantId,
             ClientId = connection.EntraClientId,
@@ -153,17 +179,20 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
 
         var authenticateTask = credential.AuthenticateAsync(cancellationToken);
 
-        // Propagate a fault (e.g. bad tenant/client, or persistence unavailable before the callback ever fired) to
-        // the awaiter below instead of leaving it to hang forever.
-        _ = authenticateTask.ContinueWith(task => deviceCodeReady.TrySetException(task.Exception!.GetBaseException()),
-            cancellationToken,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
-
         try
         {
-            var info = await deviceCodeReady.Task;
-            return new DeviceCodeFlowHandle(info, credential, authenticateTask);
+            await Task.WhenAny(deviceCodeReady.Task, authenticateTask);
+            if (deviceCodeReady.Task.IsCompletedSuccessfully)
+            {
+                return new DeviceCodeFlowHandle(await deviceCodeReady.Task, credential, authenticateTask);
+            }
+
+            // AuthenticateAsync ended before the callback fired: rethrow its fault (bad tenant/client, persistence
+            // unavailable) or its cancellation (a newer StartAsync superseded this attempt, or Dispose) as is.
+            await authenticateTask;
+
+            // AuthenticateAsync always runs the interactive device-code flow, so success without a code breaks its contract.
+            throw new AuthenticationFailedException("Entra ID device-code sign-in completed without issuing a device code.");
         }
         // A persistence failure does not always surface as CredentialUnavailableException: with no org.freedesktop.secrets provider it can arrive as
         // AuthenticationFailedException wrapping MsalCachePersistenceException several levels deep (see EntraCachePersistenceFailure). Checking both is what makes this retry fire at all.
@@ -211,16 +240,21 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
         }
         finally
         {
-            lock (_gate)
-            {
-                if (ReferenceEquals(_pendingCts, cts))
-                {
-                    _pendingCts = null;
-                }
-            }
-
-            cts.Dispose();
+            ReleasePending(cts);
         }
+    }
+
+    private void ReleasePending(CancellationTokenSource cts)
+    {
+        lock (_gate)
+        {
+            if (ReferenceEquals(_pendingCts, cts))
+            {
+                _pendingCts = null;
+            }
+        }
+
+        cts.Dispose();
     }
 
     private async Task<StoredAzureFoundryConnection> LoadEntraConnectionOrThrowAsync(CancellationToken cancellationToken)

@@ -27,7 +27,8 @@ public sealed class LinuxSandboxProcessGroupKiller : ISandboxProcessGroupKiller
     /// </summary>
     public LinuxSandboxProcessGroupKiller(TimeProvider timeProvider)
     {
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     /// <inheritdoc />

@@ -40,11 +40,16 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
         ILlamaCppUpdateState updateState,
         ILogger<CatalogRecommendationService> logger)
     {
-        _catalogProvider = catalogProvider ?? throw new ArgumentNullException(nameof(catalogProvider));
-        _discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
-        _estimator = estimator ?? throw new ArgumentNullException(nameof(estimator));
-        _updateState = updateState ?? throw new ArgumentNullException(nameof(updateState));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(catalogProvider);
+        _catalogProvider = catalogProvider;
+        ArgumentNullException.ThrowIfNull(discovery);
+        _discovery = discovery;
+        ArgumentNullException.ThrowIfNull(estimator);
+        _estimator = estimator;
+        ArgumentNullException.ThrowIfNull(updateState);
+        _updateState = updateState;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<CatalogRecommendationResult> BuildRecommendationsAsync(string? useCase,

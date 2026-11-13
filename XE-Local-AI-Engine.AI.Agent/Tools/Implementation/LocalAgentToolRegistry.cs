@@ -16,7 +16,8 @@ internal sealed class LocalAgentToolRegistry : IAgentToolRegistry
 
     public LocalAgentToolRegistry(TimeProvider timeProvider)
     {
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
 
         // Built here rather than in a helper so the GetCurrentTime method group binds to this instance's clock.
         _tools =

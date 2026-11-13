@@ -19,7 +19,8 @@ public sealed class GetWorkSessionArtifactContentEndpoint : Endpoint<WorkSession
 
     public GetWorkSessionArtifactContentEndpoint(IWorkSessionService service, IOptions<WorkSessionOptions> options)
     {
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
         ArgumentNullException.ThrowIfNull(service);
         _service = service;
     }

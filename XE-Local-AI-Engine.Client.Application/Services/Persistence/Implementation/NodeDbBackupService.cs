@@ -49,13 +49,20 @@ public sealed class NodeDbBackupService : INodeDbBackupService
         IFreeSpaceProbe freeSpaceProbe,
         ILogger<NodeDbBackupService> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _nodeDataDirectory = nodeDataDirectory ?? throw new ArgumentNullException(nameof(nodeDataDirectory));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _freeSpaceProbe = freeSpaceProbe ?? throw new ArgumentNullException(nameof(freeSpaceProbe));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(nodeDataDirectory);
+        _nodeDataDirectory = nodeDataDirectory;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(freeSpaceProbe);
+        _freeSpaceProbe = freeSpaceProbe;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

@@ -40,10 +40,13 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
         IOptions<KnowledgeBaseOptions> options,
         ILogger<KnowledgeIngestionWorker> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(dispatcher);
+        _dispatcher = dispatcher;
         ArgumentNullException.ThrowIfNull(options);
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
 
         var maxConcurrency = Math.Max(1, options.Value.MaxConcurrentIngestions);
         _concurrency = new SemaphoreSlim(maxConcurrency, maxConcurrency);

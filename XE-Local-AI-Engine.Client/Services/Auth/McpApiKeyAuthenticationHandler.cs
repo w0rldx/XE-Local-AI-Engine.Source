@@ -32,7 +32,8 @@ internal sealed class McpApiKeyAuthenticationHandler : AuthenticationHandler<Aut
         IMcpServerApiKeyService apiKeyService)
         : base(options, logger, encoder)
     {
-        _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
+        ArgumentNullException.ThrowIfNull(apiKeyService);
+        _apiKeyService = apiKeyService;
     }
 
     /// <summary>

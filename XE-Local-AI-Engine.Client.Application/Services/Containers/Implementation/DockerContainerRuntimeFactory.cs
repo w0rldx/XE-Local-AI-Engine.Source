@@ -31,8 +31,10 @@ internal sealed class DockerContainerRuntimeFactory : IContainerRuntimeFactory
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
 
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
 
         // Categorized as the client, not this factory: the two things it logs — an unrecognised daemon health string
         // and a failed write probe — are the client's observations, and an operator needs the wire caller's name.

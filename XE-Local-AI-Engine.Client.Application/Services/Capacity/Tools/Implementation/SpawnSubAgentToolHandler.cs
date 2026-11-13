@@ -24,7 +24,8 @@ internal sealed class SpawnSubAgentToolHandler : IClientLocalToolHandler
 
     public SpawnSubAgentToolHandler(IServiceScopeFactory scopeFactory)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
     }
 
     public string ToolName => SpawnSubAgentToolDefinition.ToolName;

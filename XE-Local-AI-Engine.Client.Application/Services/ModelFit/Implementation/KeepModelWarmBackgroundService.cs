@@ -43,13 +43,20 @@ public sealed class KeepModelWarmBackgroundService : BackgroundService
         TimeProvider timeProvider,
         ILogger<KeepModelWarmBackgroundService> logger)
     {
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
-        _processSupervisor = processSupervisor ?? throw new ArgumentNullException(nameof(processSupervisor));
-        _sourceBuildActivity = sourceBuildActivity ?? throw new ArgumentNullException(nameof(sourceBuildActivity));
-        _supervisorOptions = supervisorOptions ?? throw new ArgumentNullException(nameof(supervisorOptions));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _providerResolver = providerResolver;
+        ArgumentNullException.ThrowIfNull(processSupervisor);
+        _processSupervisor = processSupervisor;
+        ArgumentNullException.ThrowIfNull(sourceBuildActivity);
+        _sourceBuildActivity = sourceBuildActivity;
+        ArgumentNullException.ThrowIfNull(supervisorOptions);
+        _supervisorOptions = supervisorOptions;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

@@ -61,10 +61,14 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         ArgumentNullException.ThrowIfNull(options);
         _dataDirectoryRoot = dataDirectory.Root;
         _options = options.Value;
-        _sandboxProvider = sandboxProvider ?? throw new ArgumentNullException(nameof(sandboxProvider));
-        _leaseManager = leaseManager ?? throw new ArgumentNullException(nameof(leaseManager));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(sandboxProvider);
+        _sandboxProvider = sandboxProvider;
+        ArgumentNullException.ThrowIfNull(leaseManager);
+        _leaseManager = leaseManager;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<AgentHomeLayout> InitializeAsync(SandboxAttachKey attachKey, CancellationToken cancellationToken = default)

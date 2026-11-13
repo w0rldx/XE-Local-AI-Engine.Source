@@ -25,8 +25,10 @@ public sealed class SaveNodeSettingsEndpoint : Endpoint<SaveNodeSettingsRequest,
     {
         ArgumentNullException.ThrowIfNull(administrationService);
         _administrationService = administrationService;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _pendingRestart = pendingRestart ?? throw new ArgumentNullException(nameof(pendingRestart));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(pendingRestart);
+        _pendingRestart = pendingRestart;
     }
 
     public override void Configure()

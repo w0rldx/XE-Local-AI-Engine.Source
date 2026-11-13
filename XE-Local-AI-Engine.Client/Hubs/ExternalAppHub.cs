@@ -41,7 +41,8 @@ public sealed class ExternalAppHub : Hub
     {
         ArgumentNullException.ThrowIfNull(apps);
         _apps = apps;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     public async Task<ExternalAppSubscriptionSnapshot> Subscribe(Guid instanceId, long afterSequence)

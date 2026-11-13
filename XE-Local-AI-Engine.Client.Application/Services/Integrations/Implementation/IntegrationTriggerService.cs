@@ -33,10 +33,14 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
         IGraphWorkflowStore graphs,
         INodeRuntimeSettings runtimeSettings)
     {
-        _triggers = triggers ?? throw new ArgumentNullException(nameof(triggers));
-        _agents = agents ?? throw new ArgumentNullException(nameof(agents));
-        _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(triggers);
+        _triggers = triggers;
+        ArgumentNullException.ThrowIfNull(agents);
+        _agents = agents;
+        ArgumentNullException.ThrowIfNull(graphs);
+        _graphs = graphs;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     public Task<IReadOnlyList<IntegrationTriggerSnapshot>> ListAsync(CancellationToken cancellationToken = default) =>

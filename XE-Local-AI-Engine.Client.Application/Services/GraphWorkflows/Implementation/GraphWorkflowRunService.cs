@@ -45,8 +45,10 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     {
         ArgumentNullException.ThrowIfNull(services);
         _services = services;
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-        _security = (security ?? throw new ArgumentNullException(nameof(security))).Value;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        ArgumentNullException.ThrowIfNull(security);
+        _security = security.Value;
         ArgumentNullException.ThrowIfNull(signal);
         _signal = signal;
         ArgumentNullException.ThrowIfNull(store);

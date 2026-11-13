@@ -35,9 +35,12 @@ public sealed class PooledRoleLaunchAdmission : ILlamaServerPooledLaunchAdmissio
 
     public PooledRoleLaunchAdmission(IServiceScopeFactory scopeFactory, TimeProvider timeProvider, ILogger<PooledRoleLaunchAdmission> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

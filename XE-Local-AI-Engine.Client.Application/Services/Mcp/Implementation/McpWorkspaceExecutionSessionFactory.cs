@@ -48,18 +48,30 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
     {
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         _runtimeSettings = runtimeSettings;
-        _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
-        _leaseManager = leaseManager ?? throw new ArgumentNullException(nameof(leaseManager));
-        _isolation = isolation ?? throw new ArgumentNullException(nameof(isolation));
-        _manifestService = manifestService ?? throw new ArgumentNullException(nameof(manifestService));
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-        _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
-        _workspaceService = workspaceService ?? throw new ArgumentNullException(nameof(workspaceService));
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-        _sandboxOptions = (sandboxOptions ?? throw new ArgumentNullException(nameof(sandboxOptions))).Value;
-        _ceilingDefaults = (ceilingDefaults ?? throw new ArgumentNullException(nameof(ceilingDefaults))).Value;
-        _nodeOptions = (nodeOptions ?? throw new ArgumentNullException(nameof(nodeOptions))).Value;
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(identityProvider);
+        _identityProvider = identityProvider;
+        ArgumentNullException.ThrowIfNull(leaseManager);
+        _leaseManager = leaseManager;
+        ArgumentNullException.ThrowIfNull(isolation);
+        _isolation = isolation;
+        ArgumentNullException.ThrowIfNull(manifestService);
+        _manifestService = manifestService;
+        ArgumentNullException.ThrowIfNull(provider);
+        _provider = provider;
+        ArgumentNullException.ThrowIfNull(resolver);
+        _resolver = resolver;
+        ArgumentNullException.ThrowIfNull(workspaceService);
+        _workspaceService = workspaceService;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        ArgumentNullException.ThrowIfNull(sandboxOptions);
+        _sandboxOptions = sandboxOptions.Value;
+        ArgumentNullException.ThrowIfNull(ceilingDefaults);
+        _ceilingDefaults = ceilingDefaults.Value;
+        ArgumentNullException.ThrowIfNull(nodeOptions);
+        _nodeOptions = nodeOptions.Value;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<McpWorkspaceExecutionSessionOpenResult> OpenAsync(Guid workspaceId,

@@ -32,7 +32,8 @@ public sealed class DefaultCudaDeviceProbe : ICudaDeviceProbe
     public DefaultCudaDeviceProbe(bool isWindows, Func<bool> hasCudaDriverLibrary)
     {
         _isWindows = isWindows;
-        _hasCudaDriverLibrary = hasCudaDriverLibrary ?? throw new ArgumentNullException(nameof(hasCudaDriverLibrary));
+        ArgumentNullException.ThrowIfNull(hasCudaDriverLibrary);
+        _hasCudaDriverLibrary = hasCudaDriverLibrary;
         _result = new Lazy<bool>(Probe, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 

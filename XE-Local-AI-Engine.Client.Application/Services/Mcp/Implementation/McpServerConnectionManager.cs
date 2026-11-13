@@ -83,17 +83,23 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     {
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         _runtimeSettings = runtimeSettings;
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
-        _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
-        _sandboxProvider = sandboxProvider ?? throw new ArgumentNullException(nameof(sandboxProvider));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
+        ArgumentNullException.ThrowIfNull(clientFactory);
+        _clientFactory = clientFactory;
+        ArgumentNullException.ThrowIfNull(sandboxProvider);
+        _sandboxProvider = sandboxProvider;
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(pipelineOptions);
         _options = options.Value;
         _maxToolResultCharacters = pipelineOptions.Value.MaxToolResultCharacters;
         _maxInvalidToolCalls = pipelineOptions.Value.MaxConsecutiveInvalidToolCallsPerTool;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _idleSweepTimer = _timeProvider.CreateTimer(static state => ((McpServerConnectionManager)state!).SweepIdleConversationSessions(), this, IdleSweepInterval, IdleSweepInterval);
     }
 

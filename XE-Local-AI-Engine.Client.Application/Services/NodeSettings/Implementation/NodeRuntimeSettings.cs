@@ -114,10 +114,12 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         IOptions<WorkerNodeOptions> workerNodeOptions,
         Lazy<IModelTrustResolver> modelTrustResolver)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
         // No DI cycle (the resolver's graph reads INodeSettingsStore, never INodeRuntimeSettings); Lazy only defers its
         // data-protected stores past composition time, when this accessor is first resolved.
-        _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        _modelTrustResolver = modelTrustResolver;
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(localChatOptions);
         ArgumentNullException.ThrowIfNull(agentHomeOptions);

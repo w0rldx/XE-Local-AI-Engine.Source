@@ -28,7 +28,8 @@ internal sealed class ImageBlobProtector
 
     public ImageBlobProtector(INodeSqliteKeyHolder keyHolder)
     {
-        _keyHolder = keyHolder ?? throw new ArgumentNullException(nameof(keyHolder));
+        ArgumentNullException.ThrowIfNull(keyHolder);
+        _keyHolder = keyHolder;
     }
 
     public byte[] Encrypt(Guid jobId, Guid imageId, string columnName, ReadOnlySpan<byte> plaintext)

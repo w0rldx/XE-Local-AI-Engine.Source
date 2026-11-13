@@ -20,9 +20,11 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
         ILlamaServerLaunchFallbackStore fallbackStore,
         ILogger<LlamaServerLaunchPolicy>? logger = null)
     {
-        _options = options ?? throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
         _options.Validate();
-        _fallbackStore = fallbackStore ?? throw new ArgumentNullException(nameof(fallbackStore));
+        ArgumentNullException.ThrowIfNull(fallbackStore);
+        _fallbackStore = fallbackStore;
         _logger = logger ?? NullLogger<LlamaServerLaunchPolicy>.Instance;
     }
 

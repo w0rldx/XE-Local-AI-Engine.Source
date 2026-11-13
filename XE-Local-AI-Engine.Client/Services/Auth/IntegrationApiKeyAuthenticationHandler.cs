@@ -37,7 +37,8 @@ internal sealed class IntegrationApiKeyAuthenticationHandler : AuthenticationHan
         IIntegrationApiKeyService apiKeyService)
         : base(options, logger, encoder)
     {
-        _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
+        ArgumentNullException.ThrowIfNull(apiKeyService);
+        _apiKeyService = apiKeyService;
     }
 
     /// <summary>

@@ -60,12 +60,18 @@ internal sealed class IntegrationApiHandler
         IntegrationSseWriter writer,
         IntegrationPrincipalRateLimiter rateLimiter)
     {
-        _invocations = invocations ?? throw new ArgumentNullException(nameof(invocations));
-        _access = access ?? throw new ArgumentNullException(nameof(access));
-        _executions = executions ?? throw new ArgumentNullException(nameof(executions));
-        _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
-        _writer = writer ?? throw new ArgumentNullException(nameof(writer));
-        _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
+        ArgumentNullException.ThrowIfNull(invocations);
+        _invocations = invocations;
+        ArgumentNullException.ThrowIfNull(access);
+        _access = access;
+        ArgumentNullException.ThrowIfNull(executions);
+        _executions = executions;
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+        ArgumentNullException.ThrowIfNull(writer);
+        _writer = writer;
+        ArgumentNullException.ThrowIfNull(rateLimiter);
+        _rateLimiter = rateLimiter;
     }
 
     /// <summary>

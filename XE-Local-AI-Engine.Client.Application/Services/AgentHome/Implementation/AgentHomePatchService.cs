@@ -36,10 +36,14 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         TimeProvider timeProvider,
         ILogger<AgentHomePatchService> logger)
     {
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(provider);
+        _provider = provider;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<AgentHomePatchExport> ExportPatchAsync(SandboxHandle handle,

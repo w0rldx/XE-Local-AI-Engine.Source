@@ -59,16 +59,26 @@ public sealed class NodeAuthService : INodeAuthService
         INodeLiveConnectionRevoker liveConnections,
         ILogger<NodeAuthService> logger)
     {
-        _identity = identity ?? throw new ArgumentNullException(nameof(identity));
-        _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
-        _signInManager = signInManager ?? throw new ArgumentNullException(nameof(signInManager));
-        _tokenService = tokenService ?? throw new ArgumentNullException(nameof(tokenService));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _vault = vault ?? throw new ArgumentNullException(nameof(vault));
-        _liveConnections = liveConnections ?? throw new ArgumentNullException(nameof(liveConnections));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(identity);
+        _identity = identity;
+        ArgumentNullException.ThrowIfNull(userManager);
+        _userManager = userManager;
+        ArgumentNullException.ThrowIfNull(signInManager);
+        _signInManager = signInManager;
+        ArgumentNullException.ThrowIfNull(tokenService);
+        _tokenService = tokenService;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(nodeSettingsStore);
+        _nodeSettingsStore = nodeSettingsStore;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(vault);
+        _vault = vault;
+        ArgumentNullException.ThrowIfNull(liveConnections);
+        _liveConnections = liveConnections;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<NodeAuthStatus> GetStatusAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)

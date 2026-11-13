@@ -10,8 +10,10 @@ internal sealed class DockerDotNetRuntimeClientFactory : IDockerRuntimeClientFac
 
     public DockerDotNetRuntimeClientFactory(IOptionsMonitor<ContainerSandboxOptions> options, TimeProvider timeProvider)
     {
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     public IDockerRuntimeClient Create(DockerDaemonEndpoint endpoint)

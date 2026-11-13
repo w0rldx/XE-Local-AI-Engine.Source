@@ -28,7 +28,8 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
 
     public NodeSqliteHealthCheck(NodeChatDbContext dbContext)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)

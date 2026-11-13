@@ -66,7 +66,8 @@ public sealed class MemoryFitEstimator
     {
         ArgumentOutOfRangeException.ThrowIfNegative(overheadBytes);
         OverheadBytes = overheadBytes;
-        _safetyMarginFraction = safetyMarginFraction ?? throw new ArgumentNullException(nameof(safetyMarginFraction));
+        ArgumentNullException.ThrowIfNull(safetyMarginFraction);
+        _safetyMarginFraction = safetyMarginFraction;
     }
 
     /// <summary>The fixed runtime overhead this estimator adds to every estimate (the insufficient-metadata floor).</summary>

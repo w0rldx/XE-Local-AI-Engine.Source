@@ -30,9 +30,12 @@ public sealed class ContainerBridgePeerGuardMiddleware : IMiddleware
         ContainerBridgeAddressWatcher watcher,
         ILogger<ContainerBridgePeerGuardMiddleware> logger)
     {
-        _endpoints = endpoints ?? throw new ArgumentNullException(nameof(endpoints));
-        _watcher = watcher ?? throw new ArgumentNullException(nameof(watcher));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(endpoints);
+        _endpoints = endpoints;
+        ArgumentNullException.ThrowIfNull(watcher);
+        _watcher = watcher;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)

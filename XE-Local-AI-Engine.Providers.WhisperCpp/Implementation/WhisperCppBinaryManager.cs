@@ -92,7 +92,8 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
     {
         _logger = logger ?? NullLogger.Instance;
         _assetPinOverride = assetPinOverride;
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        ArgumentNullException.ThrowIfNull(httpClient);
+        _httpClient = httpClient;
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(activeTag);
         _cacheRoot = cacheRoot;

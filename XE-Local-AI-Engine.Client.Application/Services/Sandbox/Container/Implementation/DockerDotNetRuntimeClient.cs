@@ -62,8 +62,10 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         TimeSpan? pullTimeout = null,
         ILogger? logger = null)
     {
-        Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(endpoint);
+        Endpoint = endpoint;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _probeTimeout = probeTimeout;
         _pullTimeout = pullTimeout ?? TimeSpan.FromMinutes(30);
         _logger = logger ?? NullLogger.Instance;

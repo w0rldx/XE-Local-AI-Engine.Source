@@ -15,11 +15,14 @@ internal sealed class WebFetchOutcome
 
     public string? ErrorMessage { get; private init; }
 
-    public static WebFetchOutcome Fetched(WebFetchPage page) =>
-        new()
+    public static WebFetchOutcome Fetched(WebFetchPage page)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        return new()
         {
-            Page = page ?? throw new ArgumentNullException(nameof(page))
+            Page = page
         };
+    }
 
     public static WebFetchOutcome Refused(string code, string message) =>
         new()

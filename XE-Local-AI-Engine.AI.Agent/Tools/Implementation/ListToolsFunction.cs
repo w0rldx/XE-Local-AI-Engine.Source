@@ -52,7 +52,8 @@ internal sealed class ListToolsFunction : AIFunction
     /// </param>
     public ListToolsFunction(IList<AITool> executableTools)
     {
-        _executableTools = executableTools ?? throw new ArgumentNullException(nameof(executableTools));
+        ArgumentNullException.ThrowIfNull(executableTools);
+        _executableTools = executableTools;
     }
 
     public override string Name => ToolName;

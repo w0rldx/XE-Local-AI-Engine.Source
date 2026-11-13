@@ -41,10 +41,14 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
         IImageServerProgressBroker progressBroker,
         ILogger<StableDiffusionCppRuntime> logger)
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _jobClient = jobClient ?? throw new ArgumentNullException(nameof(jobClient));
-        _progressBroker = progressBroker ?? throw new ArgumentNullException(nameof(progressBroker));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+        ArgumentNullException.ThrowIfNull(jobClient);
+        _jobClient = jobClient;
+        ArgumentNullException.ThrowIfNull(progressBroker);
+        _progressBroker = progressBroker;
     }
 
     /// <inheritdoc />

@@ -9,7 +9,8 @@ internal sealed class ProcessSandboxChildProcess : ISandboxChildProcess
 
     public ProcessSandboxChildProcess(Process process)
     {
-        _process = process ?? throw new ArgumentNullException(nameof(process));
+        ArgumentNullException.ThrowIfNull(process);
+        _process = process;
     }
 
     public int Id => _process.Id;

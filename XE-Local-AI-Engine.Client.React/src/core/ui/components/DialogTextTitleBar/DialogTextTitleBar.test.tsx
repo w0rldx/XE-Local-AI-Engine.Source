@@ -2,7 +2,7 @@
 
 import "@/i18n";
 
-import { MantineProvider } from "@mantine/core";
+import { MantineProvider, Modal } from "@mantine/core";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,10 +10,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DialogTextTitleBar } from "@/core/ui/components/DialogTextTitleBar/DialogTextTitleBar";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
+// The title is a Modal.Title (so Mantine can name the dialog), which only renders inside a Modal: the bar's one host.
 function renderWithProviders(ui: ReactElement) {
 	return render(
 		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
+			<Modal opened={true} onClose={vi.fn()} withCloseButton={false}>
+				{ui}
+			</Modal>
 		</MantineProvider>,
 	);
 }

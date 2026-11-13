@@ -29,7 +29,8 @@ public sealed class CodexSessionService
     {
         ArgumentNullException.ThrowIfNull(activeCloudFactory);
         _activeCloudFactory = activeCloudFactory;
-        _codexOptions = (codexOptions ?? throw new ArgumentNullException(nameof(codexOptions))).Value;
+        ArgumentNullException.ThrowIfNull(codexOptions);
+        _codexOptions = codexOptions.Value;
         ArgumentNullException.ThrowIfNull(loginCoordinator);
         _loginCoordinator = loginCoordinator;
         ArgumentNullException.ThrowIfNull(timeProvider);

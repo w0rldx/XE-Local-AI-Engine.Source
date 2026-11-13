@@ -47,19 +47,30 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         INodeRuntimeSettings runtimeSettings,
         ILogger<AgentDefinitionResolver> logger)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
-        _agentSkillStore = agentSkillStore ?? throw new ArgumentNullException(nameof(agentSkillStore));
-        _customToolStore = customToolStore ?? throw new ArgumentNullException(nameof(customToolStore));
-        _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
-        _retrievalRanker = retrievalRanker ?? throw new ArgumentNullException(nameof(retrievalRanker));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(playbookActionStore);
+        _playbookActionStore = playbookActionStore;
+        ArgumentNullException.ThrowIfNull(agentSkillStore);
+        _agentSkillStore = agentSkillStore;
+        ArgumentNullException.ThrowIfNull(customToolStore);
+        _customToolStore = customToolStore;
+        ArgumentNullException.ThrowIfNull(localToolOfferProvider);
+        _localToolOfferProvider = localToolOfferProvider;
+        ArgumentNullException.ThrowIfNull(retrievalRanker);
+        _retrievalRanker = retrievalRanker;
         ArgumentNullException.ThrowIfNull(retrievalOptions);
         _retrievalOptions = retrievalOptions.Value;
-        _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
-        _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
-        _toolApprovalPolicy = toolApprovalPolicy ?? throw new ArgumentNullException(nameof(toolApprovalPolicy));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(instructionProvider);
+        _instructionProvider = instructionProvider;
+        ArgumentNullException.ThrowIfNull(modelCapabilityResolver);
+        _modelCapabilityResolver = modelCapabilityResolver;
+        ArgumentNullException.ThrowIfNull(toolApprovalPolicy);
+        _toolApprovalPolicy = toolApprovalPolicy;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true,

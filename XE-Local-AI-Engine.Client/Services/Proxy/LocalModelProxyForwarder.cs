@@ -91,10 +91,14 @@ internal sealed class LocalModelProxyForwarder
         ILogger<LocalModelProxyForwarder> logger,
         TimeSpan? upstreamIdleTimeout = null)
     {
-        _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
-        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        _ggufModelStore = ggufModelStore;
+        ArgumentNullException.ThrowIfNull(runtime);
+        _runtime = runtime;
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        _httpClientFactory = httpClientFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _upstreamIdleTimeout = upstreamIdleTimeout ?? DefaultUpstreamIdleTimeout;
     }
 

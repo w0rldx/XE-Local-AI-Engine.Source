@@ -90,16 +90,26 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         ILlamaServerProcessSupervisor llamaSupervisor,
         IImageModelRegistry modelRegistry)
     {
-        _modelRegistry = modelRegistry ?? throw new ArgumentNullException(nameof(modelRegistry));
-        _llamaSupervisor = llamaSupervisor ?? throw new ArgumentNullException(nameof(llamaSupervisor));
-        _gpuWorkGate = gpuWorkGate ?? throw new ArgumentNullException(nameof(gpuWorkGate));
-        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
-        _imageStore = imageStore ?? throw new ArgumentNullException(nameof(imageStore));
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _runtimeActivityGate = runtimeActivityGate ?? throw new ArgumentNullException(nameof(runtimeActivityGate));
+        ArgumentNullException.ThrowIfNull(modelRegistry);
+        _modelRegistry = modelRegistry;
+        ArgumentNullException.ThrowIfNull(llamaSupervisor);
+        _llamaSupervisor = llamaSupervisor;
+        ArgumentNullException.ThrowIfNull(gpuWorkGate);
+        _gpuWorkGate = gpuWorkGate;
+        ArgumentNullException.ThrowIfNull(runtime);
+        _runtime = runtime;
+        ArgumentNullException.ThrowIfNull(imageStore);
+        _imageStore = imageStore;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(eventPublisher);
+        _eventPublisher = eventPublisher;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(runtimeActivityGate);
+        _runtimeActivityGate = runtimeActivityGate;
         // The callback only walks concurrent dictionaries (safe against a racing Dispose) and never throws.
         _evictionTimer = _timeProvider.CreateTimer(static state => ((ImageJobCoordinator)state!).EvictExpiredEventLogs(),
             this,

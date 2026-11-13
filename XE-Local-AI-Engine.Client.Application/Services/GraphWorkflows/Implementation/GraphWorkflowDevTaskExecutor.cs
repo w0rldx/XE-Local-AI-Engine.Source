@@ -44,10 +44,14 @@ internal sealed class GraphWorkflowDevTaskExecutor : IGraphWorkflowNodeExecutor
         ILogger<GraphWorkflowDevTaskExecutor> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _options = options.Value;
     }
 

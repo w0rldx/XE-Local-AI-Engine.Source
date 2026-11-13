@@ -88,9 +88,12 @@ public sealed class IntegrationExternalAccess
 
     public IntegrationExternalAccess(IIntegrationExecutionStore executions, IIntegrationSessionStore sessions, IIntegrationApiKeyStore keys)
     {
-        _executions = executions ?? throw new ArgumentNullException(nameof(executions));
-        _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
-        _keys = keys ?? throw new ArgumentNullException(nameof(keys));
+        ArgumentNullException.ThrowIfNull(executions);
+        _executions = executions;
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+        ArgumentNullException.ThrowIfNull(keys);
+        _keys = keys;
     }
 
     public async Task<IntegrationAccessResult> ResolveExecutionAsync(Guid executionId,

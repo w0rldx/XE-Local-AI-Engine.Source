@@ -48,18 +48,28 @@ internal sealed class WorkSessionService : IWorkSessionService
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(securityOptions);
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
-        _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
-        _toolGate = toolGate ?? throw new ArgumentNullException(nameof(toolGate));
-        _capabilityResolver = capabilityResolver ?? throw new ArgumentNullException(nameof(capabilityResolver));
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(blobStore);
+        _blobStore = blobStore;
+        ArgumentNullException.ThrowIfNull(persistence);
+        _persistence = persistence;
+        ArgumentNullException.ThrowIfNull(toolGate);
+        _toolGate = toolGate;
+        ArgumentNullException.ThrowIfNull(capabilityResolver);
+        _capabilityResolver = capabilityResolver;
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+        ArgumentNullException.ThrowIfNull(publisher);
+        _publisher = publisher;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _options = options.Value;
         _securityOptions = securityOptions.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     public async Task<IReadOnlyList<WorkSessionSummary>> ListAsync(CancellationToken cancellationToken = default)

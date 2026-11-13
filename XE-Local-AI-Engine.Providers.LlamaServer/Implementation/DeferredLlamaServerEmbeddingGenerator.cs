@@ -41,7 +41,8 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
 
     public DeferredLlamaServerEmbeddingGenerator(ILlamaServerProcessSupervisor supervisor, string modelName, TimeSpan networkTimeout)
     {
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         _modelName = modelName;
         _networkTimeout = networkTimeout;

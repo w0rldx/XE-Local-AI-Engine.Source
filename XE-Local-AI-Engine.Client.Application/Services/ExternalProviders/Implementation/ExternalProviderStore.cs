@@ -38,7 +38,8 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
 
         _protector = dataProtectionProvider.CreateProtector("WorkerNode.ExternalProviderStore.v1");
         _storePath = Path.Combine(dataDirectory.Root, StoreFileName);
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

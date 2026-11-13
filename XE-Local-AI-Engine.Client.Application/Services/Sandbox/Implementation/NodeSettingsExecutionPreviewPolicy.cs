@@ -9,7 +9,8 @@ internal sealed class NodeSettingsExecutionPreviewPolicy : IExecutionPreviewPoli
 
     public NodeSettingsExecutionPreviewPolicy(INodeRuntimeSettings runtimeSettings)
     {
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     public bool PreviewMechanismsEnabled => _runtimeSettings.GetExecutionPreviewsEnabled();

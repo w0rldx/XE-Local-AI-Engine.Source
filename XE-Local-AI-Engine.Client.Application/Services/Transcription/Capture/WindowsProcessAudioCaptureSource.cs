@@ -52,8 +52,10 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
     public WindowsProcessAudioCaptureSource(ILiveTranscriptionSessionRegistry registry,
         ILogger<WindowsProcessAudioCaptureSource> logger)
     {
-        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

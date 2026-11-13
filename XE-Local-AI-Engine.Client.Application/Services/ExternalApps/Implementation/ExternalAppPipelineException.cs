@@ -12,7 +12,8 @@ public sealed class ExternalAppPipelineException : Exception
     public ExternalAppPipelineException(ExternalAppFailure failure, Exception? innerException = null)
         : base(failure?.Summary ?? "The operation failed.", innerException)
     {
-        Failure = failure ?? throw new ArgumentNullException(nameof(failure));
+        ArgumentNullException.ThrowIfNull(failure);
+        Failure = failure;
     }
 
     /// <summary>The category and the content-free summary to persist.</summary>

@@ -42,13 +42,18 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
         IOptions<DevelopmentOptions> options,
         TimeProvider timeProvider)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
-        _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
-        _evidence = evidence ?? throw new ArgumentNullException(nameof(evidence));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(workspaceProvider);
+        _workspaceProvider = workspaceProvider;
+        ArgumentNullException.ThrowIfNull(sandbox);
+        _sandbox = sandbox;
+        ArgumentNullException.ThrowIfNull(evidence);
+        _evidence = evidence;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     public async Task<DevelopmentValidationResult> RunAsync(Guid taskId,

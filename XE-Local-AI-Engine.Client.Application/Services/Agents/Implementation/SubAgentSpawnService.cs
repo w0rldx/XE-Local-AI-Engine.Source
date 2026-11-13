@@ -101,27 +101,48 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         ILoggerFactory loggerFactory,
         ILogger<SubAgentSpawnService> logger)
     {
-        _capacityService = capacityService ?? throw new ArgumentNullException(nameof(capacityService));
-        _spawnSerializer = spawnSerializer ?? throw new ArgumentNullException(nameof(spawnSerializer));
-        _definitionStore = definitionStore ?? throw new ArgumentNullException(nameof(definitionStore));
-        _agentDefinitionResolver = agentDefinitionResolver ?? throw new ArgumentNullException(nameof(agentDefinitionResolver));
-        _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
-        _clientLocalToolRegistry = clientLocalToolRegistry ?? throw new ArgumentNullException(nameof(clientLocalToolRegistry));
-        _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
-        _customToolCatalog = customToolCatalog ?? throw new ArgumentNullException(nameof(customToolCatalog));
-        _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
-        _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
-        _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
-        _mcpExecutionBindingResolver = mcpExecutionBindingResolver ?? throw new ArgumentNullException(nameof(mcpExecutionBindingResolver));
-        _mcpAgenticToolAdapter = mcpAgenticToolAdapter ?? throw new ArgumentNullException(nameof(mcpAgenticToolAdapter));
-        _mcpWorkspaceSessionFactory = mcpWorkspaceSessionFactory ?? throw new ArgumentNullException(nameof(mcpWorkspaceSessionFactory));
-        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
-        _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
-        _providerCallBudgetOptions = (providerCallBudgetOptions ?? throw new ArgumentNullException(nameof(providerCallBudgetOptions))).Value;
-        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(capacityService);
+        _capacityService = capacityService;
+        ArgumentNullException.ThrowIfNull(spawnSerializer);
+        _spawnSerializer = spawnSerializer;
+        ArgumentNullException.ThrowIfNull(definitionStore);
+        _definitionStore = definitionStore;
+        ArgumentNullException.ThrowIfNull(agentDefinitionResolver);
+        _agentDefinitionResolver = agentDefinitionResolver;
+        ArgumentNullException.ThrowIfNull(toolRegistry);
+        _toolRegistry = toolRegistry;
+        ArgumentNullException.ThrowIfNull(clientLocalToolRegistry);
+        _clientLocalToolRegistry = clientLocalToolRegistry;
+        ArgumentNullException.ThrowIfNull(mcpToolRegistry);
+        _mcpToolRegistry = mcpToolRegistry;
+        ArgumentNullException.ThrowIfNull(customToolCatalog);
+        _customToolCatalog = customToolCatalog;
+        ArgumentNullException.ThrowIfNull(chatClient);
+        _chatClient = chatClient;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(instructionProvider);
+        _instructionProvider = instructionProvider;
+        ArgumentNullException.ThrowIfNull(modelCapabilityResolver);
+        _modelCapabilityResolver = modelCapabilityResolver;
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        _modelTrustResolver = modelTrustResolver;
+        ArgumentNullException.ThrowIfNull(mcpExecutionBindingResolver);
+        _mcpExecutionBindingResolver = mcpExecutionBindingResolver;
+        ArgumentNullException.ThrowIfNull(mcpAgenticToolAdapter);
+        _mcpAgenticToolAdapter = mcpAgenticToolAdapter;
+        ArgumentNullException.ThrowIfNull(mcpWorkspaceSessionFactory);
+        _mcpWorkspaceSessionFactory = mcpWorkspaceSessionFactory;
+        ArgumentNullException.ThrowIfNull(nodeSettingsStore);
+        _nodeSettingsStore = nodeSettingsStore;
+        ArgumentNullException.ThrowIfNull(externalProviderRegistry);
+        _externalProviderRegistry = externalProviderRegistry;
+        ArgumentNullException.ThrowIfNull(providerCallBudgetOptions);
+        _providerCallBudgetOptions = providerCallBudgetOptions.Value;
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        _loggerFactory = loggerFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

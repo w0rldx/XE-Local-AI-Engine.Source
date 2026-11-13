@@ -23,7 +23,8 @@ internal sealed class ConversationMaintenanceDispatcher : IConversationMaintenan
     public ConversationMaintenanceDispatcher(IOptions<ConversationCompactionOptions> options, ILogger<ConversationMaintenanceDispatcher> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
 
         _queue = Channel.CreateBounded<ConversationMaintenanceJob>(new BoundedChannelOptions(Math.Max(1, options.Value.MaintenanceQueueCapacity))
         {

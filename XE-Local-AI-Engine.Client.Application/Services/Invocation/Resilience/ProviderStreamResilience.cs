@@ -32,9 +32,12 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
     {
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public IAsyncEnumerable<T> ExecuteStreamingAsync<T>(string endpointKey,

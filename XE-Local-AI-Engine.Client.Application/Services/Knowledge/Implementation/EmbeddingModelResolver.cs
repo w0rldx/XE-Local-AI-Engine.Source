@@ -19,7 +19,8 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
     {
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
+        ArgumentNullException.ThrowIfNull(settingsStore);
+        _settingsStore = settingsStore;
     }
 
     public async Task<EmbeddingModelResolution> ResolveAsync(ILocalModelProvider provider, CancellationToken cancellationToken)

@@ -42,9 +42,12 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         ILogger<HardwareProfiler>? logger = null,
         IHardwareProbeMetrics? metrics = null)
     {
-        _processProbe = processProbe ?? throw new ArgumentNullException(nameof(processProbe));
-        _environment = environment ?? throw new ArgumentNullException(nameof(environment));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(processProbe);
+        _processProbe = processProbe;
+        ArgumentNullException.ThrowIfNull(environment);
+        _environment = environment;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
         _logger = logger ?? NullLogger<HardwareProfiler>.Instance;
         _metrics = metrics ?? NullHardwareProbeMetrics.Instance;
     }

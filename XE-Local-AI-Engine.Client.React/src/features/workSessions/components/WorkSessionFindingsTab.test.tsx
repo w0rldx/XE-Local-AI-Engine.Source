@@ -60,6 +60,17 @@ describe("WorkSessionFindingsTab", () => {
 		expect(screen.getByTestId("work-session-finding-source-f1").textContent).toBe("kb://doc-42#3");
 	});
 
+	// Finding text is agent-written: a rendered image's src would be fetched on tab open and could carry data out.
+	it("writes a Markdown image in a finding as its alt text and URL and never renders an <img>", () => {
+		renderWithProviders(
+			<WorkSessionFindingsTab findings={[finding("f1", { text: "See ![x](https://example.invalid/a.png)" })]} />,
+		);
+
+		const card = screen.getByTestId("work-session-finding-f1");
+		expect(card.querySelector("img")).toBeNull();
+		expect(card.textContent).toContain("[x] https://example.invalid/a.png");
+	});
+
 	it("says so when the agent has recorded nothing", () => {
 		renderWithProviders(<WorkSessionFindingsTab findings={[]} />);
 

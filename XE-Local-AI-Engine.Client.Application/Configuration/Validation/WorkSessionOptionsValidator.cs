@@ -15,8 +15,11 @@ public sealed class WorkSessionOptionsValidator : IValidateOptions<WorkSessionOp
 {
     private readonly IOptions<WorkerNodeOptions> _workerNode;
 
-    public WorkSessionOptionsValidator(IOptions<WorkerNodeOptions> workerNode) =>
-        _workerNode = workerNode ?? throw new ArgumentNullException(nameof(workerNode));
+    public WorkSessionOptionsValidator(IOptions<WorkerNodeOptions> workerNode)
+    {
+        ArgumentNullException.ThrowIfNull(workerNode);
+        _workerNode = workerNode;
+    }
 
     public ValidateOptionsResult Validate(string? name, WorkSessionOptions options)
     {

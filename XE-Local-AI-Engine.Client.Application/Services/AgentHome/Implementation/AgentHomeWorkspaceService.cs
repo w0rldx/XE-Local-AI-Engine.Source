@@ -35,12 +35,18 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         TimeProvider timeProvider,
         ILogger<AgentHomeWorkspaceService> logger)
     {
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-        _isolation = isolation ?? throw new ArgumentNullException(nameof(isolation));
-        _exclusionService = exclusionService ?? throw new ArgumentNullException(nameof(exclusionService));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(provider);
+        _provider = provider;
+        ArgumentNullException.ThrowIfNull(isolation);
+        _isolation = isolation;
+        ArgumentNullException.ThrowIfNull(exclusionService);
+        _exclusionService = exclusionService;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<SelectedFolderSnapshot>> PrepareSelectedFoldersAsync(SandboxHandle handle,

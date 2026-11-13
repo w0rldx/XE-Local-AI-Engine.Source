@@ -180,16 +180,26 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ILogger<InvocationRunner> logger,
         TimeProvider timeProvider)
     {
-        _lifecycleTracker = lifecycleTracker ?? throw new ArgumentNullException(nameof(lifecycleTracker));
-        _toolApprovalCoordinator = toolApprovalCoordinator ?? throw new ArgumentNullException(nameof(toolApprovalCoordinator));
-        _apiToolCallBridge = apiToolCallBridge ?? throw new ArgumentNullException(nameof(apiToolCallBridge));
-        _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
-        _invocationAgentFactory = invocationAgentFactory ?? throw new ArgumentNullException(nameof(invocationAgentFactory));
-        _orchestrationAgentFactory = orchestrationAgentFactory ?? throw new ArgumentNullException(nameof(orchestrationAgentFactory));
-        _runtimePackageValidator = runtimePackageValidator ?? throw new ArgumentNullException(nameof(runtimePackageValidator));
-        _localRuntimeWarmer = localRuntimeWarmer ?? throw new ArgumentNullException(nameof(localRuntimeWarmer));
-        _providerStreamResilience = providerStreamResilience ?? throw new ArgumentNullException(nameof(providerStreamResilience));
-        _contextBudgeter = contextBudgeter ?? throw new ArgumentNullException(nameof(contextBudgeter));
+        ArgumentNullException.ThrowIfNull(lifecycleTracker);
+        _lifecycleTracker = lifecycleTracker;
+        ArgumentNullException.ThrowIfNull(toolApprovalCoordinator);
+        _toolApprovalCoordinator = toolApprovalCoordinator;
+        ArgumentNullException.ThrowIfNull(apiToolCallBridge);
+        _apiToolCallBridge = apiToolCallBridge;
+        ArgumentNullException.ThrowIfNull(eventDispatcher);
+        _eventDispatcher = eventDispatcher;
+        ArgumentNullException.ThrowIfNull(invocationAgentFactory);
+        _invocationAgentFactory = invocationAgentFactory;
+        ArgumentNullException.ThrowIfNull(orchestrationAgentFactory);
+        _orchestrationAgentFactory = orchestrationAgentFactory;
+        ArgumentNullException.ThrowIfNull(runtimePackageValidator);
+        _runtimePackageValidator = runtimePackageValidator;
+        ArgumentNullException.ThrowIfNull(localRuntimeWarmer);
+        _localRuntimeWarmer = localRuntimeWarmer;
+        ArgumentNullException.ThrowIfNull(providerStreamResilience);
+        _providerStreamResilience = providerStreamResilience;
+        ArgumentNullException.ThrowIfNull(contextBudgeter);
+        _contextBudgeter = contextBudgeter;
         ArgumentNullException.ThrowIfNull(contextBudgetOptions);
         _contextBudgetOptions = contextBudgetOptions.Value;
         ArgumentNullException.ThrowIfNull(resilienceOptions);
@@ -198,14 +208,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _toolPipelineOptions = toolPipelineOptions.Value;
         ArgumentNullException.ThrowIfNull(providerCallBudgetOptions);
         _providerCallBudgetOptions = providerCallBudgetOptions.Value;
-        _toolRelevanceCoreSet = toolRelevanceCoreSet ?? throw new ArgumentNullException(nameof(toolRelevanceCoreSet));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _knowledgeModelPrewarmer = knowledgeModelPrewarmer ?? throw new ArgumentNullException(nameof(knowledgeModelPrewarmer));
-        _reasoningControl = reasoningControl ?? throw new ArgumentNullException(nameof(reasoningControl));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(toolRelevanceCoreSet);
+        _toolRelevanceCoreSet = toolRelevanceCoreSet;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(externalProviderRegistry);
+        _externalProviderRegistry = externalProviderRegistry;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(knowledgeModelPrewarmer);
+        _knowledgeModelPrewarmer = knowledgeModelPrewarmer;
+        ArgumentNullException.ThrowIfNull(reasoningControl);
+        _reasoningControl = reasoningControl;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
 
         // Read once at singleton construction from INodeRuntimeSettings (stored > appsettings seed > default) into plain fields the hot
         // streaming/cleanup loops read, so an operator edit applies on the next restart. The default model is read per turn instead.

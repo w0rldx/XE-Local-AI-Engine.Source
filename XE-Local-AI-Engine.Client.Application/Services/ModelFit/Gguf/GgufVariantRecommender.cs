@@ -40,11 +40,16 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         IRuntimeDeviceAudit runtimeAudit,
         ILogger<GgufVariantRecommender> logger)
     {
-        _runtimeAudit = runtimeAudit ?? throw new ArgumentNullException(nameof(runtimeAudit));
-        _companionReserve = companionReserve ?? throw new ArgumentNullException(nameof(companionReserve));
-        _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
-        _processVramBudgetProbe = processVramBudgetProbe ?? throw new ArgumentNullException(nameof(processVramBudgetProbe));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeAudit);
+        _runtimeAudit = runtimeAudit;
+        ArgumentNullException.ThrowIfNull(companionReserve);
+        _companionReserve = companionReserve;
+        ArgumentNullException.ThrowIfNull(variantSelector);
+        _variantSelector = variantSelector;
+        ArgumentNullException.ThrowIfNull(processVramBudgetProbe);
+        _processVramBudgetProbe = processVramBudgetProbe;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

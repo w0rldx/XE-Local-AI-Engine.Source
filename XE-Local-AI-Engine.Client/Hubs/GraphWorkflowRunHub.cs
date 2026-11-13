@@ -32,7 +32,8 @@ public sealed class GraphWorkflowRunHub : Hub
         IInvocationResumeRegistry resumeRegistry,
         INodeRuntimeSettings runtimeSettings)
     {
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         ArgumentNullException.ThrowIfNull(runs);
         ArgumentNullException.ThrowIfNull(resumeRegistry);
         _runs = runs;

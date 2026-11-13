@@ -19,7 +19,8 @@ internal sealed class ExternalAppBridgeTokenVerifier : IContainerBridgeTokenVeri
 
     public ExternalAppBridgeTokenVerifier(IExternalAppInstanceStore store)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
     }
 
     public async Task<ContainerBridgeCaller?> VerifyAsync(string presentedToken, CancellationToken cancellationToken = default)

@@ -51,14 +51,21 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(agentHomeOptions);
         ArgumentNullException.ThrowIfNull(dataDirectory);
-        _options = options.Value ?? throw new ArgumentNullException(nameof(options));
-        _agentHomeOptions = agentHomeOptions.Value ?? throw new ArgumentNullException(nameof(agentHomeOptions));
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        ArgumentNullException.ThrowIfNull(agentHomeOptions);
+        _agentHomeOptions = agentHomeOptions.Value;
         _dataDirectoryRoot = dataDirectory.Root;
-        _executingRuns = executingRuns ?? throw new ArgumentNullException(nameof(executingRuns));
-        _applyGuard = applyGuard ?? throw new ArgumentNullException(nameof(applyGuard));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(executingRuns);
+        _executingRuns = executingRuns;
+        ArgumentNullException.ThrowIfNull(applyGuard);
+        _applyGuard = applyGuard;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

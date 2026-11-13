@@ -57,15 +57,19 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
         TimeProvider timeProvider,
         ILogger logger)
     {
-        _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-        _executions = executions ?? throw new ArgumentNullException(nameof(executions));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(buffer);
+        _buffer = buffer;
+        ArgumentNullException.ThrowIfNull(executions);
+        _executions = executions;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _executionId = executionId;
         _sessionId = sessionId;
         _invocationId = invocationId;
         _maxOutputBytes = maxOutputBytes;
         _emitDebounce = emitDebounce;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _pump = PumpAsync();
     }
 

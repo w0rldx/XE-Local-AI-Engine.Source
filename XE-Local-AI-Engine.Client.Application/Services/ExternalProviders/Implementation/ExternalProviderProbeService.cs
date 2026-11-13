@@ -53,8 +53,10 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
         ILogger<ExternalProviderProbeService> logger,
         Func<HttpMessageHandler>? transportHandlerFactory = null)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _transportHandlerFactory = transportHandlerFactory;
     }
 

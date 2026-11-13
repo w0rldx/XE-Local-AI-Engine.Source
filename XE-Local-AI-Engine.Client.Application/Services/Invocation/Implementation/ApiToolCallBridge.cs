@@ -27,7 +27,8 @@ public sealed class ApiToolCallBridge
     {
         ArgumentNullException.ThrowIfNull(pendingToolCallRegistry);
         _pendingToolCalls = pendingToolCallRegistry.Calls;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     public void CleanupStaleToolCalls(TimeSpan maxAge)

@@ -21,9 +21,12 @@ public sealed partial class KnowledgeRerankerStartupWarmService : BackgroundServ
         IKnowledgeModelPrewarmer prewarmer,
         ILogger<KnowledgeRerankerStartupWarmService> logger)
     {
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _prewarmer = prewarmer ?? throw new ArgumentNullException(nameof(prewarmer));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(prewarmer);
+        _prewarmer = prewarmer;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

@@ -53,10 +53,14 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
         TimeProvider timeProvider,
         ILogger<ProcessAudioCaptureCoordinator> logger)
     {
-        _source = source ?? throw new ArgumentNullException(nameof(source));
-        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(source);
+        _source = source;
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <summary>Whether this session currently has a capture attached.</summary>

@@ -72,7 +72,8 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         _goldenConversationStore = goldenConversationStore;
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
         ArgumentNullException.ThrowIfNull(modelIdentityResolver);
         _modelIdentityResolver = modelIdentityResolver;
         ArgumentNullException.ThrowIfNull(playbookActionService);
@@ -83,8 +84,10 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         _providerResolver = providerResolver;
         ArgumentNullException.ThrowIfNull(timeProvider);
         _timeProvider = timeProvider;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        _modelTrustResolver = modelTrustResolver;
     }
 
     public async Task<PlaybookEvalOutcome> RunEvalAsync(Guid agentId, Guid actionId, CancellationToken cancellationToken = default)

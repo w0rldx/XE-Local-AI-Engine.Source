@@ -26,10 +26,14 @@ internal sealed class CudaBuildStartupService : IHostedService
         ICudaManagedBuildSignal signal,
         ILogger<CudaBuildStartupService> logger)
     {
-        _buildService = buildService ?? throw new ArgumentNullException(nameof(buildService));
-        _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
-        _signal = signal ?? throw new ArgumentNullException(nameof(signal));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(buildService);
+        _buildService = buildService;
+        ArgumentNullException.ThrowIfNull(installedRuntimeStore);
+        _installedRuntimeStore = installedRuntimeStore;
+        ArgumentNullException.ThrowIfNull(signal);
+        _signal = signal;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)

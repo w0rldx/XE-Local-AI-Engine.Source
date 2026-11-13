@@ -54,12 +54,18 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         ILogger<ContainerRuntimeResolver> logger,
         Func<string?, DockerDaemonEndpoint>? endpointResolver)
     {
-        _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _factory = factory ?? throw new ArgumentNullException(nameof(factory));
-        _attestationStore = attestationStore ?? throw new ArgumentNullException(nameof(attestationStore));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(settingsStore);
+        _settingsStore = settingsStore;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(factory);
+        _factory = factory;
+        ArgumentNullException.ThrowIfNull(attestationStore);
+        _attestationStore = attestationStore;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _endpointResolver = endpointResolver ?? DockerDaemonEndpointResolver.Resolve;
     }
 

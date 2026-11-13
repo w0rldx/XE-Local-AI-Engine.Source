@@ -46,8 +46,10 @@ public sealed class SandboxLauncher : ISandboxLauncher
 
     internal SandboxLauncher(ISandboxContainmentProbe probe, IReadOnlyList<string> deniedRootCandidates, ILogger<SandboxLauncher>? logger = null)
     {
-        _probe = probe ?? throw new ArgumentNullException(nameof(probe));
-        _deniedRootCandidates = deniedRootCandidates ?? throw new ArgumentNullException(nameof(deniedRootCandidates));
+        ArgumentNullException.ThrowIfNull(probe);
+        _probe = probe;
+        ArgumentNullException.ThrowIfNull(deniedRootCandidates);
+        _deniedRootCandidates = deniedRootCandidates;
         _logger = logger ?? NullLogger<SandboxLauncher>.Instance;
     }
 

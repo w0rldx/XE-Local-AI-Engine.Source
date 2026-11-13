@@ -27,11 +27,16 @@ public sealed class ExternalProviderAdministrationService : IExternalProviderAdm
         ILocalChatClientCacheInvalidator chatClientCacheInvalidator,
         ILogger<ExternalProviderAdministrationService> logger)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _registryCache = registryCache ?? throw new ArgumentNullException(nameof(registryCache));
-        _reconciler = reconciler ?? throw new ArgumentNullException(nameof(reconciler));
-        _chatClientCacheInvalidator = chatClientCacheInvalidator ?? throw new ArgumentNullException(nameof(chatClientCacheInvalidator));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(registryCache);
+        _registryCache = registryCache;
+        ArgumentNullException.ThrowIfNull(reconciler);
+        _reconciler = reconciler;
+        ArgumentNullException.ThrowIfNull(chatClientCacheInvalidator);
+        _chatClientCacheInvalidator = chatClientCacheInvalidator;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

@@ -20,7 +20,8 @@ internal sealed class DraftAdmissionGate : IDisposable
 
     public DraftAdmissionGate(IWorkerEventDispatcher workerEventDispatcher)
     {
-        _workerEventDispatcher = workerEventDispatcher ?? throw new ArgumentNullException(nameof(workerEventDispatcher));
+        ArgumentNullException.ThrowIfNull(workerEventDispatcher);
+        _workerEventDispatcher = workerEventDispatcher;
     }
 
     /// <summary>

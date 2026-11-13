@@ -36,14 +36,21 @@ internal sealed class ChatStreamEventForwarder : IDisposable
         NodeChatPartAccumulator parts,
         TimeProvider timeProvider)
     {
-        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
-        _correlation = correlation ?? throw new ArgumentNullException(nameof(correlation));
+        ArgumentNullException.ThrowIfNull(dispatcher);
+        _dispatcher = dispatcher;
+        ArgumentNullException.ThrowIfNull(correlation);
+        _correlation = correlation;
         _requestId = requestId;
-        _stateWriter = stateWriter ?? throw new ArgumentNullException(nameof(stateWriter));
-        _eventSink = eventSink ?? throw new ArgumentNullException(nameof(eventSink));
-        _sequence = sequence ?? throw new ArgumentNullException(nameof(sequence));
-        _parts = parts ?? throw new ArgumentNullException(nameof(parts));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(stateWriter);
+        _stateWriter = stateWriter;
+        ArgumentNullException.ThrowIfNull(eventSink);
+        _eventSink = eventSink;
+        ArgumentNullException.ThrowIfNull(sequence);
+        _sequence = sequence;
+        ArgumentNullException.ThrowIfNull(parts);
+        _parts = parts;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
 
         _dispatcher.InvocationStateChanged += OnInvocationStateChanged;
         _dispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;

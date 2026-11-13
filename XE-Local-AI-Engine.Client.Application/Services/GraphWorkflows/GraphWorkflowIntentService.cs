@@ -47,11 +47,16 @@ public sealed class GraphWorkflowIntentService
         IOptions<GraphWorkflowOptions> options,
         TimeProvider timeProvider)
     {
-        _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
-        _runs = runs ?? throw new ArgumentNullException(nameof(runs));
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(definitions);
+        _definitions = definitions;
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+        ArgumentNullException.ThrowIfNull(settings);
+        _settings = settings;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     /// <summary>Collapses whitespace runs, trims and strips trailing <c>.!?</c>: the one form aliases match in, compared ignoring case.</summary>

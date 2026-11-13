@@ -52,7 +52,8 @@ public sealed class ModelFitRequestValidator
 
     public ModelFitRequestValidator(ModelNameValidator modelNameValidator)
     {
-        _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
+        ArgumentNullException.ThrowIfNull(modelNameValidator);
+        _modelNameValidator = modelNameValidator;
     }
 
     /// <summary>Validates the params for the given <paramref name="operation" />. Returns a sanitized error, or <c>null</c> when valid.</summary>

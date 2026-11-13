@@ -37,10 +37,14 @@ internal sealed class LiveMemorySampler : ILiveMemorySampler
         HardwareProfilerOptions options,
         TimeProvider timeProvider)
     {
-        _processProbe = processProbe ?? throw new ArgumentNullException(nameof(processProbe));
-        _environment = environment ?? throw new ArgumentNullException(nameof(environment));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(processProbe);
+        _processProbe = processProbe;
+        ArgumentNullException.ThrowIfNull(environment);
+        _environment = environment;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     /// <inheritdoc />

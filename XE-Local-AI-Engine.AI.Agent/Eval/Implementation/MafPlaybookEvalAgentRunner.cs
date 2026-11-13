@@ -24,8 +24,10 @@ internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
 
     public MafPlaybookEvalAgentRunner(ILoggerFactory loggerFactory, IServiceProvider serviceProvider)
     {
-        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
-        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        _loggerFactory = loggerFactory;
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        _serviceProvider = serviceProvider;
     }
 
     public async Task<string> RunAsync(IChatClient chatClient,

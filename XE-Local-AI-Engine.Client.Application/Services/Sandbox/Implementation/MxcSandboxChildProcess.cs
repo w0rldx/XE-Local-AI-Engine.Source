@@ -15,7 +15,8 @@ internal sealed class MxcSandboxChildProcess : ISandboxChildProcess
 
     public MxcSandboxChildProcess(MxcChildProcess child)
     {
-        _child = child ?? throw new ArgumentNullException(nameof(child));
+        ArgumentNullException.ThrowIfNull(child);
+        _child = child;
     }
 
     public int Id => _child.Id;

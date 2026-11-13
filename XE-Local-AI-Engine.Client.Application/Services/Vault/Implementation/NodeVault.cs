@@ -38,9 +38,12 @@ public sealed class NodeVault : INodeVault, IDisposable
     {
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(dataDirectory);
-        _secretProvider = secretProvider ?? throw new ArgumentNullException(nameof(secretProvider));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(secretProvider);
+        _secretProvider = secretProvider;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _path = Path.Combine(dataDirectory.Root, VaultFileCodec.KeyFileName);
 
 #pragma warning disable MA0045 // Read once at singleton construction, which DI performs synchronously.

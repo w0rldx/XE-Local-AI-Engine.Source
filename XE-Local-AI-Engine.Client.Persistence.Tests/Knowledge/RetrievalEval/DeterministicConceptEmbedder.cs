@@ -134,7 +134,8 @@ internal sealed class SingleProviderResolver : ILocalModelProviderResolver
 
     public SingleProviderResolver(ILocalModelProvider provider)
     {
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+        ArgumentNullException.ThrowIfNull(provider);
+        _provider = provider;
     }
 
     public int MaxLoadedProcesses => 1;

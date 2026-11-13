@@ -50,10 +50,14 @@ internal sealed partial class SkillImportService : ISkillImportService
         HttpClient httpClient,
         SkillImportOptions options)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(cache);
+        _cache = cache;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
         _downloader = new GitHubSkillArchiveDownloader(httpClient, options);
     }
 

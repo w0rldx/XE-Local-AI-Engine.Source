@@ -17,7 +17,8 @@ internal sealed class MxcCancellableStdoutStream : Stream
 
     public MxcCancellableStdoutStream(Stream inner, IMxcStreamCloser? closer)
     {
-        _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        ArgumentNullException.ThrowIfNull(inner);
+        _inner = inner;
         _closer = closer;
     }
 

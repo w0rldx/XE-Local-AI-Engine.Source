@@ -45,9 +45,12 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         ILogger<ToolRelevanceChatClient> logger)
         : base(innerClient)
     {
-        _selector = selector ?? throw new ArgumentNullException(nameof(selector));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(selector);
+        _selector = selector;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,

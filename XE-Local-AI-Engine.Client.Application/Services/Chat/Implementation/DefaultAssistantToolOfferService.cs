@@ -26,13 +26,20 @@ internal sealed class DefaultAssistantToolOfferService : IDefaultAssistantToolOf
         ILocalToolOfferProvider localToolOfferProvider,
         IToolApprovalPolicy toolApprovalPolicy)
     {
-        _turnResolver = turnResolver ?? throw new ArgumentNullException(nameof(turnResolver));
-        _defaultAgentProvider = defaultAgentProvider ?? throw new ArgumentNullException(nameof(defaultAgentProvider));
-        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
-        _localDefaultChatModelResolver = localDefaultChatModelResolver ?? throw new ArgumentNullException(nameof(localDefaultChatModelResolver));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
-        _toolApprovalPolicy = toolApprovalPolicy ?? throw new ArgumentNullException(nameof(toolApprovalPolicy));
+        ArgumentNullException.ThrowIfNull(turnResolver);
+        _turnResolver = turnResolver;
+        ArgumentNullException.ThrowIfNull(defaultAgentProvider);
+        _defaultAgentProvider = defaultAgentProvider;
+        ArgumentNullException.ThrowIfNull(nodeSettingsStore);
+        _nodeSettingsStore = nodeSettingsStore;
+        ArgumentNullException.ThrowIfNull(localDefaultChatModelResolver);
+        _localDefaultChatModelResolver = localDefaultChatModelResolver;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(localToolOfferProvider);
+        _localToolOfferProvider = localToolOfferProvider;
+        ArgumentNullException.ThrowIfNull(toolApprovalPolicy);
+        _toolApprovalPolicy = toolApprovalPolicy;
     }
 
     public async Task<DefaultAssistantToolOffer> GetAsync(string? modelName, CancellationToken cancellationToken = default)

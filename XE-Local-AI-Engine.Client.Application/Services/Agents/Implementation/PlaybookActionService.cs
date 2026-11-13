@@ -23,10 +23,12 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         IOptions<PlaybookActionOptions> actionOptions,
         INodeRuntimeSettings runtimeSettings)
     {
-        _actionOptions = (actionOptions ?? throw new ArgumentNullException(nameof(actionOptions))).Value;
+        ArgumentNullException.ThrowIfNull(actionOptions);
+        _actionOptions = actionOptions.Value;
         ArgumentNullException.ThrowIfNull(agentDefinitionStore);
         _agentDefinitionStore = agentDefinitionStore;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         ArgumentNullException.ThrowIfNull(goldenConversationStore);
         _goldenConversationStore = goldenConversationStore;
         ArgumentNullException.ThrowIfNull(modelIdentityResolver);

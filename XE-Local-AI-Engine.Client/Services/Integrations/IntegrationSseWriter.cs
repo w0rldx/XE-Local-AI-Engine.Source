@@ -60,9 +60,12 @@ internal sealed class IntegrationSseWriter : IDisposable
         ILogger<IntegrationSseWriter> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
-        _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(buffer);
+        _buffer = buffer;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
 
         var maxStreams = options.Value.MaxTrackedExecutions;
         _openStreams = new SemaphoreSlim(maxStreams, maxStreams);

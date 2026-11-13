@@ -19,10 +19,14 @@ internal sealed class AgentHomeWorkspaceRevocationPreparation : IWorkspaceRevoca
         IAgentSandboxRuntimeProvider provider,
         IOptions<AgentHomeOptions> options)
     {
-        _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
-        _leaseManager = leaseManager ?? throw new ArgumentNullException(nameof(leaseManager));
-        _isolation = isolation ?? throw new ArgumentNullException(nameof(isolation));
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+        ArgumentNullException.ThrowIfNull(identityProvider);
+        _identityProvider = identityProvider;
+        ArgumentNullException.ThrowIfNull(leaseManager);
+        _leaseManager = leaseManager;
+        ArgumentNullException.ThrowIfNull(isolation);
+        _isolation = isolation;
+        ArgumentNullException.ThrowIfNull(provider);
+        _provider = provider;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
     }

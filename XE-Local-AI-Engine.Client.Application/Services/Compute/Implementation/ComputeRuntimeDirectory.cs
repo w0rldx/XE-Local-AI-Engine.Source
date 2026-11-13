@@ -34,7 +34,8 @@ internal sealed class ComputeRuntimeDirectory
         ArgumentException.ThrowIfNullOrWhiteSpace(scriptsDirectory);
         CacheRoot = cacheRoot;
         _scriptsDirectory = scriptsDirectory;
-        _toolchain = toolchain ?? throw new ArgumentNullException(nameof(toolchain));
+        ArgumentNullException.ThrowIfNull(toolchain);
+        _toolchain = toolchain;
     }
 
     public string CacheRoot { get; }

@@ -43,12 +43,18 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
         BackgroundInvocationYield invocationYield,
         ILogger<ConversationMaintenanceWorker> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
-        _invocationYield = invocationYield ?? throw new ArgumentNullException(nameof(invocationYield));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(dispatcher);
+        _dispatcher = dispatcher;
+        ArgumentNullException.ThrowIfNull(invocationYield);
+        _invocationYield = invocationYield;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _drainTimeout = TimeSpan.FromSeconds(Math.Max(1, options.Value.MaintenanceShutdownDrainTimeoutSeconds));
     }
 

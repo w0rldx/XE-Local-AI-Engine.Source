@@ -93,6 +93,7 @@ Lookup material split out of the largest pages. Each is complete on its own and 
 | 03 Local Runtime & Providers | [supervisor internals](reference/03-llama-server-supervisor.md) · [launch flags](reference/03-llama-server-launch-flags.md) · [clients](reference/03-llama-server-clients.md) · [runtime binaries & tuning](reference/03-runtime-binaries-and-tuning.md) · [satellite & cloud providers](reference/03-satellite-and-cloud-providers.md) |
 | 04 Agent Mode | [AI.Agent runtime](reference/04-ai-agent-runtime.md) · [application services](reference/04-application-services.md) · [agent skills](reference/04-agent-skills.md) · [work sessions](reference/04-work-sessions.md) |
 | 12 Security & Privacy | [admin API surface](reference/12-admin-api-surface.md) · [sandbox modes & options](reference/12-sandbox-modes-and-options.md) |
+| 13 Testing & Validation | [quality review](reference/13-quality-review.md) |
 
 ## Conventions in this wiki
 

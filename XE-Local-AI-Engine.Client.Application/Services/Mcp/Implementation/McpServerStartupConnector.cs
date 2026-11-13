@@ -17,8 +17,10 @@ internal sealed class McpServerStartupConnector : BackgroundService
     public McpServerStartupConnector(IMcpServerConnectionManager connectionManager,
         ILogger<McpServerStartupConnector> logger)
     {
-        _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(connectionManager);
+        _connectionManager = connectionManager;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

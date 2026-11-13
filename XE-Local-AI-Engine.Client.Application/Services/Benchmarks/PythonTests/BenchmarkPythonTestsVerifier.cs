@@ -44,10 +44,12 @@ internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifi
         IOptions<ComputeOptions> options,
         ILogger<BenchmarkPythonTestsVerifier> logger)
     {
-        _gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
+        ArgumentNullException.ThrowIfNull(gateway);
+        _gateway = gateway;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<BenchmarkPythonTestsOutcome> VerifyAsync(BenchmarkJudgeRubricCriterionV1 criterion,

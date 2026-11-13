@@ -35,11 +35,16 @@ public sealed class DetachedInvocationReaper : BackgroundService
         TimeProvider timeProvider,
         ILogger<DetachedInvocationReaper> logger)
     {
-        _attachmentTracker = attachmentTracker ?? throw new ArgumentNullException(nameof(attachmentTracker));
-        _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(attachmentTracker);
+        _attachmentTracker = attachmentTracker;
+        ArgumentNullException.ThrowIfNull(invocationRunner);
+        _invocationRunner = invocationRunner;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

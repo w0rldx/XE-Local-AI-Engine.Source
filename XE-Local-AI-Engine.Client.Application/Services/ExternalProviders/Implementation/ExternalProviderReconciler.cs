@@ -37,13 +37,20 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         INodeSettingsStore settingsStore,
         ILogger<ExternalProviderReconciler> logger)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _mapStore = mapStore ?? throw new ArgumentNullException(nameof(mapStore));
-        _leaseCoordinator = leaseCoordinator ?? throw new ArgumentNullException(nameof(leaseCoordinator));
-        _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
-        _chatClientCacheInvalidator = chatClientCacheInvalidator ?? throw new ArgumentNullException(nameof(chatClientCacheInvalidator));
-        _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(mapStore);
+        _mapStore = mapStore;
+        ArgumentNullException.ThrowIfNull(leaseCoordinator);
+        _leaseCoordinator = leaseCoordinator;
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _providerResolver = providerResolver;
+        ArgumentNullException.ThrowIfNull(chatClientCacheInvalidator);
+        _chatClientCacheInvalidator = chatClientCacheInvalidator;
+        ArgumentNullException.ThrowIfNull(settingsStore);
+        _settingsStore = settingsStore;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

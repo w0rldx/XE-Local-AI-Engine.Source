@@ -37,12 +37,16 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         IOptions<KnowledgeBaseOptions> options,
         TimeProvider timeProvider)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
-        _embeddingModelResolver = embeddingModelResolver ?? throw new ArgumentNullException(nameof(embeddingModelResolver));
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _providerResolver = providerResolver;
+        ArgumentNullException.ThrowIfNull(embeddingModelResolver);
+        _embeddingModelResolver = embeddingModelResolver;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(CancellationToken cancellationToken)

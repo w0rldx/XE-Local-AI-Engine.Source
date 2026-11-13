@@ -26,9 +26,12 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
         IKnowledgeDocumentBlobStore blobStore,
         ILogger<KnowledgeDocumentPurgeService> logger)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+        ArgumentNullException.ThrowIfNull(blobStore);
+        _blobStore = blobStore;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<bool> PurgeAsync(Guid documentId, CancellationToken cancellationToken)

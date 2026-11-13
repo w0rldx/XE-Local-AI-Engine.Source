@@ -36,11 +36,14 @@ internal sealed class CustomToolCatalog : ICustomToolCatalog, IUnattendedCustomT
         IOptions<AgentToolPipelineOptions> pipelineOptions,
         ILogger<CustomToolCatalog> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         ArgumentNullException.ThrowIfNull(executors);
         ArgumentNullException.ThrowIfNull(pipelineOptions);
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
 
         _executors = executors.ToDictionary(static executor => executor.Kind);
         _maxResultCharacters = pipelineOptions.Value.MaxToolResultCharacters;

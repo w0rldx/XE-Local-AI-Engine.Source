@@ -9,7 +9,8 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
 
     internal CoordinatedModelProviderMapStore(IModelProviderMapStore persistence)
     {
-        _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
+        ArgumentNullException.ThrowIfNull(persistence);
+        _persistence = persistence;
     }
 
     public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)

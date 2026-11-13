@@ -24,7 +24,8 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     public NodeSettingsStore(INodeDataDirectory dataDirectory, ILogger<NodeSettingsStore> logger)
     {
         ArgumentNullException.ThrowIfNull(dataDirectory);
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _settingsPath = Path.Combine(dataDirectory.Root, SettingsFileName);
     }
 

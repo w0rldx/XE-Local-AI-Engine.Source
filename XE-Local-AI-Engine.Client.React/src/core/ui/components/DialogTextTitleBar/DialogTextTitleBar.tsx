@@ -1,4 +1,4 @@
-import { ActionIcon, Group, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Group, Modal, Tooltip } from "@mantine/core";
 import { IconMaximize, IconMinimize, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
@@ -24,10 +24,11 @@ export function DialogTextTitleBar({
 	return (
 		<Group justify="space-between" align="center" wrap="nowrap" gap="sm" mb="md">
 			{/* minWidth 0 + an anywhere-break: an unspaced title (a file name) wraps instead of widening the dialog past a
-			    phone's edge and pushing the action icons off-screen. */}
-			<Text size="xl" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+			    phone's edge and pushing the action icons off-screen. Modal.Title, not Text: Mantine names the dialog
+			    (aria-labelledby) only while its own title is mounted, so a plain Text left every dialog unnamed. */}
+			<Modal.Title fz="xl" lh="xl" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
 				{title}
-			</Text>
+			</Modal.Title>
 			<Group gap="xs" align="center" wrap="nowrap">
 				{showFullScreenToggle ? (
 					<Tooltip label={fullScreenLabel}>

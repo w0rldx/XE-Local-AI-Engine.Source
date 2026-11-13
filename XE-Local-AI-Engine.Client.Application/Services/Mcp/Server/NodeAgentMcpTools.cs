@@ -64,17 +64,26 @@ public sealed class NodeAgentMcpTools
         TimeProvider timeProvider,
         ILogger<NodeAgentMcpTools> logger)
     {
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _mcpAgentExecutionService = mcpAgentExecutionService ?? throw new ArgumentNullException(nameof(mcpAgentExecutionService));
-        _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
-        _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-        _nodeSettingsAdministrationService = nodeSettingsAdministrationService ?? throw new ArgumentNullException(nameof(nodeSettingsAdministrationService));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _runCoordinator = runCoordinator ?? throw new ArgumentNullException(nameof(runCoordinator));
-        _selectedFolderResolver = selectedFolderResolver ?? throw new ArgumentNullException(nameof(selectedFolderResolver));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(mcpAgentExecutionService);
+        _mcpAgentExecutionService = mcpAgentExecutionService;
+        ArgumentNullException.ThrowIfNull(agentDefinitionStore);
+        _agentDefinitionStore = agentDefinitionStore;
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        _ggufModelStore = ggufModelStore;
+        ArgumentNullException.ThrowIfNull(nodeSettingsAdministrationService);
+        _nodeSettingsAdministrationService = nodeSettingsAdministrationService;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(runCoordinator);
+        _runCoordinator = runCoordinator;
+        ArgumentNullException.ThrowIfNull(selectedFolderResolver);
+        _selectedFolderResolver = selectedFolderResolver;
         ArgumentNullException.ThrowIfNull(runOptions);
         _runOptions = runOptions.Value;
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     [McpServerTool(Name = "list_agents", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]

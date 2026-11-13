@@ -47,12 +47,16 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
         TimeProvider timeProvider,
         ILogger<EmitOutputToolHandler> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(buffer);
+        _buffer = buffer;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public string ToolName => EmitOutputToolDefinition.ToolName;

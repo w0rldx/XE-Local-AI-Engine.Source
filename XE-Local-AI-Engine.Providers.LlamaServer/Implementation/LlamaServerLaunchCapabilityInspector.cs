@@ -17,9 +17,12 @@ internal sealed class LlamaServerLaunchCapabilityInspector : ILlamaServerLaunchC
         ILlamaCppBinaryManager binaryManager,
         ILlamaServerCapabilityManifestProbe manifestProbe)
     {
-        _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
-        _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
-        _manifestProbe = manifestProbe ?? throw new ArgumentNullException(nameof(manifestProbe));
+        ArgumentNullException.ThrowIfNull(variantSelector);
+        _variantSelector = variantSelector;
+        ArgumentNullException.ThrowIfNull(binaryManager);
+        _binaryManager = binaryManager;
+        ArgumentNullException.ThrowIfNull(manifestProbe);
+        _manifestProbe = manifestProbe;
     }
 
     /// <inheritdoc />

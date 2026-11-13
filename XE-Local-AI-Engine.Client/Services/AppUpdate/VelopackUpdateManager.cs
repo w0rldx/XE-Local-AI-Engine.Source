@@ -34,9 +34,10 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
         Action<UpdateManager, VelopackAsset, string[]> scheduleApplyAfterExit,
         PaginatingGithubSource? source = null)
     {
-        _updateManager = updateManager ?? throw new ArgumentNullException(nameof(updateManager));
-        _scheduleApplyAfterExit = scheduleApplyAfterExit
-                                  ?? throw new ArgumentNullException(nameof(scheduleApplyAfterExit));
+        ArgumentNullException.ThrowIfNull(updateManager);
+        _updateManager = updateManager;
+        ArgumentNullException.ThrowIfNull(scheduleApplyAfterExit);
+        _scheduleApplyAfterExit = scheduleApplyAfterExit;
         _source = source;
     }
 

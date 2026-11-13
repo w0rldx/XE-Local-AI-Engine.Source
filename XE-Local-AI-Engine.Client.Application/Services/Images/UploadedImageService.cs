@@ -24,8 +24,10 @@ public sealed class UploadedImageService
 
     public UploadedImageService(IGeneratedImageStore imageStore, IServiceScopeFactory scopeFactory)
     {
-        _imageStore = imageStore ?? throw new ArgumentNullException(nameof(imageStore));
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        ArgumentNullException.ThrowIfNull(imageStore);
+        _imageStore = imageStore;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
     }
 
     /// <summary>Validates and stores one uploaded image.</summary>

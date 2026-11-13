@@ -81,13 +81,20 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         ProcessSpawnReceiptStore? spawnReceipts = null,
         IRuntimeResidencyChangeNotifier? residencyNotifier = null)
     {
-        _backendSelector = backendSelector ?? throw new ArgumentNullException(nameof(backendSelector));
-        _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
-        _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
-        _readinessProbe = readinessProbe ?? throw new ArgumentNullException(nameof(readinessProbe));
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(backendSelector);
+        _backendSelector = backendSelector;
+        ArgumentNullException.ThrowIfNull(binaryManager);
+        _binaryManager = binaryManager;
+        ArgumentNullException.ThrowIfNull(launcher);
+        _launcher = launcher;
+        ArgumentNullException.ThrowIfNull(readinessProbe);
+        _readinessProbe = readinessProbe;
+        ArgumentNullException.ThrowIfNull(httpClient);
+        _httpClient = httpClient;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _logger = logger ?? NullLogger<WhisperServerProcessSupervisor>.Instance;
         _runtimeActivityGate = runtimeActivityGate ?? new WhisperRuntimeActivityGate();
         _cudaFailureSignal = cudaFailureSignal ?? new WhisperCudaFailureSignal();

@@ -16,7 +16,8 @@ public sealed class NodeOperatorSecretProvider : INodeOperatorSecretProvider
 
     public NodeOperatorSecretProvider(IConfiguration configuration)
     {
-        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        ArgumentNullException.ThrowIfNull(configuration);
+        _configuration = configuration;
     }
 
     public byte[] GetOperatorSecret()

@@ -39,9 +39,12 @@ public sealed class DefaultVulkanDeviceProbe : IVulkanDeviceProbe
     /// </summary>
     internal DefaultVulkanDeviceProbe(Func<bool> hasExplicitIcdEnvironment, Func<bool> isWsl, Func<bool> hasIcdManifest)
     {
-        _hasExplicitIcdEnvironment = hasExplicitIcdEnvironment ?? throw new ArgumentNullException(nameof(hasExplicitIcdEnvironment));
-        _isWsl = isWsl ?? throw new ArgumentNullException(nameof(isWsl));
-        _hasIcdManifest = hasIcdManifest ?? throw new ArgumentNullException(nameof(hasIcdManifest));
+        ArgumentNullException.ThrowIfNull(hasExplicitIcdEnvironment);
+        _hasExplicitIcdEnvironment = hasExplicitIcdEnvironment;
+        ArgumentNullException.ThrowIfNull(isWsl);
+        _isWsl = isWsl;
+        ArgumentNullException.ThrowIfNull(hasIcdManifest);
+        _hasIcdManifest = hasIcdManifest;
         _result = new Lazy<bool>(Probe, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 

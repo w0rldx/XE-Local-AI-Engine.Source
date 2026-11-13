@@ -80,7 +80,8 @@ public sealed class ClientLocalToolCancellationTests
 
         public ScriptedToolCallChatClient(string toolName)
         {
-            _toolName = toolName ?? throw new ArgumentNullException(nameof(toolName));
+            ArgumentNullException.ThrowIfNull(toolName);
+            _toolName = toolName;
         }
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)

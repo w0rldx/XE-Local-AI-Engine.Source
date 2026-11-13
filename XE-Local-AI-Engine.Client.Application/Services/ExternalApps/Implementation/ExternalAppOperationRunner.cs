@@ -34,9 +34,12 @@ internal sealed class ExternalAppOperationRunner
         IHostApplicationLifetime lifetime,
         ILogger<ExternalAppOperationRunner> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(lifetime);
+        _lifetime = lifetime;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <summary>Whether the host is shutting down; a user's cancel is the opposite decision.</summary>

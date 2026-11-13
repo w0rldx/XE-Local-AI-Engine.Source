@@ -110,14 +110,20 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         TimeProvider timeProvider,
         ILogger<IntegrationExecutionCoordinator> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _queue = queue ?? throw new ArgumentNullException(nameof(queue));
-        _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-        _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(queue);
+        _queue = queue;
+        ArgumentNullException.ThrowIfNull(buffer);
+        _buffer = buffer;
+        ArgumentNullException.ThrowIfNull(cancellations);
+        _cancellations = cancellations;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _constructedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
     }
 

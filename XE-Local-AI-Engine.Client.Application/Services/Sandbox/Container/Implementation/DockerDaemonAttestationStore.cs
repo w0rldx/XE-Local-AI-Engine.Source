@@ -28,7 +28,8 @@ internal sealed class DockerDaemonAttestationStore : IDockerDaemonAttestationSto
     public DockerDaemonAttestationStore(INodeDataDirectory nodeDataDirectory, ILogger<DockerDaemonAttestationStore> logger)
     {
         ArgumentNullException.ThrowIfNull(nodeDataDirectory);
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _filePath = Path.Combine(nodeDataDirectory.Root, DirectoryName, FileName);
     }
 

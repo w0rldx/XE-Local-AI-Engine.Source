@@ -45,7 +45,8 @@ public sealed class GpuVariantSelector : IGpuVariantSelector
         ICudaManagedBuildSignal? managedCudaSignal = null,
         IInstalledRuntimeStore? installedRuntimeStore = null)
     {
-        _vendorProbe = vendorProbe ?? throw new ArgumentNullException(nameof(vendorProbe));
+        ArgumentNullException.ThrowIfNull(vendorProbe);
+        _vendorProbe = vendorProbe;
         _os = os;
         _arch = arch;
         _overrideOptions = overrideOptions ?? new LlamaServerRuntimeOverrideOptions();

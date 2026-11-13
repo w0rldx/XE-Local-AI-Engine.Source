@@ -28,8 +28,10 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
 
     public ImageModelDownloadCoordinator(IImageModelStore modelStore, ILogger<ImageModelDownloadCoordinator> logger)
     {
-        _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(modelStore);
+        _modelStore = modelStore;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

@@ -33,8 +33,10 @@ public sealed class ContainerBridgeAddressWatcher : IHostedService, IDisposable
         ArgumentNullException.ThrowIfNull(options);
 
         _options = options.Value;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _addressSource = addressSource ?? DefaultAddressSource;
     }
 

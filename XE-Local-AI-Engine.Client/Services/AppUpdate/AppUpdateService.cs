@@ -47,15 +47,22 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         Action<FileStream>? retainAcceptedLease)
     {
         _retainAcceptedLease = retainAcceptedLease;
-        _busyProbe = busyProbe ?? throw new ArgumentNullException(nameof(busyProbe));
-        _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
-        _updateManagerFactory = updateManagerFactory ?? throw new ArgumentNullException(nameof(updateManagerFactory));
-        _state = state ?? throw new ArgumentNullException(nameof(state));
+        ArgumentNullException.ThrowIfNull(busyProbe);
+        _busyProbe = busyProbe;
+        ArgumentNullException.ThrowIfNull(settingsStore);
+        _settingsStore = settingsStore;
+        ArgumentNullException.ThrowIfNull(updateManagerFactory);
+        _updateManagerFactory = updateManagerFactory;
+        ArgumentNullException.ThrowIfNull(state);
+        _state = state;
         ArgumentNullException.ThrowIfNull(channelOptions);
         _channelOptions = channelOptions.Value;
-        _hostContext = hostContext ?? throw new ArgumentNullException(nameof(hostContext));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(hostContext);
+        _hostContext = hostContext;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
 
         PrimeInitialSnapshot();
     }

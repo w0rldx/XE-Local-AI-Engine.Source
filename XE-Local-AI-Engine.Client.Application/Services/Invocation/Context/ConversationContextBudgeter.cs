@@ -35,10 +35,12 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 
     public ConversationContextBudgeter(ITokenEstimator estimator, IOptions<ConversationContextBudgetOptions> options, INodeRuntimeSettings runtimeSettings)
     {
-        _estimator = estimator ?? throw new ArgumentNullException(nameof(estimator));
+        ArgumentNullException.ThrowIfNull(estimator);
+        _estimator = estimator;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     public ConversationBudgetResult Budget(IReadOnlyList<ChatMessage> messages,

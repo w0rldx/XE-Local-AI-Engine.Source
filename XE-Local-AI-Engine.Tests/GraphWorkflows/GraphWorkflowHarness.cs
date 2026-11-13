@@ -49,24 +49,39 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     }
 
     /// <summary>The class's shared host, with this test's own runs on it. See <see cref="GraphWorkflowHostFixture" />.</summary>
-    public GraphWorkflowHarness(GraphWorkflowHostFixture host) =>
-        _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;
+    public GraphWorkflowHarness(GraphWorkflowHostFixture host)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        _factory = host.Factory;
+    }
 
     /// <summary>The agent-lane host, whose invocation runner is faked and whose model seams answer off the name.</summary>
-    public GraphWorkflowHarness(GraphWorkflowAgentHostFixture host) =>
-        _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;
+    public GraphWorkflowHarness(GraphWorkflowAgentHostFixture host)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        _factory = host.Factory;
+    }
 
     /// <summary>The agent-lane host with the <c>/v1/systemone</c> client faked, for native decision nodes.</summary>
-    public GraphWorkflowHarness(GraphWorkflowSystemOneHostFixture host) =>
-        _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;
+    public GraphWorkflowHarness(GraphWorkflowSystemOneHostFixture host)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        _factory = host.Factory;
+    }
 
     /// <summary>The agent-lane host with the real invocation runner over a scripted model that reads <c>notes.txt</c>.</summary>
-    public GraphWorkflowHarness(GraphWorkflowRepositoryHostFixture host) =>
-        _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;
+    public GraphWorkflowHarness(GraphWorkflowRepositoryHostFixture host)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        _factory = host.Factory;
+    }
 
     /// <summary>The tool-lane host, whose invocation service is scripted per tool name.</summary>
-    public GraphWorkflowHarness(GraphWorkflowToolHostFixture host) =>
-        _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;
+    public GraphWorkflowHarness(GraphWorkflowToolHostFixture host)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        _factory = host.Factory;
+    }
 
     /// <summary>An agent host of this test's own, for host-level state a concurrent sibling must not see.</summary>
     public static GraphWorkflowHarness PrivateAgentHost(params (string Key, string Value)[] configuration) =>

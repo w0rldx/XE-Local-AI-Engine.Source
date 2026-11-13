@@ -38,8 +38,10 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
     /// </summary>
     public ModelRoutingLocalChatClient(ILocalModelProviderResolver resolver, INodeRuntimeSettings runtimeSettings)
     {
-        _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(resolver);
+        _resolver = resolver;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     /// <inheritdoc />

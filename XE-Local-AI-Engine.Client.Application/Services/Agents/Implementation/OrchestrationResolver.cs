@@ -48,17 +48,26 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         IToolApprovalPolicy toolApprovalPolicy,
         ILogger<OrchestrationResolver> logger)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
-        _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
-        _retrievalRanker = retrievalRanker ?? throw new ArgumentNullException(nameof(retrievalRanker));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(playbookActionStore);
+        _playbookActionStore = playbookActionStore;
+        ArgumentNullException.ThrowIfNull(localToolOfferProvider);
+        _localToolOfferProvider = localToolOfferProvider;
+        ArgumentNullException.ThrowIfNull(retrievalRanker);
+        _retrievalRanker = retrievalRanker;
         ArgumentNullException.ThrowIfNull(retrievalOptions);
         _retrievalOptions = retrievalOptions.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
-        _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
-        _toolApprovalPolicy = toolApprovalPolicy ?? throw new ArgumentNullException(nameof(toolApprovalPolicy));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(modelCapabilityResolver);
+        _modelCapabilityResolver = modelCapabilityResolver;
+        ArgumentNullException.ThrowIfNull(instructionProvider);
+        _instructionProvider = instructionProvider;
+        ArgumentNullException.ThrowIfNull(toolApprovalPolicy);
+        _toolApprovalPolicy = toolApprovalPolicy;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<OrchestrationResolution> ResolveAsync(AgentDefinitionRecord orchestrator,

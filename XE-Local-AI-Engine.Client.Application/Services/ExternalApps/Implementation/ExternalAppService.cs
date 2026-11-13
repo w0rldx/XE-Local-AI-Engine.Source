@@ -78,17 +78,27 @@ internal sealed partial class ExternalAppService
         ArgumentNullException.ThrowIfNull(dataDirectory);
         ArgumentNullException.ThrowIfNull(options);
 
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _layout = layout ?? throw new ArgumentNullException(nameof(layout));
-        _resourceGate = resourceGate ?? throw new ArgumentNullException(nameof(resourceGate));
-        _gate = gate ?? throw new ArgumentNullException(nameof(gate));
-        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
-        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(layout);
+        _layout = layout;
+        ArgumentNullException.ThrowIfNull(resourceGate);
+        _resourceGate = resourceGate;
+        ArgumentNullException.ThrowIfNull(gate);
+        _gate = gate;
+        ArgumentNullException.ThrowIfNull(runner);
+        _runner = runner;
+        ArgumentNullException.ThrowIfNull(publisher);
+        _publisher = publisher;
         _options = options.Value;
-        _bridgeEndpoints = bridgeEndpoints ?? throw new ArgumentNullException(nameof(bridgeEndpoints));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(bridgeEndpoints);
+        _bridgeEndpoints = bridgeEndpoints;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
 
         // The same per-installation id Development Mode labels its containers with, from the same directory: two
         // installations on one daemon must not remove each other's containers, and the owner label is a constant.

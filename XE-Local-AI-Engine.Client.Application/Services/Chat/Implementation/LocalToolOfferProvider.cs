@@ -91,10 +91,14 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         ArgumentNullException.ThrowIfNull(toolRegistry);
         _logger = logger ?? NullLogger<LocalToolOfferProvider>.Instance;
         _toolCapableModelRegistrar = toolCapableModelRegistrar;
-        _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
+        ArgumentNullException.ThrowIfNull(mcpToolRegistry);
+        _mcpToolRegistry = mcpToolRegistry;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        _modelTrustResolver = modelTrustResolver;
 
         var builtinDescriptors = toolRegistry.GetLocalChatToolDescriptors();
 

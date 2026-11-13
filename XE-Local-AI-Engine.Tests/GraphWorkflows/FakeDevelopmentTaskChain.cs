@@ -51,8 +51,11 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     private bool _gateFails;
     private DevelopmentValidationVerdict _gateVerdict = TestsFailedVerdict;
 
-    public FakeDevelopmentTaskChain(IServiceScopeFactory scopes) =>
-        _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
+    public FakeDevelopmentTaskChain(IServiceScopeFactory scopes)
+    {
+        ArgumentNullException.ThrowIfNull(scopes);
+        _scopes = scopes;
+    }
 
     /// <summary>Every next action that was asked for, as the status it was asked in.</summary>
     public IReadOnlyList<string> Actions

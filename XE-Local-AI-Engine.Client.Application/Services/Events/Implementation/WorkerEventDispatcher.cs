@@ -39,10 +39,14 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
         ILogger<WorkerEventDispatcher> logger,
         TimeProvider timeProvider)
     {
-        _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
-        _invocationHistory = invocationHistory ?? throw new ArgumentNullException(nameof(invocationHistory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(invocationRunner);
+        _invocationRunner = invocationRunner;
+        ArgumentNullException.ThrowIfNull(invocationHistory);
+        _invocationHistory = invocationHistory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     public event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged;

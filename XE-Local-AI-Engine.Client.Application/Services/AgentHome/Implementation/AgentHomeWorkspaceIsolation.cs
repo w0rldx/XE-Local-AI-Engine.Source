@@ -14,9 +14,12 @@ internal sealed class AgentHomeWorkspaceIsolation : IAgentHomeWorkspaceIsolation
         IAgentHomeExecutionLeaseManager leases,
         ILogger<AgentHomeWorkspaceIsolation> logger)
     {
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-        _leases = leases ?? throw new ArgumentNullException(nameof(leases));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(provider);
+        _provider = provider;
+        ArgumentNullException.ThrowIfNull(leases);
+        _leases = leases;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<AgentHomeWorkspaceClearResult> ClearAsync(SandboxHandle handle,

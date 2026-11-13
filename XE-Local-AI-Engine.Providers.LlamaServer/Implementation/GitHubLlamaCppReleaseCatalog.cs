@@ -35,8 +35,10 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
     /// <summary>Creates the catalog over the injected download/API <see cref="HttpClient" /> and the ambient clock.</summary>
     public GitHubLlamaCppReleaseCatalog(HttpClient httpClient, TimeProvider timeProvider)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(httpClient);
+        _httpClient = httpClient;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     /// <summary>

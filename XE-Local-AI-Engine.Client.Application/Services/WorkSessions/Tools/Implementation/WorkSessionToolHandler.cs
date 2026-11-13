@@ -39,10 +39,14 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
         ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(options);
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(publisher);
+        _publisher = publisher;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(logger);
+        Logger = logger;
         Options = options.Value;
     }
 

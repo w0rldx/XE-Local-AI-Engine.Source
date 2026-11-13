@@ -20,8 +20,10 @@ internal sealed class ToolApprovalAuditRecorder : IToolApprovalAuditRecorder
 
     public ToolApprovalAuditRecorder(IServiceScopeFactory scopeFactory, ILogger<ToolApprovalAuditRecorder> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task RecordAsync(Guid? invocationId,

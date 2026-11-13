@@ -21,10 +21,14 @@ public sealed class ToolCallCleanupService : BackgroundService
         INodeRuntimeSettings runtimeSettings,
         ILogger<ToolCallCleanupService> logger)
     {
-        _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
-        _workerNodeOptions = workerNodeOptions ?? throw new ArgumentNullException(nameof(workerNodeOptions));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(invocationRunner);
+        _invocationRunner = invocationRunner;
+        ArgumentNullException.ThrowIfNull(workerNodeOptions);
+        _workerNodeOptions = workerNodeOptions;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

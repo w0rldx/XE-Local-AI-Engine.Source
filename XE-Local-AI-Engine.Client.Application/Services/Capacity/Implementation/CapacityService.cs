@@ -51,16 +51,26 @@ public sealed class CapacityService : ICapacityService
         LlamaServerSupervisorOptions supervisorOptions,
         ILogger<CapacityService> logger)
     {
-        _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
-        _localProviderResolver = localProviderResolver ?? throw new ArgumentNullException(nameof(localProviderResolver));
-        _runtimeAudit = runtimeAudit ?? throw new ArgumentNullException(nameof(runtimeAudit));
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _footprintProvider = footprintProvider ?? throw new ArgumentNullException(nameof(footprintProvider));
-        _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
-        _launchAdmissions = launchAdmissions ?? throw new ArgumentNullException(nameof(launchAdmissions));
-        _externalEndpoints = externalEndpoints ?? throw new ArgumentNullException(nameof(externalEndpoints));
-        _supervisorOptions = supervisorOptions ?? throw new ArgumentNullException(nameof(supervisorOptions));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(cloudFactory);
+        _cloudFactory = cloudFactory;
+        ArgumentNullException.ThrowIfNull(localProviderResolver);
+        _localProviderResolver = localProviderResolver;
+        ArgumentNullException.ThrowIfNull(runtimeAudit);
+        _runtimeAudit = runtimeAudit;
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+        ArgumentNullException.ThrowIfNull(footprintProvider);
+        _footprintProvider = footprintProvider;
+        ArgumentNullException.ThrowIfNull(ledger);
+        _ledger = ledger;
+        ArgumentNullException.ThrowIfNull(launchAdmissions);
+        _launchAdmissions = launchAdmissions;
+        ArgumentNullException.ThrowIfNull(externalEndpoints);
+        _externalEndpoints = externalEndpoints;
+        ArgumentNullException.ThrowIfNull(supervisorOptions);
+        _supervisorOptions = supervisorOptions;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

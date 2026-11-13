@@ -60,10 +60,14 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         ILogger<DockerSandboxRuntimeProvider> logger)
     {
         ArgumentNullException.ThrowIfNull(nodeDataDirectory);
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(clientFactory);
+        _clientFactory = clientFactory;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _installId = BuildInstallId(nodeDataDirectory.Root);
     }
 

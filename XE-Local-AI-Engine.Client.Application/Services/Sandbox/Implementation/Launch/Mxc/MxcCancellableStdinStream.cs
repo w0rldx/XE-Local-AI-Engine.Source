@@ -17,8 +17,10 @@ internal sealed class MxcCancellableStdinStream : Stream
 
     public MxcCancellableStdinStream(Stream inner, Action kill)
     {
-        _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-        _kill = kill ?? throw new ArgumentNullException(nameof(kill));
+        ArgumentNullException.ThrowIfNull(inner);
+        _inner = inner;
+        ArgumentNullException.ThrowIfNull(kill);
+        _kill = kill;
     }
 
     public override bool CanRead => false;

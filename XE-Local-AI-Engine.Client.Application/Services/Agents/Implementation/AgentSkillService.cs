@@ -33,7 +33,8 @@ internal sealed class AgentSkillService : IAgentSkillService
 
     public AgentSkillService(IAgentSkillStore store)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
     }
 
     public async Task<AgentSkillRecord> CreateAsync(AgentSkillInput input, CancellationToken cancellationToken = default)

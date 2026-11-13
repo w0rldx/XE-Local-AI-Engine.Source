@@ -62,10 +62,14 @@ internal sealed class DesktopLifecycle : IDisposable
         string? version = null,
         TextWriter? standardOutput = null)
     {
-        _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
-        _server = server ?? throw new ArgumentNullException(nameof(server));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(lifetime);
+        _lifetime = lifetime;
+        ArgumentNullException.ThrowIfNull(server);
+        _server = server;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _dataDirectory = dataDirectory;
         _suppressBrowser = suppressBrowser;
         _version = version ?? "0.0.0";

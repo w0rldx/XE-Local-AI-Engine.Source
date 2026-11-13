@@ -34,8 +34,10 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
 
     public IntegrationApiKeyService(IIntegrationApiKeyStore store, TimeProvider timeProvider)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     public async Task<GeneratedIntegrationApiKey> GenerateAsync(string label,

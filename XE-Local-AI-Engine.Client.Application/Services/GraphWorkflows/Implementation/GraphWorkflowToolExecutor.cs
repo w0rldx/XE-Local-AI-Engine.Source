@@ -47,13 +47,17 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         ILogger<GraphWorkflowToolExecutor> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _sweepWake = sweepWake ?? throw new ArgumentNullException(nameof(sweepWake));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(sweepWake);
+        _sweepWake = sweepWake;
 
         // Injected as the singleton it is registered as. Unlike the agent lane there is nothing scoped behind it: the
         // service opens whatever scope its own catalog read needs, per call and on purpose.
-        _tools = tools ?? throw new ArgumentNullException(nameof(tools));
-        _webFetch = webFetch ?? throw new ArgumentNullException(nameof(webFetch));
+        ArgumentNullException.ThrowIfNull(tools);
+        _tools = tools;
+        ArgumentNullException.ThrowIfNull(webFetch);
+        _webFetch = webFetch;
         _options = options.Value;
 
         // No discard hook: a tool call is an in-process await, so a cancelled token is the whole of what unwinds one.

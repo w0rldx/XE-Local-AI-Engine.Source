@@ -31,9 +31,12 @@ internal sealed partial class AgentHomeRunDeleteService : IAgentHomeRunDeleteSer
         ArgumentNullException.ThrowIfNull(dataDirectory);
         _options = options.Value;
         _dataDirectoryRoot = dataDirectory.Root;
-        _executingRuns = executingRuns ?? throw new ArgumentNullException(nameof(executingRuns));
-        _applyGuard = applyGuard ?? throw new ArgumentNullException(nameof(applyGuard));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(executingRuns);
+        _executingRuns = executingRuns;
+        ArgumentNullException.ThrowIfNull(applyGuard);
+        _applyGuard = applyGuard;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

@@ -51,7 +51,8 @@ public sealed class WhisperBackendSelector : IWhisperBackendSelector
         ILogger<WhisperBackendSelector>? logger = null,
         WhisperCudaFailureSignal? cudaFailureSignal = null)
     {
-        _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
+        ArgumentNullException.ThrowIfNull(hardwareProfiler);
+        _hardwareProfiler = hardwareProfiler;
         _isWindows = isWindows;
         _overrideOptions = overrideOptions ?? new WhisperServerRuntimeOverrideOptions();
         _managedSourceSignal = managedSourceSignal ?? new ManagedSourceBuildSignal<WhisperBackend>();

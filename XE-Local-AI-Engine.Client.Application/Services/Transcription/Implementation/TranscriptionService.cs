@@ -67,15 +67,24 @@ public sealed class TranscriptionService : ITranscriptionService
         TimeProvider timeProvider,
         ILogger<TranscriptionService> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _live = live ?? throw new ArgumentNullException(nameof(live));
-        _runtimeService = runtimeService ?? throw new ArgumentNullException(nameof(runtimeService));
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _transcriber = transcriber ?? throw new ArgumentNullException(nameof(transcriber));
-        _transcoder = transcoder ?? throw new ArgumentNullException(nameof(transcoder));
-        _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(live);
+        _live = live;
+        ArgumentNullException.ThrowIfNull(runtimeService);
+        _runtimeService = runtimeService;
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+        ArgumentNullException.ThrowIfNull(transcriber);
+        _transcriber = transcriber;
+        ArgumentNullException.ThrowIfNull(transcoder);
+        _transcoder = transcoder;
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        _dataDirectory = dataDirectory;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <summary>The engine-owned directory every uploaded file lives in for the length of one transcription.</summary>

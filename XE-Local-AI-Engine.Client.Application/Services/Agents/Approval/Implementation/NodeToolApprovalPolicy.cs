@@ -22,8 +22,10 @@ internal sealed class NodeToolApprovalPolicy : IToolApprovalPolicy
         IReadOnlyDictionary<string, bool> toolOverrides,
         bool skillSessionScopeDisabled = false)
     {
-        _categoryPolicy = categoryPolicy ?? throw new ArgumentNullException(nameof(categoryPolicy));
-        _toolOverrides = toolOverrides ?? throw new ArgumentNullException(nameof(toolOverrides));
+        ArgumentNullException.ThrowIfNull(categoryPolicy);
+        _categoryPolicy = categoryPolicy;
+        ArgumentNullException.ThrowIfNull(toolOverrides);
+        _toolOverrides = toolOverrides;
         SkillSessionScopeDisabled = skillSessionScopeDisabled;
     }
 

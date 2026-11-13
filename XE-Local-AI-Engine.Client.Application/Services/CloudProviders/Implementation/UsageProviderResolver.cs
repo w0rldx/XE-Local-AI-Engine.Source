@@ -28,10 +28,14 @@ internal sealed class UsageProviderResolver : IUsageProviderResolver
         TimeProvider timeProvider,
         ILogger<UsageProviderResolver> logger)
     {
-        _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
-        _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(cloudFactory);
+        _cloudFactory = cloudFactory;
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _providerResolver = providerResolver;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<string> ResolveAsync(string? modelName, CancellationToken cancellationToken = default)

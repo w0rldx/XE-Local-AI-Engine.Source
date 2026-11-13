@@ -12,7 +12,8 @@ internal sealed class GraphWorkflowConversationDeletionObserver : IConversationD
 
     public GraphWorkflowConversationDeletionObserver(IServiceScopeFactory scopeFactory)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
     }
 
     public async Task OnDeletingAsync(Guid conversationId, bool purge, CancellationToken cancellationToken)

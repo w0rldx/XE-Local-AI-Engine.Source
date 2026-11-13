@@ -17,7 +17,8 @@ public sealed class NodeKeyCheckStartupService : IHostedService
 
     public NodeKeyCheckStartupService(IServiceScopeFactory scopeFactory)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)

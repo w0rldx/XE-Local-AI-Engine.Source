@@ -41,11 +41,16 @@ public sealed class ManagedPythonStatusService
         Func<bool>? isLinux = null,
         Func<bool>? isPlatformSupported = null)
     {
-        _compute = compute ?? throw new ArgumentNullException(nameof(compute));
-        _training = training ?? throw new ArgumentNullException(nameof(training));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
-        _toolchain = toolchain ?? throw new ArgumentNullException(nameof(toolchain));
+        ArgumentNullException.ThrowIfNull(compute);
+        _compute = compute;
+        ArgumentNullException.ThrowIfNull(training);
+        _training = training;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(sandbox);
+        _sandbox = sandbox;
+        ArgumentNullException.ThrowIfNull(toolchain);
+        _toolchain = toolchain;
         _isLinux = isLinux ?? OperatingSystem.IsLinux;
         _isPlatformSupported = isPlatformSupported ?? (static () => ManagedPythonPins.IsCurrentPlatformSupported);
     }

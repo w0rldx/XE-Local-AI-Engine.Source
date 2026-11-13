@@ -27,11 +27,16 @@ internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightServi
         TimeProvider timeProvider,
         ILogger<DockerDaemonPreflightService> logger)
     {
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
-        _attestationStore = attestationStore ?? throw new ArgumentNullException(nameof(attestationStore));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(clientFactory);
+        _clientFactory = clientFactory;
+        ArgumentNullException.ThrowIfNull(attestationStore);
+        _attestationStore = attestationStore;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<DockerDaemonPreflight> InspectAsync(CancellationToken cancellationToken = default)

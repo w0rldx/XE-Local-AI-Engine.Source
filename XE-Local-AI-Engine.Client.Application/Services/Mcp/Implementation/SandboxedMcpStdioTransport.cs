@@ -144,13 +144,20 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     {
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         _runtimeSettings = runtimeSettings;
-        _record = record ?? throw new ArgumentNullException(nameof(record));
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-        _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
-        _nodeDataDirectory = nodeDataDirectory ?? throw new ArgumentNullException(nameof(nodeDataDirectory));
-        _ceilingDefaults = (ceilingDefaults ?? throw new ArgumentNullException(nameof(ceilingDefaults))).Value;
-        _nodeOptions = (nodeOptions ?? throw new ArgumentNullException(nameof(nodeOptions))).Value;
-        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+        ArgumentNullException.ThrowIfNull(record);
+        _record = record;
+        ArgumentNullException.ThrowIfNull(provider);
+        _provider = provider;
+        ArgumentNullException.ThrowIfNull(identityProvider);
+        _identityProvider = identityProvider;
+        ArgumentNullException.ThrowIfNull(nodeDataDirectory);
+        _nodeDataDirectory = nodeDataDirectory;
+        ArgumentNullException.ThrowIfNull(ceilingDefaults);
+        _ceilingDefaults = ceilingDefaults.Value;
+        ArgumentNullException.ThrowIfNull(nodeOptions);
+        _nodeOptions = nodeOptions.Value;
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        _loggerFactory = loggerFactory;
         // Every transport instance owns a jail nobody else can attach to: a replacement that reused the retiring
         // jail's identity while teardown still runs would be hit by the old kill.
         _sessionIdentity = RuntimeProfile + "-" + record.Id.ToString("N") + (string.IsNullOrEmpty(sessionKey) ? string.Empty : "-" + sessionKey)

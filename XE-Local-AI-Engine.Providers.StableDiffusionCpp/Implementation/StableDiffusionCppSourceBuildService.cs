@@ -57,8 +57,10 @@ public sealed class StableDiffusionCppSourceBuildService
             timeProvider,
             isLinux)
     {
-        _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
-        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
+        ArgumentNullException.ThrowIfNull(prerequisiteProbe);
+        _prerequisiteProbe = prerequisiteProbe;
+        ArgumentNullException.ThrowIfNull(publisher);
+        _publisher = publisher;
         _adoption = new StableDiffusionCppRuntimeAdoption(cacheRoot, runtimeStore, managedSignal, timeProvider, logger);
     }
 

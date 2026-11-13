@@ -19,7 +19,8 @@ internal sealed class TrustedDevelopmentHostApplyPort : IDevelopmentHostApplyPor
     {
         ArgumentNullException.ThrowIfNull(blobStore);
         _blobStore = blobStore;
-        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
     }
 
     public async Task<DevelopmentHostApplyState> InspectAsync(DevelopmentApprovedApplySubject subject,

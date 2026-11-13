@@ -21,9 +21,12 @@ public sealed class NodeTokenService : INodeTokenService
 
     public NodeTokenService(INodeJwtKeyProvider jwtKeyProvider, IOptions<NodeAuthOptions> options, TimeProvider timeProvider)
     {
-        _jwtKeyProvider = jwtKeyProvider ?? throw new ArgumentNullException(nameof(jwtKeyProvider));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(jwtKeyProvider);
+        _jwtKeyProvider = jwtKeyProvider;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     public AccessTokenResult CreateAccessToken(NodeUser user, IEnumerable<string> roles, string? sessionId = null)

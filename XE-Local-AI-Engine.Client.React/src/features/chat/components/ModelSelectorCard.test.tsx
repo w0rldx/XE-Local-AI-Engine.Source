@@ -224,8 +224,6 @@ describe("ModelSelectorCard", () => {
 
 		fireEvent.click(screen.getByTestId("chat-model-selector-trigger"));
 
-		expect(await screen.findByRole("textbox", { name: "Search models..." })).toBe(
-			screen.getByTestId("chat-model-selector-search"),
-		);
+		expect(await screen.findByRole("textbox", { name: "Search models…" })).toBe(screen.getByTestId("chat-model-selector-search"));
 	});
 });

@@ -16,7 +16,8 @@ public sealed class McpAgentRunPayloadProtector : IDisposable
     public McpAgentRunPayloadProtector(INodeSqliteKeyHolder keyHolder, INodeAeadCipher cipher)
     {
         ArgumentNullException.ThrowIfNull(keyHolder);
-        _cipher = cipher ?? throw new ArgumentNullException(nameof(cipher));
+        ArgumentNullException.ThrowIfNull(cipher);
+        _cipher = cipher;
         _payloadKey = DeriveKey(keyHolder.Key.Span, "c0re-node-mcp-agent-run-payload|v1");
         _fingerprintKey = DeriveKey(keyHolder.Key.Span, "c0re-node-mcp-agent-run-fingerprint|v1");
     }

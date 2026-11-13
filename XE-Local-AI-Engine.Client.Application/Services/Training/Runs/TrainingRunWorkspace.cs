@@ -24,9 +24,11 @@ public sealed class TrainingRunWorkspace
 
     public TrainingRunWorkspace(INodeDataDirectory dataDirectory, INodeSqliteKeyHolder keyHolder)
     {
-        _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        _dataDirectory = dataDirectory;
         // No shared singleton exists — every on-disk blob consumer constructs its own, as KnowledgeDocumentBlobStore does.
-        _protector = new UploadedFileBlobProtector(keyHolder ?? throw new ArgumentNullException(nameof(keyHolder)));
+        ArgumentNullException.ThrowIfNull(keyHolder);
+        _protector = new UploadedFileBlobProtector(keyHolder);
     }
 
     public string TrainingRoot => Path.Combine(_dataDirectory.Root, "training");

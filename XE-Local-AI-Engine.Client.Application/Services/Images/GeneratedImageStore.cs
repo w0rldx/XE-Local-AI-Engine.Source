@@ -29,11 +29,15 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
         TimeProvider timeProvider,
         ILogger<GeneratedImageStore> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        _dataDirectory = dataDirectory;
         ArgumentNullException.ThrowIfNull(keyHolder);
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _blobProtector = new ImageBlobProtector(keyHolder);
     }
 

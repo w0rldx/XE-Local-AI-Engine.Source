@@ -70,10 +70,14 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         string scriptsDirectory,
         ManagedPythonToolchain toolchain)
     {
-        _toolchain = toolchain ?? throw new ArgumentNullException(nameof(toolchain));
-        _acquirer = acquirer ?? throw new ArgumentNullException(nameof(acquirer));
-        _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(toolchain);
+        _toolchain = toolchain;
+        ArgumentNullException.ThrowIfNull(acquirer);
+        _acquirer = acquirer;
+        ArgumentNullException.ThrowIfNull(processRunner);
+        _processRunner = processRunner;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _directory = new ComputeRuntimeDirectory(cacheRoot, scriptsDirectory, _toolchain);
     }
 

@@ -41,9 +41,12 @@ public sealed class ChatStreamEventSink : IChatStreamEventSink
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        _correlation = correlation ?? throw new ArgumentNullException(nameof(correlation));
-        _sequence = sequence ?? throw new ArgumentNullException(nameof(sequence));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(correlation);
+        _correlation = correlation;
+        ArgumentNullException.ThrowIfNull(sequence);
+        _sequence = sequence;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _maxQueuedChars = options.MaxQueuedChars;
 
         _channel = Channel.CreateBounded<ChatStreamEvent>(new BoundedChannelOptions(options.QueueCapacity)

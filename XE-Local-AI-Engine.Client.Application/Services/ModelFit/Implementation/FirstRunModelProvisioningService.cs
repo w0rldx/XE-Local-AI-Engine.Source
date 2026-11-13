@@ -55,7 +55,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             timeProvider,
             logger,
             deviceAudit,
-            (launchContext ?? throw new ArgumentNullException(nameof(launchContext))).IsLocalMode,
+            IsLocalMode(launchContext),
             TimeSpan.FromSeconds(2),
             DefaultGpuProbeCeiling)
     {
@@ -76,18 +76,34 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         TimeSpan pollInterval,
         TimeSpan gpuProbeCeiling)
     {
-        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-        _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-        _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
-        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
-        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
-        _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _deviceAudit = deviceAudit ?? throw new ArgumentNullException(nameof(deviceAudit));
+        ArgumentNullException.ThrowIfNull(configuration);
+        _configuration = configuration;
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        _ggufModelStore = ggufModelStore;
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        _downloadCoordinator = downloadCoordinator;
+        ArgumentNullException.ThrowIfNull(runtime);
+        _runtime = runtime;
+        ArgumentNullException.ThrowIfNull(nodeSettingsStore);
+        _nodeSettingsStore = nodeSettingsStore;
+        ArgumentNullException.ThrowIfNull(nodeRuntimeSettings);
+        _nodeRuntimeSettings = nodeRuntimeSettings;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(deviceAudit);
+        _deviceAudit = deviceAudit;
         _isLocalMode = isLocalMode;
         _pollInterval = pollInterval;
         _gpuProbeCeiling = gpuProbeCeiling;
+    }
+
+    // The chained ctor call admits no statement, so the launch-context guard lives here.
+    private static bool IsLocalMode(NodeLaunchContext launchContext)
+    {
+        ArgumentNullException.ThrowIfNull(launchContext);
+        return launchContext.IsLocalMode;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

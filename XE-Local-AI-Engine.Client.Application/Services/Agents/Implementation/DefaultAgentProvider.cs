@@ -23,7 +23,8 @@ internal sealed class DefaultAgentProvider : IDefaultAgentProvider, IDisposable
 
     public DefaultAgentProvider(IServiceScopeFactory scopeFactory)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
     }
 
     public async Task<Guid?> GetDefaultAgentIdAsync(CancellationToken cancellationToken = default)

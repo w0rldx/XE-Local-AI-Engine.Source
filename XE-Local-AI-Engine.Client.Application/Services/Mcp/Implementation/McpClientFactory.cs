@@ -45,13 +45,19 @@ internal sealed class McpClientFactory : IMcpClientFactory
         // Handed to every Sandboxed transport, which reads the sandbox security profile per connect.
         _runtimeSettings = runtimeSettings;
         _options = options.Value;
-        _sandboxProvider = sandboxProvider ?? throw new ArgumentNullException(nameof(sandboxProvider));
-        _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
+        ArgumentNullException.ThrowIfNull(sandboxProvider);
+        _sandboxProvider = sandboxProvider;
+        ArgumentNullException.ThrowIfNull(identityProvider);
+        _identityProvider = identityProvider;
         // Only to know which host root a sandboxed server must never be able to read; nothing here writes to it.
-        _nodeDataDirectory = nodeDataDirectory ?? throw new ArgumentNullException(nameof(nodeDataDirectory));
-        _ceilingDefaults = ceilingDefaults ?? throw new ArgumentNullException(nameof(ceilingDefaults));
-        _nodeOptions = nodeOptions ?? throw new ArgumentNullException(nameof(nodeOptions));
-        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+        ArgumentNullException.ThrowIfNull(nodeDataDirectory);
+        _nodeDataDirectory = nodeDataDirectory;
+        ArgumentNullException.ThrowIfNull(ceilingDefaults);
+        _ceilingDefaults = ceilingDefaults;
+        ArgumentNullException.ThrowIfNull(nodeOptions);
+        _nodeOptions = nodeOptions;
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        _loggerFactory = loggerFactory;
     }
 
     public async Task<McpClient> CreateAsync(McpServerRecord record, string? sessionKey, CancellationToken cancellationToken)

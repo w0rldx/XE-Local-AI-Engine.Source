@@ -44,7 +44,8 @@ public sealed class LocalModelCatalogService : ILocalModelCatalogService
         _classificationStore = classificationStore;
         ArgumentNullException.ThrowIfNull(cloudModelResolver);
         _cloudModelResolver = cloudModelResolver;
-        _codexOptions = (codexOptions ?? throw new ArgumentNullException(nameof(codexOptions))).Value;
+        ArgumentNullException.ThrowIfNull(codexOptions);
+        _codexOptions = codexOptions.Value;
         ArgumentNullException.ThrowIfNull(codexTokenStore);
         _codexTokenStore = codexTokenStore;
         ArgumentNullException.ThrowIfNull(externalProviderRegistry);

@@ -32,10 +32,14 @@ public sealed class TranscriptionSessionLifecycleService : IHostedService
         TimeProvider timeProvider,
         ILogger<TranscriptionSessionLifecycleService> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _liveRegistry = liveRegistry ?? throw new ArgumentNullException(nameof(liveRegistry));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(liveRegistry);
+        _liveRegistry = liveRegistry;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)

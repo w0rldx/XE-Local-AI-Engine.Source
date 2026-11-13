@@ -26,8 +26,10 @@ public sealed class CachedNodeSettingsStore : INodeSettingsStore
 
     public CachedNodeSettingsStore(INodeSettingsStore inner, IMemoryCache cache)
     {
-        _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        ArgumentNullException.ThrowIfNull(inner);
+        _inner = inner;
+        ArgumentNullException.ThrowIfNull(cache);
+        _cache = cache;
     }
 
     public async Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)

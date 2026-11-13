@@ -35,7 +35,8 @@ public sealed class WorkSessionHub : Hub
 
     public WorkSessionHub(IWorkSessionService service, INodeRuntimeSettings runtimeSettings)
     {
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         ArgumentNullException.ThrowIfNull(service);
         _service = service;
     }

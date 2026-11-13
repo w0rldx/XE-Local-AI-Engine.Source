@@ -27,9 +27,12 @@ internal sealed class BackgroundInvocationYield
     /// <summary>A yield over a different window; tests that do not exercise the wait pass <see cref="TimeSpan.Zero" />.</summary>
     internal BackgroundInvocationYield(IWorkerEventDispatcher dispatcher, TimeProvider timeProvider, ILogger<BackgroundInvocationYield> logger, TimeSpan idleWindow)
     {
-        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(dispatcher);
+        _dispatcher = dispatcher;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _idleWindow = idleWindow;
     }
 

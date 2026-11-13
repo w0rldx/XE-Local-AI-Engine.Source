@@ -54,9 +54,11 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
         Func<string, string, IProbeProcess> processFactory,
         ProbePlatform? platform = null)
     {
-        _nvidiaDriverPresent = nvidiaDriverPresent ?? throw new ArgumentNullException(nameof(nvidiaDriverPresent));
+        ArgumentNullException.ThrowIfNull(nvidiaDriverPresent);
+        _nvidiaDriverPresent = nvidiaDriverPresent;
         _probeTimeout = probeTimeout;
-        _processFactory = processFactory ?? throw new ArgumentNullException(nameof(processFactory));
+        ArgumentNullException.ThrowIfNull(processFactory);
+        _processFactory = processFactory;
         _platform = platform ?? CurrentPlatform();
     }
 

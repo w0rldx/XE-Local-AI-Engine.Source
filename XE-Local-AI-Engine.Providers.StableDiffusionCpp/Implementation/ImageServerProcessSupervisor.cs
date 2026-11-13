@@ -80,13 +80,20 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         ProcessSpawnReceiptStore? spawnReceipts = null,
         IRuntimeResidencyChangeNotifier? residencyNotifier = null)
     {
-        _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
-        _backendSelector = backendSelector ?? throw new ArgumentNullException(nameof(backendSelector));
-        _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
-        _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
-        _readinessProbe = readinessProbe ?? throw new ArgumentNullException(nameof(readinessProbe));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(modelStore);
+        _modelStore = modelStore;
+        ArgumentNullException.ThrowIfNull(backendSelector);
+        _backendSelector = backendSelector;
+        ArgumentNullException.ThrowIfNull(binaryManager);
+        _binaryManager = binaryManager;
+        ArgumentNullException.ThrowIfNull(launcher);
+        _launcher = launcher;
+        ArgumentNullException.ThrowIfNull(readinessProbe);
+        _readinessProbe = readinessProbe;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _logger = logger ?? NullLogger<ImageServerProcessSupervisor>.Instance;
         _runtimeActivityGate = runtimeActivityGate ?? new ImageRuntimeActivityGate();
         _spawnReceipts = spawnReceipts ?? new ProcessSpawnReceiptStore(nodeDataRoot: null, "sd-server", _logger);

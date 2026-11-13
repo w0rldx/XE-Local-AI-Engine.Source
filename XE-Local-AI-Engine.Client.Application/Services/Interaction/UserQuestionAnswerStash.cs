@@ -24,7 +24,8 @@ public sealed class UserQuestionAnswerStash
 
     public UserQuestionAnswerStash(TimeProvider timeProvider)
     {
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     /// <summary>

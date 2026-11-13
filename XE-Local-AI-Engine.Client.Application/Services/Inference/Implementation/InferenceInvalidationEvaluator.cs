@@ -35,13 +35,18 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
         IProcessContextAllocationResolver allocationResolver,
         ILogger<InferenceInvalidationEvaluator> logger)
     {
-        _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
-        _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-        _launchPolicyFingerprintProvider =
-            launchPolicyFingerprintProvider ?? throw new ArgumentNullException(nameof(launchPolicyFingerprintProvider));
-        _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
-        _allocationResolver = allocationResolver ?? throw new ArgumentNullException(nameof(allocationResolver));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(installedRuntimeStore);
+        _installedRuntimeStore = installedRuntimeStore;
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        _ggufModelStore = ggufModelStore;
+        ArgumentNullException.ThrowIfNull(launchPolicyFingerprintProvider);
+        _launchPolicyFingerprintProvider = launchPolicyFingerprintProvider;
+        ArgumentNullException.ThrowIfNull(hardwareProfiler);
+        _hardwareProfiler = hardwareProfiler;
+        ArgumentNullException.ThrowIfNull(allocationResolver);
+        _allocationResolver = allocationResolver;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

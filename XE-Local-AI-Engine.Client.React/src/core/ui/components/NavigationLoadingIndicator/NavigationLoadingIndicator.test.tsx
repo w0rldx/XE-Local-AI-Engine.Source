@@ -26,7 +26,7 @@ describe("NavigationLoadingIndicator", () => {
 	it("shows only the loading line when no refresh is waiting out a rate limit", () => {
 		renderWithMantine(<NavigationLoadingIndicator />);
 
-		expect(screen.getByText("Loading...")).toBeTruthy();
+		expect(screen.getByText("Loading…")).toBeTruthy();
 		expect(screen.queryByTestId("navigation-loading-rate-limited")).toBeNull();
 	});
 

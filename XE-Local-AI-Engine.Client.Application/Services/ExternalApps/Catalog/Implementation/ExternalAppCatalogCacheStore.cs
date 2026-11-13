@@ -25,7 +25,8 @@ internal sealed class ExternalAppCatalogCacheStore : IExternalAppCatalogCacheSto
     public ExternalAppCatalogCacheStore(INodeDataDirectory dataDirectory, ILogger<ExternalAppCatalogCacheStore> logger)
     {
         ArgumentNullException.ThrowIfNull(dataDirectory);
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _cachePath = Path.Combine(dataDirectory.Root, CacheDirectoryName, CacheFileName);
     }
 

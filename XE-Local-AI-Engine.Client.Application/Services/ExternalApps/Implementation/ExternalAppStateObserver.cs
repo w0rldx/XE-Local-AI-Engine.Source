@@ -49,16 +49,25 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _service = service ?? throw new ArgumentNullException(nameof(service));
-        _gate = gate ?? throw new ArgumentNullException(nameof(gate));
-        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
-        _reconciler = reconciler ?? throw new ArgumentNullException(nameof(reconciler));
-        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+        ArgumentNullException.ThrowIfNull(gate);
+        _gate = gate;
+        ArgumentNullException.ThrowIfNull(runner);
+        _runner = runner;
+        ArgumentNullException.ThrowIfNull(reconciler);
+        _reconciler = reconciler;
+        ArgumentNullException.ThrowIfNull(publisher);
+        _publisher = publisher;
         _options = options.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public void Dispose()

@@ -39,9 +39,12 @@ internal sealed class SandboxLifecycleRegistry
         IExecutionPreviewPolicy? previewPolicy = null,
         ILogger? logger = null)
     {
-        _jailRoot = jailRoot ?? throw new ArgumentNullException(nameof(jailRoot));
-        _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(jailRoot);
+        _jailRoot = jailRoot;
+        ArgumentNullException.ThrowIfNull(launcher);
+        _launcher = launcher;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _previewPolicy = previewPolicy;
         _logger = logger ?? NullLogger.Instance;
     }

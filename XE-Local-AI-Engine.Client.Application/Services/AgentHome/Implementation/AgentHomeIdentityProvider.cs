@@ -21,7 +21,8 @@ internal sealed class AgentHomeIdentityProvider : IAgentHomeIdentityProvider
 
     public AgentHomeIdentityProvider(ITokenStore tokenStore)
     {
-        _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+        ArgumentNullException.ThrowIfNull(tokenStore);
+        _tokenStore = tokenStore;
     }
 
     public async Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)

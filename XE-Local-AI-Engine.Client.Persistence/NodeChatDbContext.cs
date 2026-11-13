@@ -32,7 +32,8 @@ public sealed class NodeChatDbContext : DbContext
 
     public NodeChatDbContext(DbContextOptions<NodeChatDbContext> options, INodeSqliteKeyHolder nodeSqliteKeyHolder) : base(options)
     {
-        _nodeSqliteKeyHolder = nodeSqliteKeyHolder ?? throw new ArgumentNullException(nameof(nodeSqliteKeyHolder));
+        ArgumentNullException.ThrowIfNull(nodeSqliteKeyHolder);
+        _nodeSqliteKeyHolder = nodeSqliteKeyHolder;
     }
 
     internal DbSet<NodeConversation> Conversations => Set<NodeConversation>();

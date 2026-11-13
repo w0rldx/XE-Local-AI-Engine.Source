@@ -58,10 +58,12 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
         TimeSpan? mapCacheTtl = null)
     {
         ArgumentNullException.ThrowIfNull(providers);
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
         ArgumentException.ThrowIfNullOrWhiteSpace(defaultProviderName);
         _mapCacheTtl = mapCacheTtl ?? DefaultMapCacheTtl;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
 
         // Last registration wins per key so a host can override a provider; provider keys are case-insensitive to match
         // LocalModelSelection routing across the persisted map and capability payloads.

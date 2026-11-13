@@ -83,12 +83,17 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
         TimeProvider timeProvider,
         int workCapacity)
     {
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _nativeClient = nativeClient ?? throw new ArgumentNullException(nameof(nativeClient));
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+        ArgumentNullException.ThrowIfNull(nativeClient);
+        _nativeClient = nativeClient;
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _interval = interval > TimeSpan.Zero ? interval : throw new ArgumentOutOfRangeException(nameof(interval));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(workCapacity);
         _work = Channel.CreateBounded<CalibrationWork>(new BoundedChannelOptions(workCapacity)
         {

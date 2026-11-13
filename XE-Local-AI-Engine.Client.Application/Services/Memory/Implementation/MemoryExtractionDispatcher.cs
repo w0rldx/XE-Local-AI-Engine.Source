@@ -21,7 +21,8 @@ internal sealed class MemoryExtractionDispatcher : IMemoryExtractionDispatcher
     public MemoryExtractionDispatcher(IOptions<MemoryExtractionOptions> options, ILogger<MemoryExtractionDispatcher> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
 
         var capacity = Math.Max(1, options.Value.QueueCapacity);
         _queue = Channel.CreateBounded<MemoryExtractionJob>(new BoundedChannelOptions(capacity)

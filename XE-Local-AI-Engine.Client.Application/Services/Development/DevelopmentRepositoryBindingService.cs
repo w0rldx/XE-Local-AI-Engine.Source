@@ -30,7 +30,8 @@ internal sealed class DevelopmentRepositoryBindingService : IDevelopmentReposito
         IDevelopmentStore store,
         IOptions<DevelopmentOptions> options)
     {
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
         ArgumentNullException.ThrowIfNull(selectedFolders);
         _selectedFolders = selectedFolders;
         ArgumentNullException.ThrowIfNull(store);

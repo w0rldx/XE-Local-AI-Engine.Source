@@ -76,10 +76,14 @@ public abstract class ManagedSourceBuildService<TBackend, TDescriptor> : IDispos
         _managedRuntimeLabel = managedRuntimeLabel;
         _serverName = serverName;
         _buildTargets = buildTargets;
-        _runtimeStore = runtimeStore ?? throw new ArgumentNullException(nameof(runtimeStore));
-        _managedSignal = managedSignal ?? throw new ArgumentNullException(nameof(managedSignal));
-        _activityGate = activityGate ?? throw new ArgumentNullException(nameof(activityGate));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeStore);
+        _runtimeStore = runtimeStore;
+        ArgumentNullException.ThrowIfNull(managedSignal);
+        _managedSignal = managedSignal;
+        ArgumentNullException.ThrowIfNull(activityGate);
+        _activityGate = activityGate;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _publishQueue = Channel.CreateBounded<StatusChange>(new BoundedChannelOptions(PublishQueueCapacity)
         {
             SingleReader = true,
@@ -91,8 +95,10 @@ public abstract class ManagedSourceBuildService<TBackend, TDescriptor> : IDispos
         _publisherTask = PublishLoopAsync();
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         _cacheRoot = cacheRoot;
-        Runner = runner ?? throw new ArgumentNullException(nameof(runner));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(runner);
+        Runner = runner;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _isLinux = isLinux ?? OperatingSystem.IsLinux();
     }
 

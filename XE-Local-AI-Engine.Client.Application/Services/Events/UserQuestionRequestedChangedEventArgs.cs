@@ -8,7 +8,8 @@ public sealed class UserQuestionRequestedChangedEventArgs : EventArgs
 {
     public UserQuestionRequestedChangedEventArgs(UserQuestionLifecyclePayload payload)
     {
-        Payload = payload ?? throw new ArgumentNullException(nameof(payload));
+        ArgumentNullException.ThrowIfNull(payload);
+        Payload = payload;
     }
 
     public UserQuestionLifecyclePayload Payload { get; }

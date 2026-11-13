@@ -132,21 +132,31 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         ILlamaServerPooledLaunchAdmission? pooledLaunchAdmission = null,
         IRuntimeResidencyChangeNotifier? residencyNotifier = null)
     {
-        _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
-        _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
-        _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
-        _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
-        _healthProbe = healthProbe ?? throw new ArgumentNullException(nameof(healthProbe));
-        _capabilityManifestProbe = capabilityManifestProbe ?? throw new ArgumentNullException(nameof(capabilityManifestProbe));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(binaryManager);
+        _binaryManager = binaryManager;
+        ArgumentNullException.ThrowIfNull(variantSelector);
+        _variantSelector = variantSelector;
+        ArgumentNullException.ThrowIfNull(modelStore);
+        _modelStore = modelStore;
+        ArgumentNullException.ThrowIfNull(launcher);
+        _launcher = launcher;
+        ArgumentNullException.ThrowIfNull(healthProbe);
+        _healthProbe = healthProbe;
+        ArgumentNullException.ThrowIfNull(capabilityManifestProbe);
+        _capabilityManifestProbe = capabilityManifestProbe;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
         _options.Validate();
-        _profileResolver = profileResolver ?? throw new ArgumentNullException(nameof(profileResolver));
+        ArgumentNullException.ThrowIfNull(profileResolver);
+        _profileResolver = profileResolver;
         _extraArgumentsResolver = extraArgumentsResolver ?? new EmptyLlamaServerExtraLaunchArgumentsResolver();
-        _launchPolicy = launchPolicy ?? throw new ArgumentNullException(nameof(launchPolicy));
+        ArgumentNullException.ThrowIfNull(launchPolicy);
+        _launchPolicy = launchPolicy;
         _allocationResolver = allocationResolver ?? new DefaultProcessContextAllocationResolver(new LlamaServerLaunchPolicyOptions());
         _launchAdmissions = launchAdmissions ?? new ProcessLaunchAdmissionRegistry();
         _externalEndpoints = externalEndpoints ?? new LlamaServerExternalEndpointOptions();
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _logger = logger ?? NullLogger<LlamaServerProcessSupervisor>.Instance;
         _detachedSpawnScheduler = detachedSpawnScheduler ?? TaskScheduler.Default;
         _spawnReceipts = spawnReceipts ?? new ProcessSpawnReceiptStore(nodeDataRoot: null, "llama-server", _logger);

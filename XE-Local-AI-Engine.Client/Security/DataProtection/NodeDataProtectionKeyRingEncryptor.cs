@@ -31,8 +31,10 @@ public sealed class NodeDataProtectionKeyRingEncryptor : IXmlEncryptor
 
     public NodeDataProtectionKeyRingEncryptor(INodeDataProtectionKeyProvider keyProvider, INodeAeadCipher cipher)
     {
-        _keyProvider = keyProvider ?? throw new ArgumentNullException(nameof(keyProvider));
-        _cipher = cipher ?? throw new ArgumentNullException(nameof(cipher));
+        ArgumentNullException.ThrowIfNull(keyProvider);
+        _keyProvider = keyProvider;
+        ArgumentNullException.ThrowIfNull(cipher);
+        _cipher = cipher;
     }
 
     public EncryptedXmlInfo Encrypt(XElement plaintextElement)

@@ -23,7 +23,8 @@ internal sealed class McpAgentRunCompactionService : BackgroundService
         _scopeFactory = scopeFactory;
         ArgumentNullException.ThrowIfNull(metrics);
         _metrics = metrics;
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
         ArgumentNullException.ThrowIfNull(timeProvider);
         _timeProvider = timeProvider;
         ArgumentNullException.ThrowIfNull(logger);

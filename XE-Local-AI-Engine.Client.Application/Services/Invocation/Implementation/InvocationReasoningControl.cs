@@ -39,8 +39,10 @@ public sealed partial class InvocationReasoningControl
 
     public InvocationReasoningControl(ILlamaServerNativeClient nativeClient, ILogger<InvocationReasoningControl> logger)
     {
-        _nativeClient = nativeClient ?? throw new ArgumentNullException(nameof(nativeClient));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(nativeClient);
+        _nativeClient = nativeClient;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <summary>Starts tracking the turn writing <paramref name="messageId" />; disposing the handle stops it.</summary>

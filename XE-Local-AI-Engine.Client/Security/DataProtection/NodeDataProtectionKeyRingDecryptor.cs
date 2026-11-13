@@ -24,7 +24,8 @@ public sealed class NodeDataProtectionKeyRingDecryptor : IXmlDecryptor
     // resolved on demand in Decrypt so they bind to the live application container at read time.
     public NodeDataProtectionKeyRingDecryptor(IServiceProvider services)
     {
-        _services = services ?? throw new ArgumentNullException(nameof(services));
+        ArgumentNullException.ThrowIfNull(services);
+        _services = services;
     }
 
     public XElement Decrypt(XElement encryptedElement)

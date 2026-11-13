@@ -41,16 +41,26 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
         TimeProvider timeProvider,
         ILogger<McpAgentRunCoordinator> logger)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
-        _fingerprint = fingerprint ?? throw new ArgumentNullException(nameof(fingerprint));
-        _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
-        _wake = wake ?? throw new ArgumentNullException(nameof(wake));
-        _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
-        _workspaceResolver = workspaceResolver ?? throw new ArgumentNullException(nameof(workspaceResolver));
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(resolver);
+        _resolver = resolver;
+        ArgumentNullException.ThrowIfNull(fingerprint);
+        _fingerprint = fingerprint;
+        ArgumentNullException.ThrowIfNull(cancellations);
+        _cancellations = cancellations;
+        ArgumentNullException.ThrowIfNull(wake);
+        _wake = wake;
+        ArgumentNullException.ThrowIfNull(metrics);
+        _metrics = metrics;
+        ArgumentNullException.ThrowIfNull(workspaceResolver);
+        _workspaceResolver = workspaceResolver;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<McpAgentRunStartResult> StartAsync(McpAgentRunStartRequest request, CancellationToken cancellationToken)

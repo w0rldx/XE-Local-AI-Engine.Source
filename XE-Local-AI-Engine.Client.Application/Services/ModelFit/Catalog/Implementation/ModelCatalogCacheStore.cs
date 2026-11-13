@@ -27,7 +27,8 @@ internal sealed class ModelCatalogCacheStore : IModelCatalogCacheStore, IDisposa
     public ModelCatalogCacheStore(INodeDataDirectory dataDirectory, ILogger<ModelCatalogCacheStore> logger)
     {
         ArgumentNullException.ThrowIfNull(dataDirectory);
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _cachePath = Path.Combine(dataDirectory.Root, CacheFileName);
     }
 

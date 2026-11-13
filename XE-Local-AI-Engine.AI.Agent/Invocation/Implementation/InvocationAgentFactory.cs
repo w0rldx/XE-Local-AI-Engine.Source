@@ -56,16 +56,24 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         ICustomToolCatalog customToolCatalog,
         IOptions<ToolRelevanceOptions>? toolRelevanceOptions = null)
     {
-        _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
+        ArgumentNullException.ThrowIfNull(chatClient);
+        _chatClient = chatClient;
         ArgumentNullException.ThrowIfNull(options);
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        _loggerFactory = loggerFactory;
         _options = options.Value;
-        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-        _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
-        _clientLocalToolRegistry = clientLocalToolRegistry ?? throw new ArgumentNullException(nameof(clientLocalToolRegistry));
-        _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
-        _customToolCatalog = customToolCatalog ?? throw new ArgumentNullException(nameof(customToolCatalog));
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        _serviceProvider = serviceProvider;
+        ArgumentNullException.ThrowIfNull(toolRegistry);
+        _toolRegistry = toolRegistry;
+        ArgumentNullException.ThrowIfNull(clientLocalToolRegistry);
+        _clientLocalToolRegistry = clientLocalToolRegistry;
+        ArgumentNullException.ThrowIfNull(mcpToolRegistry);
+        _mcpToolRegistry = mcpToolRegistry;
+        ArgumentNullException.ThrowIfNull(customToolCatalog);
+        _customToolCatalog = customToolCatalog;
         _toolRelevanceOptions = toolRelevanceOptions?.Value ?? new ToolRelevanceOptions();
     }
 

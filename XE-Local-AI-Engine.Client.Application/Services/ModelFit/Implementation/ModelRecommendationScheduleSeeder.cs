@@ -46,8 +46,10 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
     public ModelRecommendationScheduleSeeder(IServiceScopeFactory scopeFactory,
         ILogger<ModelRecommendationScheduleSeeder> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)

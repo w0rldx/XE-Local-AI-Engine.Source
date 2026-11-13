@@ -147,12 +147,16 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         _logger = logger ?? (ILogger)NullLogger.Instance;
         // Required, never defaulted: a provider built without node settings would silently run under `low` (ADR 0020).
         _runtimeSettings = runtimeSettings;
-        _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
-        _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        _dataDirectory = dataDirectory;
+        ArgumentNullException.ThrowIfNull(sandbox);
+        _sandbox = sandbox;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _secretsSink = secretsSink ?? throw new ArgumentNullException(nameof(secretsSink));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(secretsSink);
+        _secretsSink = secretsSink;
 
         // The product's single definition of "this file may hold a credential", shared with the tools' read gate and
         // AgentHome's copy filter. Defaulted so a directly constructed provider behaves as the DI-resolved one.

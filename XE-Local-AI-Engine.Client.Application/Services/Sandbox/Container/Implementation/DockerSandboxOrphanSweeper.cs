@@ -21,9 +21,12 @@ internal sealed class DockerSandboxOrphanSweeper : IHostedService
         IDockerDaemonPreflightService preflight,
         ILogger<DockerSandboxOrphanSweeper> logger)
     {
-        _services = services ?? throw new ArgumentNullException(nameof(services));
-        _preflight = preflight ?? throw new ArgumentNullException(nameof(preflight));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(services);
+        _services = services;
+        ArgumentNullException.ThrowIfNull(preflight);
+        _preflight = preflight;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

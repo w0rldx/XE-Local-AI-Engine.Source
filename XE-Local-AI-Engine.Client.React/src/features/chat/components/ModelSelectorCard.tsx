@@ -213,8 +213,8 @@ export function ModelSelectorCard({
 						{showSearch ? (
 							<Box px="xs" pt={4} pb={2}>
 								<TextInput
-									placeholder={t("pages.chat.modelSelector.search", "Search models...")}
-									aria-label={t("pages.chat.modelSelector.search", "Search models...")}
+									placeholder={t("pages.chat.modelSelector.search", "Search models…")}
+									aria-label={t("pages.chat.modelSelector.search", "Search models…")}
 									size="xs"
 									leftSection={<IconSearch size={14} />}
 									value={searchQuery}

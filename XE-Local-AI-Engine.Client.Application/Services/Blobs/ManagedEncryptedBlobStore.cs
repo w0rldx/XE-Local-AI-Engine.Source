@@ -37,8 +37,10 @@ internal sealed class ManagedEncryptedBlobStore
         int maxBytes,
         string subject)
     {
-        _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
-        _keyHolder = keyHolder ?? throw new ArgumentNullException(nameof(keyHolder));
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        _dataDirectory = dataDirectory;
+        ArgumentNullException.ThrowIfNull(keyHolder);
+        _keyHolder = keyHolder;
         _folderSegment = folderSegment;
         _leafSegment = leafSegment;
         _aadColumn = aadColumn;

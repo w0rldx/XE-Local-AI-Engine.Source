@@ -100,16 +100,22 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         IEnumerable<IGraphWorkflowNativeDecisionProvider> nativeDecisionProviders,
         ILogger<GraphWorkflowInvocationExecutor> logger)
     {
-        _decisionProviders = [.. decisionProviders ?? throw new ArgumentNullException(nameof(decisionProviders))];
-        _nativeDecisionProviders = [.. nativeDecisionProviders ?? throw new ArgumentNullException(nameof(nativeDecisionProviders))];
+        ArgumentNullException.ThrowIfNull(decisionProviders);
+        _decisionProviders = [.. decisionProviders];
+        ArgumentNullException.ThrowIfNull(nativeDecisionProviders);
+        _nativeDecisionProviders = [.. nativeDecisionProviders];
         ArgumentNullException.ThrowIfNull(options);
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _sweepWake = sweepWake ?? throw new ArgumentNullException(nameof(sweepWake));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(sweepWake);
+        _sweepWake = sweepWake;
 
         // The runner is a SINGLETON and is injected as one: the stop and discard paths are documented as non-blocking,
         // and opening a DI scope per cancel to reach a singleton is work a hot drain loop pays for nothing.
-        _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(invocationRunner);
+        _invocationRunner = invocationRunner;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _options = options.Value;
 
         // Sized on the run cap rather than on an option of its own: it bounds how many node runs may be parked on the node-wide invocation lease at once, and a

@@ -150,7 +150,8 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         _supervisor = supervisor;
         ArgumentNullException.ThrowIfNull(templateStore);
         _templateStore = templateStore;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         ArgumentNullException.ThrowIfNull(graphWorkflows);
         _graphWorkflows = graphWorkflows;
         ArgumentNullException.ThrowIfNull(timeProvider);

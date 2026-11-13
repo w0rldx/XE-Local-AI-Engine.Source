@@ -23,7 +23,8 @@ public sealed class PreviewSkillImportEndpoint : Endpoint<SkillImportPreviewRequ
     {
         ArgumentNullException.ThrowIfNull(importService);
         _importService = importService;
-        _maxArchiveBytes = (options ?? throw new ArgumentNullException(nameof(options))).MaxArchiveBytes;
+        ArgumentNullException.ThrowIfNull(options);
+        _maxArchiveBytes = options.MaxArchiveBytes;
     }
 
     public override void Configure()

@@ -92,18 +92,27 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         TimeProvider timeProvider,
         string cacheRoot)
     {
-        _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
-        _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _buildActivity = buildActivity ?? throw new ArgumentNullException(nameof(buildActivity));
-        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(prerequisiteProbe);
+        _prerequisiteProbe = prerequisiteProbe;
+        ArgumentNullException.ThrowIfNull(binaryManager);
+        _binaryManager = binaryManager;
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+        ArgumentNullException.ThrowIfNull(buildActivity);
+        _buildActivity = buildActivity;
+        ArgumentNullException.ThrowIfNull(publisher);
+        _publisher = publisher;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         _cacheRoot = cacheRoot;
         _homeDirectory = Environment.GetEnvironmentVariable("HOME") ?? string.Empty;
-        _reconciler = new LlamaCppSourceBuildReconciler(installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore)),
-            activeSignal ?? throw new ArgumentNullException(nameof(activeSignal)),
+        ArgumentNullException.ThrowIfNull(installedRuntimeStore);
+        ArgumentNullException.ThrowIfNull(activeSignal);
+        _reconciler = new LlamaCppSourceBuildReconciler(installedRuntimeStore,
+            activeSignal,
             SourceBuildRoot,
             _logger);
     }

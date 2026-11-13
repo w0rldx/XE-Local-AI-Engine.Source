@@ -48,17 +48,27 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _service = service ?? throw new ArgumentNullException(nameof(service));
-        _layout = layout ?? throw new ArgumentNullException(nameof(layout));
-        _gate = gate ?? throw new ArgumentNullException(nameof(gate));
-        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
-        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-        _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+        ArgumentNullException.ThrowIfNull(layout);
+        _layout = layout;
+        ArgumentNullException.ThrowIfNull(gate);
+        _gate = gate;
+        ArgumentNullException.ThrowIfNull(runner);
+        _runner = runner;
+        ArgumentNullException.ThrowIfNull(publisher);
+        _publisher = publisher;
+        ArgumentNullException.ThrowIfNull(lifetime);
+        _lifetime = lifetime;
         _options = options.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <summary>

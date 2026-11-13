@@ -33,7 +33,8 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
 
     public IntegrationExecutionStore(NodeChatDbContext dbContext)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
         _connectionString = dbContext.Database.GetConnectionString()
                             ?? throw new InvalidOperationException("The integration execution store requires a configured SQLite connection string.");
     }

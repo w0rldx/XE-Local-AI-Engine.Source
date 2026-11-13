@@ -18,8 +18,10 @@ public sealed class ImportKnowledgeRepositoryEndpoint : Endpoint<ImportKnowledge
     public ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scopeFactory, IOptions<DevelopmentOptions> options, INodeRuntimeSettings runtimeSettings)
     {
         // The options carry the startup value, which decided whether the repository services exist; the live switch closes the rest.
-        _developmentRegistered = (options ?? throw new ArgumentNullException(nameof(options))).Value.Enabled;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(options);
+        _developmentRegistered = options.Value.Enabled;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         ArgumentNullException.ThrowIfNull(scopeFactory);
         _scopeFactory = scopeFactory;
     }

@@ -24,9 +24,12 @@ internal sealed class ToolCapableModelRegistrar : IToolCapableModelRegistrar
         INodeSettingsStore settingsStore,
         ILogger<ToolCapableModelRegistrar> logger)
     {
-        _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-        _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        _ggufModelStore = ggufModelStore;
+        ArgumentNullException.ThrowIfNull(settingsStore);
+        _settingsStore = settingsStore;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<bool> RegisterIfToolCapableAsync(string modelName, CancellationToken cancellationToken = default)

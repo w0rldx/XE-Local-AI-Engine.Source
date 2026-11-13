@@ -22,8 +22,10 @@ internal sealed class RunInAgentHomeToolHandler : IClientLocalToolHandler
 
     public RunInAgentHomeToolHandler(INodeRuntimeSettings runtimeSettings, IAgentHomeToolGateway gateway)
     {
-        _gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(gateway);
+        _gateway = gateway;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     public string ToolName => AgentHomeToolDefinition.ToolName;

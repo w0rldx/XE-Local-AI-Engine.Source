@@ -54,9 +54,12 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
 
     public HttpFetchExecutor(IHttpClientFactory httpClientFactory, CustomToolConcurrencyLimiter concurrencyLimiter, ILogger<HttpFetchExecutor> logger)
     {
-        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        _concurrencyLimiter = concurrencyLimiter ?? throw new ArgumentNullException(nameof(concurrencyLimiter));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        _httpClientFactory = httpClientFactory;
+        ArgumentNullException.ThrowIfNull(concurrencyLimiter);
+        _concurrencyLimiter = concurrencyLimiter;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public CustomToolKind Kind => CustomToolKind.HttpFetch;

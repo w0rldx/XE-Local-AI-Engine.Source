@@ -35,13 +35,20 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         TimeProvider timeProvider,
         ILogger<McpAgentRunDispatcher> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
-        _wake = wake ?? throw new ArgumentNullException(nameof(wake));
-        _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(cancellations);
+        _cancellations = cancellations;
+        ArgumentNullException.ThrowIfNull(wake);
+        _wake = wake;
+        ArgumentNullException.ThrowIfNull(metrics);
+        _metrics = metrics;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)

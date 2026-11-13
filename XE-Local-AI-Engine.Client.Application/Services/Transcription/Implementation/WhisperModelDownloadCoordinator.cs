@@ -34,9 +34,12 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
         WhisperModelPathResolver pathResolver,
         ILogger<WhisperModelDownloadCoordinator> logger)
     {
-        _weightStore = weightStore ?? throw new ArgumentNullException(nameof(weightStore));
-        _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(weightStore);
+        _weightStore = weightStore;
+        ArgumentNullException.ThrowIfNull(pathResolver);
+        _pathResolver = pathResolver;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

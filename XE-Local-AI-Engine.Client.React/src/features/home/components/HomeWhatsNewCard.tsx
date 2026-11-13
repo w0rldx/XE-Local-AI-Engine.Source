@@ -54,8 +54,7 @@ export function HomeWhatsNewCard() {
 				hideLabel={t("pages.home.whatsNew.showLess", "Show less")}
 			>
 				<Stack gap={0} data-testid="home-whats-new-notes">
-					{/* Feed text, not vetted for this page: images stay links so rendering fetches nothing. */}
-					<MarkdownView content={shown.notesMarkdown} images="link" />
+					<MarkdownView content={shown.notesMarkdown} />
 				</Stack>
 			</Spoiler>
 			{shown.isTruncated ? (

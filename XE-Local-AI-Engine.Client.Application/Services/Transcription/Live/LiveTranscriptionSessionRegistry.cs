@@ -80,13 +80,18 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        _transcriber = transcriber ?? throw new ArgumentNullException(nameof(transcriber));
-        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        ArgumentNullException.ThrowIfNull(transcriber);
+        _transcriber = transcriber;
+        ArgumentNullException.ThrowIfNull(publisher);
+        _publisher = publisher;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
         _options = options.Value;
         _maxBufferedBytes = (long)_options.MaxBufferedAudioMb * 1024 * 1024;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",

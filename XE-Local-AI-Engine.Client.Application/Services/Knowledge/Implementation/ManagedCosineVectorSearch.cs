@@ -27,7 +27,8 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
 
     public ManagedCosineVectorSearch(NodeChatDbContext dbContext)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
     }
 
     public async Task<IReadOnlyList<VectorSearchHit>> SearchAsync(ReadOnlyMemory<float> queryVector,

@@ -63,8 +63,9 @@ End-to-end tests are opt-in and ask-gated: `scripts/run-e2e-local.sh`.
 ## Pull requests
 
 - Branch from and target `develop`.
-- Keep commits focused; write clear messages (Conventional Commits are used across the history).
-- Don't commit generated output by hand (the hey-api client is generated), secrets, or runtime data.
+- Keep commits focused. Write commit messages as Conventional Commits (`fix(scope): …`).
+- Never hand-edit generated output such as the hey-api client: regenerate it and commit the result. Never commit
+  secrets or runtime data.
 - Fill in the pull-request template and note how you validated the change.
 
 ## License

@@ -32,8 +32,10 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
 
     public AgentHomeToolGateway(IAgentHomeService service, INodeRuntimeSettings runtimeSettings)
     {
-        _service = service ?? throw new ArgumentNullException(nameof(service));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     public async Task<string> ExecuteAsync(AgentHomeRunToolRequest request, CancellationToken cancellationToken = default)

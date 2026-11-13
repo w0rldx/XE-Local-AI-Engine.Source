@@ -16,8 +16,10 @@ public sealed class InvocationAttachmentTracker : IInvocationAttachmentTracker
     // resolving it in the constructor closes a DI cycle the container rejects at validate-on-build. InvocationRunner breaks the same cycle the same way.
     public InvocationAttachmentTracker(Lazy<IWorkerEventDispatcher> eventDispatcher, TimeProvider timeProvider)
     {
-        _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(eventDispatcher);
+        _eventDispatcher = eventDispatcher;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     public event EventHandler<InvocationAttachmentChangedEventArgs>? AttachmentChanged;

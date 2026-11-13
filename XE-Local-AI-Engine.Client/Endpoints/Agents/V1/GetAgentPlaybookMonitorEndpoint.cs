@@ -31,7 +31,8 @@ public sealed class GetAgentPlaybookMonitorEndpoint : Endpoint<GetAgentPlaybookM
         _agentDefinitions = agentDefinitions;
         ArgumentNullException.ThrowIfNull(playbookMonitorService);
         _playbookMonitorService = playbookMonitorService;
-        _retrievalOptions = (retrievalOptions ?? throw new ArgumentNullException(nameof(retrievalOptions))).Value;
+        ArgumentNullException.ThrowIfNull(retrievalOptions);
+        _retrievalOptions = retrievalOptions.Value;
     }
 
     public override void Configure()

@@ -23,7 +23,8 @@ internal sealed class ToolRelevanceCoreSet : IToolRelevanceCoreSet
 
     public ToolRelevanceCoreSet(ILocalToolOfferProvider offerProvider)
     {
-        _offerProvider = offerProvider ?? throw new ArgumentNullException(nameof(offerProvider));
+        ArgumentNullException.ThrowIfNull(offerProvider);
+        _offerProvider = offerProvider;
     }
 
     /// <inheritdoc />

@@ -43,10 +43,13 @@ internal sealed class DevelopmentAttemptLiveProgress
         int maxOutputTokens,
         int maxToolCalls)
     {
-        _execution = execution ?? throw new ArgumentNullException(nameof(execution));
-        _broker = broker ?? throw new ArgumentNullException(nameof(broker));
+        ArgumentNullException.ThrowIfNull(execution);
+        _execution = execution;
+        ArgumentNullException.ThrowIfNull(broker);
+        _broker = broker;
         ArgumentNullException.ThrowIfNull(options);
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _detector = new DevelopmentProgressDetector(options, timeProvider);
         _maxProviderRounds = Math.Max(1, maxToolCalls + 1);
         _maxToolCalls = maxToolCalls;

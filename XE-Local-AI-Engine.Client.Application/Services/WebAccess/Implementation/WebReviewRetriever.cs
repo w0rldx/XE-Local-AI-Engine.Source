@@ -19,9 +19,12 @@ public sealed class WebReviewRetriever
 
     internal WebReviewRetriever(WebFetchService fetchService, WebSearchService searchService, ILogger<WebReviewRetriever> logger)
     {
-        _fetchService = fetchService ?? throw new ArgumentNullException(nameof(fetchService));
-        _searchService = searchService ?? throw new ArgumentNullException(nameof(searchService));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(fetchService);
+        _fetchService = fetchService;
+        ArgumentNullException.ThrowIfNull(searchService);
+        _searchService = searchService;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <summary>What <see cref="RetrieveAsync" /> would send (normalized URL or trimmed query); null when it would refuse before sending.</summary>

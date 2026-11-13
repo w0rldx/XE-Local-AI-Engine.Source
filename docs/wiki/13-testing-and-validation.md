@@ -79,6 +79,8 @@ These suites landed with the 2026-06-24…27 subsystems and are confirmed presen
 
 Two more read source because the shape they pin leaves no mark in IL, and both fence every solution project plus the C# under `tools/`: **`PrimaryConstructorConventionTests`** refuses a primary constructor on a class or struct, with no exemption list, and **`PositionalRecordConventionTests`** refuses a `record` of class kind that carries a parameter list unless `Architecture/PositionalRecordAllowlist.txt` lists that declaration — grouped by the reason `required` cannot apply to those types, one line per declaration, and shrink-only in both directions, so an entry that no longer matches a positional record fails as loudly as an unreasoned one. **`RequiredMemberSerializationTests`** closes the same rule from the other side by reflection over the product assemblies: a `required` member may not also be conditionally omitted from the JSON. Rules and rationale: [Code Conventions](16-code-conventions.md).
 
+**`ArgumentNullGuardConventionTests`** walks the same files through `Support/EnforcedSourceFiles` and refuses a null guard written as `?? throw new ArgumentNullException`: guard with `ArgumentNullException.ThrowIfNull(x)`, then assign. Comments and literal content are blanked first, and there is no exemption list. Rule: [Code Conventions](16-code-conventions.md).
+
 **`CommentBudgetConventionTests`** fences the same roots through `Support/EnforcedSourceFiles`, and ratchets the nine comment and XML-doc rules of [Code Conventions](16-code-conventions.md). Five are length budgets: a `<summary>` over 240 characters, a `<param>`/`<returns>`/`<value>` over 160, a `<remarks>` over 5 content lines or 600 characters, a `///` block over 15 lines, and more than 2 consecutive own-line `//` lines. Four are shapes that satisfy a budget while being wrong: a block carrying a second `<summary>` or `<remarks>` (`multi`), a `<seealso>` carrying a prose body (`seealso`), a block with `<remarks>` but no `<summary>` or `<inheritdoc>` (`nosummary`), and a block that is not well-formed XML (`xml`) — csc parses one too, since `Directory.Build.props` sets `GenerateDocumentationFile` to make IDE0005 run, but it reports only well-formedness (`CS1570`) and not any of the other eight rules. `Architecture/CommentBudgetAllowlist.txt` records a COUNT per file and rule rather than a per-item key, because the items are prose and a count is the only key that rewording cannot break; it is shrink-only in both directions, and `XE_COMMENT_BUDGET_SHRINK=1` regenerates it downward and then fails so the regeneration is never a green run. Test projects are ratcheted exactly like production; production measures zero for the four shape rules.
 
 `LayerDependencyTests` also pins the exact `ProjectReference` sets of the test and support projects alongside the production ones (seven entries as of 2026-09-16, keyed by repository-relative csproj path), cross-checked against the solution's `/Tests` folder membership so a newly added test or fixture project cannot ship unpinned.
@@ -390,7 +392,7 @@ Contract test: `scripts/tests/squash-guard.test.sh`.
 
 ### The four standalone runners
 
-All four exist for local, CI-independent validation. The CI gate is `build-and-test.yml` (on `develop` PRs/pushes)
+These runners exist for local, CI-independent validation. The CI gate is `build-and-test.yml` (on `develop` PRs/pushes)
 and the immutable-tag-bound `release.yml` (on `v*` tags, which itself calls `build-and-test.yml` before packaging).
 These standalone runners exercise additional target-specific checks locally.
 
@@ -445,6 +447,13 @@ every directory over 1 GB under the main checkout's `.tmp/` and every linked wor
 > **The frontend prerequisite is explicit.** The standalone runner executes `pnpm run lint` before
 > E2E because the fixture uses bare `pnpm run build:e2e`; do not infer type/lint correctness from a
 > green Vite build alone. Use `--list` for the current discovered-test count.
+
+### Quality review
+
+A read-only review of code or docs against the house rules and the external guideline sets follows the method in
+[Quality review](reference/13-quality-review.md): the source order, procedure, severity, report format, the house
+review checklist (what tooling already enforces and what only a reviewer catches) and the applicability profile of
+each guideline set. A review is evidence for findings, never a substitute for the gates on this page.
 
 ## Continuous integration
 

@@ -45,16 +45,26 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
         TimeProvider timeProvider,
         ILogger<ConversationStateDistillationService> logger)
     {
-        _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
-        _distiller = distiller ?? throw new ArgumentNullException(nameof(distiller));
-        _localDefaultChatModelResolver = localDefaultChatModelResolver ?? throw new ArgumentNullException(nameof(localDefaultChatModelResolver));
-        _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
-        _localRuntimeWarmer = localRuntimeWarmer ?? throw new ArgumentNullException(nameof(localRuntimeWarmer));
-        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(persistence);
+        _persistence = persistence;
+        ArgumentNullException.ThrowIfNull(distiller);
+        _distiller = distiller;
+        ArgumentNullException.ThrowIfNull(localDefaultChatModelResolver);
+        _localDefaultChatModelResolver = localDefaultChatModelResolver;
+        ArgumentNullException.ThrowIfNull(modelCapabilityResolver);
+        _modelCapabilityResolver = modelCapabilityResolver;
+        ArgumentNullException.ThrowIfNull(localRuntimeWarmer);
+        _localRuntimeWarmer = localRuntimeWarmer;
+        ArgumentNullException.ThrowIfNull(nodeSettingsStore);
+        _nodeSettingsStore = nodeSettingsStore;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <summary>One completed, content-bearing message of the selected path with the anchor sequence it folds under.</summary>

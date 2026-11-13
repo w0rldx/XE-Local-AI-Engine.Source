@@ -52,14 +52,22 @@ public sealed class IntegrationSessionService
         TimeProvider timeProvider,
         ILogger<IntegrationSessionService> logger)
     {
-        _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
-        _executions = executions ?? throw new ArgumentNullException(nameof(executions));
-        _triggers = triggers ?? throw new ArgumentNullException(nameof(triggers));
-        _access = access ?? throw new ArgumentNullException(nameof(access));
-        _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
-        _gate = gate ?? throw new ArgumentNullException(nameof(gate));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+        ArgumentNullException.ThrowIfNull(executions);
+        _executions = executions;
+        ArgumentNullException.ThrowIfNull(triggers);
+        _triggers = triggers;
+        ArgumentNullException.ThrowIfNull(access);
+        _access = access;
+        ArgumentNullException.ThrowIfNull(persistence);
+        _persistence = persistence;
+        ArgumentNullException.ThrowIfNull(gate);
+        _gate = gate;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <summary>

@@ -25,8 +25,10 @@ internal sealed class RecommendationDiscoveryMemo : IHuggingFaceGgufDiscovery
 
     public RecommendationDiscoveryMemo(IHuggingFaceGgufDiscovery inner, TimeProvider timeProvider)
     {
-        _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(inner);
+        _inner = inner;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     /// <summary>Entries held right now, expired ones included until the next call prunes them.</summary>

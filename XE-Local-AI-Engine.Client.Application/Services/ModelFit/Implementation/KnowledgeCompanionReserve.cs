@@ -35,14 +35,20 @@ public sealed class KnowledgeCompanionReserve : IKnowledgeCompanionReserve
         INodeRuntimeSettings runtimeSettings,
         ILogger<KnowledgeCompanionReserve> logger)
     {
-        _footprintProvider = footprintProvider ?? throw new ArgumentNullException(nameof(footprintProvider));
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
-        _embeddingModelResolver = embeddingModelResolver ?? throw new ArgumentNullException(nameof(embeddingModelResolver));
+        ArgumentNullException.ThrowIfNull(footprintProvider);
+        _footprintProvider = footprintProvider;
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _providerResolver = providerResolver;
+        ArgumentNullException.ThrowIfNull(embeddingModelResolver);
+        _embeddingModelResolver = embeddingModelResolver;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

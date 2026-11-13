@@ -24,7 +24,8 @@ public sealed class DevelopmentAttemptLiveBroker : IDevelopmentAttemptLiveBroker
     public DevelopmentAttemptLiveBroker(IOptions<DevelopmentOptions> options, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(options);
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _capacity = options.Value.LiveChannelCapacity;
         _maxTextCharacters = options.Value.MaxLiveTextCharacters;
     }

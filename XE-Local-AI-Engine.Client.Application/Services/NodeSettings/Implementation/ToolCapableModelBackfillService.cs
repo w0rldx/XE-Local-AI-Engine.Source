@@ -16,8 +16,10 @@ internal sealed class ToolCapableModelBackfillService : BackgroundService
 
     public ToolCapableModelBackfillService(IToolCapableModelRegistrar registrar, ILogger<ToolCapableModelBackfillService> logger)
     {
-        _registrar = registrar ?? throw new ArgumentNullException(nameof(registrar));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(registrar);
+        _registrar = registrar;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

@@ -16,7 +16,8 @@ public sealed class OfflineProfileLlamaCppAcquisitionPolicy : ILlamaCppImplicitA
 
     public OfflineProfileLlamaCppAcquisitionPolicy(INodeRuntimeSettings runtimeSettings)
     {
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     public async Task<string?> GetRefusalAsync(CancellationToken ct)

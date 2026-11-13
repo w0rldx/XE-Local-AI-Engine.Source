@@ -88,7 +88,8 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
         ArgumentNullException.ThrowIfNull(dockerDaemonPreflight);
         ArgumentNullException.ThrowIfNull(homeDirectory);
         _options = options;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         _agentSandboxOptions = agentSandboxOptions;
         _developmentSandboxOptions = developmentSandboxOptions;
         _sandboxRuntimeProvider = sandboxRuntimeProvider;

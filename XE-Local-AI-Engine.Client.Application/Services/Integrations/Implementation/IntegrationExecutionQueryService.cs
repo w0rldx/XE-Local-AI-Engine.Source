@@ -32,12 +32,18 @@ public sealed class IntegrationExecutionQueryService
         TimeProvider timeProvider,
         ILogger<IntegrationExecutionQueryService> logger)
     {
-        _executions = executions ?? throw new ArgumentNullException(nameof(executions));
-        _triggers = triggers ?? throw new ArgumentNullException(nameof(triggers));
-        _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-        _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(executions);
+        _executions = executions;
+        ArgumentNullException.ThrowIfNull(triggers);
+        _triggers = triggers;
+        ArgumentNullException.ThrowIfNull(buffer);
+        _buffer = buffer;
+        ArgumentNullException.ThrowIfNull(cancellations);
+        _cancellations = cancellations;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public Task<IReadOnlyList<IntegrationExecutionSnapshot>> ListAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default) =>

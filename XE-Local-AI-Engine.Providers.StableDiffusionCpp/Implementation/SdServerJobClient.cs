@@ -33,7 +33,8 @@ internal sealed class SdServerJobClient
 
     public SdServerJobClient(HttpClient httpClient)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        ArgumentNullException.ThrowIfNull(httpClient);
+        _httpClient = httpClient;
     }
 
     /// <summary>

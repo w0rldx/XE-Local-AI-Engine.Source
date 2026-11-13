@@ -13,7 +13,8 @@ internal sealed class McpAgentRunWakeSignal : IDisposable
 
     public McpAgentRunWakeSignal(IOptions<McpAgentRunOptions> options)
     {
-        _maxPending = (options ?? throw new ArgumentNullException(nameof(options))).Value.MaxConcurrentWorkers;
+        ArgumentNullException.ThrowIfNull(options);
+        _maxPending = options.Value.MaxConcurrentWorkers;
     }
 
     /// <summary>Called after a Queued row has committed. Capped at the worker count: each stale permit costs one empty queue read.</summary>

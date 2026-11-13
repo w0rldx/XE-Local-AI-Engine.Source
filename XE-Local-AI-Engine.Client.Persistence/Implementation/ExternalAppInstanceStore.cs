@@ -31,7 +31,8 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
 
     public ExternalAppInstanceStore(NodeChatDbContext dbContext)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
     }
 
     public async Task<ExternalAppInstanceSnapshot?> GetAsync(Guid instanceId, CancellationToken cancellationToken = default)

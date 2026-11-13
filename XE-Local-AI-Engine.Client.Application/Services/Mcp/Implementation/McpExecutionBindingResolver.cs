@@ -48,12 +48,18 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
         IModelCapabilityResolver modelCapabilityResolver,
         INodeSqliteKeyHolder nodeKey)
     {
-        _agentDefinitionService = agentDefinitionService ?? throw new ArgumentNullException(nameof(agentDefinitionService));
-        _agentDefinitionResolver = agentDefinitionResolver ?? throw new ArgumentNullException(nameof(agentDefinitionResolver));
-        _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-        _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
-        _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
-        _nodeKey = nodeKey ?? throw new ArgumentNullException(nameof(nodeKey));
+        ArgumentNullException.ThrowIfNull(agentDefinitionService);
+        _agentDefinitionService = agentDefinitionService;
+        ArgumentNullException.ThrowIfNull(agentDefinitionResolver);
+        _agentDefinitionResolver = agentDefinitionResolver;
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        _ggufModelStore = ggufModelStore;
+        ArgumentNullException.ThrowIfNull(instructionProvider);
+        _instructionProvider = instructionProvider;
+        ArgumentNullException.ThrowIfNull(modelCapabilityResolver);
+        _modelCapabilityResolver = modelCapabilityResolver;
+        ArgumentNullException.ThrowIfNull(nodeKey);
+        _nodeKey = nodeKey;
     }
 
     public async Task<McpExecutionBindingResolution> ResolveAsync(McpExecutionBindingRequest request, CancellationToken cancellationToken)

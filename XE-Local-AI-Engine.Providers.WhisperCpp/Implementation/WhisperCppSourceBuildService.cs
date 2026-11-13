@@ -61,7 +61,8 @@ public sealed partial class WhisperCppSourceBuildService
             timeProvider,
             isLinux)
     {
-        _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
+        ArgumentNullException.ThrowIfNull(prerequisiteProbe);
+        _prerequisiteProbe = prerequisiteProbe;
         _adoption = new WhisperCppRuntimeAdoption(cacheRoot, runtimeStore, managedSignal, timeProvider, logger);
     }
 

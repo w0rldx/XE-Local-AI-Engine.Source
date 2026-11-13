@@ -26,8 +26,10 @@ public sealed class LlamaServerExtraLaunchArgumentsResolver : ILlamaServerExtraL
     public LlamaServerExtraLaunchArgumentsResolver(IServiceScopeFactory scopeFactory,
         ILogger<LlamaServerExtraLaunchArgumentsResolver> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

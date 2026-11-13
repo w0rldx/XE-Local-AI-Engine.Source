@@ -25,7 +25,8 @@ internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
 
     public AgentHomeRunLogger(TimeProvider timeProvider)
     {
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     /// <inheritdoc />

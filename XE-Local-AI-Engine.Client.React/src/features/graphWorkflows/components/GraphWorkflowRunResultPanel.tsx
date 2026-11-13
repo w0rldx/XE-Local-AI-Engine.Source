@@ -40,7 +40,7 @@ export function GraphWorkflowRunResultPanel({ output }: { readonly output: unkno
 			</Group>
 			{typeof output === "string" ? (
 				<Stack gap={0} data-testid="graph-workflow-run-result-markdown">
-					<MarkdownView content={output} images="link" />
+					<MarkdownView content={output} />
 				</Stack>
 			) : (
 				<Document value={output} testId="graph-workflow-run-result-json" />

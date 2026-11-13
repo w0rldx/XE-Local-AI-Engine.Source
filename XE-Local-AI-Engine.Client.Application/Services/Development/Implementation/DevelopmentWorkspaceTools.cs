@@ -55,11 +55,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         DevelopmentAttemptLiveProgress? liveProgress = null,
         ISensitiveFileExclusionService? exclusions = null)
     {
-        _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
-        _session = session ?? throw new ArgumentNullException(nameof(session));
+        ArgumentNullException.ThrowIfNull(sandbox);
+        _sandbox = sandbox;
+        ArgumentNullException.ThrowIfNull(session);
+        _session = session;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _profile = profile ?? throw new ArgumentNullException(nameof(profile));
+        ArgumentNullException.ThrowIfNull(profile);
+        _profile = profile;
         _liveProgress = liveProgress;
         _exclusions = exclusions ?? DefaultExclusions;
         _importBaselineDigest = DevelopmentCommandProfileImport.ComputeDigestOrNull(session.HostWorktreePath);

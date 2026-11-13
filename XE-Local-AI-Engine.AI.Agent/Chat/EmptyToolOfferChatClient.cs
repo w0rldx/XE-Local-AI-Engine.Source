@@ -10,7 +10,8 @@ internal sealed class EmptyToolOfferChatClient : DelegatingChatClient
     public EmptyToolOfferChatClient(IChatClient functionInvokingClient, IChatClient providerClient)
         : base(functionInvokingClient)
     {
-        _providerClient = providerClient ?? throw new ArgumentNullException(nameof(providerClient));
+        ArgumentNullException.ThrowIfNull(providerClient);
+        _providerClient = providerClient;
     }
 
     public override Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,

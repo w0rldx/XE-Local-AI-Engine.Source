@@ -35,16 +35,26 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         TimeProvider timeProvider,
         ILogger<GgufImportTransactionCoordinator> logger)
     {
-        _inspector = inspector ?? throw new ArgumentNullException(nameof(inspector));
-        _importer = importer ?? throw new ArgumentNullException(nameof(importer));
-        _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
-        _operations = operations ?? throw new ArgumentNullException(nameof(operations));
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
-        _freeSpaceProbe = freeSpaceProbe ?? throw new ArgumentNullException(nameof(freeSpaceProbe));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(inspector);
+        _inspector = inspector;
+        ArgumentNullException.ThrowIfNull(importer);
+        _importer = importer;
+        ArgumentNullException.ThrowIfNull(resolver);
+        _resolver = resolver;
+        ArgumentNullException.ThrowIfNull(operations);
+        _operations = operations;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(eventPublisher);
+        _eventPublisher = eventPublisher;
+        ArgumentNullException.ThrowIfNull(freeSpaceProbe);
+        _freeSpaceProbe = freeSpaceProbe;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<PreviewGgufImportResult> PreviewAsync(string sourcePath, CancellationToken cancellationToken = default)

@@ -42,10 +42,14 @@ public sealed class AppUpdateCheckService : BackgroundService
         ILogger<AppUpdateCheckService> logger,
         TimeSpan startupDelay)
     {
-        _appUpdateService = appUpdateService ?? throw new ArgumentNullException(nameof(appUpdateService));
-        _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(appUpdateService);
+        _appUpdateService = appUpdateService;
+        ArgumentNullException.ThrowIfNull(nodeRuntimeSettings);
+        _nodeRuntimeSettings = nodeRuntimeSettings;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _startupDelay = startupDelay;
     }
 

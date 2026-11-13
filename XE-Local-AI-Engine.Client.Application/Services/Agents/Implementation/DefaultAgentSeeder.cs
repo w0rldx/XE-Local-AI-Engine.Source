@@ -27,10 +27,12 @@ public sealed class DefaultAgentSeeder : IHostedService
         IOptions<LocalChatAgentOptions> options,
         ILogger<DefaultAgentSeeder> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)

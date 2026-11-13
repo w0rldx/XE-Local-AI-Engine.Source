@@ -21,15 +21,18 @@ public sealed class MxcAclResidueSweepService : IHostedService
     [SupportedOSPlatform("windows")]
     public MxcAclResidueSweepService(ILogger<MxcAclResidueSweepService> logger)
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _sweep = Sweep;
     }
 
     /// <summary>Test seam: runs <paramref name="sweep" /> in place of the Windows ACL walk.</summary>
     internal MxcAclResidueSweepService(ILogger<MxcAclResidueSweepService> logger, Action sweep)
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _sweep = sweep ?? throw new ArgumentNullException(nameof(sweep));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(sweep);
+        _sweep = sweep;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)

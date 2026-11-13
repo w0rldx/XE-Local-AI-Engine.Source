@@ -26,7 +26,8 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : SourceBuildPrerequisi
     internal LlamaCppSourceBuildPrerequisiteProbe(IGpuVendorProbe vendorProbe, string buildCacheRoot, long requiredFreeDiskBytes = SourceBuildPolicy.RequiredFreeDiskBytes)
         : base(buildCacheRoot, requiredFreeDiskBytes, "llama.cpp", requiresReadelf: false)
     {
-        _vendorProbe = vendorProbe ?? throw new ArgumentNullException(nameof(vendorProbe));
+        ArgumentNullException.ThrowIfNull(vendorProbe);
+        _vendorProbe = vendorProbe;
     }
 
     /// <inheritdoc />

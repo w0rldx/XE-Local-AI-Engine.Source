@@ -45,15 +45,24 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         IOptions<SecurityOptions> security,
         TimeProvider timeProvider)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _runs = runs ?? throw new ArgumentNullException(nameof(runs));
-        _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
-        _guard = guard ?? throw new ArgumentNullException(nameof(guard));
-        _resumeRegistry = resumeRegistry ?? throw new ArgumentNullException(nameof(resumeRegistry));
-        _files = files ?? throw new ArgumentNullException(nameof(files));
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-        _security = (security ?? throw new ArgumentNullException(nameof(security))).Value;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+        ArgumentNullException.ThrowIfNull(persistence);
+        _persistence = persistence;
+        ArgumentNullException.ThrowIfNull(guard);
+        _guard = guard;
+        ArgumentNullException.ThrowIfNull(resumeRegistry);
+        _resumeRegistry = resumeRegistry;
+        ArgumentNullException.ThrowIfNull(files);
+        _files = files;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        ArgumentNullException.ThrowIfNull(security);
+        _security = security.Value;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     public async Task<GraphWorkflowChatSendResult> SendAsync(Guid conversationId,

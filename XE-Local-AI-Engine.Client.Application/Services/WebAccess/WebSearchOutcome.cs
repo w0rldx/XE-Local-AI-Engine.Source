@@ -18,12 +18,16 @@ internal sealed class WebSearchOutcome
 
     public string? ErrorMessage { get; private init; }
 
-    public static WebSearchOutcome Found(string backend, IReadOnlyList<WebSearchResult> results) =>
-        new()
+    public static WebSearchOutcome Found(string backend, IReadOnlyList<WebSearchResult> results)
+    {
+        ArgumentNullException.ThrowIfNull(backend);
+        ArgumentNullException.ThrowIfNull(results);
+        return new()
         {
-            Backend = backend ?? throw new ArgumentNullException(nameof(backend)),
-            Results = results ?? throw new ArgumentNullException(nameof(results))
+            Backend = backend,
+            Results = results
         };
+    }
 
     public static WebSearchOutcome Refused(string code, string message, string? backend = null) =>
         new()

@@ -22,7 +22,8 @@ internal sealed class GraphWorkflowInlineExecutor
 
     public GraphWorkflowInlineExecutor(IOptions<GraphWorkflowOptions> options)
     {
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
     }
 
     /// <summary>The kinds this executor owns. Everything else is a lane's, or has no executor in this build.</summary>

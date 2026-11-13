@@ -19,7 +19,8 @@ internal sealed class McpToolRegistry : IMcpToolRegistry
 
     public McpToolRegistry(ILogger<McpToolRegistry> logger)
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public bool TryResolve(string name, [NotNullWhen(true)] out AITool? tool)

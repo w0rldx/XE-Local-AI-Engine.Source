@@ -62,8 +62,10 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         _localRuntimeWarmer = localRuntimeWarmer;
         ArgumentNullException.ThrowIfNull(nodeSettingsStore);
         _nodeSettingsStore = nodeSettingsStore;
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         ArgumentNullException.ThrowIfNull(tokenEstimator);
         _tokenEstimator = tokenEstimator;
         ArgumentNullException.ThrowIfNull(timeProvider);

@@ -109,7 +109,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         IMxcSandboxRuntime? mxcRuntime = null)
     {
         ArgumentNullException.ThrowIfNull(copyOptions);
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _logger = logger ?? NullLogger<ProcessSandboxRuntimeProvider>.Instance;
         _launcher = launcher ?? new SandboxLauncher(new HostSandboxContainmentProbe());
         _markerStore = markerStore ?? new FileSandboxMarkerStore();

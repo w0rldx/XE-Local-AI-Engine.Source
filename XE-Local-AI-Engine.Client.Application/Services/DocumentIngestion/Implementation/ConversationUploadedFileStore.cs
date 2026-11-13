@@ -30,10 +30,13 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
         INodeSqliteKeyHolder keyHolder,
         TimeProvider timeProvider)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        _dataDirectory = dataDirectory;
         ArgumentNullException.ThrowIfNull(keyHolder);
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _blobProtector = new UploadedFileBlobProtector(keyHolder);
     }
 

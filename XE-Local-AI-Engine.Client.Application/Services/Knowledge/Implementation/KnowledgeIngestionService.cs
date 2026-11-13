@@ -56,16 +56,25 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     {
         _settingsStore = settingsStore;
         _documentTimeout = TimeSpan.FromMinutes(Math.Max(1, (options?.Value ?? new KnowledgeBaseOptions()).IngestionDocumentTimeoutMinutes));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
-        _extractor = extractor ?? throw new ArgumentNullException(nameof(extractor));
-        _chunkingService = chunkingService ?? throw new ArgumentNullException(nameof(chunkingService));
-        _embedder = embedder ?? throw new ArgumentNullException(nameof(embedder));
-        _indexWriter = indexWriter ?? throw new ArgumentNullException(nameof(indexWriter));
-        _notifier = notifier ?? throw new ArgumentNullException(nameof(notifier));
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+        ArgumentNullException.ThrowIfNull(blobStore);
+        _blobStore = blobStore;
+        ArgumentNullException.ThrowIfNull(extractor);
+        _extractor = extractor;
+        ArgumentNullException.ThrowIfNull(chunkingService);
+        _chunkingService = chunkingService;
+        ArgumentNullException.ThrowIfNull(embedder);
+        _embedder = embedder;
+        ArgumentNullException.ThrowIfNull(indexWriter);
+        _indexWriter = indexWriter;
+        ArgumentNullException.ThrowIfNull(notifier);
+        _notifier = notifier;
         _embeddingCache = embeddingCache;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task RunAsync(Guid documentId, CancellationToken cancellationToken)

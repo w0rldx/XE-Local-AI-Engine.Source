@@ -20,7 +20,8 @@ internal sealed class AskUserToolHandler : IClientLocalToolHandler
 
     public AskUserToolHandler(UserQuestionAnswerStash stash)
     {
-        _stash = stash ?? throw new ArgumentNullException(nameof(stash));
+        ArgumentNullException.ThrowIfNull(stash);
+        _stash = stash;
     }
 
     public string ToolName => AskUserTool.ToolName;

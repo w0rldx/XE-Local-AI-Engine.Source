@@ -65,15 +65,20 @@ internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
         ITokenEstimatorCalibrationStore calibrationStore,
         ILogger<DefaultMemoryExtractionAgent> logger)
     {
-        _calibrationStore = calibrationStore ?? throw new ArgumentNullException(nameof(calibrationStore));
+        ArgumentNullException.ThrowIfNull(calibrationStore);
+        _calibrationStore = calibrationStore;
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
         ArgumentNullException.ThrowIfNull(providerResolver);
         _providerResolver = providerResolver;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        _modelTrustResolver = modelTrustResolver;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
     }
 
     public async Task<IReadOnlyList<ProposedMemory>> ProposeAsync(MemoryExtractionRunInput run, CancellationToken cancellationToken = default)

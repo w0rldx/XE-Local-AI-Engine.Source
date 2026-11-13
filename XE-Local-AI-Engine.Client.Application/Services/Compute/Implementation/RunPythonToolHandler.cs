@@ -21,7 +21,8 @@ internal sealed class RunPythonToolHandler : IClientLocalToolHandler, IClientLoc
 
     public RunPythonToolHandler(IComputeToolGateway gateway)
     {
-        _gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
+        ArgumentNullException.ThrowIfNull(gateway);
+        _gateway = gateway;
     }
 
     public string ToolName => ComputeToolDefinition.ToolName;

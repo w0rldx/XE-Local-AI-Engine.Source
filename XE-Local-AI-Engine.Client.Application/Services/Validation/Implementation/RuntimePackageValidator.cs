@@ -15,7 +15,8 @@ public sealed class RuntimePackageValidator : IRuntimePackageValidator
     public RuntimePackageValidator(ModelNameValidator modelNameValidator,
         IOptions<SecurityOptions> securityOptions)
     {
-        _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
+        ArgumentNullException.ThrowIfNull(modelNameValidator);
+        _modelNameValidator = modelNameValidator;
         ArgumentNullException.ThrowIfNull(securityOptions);
 
         _securityOptions = securityOptions.Value;

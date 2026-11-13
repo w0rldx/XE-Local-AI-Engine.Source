@@ -56,14 +56,20 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(dataDirectory);
-        _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+        ArgumentNullException.ThrowIfNull(resolver);
+        _resolver = resolver;
         _options = options.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         _dataDirectoryRoot = dataDirectory.Root;
-        _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
-        _applyGuard = applyGuard ?? throw new ArgumentNullException(nameof(applyGuard));
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(identityProvider);
+        _identityProvider = identityProvider;
+        ArgumentNullException.ThrowIfNull(applyGuard);
+        _applyGuard = applyGuard;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<NodePatchApplyPreview> PreviewAsync(NodePatchApplyRequest request, CancellationToken cancellationToken = default)

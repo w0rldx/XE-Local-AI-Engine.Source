@@ -54,8 +54,10 @@ public sealed class TranscriptionHub : Hub
     {
         ArgumentNullException.ThrowIfNull(live);
         _live = live;
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         ArgumentNullException.ThrowIfNull(sessions);
         _sessions = sessions;
     }

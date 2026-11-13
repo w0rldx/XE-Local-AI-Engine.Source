@@ -65,9 +65,12 @@ public sealed class RunGraphWorkflowHandler : IScheduledJobHandler
 
     public RunGraphWorkflowHandler(IServiceScopeFactory scopeFactory, IOptions<GraphWorkflowOptions> options, TimeProvider timeProvider)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     public string TemplateId => TemplateIdValue;

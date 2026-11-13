@@ -44,9 +44,12 @@ internal sealed partial class CustomToolService : ICustomToolService
 
     public CustomToolService(ICustomToolStore store, ILocalToolOfferProvider offerProvider, INodeRuntimeSettings runtimeSettings)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _offerProvider = offerProvider ?? throw new ArgumentNullException(nameof(offerProvider));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(offerProvider);
+        _offerProvider = offerProvider;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]

@@ -33,10 +33,14 @@ internal sealed class StepCancellationGuard : IDisposable
         Action onAnsweredPark)
     {
         ArgumentNullException.ThrowIfNull(timeProvider);
-        _parkAnswered = parkAnswered ?? throw new ArgumentNullException(nameof(parkAnswered));
-        _onAnsweredPark = onAnsweredPark ?? throw new ArgumentNullException(nameof(onAnsweredPark));
-        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
-        _correlation = correlation ?? throw new ArgumentNullException(nameof(correlation));
+        ArgumentNullException.ThrowIfNull(parkAnswered);
+        _parkAnswered = parkAnswered;
+        ArgumentNullException.ThrowIfNull(onAnsweredPark);
+        _onAnsweredPark = onAnsweredPark;
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
+        ArgumentNullException.ThrowIfNull(correlation);
+        _correlation = correlation;
         _parkTimer = timeProvider.CreateTimer(static state => ((StepCancellationGuard)state!).OnParkExpired(), this, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         _deadlineTimer = timeProvider.CreateTimer(static state => ((StepCancellationGuard)state!).OnDeadlineExpired(),
             this,

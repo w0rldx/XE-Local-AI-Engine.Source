@@ -27,7 +27,8 @@ internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
         _insightsService = insightsService;
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
         ArgumentNullException.ThrowIfNull(playbookActionService);
         _playbookActionService = playbookActionService;
     }

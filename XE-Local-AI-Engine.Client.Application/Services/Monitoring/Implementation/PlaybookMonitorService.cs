@@ -25,7 +25,8 @@ public sealed class PlaybookMonitorService : IPlaybookMonitorService
     {
         ArgumentNullException.ThrowIfNull(monitorStore);
         _monitorStore = monitorStore;
-        _options = (monitorOptions ?? throw new ArgumentNullException(nameof(monitorOptions))).Value;
+        ArgumentNullException.ThrowIfNull(monitorOptions);
+        _options = monitorOptions.Value;
         ArgumentNullException.ThrowIfNull(playbookActionStore);
         _playbookActionStore = playbookActionStore;
     }

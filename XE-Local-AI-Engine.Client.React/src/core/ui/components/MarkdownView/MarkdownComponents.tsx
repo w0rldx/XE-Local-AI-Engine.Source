@@ -8,7 +8,7 @@ import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
 export { remarkGfm };
 
 /**
- * Shared react-markdown component map: code/CodeBlock (Prism), p, li.
+ * Shared react-markdown component map: code/CodeBlock (Prism), p, li, tables, and images as text.
  * Re-exported for ChatMarkdown to spread and override the `p` renderer
  * with its StreamCaret injection without duplicating the renderers.
  */
@@ -54,14 +54,15 @@ export const markdownComponents: Components = {
 	tr: ({ node: _node, ...properties }) => <Table.Tr {...properties} />,
 	th: ({ node: _node, ...properties }) => <Table.Th {...properties} />,
 	td: ({ node: _node, ...properties }) => <Table.Td {...properties} />,
-	// Images never exceed the container width.
+	// An image's alt text and URL as plain text: no `<img>`, no anchor, no request. Rendered markdown is often model
+	// output nobody vetted, and an image `src` is fetched the moment it renders, so it could carry data out to whoever
+	// owns that URL. Chat overrides this with SafeMarkdownImage's click-to-load consent.
 	img({ src, alt }) {
+		const label = typeof alt === "string" && alt.length > 0 ? alt : "image";
 		return (
-			<img
-				src={typeof src === "string" ? src : undefined}
-				alt={typeof alt === "string" ? alt : ""}
-				style={{ maxWidth: "100%", height: "auto" }}
-			/>
+			<Text span={true} size="sm" c="dimmed">
+				[{label}] {typeof src === "string" ? src : ""}
+			</Text>
 		);
 	},
 };

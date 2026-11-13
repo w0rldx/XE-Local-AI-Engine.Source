@@ -82,7 +82,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         ILlamaServerEndpointBinding? endpointBinding = null,
         ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive)
     {
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         _modelName = modelName;
         _networkTimeout = networkTimeout;

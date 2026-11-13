@@ -38,15 +38,24 @@ public sealed class AppUpdateBusyProbe
         IStableDiffusionCppSourceBuildService stableDiffusionCppSourceBuild,
         IServiceScopeFactory scopeFactory)
     {
-        _gpuWorkGate = gpuWorkGate ?? throw new ArgumentNullException(nameof(gpuWorkGate));
-        _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
-        _ggufDownloads = ggufDownloads ?? throw new ArgumentNullException(nameof(ggufDownloads));
-        _imageModelDownloads = imageModelDownloads ?? throw new ArgumentNullException(nameof(imageModelDownloads));
-        _whisperModelDownloads = whisperModelDownloads ?? throw new ArgumentNullException(nameof(whisperModelDownloads));
-        _llamaCppSourceBuild = llamaCppSourceBuild ?? throw new ArgumentNullException(nameof(llamaCppSourceBuild));
-        _whisperCppSourceBuild = whisperCppSourceBuild ?? throw new ArgumentNullException(nameof(whisperCppSourceBuild));
-        _stableDiffusionCppSourceBuild = stableDiffusionCppSourceBuild ?? throw new ArgumentNullException(nameof(stableDiffusionCppSourceBuild));
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        ArgumentNullException.ThrowIfNull(gpuWorkGate);
+        _gpuWorkGate = gpuWorkGate;
+        ArgumentNullException.ThrowIfNull(invocationRunner);
+        _invocationRunner = invocationRunner;
+        ArgumentNullException.ThrowIfNull(ggufDownloads);
+        _ggufDownloads = ggufDownloads;
+        ArgumentNullException.ThrowIfNull(imageModelDownloads);
+        _imageModelDownloads = imageModelDownloads;
+        ArgumentNullException.ThrowIfNull(whisperModelDownloads);
+        _whisperModelDownloads = whisperModelDownloads;
+        ArgumentNullException.ThrowIfNull(llamaCppSourceBuild);
+        _llamaCppSourceBuild = llamaCppSourceBuild;
+        ArgumentNullException.ThrowIfNull(whisperCppSourceBuild);
+        _whisperCppSourceBuild = whisperCppSourceBuild;
+        ArgumentNullException.ThrowIfNull(stableDiffusionCppSourceBuild);
+        _stableDiffusionCppSourceBuild = stableDiffusionCppSourceBuild;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
     }
 
     /// <summary>The work running right now; empty when the node is idle.</summary>

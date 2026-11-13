@@ -30,8 +30,10 @@ internal sealed class LocalModelProxyApiKeyService : ILocalModelProxyApiKeyServi
 
     public LocalModelProxyApiKeyService(ILocalModelProxyApiKeyStore store, TimeProvider timeProvider)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     public async Task<GeneratedLocalModelProxyApiKey> GenerateAsync(CancellationToken cancellationToken = default)

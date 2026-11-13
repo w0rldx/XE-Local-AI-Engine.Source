@@ -40,7 +40,8 @@ public sealed class DatasetGenerationHostedService : BackgroundService
         _gpuWorkGate = gpuWorkGate;
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
-        _pollInterval = (options ?? throw new ArgumentNullException(nameof(options))).Value.PollInterval;
+        ArgumentNullException.ThrowIfNull(options);
+        _pollInterval = options.Value.PollInterval;
         ArgumentNullException.ThrowIfNull(scopeFactory);
         _scopeFactory = scopeFactory;
         ArgumentNullException.ThrowIfNull(signal);

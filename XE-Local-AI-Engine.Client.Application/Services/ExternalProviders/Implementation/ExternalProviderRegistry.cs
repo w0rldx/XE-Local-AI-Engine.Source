@@ -29,7 +29,8 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
 
     public ExternalProviderRegistry(IExternalProviderStore store)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
     }
 
     /// <inheritdoc />

@@ -110,17 +110,22 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         INodeRuntimeSettings runtimeSettings,
         ILogger<ComputeToolGateway> logger)
     {
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-        _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
-        _environment = environment ?? throw new ArgumentNullException(nameof(environment));
+        ArgumentNullException.ThrowIfNull(provider);
+        _provider = provider;
+        ArgumentNullException.ThrowIfNull(identityProvider);
+        _identityProvider = identityProvider;
+        ArgumentNullException.ThrowIfNull(environment);
+        _environment = environment;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         ArgumentNullException.ThrowIfNull(nodeOptions);
         _nodeOptions = nodeOptions.Value;
         ArgumentNullException.ThrowIfNull(pipelineOptions);
         _maxToolResultCharacters = pipelineOptions.Value.MaxToolResultCharacters;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <summary>

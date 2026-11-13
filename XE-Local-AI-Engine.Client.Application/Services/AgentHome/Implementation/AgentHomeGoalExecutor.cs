@@ -80,16 +80,24 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         ILoggerFactory loggerFactory,
         ILogger<AgentHomeGoalExecutor> logger)
     {
-        _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-        _workspaceReader = workspaceReader ?? throw new ArgumentNullException(nameof(workspaceReader));
-        _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
+        ArgumentNullException.ThrowIfNull(chatClient);
+        _chatClient = chatClient;
+        ArgumentNullException.ThrowIfNull(provider);
+        _provider = provider;
+        ArgumentNullException.ThrowIfNull(workspaceReader);
+        _workspaceReader = workspaceReader;
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        _modelTrustResolver = modelTrustResolver;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        _loggerFactory = loggerFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<AgentHomeGoalOutcome> ExecuteAsync(AgentHomeGoalRequest request, CancellationToken cancellationToken = default)

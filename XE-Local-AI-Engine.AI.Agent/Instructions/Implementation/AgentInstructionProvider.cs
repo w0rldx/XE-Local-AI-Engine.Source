@@ -14,7 +14,8 @@ internal sealed class AgentInstructionProvider : IAgentInstructionProvider
 
     public AgentInstructionProvider(IOptions<LocalChatAgentOptions> localChatOptions)
     {
-        _localChatOptions = localChatOptions ?? throw new ArgumentNullException(nameof(localChatOptions));
+        ArgumentNullException.ThrowIfNull(localChatOptions);
+        _localChatOptions = localChatOptions;
     }
 
     public string GetLocalChatInstructions()

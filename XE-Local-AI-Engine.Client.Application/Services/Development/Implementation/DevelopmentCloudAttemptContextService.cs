@@ -31,7 +31,8 @@ internal sealed class DevelopmentCloudAttemptContextService : IDevelopmentCloudA
         _blobStore = blobStore;
         ArgumentNullException.ThrowIfNull(contextBuilder);
         _contextBuilder = contextBuilder;
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
         ArgumentNullException.ThrowIfNull(routeFactory);
         _routeFactory = routeFactory;
         ArgumentNullException.ThrowIfNull(store);

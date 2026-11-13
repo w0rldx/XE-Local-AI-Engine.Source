@@ -65,6 +65,18 @@ describe("DialogShell", () => {
 		expect(document.querySelector("[data-offset-scrollbars]")).not.toBeNull();
 	});
 
+	// Mantine names a dialog (aria-labelledby) only while its own Modal.Title is mounted. The title used to be a plain
+	// Text, so every DialogShell announced as a bare "dialog" with no idea which one had opened.
+	it("names the dialog after its visible title", () => {
+		renderWithProviders(
+			<DialogShell opened={true} onClose={vi.fn()} title="Editor" data-testid="sample-dialog">
+				<div>body</div>
+			</DialogShell>,
+		);
+
+		expect(screen.getByRole("dialog", { name: "Editor" })).toBe(screen.getByTestId("sample-dialog"));
+	});
+
 	// REGRESSION (capture run 2026-08-01): the test id landed on Mantine's Modal ROOT — a zero-size portal wrapper that
 	// Playwright resolves but reports as `hidden` — so `waitFor({ state: "visible" })` timed out against a dialog that
 	// was plainly on screen. It must land on the visible dialog card instead.

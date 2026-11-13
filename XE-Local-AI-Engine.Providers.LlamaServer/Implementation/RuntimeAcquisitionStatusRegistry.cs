@@ -32,9 +32,12 @@ public sealed class RuntimeAcquisitionStatusRegistry : IRuntimeAcquisitionStatus
         ILogger<RuntimeAcquisitionStatusRegistry> logger,
         TimeProvider timeProvider)
     {
-        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(publisher);
+        _publisher = publisher;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     /// <summary>The pre-acquisition snapshot: nothing attempted yet in this process lifetime.</summary>

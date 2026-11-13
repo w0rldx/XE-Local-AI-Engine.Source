@@ -19,7 +19,8 @@ public sealed class WhisperModelPathResolver
 
     public WhisperModelPathResolver(INodeDataDirectory dataDirectory)
     {
-        _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        _dataDirectory = dataDirectory;
     }
 
     /// <summary>The directory holding every Whisper weight, one subdirectory per catalog id.</summary>

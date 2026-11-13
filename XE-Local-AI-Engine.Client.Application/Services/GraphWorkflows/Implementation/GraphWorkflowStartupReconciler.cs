@@ -32,8 +32,10 @@ internal sealed class GraphWorkflowStartupReconciler : IHostedService
     public GraphWorkflowStartupReconciler(IServiceScopeFactory scopeFactory,
         ILogger<GraphWorkflowStartupReconciler> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)

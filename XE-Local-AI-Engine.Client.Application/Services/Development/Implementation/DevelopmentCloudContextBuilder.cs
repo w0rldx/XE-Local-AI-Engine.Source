@@ -16,7 +16,8 @@ public sealed class DevelopmentCloudContextBuilder : IDevelopmentCloudContextBui
         int maximumBytes = DefaultMaximumBytes,
         int maximumEstimatedTokens = DefaultMaximumEstimatedTokens)
     {
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumBytes);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumEstimatedTokens);
 

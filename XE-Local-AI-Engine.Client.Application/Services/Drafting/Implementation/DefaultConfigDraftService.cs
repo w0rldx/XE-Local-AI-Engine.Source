@@ -59,14 +59,22 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         TimeProvider timeProvider,
         ILogger<DefaultConfigDraftService> logger)
     {
-        _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
-        _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-        _modelClassificationStore = modelClassificationStore ?? throw new ArgumentNullException(nameof(modelClassificationStore));
-        _admissionGate = admissionGate ?? throw new ArgumentNullException(nameof(admissionGate));
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _providerResolver = providerResolver;
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        _ggufModelStore = ggufModelStore;
+        ArgumentNullException.ThrowIfNull(modelClassificationStore);
+        _modelClassificationStore = modelClassificationStore;
+        ArgumentNullException.ThrowIfNull(admissionGate);
+        _admissionGate = admissionGate;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        ArgumentNullException.ThrowIfNull(nodeSettingsStore);
+        _nodeSettingsStore = nodeSettingsStore;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public Task<DraftResult> DraftAgentDefinitionAsync(ConfigDraftRequest request, CancellationToken cancellationToken = default)

@@ -7,7 +7,8 @@ public sealed class InvocationStateChangedEventArgs : EventArgs
 {
     public InvocationStateChangedEventArgs(InvocationState state)
     {
-        State = state ?? throw new ArgumentNullException(nameof(state));
+        ArgumentNullException.ThrowIfNull(state);
+        State = state;
     }
 
     public InvocationState State { get; }

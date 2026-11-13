@@ -41,7 +41,8 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
     /// </remarks>
     internal FfmpegAudioTranscoder(ILogger<FfmpegAudioTranscoder> logger, string? executablePath)
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _executablePath = executablePath;
     }
 

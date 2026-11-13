@@ -36,8 +36,10 @@ internal sealed partial class GitHubSkillArchiveDownloader
 
     public GitHubSkillArchiveDownloader(HttpClient httpClient, SkillImportOptions options)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(httpClient);
+        _httpClient = httpClient;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
     }
 
     /// <summary>Validates an <c>owner/repo</c> slug. Throws rather than sanitizing: a malformed slug is a caller bug, not something to guess at.</summary>

@@ -44,11 +44,16 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
         TimeProvider timeProvider,
         ILogger<ApplicationCatalogProvider> logger)
     {
-        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        _cacheStore = cacheStore ?? throw new ArgumentNullException(nameof(cacheStore));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        _httpClientFactory = httpClientFactory;
+        ArgumentNullException.ThrowIfNull(cacheStore);
+        _cacheStore = cacheStore;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
 
         _refreshUrl = ResolveRefreshUrl(_options.Value.RefreshUrl, _logger);
         _current = new ExternalAppCatalogSnapshot(ExternalAppCatalogBundledLoader.Load(_logger),

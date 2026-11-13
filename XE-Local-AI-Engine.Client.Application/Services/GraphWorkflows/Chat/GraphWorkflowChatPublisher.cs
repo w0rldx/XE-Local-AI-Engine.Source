@@ -23,9 +23,12 @@ internal sealed class GraphWorkflowChatPublisher
 
     public GraphWorkflowChatPublisher(INodeChatPersistenceService persistence, TimeProvider timeProvider, ILogger<GraphWorkflowChatPublisher> logger)
     {
-        _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(persistence);
+        _persistence = persistence;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <summary>Publishes what is due and answers how many node runs it stamped and how many it could not publish.</summary>

@@ -113,21 +113,36 @@ internal sealed class GraphWorkflowDesignerService : IGraphWorkflowDesignerServi
         TimeProvider timeProvider,
         ILogger<GraphWorkflowDesignerService> logger)
     {
-        _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
-        _agents = agents ?? throw new ArgumentNullException(nameof(agents));
-        _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
-        _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-        _modelClassificationStore = modelClassificationStore ?? throw new ArgumentNullException(nameof(modelClassificationStore));
-        _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
-        _trust = trust ?? throw new ArgumentNullException(nameof(trust));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _cloudChatClient = cloudChatClient ?? throw new ArgumentNullException(nameof(cloudChatClient));
-        _admissionGate = admissionGate ?? throw new ArgumentNullException(nameof(admissionGate));
-        _draftingOptions = (draftingOptions ?? throw new ArgumentNullException(nameof(draftingOptions))).Value;
-        _graphOptions = graphOptions ?? throw new ArgumentNullException(nameof(graphOptions));
-        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(definitions);
+        _definitions = definitions;
+        ArgumentNullException.ThrowIfNull(agents);
+        _agents = agents;
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _providerResolver = providerResolver;
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        _ggufModelStore = ggufModelStore;
+        ArgumentNullException.ThrowIfNull(modelClassificationStore);
+        _modelClassificationStore = modelClassificationStore;
+        ArgumentNullException.ThrowIfNull(capabilities);
+        _capabilities = capabilities;
+        ArgumentNullException.ThrowIfNull(trust);
+        _trust = trust;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(cloudChatClient);
+        _cloudChatClient = cloudChatClient;
+        ArgumentNullException.ThrowIfNull(admissionGate);
+        _admissionGate = admissionGate;
+        ArgumentNullException.ThrowIfNull(draftingOptions);
+        _draftingOptions = draftingOptions.Value;
+        ArgumentNullException.ThrowIfNull(graphOptions);
+        _graphOptions = graphOptions;
+        ArgumentNullException.ThrowIfNull(nodeSettingsStore);
+        _nodeSettingsStore = nodeSettingsStore;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<GraphWorkflowDesignerResult> TurnAsync(GraphWorkflowDesignerTurnRequest request, CancellationToken cancellationToken = default)

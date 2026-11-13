@@ -40,10 +40,13 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
         TimeSpan idleTimeout,
         ILogger logger)
     {
-        _run = run ?? throw new ArgumentNullException(nameof(run));
-        _participantsByAgentId = participantsByAgentId ?? throw new ArgumentNullException(nameof(participantsByAgentId));
+        ArgumentNullException.ThrowIfNull(run);
+        _run = run;
+        ArgumentNullException.ThrowIfNull(participantsByAgentId);
+        _participantsByAgentId = participantsByAgentId;
         _idleTimeout = idleTimeout;
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async IAsyncEnumerable<OrchestrationUpdate> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)

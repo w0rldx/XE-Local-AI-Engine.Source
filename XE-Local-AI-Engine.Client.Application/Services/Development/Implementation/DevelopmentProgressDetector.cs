@@ -23,7 +23,8 @@ public sealed class DevelopmentProgressDetector
     {
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _lastMeaningfulProgressUtc = Now;
     }
 

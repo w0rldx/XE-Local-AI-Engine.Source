@@ -52,7 +52,8 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
     {
         ArgumentNullException.ThrowIfNull(dataDirectory);
         _dataDirectory = dataDirectory;
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
         ArgumentNullException.ThrowIfNull(repositoryBindings);
         _repositoryBindings = repositoryBindings;
         ArgumentNullException.ThrowIfNull(templateStore);

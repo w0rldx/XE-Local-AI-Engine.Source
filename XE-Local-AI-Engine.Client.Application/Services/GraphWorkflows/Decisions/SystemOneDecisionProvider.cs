@@ -20,7 +20,8 @@ internal sealed class SystemOneDecisionProvider : IGraphWorkflowNativeDecisionPr
 
     public SystemOneDecisionProvider(ILlamaServerSystemOneClient client)
     {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
+        ArgumentNullException.ThrowIfNull(client);
+        _client = client;
     }
 
     public string Name => ProviderName;

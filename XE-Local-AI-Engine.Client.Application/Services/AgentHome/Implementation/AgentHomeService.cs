@@ -75,16 +75,26 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         TimeProvider timeProvider,
         ILogger<AgentHomeService> logger)
     {
-        _manifestService = manifestService ?? throw new ArgumentNullException(nameof(manifestService));
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-        _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
-        _leaseManager = leaseManager ?? throw new ArgumentNullException(nameof(leaseManager));
-        _executingRuns = executingRuns ?? throw new ArgumentNullException(nameof(executingRuns));
-        _isolation = isolation ?? throw new ArgumentNullException(nameof(isolation));
-        _workspaceService = workspaceService ?? throw new ArgumentNullException(nameof(workspaceService));
-        _patchService = patchService ?? throw new ArgumentNullException(nameof(patchService));
-        _goalExecutor = goalExecutor ?? throw new ArgumentNullException(nameof(goalExecutor));
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        ArgumentNullException.ThrowIfNull(manifestService);
+        _manifestService = manifestService;
+        ArgumentNullException.ThrowIfNull(provider);
+        _provider = provider;
+        ArgumentNullException.ThrowIfNull(identityProvider);
+        _identityProvider = identityProvider;
+        ArgumentNullException.ThrowIfNull(leaseManager);
+        _leaseManager = leaseManager;
+        ArgumentNullException.ThrowIfNull(executingRuns);
+        _executingRuns = executingRuns;
+        ArgumentNullException.ThrowIfNull(isolation);
+        _isolation = isolation;
+        ArgumentNullException.ThrowIfNull(workspaceService);
+        _workspaceService = workspaceService;
+        ArgumentNullException.ThrowIfNull(patchService);
+        _patchService = patchService;
+        ArgumentNullException.ThrowIfNull(goalExecutor);
+        _goalExecutor = goalExecutor;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         ArgumentNullException.ThrowIfNull(sandboxOptions);
@@ -93,10 +103,14 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         _ceilingDefaults = ceilingDefaults.Value;
         ArgumentNullException.ThrowIfNull(nodeOptions);
         _nodeOptions = nodeOptions.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _uploadedFileStore = uploadedFileStore ?? throw new ArgumentNullException(nameof(uploadedFileStore));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(uploadedFileStore);
+        _uploadedFileStore = uploadedFileStore;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<AgentHomeRunResult> RunLifecycleAsync(AgentHomeRunLifecycleRequest request, CancellationToken cancellationToken = default)

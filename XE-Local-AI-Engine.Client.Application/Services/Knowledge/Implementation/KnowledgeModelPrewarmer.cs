@@ -46,15 +46,22 @@ public sealed partial class KnowledgeModelPrewarmer : IKnowledgeModelPrewarmer
         TimeProvider timeProvider,
         ILogger<KnowledgeModelPrewarmer> logger)
     {
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
-        _embeddingModelResolver = embeddingModelResolver ?? throw new ArgumentNullException(nameof(embeddingModelResolver));
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _providerResolver = providerResolver;
+        ArgumentNullException.ThrowIfNull(embeddingModelResolver);
+        _embeddingModelResolver = embeddingModelResolver;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(lifetime);
+        _lifetime = lifetime;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public void RequestWarm()

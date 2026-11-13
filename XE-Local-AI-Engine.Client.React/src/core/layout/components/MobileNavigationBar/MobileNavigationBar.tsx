@@ -97,6 +97,8 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen, drawerActions }
 			withOverlay={true}
 			overlayProps={{ backgroundOpacity: 0.5, blur: 0 }}
 			className="flex flex-col h-full"
+			// The content section is the role="dialog" element; a prop on the Drawer itself would land on its portal root.
+			attributes={{ content: { "aria-label": t("components.sideNavigationBar.ariaLabel") } }}
 			styles={{
 				content: {
 					width: width < 420 ? "100%" : "min(400px, 100vw)",

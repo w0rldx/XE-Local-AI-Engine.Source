@@ -56,7 +56,8 @@ public sealed partial class NodeAdminMcpTools
         _agentDefinitionService = agentDefinitionService;
         ArgumentNullException.ThrowIfNull(graphWorkflowStore);
         _graphWorkflowStore = graphWorkflowStore;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         ArgumentNullException.ThrowIfNull(ggufDownloadCoordinator);
         _ggufDownloadCoordinator = ggufDownloadCoordinator;
         ArgumentNullException.ThrowIfNull(localModelAdministrationService);

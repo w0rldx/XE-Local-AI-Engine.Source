@@ -24,9 +24,12 @@ public sealed class KnowledgeBlobOrphanSweeper : BackgroundService
         IKnowledgeDocumentBlobStore blobStore,
         ILogger<KnowledgeBlobOrphanSweeper> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(blobStore);
+        _blobStore = blobStore;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

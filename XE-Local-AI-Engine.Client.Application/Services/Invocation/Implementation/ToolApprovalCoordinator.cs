@@ -121,18 +121,25 @@ public sealed class ToolApprovalCoordinator
         ILogger<ToolApprovalCoordinator> logger,
         TimeProvider timeProvider)
     {
-        _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
+        ArgumentNullException.ThrowIfNull(eventDispatcher);
+        _eventDispatcher = eventDispatcher;
         ArgumentNullException.ThrowIfNull(pendingToolCallRegistry);
         _pendingToolCalls = pendingToolCallRegistry.Calls;
-        _approvalAuditRecorder = approvalAuditRecorder ?? throw new ArgumentNullException(nameof(approvalAuditRecorder));
-        _userQuestionAnswerStash = userQuestionAnswerStash ?? throw new ArgumentNullException(nameof(userQuestionAnswerStash));
-        _webReviewRetriever = webReviewRetriever ?? throw new ArgumentNullException(nameof(webReviewRetriever));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(approvalAuditRecorder);
+        _approvalAuditRecorder = approvalAuditRecorder;
+        ArgumentNullException.ThrowIfNull(userQuestionAnswerStash);
+        _userQuestionAnswerStash = userQuestionAnswerStash;
+        ArgumentNullException.ThrowIfNull(webReviewRetriever);
+        _webReviewRetriever = webReviewRetriever;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
 
         // The human-wait cap is read once at singleton construction from INodeRuntimeSettings, exactly as the runner and
         // the API tool-call bridge read it, so an operator edit applies on the next process restart and all three agree.
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         _maxPendingToolCallAge = TimeSpan.FromMinutes(runtimeSettings.GetMaxPendingToolCallAgeMinutes());
 
         // A concrete-type test rather than a widened IToolApprovalPolicy: that interface is the cross-project contract for one call's yes/no verdict, and the

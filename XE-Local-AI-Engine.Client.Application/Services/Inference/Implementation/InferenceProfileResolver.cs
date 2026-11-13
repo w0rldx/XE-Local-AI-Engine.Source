@@ -29,10 +29,14 @@ public sealed class InferenceProfileResolver : IInferenceProfileResolver
         IInferenceInvalidationEvaluator invalidationEvaluator,
         ILogger<InferenceProfileResolver> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _machineKeyProvider = machineKeyProvider ?? throw new ArgumentNullException(nameof(machineKeyProvider));
-        _invalidationEvaluator = invalidationEvaluator ?? throw new ArgumentNullException(nameof(invalidationEvaluator));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(machineKeyProvider);
+        _machineKeyProvider = machineKeyProvider;
+        ArgumentNullException.ThrowIfNull(invalidationEvaluator);
+        _invalidationEvaluator = invalidationEvaluator;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

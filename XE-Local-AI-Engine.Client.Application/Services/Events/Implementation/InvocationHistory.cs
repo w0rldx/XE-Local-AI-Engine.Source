@@ -12,8 +12,10 @@ internal sealed class InvocationHistory : IInvocationHistory
 
     public InvocationHistory(ILogger<InvocationHistory> logger, TimeProvider timeProvider)
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     public event EventHandler<InvocationHistoryEntryAddedEventArgs>? EntryAdded;

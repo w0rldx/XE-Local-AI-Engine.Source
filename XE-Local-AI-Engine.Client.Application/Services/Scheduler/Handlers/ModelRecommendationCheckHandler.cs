@@ -67,8 +67,10 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
     public ModelRecommendationCheckHandler(IServiceScopeFactory scopeFactory,
         ILogger<ModelRecommendationCheckHandler> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public string TemplateId => TemplateIdValue;

@@ -21,8 +21,10 @@ public sealed class SchedulerJobDetailReconciliationService : IHostedService
     public SchedulerJobDetailReconciliationService(IServiceScopeFactory scopeFactory,
         ILogger<SchedulerJobDetailReconciliationService> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)

@@ -66,9 +66,12 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
         ILogger<LlamaServerRerankerClient> logger,
         TimeSpan? requestTimeout = null)
     {
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+        ArgumentNullException.ThrowIfNull(httpClient);
+        _httpClient = httpClient;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _requestTimeoutOverride = requestTimeout;
     }
 

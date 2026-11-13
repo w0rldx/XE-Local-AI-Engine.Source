@@ -42,7 +42,8 @@ public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDo
         _ingestionAdmission = ingestionAdmission;
         ArgumentNullException.ThrowIfNull(extractor);
         _extractor = extractor;
-        _embeddingModel = (knowledgeBaseOptions ?? throw new ArgumentNullException(nameof(knowledgeBaseOptions))).Value.EmbeddingModelName;
+        ArgumentNullException.ThrowIfNull(knowledgeBaseOptions);
+        _embeddingModel = knowledgeBaseOptions.Value.EmbeddingModelName;
         ArgumentNullException.ThrowIfNull(securityOptions);
         _maxUploadBytes = MultipartUploadLimits.MaxUploadBytes(securityOptions.Value);
     }

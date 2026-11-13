@@ -26,9 +26,12 @@ public sealed class RuntimeAuditCudaDeviceProbe : ICudaDeviceProbe
 
     internal RuntimeAuditCudaDeviceProbe(IRuntimeDeviceAudit audit, ICudaDeviceProbe fallback, ILogger<RuntimeAuditCudaDeviceProbe> logger)
     {
-        _audit = audit ?? throw new ArgumentNullException(nameof(audit));
-        _fallback = fallback ?? throw new ArgumentNullException(nameof(fallback));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(audit);
+        _audit = audit;
+        ArgumentNullException.ThrowIfNull(fallback);
+        _fallback = fallback;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

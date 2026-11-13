@@ -127,7 +127,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         _activeTag = activeTag;
         _os = os;
         _arch = arch;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _archiveDownloader = new LlamaCppArchiveDownloader(httpClient, _timeProvider);
         _catalog = catalog;
         _installedRuntimeStore = installedRuntimeStore;

@@ -51,7 +51,8 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
         TimeSpan? terminalMaxAge = null,
         int maxTerminalCount = DefaultMaxTerminalCount)
     {
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _terminalMaxAge = terminalMaxAge ?? DefaultTerminalMaxAge;
         if (_terminalMaxAge <= TimeSpan.Zero)
         {

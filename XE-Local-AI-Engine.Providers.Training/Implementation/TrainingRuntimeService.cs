@@ -84,13 +84,20 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         TimeProvider timeProvider,
         ManagedPythonToolchain toolchain)
     {
-        _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
-        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-        _acquirer = acquirer ?? throw new ArgumentNullException(nameof(acquirer));
-        _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _toolchain = toolchain ?? throw new ArgumentNullException(nameof(toolchain));
+        ArgumentNullException.ThrowIfNull(prerequisiteProbe);
+        _prerequisiteProbe = prerequisiteProbe;
+        ArgumentNullException.ThrowIfNull(publisher);
+        _publisher = publisher;
+        ArgumentNullException.ThrowIfNull(acquirer);
+        _acquirer = acquirer;
+        ArgumentNullException.ThrowIfNull(processRunner);
+        _processRunner = processRunner;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(toolchain);
+        _toolchain = toolchain;
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(scriptsDirectory);
         _cacheRoot = cacheRoot;

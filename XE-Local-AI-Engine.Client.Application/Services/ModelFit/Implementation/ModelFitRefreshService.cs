@@ -90,19 +90,32 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         TimeProvider timeProvider,
         ILogger<ModelFitRefreshService> logger)
     {
-        _companionReserve = companionReserve ?? throw new ArgumentNullException(nameof(companionReserve));
-        _runtimeAudit = runtimeAudit ?? throw new ArgumentNullException(nameof(runtimeAudit));
-        _discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
-        _estimator = estimator ?? throw new ArgumentNullException(nameof(estimator));
-        _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
-        _modelRegistry = modelRegistry ?? throw new ArgumentNullException(nameof(modelRegistry));
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _requestValidator = requestValidator ?? throw new ArgumentNullException(nameof(requestValidator));
-        _snapshotStore = snapshotStore ?? throw new ArgumentNullException(nameof(snapshotStore));
-        _recommendationStore = recommendationStore ?? throw new ArgumentNullException(nameof(recommendationStore));
-        _catalogRecommendationService = catalogRecommendationService ?? throw new ArgumentNullException(nameof(catalogRecommendationService));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(companionReserve);
+        _companionReserve = companionReserve;
+        ArgumentNullException.ThrowIfNull(runtimeAudit);
+        _runtimeAudit = runtimeAudit;
+        ArgumentNullException.ThrowIfNull(discovery);
+        _discovery = discovery;
+        ArgumentNullException.ThrowIfNull(estimator);
+        _estimator = estimator;
+        ArgumentNullException.ThrowIfNull(modelStore);
+        _modelStore = modelStore;
+        ArgumentNullException.ThrowIfNull(modelRegistry);
+        _modelRegistry = modelRegistry;
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+        ArgumentNullException.ThrowIfNull(requestValidator);
+        _requestValidator = requestValidator;
+        ArgumentNullException.ThrowIfNull(snapshotStore);
+        _snapshotStore = snapshotStore;
+        ArgumentNullException.ThrowIfNull(recommendationStore);
+        _recommendationStore = recommendationStore;
+        ArgumentNullException.ThrowIfNull(catalogRecommendationService);
+        _catalogRecommendationService = catalogRecommendationService;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<ModelFitRefreshResult> RefreshAsync(ModelFitRefreshRequest request,

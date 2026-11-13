@@ -37,7 +37,8 @@ public sealed class UvBinaryAcquirer
     internal UvBinaryAcquirer(HttpClient httpClient, ManagedPythonUvAsset asset)
         : this(httpClient)
     {
-        _asset = asset ?? throw new ArgumentNullException(nameof(asset));
+        ArgumentNullException.ThrowIfNull(asset);
+        _asset = asset;
     }
 
     /// <summary>Test seam: this platform's asset with the digest a synthetic archive carries.</summary>

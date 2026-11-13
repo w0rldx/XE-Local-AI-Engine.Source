@@ -29,7 +29,8 @@ public sealed class MxcChildProcess : IDisposable
         Action<string>? onStandardOutputLine = null,
         Action<string>? onStandardErrorLine = null)
     {
-        _process = process ?? throw new ArgumentNullException(nameof(process));
+        ArgumentNullException.ThrowIfNull(process);
+        _process = process;
         ArgumentNullException.ThrowIfNull(timeProvider);
         _timeProvider = timeProvider;
         var pumps = new List<Task>(2);

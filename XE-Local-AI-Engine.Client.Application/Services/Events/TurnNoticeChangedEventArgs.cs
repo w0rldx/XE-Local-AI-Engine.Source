@@ -7,7 +7,8 @@ public sealed class TurnNoticeChangedEventArgs : EventArgs
 {
     public TurnNoticeChangedEventArgs(TurnNoticePayload payload)
     {
-        Payload = payload ?? throw new ArgumentNullException(nameof(payload));
+        ArgumentNullException.ThrowIfNull(payload);
+        Payload = payload;
     }
 
     public TurnNoticePayload Payload { get; }

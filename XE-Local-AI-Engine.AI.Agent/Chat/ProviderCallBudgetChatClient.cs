@@ -64,7 +64,8 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         : base(innerClient)
     {
         _errorBodyReader = errorBodyReader;
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _calibrationStore = calibrationStore ?? new TokenEstimatorCalibrationStore();
         _maxToolCallsPerResponse = maxToolCallsPerResponse >= 1
             ? maxToolCallsPerResponse

@@ -26,10 +26,14 @@ public sealed class ModelTrustResolver : IModelTrustResolver
         IActiveCloudChatClientFactory cloudFactory,
         ILogger<ModelTrustResolver> logger)
     {
-        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
-        _registryCache = registryCache ?? throw new ArgumentNullException(nameof(registryCache));
-        _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
+        ArgumentNullException.ThrowIfNull(registryCache);
+        _registryCache = registryCache;
+        ArgumentNullException.ThrowIfNull(cloudFactory);
+        _cloudFactory = cloudFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

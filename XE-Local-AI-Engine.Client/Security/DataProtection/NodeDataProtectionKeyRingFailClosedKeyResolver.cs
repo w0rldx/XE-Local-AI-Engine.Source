@@ -48,9 +48,12 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
         Func<Exception, bool> isRingDecryptionFailure,
         string remediation)
     {
-        _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-        _isRingDecryptionFailure = isRingDecryptionFailure ?? throw new ArgumentNullException(nameof(isRingDecryptionFailure));
-        _remediation = remediation ?? throw new ArgumentNullException(nameof(remediation));
+        ArgumentNullException.ThrowIfNull(inner);
+        _inner = inner;
+        ArgumentNullException.ThrowIfNull(isRingDecryptionFailure);
+        _isRingDecryptionFailure = isRingDecryptionFailure;
+        ArgumentNullException.ThrowIfNull(remediation);
+        _remediation = remediation;
     }
 
     /// <summary>

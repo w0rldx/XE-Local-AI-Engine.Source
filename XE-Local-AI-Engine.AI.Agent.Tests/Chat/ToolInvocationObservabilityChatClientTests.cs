@@ -515,8 +515,10 @@ public sealed class ToolInvocationObservabilityChatClientTests
 
         public CallThenResultChatClient(string callId, string toolName, object? result, Exception? exception)
         {
-            _callId = callId ?? throw new ArgumentNullException(nameof(callId));
-            _toolName = toolName ?? throw new ArgumentNullException(nameof(toolName));
+            ArgumentNullException.ThrowIfNull(callId);
+            _callId = callId;
+            ArgumentNullException.ThrowIfNull(toolName);
+            _toolName = toolName;
             _result = result;
             _exception = exception;
         }
@@ -576,8 +578,10 @@ public sealed class ToolInvocationObservabilityChatClientTests
 
         public FakeChatClient(string callId, string toolName, object? argumentValue = null)
         {
-            _callId = callId ?? throw new ArgumentNullException(nameof(callId));
-            _toolName = toolName ?? throw new ArgumentNullException(nameof(toolName));
+            ArgumentNullException.ThrowIfNull(callId);
+            _callId = callId;
+            ArgumentNullException.ThrowIfNull(toolName);
+            _toolName = toolName;
             _argumentValue = argumentValue ?? true;
         }
 
@@ -623,8 +627,10 @@ public sealed class ToolInvocationObservabilityChatClientTests
 
         public RepeatingFunctionCallChatClient(string callId, string toolName, int updateCount)
         {
-            _callId = callId ?? throw new ArgumentNullException(nameof(callId));
-            _toolName = toolName ?? throw new ArgumentNullException(nameof(toolName));
+            ArgumentNullException.ThrowIfNull(callId);
+            _callId = callId;
+            ArgumentNullException.ThrowIfNull(toolName);
+            _toolName = toolName;
             _updateCount = updateCount;
         }
 

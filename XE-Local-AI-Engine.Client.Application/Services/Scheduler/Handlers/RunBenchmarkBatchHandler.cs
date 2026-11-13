@@ -108,9 +108,12 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
 
     public RunBenchmarkBatchHandler(IServiceScopeFactory scopeFactory, TimeProvider timeProvider, ILogger<RunBenchmarkBatchHandler> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public string TemplateId => TemplateIdValue;

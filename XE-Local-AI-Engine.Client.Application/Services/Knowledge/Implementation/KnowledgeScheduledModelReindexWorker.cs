@@ -19,12 +19,15 @@ public sealed class KnowledgeScheduledModelReindexWorker : BackgroundService
         IOptions<KnowledgeBaseOptions> options,
         ILogger<KnowledgeScheduledModelReindexWorker> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(dispatcher);
+        _dispatcher = dispatcher;
         ArgumentNullException.ThrowIfNull(options);
         _enabled = options.Value.ScheduledModelReindexEnabled;
         _interval = TimeSpan.FromMinutes(Math.Max(1, options.Value.ScheduledModelReindexIntervalMinutes));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

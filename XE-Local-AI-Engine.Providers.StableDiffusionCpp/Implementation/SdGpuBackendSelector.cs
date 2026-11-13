@@ -52,9 +52,11 @@ public sealed class SdGpuBackendSelector : ISdGpuBackendSelector
         IManagedSourceBuildSignal<SdGpuBackend>? managedSourceSignal = null,
         ILogger<SdGpuBackendSelector>? logger = null)
     {
-        _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
+        ArgumentNullException.ThrowIfNull(hardwareProfiler);
+        _hardwareProfiler = hardwareProfiler;
         _isWindows = isWindows;
-        _vulkanDeviceProbe = vulkanDeviceProbe ?? throw new ArgumentNullException(nameof(vulkanDeviceProbe));
+        ArgumentNullException.ThrowIfNull(vulkanDeviceProbe);
+        _vulkanDeviceProbe = vulkanDeviceProbe;
         _cudaDeviceProbe = cudaDeviceProbe ?? new DefaultCudaDeviceProbe(isWindows: false, static () => true);
         _overrideOptions = overrideOptions ?? new StableDiffusionServerRuntimeOverrideOptions();
         _managedSourceSignal = managedSourceSignal ?? new ManagedSourceBuildSignal<SdGpuBackend>();

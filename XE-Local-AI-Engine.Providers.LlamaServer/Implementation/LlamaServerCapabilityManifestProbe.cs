@@ -32,8 +32,10 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
     internal LlamaServerCapabilityManifestProbe(ILlamaCommandProcessRunner runner,
         ILogger<LlamaServerCapabilityManifestProbe> logger)
     {
-        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runner);
+        _runner = runner;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<LlamaServerCapabilityManifest> GetManifestAsync(LlamaBinary binary, CancellationToken ct)

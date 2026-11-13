@@ -109,7 +109,7 @@ export function GraphWorkflowAssistantPanel({ designer, editorMode, selectedNode
 						) : (
 							// biome-ignore lint/suspicious/noArrayIndexKey: append-only list, see above
 							<div key={index} data-testid="gw-assistant-message-assistant">
-								<MarkdownView content={message.text} images="link" />
+								<MarkdownView content={message.text} />
 							</div>
 						),
 					)}

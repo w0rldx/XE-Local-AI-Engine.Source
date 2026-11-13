@@ -21,8 +21,10 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
 
     public KnowledgeIndexWriter(NodeChatDbContext dbContext, TimeProvider timeProvider)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     public async Task<bool> WriteAsync(KnowledgeIndexInput input, CancellationToken cancellationToken)

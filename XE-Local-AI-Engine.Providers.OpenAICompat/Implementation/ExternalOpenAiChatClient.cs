@@ -48,7 +48,8 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
     /// <param name="transportHandlerFactory">Test seam supplying the INNERMOST handler, so a request drives the real pipeline without network I/O.</param>
     public ExternalOpenAiChatClient(IExternalProviderRegistry registry, string modelId, Func<HttpMessageHandler>? transportHandlerFactory = null)
     {
-        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
         _modelId = modelId;
         _transportHandlerFactory = transportHandlerFactory;

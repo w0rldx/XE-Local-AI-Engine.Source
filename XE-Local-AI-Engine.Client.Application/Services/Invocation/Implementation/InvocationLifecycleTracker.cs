@@ -44,7 +44,8 @@ public sealed class InvocationLifecycleTracker
         INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider)
     {
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         ArgumentNullException.ThrowIfNull(pendingToolCallRegistry);
         _pendingToolCalls = pendingToolCallRegistry.Calls;
         ArgumentNullException.ThrowIfNull(runtimeSettings);
@@ -52,7 +53,8 @@ public sealed class InvocationLifecycleTracker
 
         // Subscribe for the process lifetime; both are singletons, so there is no unsubscribe path (mirrors
         // InvocationResumeRegistry's subscription to the same dispatcher).
-        _attachmentTracker = attachmentTracker ?? throw new ArgumentNullException(nameof(attachmentTracker));
+        ArgumentNullException.ThrowIfNull(attachmentTracker);
+        _attachmentTracker = attachmentTracker;
         _attachmentTracker.AttachmentChanged += OnAttachmentChanged;
     }
 

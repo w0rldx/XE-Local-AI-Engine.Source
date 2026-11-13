@@ -99,16 +99,24 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         IWorkerEventDispatcher eventDispatcher,
         ILogger<WorkSessionExecutionSupervisor> logger)
     {
-        _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
+        ArgumentNullException.ThrowIfNull(eventDispatcher);
+        _eventDispatcher = eventDispatcher;
         ArgumentNullException.ThrowIfNull(options);
-        _pendingToolCalls = pendingToolCalls ?? throw new ArgumentNullException(nameof(pendingToolCalls));
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-        _cancellationRegistry = cancellationRegistry ?? throw new ArgumentNullException(nameof(cancellationRegistry));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(pendingToolCalls);
+        _pendingToolCalls = pendingToolCalls;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(publisher);
+        _publisher = publisher;
+        ArgumentNullException.ThrowIfNull(cancellationRegistry);
+        _cancellationRegistry = cancellationRegistry;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _options = options.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         ArgumentNullException.ThrowIfNull(approvalCoordinator);
         // Use the wait owner's snapshot: separately reading settings could observe a later edit.
         _pendingToolCallAge = approvalCoordinator.PendingToolCallAge;

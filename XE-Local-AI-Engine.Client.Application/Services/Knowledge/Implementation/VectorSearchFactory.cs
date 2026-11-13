@@ -12,7 +12,8 @@ public sealed class VectorSearchFactory : IVectorSearchFactory
 
     public VectorSearchFactory(IServiceProvider serviceProvider)
     {
-        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        _serviceProvider = serviceProvider;
     }
 
     public IVectorSearch Create()

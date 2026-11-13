@@ -65,8 +65,10 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
 
     public RunSavedAgentHandler(IServiceScopeFactory scopeFactory, ILogger<RunSavedAgentHandler> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public string TemplateId => TemplateIdValue;

@@ -20,7 +20,8 @@ public sealed class MachineKeyProvider : IMachineKeyProvider, IDisposable
 
     public MachineKeyProvider(INodeSettingsStore settingsStore)
     {
-        _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
+        ArgumentNullException.ThrowIfNull(settingsStore);
+        _settingsStore = settingsStore;
     }
 
     public void Dispose()

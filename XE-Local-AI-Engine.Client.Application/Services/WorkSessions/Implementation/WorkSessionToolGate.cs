@@ -28,11 +28,16 @@ internal sealed class WorkSessionToolGate
         INodeSettingsStore nodeSettingsStore,
         ILocalToolOfferProvider toolOffer)
     {
-        _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
-        _capabilityResolver = capabilityResolver ?? throw new ArgumentNullException(nameof(capabilityResolver));
-        _defaultModelResolver = defaultModelResolver ?? throw new ArgumentNullException(nameof(defaultModelResolver));
-        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
-        _toolOffer = toolOffer ?? throw new ArgumentNullException(nameof(toolOffer));
+        ArgumentNullException.ThrowIfNull(agentDefinitionStore);
+        _agentDefinitionStore = agentDefinitionStore;
+        ArgumentNullException.ThrowIfNull(capabilityResolver);
+        _capabilityResolver = capabilityResolver;
+        ArgumentNullException.ThrowIfNull(defaultModelResolver);
+        _defaultModelResolver = defaultModelResolver;
+        ArgumentNullException.ThrowIfNull(nodeSettingsStore);
+        _nodeSettingsStore = nodeSettingsStore;
+        ArgumentNullException.ThrowIfNull(toolOffer);
+        _toolOffer = toolOffer;
     }
 
     /// <summary>

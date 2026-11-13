@@ -58,8 +58,10 @@ public sealed class WorkSessionAgentSeeder : IHostedService
 
     public WorkSessionAgentSeeder(IServiceScopeFactory scopeFactory, ILogger<WorkSessionAgentSeeder> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)

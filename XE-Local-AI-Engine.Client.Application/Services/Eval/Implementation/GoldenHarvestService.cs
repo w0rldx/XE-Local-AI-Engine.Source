@@ -51,7 +51,8 @@ internal sealed class GoldenHarvestService : IGoldenHarvestService
         _goldenStore = goldenStore;
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
-        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
         ArgumentNullException.ThrowIfNull(sourceStore);
         _sourceStore = sourceStore;
     }

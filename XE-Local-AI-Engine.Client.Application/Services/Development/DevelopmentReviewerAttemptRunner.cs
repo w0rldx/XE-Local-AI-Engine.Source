@@ -53,16 +53,24 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         IDevelopmentAttemptLiveBroker? liveBroker = null,
         IHostApplicationLifetime? lifetime = null)
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
-        _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
-        _evidence = evidence ?? throw new ArgumentNullException(nameof(evidence));
-        _reviewerModel = reviewerModel ?? throw new ArgumentNullException(nameof(reviewerModel));
-        _cloudContext = cloudContext ?? throw new ArgumentNullException(nameof(cloudContext));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(workspaceProvider);
+        _workspaceProvider = workspaceProvider;
+        ArgumentNullException.ThrowIfNull(sandbox);
+        _sandbox = sandbox;
+        ArgumentNullException.ThrowIfNull(evidence);
+        _evidence = evidence;
+        ArgumentNullException.ThrowIfNull(reviewerModel);
+        _reviewerModel = reviewerModel;
+        ArgumentNullException.ThrowIfNull(cloudContext);
+        _cloudContext = cloudContext;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _liveBroker = liveBroker;
         _lifetime = lifetime;
     }

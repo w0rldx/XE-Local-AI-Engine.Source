@@ -284,6 +284,7 @@ production projects only, and 12 §8 carries the full list with each replacement
 constructor that already exists, so a source scan enforces the rule: `PrimaryConstructorConventionTests` fails on
 any class or struct declaration that carries a parameter list (records are out of scope). It derives its coverage
 from the solution and fences every project in it, plus the C# under `tools/`. There is no exemption list.
+`ArgumentNullGuardConventionTests` fences the same files against the `?? throw new ArgumentNullException` guard.
 
 ### DTOs, records and type choice
 

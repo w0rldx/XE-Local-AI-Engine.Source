@@ -39,18 +39,28 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
         IOptions<TranscriptionOptions> options,
         INodeRuntimeSettings runtimeSettings)
     {
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _activityGate = activityGate ?? throw new ArgumentNullException(nameof(activityGate));
-        _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
-        _backendSelector = backendSelector ?? throw new ArgumentNullException(nameof(backendSelector));
-        _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
-        _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
-        _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
-        _runtimeDeviceAudit = runtimeDeviceAudit ?? throw new ArgumentNullException(nameof(runtimeDeviceAudit));
-        _processCapture = processCapture ?? throw new ArgumentNullException(nameof(processCapture));
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+        ArgumentNullException.ThrowIfNull(activityGate);
+        _activityGate = activityGate;
+        ArgumentNullException.ThrowIfNull(installedRuntimeStore);
+        _installedRuntimeStore = installedRuntimeStore;
+        ArgumentNullException.ThrowIfNull(backendSelector);
+        _backendSelector = backendSelector;
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        _downloadCoordinator = downloadCoordinator;
+        ArgumentNullException.ThrowIfNull(pathResolver);
+        _pathResolver = pathResolver;
+        ArgumentNullException.ThrowIfNull(settingsStore);
+        _settingsStore = settingsStore;
+        ArgumentNullException.ThrowIfNull(runtimeDeviceAudit);
+        _runtimeDeviceAudit = runtimeDeviceAudit;
+        ArgumentNullException.ThrowIfNull(processCapture);
+        _processCapture = processCapture;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     /// <inheritdoc />

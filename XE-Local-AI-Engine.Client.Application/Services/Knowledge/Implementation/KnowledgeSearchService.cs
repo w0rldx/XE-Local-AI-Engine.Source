@@ -78,20 +78,32 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         ILogger<KnowledgeSearchService> logger,
         IKnowledgeModelPrewarmer? prewarmer = null)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
-        _embeddingModelResolver = embeddingModelResolver ?? throw new ArgumentNullException(nameof(embeddingModelResolver));
-        _prefixer = prefixer ?? throw new ArgumentNullException(nameof(prefixer));
-        _ftsSearch = ftsSearch ?? throw new ArgumentNullException(nameof(ftsSearch));
-        _vectorSearchFactory = vectorSearchFactory ?? throw new ArgumentNullException(nameof(vectorSearchFactory));
-        _fusion = fusion ?? throw new ArgumentNullException(nameof(fusion));
-        _reranker = reranker ?? throw new ArgumentNullException(nameof(reranker));
-        _contextExpansion = contextExpansion ?? throw new ArgumentNullException(nameof(contextExpansion));
-        _queryEmbeddingCache = queryEmbeddingCache ?? throw new ArgumentNullException(nameof(queryEmbeddingCache));
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _providerResolver = providerResolver;
+        ArgumentNullException.ThrowIfNull(embeddingModelResolver);
+        _embeddingModelResolver = embeddingModelResolver;
+        ArgumentNullException.ThrowIfNull(prefixer);
+        _prefixer = prefixer;
+        ArgumentNullException.ThrowIfNull(ftsSearch);
+        _ftsSearch = ftsSearch;
+        ArgumentNullException.ThrowIfNull(vectorSearchFactory);
+        _vectorSearchFactory = vectorSearchFactory;
+        ArgumentNullException.ThrowIfNull(fusion);
+        _fusion = fusion;
+        ArgumentNullException.ThrowIfNull(reranker);
+        _reranker = reranker;
+        ArgumentNullException.ThrowIfNull(contextExpansion);
+        _contextExpansion = contextExpansion;
+        ArgumentNullException.ThrowIfNull(queryEmbeddingCache);
+        _queryEmbeddingCache = queryEmbeddingCache;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _prewarmer = prewarmer;
     }
 

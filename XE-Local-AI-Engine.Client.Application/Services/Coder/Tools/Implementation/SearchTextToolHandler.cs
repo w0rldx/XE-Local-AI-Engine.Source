@@ -18,8 +18,10 @@ internal sealed class SearchTextToolHandler : IClientLocalToolHandler
 
     public SearchTextToolHandler(INodeRuntimeSettings runtimeSettings, ICoderWorkspaceReader reader)
     {
-        _reader = reader ?? throw new ArgumentNullException(nameof(reader));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(reader);
+        _reader = reader;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     public string ToolName => CoderToolDefinition.SearchTextToolName;

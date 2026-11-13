@@ -52,12 +52,18 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     {
         _residencyNotifier = residencyNotifier ?? NullRuntimeResidencyChangeNotifier.Instance;
         _loadTelemetry = loadTelemetry ?? new NullLlamaServerLoadTelemetry();
-        _processes = processes ?? throw new ArgumentNullException(nameof(processes));
-        _ports = ports ?? throw new ArgumentNullException(nameof(ports));
-        _layerPlacementReport = layerPlacementReport ?? throw new ArgumentNullException(nameof(layerPlacementReport));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(processes);
+        _processes = processes;
+        ArgumentNullException.ThrowIfNull(ports);
+        _ports = ports;
+        ArgumentNullException.ThrowIfNull(layerPlacementReport);
+        _layerPlacementReport = layerPlacementReport;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public void Dispose()

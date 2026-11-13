@@ -26,8 +26,10 @@ internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
 
     public ReadDocumentToolHandler(IServiceScopeFactory scopeFactory, INodeRuntimeSettings runtimeSettings)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     public string ToolName => ReadDocumentToolDefinition.ToolName;

@@ -4,9 +4,10 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { normalizeMath } from "@/core/chat/components/ChatMath";
 import { ChatMarkdown } from "@/core/chat/components/ChatMarkdown";
+import { normalizeMath } from "@/core/chat/components/ChatMath";
 import { testMantineTheme } from "@/test/MantineTestRender";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 function renderMarkdown(content: string) {
 	return render(
@@ -234,5 +235,28 @@ describe("ChatMarkdown math", () => {
 		const container = renderMarkdown("Bad $\\frac{1}{$ and open\n\n$$\n\\left( x");
 		await waitFor(() => expect(container.querySelector(".katex-error, .katex")).not.toBeNull());
 		expect(container.textContent).toContain("Bad");
+	});
+});
+
+describe("ChatMarkdown streaming caret", () => {
+	const hasCaret = (paragraph: Element | undefined) => paragraph?.querySelector('[aria-hidden="true"]') != null;
+
+	it("keeps each paragraph's DOM node across streamed frames and shows the caret only on the last paragraph", () => {
+		const { wrapper } = createProvidersWrapper();
+		const frame1 = "First.\n\nSecond";
+		const frame2 = "First.\n\nSecond grows.\n\nThird";
+		const { container, rerender } = render(<ChatMarkdown content={frame1} withCaret={true} />, { wrapper });
+		const [first, second] = container.querySelectorAll("p");
+		expect(hasCaret(first)).toBe(false);
+		expect(hasCaret(second)).toBe(true);
+
+		rerender(<ChatMarkdown content={frame2} withCaret={true} />);
+
+		const paragraphs = [...container.querySelectorAll("p")];
+		expect(paragraphs).toHaveLength(3);
+		expect(paragraphs[0]).toBe(first);
+		expect(paragraphs[1]).toBe(second);
+		expect(paragraphs[1]?.textContent).toBe("Second grows.");
+		expect(paragraphs.map(hasCaret)).toEqual([false, false, true]);
 	});
 });

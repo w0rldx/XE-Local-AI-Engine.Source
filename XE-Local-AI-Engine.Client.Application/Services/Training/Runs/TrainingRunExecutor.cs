@@ -82,7 +82,8 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
         _events = events;
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
         ArgumentNullException.ThrowIfNull(runtime);
         _runtime = runtime;
         ArgumentNullException.ThrowIfNull(spawner);

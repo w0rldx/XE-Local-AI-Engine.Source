@@ -47,13 +47,20 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         ILogger<GgufDownloadCoordinator> logger,
         TimeProvider timeProvider)
     {
-        _downloadTransaction = downloadTransaction ?? throw new ArgumentNullException(nameof(downloadTransaction));
-        _identityResolver = identityResolver ?? throw new ArgumentNullException(nameof(identityResolver));
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _operations = operations ?? throw new ArgumentNullException(nameof(operations));
-        _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(downloadTransaction);
+        _downloadTransaction = downloadTransaction;
+        ArgumentNullException.ThrowIfNull(identityResolver);
+        _identityResolver = identityResolver;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(operations);
+        _operations = operations;
+        ArgumentNullException.ThrowIfNull(eventPublisher);
+        _eventPublisher = eventPublisher;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _interruptedRecorded = new Lazy<bool>(RecordInterruptedDownloads, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 

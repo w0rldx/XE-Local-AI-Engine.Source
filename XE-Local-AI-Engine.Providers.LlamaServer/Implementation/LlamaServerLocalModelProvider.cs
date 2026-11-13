@@ -43,9 +43,12 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
         ITokenEstimatorCalibrationScheduler? calibrationScheduler = null,
         ILlamaServerEndpointBinding? endpointBinding = null)
     {
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+        ArgumentNullException.ThrowIfNull(modelStore);
+        _modelStore = modelStore;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         var resolvedOptions = options ?? new LlamaServerSupervisorOptions();
         _chatNetworkTimeout = resolvedOptions.HttpNetworkTimeout;
         _embeddingNetworkTimeout = resolvedOptions.EmbeddingHttpNetworkTimeout;

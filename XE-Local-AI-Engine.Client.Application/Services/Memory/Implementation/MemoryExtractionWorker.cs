@@ -44,11 +44,15 @@ public sealed class MemoryExtractionWorker : BackgroundService
         BackgroundInvocationYield invocationYield,
         ILogger<MemoryExtractionWorker> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
-        _invocationYield = invocationYield ?? throw new ArgumentNullException(nameof(invocationYield));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(dispatcher);
+        _dispatcher = dispatcher;
+        ArgumentNullException.ThrowIfNull(invocationYield);
+        _invocationYield = invocationYield;
         ArgumentNullException.ThrowIfNull(options);
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
 
         var maxConcurrency = Math.Max(1, options.Value.MaxConcurrentExtractions);
         _concurrency = new SemaphoreSlim(maxConcurrency, maxConcurrency);

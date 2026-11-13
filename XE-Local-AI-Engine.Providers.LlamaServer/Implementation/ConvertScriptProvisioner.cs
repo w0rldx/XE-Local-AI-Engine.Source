@@ -51,8 +51,10 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
         ILogger<ConvertScriptProvisioner> logger,
         string cacheRoot)
     {
-        _fetcher = fetcher ?? throw new ArgumentNullException(nameof(fetcher));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(fetcher);
+        _fetcher = fetcher;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         _cacheRoot = cacheRoot;
     }

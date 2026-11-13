@@ -29,7 +29,7 @@ the 1.x line, and a breaking change waits for the next major version. A `preview
 | `delete_model` | agentic | stable | Delete an installed model through coordinated deletion. | `model_name`. |
 | `set_default_model` | agentic | stable | Select an installed local model as node default. | `model_name`. |
 | `get_node_settings` | agentic | stable | Read the restricted core node-settings view. | Never returns secrets or unrestricted settings. |
-| `update_node_settings` | agentic | stable | Apply a partial update to the exact 18-field whitelist. | See **Settings whitelist** below. |
+| `update_node_settings` | agentic | stable | Apply a partial update to the exact 18-field allowlist. | See **Settings allowlist** below. |
 | `get_agent` | agentic | stable | Get a saved agent by id or exact name. | `agent_id`. |
 | `create_agent` | agentic | stable | Validate and create a saved agent. | Required `name`, `instructions`; optional definition/provenance fields. |
 | `update_agent` | agentic | stable | Fully replace a saved agent by id or exact name. | `agent_id`, required `name`, `instructions`, plus the complete optional definition. |
@@ -73,7 +73,7 @@ the 1.x line, and a breaking change waits for the next major version. A `preview
   invocations are audited before execution as metadata only; audit failure blocks the invocation.
   Spawned children retain ordinary curation and never inherit the root's agentic elevation.
 
-## Settings whitelist
+## Settings allowlist
 
 `update_node_settings` accepts only these 18 optional fields:
 

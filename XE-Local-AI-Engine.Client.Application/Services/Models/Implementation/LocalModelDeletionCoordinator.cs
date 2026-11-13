@@ -39,8 +39,8 @@ public sealed class LocalModelDeletionCoordinator : ILocalModelDeletionCoordinat
         _providerResolver = providerResolver;
         _modelRegistry = modelRegistry;
         _logger = logger;
-        _journals = new(options?.ModelsDirectory
-                        ?? throw new ArgumentNullException(nameof(options)), logger);
+        ArgumentNullException.ThrowIfNull(options);
+        _journals = new(options.ModelsDirectory, logger);
     }
 
     public async Task<CommittedModelDeletion> CommitDeleteAsync(string modelName, CancellationToken cancellationToken = default)

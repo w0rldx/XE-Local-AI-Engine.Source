@@ -22,7 +22,8 @@ internal sealed class McpAgentRunExecutor : IMcpAgentRunExecutor
     {
         ArgumentNullException.ThrowIfNull(executionService);
         _executionService = executionService;
-        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
     }
 
     public async Task<SpawnOutcome> ExecuteAsync(McpAgentRunRecord run, CancellationToken cancellationToken)

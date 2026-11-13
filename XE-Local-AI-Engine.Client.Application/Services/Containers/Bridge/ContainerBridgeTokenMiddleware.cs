@@ -26,8 +26,10 @@ public sealed class ContainerBridgeTokenMiddleware : IMiddleware
 
     public ContainerBridgeTokenMiddleware(IContainerBridgeTokenVerifier verifier, ILogger<ContainerBridgeTokenMiddleware> logger)
     {
-        _verifier = verifier ?? throw new ArgumentNullException(nameof(verifier));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(verifier);
+        _verifier = verifier;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)

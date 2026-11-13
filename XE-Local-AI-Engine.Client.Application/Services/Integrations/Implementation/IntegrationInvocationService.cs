@@ -39,18 +39,28 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         TimeProvider timeProvider,
         ILogger<IntegrationInvocationService> logger)
     {
-        _triggers = triggers ?? throw new ArgumentNullException(nameof(triggers));
-        _keyStore = keyStore ?? throw new ArgumentNullException(nameof(keyStore));
-        _executions = executions ?? throw new ArgumentNullException(nameof(executions));
-        _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-        _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
-        _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
-        _sessionGate = sessionGate ?? throw new ArgumentNullException(nameof(sessionGate));
-        _queue = queue ?? throw new ArgumentNullException(nameof(queue));
+        ArgumentNullException.ThrowIfNull(triggers);
+        _triggers = triggers;
+        ArgumentNullException.ThrowIfNull(keyStore);
+        _keyStore = keyStore;
+        ArgumentNullException.ThrowIfNull(executions);
+        _executions = executions;
+        ArgumentNullException.ThrowIfNull(buffer);
+        _buffer = buffer;
+        ArgumentNullException.ThrowIfNull(persistence);
+        _persistence = persistence;
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+        ArgumentNullException.ThrowIfNull(sessionGate);
+        _sessionGate = sessionGate;
+        ArgumentNullException.ThrowIfNull(queue);
+        _queue = queue;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task<IntegrationAcceptResult> AcceptAsync(IntegrationAcceptRequest request, CancellationToken cancellationToken = default)

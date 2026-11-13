@@ -38,8 +38,10 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
     /// </param>
     public ExternalOpenAiModelProvider(IExternalProviderRegistry registry, TimeProvider timeProvider, Func<HttpMessageHandler>? transportHandlerFactory = null)
     {
-        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _transportHandlerFactory = transportHandlerFactory;
     }
 

@@ -104,7 +104,8 @@ internal sealed class FakeGraphWorkflowInvocation : IInvocationRunner
 
     public FakeGraphWorkflowInvocation(IServiceProvider services)
     {
-        _eventDispatcher = new((services ?? throw new ArgumentNullException(nameof(services))).GetRequiredService<IWorkerEventDispatcher>);
+        ArgumentNullException.ThrowIfNull(services);
+        _eventDispatcher = new(services.GetRequiredService<IWorkerEventDispatcher>);
     }
 
     /// <summary>Every package this fake was handed, so a test can assert the contract the fake itself cannot see.</summary>

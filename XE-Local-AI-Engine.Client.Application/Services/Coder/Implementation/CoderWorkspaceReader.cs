@@ -42,10 +42,14 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         IOptions<CoderOptions> options,
         IOptions<AgentHomeOptions> agentHomeOptions)
     {
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-        _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
-        _leaseManager = leaseManager ?? throw new ArgumentNullException(nameof(leaseManager));
-        _exclusionService = exclusionService ?? throw new ArgumentNullException(nameof(exclusionService));
+        ArgumentNullException.ThrowIfNull(provider);
+        _provider = provider;
+        ArgumentNullException.ThrowIfNull(identityProvider);
+        _identityProvider = identityProvider;
+        ArgumentNullException.ThrowIfNull(leaseManager);
+        _leaseManager = leaseManager;
+        ArgumentNullException.ThrowIfNull(exclusionService);
+        _exclusionService = exclusionService;
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(agentHomeOptions);
         _options = options.Value;

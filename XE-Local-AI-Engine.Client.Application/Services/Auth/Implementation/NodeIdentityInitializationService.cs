@@ -11,8 +11,10 @@ public sealed class NodeIdentityInitializationService
 
     public NodeIdentityInitializationService(IServiceScopeFactory scopeFactory, ILogger<NodeIdentityInitializationService> logger)
     {
-        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     public async Task MigrateAndSeedAsync(CancellationToken cancellationToken = default)

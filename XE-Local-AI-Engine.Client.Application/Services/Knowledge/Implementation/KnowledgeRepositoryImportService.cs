@@ -45,13 +45,20 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
         IDocumentTextExtractor extractor,
         IOptions<KnowledgeBaseOptions> options)
     {
-        _repositories = repositories ?? throw new ArgumentNullException(nameof(repositories));
-        _exclusions = exclusions ?? throw new ArgumentNullException(nameof(exclusions));
-        _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
-        _admission = admission ?? throw new ArgumentNullException(nameof(admission));
-        _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
-        _purge = purge ?? throw new ArgumentNullException(nameof(purge));
-        _extractor = extractor ?? throw new ArgumentNullException(nameof(extractor));
+        ArgumentNullException.ThrowIfNull(repositories);
+        _repositories = repositories;
+        ArgumentNullException.ThrowIfNull(exclusions);
+        _exclusions = exclusions;
+        ArgumentNullException.ThrowIfNull(blobStore);
+        _blobStore = blobStore;
+        ArgumentNullException.ThrowIfNull(admission);
+        _admission = admission;
+        ArgumentNullException.ThrowIfNull(catalog);
+        _catalog = catalog;
+        ArgumentNullException.ThrowIfNull(purge);
+        _purge = purge;
+        ArgumentNullException.ThrowIfNull(extractor);
+        _extractor = extractor;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
     }

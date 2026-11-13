@@ -356,7 +356,7 @@
 		"filters": "Filter",
 		"hide": "Ausblenden",
 		"keepEditing": "Weiter bearbeiten",
-		"loading": "Lädt...",
+		"loading": "Lädt…",
 		"loadingRateLimited": "Zu viele Anfragen an den Node. Neuer Versuch in {{seconds}} s.",
 		"noData": "Keine Einträge gefunden",
 		"ok": "Ok",
@@ -365,7 +365,7 @@
 			"showingRange": "{{from}}–{{to}} von {{total}}"
 		},
 		"refresh": "Aktualisieren",
-		"refreshing": "Wird aktualisiert...",
+		"refreshing": "Wird aktualisiert…",
 		"retry": "Erneut versuchen",
 		"save": "Speichern",
 		"search": "Suchen",
@@ -2120,7 +2120,7 @@
 				"offOptionHint": "Kein Agent — verwendet die Node-Standardeinstellung",
 				"orchestratorBadge": "Orchestrator",
 				"pinnedModelHint": "Verwendet Modell: {{model}}",
-				"search": "Agenten suchen...",
+				"search": "Agenten suchen…",
 				"triggerCurrent": "Agent: {{name}}",
 				"triggerLabel": "Agent"
 			},
@@ -2410,7 +2410,7 @@
 				"hint": "Wählen Sie ein auf dem lokalen Node installiertes Modell.",
 				"noChatModels": "Keine chat-fähigen Modelle",
 				"noResults": "Keine Modelle gefunden",
-				"search": "Modelle suchen..."
+				"search": "Modelle suchen…"
 			},
 			"modelUnloadingIn": "Entladen in {{time}}",
 			"nativeReasoningLabel": "Natives Denken",

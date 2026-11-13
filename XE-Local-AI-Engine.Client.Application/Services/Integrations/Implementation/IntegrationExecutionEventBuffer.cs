@@ -43,7 +43,8 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
     public IntegrationExecutionEventBuffer(IOptions<IntegrationOptions> options, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(options);
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
 
         var value = options.Value;
         _capacity = value.EventBufferCapacity;

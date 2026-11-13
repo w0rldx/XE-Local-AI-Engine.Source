@@ -236,8 +236,6 @@ describe("AgentSelectorCard", () => {
 
 		fireEvent.click(screen.getByTestId("chat-agent-selector-trigger"));
 
-		expect(await screen.findByRole("textbox", { name: "Search agents..." })).toBe(
-			screen.getByTestId("chat-agent-selector-search"),
-		);
+		expect(await screen.findByRole("textbox", { name: "Search agents…" })).toBe(screen.getByTestId("chat-agent-selector-search"));
 	});
 });

@@ -40,10 +40,14 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         ICudaManagedBuildSignal? managedCudaSignal = null,
         ILlamaLayerPlacementReport? layerPlacementReport = null)
     {
-        _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
-        _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
-        _deviceProbe = deviceProbe ?? throw new ArgumentNullException(nameof(deviceProbe));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(hardwareProfiler);
+        _hardwareProfiler = hardwareProfiler;
+        ArgumentNullException.ThrowIfNull(variantSelector);
+        _variantSelector = variantSelector;
+        ArgumentNullException.ThrowIfNull(deviceProbe);
+        _deviceProbe = deviceProbe;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         // Optional so the test seam (and a provider-only host) can omit it; when absent the stamp is a constant, so the
         // memo behaves exactly as before (no signal-driven invalidation). The composition root injects the real singleton.
         _managedCudaSignal = managedCudaSignal;
