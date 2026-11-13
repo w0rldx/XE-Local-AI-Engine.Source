@@ -211,7 +211,7 @@ public sealed class ContainerRuntimeWireMappingTests
         using var framed = new MemoryStream(Framed(onStandardError ? StandardErrorFrame : StandardOutputFrame, PayloadBytes));
         using var stream = new MultiplexedStream(framed, multiplexed: true);
 
-        var captured = await DockerDotNetRuntimeClient.ReadBoundedAsync(stream, CeilingBytes, CancellationToken.None);
+        var captured = await DockerDotNetRuntimeClient.ReadBoundedAsync(stream, CeilingBytes, observer: null, CancellationToken.None);
 
         var (text, truncated) = onStandardError
             ? (captured.StandardError, captured.StandardErrorTruncated)

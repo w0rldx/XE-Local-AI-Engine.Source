@@ -66,6 +66,9 @@ internal sealed class ChatStreamFolder
             ChatStreamEventTypes.ToolCallRequested or ChatStreamEventTypes.ToolCallCompleted => Emit(frame, CliStreamEventKind.ToolActivity),
             ChatStreamEventTypes.AssistantNotice => Emit(frame, CliStreamEventKind.Notice, frame.NoticeMessage ?? string.Empty),
 
+            // Up to ten frames a second per running command: a terminal turn view has no card to stream them into.
+            ChatStreamEventTypes.ToolCallOutput => FoldOutcome.Dropped,
+
             // Persisted, pending, queued, streaming, phase, and any type a newer node adds: progress, never a silent drop.
             _ => Emit(frame, CliStreamEventKind.Status)
         };

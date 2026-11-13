@@ -986,6 +986,7 @@ internal static class InvocationRunnerTestSupport
             CreateScopeFactory(reasoningEffortDispatcherFactory, localChatModel),
             knowledgeModelPrewarmer ?? Substitute.For<IKnowledgeModelPrewarmer>(),
             reasoningControl ?? new InvocationReasoningControl(Substitute.For<ILlamaServerNativeClient>(), NullLogger<InvocationReasoningControl>.Instance),
+            new ToolCommandStopRegistry(),
             logger ?? NullLogger<InvocationRunner>.Instance,
             resolvedTimeProvider);
     }

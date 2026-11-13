@@ -15,6 +15,9 @@ internal static class ToolFailureText
     /// <summary>The per-call deadline fired before the tool answered.</summary>
     public const string TimeoutCode = "timeout";
 
+    /// <summary>The operator stopped the tool's command before it finished; not a deadline, so a longer timeout would not help.</summary>
+    public const string StoppedCode = "stopped";
+
     /// <summary>The tool ran and reported its own failure (an MCP <c>isError</c> result).</summary>
     public const string ToolReportedCode = "tool_reported";
 

@@ -1,13 +1,19 @@
 namespace XE_Local_AI_Engine.Tests.Compute;
 
+using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
+using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
@@ -76,6 +82,49 @@ public sealed class ComputeSandboxLiveTests : IDisposable
         // sympy must be importable AND usable — this is what proves the venv provision end to end.
         AssertEx.Contains(rendered, "x**2");
         AssertEx.Contains(rendered, "6");
+    }
+
+    [Test]
+    public async Task RunPython_ALinePrintedWithoutFlush_ReachesTheLiveViewWhileTheScriptStillRuns()
+    {
+        // Redirected stdout is block-buffered unless the interpreter runs with -u (PYTHONUNBUFFERED is ignored under -I).
+        RequireIsolationCapableHost();
+        using var provider = CreateHostProvider();
+        var handler = new RunPythonToolHandler(CreateGateway(provider, new ComputeOptions
+        {
+            TimeoutSeconds = 120
+        }));
+        var lines = new ConcurrentQueue<string>();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.When(static d => d.ReportToolCallOutput(Arg.Any<ToolCallOutputPayload>()))
+                  .Do(call =>
+                  {
+                      foreach (var line in call.Arg<ToolCallOutputPayload>().Lines)
+                      {
+                          lines.Enqueue(line.Text);
+                      }
+                  });
+        var stops = new ToolCommandStopRegistry();
+        var messageId = Guid.NewGuid();
+        var arguments = JsonSerializer.Serialize(new
+        {
+            code = "import time\nprint('first line')\ntime.sleep(90)"
+        });
+
+        // Started inside the scopes, so the call carries them; disposing them here does not reach the running call's context.
+        Task<string> run;
+        using (ToolCommandOutputScope.Open(Guid.NewGuid(), messageId, dispatcher, stops, TimeProvider.System, NullLogger.Instance))
+        using (AmbientToolCall.Enter("call-live", "run_python"))
+        {
+            run = handler.ExecuteAsync(arguments);
+        }
+
+        await AssertEx.EventuallyAsync(() => lines.Contains("first line"), TimeSpan.FromSeconds(80), "an unflushed print must reach the live view while the script sleeps");
+        AssertEx.False(run.IsCompleted, "the line arrived before the command completed");
+
+        await AssertEx.EventuallyAsync(() => stops.TryStopAsync(messageId, "call-live", CancellationToken.None), TimeSpan.FromSeconds(10));
+        var rendered = await run.WaitAsync(TimeSpan.FromSeconds(30));
+        AssertEx.Equal(ToolFailureText.StoppedCode, ToolFailureText.GetCodeOrNull(rendered), rendered);
     }
 
     [Test]

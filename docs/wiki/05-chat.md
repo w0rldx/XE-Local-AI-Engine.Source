@@ -210,6 +210,41 @@ Tool execution time. `ToolCallLifecyclePayload.DurationMs` is how long the tool 
 - `DurationMs` is null, never 0, when nothing was measured: a provider-side call whose invoker never ran, an id-less call, a call outside any open scope, and the requested phase.
 - It is not the `Requested → Completed` gap. That gap spans the model's streaming tail and every sibling call of the round. `ToolInvocationObservabilityChatClient` still measures request-to-result latency in its completion span (`tool.duration_ms`, `DurationMs` in its log line), and its requested span measures call discovery; neither is execution time. The benchmark module copies `DurationMs` onto its `tool_result` parts ([Benchmarks](20-benchmarks.md) §7.2).
 
+### Live command output on a tool card
+
+`run_python` and `run_in_agent_home` show the output of the sandbox command they run on the tool card while it runs.
+The view is observe-only: what the model reads is the tool's normal result, except for the stop wording below.
+
+- **Plumbing.** `InvocationRunner` opens a `ToolCommandOutputScope` per turn (invocation id and assistant message id).
+  The tool handler binds its own call id (`ToolCommandOutputScope.BindCurrentCall`); `RunInAgentHomeToolHandler` binds
+  the OUTER call, because the inner agent's function invocation replaces the ambient call context, so every inner
+  `run_command` lands on the outer card. `ToolCommandOutputScope.StartCommand` puts a `LiveCommandOutput` observer on
+  `SandboxCommandRequest.OutputObserver` and reports its batches through `IWorkerEventDispatcher.ReportToolCallOutput`.
+  No open turn, or an id-less call, runs the command unobserved. Redaction and caps: [Security &
+  Privacy](12-security-and-privacy.md#22-redaction-in-logs-transcripts-and-dtos).
+- **Wire.** `ChatStreamEventForwarder` maps each batch to a `tool-call-output` event (`ChatStreamEventTypes.ToolCallOutput`)
+  with `toolCallId`, `outputLines` (`{ stream: "stdout" | "stderr", text }`), `outputSkippedLines` (cumulative for the
+  current command), `commandLabel` (the redacted executable and arguments; null for `run_python`), `commandRunning`,
+  `commandExitCode` (null while running and when the command was stopped, timed out or failed to run) and
+  `outputReplace`. Every event describes the command on its own. A command's first event replaces the card's lines
+  with none; when any of its lines were skipped, the last event replaces them with the command's real tail. Batches are
+  coalesced at the source, a sequence number is taken only for a frame that is written, and the sink counts their text
+  against `MaxQueuedChars`.
+- **Not history.** The event is never accumulated into `parts[]` and never enters the resume tool history.
+  `InvocationResumeRegistry` keeps a bounded tail per call (the most recent calls only) and replays each, after the
+  tool cards, as one `outputReplace` event carrying the latest command state.
+- **Persisted tail.** At the completed phase `ToolCommandOutputScope.WithCommandTail` adds the last command's redacted
+  tail, skipped-line count and label to the payload, and `NodeChatPartAccumulator.AttachCommandOutput` stores them on the
+  tool part as `outputTail`, `outputSkippedLines` and `lastCommandLabel`, inside the encrypted `metadata_json`. The
+  keys are omitted when null, so a part without output, and every older row, reads as before.
+- **Stopping one command.** `POST chat/messages/{messageId}/tool-calls/{toolCallId}/stop` ([API &
+  Hubs](09-api-and-hubs.md)) stops only the command `ToolCommandStopRegistry` holds for that message and call, through
+  `ISandboxRuntimeProvider.CancelCommandAsync`. A command registers only when the provider advertises
+  `SupportsCommandCancellation`. The turn continues: the tool gets its normal not-completed result. `run_python`
+  reports it as `[tool error: stopped]`, never as a timeout ([Compute Tools](19-compute-tools.md)); an inner AgentHome
+  `run_command` reads like any other command that did not complete. Ending the whole turn is still `chat/cancel`.
+- **`xe` CLI.** `ChatStreamFolder` consumes `tool-call-output` silently, so command output never prints as status lines.
+
 ## MCP & local tools offered during a chat run
 
 Tools are offered to the turn only when all three hold (`NodeChatStreamService.cs`): the turn asks for tools, the node has the tool engine enabled (`runtimeSettings.GetEnableToolsAsync`), and the active model advertises the `tools` capability (`resolution.SupportsTools`). The turn asks when the client sent `request.UseLocalTools` or when the agent names its own tools: a definition other than the Default Assistant with a non-empty allowed-tools list (`ResolvedAgentRuntime.DeclaresToolList`). So the composer toggle gates only the node-wide offer, while `EnableTools` and the model's tool support still gate both. Regenerate follows the same rule (`NodeChatRegenerationService` uses `ChatToolOfferResolver`), and the "tools withheld" notice is sent for an agent-list turn too.

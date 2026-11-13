@@ -106,7 +106,8 @@ export type DevelopmentLiveUpdateKind =
 	| "Metrics"
 	| "Progress"
 	| "Warning"
-	| "Terminal";
+	| "Terminal"
+	| "CommandOutput";
 
 export interface DevelopmentAttemptLiveUpdate {
 	readonly projectId: string;
@@ -130,6 +131,8 @@ export interface DevelopmentAttemptLiveUpdate {
 	readonly commandCount: number;
 	readonly currentToolId?: string | null;
 	readonly currentCommandId?: string | null;
+	readonly currentCommandExecutionId?: string | null;
+	readonly commandOutputSkippedLines?: number | null;
 	readonly currentOperationElapsedMilliseconds?: number | null;
 	readonly changedFileCount: number;
 	readonly patchByteCount: number;

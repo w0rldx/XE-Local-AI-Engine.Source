@@ -172,7 +172,7 @@ choice, not the default**: `Development:Sandbox:Provider=docker` selects it, and
 [Development Mode container implementation status](../roadmaps/development-mode-container-status.md) for the
 maintained provider coverage and limitations — this page does not duplicate them.
 
-**Where the code and the decisions live.** Backend: 21 endpoint classes under
+**Where the code and the decisions live.** Backend: 22 endpoint classes under
 `Client/Endpoints/Development/V1/`, one `*DevelopmentEndpoint.cs` file per class covering the artifact,
 capability, event, patch, project, repository, task and template families (routes on
 `LocalApiRoutes.Development`), services under

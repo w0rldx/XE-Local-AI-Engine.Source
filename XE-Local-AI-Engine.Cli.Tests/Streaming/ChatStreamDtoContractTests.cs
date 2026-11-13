@@ -47,7 +47,8 @@ public sealed class ChatStreamDtoContractTests
                 QuestionRequestId = "question"
             });
 
-            AssertEx.True(outcome.Event is not null || outcome.NeedsResume, $"'{type}' was dropped by the folder.");
+            // The one type the CLI ignores on purpose, pinned by its own folder test: a terminal turn view has no tool card for it.
+            AssertEx.True(outcome.Event is not null || outcome.NeedsResume || type == ChatStreamEventTypes.ToolCallOutput, $"'{type}' was dropped by the folder.");
         }
     }
 

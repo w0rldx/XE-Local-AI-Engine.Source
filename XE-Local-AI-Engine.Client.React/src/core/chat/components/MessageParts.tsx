@@ -9,6 +9,8 @@ import type { ChatMessagePart } from "@/core/models/ChatMessageParts";
 
 interface MessagePartsProps {
 	parts: ChatMessagePart[];
+	// The chat message these parts belong to; passed by the chat transcript so a tool card can stop its command.
+	messageId?: string;
 	// True while the turn is in flight. Only the trailing reasoning segment of a live turn streams; earlier
 	// reasoning runs (before a tool) are complete and render as folded Thoughts blocks.
 	isStreaming?: boolean;
@@ -37,6 +39,7 @@ function lastReasoningIndex(parts: ChatMessagePart[]): number {
  */
 export const MessageParts = memo(function MessageParts({
 	parts,
+	messageId,
 	isStreaming = false,
 	streamingReasoningOverflowBytes = 0,
 	hasContentStarted = false,
@@ -70,7 +73,7 @@ export const MessageParts = memo(function MessageParts({
 				}
 
 				if (part.kind === "tool") {
-					return <ToolCallCard key={part.id} part={part} />;
+					return <ToolCallCard key={part.id} part={part} messageId={messageId} />;
 				}
 
 				if (part.kind === "notice") {

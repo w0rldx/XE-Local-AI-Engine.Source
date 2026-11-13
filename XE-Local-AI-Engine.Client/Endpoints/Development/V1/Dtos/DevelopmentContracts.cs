@@ -47,6 +47,14 @@ public sealed class DevelopmentAttemptRequest
     public Guid AttemptId { get; init; }
 }
 
+public sealed class DevelopmentAttemptCommandRequest
+{
+    public Guid ProjectId { get; init; }
+    public Guid TaskId { get; init; }
+    public Guid AttemptId { get; init; }
+    public string ExecutionId { get; init; } = string.Empty;
+}
+
 public sealed class DevelopmentArtifactRequest
 {
     public Guid ProjectId { get; init; }

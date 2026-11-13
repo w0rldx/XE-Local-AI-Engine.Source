@@ -44,6 +44,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         // so there is no unsubscribe path (mirrors WorkerEventDispatcher's CA1001 suppression rationale).
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
+        eventDispatcher.ToolCallOutputChanged += OnToolCallOutputChanged;
         eventDispatcher.TurnNoticeChanged += OnTurnNoticeChanged;
     }
 
@@ -84,7 +85,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     private async IAsyncEnumerable<ChatStreamEvent> ResumeCoreAsync(LiveInvocation live,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var subscriber = live.Subscribe(out var snapshot, out var toolHistory, out var noticeHistory);
+        var subscriber = live.Subscribe(out var snapshot, out var toolHistory, out var noticeHistory, out var outputTails);
         var lastContent = snapshot.StreamedContent;
         var lastReasoning = snapshot.StreamedThinkingContent;
         var sequence = 0L;
@@ -114,6 +115,12 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         foreach (var toolCall in toolHistory)
         {
             yield return ToToolCallEvent(snapshot, toolCall, sequence++);
+        }
+
+        // Each call's bounded output tail, as a replacement, after the cards it belongs to.
+        foreach (var output in outputTails)
+        {
+            yield return ToToolCallOutputEvent(snapshot, output, sequence++);
         }
 
         foreach (var notice in noticeHistory)
@@ -204,6 +211,12 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 if (item.Notice is { } notice)
                 {
                     yield return ToNoticeEvent(live.LatestState, notice, sequence++);
+                    continue;
+                }
+
+                if (item.Output is { } output)
+                {
+                    yield return ToToolCallOutputEvent(live.LatestState, output, sequence++);
                     continue;
                 }
 
@@ -337,7 +350,21 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         // already terminal: nothing to fan out, and the persisted parts[] remain the source of truth on reload.
         if (_live.TryGetValue(args.Payload.InvocationId, out var live))
         {
-            live.PublishToolCall(args.Payload);
+            // The completed phase's output tail is for the persisted part only; the per-call output state keeps the replay's.
+            live.PublishToolCall(args.Payload.OutputTail is null
+                ? args.Payload
+                : args.Payload with
+                {
+                    OutputTail = null
+                });
+        }
+    }
+
+    private void OnToolCallOutputChanged(object? sender, ToolCallOutputChangedEventArgs args)
+    {
+        if (_live.TryGetValue(args.Payload.InvocationId, out var live))
+        {
+            live.PublishOutput(args.Payload);
         }
     }
 
@@ -469,6 +496,18 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         return events;
     }
 
+    private ChatStreamEvent ToToolCallOutputEvent(InvocationState state,
+        ToolCallOutputPayload payload,
+        long sequence)
+    {
+        return ChatStreamEventMapper.ToolCallOutputEvent(state.ConversationId,
+            state.InvocationId,
+            state.InvocationId,
+            payload,
+            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+            sequence);
+    }
+
     private ChatStreamEvent ToNoticeEvent(InvocationState state,
         TurnNoticePayload payload,
         long sequence)
@@ -551,23 +590,28 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
     /// <summary>
     ///     One item on a resume consumer's channel: exactly one of a state snapshot, a tool-call lifecycle
-    ///     transition, or a turn notice, in dispatcher order.
+    ///     transition, a turn notice, or a batch of tool command output, in dispatcher order.
     /// </summary>
-    private readonly record struct ResumeItem(InvocationState? State, ToolCallLifecyclePayload? ToolCall, TurnNoticePayload? Notice)
+    private readonly record struct ResumeItem(InvocationState? State, ToolCallLifecyclePayload? ToolCall, TurnNoticePayload? Notice, ToolCallOutputPayload? Output)
     {
         public static ResumeItem FromState(InvocationState state)
         {
-            return new ResumeItem(state, null, null);
+            return new ResumeItem(state, null, null, null);
         }
 
         public static ResumeItem FromToolCall(ToolCallLifecyclePayload toolCall)
         {
-            return new ResumeItem(null, toolCall, null);
+            return new ResumeItem(null, toolCall, null, null);
         }
 
         public static ResumeItem FromNotice(TurnNoticePayload notice)
         {
-            return new ResumeItem(null, null, notice);
+            return new ResumeItem(null, null, notice, null);
+        }
+
+        public static ResumeItem FromOutput(ToolCallOutputPayload output)
+        {
+            return new ResumeItem(null, null, null, output);
         }
     }
 
@@ -590,8 +634,13 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         // one truncation warning); this cap is generous headroom, not a real bound.
         private const int MaxRecordedNoticeEvents = 64;
 
+        // Live command output keeps a bounded tail per call, never an entry in the tool history; the oldest call drops first.
+        private const int MaxTrackedOutputCalls = 32;
+
         private readonly List<ToolCallLifecyclePayload> _toolHistory = [];
         private readonly List<TurnNoticePayload> _noticeHistory = [];
+        private readonly Dictionary<string, CallOutputTail> _outputs = new(StringComparer.Ordinal);
+        private readonly List<string> _outputOrder = [];
         private readonly List<ResumeSubscriber> _subscribers = [];
         private readonly Lock _syncRoot = new();
         private readonly ChatStreamBudgetOptions _options;
@@ -640,6 +689,32 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             }
         }
 
+        public void PublishOutput(ToolCallOutputPayload output)
+        {
+            lock (_syncRoot)
+            {
+                if (!_outputs.TryGetValue(output.ToolCallId, out var tail))
+                {
+                    if (_outputOrder.Count >= MaxTrackedOutputCalls)
+                    {
+                        _ = _outputs.Remove(_outputOrder[0]);
+                        _outputOrder.RemoveAt(0);
+                    }
+
+                    tail = new CallOutputTail();
+                    _outputs[output.ToolCallId] = tail;
+                    _outputOrder.Add(output.ToolCallId);
+                }
+
+                tail.Apply(output);
+
+                foreach (var subscriber in _subscribers)
+                {
+                    subscriber.Write(ResumeItem.FromOutput(output));
+                }
+            }
+        }
+
         public void PublishNotice(TurnNoticePayload notice)
         {
             lock (_syncRoot)
@@ -667,7 +742,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         /// </exception>
         public ResumeSubscriber Subscribe(out InvocationState snapshot,
             out IReadOnlyList<ToolCallLifecyclePayload> toolHistory,
-            out IReadOnlyList<TurnNoticePayload> noticeHistory)
+            out IReadOnlyList<TurnNoticePayload> noticeHistory,
+            out IReadOnlyList<ToolCallOutputPayload> outputTails)
         {
             var subscriber = new ResumeSubscriber(_options.QueueCapacity);
 
@@ -676,6 +752,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 snapshot = LatestState.Clone();
                 toolHistory = [.. _toolHistory];
                 noticeHistory = [.. _noticeHistory];
+                outputTails = [.. _outputOrder.Select(callId => _outputs[callId].ToReplay())];
 
                 // Complete() already ran, so registering a channel now would leave a reader nothing ever finishes:
                 // hand back a completed one. The snapshot above is the terminal state, which ResumeCoreAsync emits.
@@ -722,6 +799,55 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
                 _subscribers.Clear();
             }
+        }
+    }
+
+    /// <summary>One call's command output for a resume replay: the last lines within a fixed budget plus the latest command state.</summary>
+    private sealed class CallOutputTail
+    {
+        // The same budget as the persisted tail, so a resumed card shows what a reload after completion shows.
+        private const int MaxTailChars = 16 * 1024;
+
+        private readonly Queue<NodeChatToolOutputLine> _lines = new();
+        private int _chars;
+        private ToolCallOutputPayload? _latest;
+
+        public void Apply(ToolCallOutputPayload output)
+        {
+            if (output.Replace)
+            {
+                _lines.Clear();
+                _chars = 0;
+            }
+
+            foreach (var line in output.Lines)
+            {
+                _lines.Enqueue(line);
+                _chars += line.Text.Length + 1;
+            }
+
+            while (_chars > MaxTailChars && _lines.Count > 1)
+            {
+                _chars -= _lines.Dequeue().Text.Length + 1;
+            }
+
+            _latest = output;
+        }
+
+        public ToolCallOutputPayload ToReplay()
+        {
+            var latest = _latest!;
+            return new ToolCallOutputPayload
+            {
+                InvocationId = latest.InvocationId,
+                ToolCallId = latest.ToolCallId,
+                Lines = [.. _lines],
+                SkippedLines = latest.SkippedLines,
+                CommandLabel = latest.CommandLabel,
+                CommandRunning = latest.CommandRunning,
+                CommandExitCode = latest.CommandExitCode,
+                Replace = true
+            };
         }
     }
 

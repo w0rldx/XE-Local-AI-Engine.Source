@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
@@ -39,6 +40,10 @@ internal sealed class RunInAgentHomeToolHandler : IClientLocalToolHandler
     public async Task<string> ExecuteAsync(string jsonArguments, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(jsonArguments);
+
+        // The OUTER call: the inner agent's own function invocation replaces the ambient call for its tools, and every inner
+        // command's live output must still land on this card.
+        using var outputCall = ToolCommandOutputScope.BindCurrentCall();
 
         if (!await _runtimeSettings.GetAgentHomeEnabledAsync(cancellationToken))
         {

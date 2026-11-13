@@ -628,6 +628,16 @@ workspace invariant probes, which would fail through the same boundary and throw
 is live (ADR 0023 decision 7), so the same succeeded coder attempt is validated again with no round charged and no cap
 widened.
 
+**An operator stop is a stop, not a timeout.** Coder and validation commands stream their redacted output to the
+attempt's live channel and can be stopped one at a time by execution id (wire and route: [API &
+Hubs](../09-api-and-hubs.md)). `DevelopmentWorkspaceTools` replaces a stopped command's standard error with
+`DevelopmentCommandEvidence.StoppedByOperatorMessage` ("Command was stopped by the operator before completion."),
+because providers report a cancel with generic text that Docker also uses for a timeout. The coder model reads that
+sentence and the attempt continues; the live completed update says the command was stopped, and the stop feeds no
+repeated-failure warning. `DevelopmentValidationVerdict` reports a stopped validation command as `command_stopped`
+(`DevelopmentValidationFailureCodes.CommandStopped`): validation fails and the task moves to `ChangesRequested` as for
+a failed command, with a reason naming the stop rather than a timeout.
+
 ### The test-write policy's protected-path set
 
 `DevelopmentCommandProfileCatalog.DefaultProtectedPaths` names the paths an agent may create but may not modify,

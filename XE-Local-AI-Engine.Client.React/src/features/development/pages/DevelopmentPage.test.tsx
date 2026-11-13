@@ -20,6 +20,7 @@ const hooksMock = vi.hoisted(() => ({
 	useReconnectDevelopmentRepository: vi.fn(),
 	useStartDevelopmentNextAction: vi.fn(),
 	useCancelDevelopmentAttempt: vi.fn(),
+	useStopDevelopmentAttemptCommand: vi.fn(),
 	useConfirmDevelopmentContainerRuntime: vi.fn(),
 	usePreviewDevelopmentPatch: vi.fn(),
 	useApplyDevelopmentPatch: vi.fn(),
@@ -31,14 +32,18 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("@/features/development/queries/useDevelopment", () => hooksMock);
 vi.mock("@/core/development/queries/useDevelopmentRepositories", () => hooksMock);
-vi.mock("@/features/development/hooks/useDevelopmentAttemptHub", () => ({
-	useDevelopmentAttemptHub: () => ({
+const attemptHubMock = vi.hoisted(() =>
+	vi.fn(() => ({
 		connectionState: "idle",
 		watermark: 0,
 		droppedOrCoalescedUpdateCount: 0,
 		latest: null,
 		updates: [],
-	}),
+		commands: [],
+	})),
+);
+vi.mock("@/features/development/hooks/useDevelopmentAttemptHub", () => ({
+	useDevelopmentAttemptHub: attemptHubMock,
 }));
 vi.mock("@/features/development/components/DevelopmentProjectForm", () => ({
 	DevelopmentProjectForm: () => <div data-testid="development-project-form" />,
@@ -187,6 +192,7 @@ describe("DevelopmentPage", () => {
 		hooksMock.useReconnectDevelopmentRepository.mockReturnValue(mutation());
 		hooksMock.useStartDevelopmentNextAction.mockReturnValue(mutation());
 		hooksMock.useCancelDevelopmentAttempt.mockReturnValue(mutation());
+		hooksMock.useStopDevelopmentAttemptCommand.mockReturnValue(mutation());
 		hooksMock.useConfirmDevelopmentContainerRuntime.mockReturnValue(mutation());
 		hooksMock.usePreviewDevelopmentPatch.mockReturnValue(mutation());
 		hooksMock.useApplyDevelopmentPatch.mockReturnValue(mutation());
@@ -260,6 +266,104 @@ describe("DevelopmentPage", () => {
 		expect(cancel.mutate).toHaveBeenCalledWith({
 			path: { projectId: "project-1", taskId: "task-1", attemptId: "attempt-1" },
 		});
+	});
+
+	it("streams a Validation task under its latest succeeded coder attempt and stops a command there", async () => {
+		const stop = mutation();
+		hooksMock.useStopDevelopmentAttemptCommand.mockReturnValue(stop);
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: detail("Validation", [
+				{ ...attempt("Succeeded"), id: "coder-old" },
+				{ ...attempt("Succeeded"), id: "reviewer", role: "Reviewer" },
+				{ ...attempt("Succeeded"), id: "coder-latest" },
+			]),
+			dataUpdatedAt: 42,
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		const { result } = renderHook(() => useDevelopmentPageController());
+		await waitFor(() => expect(result.current.liveAttempt?.id).toBe("coder-latest"));
+
+		expect(attemptHubMock).toHaveBeenLastCalledWith("project-1", "task-1", "coder-latest", "validation", 42);
+		act(() => result.current.stopCommand("exec-1"));
+		expect(stop.mutate).toHaveBeenCalledWith({
+			path: { projectId: "project-1", taskId: "task-1", attemptId: "coder-latest", executionId: "exec-1" },
+		});
+	});
+
+	it("keys the same coder attempt id to a new stream when its task moves from the run to Validation", async () => {
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: detail("InProgress", [attempt("Running")]),
+			dataUpdatedAt: 1,
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		const { result, rerender } = renderHook(() => useDevelopmentPageController());
+		await waitFor(() => expect(result.current.liveAttempt?.id).toBe("attempt-1"));
+		expect(attemptHubMock).toHaveBeenLastCalledWith("project-1", "task-1", "attempt-1", "attempt", 1);
+
+		// The next poll already shows Validation: no intermediate state, the same attempt id, a different phase.
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: detail("Validation", [attempt("Succeeded")]),
+			dataUpdatedAt: 2,
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		rerender();
+
+		expect(attemptHubMock).toHaveBeenLastCalledWith("project-1", "task-1", "attempt-1", "validation", 2);
+	});
+
+	it("names only the execution whose stop request is in flight", async () => {
+		hooksMock.useStopDevelopmentAttemptCommand.mockReturnValue({
+			...mutation(),
+			isPending: true,
+			variables: { path: { projectId: "project-1", taskId: "task-1", attemptId: "attempt-1", executionId: "exec-2" } },
+		});
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: detail("InProgress", [attempt("Running")]),
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		const { result } = renderHook(() => useDevelopmentPageController());
+		await waitFor(() => expect(result.current.liveAttempt?.id).toBe("attempt-1"));
+
+		expect(result.current.stoppingExecutionId).toBe("exec-2");
+	});
+
+	it("subscribes to nothing in Validation while the latest coder attempt has not succeeded", async () => {
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: detail("Validation", [
+				{ ...attempt("Succeeded"), id: "coder-old" },
+				{ ...attempt("Failed"), id: "coder-latest" },
+			]),
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		const { result } = renderHook(() => useDevelopmentPageController());
+		await waitFor(() => expect(result.current.tasks.length).toBe(1));
+
+		expect(result.current.liveAttempt).toBeNull();
+		expect(attemptHubMock).toHaveBeenLastCalledWith("project-1", "task-1", null, "validation", undefined);
+	});
+
+	it("subscribes to no finished attempt outside Validation", async () => {
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: detail("AwaitingApply", [attempt("Succeeded")]),
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		const { result } = renderHook(() => useDevelopmentPageController());
+		await waitFor(() => expect(result.current.tasks.length).toBe(1));
+
+		expect(result.current.liveAttempt).toBeNull();
+		expect(attemptHubMock).toHaveBeenLastCalledWith("project-1", "task-1", null, "attempt", undefined);
 	});
 
 	it("enables apply only after a successful preview for the current task", async () => {

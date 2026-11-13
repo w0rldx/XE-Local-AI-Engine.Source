@@ -306,18 +306,48 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     private async Task<SandboxCommandResult> ExecuteCatalogAsync(string commandId, CancellationToken cancellationToken)
     {
         var command = _profile.ResolveCommand(commandId);
-
-        _liveProgress?.CommandStarted(commandId);
+        var executionId = NewExecutionId(commandId);
+        var stopRequested = 0;
+        using var liveOutput = _liveProgress?.CommandStarted(commandId,
+            executionId,
+            _session.SandboxHandle.ResolveSandboxPathOrNull(_session.HostWorktreePath),
+            token =>
+            {
+                // Marked before the cancel, which can hand this method its result before the stop returns.
+                Volatile.Write(ref stopRequested, 1);
+                return _sandbox.CancelCommandAsync(_session.SandboxHandle, executionId, token);
+            });
 
         // Raw first, truncated second, and the result adapter reads the raw copy: a runner prints its summary LAST
         // and Truncate keeps the HEAD, so the evidence copy loses it on any sufficiently verbose repository.
-        var raw = await ExecuteRawAsync(commandId,
-            command.Executable,
-            command.Arguments,
-            "/",
-            standardInput: null,
-            ResolveTimeout(command.TimeoutSeconds),
-            cancellationToken);
+        SandboxCommandResult raw;
+        try
+        {
+            raw = await ExecuteRawAsync(executionId,
+                command.Executable,
+                command.Arguments,
+                "/",
+                standardInput: null,
+                ResolveTimeout(command.TimeoutSeconds),
+                liveOutput,
+                cancellationToken);
+        }
+        finally
+        {
+            liveOutput?.Complete();
+            _liveProgress?.UntrackCommand(executionId);
+        }
+
+        // Providers report a stop with the generic cancel text Docker also uses for a timeout; the model and the verdict must read the stop.
+        var stoppedByOperator = !raw.Completed && Volatile.Read(ref stopRequested) == 1;
+        if (stoppedByOperator)
+        {
+            raw = raw with
+            {
+                StandardError = DevelopmentCommandEvidence.StoppedByOperatorMessage
+            };
+        }
+
         var testOutcome = DevelopmentTestResultAdapters.Resolve(_profile, commandId)
                                                        ?.Parse(raw.StandardOutput,
                                                            raw.StandardError,
@@ -339,11 +369,17 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             (long)result.Duration.TotalMilliseconds,
             result.StandardOutput,
             result.StandardError,
-            testOutcome);
+            testOutcome)
+        {
+            StoppedByOperator = stoppedByOperator
+        };
         _commandEvidence.Add(evidence);
-        _liveProgress?.CommandCompleted(evidence);
+        _liveProgress?.CommandCompleted(evidence, executionId, liveOutput?.SkippedLines ?? 0);
         return result;
     }
+
+    private static string NewExecutionId(string executionPrefix) =>
+        executionPrefix + "-" + Guid.NewGuid().ToString("N");
 
     /// <summary>A result the ENGINE composed because nothing was started: no filesystem boundary, or no executable to start.</summary>
     /// <remarks>Never the wrapper-rewritten form (<c>bwrap: execvp …</c>), whose line came from a child's stderr.</remarks>
@@ -435,12 +471,13 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         string? standardInput,
         TimeSpan timeout,
         CancellationToken cancellationToken) =>
-        TruncateForEvidence(await ExecuteRawAsync(executionPrefix,
+        TruncateForEvidence(await ExecuteRawAsync(NewExecutionId(executionPrefix),
             executable,
             arguments,
             workingDirectory,
             standardInput,
             timeout,
+            outputObserver: null,
             cancellationToken));
 
     /// <summary>
@@ -452,12 +489,13 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     ///     reason to hold the untruncated form is to read structure out of it, the evidence cap keeping the head
     ///     while the structure a test runner emits is at the tail.
     /// </remarks>
-    private async Task<SandboxCommandResult> ExecuteRawAsync(string executionPrefix,
+    private async Task<SandboxCommandResult> ExecuteRawAsync(string executionId,
         string executable,
         IReadOnlyList<string> arguments,
         string workingDirectory,
         string? standardInput,
         TimeSpan timeout,
+        ISandboxOutputObserver? outputObserver,
         CancellationToken cancellationToken)
     {
         var pipeDirectory = CreateTestPlatformPipeDirectory();
@@ -465,13 +503,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         {
             return await _sandbox.ExecuteAsync(_session.SandboxHandle, new SandboxCommandRequest
             {
-                ExecutionId = executionPrefix + "-" + Guid.NewGuid().ToString("N"),
+                ExecutionId = executionId,
                 Executable = executable,
                 Arguments = arguments,
                 WorkingDirectory = workingDirectory,
                 StandardInput = standardInput,
                 Environment = BuildEnvironment(pipeDirectory?.FullName),
-                Timeout = timeout
+                Timeout = timeout,
+                OutputObserver = outputObserver
             }, cancellationToken);
         }
         finally

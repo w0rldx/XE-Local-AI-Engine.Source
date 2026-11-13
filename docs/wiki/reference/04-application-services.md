@@ -302,6 +302,15 @@ lives on disk, under `runs/<run-id>/`. `AgentHomeToolResultContainmentTests` pla
 routes at once — a command's stdout, a written file's content, and the path the model chose for a second file — and
 grades the returned string on its absence.
 
+**The operator sees command output live; the outer model still does not.** In a chat turn every inner `run_command`
+streams its redacted output onto the OUTER `run_in_agent_home` tool card (`AgentHomeGoalExecutor` starts the view
+through `ToolCommandOutputScope.StartCommand`, labelled with the redacted executable and arguments), because
+`RunInAgentHomeToolHandler` binds the outer call before the inner agent replaces the ambient call context. The card
+keeps the last command's tail. That view goes to the operator only and changes neither the inner result nor the
+outer summary above. The operator can stop the running inner command from the card; the inner model then reads
+"run_command did not complete." with the provider's cancel text, as for any command that did not complete, and the
+run continues. Wire, stop route and persistence: [Chat](../05-chat.md#live-command-output-on-a-tool-card).
+
 **Writes the patch does not carry.** The loop records every path `write_file` wrote. At export time the node
 compares that list against the paths the diff names and classifies whatever is missing: hidden by a `.gitignore`,
 deleted again before the export ran, byte-identical to the baseline so there is nothing for a patch to carry, or

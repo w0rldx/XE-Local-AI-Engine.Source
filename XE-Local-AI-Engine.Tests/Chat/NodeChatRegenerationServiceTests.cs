@@ -4365,6 +4365,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         public event EventHandler<ToolCallLifecycleChangedEventArgs>? ToolCallLifecycleChanged;
 
+        public event EventHandler<ToolCallOutputChangedEventArgs>? ToolCallOutputChanged;
+
         public event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
 
         public event EventHandler<ApprovalRequestedChangedEventArgs>? ApprovalRequestedChanged;
@@ -4606,6 +4608,11 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         {
             ToolCallLifecycleChanged?.Invoke(this, new ToolCallLifecycleChangedEventArgs(payload));
             return Task.CompletedTask;
+        }
+
+        public void ReportToolCallOutput(ToolCallOutputPayload payload)
+        {
+            ToolCallOutputChanged?.Invoke(this, new ToolCallOutputChangedEventArgs(payload));
         }
 
         public Task ReportTurnNoticeAsync(TurnNoticePayload payload)

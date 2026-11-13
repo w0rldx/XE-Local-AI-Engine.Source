@@ -326,7 +326,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                                                 TTY = false
                                             }, cancellationToken);
 
-            var captured = await PumpAsync(stream, request.StandardInput, request.MaxCapturedBytes, cancellationToken);
+            var captured = await PumpAsync(stream, request.StandardInput, request.MaxCapturedBytes, request.OutputObserver, cancellationToken);
             var inspected = await _client.Exec.InspectContainerExecAsync(created.ID, cancellationToken);
 
             var (outputText, outputTruncated, errorText, errorTruncated) = captured;
@@ -921,7 +921,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                                                 },
                                                 deadline.Token);
 
-            var captured = await PumpAsync(stream, standardInput: null, WriteProbeCaptureBytes, deadline.Token);
+            var captured = await PumpAsync(stream, standardInput: null, WriteProbeCaptureBytes, observer: null, deadline.Token);
             var inspected = await _client.Exec.InspectContainerExecAsync(created.ID, deadline.Token);
             var exitCode = inspected.ExitCode ?? -1;
 
@@ -1312,18 +1312,19 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     private static async Task<ExecOutput> PumpAsync(MultiplexedStream stream,
         string? standardInput,
         int maxBytesPerStream,
+        ISandboxOutputObserver? observer,
         CancellationToken cancellationToken)
     {
         if (standardInput is null)
         {
-            return await ReadBoundedAsync(stream, maxBytesPerStream, cancellationToken);
+            return await ReadBoundedAsync(stream, maxBytesPerStream, observer, cancellationToken);
         }
 
         var payload = Encoding.UTF8.GetBytes(standardInput);
         var writeTask = SendAsync(stream, payload, cancellationToken);
         try
         {
-            return await ReadBoundedAsync(stream, maxBytesPerStream, cancellationToken);
+            return await ReadBoundedAsync(stream, maxBytesPerStream, observer, cancellationToken);
         }
         finally
         {
@@ -1346,6 +1347,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     /// </remarks>
     internal static async Task<ExecOutput> ReadBoundedAsync(MultiplexedStream stream,
         int maxBytesPerStream,
+        ISandboxOutputObserver? observer,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -1354,6 +1356,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         var buffer = new byte[ExecReadBufferBytes];
         var standardOutput = new BoundedCapture(maxBytesPerStream);
         var standardError = new BoundedCapture(maxBytesPerStream);
+        var standardOutputLines = observer is null ? null : new SandboxOutputLineSplitter(observer, SandboxOutputSource.StandardOutput);
+        var standardErrorLines = observer is null ? null : new SandboxOutputLineSplitter(observer, SandboxOutputSource.StandardError);
 
         while (true)
         {
@@ -1363,10 +1367,13 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                 break;
             }
 
-            var target = read.Target == MultiplexedStream.TargetStream.StandardError ? standardError : standardOutput;
-            target.Append(buffer, read.Count);
+            var isError = read.Target == MultiplexedStream.TargetStream.StandardError;
+            (isError ? standardError : standardOutput).Append(buffer, read.Count);
+            (isError ? standardErrorLines : standardOutputLines)?.Write(buffer.AsSpan(0, read.Count));
         }
 
+        standardOutputLines?.Complete();
+        standardErrorLines?.Complete();
         return new ExecOutput(standardOutput.Text, standardOutput.Truncated, standardError.Text, standardError.Truncated);
     }
 

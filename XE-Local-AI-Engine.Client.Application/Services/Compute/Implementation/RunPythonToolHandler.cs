@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 
 /// <summary>
 ///     <see cref="IClientLocalToolHandler" /> for <c>run_python</c> (ClientLocal). The bridge is JSON-in / JSON-out, so
@@ -39,6 +40,9 @@ internal sealed class RunPythonToolHandler : IClientLocalToolHandler, IClientLoc
     {
         ArgumentNullException.ThrowIfNull(jsonArguments);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // The script's live output goes to this call's card.
+        using var outputCall = ToolCommandOutputScope.BindCurrentCall();
 
         // The one thing that IS this handler's own: turning a JSON envelope into the typed request. Everything the
         // request then has to satisfy is the gateway's.

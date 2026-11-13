@@ -347,7 +347,7 @@ public sealed partial class InvocationRunner
         loop.FinalRoundReasoningStart = stream.ReasoningBuilder.Length;
 
         // Media rides beside the model's text (ToolResultMedia) so an image result persists as an image, never as a type name.
-        await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+        await transport.Dispatcher.ReportToolCallLifecycleAsync(ToolCommandOutputScope.WithCommandTail(new ToolCallLifecyclePayload
         {
             InvocationId = package.InvocationId,
             ToolCallId = resultCallId,
@@ -358,7 +358,7 @@ public sealed partial class InvocationRunner
             IsDenied = ToolInvocationObservabilityChatClient.IsDeniedResult(functionResult.Result),
             Media = ToolResultMedia.Get(functionResult.Result),
             DurationMs = ToolExecutionTimingScope.GetOrNull(resultCallId)
-        });
+        }));
 
         // ToolArgumentRepairAIFunction returns this structured result instead of throwing once repeated invalid-argument calls disable
         // a tool for the rest of the run; without this it is visible only in the tool-result JSON. Once per tool — every further call returns the same marker.

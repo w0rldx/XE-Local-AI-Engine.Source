@@ -39,6 +39,9 @@ internal static class DevelopmentValidationFailureCodes
     /// <summary>A validation command did not finish — it timed out or could not be launched.</summary>
     public const string CommandDidNotComplete = "command_did_not_complete";
 
+    /// <summary>The operator stopped a validation command from the live view; not a timeout.</summary>
+    public const string CommandStopped = "command_stopped";
+
     /// <summary>A validation command finished with a non-zero exit code.</summary>
     public const string CommandFailed = "command_failed";
 

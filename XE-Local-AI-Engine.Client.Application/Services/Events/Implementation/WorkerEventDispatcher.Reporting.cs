@@ -288,6 +288,13 @@ public sealed partial class WorkerEventDispatcher
         return Task.CompletedTask;
     }
 
+    public void ReportToolCallOutput(ToolCallOutputPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        ToolCallOutputChanged?.Invoke(this, new ToolCallOutputChangedEventArgs(payload));
+    }
+
     public Task ReportTurnNoticeAsync(TurnNoticePayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);

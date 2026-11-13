@@ -101,6 +101,16 @@ internal sealed class DevelopmentValidationVerdict
     /// </remarks>
     private static DevelopmentValidationVerdict? EvaluateCommand(DevelopmentCommandEvidence command)
     {
+        if (command.StoppedByOperator)
+        {
+            return new DevelopmentValidationVerdict
+            {
+                Passed = false,
+                FailureCode = DevelopmentValidationFailureCodes.CommandStopped,
+                FailureDetail = $"Command {command.CommandId} was stopped by the operator before it finished."
+            };
+        }
+
         // Ahead of "did not finish": the operator needs to hear what to install. The adapter's hint is the specific
         // answer; the launch-failure prefix covers every profile, including those whose adapter does not look.
         if (command.TestOutcome is { ParseFailureCode: DevelopmentTestParseFailureCodes.RunnerNotInstalled } missing)

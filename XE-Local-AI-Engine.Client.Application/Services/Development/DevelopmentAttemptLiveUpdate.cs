@@ -12,7 +12,10 @@ public enum DevelopmentAttemptLiveUpdateKind
     Metrics,
     Progress,
     Warning,
-    Terminal
+    Terminal,
+
+    /// <summary>A batch of a running command's redacted output lines in <see cref="DevelopmentAttemptLiveUpdate.OutputDelta" />; lossy.</summary>
+    CommandOutput
 }
 
 public sealed record DevelopmentAttemptLiveUpdate
@@ -45,6 +48,13 @@ public sealed record DevelopmentAttemptLiveUpdate
     public int CommandCount { get; init; }
     public string? CurrentToolId { get; init; }
     public string? CurrentCommandId { get; init; }
+
+    /// <summary>The sandbox execution id of the running command; the stop route targets it.</summary>
+    public string? CurrentCommandExecutionId { get; init; }
+
+    /// <summary>On a command update: all output lines of that command not shown live so far (cumulative).</summary>
+    public int? CommandOutputSkippedLines { get; init; }
+
     public long? CurrentOperationElapsedMilliseconds { get; init; }
     public int ChangedFileCount { get; init; }
     public long PatchByteCount { get; init; }
@@ -62,7 +72,8 @@ public sealed record DevelopmentAttemptLiveUpdate
         Kind is DevelopmentAttemptLiveUpdateKind.Output
             or DevelopmentAttemptLiveUpdateKind.Activity
             or DevelopmentAttemptLiveUpdateKind.Metrics
-            or DevelopmentAttemptLiveUpdateKind.Progress;
+            or DevelopmentAttemptLiveUpdateKind.Progress
+            or DevelopmentAttemptLiveUpdateKind.CommandOutput;
 }
 
 public sealed class DevelopmentAttemptLiveSnapshot

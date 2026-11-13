@@ -6,6 +6,7 @@ import {
 	mergePendingPromptIntoToolEntries,
 	mergeStreamText,
 	mergeToolEntry,
+	mergeToolOutputIntoToolEntries,
 	nextReasoningParts,
 	splitInterimText,
 	splitStreamedContent,
@@ -48,6 +49,8 @@ export const nodeChatStreamEventTypes = {
 	// A pending `ask_user` question: flips the matching tool card into a waiting state carrying the question payload
 	// the inline answer card renders. Same contract as approvalRequested — the turn stays live while the user answers.
 	questionRequested: nodeChatToolStreamEventTypes.questionRequested,
+	// A running tool's command output: merged into its card, never into content/status.
+	toolCallOutput: nodeChatToolStreamEventTypes.toolCallOutput,
 	// A non-fatal "turn notice" (model substitution, tool disabled, history truncated). Never mutates
 	// content/status — it only appends a notice part to the current assistant turn and keeps the turn live.
 	assistantNotice: "assistant-notice",
@@ -231,6 +234,9 @@ export function applyNodeChatStreamEvent(
 	// The prior streaming state, threaded by the stream loops. Only an assistant-snapshot reads it, to keep the
 	// runtime phase alive across a snapshot (the phase is not on ChatMessageModel, so it cannot be re-derived).
 	previous?: ChatStreamingState,
+	// When the browser received the event (epoch ms), passed in by the stream loops so this stays pure. Only command
+	// output reads it; absent, the event's own send time stands in.
+	receivedAtMs?: number,
 ): AppliedNodeChatStreamEvent {
 	const terminalStatus = terminalStatusForEvent(event.type);
 	const isTerminal = terminalStatus !== undefined;
@@ -312,6 +318,40 @@ export function applyNodeChatStreamEvent(
 		const nextConversation = current
 			? { ...conversation, messages: replaceMessage(conversation.messages, { ...current, parts: nextParts }) }
 			: conversation;
+		return {
+			conversation: nextConversation,
+			streamingMessage: {
+				conversationId: event.conversationId,
+				messageId: event.messageId,
+				content: current?.content ?? "",
+				reasoning: current?.reasoning,
+				parts: nextParts,
+				startedAt: current?.createdAt ?? isoFromUnixMilliseconds(event.occurredAtUtc),
+				isActive: true,
+				inputTokens: current?.inputTokens,
+				outputTokens: current?.outputTokens,
+				totalTokens: current?.totalTokens,
+				reasoningTokens: current?.reasoningTokens,
+			},
+			isTerminal: false,
+		};
+	}
+
+	// A tool's live command output: merged into its card by tool-call id and nothing else. Handled here rather than
+	// left to fall through, because the generic path below would rebuild the assistant message from an event that
+	// carries no text, status or tokens. Like the prompt events above it keeps the turn live and yields no timeline entry.
+	if (event.type === nodeChatStreamEventTypes.toolCallOutput) {
+		const current = conversation.messages.find((message) => message.id === event.messageId && message.role === "assistant");
+		const { reasoningSegments, toolEntries, textSegments, noticeEntries } = decomposeParts(current?.parts);
+		const nextToolEntries = mergeToolOutputIntoToolEntries(toolEntries, event, receivedAtMs ?? event.occurredAtUtc);
+		const nextParts =
+			nextToolEntries === toolEntries
+				? current?.parts
+				: buildMessageParts(reasoningSegments, nextToolEntries, textSegments, noticeEntries);
+		const nextConversation =
+			current && nextParts !== current.parts
+				? { ...conversation, messages: replaceMessage(conversation.messages, { ...current, parts: nextParts }) }
+				: conversation;
 		return {
 			conversation: nextConversation,
 			streamingMessage: {

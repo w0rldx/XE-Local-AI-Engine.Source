@@ -379,6 +379,43 @@ describe("node chat mapper", () => {
 		expect(message.parts?.[2]).toMatchObject({ kind: "text", text: "One more lookup. " });
 	});
 
+	it("maps a tool part's persisted output tail as a finished command, and none where the call ran no command", () => {
+		const message = mapSingleMessage({
+			parts: [
+				{
+					kind: "tool",
+					sequence: 3,
+					toolCallId: "call-1",
+					name: "run_python",
+					state: "received",
+					result: "ok",
+					outputTail: [
+						{ stream: "stdout", text: "tick" },
+						{ stream: "stderr", text: "warn" },
+					],
+					outputSkippedLines: 12,
+					lastCommandLabel: "python script.py",
+				},
+				{ kind: "tool", sequence: 5, toolCallId: "call-2", name: "get_time", state: "received", result: "noon" },
+			],
+		});
+
+		const [withTail, withoutTail] = message.parts ?? [];
+		expect(withTail).toMatchObject({
+			commandOutput: {
+				lines: [
+					{ stream: "stdout", text: "tick" },
+					{ stream: "stderr", text: "warn" },
+				],
+				hiddenLines: 0,
+				skippedLines: 12,
+				label: "python script.py",
+				running: false,
+			},
+		});
+		expect(withoutTail?.kind === "tool" ? withoutTail.commandOutput : "not a tool").toBeUndefined();
+	});
+
 	it("keys a tool part on the message id + sequence when the wire omits the tool-call id", () => {
 		const message = mapSingleMessage({
 			parts: [{ kind: "tool", sequence: 4, name: "noop", state: "requesting" }],

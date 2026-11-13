@@ -157,6 +157,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // Tracks each turn's armed llama.cpp completion so "Answer now" can end its reasoning from another call stack.
     private readonly InvocationReasoningControl _reasoningControl;
 
+    // The sandbox command each tool call runs, so the operator can stop that one command from another call stack.
+    private readonly ToolCommandStopRegistry _toolCommandStops;
+
     public InvocationRunner(Lazy<IWorkerEventDispatcher> eventDispatcher,
         IInvocationAgentFactory invocationAgentFactory,
         IOrchestrationAgentFactory orchestrationAgentFactory,
@@ -177,6 +180,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IServiceScopeFactory scopeFactory,
         IKnowledgeModelPrewarmer knowledgeModelPrewarmer,
         InvocationReasoningControl reasoningControl,
+        ToolCommandStopRegistry toolCommandStops,
         ILogger<InvocationRunner> logger,
         TimeProvider timeProvider)
     {
@@ -220,6 +224,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _knowledgeModelPrewarmer = knowledgeModelPrewarmer;
         ArgumentNullException.ThrowIfNull(reasoningControl);
         _reasoningControl = reasoningControl;
+        ArgumentNullException.ThrowIfNull(toolCommandStops);
+        _toolCommandStops = toolCommandStops;
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -660,6 +666,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
         else
         {
+            // The live output of the sandbox commands this turn's tool calls run, keyed by the message the stop route addresses.
+            using var commandOutput = ToolCommandOutputScope.Open(package.InvocationId, turn.Context.MessageId, dispatcher, _toolCommandStops, _timeProvider, _logger);
             try
             {
                 await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken);

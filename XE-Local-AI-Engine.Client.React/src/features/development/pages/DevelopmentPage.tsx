@@ -66,6 +66,9 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 		untiedEvents,
 		latestAttempt,
 		activeAttempt,
+		liveAttempt,
+		stopCommand,
+		stoppingExecutionId,
 		nextActionKey,
 		nextActionDefault,
 		live,
@@ -284,8 +287,9 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 
 								<SectionCard>
 									<DevelopmentLivePanel
-										attempt={activeAttempt ?? latestAttempt}
+										attempt={liveAttempt ?? latestAttempt}
 										live={live}
+										commandStop={{ stop: stopCommand, pendingExecutionId: stoppingExecutionId }}
 										artifacts={artifacts}
 										events={events}
 									/>

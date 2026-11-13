@@ -1,5 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
+import { ApiError } from "@/core/api/errors/ApiError";
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import {
 	applyDevelopmentPatchMutation,
 	cancelDevelopmentAttemptMutation,
@@ -19,7 +22,9 @@ import {
 	registerDevelopmentTemplateMutation,
 	removeDevelopmentTemplateMutation,
 	startDevelopmentNextActionMutation,
+	stopDevelopmentAttemptCommandMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { toast } from "@/core/ui/notifications/Toast";
 import {
 	type DevelopmentProjectDetail,
 	type DevelopmentTemplate,
@@ -118,7 +123,10 @@ export function useDevelopmentProject(projectId: string | null, enabled = true) 
  * outside this page, and no hub announces them.
  */
 export function developmentProjectPollInterval(query: { state: { data?: DevelopmentProjectDetail } }): number {
-	return query.state.data?.tasks?.some((task) => task.attempts?.some(isActiveAttempt)) ? 3000 : 5000;
+	// A task in Validation runs commands with no active attempt, and only this poll says when it starts and ends.
+	return query.state.data?.tasks?.some((task) => task.attempts?.some(isActiveAttempt) || task.task?.status === "Validation")
+		? 3000
+		: 5000;
 }
 
 /**
@@ -255,6 +263,24 @@ export function useCancelDevelopmentAttempt() {
 	return useMutation({
 		...cancelDevelopmentAttemptMutation(),
 		onSettled: () => invalidateDevelopment(queryClient),
+	});
+}
+
+/**
+ * Stops one running attempt command by its execution id. Its completed update says it was stopped, so a success needs
+ * no message; a 404 means the command had already ended.
+ */
+export function useStopDevelopmentAttemptCommand() {
+	const { t } = useTranslation();
+	return useMutation({
+		...stopDevelopmentAttemptCommandMutation(),
+		onError: (error) => {
+			if (error instanceof ApiError && error.statusCode === 404) {
+				toast.info(t("pages.development.live.stopNothingRunning", "The command had already finished."));
+				return;
+			}
+			toast.error(apiErrorMessage(error, t("pages.development.live.stopFailed", "Could not stop the command.")));
+		},
 	});
 }
 

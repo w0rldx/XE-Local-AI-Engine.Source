@@ -268,6 +268,9 @@
 			"live": "läuft",
 			"name": "Tool",
 			"noOutput": "(keine Ausgabe)",
+			"outputLabel": "Befehlsausgabe",
+			"outputLabelExit": "Befehlsausgabe (Exit-Code {{code}})",
+			"outputRegion": "Ausgabe von {{tool}}",
 			"patchApply": {
 				"appliedTitle": "Auf Ihre Ordner angewendet",
 				"apply": "Auf meine Ordner anwenden",
@@ -307,6 +310,9 @@
 			},
 			"resultLabel": "Ergebnis",
 			"sending": "Wird gesendet",
+			"stop": "Befehl stoppen",
+			"stopFailed": "Der Befehl konnte nicht gestoppt werden.",
+			"stopNothingRunning": "Der Befehl war bereits beendet.",
 			"thinkingLive": "Denkt nach…"
 		},
 		"webRequest": {
@@ -415,6 +421,16 @@
 		},
 		"layout": {
 			"skipToContent": "Zum Hauptinhalt springen"
+		},
+		"liveOutput": {
+			"empty": "Noch keine Ausgabe.",
+			"hiddenLines_one": "{{count}} frühere Zeile ausgeblendet",
+			"hiddenLines_other": "{{count}} frühere Zeilen ausgeblendet",
+			"running": "Läuft seit {{elapsed}}, letzte Ausgabe vor {{ago}}",
+			"runningNoOutput": "Läuft seit {{elapsed}}, noch keine Ausgabe",
+			"skippedLines_one": "{{count}} Zeile übersprungen",
+			"skippedLines_other": "{{count}} Zeilen übersprungen",
+			"stderrPrefix": "stderr: "
 		},
 		"markdownEditor": {
 			"edit": "Bearbeiten",
@@ -3229,6 +3245,9 @@
 			},
 			"live": {
 				"activityUpdated": "Aktivität aktualisiert",
+				"commandEnded": "Beendet",
+				"commandOutputRegion": "Ausgabe von {{command}}",
+				"commandRunning": "Läuft",
 				"commands": "Befehle",
 				"context": "Kontext-Reserve",
 				"details": {
@@ -3258,6 +3277,9 @@
 				"reasoningTokens": "Reasoning-Tokens",
 				"rounds": "Anbieter-Runden",
 				"speed": "Ausgabe-Tokens/s",
+				"stopCommand": "Befehl stoppen",
+				"stopFailed": "Der Befehl konnte nicht gestoppt werden.",
+				"stopNothingRunning": "Der Befehl war bereits beendet.",
 				"tabs": {
 					"commands": "Befehle",
 					"details": "Details",
@@ -3403,6 +3425,7 @@
 				"failure": {
 					"commandDidNotComplete": "Ein Validierungsbefehl wurde nicht vollständig ausgeführt.",
 					"commandFailed": "Ein Validierungsbefehl wurde mit einem Fehlercode beendet.",
+					"commandStopped": "Ein Validierungsbefehl wurde manuell gestoppt, daher hat dieser Lauf nichts beurteilt.",
 					"missingCommandEvidence": "Im Bericht fehlt der Nachweis für einen Befehl, den dieses Profil verlangt.",
 					"noTestsExecuted": "Die Suite lief, hat aber keine Tests ausgeführt — dieser Lauf belegt nur den Build, nicht das Verhalten.",
 					"runnerNotInstalled": "Das Programm für einen Validierungsbefehl konnte auf diesem Host nicht gestartet werden, daher wurde nichts vom Coder Geschriebene geprüft: Es ist nicht installiert, oder die Dateisystemgrenze konnte es nicht erreichen. Die Details nennen den Grund; XE installiert es nie.",

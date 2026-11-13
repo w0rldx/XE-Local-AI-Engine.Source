@@ -859,6 +859,12 @@ public sealed class ToolApprovalCoordinatorTests
             remove => _inner.ToolCallLifecycleChanged -= value;
         }
 
+        public event EventHandler<ToolCallOutputChangedEventArgs>? ToolCallOutputChanged
+        {
+            add => _inner.ToolCallOutputChanged += value;
+            remove => _inner.ToolCallOutputChanged -= value;
+        }
+
         public event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged
         {
             add => _inner.TurnNoticeChanged += value;
@@ -937,6 +943,9 @@ public sealed class ToolApprovalCoordinatorTests
 
         public Task ReportToolCallLifecycleAsync(ToolCallLifecyclePayload payload) =>
             _inner.ReportToolCallLifecycleAsync(payload);
+
+        public void ReportToolCallOutput(ToolCallOutputPayload payload) =>
+            _inner.ReportToolCallOutput(payload);
 
         public Task ReportTurnNoticeAsync(TurnNoticePayload payload) =>
             _inner.ReportTurnNoticeAsync(payload);

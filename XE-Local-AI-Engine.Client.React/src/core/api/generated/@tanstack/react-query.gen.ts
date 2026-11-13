@@ -446,7 +446,9 @@ import {
 	startWhisperCppSourceBuild,
 	startWorkSession,
 	steerGraphWorkflowNodeRun,
+	stopDevelopmentAttemptCommand,
 	stopExternalApp,
+	stopNodeChatToolCommand,
 	stopProcessCapture,
 	submitBenchmarkRunReview,
 	suggestComparison,
@@ -1571,9 +1573,12 @@ import type {
 	SteerGraphWorkflowNodeRunData,
 	SteerGraphWorkflowNodeRunError,
 	SteerGraphWorkflowNodeRunResponse,
+	StopDevelopmentAttemptCommandData,
 	StopExternalAppData,
 	StopExternalAppError,
 	StopExternalAppResponse,
+	StopNodeChatToolCommandData,
+	StopNodeChatToolCommandError,
 	StopProcessCaptureData,
 	StopProcessCaptureResponse,
 	SubmitBenchmarkRunReviewData,
@@ -4567,6 +4572,26 @@ export const answerNowNodeChatMessageMutation = (
 	return mutationOptions;
 };
 
+export const stopNodeChatToolCommandMutation = (
+	options?: Partial<Options<StopNodeChatToolCommandData>>,
+): UseMutationOptions<unknown, AxiosError<StopNodeChatToolCommandError>, Options<StopNodeChatToolCommandData>> => {
+	const mutationOptions: UseMutationOptions<
+		unknown,
+		AxiosError<StopNodeChatToolCommandError>,
+		Options<StopNodeChatToolCommandData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await stopNodeChatToolCommand({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const resolveUserQuestionMutation = (
 	options?: Partial<Options<ResolveUserQuestionData>>,
 ): UseMutationOptions<ResolveUserQuestionResponse, AxiosError<ResolveUserQuestionError>, Options<ResolveUserQuestionData>> => {
@@ -5171,6 +5196,22 @@ export const cancelDevelopmentAttemptMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await cancelDevelopmentAttempt({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const stopDevelopmentAttemptCommandMutation = (
+	options?: Partial<Options<StopDevelopmentAttemptCommandData>>,
+): UseMutationOptions<unknown, AxiosError<DefaultError>, Options<StopDevelopmentAttemptCommandData>> => {
+	const mutationOptions: UseMutationOptions<unknown, AxiosError<DefaultError>, Options<StopDevelopmentAttemptCommandData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await stopDevelopmentAttemptCommand({
 				...options,
 				...fnOptions,
 				throwOnError: true,

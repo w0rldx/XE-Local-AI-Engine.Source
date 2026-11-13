@@ -31,6 +31,7 @@ import {
 	useRegisterDevelopmentTemplate,
 	useRemoveDevelopmentTemplate,
 	useStartDevelopmentNextAction,
+	useStopDevelopmentAttemptCommand,
 } from "@/features/development/queries/useDevelopment";
 
 export interface DevelopmentPageControllerOptions {
@@ -108,7 +109,24 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	const latestAttempt = attempts.at(-1) ?? null;
 	const activeAttempt = attempts.find(isActiveAttempt) ?? null;
 	const [nextActionKey, nextActionDefault] = nextActionLabel(task?.status, latestAttempt?.status);
-	const live = useDevelopmentAttemptHub(detail?.project?.id ?? null, task?.id ?? null, activeAttempt?.id ?? null);
+	// Validation has no attempt of its own: it streams under the coder attempt it judges, the task's latest coder
+	// attempt (listed oldest first), and only once that attempt succeeded.
+	const judgedCoderAttempt =
+		activeAttempt === null && task?.status === "Validation"
+			? attempts.findLast((attempt) => attempt.role === "Coder")
+			: undefined;
+	const liveAttempt = activeAttempt ?? (judgedCoderAttempt?.status === "Succeeded" ? judgedCoderAttempt : null);
+	// The same coder attempt id carries two streams, its own run and then validation, so the phase keys the subscription.
+	const live = useDevelopmentAttemptHub(
+		detail?.project?.id ?? null,
+		task?.id ?? null,
+		liveAttempt?.id ?? null,
+		judgedCoderAttempt === undefined ? "attempt" : "validation",
+		projectQuery.dataUpdatedAt,
+	);
+	const stopCommandMutation = useStopDevelopmentAttemptCommand();
+	// Only the Stop that was pressed shows as busy; the others stay usable.
+	const stoppingExecutionId = stopCommandMutation.isPending ? (stopCommandMutation.variables?.path.executionId ?? null) : null;
 	// The Graph Workflows run that owns this task: its STATUS decides who may apply. Read only while the module is offered.
 	const workflowEngineEnabled = nodeCapabilities.graphWorkflows;
 	const workflowRunQuery = useDevelopmentTaskWorkflowRun(task?.workflowRunId, workflowEngineEnabled);
@@ -221,6 +239,15 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 		cancelMutation.mutate({ path: { projectId: detail.project.id, taskId: task.id, attemptId: activeAttempt.id } });
 	};
 
+	const stopCommand = (executionId: string): void => {
+		if (!detail?.project?.id || !task?.id || !liveAttempt?.id) {
+			return;
+		}
+		stopCommandMutation.mutate({
+			path: { projectId: detail.project.id, taskId: task.id, attemptId: liveAttempt.id, executionId },
+		});
+	};
+
 	const preview = (): void => {
 		if (!repositoryReady || !detail?.project?.id || !task?.id) {
 			return;
@@ -314,6 +341,9 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 		createProject,
 		startNext,
 		cancelActive,
+		liveAttempt,
+		stopCommand,
+		stoppingExecutionId,
 		preview,
 		apply,
 		reconnectRepository,

@@ -3,11 +3,10 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Client.Common;
 
 internal static partial class DevelopmentAttemptLiveSanitizer
 {
-    private const string Redacted = "[redacted]";
-
     public static DevelopmentAttemptLiveUpdate Sanitize(DevelopmentAttemptLiveUpdate update, int maxTextCharacters)
     {
         ArgumentNullException.ThrowIfNull(update);
@@ -19,6 +18,7 @@ internal static partial class DevelopmentAttemptLiveSanitizer
             CurrentActivity = Text(update.CurrentActivity, maxTextCharacters),
             CurrentToolId = Identifier(update.CurrentToolId),
             CurrentCommandId = Identifier(update.CurrentCommandId),
+            CurrentCommandExecutionId = Identifier(update.CurrentCommandExecutionId),
             SubjectHash = Fingerprint(update.SubjectHash),
             WarningMessage = Text(update.WarningMessage, maxTextCharacters)
         };
@@ -59,19 +59,11 @@ internal static partial class DevelopmentAttemptLiveSanitizer
             return value;
         }
 
-        var safe = DevelopmentCredential().Replace(value, Redacted);
-        safe = CommonCredential().Replace(safe, "${label}" + Redacted);
+        var safe = CredentialRedaction.Redact(value);
         safe = WindowsAbsolutePath().Replace(safe, "[path]");
         safe = UnixAbsolutePath().Replace(safe, "[path]");
         return safe.Length <= maxCharacters ? safe : safe[..maxCharacters];
     }
-
-    [GeneratedRegex(@"![A-Za-z][A-Za-z0-9]{11,}", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking | RegexOptions.ExplicitCapture, 100)]
-    private static partial Regex DevelopmentCredential();
-
-    [GeneratedRegex(@"(?i)(?<label>password|passwd|secret|api[-_]?key|authorization|bearer)\s*[:=]\s*[^\s,;]+",
-        RegexOptions.CultureInvariant | RegexOptions.NonBacktracking | RegexOptions.ExplicitCapture, 100)]
-    private static partial Regex CommonCredential();
 
     [GeneratedRegex("""(?:[A-Za-z]:\\|\\\\)[^\r\n\t"']+""", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking | RegexOptions.ExplicitCapture, 100)]
     private static partial Regex WindowsAbsolutePath();

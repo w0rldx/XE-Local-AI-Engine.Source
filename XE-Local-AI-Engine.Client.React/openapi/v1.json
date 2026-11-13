@@ -7291,6 +7291,65 @@
         ]
       }
     },
+    "/api/local/v1/chat/messages/{messageId}/tool-calls/{toolCallId}/stop": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "stopNodeChatToolCommand",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "toolCallId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/chat/questions/resolve": {
       "post": {
         "tags": [
@@ -8697,6 +8756,73 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/attempts/{attemptId}/commands/{executionId}/stop": {
+      "post": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "stopDevelopmentAttemptCommand",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "attemptId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "executionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
           }
         },
         "security": [
@@ -31877,6 +32003,10 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentAttemptCommandRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentAttemptRequest": {
         "type": "object",
         "additionalProperties": false
@@ -40004,6 +40134,10 @@
             }
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1StopNodeChatToolCommandRequest": {
+        "type": "object",
+        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsLocalChatV1UploadConversationFileRequest": {
         "type": "object",
@@ -51130,6 +51264,22 @@
           "requiresApproval": {
             "type": "boolean",
             "nullable": true
+          },
+          "outputTail": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesChatNodeChatToolOutputLine"
+            }
+          },
+          "outputSkippedLines": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "lastCommandLabel": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -51199,6 +51349,18 @@
             "type": "integer",
             "format": "int32",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesChatNodeChatToolOutputLine": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "stream": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
           }
         }
       },

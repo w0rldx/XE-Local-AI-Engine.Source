@@ -337,6 +337,14 @@ public sealed class AnswerNowNodeChatMessageRequest
     public Guid MessageId { get; init; }
 }
 
+/// <summary>The tool call, on the assistant message its turn is writing, whose running sandbox command should stop.</summary>
+public sealed class StopNodeChatToolCommandRequest
+{
+    public Guid MessageId { get; init; }
+
+    public string ToolCallId { get; init; } = string.Empty;
+}
+
 /// <summary>
 ///     The operator's decision on a pending tool-approval request.
 /// </summary>

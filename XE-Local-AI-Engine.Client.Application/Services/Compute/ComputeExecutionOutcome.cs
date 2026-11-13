@@ -54,6 +54,9 @@ internal sealed class ComputeExecutionOutcome
 
     public required SandboxCommandResult? Result { get; init; }
 
+    /// <summary>The operator stopped the script before it finished (the result is not completed); never set on a timeout.</summary>
+    public bool StoppedByOperator { get; init; }
+
     public static ComputeExecutionOutcome Refused(string refusalCode, string refusalMessage) =>
         new()
         {
@@ -63,12 +66,13 @@ internal sealed class ComputeExecutionOutcome
             Result = null
         };
 
-    public static ComputeExecutionOutcome Executed(SandboxCommandResult result) =>
+    public static ComputeExecutionOutcome Executed(SandboxCommandResult result, bool stoppedByOperator = false) =>
         new()
         {
             Ran = true,
             RefusalCode = null,
             RefusalMessage = null,
-            Result = result
+            Result = result,
+            StoppedByOperator = stoppedByOperator
         };
 }

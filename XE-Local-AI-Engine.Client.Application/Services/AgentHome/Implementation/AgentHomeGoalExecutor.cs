@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -575,6 +576,13 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
             commandCts.CancelAfter(commandTimeout);
 
             var startedTimestamp = _executor._timeProvider.GetTimestamp();
+
+            // Observe-only, on the OUTER run_in_agent_home card when a chat tool call bound one; the label is redacted like the run log.
+            using var liveOutput = ToolCommandOutputScope.StartCommand(_executor._provider,
+                _request.Handle,
+                executionId,
+                _request.Handle.WorkingRoot,
+                string.Join(' ', arguments.Prepend(executable)));
             SandboxCommandResult result;
             try
             {
@@ -585,9 +593,11 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
                         Executable = executable,
                         Arguments = [.. arguments],
                         WorkingDirectory = AgentHomeGit.WorkspaceSelectedRoot,
-                        Timeout = commandTimeout
+                        Timeout = commandTimeout,
+                        OutputObserver = liveOutput?.Observer
                     },
                     commandCts.Token);
+                liveOutput?.Complete(result);
             }
             catch (OperationCanceledException) when (commandCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
@@ -614,7 +624,7 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
                 Completed = result.Completed
             });
 
-            return RenderCommandResult(result);
+            return RenderCommandResult(result, stoppedByOperator: liveOutput?.StopRequested == true);
         }
 
         /// <summary>
@@ -626,7 +636,7 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         ///     content, plus a context-sized truncation and the removal of the sandbox's own root from any path a
         ///     command printed.
         /// </remarks>
-        private string RenderCommandResult(SandboxCommandResult result)
+        private string RenderCommandResult(SandboxCommandResult result, bool stoppedByOperator)
         {
             var captured = new StringBuilder();
             if (!string.IsNullOrEmpty(result.StandardOutput))
@@ -645,9 +655,16 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
             }
 
             var (body, truncated) = TruncateToByteBudget(RedactSandboxRoot(captured.ToString()), _executor._options.MaxCommandOutputBytes);
-            var outcome = result.Completed
-                ? string.Create(CultureInfo.InvariantCulture, $"run_command finished with exit code {result.ExitCode}.")
-                : "run_command did not complete.";
+            // The stop wording matches run_python's, so the model never mistakes an operator stop for a failure to retry.
+            var outcome = "run_command did not complete.";
+            if (result.Completed)
+            {
+                outcome = string.Create(CultureInfo.InvariantCulture, $"run_command finished with exit code {result.ExitCode}.");
+            }
+            else if (stoppedByOperator)
+            {
+                outcome = "The operator stopped this command before it finished.";
+            }
 
             var rendered = new StringBuilder();
             _ = rendered.Append(outcome)

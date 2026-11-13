@@ -13,6 +13,11 @@ describe("developmentProjectPollInterval", () => {
 		expect(developmentProjectPollInterval({ state: { data: detailWithAttempts("Pending") } })).toBe(3000);
 	});
 
+	it("polls at 3 s while a task is in Validation, which runs without an active attempt", () => {
+		const data = { tasks: [{ task: { status: "Validation" }, attempts: [{ status: "Succeeded" }] }] } as DevelopmentProjectDetail;
+		expect(developmentProjectPollInterval({ state: { data } })).toBe(3000);
+	});
+
 	it("falls back to the 5 s page-scoped cadence when nothing runs", () => {
 		expect(developmentProjectPollInterval({ state: { data: detailWithAttempts("Succeeded", "Failed") } })).toBe(5000);
 		expect(developmentProjectPollInterval({ state: {} })).toBe(5000);

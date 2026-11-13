@@ -28,6 +28,9 @@ public static partial class LocalApiRoutes
         public const string TaskById = "development/projects/{projectId}/tasks/{taskId}";
         public const string NextAction = "development/projects/{projectId}/tasks/{taskId}/next-action";
         public const string CancelAttempt = "development/projects/{projectId}/tasks/{taskId}/attempts/{attemptId}/cancel";
+
+        // Stops one running sandbox command of the attempt; the attempt itself continues and sees a not-completed result.
+        public const string StopAttemptCommand = "development/projects/{projectId}/tasks/{taskId}/attempts/{attemptId}/commands/{executionId}/stop";
         public const string Events = "development/projects/{projectId}/events";
         public const string TaskArtifacts = "development/projects/{projectId}/tasks/{taskId}/artifacts";
         public const string ArtifactById = "development/projects/{projectId}/tasks/{taskId}/artifacts/{artifactId}";

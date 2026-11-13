@@ -54,6 +54,7 @@ internal sealed class ChatStreamEventForwarder : IDisposable
 
         _dispatcher.InvocationStateChanged += OnInvocationStateChanged;
         _dispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
+        _dispatcher.ToolCallOutputChanged += OnToolCallOutputChanged;
         _dispatcher.TurnNoticeChanged += OnTurnNoticeChanged;
         _dispatcher.ApprovalRequestedChanged += OnApprovalRequestedChanged;
         _dispatcher.UserQuestionRequestedChanged += OnUserQuestionRequestedChanged;
@@ -68,6 +69,7 @@ internal sealed class ChatStreamEventForwarder : IDisposable
 
         _dispatcher.InvocationStateChanged -= OnInvocationStateChanged;
         _dispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
+        _dispatcher.ToolCallOutputChanged -= OnToolCallOutputChanged;
         _dispatcher.TurnNoticeChanged -= OnTurnNoticeChanged;
         _dispatcher.ApprovalRequestedChanged -= OnApprovalRequestedChanged;
         _dispatcher.UserQuestionRequestedChanged -= OnUserQuestionRequestedChanged;
@@ -89,6 +91,17 @@ internal sealed class ChatStreamEventForwarder : IDisposable
             ChatStreamEventMapper.AccumulateToolPart(_parts, args.Payload, toolSequence);
             _eventSink.TryWrite(ChatStreamEventMapper.ToolCallEvent(_correlation.ConversationId, _correlation.MessageId, _correlation.RequestId, args.Payload, NowUnixMilliseconds(),
                 toolSequence));
+        }
+    }
+
+    // Coalesced and bounded at the source, so frames reach the sink already batched; like its siblings, a frame the sink drops keeps
+    // its number and the sink's reconcile repairs the gap. Never accumulated into parts[]: the completed phase carries the tail.
+    private void OnToolCallOutputChanged(object? sender, ToolCallOutputChangedEventArgs args)
+    {
+        if (args.Payload.InvocationId == _requestId)
+        {
+            _eventSink.TryWrite(ChatStreamEventMapper.ToolCallOutputEvent(_correlation.ConversationId, _correlation.MessageId, _correlation.RequestId, args.Payload,
+                NowUnixMilliseconds(), _sequence.Next()));
         }
     }
 

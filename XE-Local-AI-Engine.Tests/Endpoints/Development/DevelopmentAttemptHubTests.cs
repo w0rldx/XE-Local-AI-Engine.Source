@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Endpoints.Development.V1;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -138,6 +139,67 @@ public sealed class DevelopmentAttemptHubTests
     }
 
     [Test]
+    public async Task SubscribeAsync_WhenTheTaskValidatesItsSucceededCoderAttempt_SubscribesToTheValidationStream()
+    {
+        var service = ServiceReturning(DevelopmentTaskStatus.Validation,
+            Attempt(Guid.NewGuid(), DevelopmentAttemptStatus.Failed),
+            Attempt(AttemptId, DevelopmentAttemptStatus.Succeeded));
+        await using var factory = EnabledFactory(service);
+        var broker = factory.Services.GetRequiredService<IDevelopmentAttemptLiveBroker>();
+        AssertEx.True(broker.Register(AttemptId));
+        await using var connection = CreateConnection(factory);
+        await connection.StartAsync();
+
+        var snapshot = await connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId);
+
+        AssertEx.Equal(AttemptId, snapshot.AttemptId);
+    }
+
+    [Test]
+    public async Task SubscribeAsync_AfterValidationEnded_RejectsTheSucceededCoderAttempt()
+    {
+        var service = ServiceReturning(DevelopmentTaskStatus.InReview, Attempt(AttemptId, DevelopmentAttemptStatus.Succeeded));
+        await using var factory = EnabledFactory(service);
+        AssertEx.True(factory.Services.GetRequiredService<IDevelopmentAttemptLiveBroker>().Register(AttemptId));
+        await using var connection = CreateConnection(factory);
+        await connection.StartAsync();
+
+        var exception = await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId));
+
+        AssertEx.Contains(exception.Message, "active Development attempt");
+    }
+
+    [Test]
+    public async Task SubscribeAsync_WhileValidating_RejectsACoderAttemptThatIsNotTheTasksLatest()
+    {
+        var service = ServiceReturning(DevelopmentTaskStatus.Validation,
+            Attempt(AttemptId, DevelopmentAttemptStatus.Succeeded),
+            Attempt(Guid.NewGuid(), DevelopmentAttemptStatus.Succeeded));
+        await using var factory = EnabledFactory(service);
+        AssertEx.True(factory.Services.GetRequiredService<IDevelopmentAttemptLiveBroker>().Register(AttemptId));
+        await using var connection = CreateConnection(factory);
+        await connection.StartAsync();
+
+        var exception = await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId));
+
+        AssertEx.Contains(exception.Message, "active Development attempt");
+    }
+
+    [Test]
+    public async Task StopCommand_WhenItRacesTheSandboxGoingAway_Returns404()
+    {
+        var service = ServiceReturning(Attempt(AttemptId, DevelopmentAttemptStatus.Running));
+        await using var factory = EnabledFactory(service);
+        var broker = factory.Services.GetRequiredService<IDevelopmentAttemptLiveBroker>();
+        AssertEx.True(broker.Register(AttemptId));
+        AssertEx.True(broker.TrackCommand(AttemptId, "git_status-raced", _ => throw new SandboxHandleInvalidException("The sandbox is gone.")));
+
+        using var response = await PostStopAsync(factory, "git_status-raced");
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Test]
     public async Task SubscribeAsync_WhenAttemptHasNoLiveBrokerState_RejectsSubscription()
     {
         var service = ServiceReturning(Attempt(AttemptId, DevelopmentAttemptStatus.Running));
@@ -186,6 +248,77 @@ public sealed class DevelopmentAttemptHubTests
         var actual = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal("delivered", actual.OutputDelta);
+    }
+
+    [Test]
+    public async Task StopCommand_WhenTheCommandIsTrackedForTheAttempt_Returns202AndStopsIt()
+    {
+        var service = ServiceReturning(Attempt(AttemptId, DevelopmentAttemptStatus.Running));
+        await using var factory = EnabledFactory(service);
+        var broker = factory.Services.GetRequiredService<IDevelopmentAttemptLiveBroker>();
+        AssertEx.True(broker.Register(AttemptId));
+        var stopped = 0;
+        AssertEx.True(broker.TrackCommand(AttemptId, "git_status-1", _ =>
+        {
+            stopped++;
+            return Task.CompletedTask;
+        }));
+
+        using var response = await PostStopAsync(factory, "git_status-1");
+
+        AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        AssertEx.Equal(expected: 1, stopped);
+    }
+
+    [Test]
+    public async Task StopCommand_WhenTheExecutionIdIsUnknownOrBelongsToAnotherAttempt_Returns404WithoutStopping()
+    {
+        var service = ServiceReturning(Attempt(AttemptId, DevelopmentAttemptStatus.Running));
+        await using var factory = EnabledFactory(service);
+        var broker = factory.Services.GetRequiredService<IDevelopmentAttemptLiveBroker>();
+        var otherAttemptId = Guid.NewGuid();
+        AssertEx.True(broker.Register(AttemptId));
+        AssertEx.True(broker.Register(otherAttemptId));
+        var stopped = 0;
+        AssertEx.True(broker.TrackCommand(otherAttemptId, "git_status-foreign", _ =>
+        {
+            stopped++;
+            return Task.CompletedTask;
+        }));
+
+        using var foreign = await PostStopAsync(factory, "git_status-foreign");
+        using var unknown = await PostStopAsync(factory, "git_status-unknown");
+
+        AssertEx.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+        AssertEx.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+        AssertEx.Equal(expected: 0, stopped);
+    }
+
+    private static async Task<HttpResponseMessage> PostStopAsync(TestServerWebAppFactory factory, string executionId)
+    {
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post,
+            $"/api/local/v1/development/projects/{ProjectId}/tasks/{TaskId}/attempts/{AttemptId}/commands/{executionId}/stop")
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json")
+        };
+        factory.AddNodeBearerToken(request);
+        return await client.SendAsync(request);
+    }
+
+    private static IDevelopmentManagementService ServiceReturning(DevelopmentTaskStatus taskStatus, params DevelopmentAttemptSnapshot[] attempts)
+    {
+        var aggregate = DevelopmentEndpointTests.TaskAggregate(ProjectId, TaskId, attempts);
+        var service = Substitute.For<IDevelopmentManagementService>();
+        service.GetTaskAsync(ProjectId, TaskId, Arg.Any<CancellationToken>())
+               .Returns(aggregate with
+               {
+                   Task = aggregate.Task with
+                   {
+                       Status = taskStatus
+                   }
+               });
+        return service;
     }
 
     private static IDevelopmentManagementService ServiceReturning(DevelopmentAttemptSnapshot attempt)

@@ -53,6 +53,10 @@ public static partial class LocalApiRoutes
         // message the stream is writing; a sibling of Cancel, which stops the turn outright.
         public const string AnswerNow = "chat/messages/{messageId}/answer-now";
 
+        // Stops the one sandbox command a tool call of that message's running turn is executing; the tool gets its normal
+        // "not completed" result and the turn continues. Keyed like AnswerNow.
+        public const string StopToolCommand = "chat/messages/{messageId}/tool-calls/{toolCallId}/stop";
+
         // Loopback tool-approval responder: desktop/local mode has no worker hub for an MCP tool's approval round-trip, so the browser posts the operator's decision
         // here and the in-process invocation runner releases the waiting turn. Literal segments keep it off the chat action routes; the body carries the request id + decision, no route param.
         public const string ResolveApproval = "chat/approvals/resolve";

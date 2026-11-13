@@ -32,7 +32,7 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 	acquireHubConnection: hubMock.acquire,
 }));
 
-import { useDevelopmentAttemptHub } from "@/features/development/hooks/useDevelopmentAttemptHub";
+import { type DevelopmentLivePhase, useDevelopmentAttemptHub } from "@/features/development/hooks/useDevelopmentAttemptHub";
 
 const projectId = "project-1";
 const taskId = "task-1";
@@ -165,6 +165,145 @@ describe("useDevelopmentAttemptHub", () => {
 		expect(invalidate).toHaveBeenCalledWith({
 			queryKey: developmentInvalidationKey(developmentQueryIds.getProject),
 		});
+	});
+
+	it("folds command output per execution and keeps it out of the update history", async () => {
+		hubMock.connection.invoke.mockResolvedValue(snapshot(1));
+		const { wrapper } = harness();
+		const { result } = renderHook(() => useDevelopmentAttemptHub(projectId, taskId, attemptId), { wrapper });
+		await waitFor(() => expect(result.current.connectionState).toBe("connected"));
+		const command = { currentCommandId: "test", currentCommandExecutionId: "exec-1" };
+
+		emit(update(2, { kind: "Command", currentOperationElapsedMilliseconds: 0, outputDelta: null, ...command }));
+		emit(update(3, { kind: "CommandOutput", outputDelta: "one\ntwo\n", ...command }));
+		emit(update(4, { kind: "CommandOutput", outputDelta: "three\n", commandOutputSkippedLines: 5, ...command }));
+
+		expect(result.current.updates.map((item) => item.sequence)).toEqual([2]);
+		expect(result.current.commands).toHaveLength(1);
+		expect(result.current.commands[0]?.output.lines.map((line) => line.text)).toEqual(["one", "two", "three"]);
+		expect(result.current.commands[0]?.skippedLines).toBe(5);
+		expect(result.current.commands[0]?.running).toBe(true);
+
+		// The backend's completion carries the skipped count (0 here) and the command's duration (0 ms for a fast one).
+		emit(
+			update(5, {
+				kind: "Command",
+				currentOperationElapsedMilliseconds: 0,
+				commandOutputSkippedLines: 0,
+				outputDelta: null,
+				...command,
+			}),
+		);
+
+		expect(result.current.commands[0]?.running).toBe(false);
+		expect(result.current.commands[0]?.output.lines).toHaveLength(3);
+	});
+
+	it("drops a completion whose start it never saw, even a 0 ms one, instead of showing it as running", async () => {
+		hubMock.connection.invoke.mockResolvedValue(snapshot(1));
+		const { wrapper } = harness();
+		const { result } = renderHook(() => useDevelopmentAttemptHub(projectId, taskId, attemptId), { wrapper });
+		await waitFor(() => expect(result.current.connectionState).toBe("connected"));
+
+		emit(
+			update(2, {
+				kind: "Command",
+				currentCommandId: "build",
+				currentCommandExecutionId: "exec-missed",
+				currentOperationElapsedMilliseconds: 0,
+				commandOutputSkippedLines: 0,
+				outputDelta: null,
+			}),
+		);
+
+		expect(result.current.commands).toEqual([]);
+	});
+
+	it("ends every running command on Terminal and does not resubscribe that stream on a later poll of the same phase", async () => {
+		hubMock.connection.invoke
+			.mockResolvedValueOnce(snapshot(1))
+			.mockRejectedValueOnce(new Error("The Development attempt has no active live stream."));
+		const { wrapper } = harness();
+		const { result, rerender } = renderHook(
+			({ token }: { token: number }) => useDevelopmentAttemptHub(projectId, taskId, attemptId, "validation", token),
+			{ wrapper, initialProps: { token: 1 } },
+		);
+		await waitFor(() => expect(result.current.connectionState).toBe("connected"));
+
+		emit(update(2, { kind: "CommandOutput", outputDelta: "x\n", currentCommandExecutionId: "exec-1" }));
+		emit(update(3, { kind: "Terminal", status: "Succeeded", currentActivity: "Validation passed." }));
+		expect(result.current.commands[0]?.running).toBe(false);
+		expect(result.current.latest?.currentActivity).toBe("Validation passed.");
+
+		// A reconnect after the end is refused; the next poll in the same phase must leave the finished stream alone.
+		act(() => hubMock.reconnect?.());
+		await waitFor(() => expect(result.current.connectionState).toBe("unavailable"));
+		rerender({ token: 2 });
+
+		expect(hubMock.connection.invoke).toHaveBeenCalledTimes(2);
+	});
+
+	it("subscribes afresh when validation starts under the coder attempt whose own run just ended", async () => {
+		// Sequences are node-wide: validation's stream starts above the coder run's last number, here 9.
+		const validationSnapshot = deferred<DevelopmentAttemptSubscriptionSnapshot>();
+		hubMock.connection.invoke.mockResolvedValueOnce(snapshot(1)).mockReturnValueOnce(validationSnapshot.promise);
+		const { queryClient, wrapper } = harness();
+		const initialProps: { phase: DevelopmentLivePhase; token: number } = { phase: "attempt", token: 1 };
+		const { result, rerender } = renderHook(
+			({ phase, token }) => useDevelopmentAttemptHub(projectId, taskId, attemptId, phase, token),
+			{ wrapper, initialProps },
+		);
+		await waitFor(() => expect(result.current.connectionState).toBe("connected"));
+		emit(update(5, { kind: "CommandOutput", outputDelta: "coder\n", currentCommandExecutionId: "exec-coder" }));
+
+		// Same attempt id, a new stream: the poll that sees Validation flips the phase.
+		rerender({ phase: "validation", token: 2 });
+		await waitFor(() => expect(hubMock.connection.invoke).toHaveBeenCalledTimes(2));
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+
+		// The coder run's delivery loop still drains into the same hub group: its Terminal lands before the snapshot, a
+		// late output after it. Both are at or below the snapshot watermark and must not end or pollute validation.
+		emit(update(9, { kind: "Terminal", status: "Succeeded" }));
+		act(() => validationSnapshot.resolve(snapshot(9)));
+		await waitFor(() => expect(result.current.connectionState).toBe("connected"));
+		emit(update(8, { kind: "CommandOutput", outputDelta: "late coder\n", currentCommandExecutionId: "exec-coder" }));
+		expect(result.current.commands).toEqual([]);
+		expect(result.current.latest).toBeNull();
+		expect(invalidate).not.toHaveBeenCalled();
+
+		emit(
+			update(10, {
+				kind: "Command",
+				currentCommandId: "test",
+				currentCommandExecutionId: "exec-validation",
+				currentOperationElapsedMilliseconds: 0,
+				outputDelta: null,
+			}),
+		);
+		emit(update(11, { kind: "CommandOutput", outputDelta: "Passed!\n", currentCommandExecutionId: "exec-validation" }));
+
+		expect(result.current.watermark).toBe(11);
+		expect(result.current.commands.map((command) => [command.executionId, command.running])).toEqual([["exec-validation", true]]);
+		expect(result.current.commands[0]?.output.lines.map((line) => line.text)).toEqual(["Passed!"]);
+	});
+
+	it("retries a refused subscription when the retry token changes", async () => {
+		hubMock.connection.invoke.mockRejectedValueOnce(new Error("no active live stream")).mockResolvedValueOnce(snapshot(4));
+		const { wrapper } = harness();
+		const { result, rerender } = renderHook(
+			({ token }: { token: number }) => useDevelopmentAttemptHub(projectId, taskId, attemptId, "attempt", token),
+			{ wrapper, initialProps: { token: 1 } },
+		);
+		await waitFor(() => expect(result.current.connectionState).toBe("unavailable"));
+
+		rerender({ token: 1 });
+		expect(hubMock.connection.invoke).toHaveBeenCalledTimes(1);
+
+		rerender({ token: 2 });
+
+		await waitFor(() => expect(result.current.connectionState).toBe("connected"));
+		expect(hubMock.connection.invoke).toHaveBeenCalledTimes(2);
+		expect(result.current.watermark).toBe(4);
 	});
 
 	// The WIRE-CONTRACT pin. This hook has no zod schema, so a numeric `kind` is not rejected — it simply matches no

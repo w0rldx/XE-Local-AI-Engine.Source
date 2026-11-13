@@ -3,6 +3,7 @@ import type {
 	ChatNoticePart,
 	ChatReasoningPart,
 	ChatTextPart,
+	ChatToolCommandOutput,
 	ChatToolImage,
 	ChatToolPart,
 	NodeChatWebReviewPreviewDto,
@@ -46,6 +47,7 @@ export interface ToolEntryInput {
 	images?: ChatToolImage[];
 	// Live only: the global content offset at which the call was requested (see `ChatToolPart.contentOffset`).
 	contentOffset?: number;
+	commandOutput?: ChatToolCommandOutput;
 }
 
 /** Interim narration streamed before a tool call; it shares that call's `sequence` and orders just before it. */
@@ -84,6 +86,7 @@ function toToolPart(entry: ToolEntryInput): ChatToolPart {
 		pendingQuestion: entry.pendingQuestion,
 		images: entry.images,
 		contentOffset: entry.contentOffset,
+		commandOutput: entry.commandOutput,
 	};
 }
 

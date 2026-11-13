@@ -83,7 +83,7 @@ export function useGraphWorkflowNodeActivity(
 					}
 					folded = true;
 					model = event.model ?? model;
-					const applied = applyNodeChatStreamEvent(conversation, event, stream);
+					const applied = applyNodeChatStreamEvent(conversation, event, stream, Date.now());
 					conversation = applied.conversation;
 					stream = applied.streamingMessage;
 					ended = applied.isTerminal;

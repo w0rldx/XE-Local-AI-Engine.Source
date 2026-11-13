@@ -148,7 +148,9 @@ public sealed class ChatStreamEventSink : IChatStreamEventSink
                + (streamEvent.Reasoning?.Length ?? 0)
                + (streamEvent.Arguments?.Length ?? 0)
                + (streamEvent.Result?.Length ?? 0)
-               + (streamEvent.Questions?.Length ?? 0);
+               + (streamEvent.Questions?.Length ?? 0)
+               + (streamEvent.CommandLabel?.Length ?? 0)
+               + (streamEvent.OutputLines?.Sum(static line => line.Text.Length + 1) ?? 0);
     }
 
     private void OnDroppedByCapacity(ChatStreamEvent dropped)

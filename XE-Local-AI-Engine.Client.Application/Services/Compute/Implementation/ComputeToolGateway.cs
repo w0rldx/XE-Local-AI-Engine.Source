@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
@@ -149,6 +150,12 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
                 : ToolFailureText.FormatNotRun(ToolFailureText.ToolReportedCode, refusal);
         }
 
+        if (outcome.StoppedByOperator)
+        {
+            // Never the timeout code: a model told it timed out retries with a longer timeout.
+            return ToolFailureText.Format(ToolFailureText.StoppedCode, FormatResult(result, stoppedByOperator: true));
+        }
+
         if (ResourceLimitReason(result) is not null)
         {
             return ToolFailureText.Format(ToolFailureText.ResourceLimitCode, FormatResult(result));
@@ -233,7 +240,20 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
 
             await EnsureScratchAsync(handle, cancellationToken);
             var command = BuildCommandRequest(handle, runtime, code, invocationId, request.TimeoutSeconds);
-            var result = await _provider.ExecuteAsync(handle, command, cancellationToken);
+
+            // Observe-only, and only inside a chat tool call: the script's own view of its working root is what gets redacted.
+            using var liveOutput = ToolCommandOutputScope.StartCommand(_provider,
+                handle,
+                command.ExecutionId,
+                SandboxIsolatedPaths.Of(handle)?.Work ?? handle.WorkingRoot,
+                label: null);
+            var result = await _provider.ExecuteAsync(handle,
+                command with
+                {
+                    OutputObserver = liveOutput?.Observer
+                },
+                cancellationToken);
+            liveOutput?.Complete(result);
             if (OperatingSystem.IsWindows() && StripRealpathWarning(result.StandardError, command.Executable) is { } stripped)
             {
                 if (Interlocked.Exchange(ref _realpathWarningLogged, 1) == 0)
@@ -247,7 +267,8 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
                 };
             }
 
-            return ComputeExecutionOutcome.Executed(result);
+            // A stop racing a normal finish leaves a completed result, which stays a plain result.
+            return ComputeExecutionOutcome.Executed(result, stoppedByOperator: !result.Completed && liveOutput?.StopRequested == true);
         }
         catch (ComputeEnvironmentException exception)
         {
@@ -450,9 +471,9 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             // The venv's interpreter at its host path, which resolves inside because the venv and the store are bound read-only AT THEIR OWN
             // CANONICAL PATHS. On Windows the store's python.exe instead of uv's trampoline. The sandbox's writable tree is the working directory.
             Executable = runtime.BaseInterpreterPath ?? runtime.InterpreterPath,
-            // `-I` is isolated mode: no PYTHONPATH, no user site-packages, no script-directory import, so the import surface is the provisioned lockfile
-            // closure and not the working directory or the operator's environment. The program arrives on stdin, so it never hits disk or argv.
-            Arguments = OperatingSystem.IsWindows() ? ["-I", "-c", WindowsTempBootstrap] : ["-I", "-"],
+            // `-I`: no PYTHONPATH, user site or script-directory import, so the import surface is the lockfile closure; the program comes on stdin.
+            // `-u`: unbuffered stdout/stderr (PYTHONUNBUFFERED is ignored under -I), so a live view and a stop see each line as it is printed.
+            Arguments = OperatingSystem.IsWindows() ? ["-I", "-u", "-c", WindowsTempBootstrap] : ["-I", "-u", "-"],
             StandardInput = code,
             Environment = environment,
             Timeout = TimeSpan.FromSeconds(timeoutSeconds)
@@ -497,10 +518,14 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     ///     traceback is. Stderr may claim half the stream budget and keeps its TAIL; stdout keeps its head and
     ///     is trimmed first. Bytes bound characters, so a byte budget also fits the pipeline's character budget.
     /// </remarks>
-    private string FormatResult(SandboxCommandResult result)
+    private string FormatResult(SandboxCommandResult result, bool stoppedByOperator = false)
     {
         var builder = new StringBuilder();
-        if (ResourceLimitReason(result) is { } limitReason)
+        if (stoppedByOperator)
+        {
+            builder.Append("The operator stopped this command before it finished.\n");
+        }
+        else if (ResourceLimitReason(result) is { } limitReason)
         {
             builder.Append(limitReason);
         }

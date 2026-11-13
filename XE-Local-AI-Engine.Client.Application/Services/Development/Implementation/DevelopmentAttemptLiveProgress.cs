@@ -5,10 +5,18 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Sandbox.LiveOutput;
 
 internal sealed class DevelopmentAttemptLiveProgress
 {
     private static readonly TimeSpan OutputPublishInterval = TimeSpan.FromMilliseconds(250);
+
+    // Half the default live text cap: the sanitizer's [path] rewrite can grow a batch, but never to double, so it is not cut.
+    private static readonly LiveCommandOutputLimits CommandOutputLimits = new()
+    {
+        FlushInterval = OutputPublishInterval,
+        MaxBatchChars = 2048
+    };
 
     private readonly IDevelopmentAttemptLiveBroker _broker;
     private readonly DevelopmentProgressDetector _detector;
@@ -123,25 +131,65 @@ internal sealed class DevelopmentAttemptLiveProgress
         _operationStartedAtUtc = 0;
     }
 
-    public void CommandStarted(string commandId)
+    /// <summary>Makes the command stoppable by <paramref name="executionId" />, announces it, and returns the observer for its output.</summary>
+    /// <remarks>The caller completes the observer and calls <see cref="UntrackCommand" /> once the command returns or throws.</remarks>
+    public LiveCommandOutput CommandStarted(string commandId,
+        string executionId,
+        string? workspaceRoot,
+        Func<CancellationToken, Task> stop)
     {
+        // Tracked before it is announced, so a stop sent on the announcement always finds the command.
+        _ = _broker.TrackCommand(_execution.AttemptId, executionId, stop);
         _commandCount++;
         Publish(DevelopmentAttemptLiveUpdateKind.Command,
             activity: $"Running command {commandId}.",
             currentCommandId: commandId,
+            currentCommandExecutionId: executionId,
             elapsedMilliseconds: 0);
+        return new LiveCommandOutput(CommandOutputLimits,
+            workspaceRoot,
+            batch => CommandOutput(commandId, executionId, batch),
+            _timeProvider);
     }
 
-    public void CommandCompleted(DevelopmentCommandEvidence evidence)
+    public void UntrackCommand(string executionId) =>
+        _broker.UntrackCommand(_execution.AttemptId, executionId);
+
+    /// <summary>Publishes one redacted output batch of a running command; lossy, so the broker may drop it under load.</summary>
+    /// <remarks>Called on a sandbox pump or timer thread under the batch source's lock: it only enqueues.</remarks>
+    private void CommandOutput(string commandId, string executionId, LiveCommandOutputBatch batch)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+        var delta = new StringBuilder();
+        foreach (var line in batch.Lines)
+        {
+            delta.Append(line.Text).Append('\n');
+        }
+
+        Publish(DevelopmentAttemptLiveUpdateKind.CommandOutput,
+            activity: $"Command {commandId} output.",
+            outputDelta: delta.ToString(),
+            currentCommandId: commandId,
+            currentCommandExecutionId: executionId,
+            commandOutputSkippedLines: batch.SkippedLines);
+    }
+
+    public void CommandCompleted(DevelopmentCommandEvidence evidence, string executionId, int skippedOutputLines)
     {
         ArgumentNullException.ThrowIfNull(evidence);
         Publish(DevelopmentAttemptLiveUpdateKind.Command,
-            activity: evidence.Completed && evidence.ExitCode == 0
-                ? $"Command {evidence.CommandId} finished."
-                : $"Command {evidence.CommandId} failed.",
+            activity: evidence switch
+            {
+                { StoppedByOperator: true } => $"Command {evidence.CommandId} was stopped by the operator.",
+                { Completed: true, ExitCode: 0 } => $"Command {evidence.CommandId} finished.",
+                _ => $"Command {evidence.CommandId} failed."
+            },
             currentCommandId: evidence.CommandId,
-            elapsedMilliseconds: evidence.DurationMilliseconds);
-        if (!evidence.Completed || evidence.ExitCode != 0)
+            currentCommandExecutionId: executionId,
+            elapsedMilliseconds: evidence.DurationMilliseconds,
+            commandOutputSkippedLines: skippedOutputLines);
+        // An operator's stop is not the agent failing a command, so it feeds no repeated-failure warning.
+        if (!evidence.StoppedByOperator && (!evidence.Completed || evidence.ExitCode != 0))
         {
             PublishWarning(_detector.ObserveCommandFailure(evidence.CommandId,
                 evidence.ExitCode,
@@ -248,7 +296,9 @@ internal sealed class DevelopmentAttemptLiveProgress
         long? elapsedMilliseconds = null,
         string? subjectHash = null,
         DevelopmentProgressWarningCategory? warningCategory = null,
-        string? warningMessage = null)
+        string? warningMessage = null,
+        string? currentCommandExecutionId = null,
+        int? commandOutputSkippedLines = null)
     {
         var inputTokens = usage?.InputTokenCount;
         var outputTokens = usage?.OutputTokenCount;
@@ -283,6 +333,8 @@ internal sealed class DevelopmentAttemptLiveProgress
             CommandCount = _commandCount,
             CurrentToolId = currentToolId,
             CurrentCommandId = currentCommandId,
+            CurrentCommandExecutionId = currentCommandExecutionId,
+            CommandOutputSkippedLines = commandOutputSkippedLines,
             CurrentOperationElapsedMilliseconds = elapsedMilliseconds,
             ChangedFileCount = _changedFiles.Count,
             PatchByteCount = _patchByteCount,

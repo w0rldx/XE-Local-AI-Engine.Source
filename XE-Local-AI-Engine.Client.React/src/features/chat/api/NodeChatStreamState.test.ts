@@ -2133,3 +2133,159 @@ describe("interim text segments split at tool calls", () => {
 		expect(applied.streamingMessage.content).toBe("Final.");
 	});
 });
+
+describe("tool command output events", () => {
+	const runningCard: ChatToolPart = { kind: "tool", id: "call-1", sequence: 2, name: "run_python", state: "requesting" };
+
+	function outputEvent(overrides: Partial<NodeChatStreamEventDto> = {}): NodeChatStreamEventDto {
+		return streamEvent({
+			type: nodeChatStreamEventTypes.toolCallOutput,
+			delta: undefined,
+			content: undefined,
+			toolCallId: "call-1",
+			commandLabel: "python script.py",
+			commandRunning: true,
+			commandExitCode: null,
+			outputSkippedLines: 0,
+			...overrides,
+		});
+	}
+
+	function toolPartOf(applied: AppliedNodeChatStreamEvent, id = "call-1"): ChatToolPart | undefined {
+		const part = applied.conversation.messages[0]?.parts?.find((candidate) => candidate.id === id);
+		return part?.kind === "tool" ? part : undefined;
+	}
+
+	it("appends lines to the card by tool-call id and takes the command state each event re-states", () => {
+		const first = applyNodeChatStreamEvent(
+			reloadedConversationWithTools([runningCard]),
+			outputEvent({ sequence: 4, outputLines: [{ stream: "stdout", text: "one" }], outputReplace: true }),
+		);
+		const second = applyNodeChatStreamEvent(
+			first.conversation,
+			outputEvent({ sequence: 5, outputLines: [{ stream: "stderr", text: "two" }], outputSkippedLines: 3 }),
+		);
+		const ended = applyNodeChatStreamEvent(
+			second.conversation,
+			outputEvent({ sequence: 6, outputLines: [], commandRunning: false, commandExitCode: 0, outputSkippedLines: 3 }),
+		);
+
+		expect(toolPartOf(second)?.commandOutput).toEqual({
+			lines: [
+				{ stream: "stdout", text: "one" },
+				{ stream: "stderr", text: "two" },
+			],
+			hiddenLines: 0,
+			skippedLines: 3,
+			label: "python script.py",
+			running: true,
+			exitCode: undefined,
+			generation: 1,
+			// No receive time passed: the event's send time stands in.
+			startedAt: 1_700_000_001_000,
+			lastOutputAt: 1_700_000_001_000,
+		});
+		expect(toolPartOf(ended)?.commandOutput).toMatchObject({ running: false, exitCode: 0 });
+		expect(toolPartOf(ended)?.commandOutput?.lines).toHaveLength(2);
+		// Output never touches the answer, the status or the tool timeline.
+		expect(ended.conversation.messages[0]).toMatchObject({ content: "", status: "streaming" });
+		expect(ended.timelineEntry).toBeUndefined();
+		expect(ended.isTerminal).toBe(false);
+		expect(ended.streamingMessage.isActive).toBe(true);
+	});
+
+	it("replaces the card's lines when the event says so (a new command, a resume replay, a flood's tail)", () => {
+		const first = applyNodeChatStreamEvent(
+			reloadedConversationWithTools([runningCard]),
+			outputEvent({ outputLines: [{ stream: "stdout", text: "first command" }] }),
+		);
+		const replaced = applyNodeChatStreamEvent(
+			first.conversation,
+			outputEvent({ commandLabel: "pytest", outputLines: [{ stream: "stdout", text: "second command" }], outputReplace: true }),
+		);
+
+		expect(toolPartOf(replaced)?.commandOutput?.lines).toEqual([{ stream: "stdout", text: "second command" }]);
+		expect(toolPartOf(replaced)?.commandOutput?.label).toBe("pytest");
+	});
+
+	it("counts a command start on each replacing running event, whatever the label, and not on appends or a final tail", () => {
+		const events = [
+			outputEvent({ sequence: 4, outputReplace: true, outputLines: [] }),
+			outputEvent({ sequence: 5, outputLines: [{ stream: "stdout", text: "a" }] }),
+			// The next inner command, under the very same label.
+			outputEvent({ sequence: 6, outputReplace: true, outputLines: [] }),
+			// A flood's final tail replaces the lines of a command that already ended.
+			outputEvent({ sequence: 7, outputReplace: true, commandRunning: false, outputLines: [{ stream: "stdout", text: "tail" }] }),
+		];
+		const generations = events
+			.reduce<AppliedNodeChatStreamEvent[]>(
+				(applied, event) => [
+					...applied,
+					applyNodeChatStreamEvent(applied.at(-1)?.conversation ?? reloadedConversationWithTools([runningCard]), event),
+				],
+				[],
+			)
+			.map((applied) => toolPartOf(applied)?.commandOutput?.generation);
+
+		expect(generations).toEqual([1, 1, 2, 2]);
+	});
+
+	it("stamps the command start and the last output with the receive time the stream loop passes in", () => {
+		const steps: [NodeChatStreamEventDto, number][] = [
+			[outputEvent({ sequence: 4, outputReplace: true, outputLines: [] }), 1_000],
+			[outputEvent({ sequence: 5, outputLines: [{ stream: "stdout", text: "a" }] }), 5_000],
+			// A batch with no lines re-states the command but is no output.
+			[outputEvent({ sequence: 6, outputLines: [] }), 9_000],
+			// The next command starts its own clock and has no output yet.
+			[outputEvent({ sequence: 7, outputReplace: true, outputLines: [] }), 12_000],
+		];
+		let conversationState = reloadedConversationWithTools([runningCard]);
+		const times = steps.map(([event, receivedAtMs]) => {
+			const applied = applyNodeChatStreamEvent(conversationState, event, undefined, receivedAtMs);
+			conversationState = applied.conversation;
+			const output = toolPartOf(applied)?.commandOutput;
+			return [output?.startedAt, output?.lastOutputAt];
+		});
+
+		expect(times).toEqual([
+			[1_000, undefined],
+			[1_000, 5_000],
+			[1_000, 5_000],
+			[12_000, undefined],
+		]);
+	});
+
+	it("leaves the conversation untouched for an unknown tool-call id instead of upserting an assistant message", () => {
+		const start = reloadedConversationWithTools([runningCard]);
+		const applied = applyNodeChatStreamEvent(
+			start,
+			outputEvent({ toolCallId: "call-unknown", outputLines: [{ stream: "stdout", text: "lost" }] }),
+		);
+
+		expect(applied.conversation).toBe(start);
+		expect(applied.conversation.messages).toHaveLength(1);
+		expect(toolPartOf(applied)?.commandOutput).toBeUndefined();
+	});
+
+	it("keeps the output on the card through the tool's completion", () => {
+		const withOutput = applyNodeChatStreamEvent(
+			reloadedConversationWithTools([runningCard]),
+			outputEvent({ outputLines: [{ stream: "stdout", text: "kept" }], commandRunning: false, commandExitCode: 0 }),
+		);
+		const completed = applyNodeChatStreamEvent(
+			withOutput.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallCompleted,
+				sequence: 9,
+				delta: undefined,
+				content: undefined,
+				toolCallId: "call-1",
+				toolName: "run_python",
+				result: "done",
+			}),
+		);
+
+		expect(toolPartOf(completed)?.state).toBe("received");
+		expect(toolPartOf(completed)?.commandOutput?.lines).toEqual([{ stream: "stdout", text: "kept" }]);
+	});
+});

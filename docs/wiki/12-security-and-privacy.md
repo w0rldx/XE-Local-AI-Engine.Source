@@ -112,6 +112,21 @@ Several redactors enforce "secrets never surface":
 | `McpFailureDescriber.SafeMessage` | clamps MCP connection failures, sandbox refusals included, to one fixed message per failure reason so a command path/URL/protected host path/secret never reaches the UI; the exception is logged at Warning. Two reasons show text written for the operator instead: a Sandboxed command missing from the jail `PATH` (`ServerNotFound`, the message names the jail `PATH`) and a server that exited during or after startup (`ServerStartupFailed`/`ServerExited`, with its `stderr` tail). That text is scrubbed of the registration's own environment, header and argument values of 8 or more characters (`SecretValueRedactor`), and the sandbox already redacts environment values as it captures the tail (`SandboxStderrTail`); host paths a server prints are **not** stripped | `McpFailureDescriber.SafeMessage` / `DescribeFailure` in `Services/Mcp/Implementation/McpFailureDescriber.cs` |
 | `InvocationFailureClassifier.RedactAgentRuntimeMessage` | sanitizes agent runtime failure messages before surfacing | `InvocationFailureClassifier.RedactAgentRuntimeMessage` (private) in `Services/Invocation/Implementation/InvocationFailureClassifier.cs` |
 | `NodePatchApplyService.Redact` | redacts patch-apply output (AgentHome) | `NodePatchApplyService.Redact` in `Services/AgentHome/Implementation/NodePatchApplyService.cs` |
+| `LiveCommandOutput` + `CredentialRedaction` | redacts each line of a sandbox command's live output before it leaves the node (chat tool cards, Development attempts); see below | `Services/Sandbox/LiveOutput/LiveCommandOutput.cs`, `Common/CredentialRedaction.cs` |
+
+**Live command output.** A sandbox command's output reaches the browser while it runs, so each line is redacted
+before delivery, never after (`LiveCommandOutput`): ANSI/VT sequences and control characters are stripped, the
+sandbox working root as the child prints it is replaced with `<workspace>`, then the `CredentialRedaction` patterns
+(Development's `!`-prefixed secrets and `password`/`secret`/`api_key`/`authorization`/`bearer`-labelled values, which
+keep their label) apply. A line is cut at a fixed length and marked; a line whose redaction times out is withheld,
+not shown raw. Lines are coalesced into batches under a per-batch and a per-command live cap, and what does not fit
+is only counted as skipped. The kept tail holds raw lines and redacts them when read. A chat tool card's command
+label goes through the same workspace and credential redaction and a length cap (`ToolCommandOutput`). Development
+output additionally passes `DevelopmentAttemptLiveSanitizer` like every other attempt update: absolute paths become
+`[path]`, text and identifiers are clamped. The tail a chat tool part persists is part of the encrypted `metadata_json` (§5). Stopping a command
+is Operator-only and reaches exactly the command registered for the addressed tool call or attempt execution id
+(`ToolCommandStopRegistry`, `DevelopmentAttemptLiveBroker.TryStopCommandAsync`); nothing else in the sandbox or the
+turn is cancelled.
 
 The request-logging enricher is the canonical example. It replaces the raw query with a redacted one and sanitizes the method and path before anything is written:
 

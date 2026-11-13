@@ -17,6 +17,7 @@ internal static class ChatStreamEventTypes
     public const string AssistantInterrupted = "assistant-interrupted";
     public const string ToolCallRequested = "tool-call-requested";
     public const string ToolCallCompleted = "tool-call-completed";
+    public const string ToolCallOutput = "tool-call-output";
     public const string AssistantNotice = "assistant-notice";
     public const string ApprovalRequested = "approval-requested";
     public const string QuestionRequested = "question-requested";

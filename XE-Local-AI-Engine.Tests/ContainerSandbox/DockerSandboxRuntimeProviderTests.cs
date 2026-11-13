@@ -75,6 +75,26 @@ public sealed class DockerSandboxRuntimeProviderTests
     }
 
     [Test]
+    public async Task CancelCommandAsync_BeforeTheExecRegisters_EndsTheExecIncomplete()
+    {
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        var execsBefore = client.ExecutedRequests.Count;
+
+        await provider.CancelCommandAsync(handle, "early-1");
+        var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "early-1",
+            Executable = "dotnet",
+            Arguments = ["test"]
+        });
+
+        AssertEx.False(result.Completed, "a stop that beat the exec must not be lost");
+        AssertEx.Equal("Command was cancelled before completion.", result.StandardError);
+        AssertEx.Equal(execsBefore, client.ExecutedRequests.Count, "the cancelled exec never reaches the daemon");
+    }
+
+    [Test]
     public async Task CreateOrAttachAsync_WhenTheRootFilesystemCameBackWritable_Refuses()
     {
         var (provider, client, workspace) = CreateProvider();

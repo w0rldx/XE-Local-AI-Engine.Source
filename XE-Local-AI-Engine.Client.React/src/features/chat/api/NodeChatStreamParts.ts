@@ -1,4 +1,5 @@
-import type { ChatMessagePart } from "@/core/models/ChatMessageParts";
+import type { ChatMessagePart, ChatToolCommandOutput } from "@/core/models/ChatMessageParts";
+import { appendLiveOutputLines, toLiveOutputStream } from "@/core/ui/components/LiveOutputView/LiveOutputLines";
 import type { ChatMessageModel, ChatToolCall } from "@/features/chat/models/ChatModels";
 import {
 	buildMessageParts,
@@ -45,6 +46,7 @@ export function decomposeParts(parts: readonly ChatMessagePart[] | undefined): {
 				pendingQuestion: part.pendingQuestion,
 				images: part.images,
 				contentOffset: part.contentOffset,
+				commandOutput: part.commandOutput,
 			});
 		} else if (part.kind === "text") {
 			textSegments.push({ id: part.id, sequence: part.sequence, text: part.text });
@@ -287,6 +289,42 @@ export function mergePendingPromptIntoToolEntries(
 				}
 			: entry,
 	);
+}
+
+/**
+ * Folds a `tool-call-output` event into the tool card with the same tool-call id: appends its lines (or replaces them
+ * on `outputReplace`) and takes the command state the event re-states. `receivedAtMs` (when the browser received the
+ * event) stamps the command's start and its last output, so a card expanded late still shows true times. An event
+ * for a card this turn does not hold changes nothing, and the same array comes back.
+ */
+export function mergeToolOutputIntoToolEntries(
+	toolEntries: readonly ToolEntryInput[],
+	event: NodeChatStreamEventDto,
+	receivedAtMs: number,
+): readonly ToolEntryInput[] {
+	const index = event.toolCallId ? toolEntries.findIndex((entry) => entry.id === event.toolCallId) : -1;
+	const entry = toolEntries[index];
+	if (entry === undefined) {
+		return toolEntries;
+	}
+
+	const previous = entry.commandOutput;
+	const incoming = (event.outputLines ?? []).map((line) => ({ stream: toLiveOutputStream(line.stream), text: line.text }));
+	const buffer = appendLiveOutputLines(previous, incoming, event.outputReplace === true);
+	// A command start (or a resume replay of a running one) replaces the lines while running.
+	const started = event.outputReplace === true && event.commandRunning === true;
+	const commandOutput: ChatToolCommandOutput = {
+		...buffer,
+		skippedLines: event.outputSkippedLines ?? 0,
+		label: event.commandLabel ?? undefined,
+		running: event.commandRunning === true,
+		generation: (previous?.generation ?? 0) + (started ? 1 : 0),
+		exitCode: event.commandExitCode ?? undefined,
+		// The first event seen for a command already running (a joined stream) stands in for its start.
+		startedAt: started || previous?.startedAt === undefined ? receivedAtMs : previous.startedAt,
+		lastOutputAt: incoming.length > 0 ? receivedAtMs : started ? undefined : previous?.lastOutputAt,
+	};
+	return toolEntries.map((candidate, candidateIndex) => (candidateIndex === index ? { ...candidate, commandOutput } : candidate));
 }
 
 /**

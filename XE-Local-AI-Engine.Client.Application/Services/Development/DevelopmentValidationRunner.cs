@@ -29,6 +29,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
     private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly IDevelopmentEvidenceService _evidence;
+    private readonly IDevelopmentAttemptLiveBroker? _liveBroker;
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
     private readonly IDevelopmentStore _store;
@@ -40,8 +41,10 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
         IDevelopmentSandboxRuntimeProvider sandbox,
         IDevelopmentEvidenceService evidence,
         IOptions<DevelopmentOptions> options,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IDevelopmentAttemptLiveBroker? liveBroker = null)
     {
+        _liveBroker = liveBroker;
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
         ArgumentNullException.ThrowIfNull(workspaceProvider);
@@ -189,7 +192,16 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
         DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken)
     {
-        var tools = new DevelopmentWorkspaceTools(_sandbox, tree, Options.Create(_options), profile);
+        // Streams under the judged coder attempt, which the supervisor registers for the run; unregistered, every publish is a no-op.
+        var liveProgress = _liveBroker is null
+            ? null
+            : new DevelopmentAttemptLiveProgress(snapshot,
+                _liveBroker,
+                Options.Create(_options),
+                _timeProvider,
+                Math.Min(snapshot.MaxTokens ?? _options.MaxOutputTokens, _options.MaxOutputTokens),
+                _options.MaxToolCalls);
+        var tools = new DevelopmentWorkspaceTools(_sandbox, tree, Options.Create(_options), profile, liveProgress);
 
         // The validation run needs a deadline of its own: bounded only per command, a four-command profile runs
         // for four times the attempt cap it is meant to respect.

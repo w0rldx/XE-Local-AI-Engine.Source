@@ -1,0 +1,22 @@
+.log {
+	margin: 0;
+	padding: var(--mantine-spacing-xs);
+	font-family: var(--mantine-font-family-monospace);
+	font-size: var(--mantine-font-size-xs);
+	line-height: 1.45;
+	background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8));
+	border-radius: var(--mantine-radius-sm);
+}
+
+.line {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	min-height: 1lh;
+}
+
+.stderr {
+	/* A non-color cue too (the border), so stderr stays distinguishable without color. */
+	color: var(--mantine-color-red-text);
+	border-inline-start: 2px solid var(--mantine-color-red-filled);
+	padding-inline-start: 6px;
+}

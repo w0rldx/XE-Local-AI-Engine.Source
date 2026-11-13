@@ -4,11 +4,14 @@ using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
+using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
@@ -62,9 +65,10 @@ public sealed class ComputeToolGatewayTests
 
         var command = AssertEx.NotNull(provider.CommandRequest);
         AssertEx.Equal("/provisioned/python", command.Executable);
-        AssertEx.Equal(expected: 2, command.Arguments.Count);
+        AssertEx.Equal(expected: 3, command.Arguments.Count);
         AssertEx.Equal("-I", command.Arguments[0], "isolated mode keeps the import surface the provisioned closure");
-        AssertEx.Equal("-", command.Arguments[1]);
+        AssertEx.Equal("-u", command.Arguments[1], "unbuffered, so live output and a stop see each line as it is printed");
+        AssertEx.Equal("-", command.Arguments[2]);
         AssertEx.Equal("print(1)", command.StandardInput, "the script is piped, never written to disk or placed in argv");
     }
 
@@ -1228,6 +1232,86 @@ public sealed class ComputeToolGatewayTests
             StandardOutput = standardOutput,
             StandardError = standardError
         };
+    }
+
+    [Test]
+    public async Task RunPython_InsideAChatToolCall_StreamsTheScriptsOutputOnThatCall_AndTheModelReadsTheSameResult()
+    {
+        // Observe-only: the same script outside a chat tool call runs with no observer, and the model reads byte-identical text.
+        RecordingSandboxProvider? provider = null;
+        provider = new RecordingSandboxProvider(Contained)
+        {
+            Result = new SandboxCommandResult
+            {
+                ExecutionId = "x",
+                ExitCode = 0,
+                Completed = true,
+                StandardOutput = "wrote /work/out.csv\n"
+            },
+            OnExecute = () => provider!.CommandRequest!.OutputObserver?.OnLine(SandboxOutputSource.StandardOutput, "wrote /work/out.csv")
+        };
+        var handler = new RunPythonToolHandler(CreateGateway(provider));
+        const string Arguments = """{"code":"print(1)"}""";
+
+        var unobserved = await handler.ExecuteAsync(Arguments);
+        AssertEx.Null(provider.CommandRequest!.OutputObserver, "outside a chat turn nothing observes the script");
+
+        var payloads = new List<ToolCallOutputPayload>();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.When(static d => d.ReportToolCallOutput(Arg.Any<ToolCallOutputPayload>())).Do(call => payloads.Add(call.Arg<ToolCallOutputPayload>()));
+        string observed;
+        using (ToolCommandOutputScope.Open(Guid.NewGuid(), Guid.NewGuid(), dispatcher, new ToolCommandStopRegistry(), TimeProvider.System, NullLogger.Instance))
+        using (AmbientToolCall.Enter("call-py", "run_python"))
+        {
+            observed = await handler.ExecuteAsync(Arguments);
+        }
+
+        AssertEx.Equal(unobserved, observed);
+        AssertEx.True(payloads.Count >= 2 && payloads.All(static payload => payload.ToolCallId == "call-py"));
+        AssertEx.True(payloads[0] is { CommandRunning: true, Replace: true, CommandLabel: null });
+        AssertEx.Equal("wrote <workspace>/out.csv", payloads.SelectMany(static payload => payload.Lines).Single().Text,
+            "the root the script sees is redacted");
+        AssertEx.True(payloads[^1] is { CommandRunning: false, CommandExitCode: 0 });
+    }
+
+    [Test]
+    public async Task RunPython_StoppedByTheOperator_SaysSo_NeverThatItTimedOut()
+    {
+        // The same not-completed result reads as a timeout when nobody stopped it; a model told that retries with a longer one.
+        var stops = new ToolCommandStopRegistry();
+        var messageId = Guid.NewGuid();
+        var notCompleted = new SandboxCommandResult
+        {
+            ExecutionId = "x",
+            ExitCode = -1,
+            Completed = false,
+            StandardError = "Command was cancelled before completion."
+        };
+        var handler = new RunPythonToolHandler(CreateGateway(new RecordingSandboxProvider(Contained | SandboxProviderCapabilities.SupportsCommandCancellation)
+        {
+            Result = notCompleted,
+            // The recording provider's cancel completes at once, so the stop is fully requested when this returns.
+            OnExecute = () => _ = stops.TryStopAsync(messageId, "call-py", CancellationToken.None)
+        }));
+        const string Arguments = """{"code":"while True: pass"}""";
+
+        string stopped;
+        using (ToolCommandOutputScope.Open(Guid.NewGuid(), messageId, Substitute.For<IWorkerEventDispatcher>(), stops, TimeProvider.System, NullLogger.Instance))
+        using (AmbientToolCall.Enter("call-py", "run_python"))
+        {
+            stopped = await handler.ExecuteAsync(Arguments);
+        }
+
+        var timedOut = await new RunPythonToolHandler(CreateGateway(new RecordingSandboxProvider(Contained)
+        {
+            Result = notCompleted
+        })).ExecuteAsync(Arguments);
+
+        AssertEx.Equal(ToolFailureText.StoppedCode, ToolFailureText.GetCodeOrNull(stopped));
+        AssertEx.True(stopped.StartsWith("[tool error: stopped] The operator stopped this command before it finished.\nexit_code: -1\n", StringComparison.Ordinal), stopped);
+        AssertEx.False(stopped.Contains("did not finish within", StringComparison.Ordinal), stopped);
+        AssertEx.Equal(ToolFailureText.TimeoutCode, ToolFailureText.GetCodeOrNull(timedOut));
+        AssertEx.Contains(timedOut, "did not finish within", StringComparison.Ordinal);
     }
 
     private static ComputeToolGateway CreateGateway(IAgentSandboxRuntimeProvider provider,

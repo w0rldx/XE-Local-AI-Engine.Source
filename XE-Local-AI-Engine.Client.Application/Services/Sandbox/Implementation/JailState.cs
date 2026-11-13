@@ -80,6 +80,9 @@ internal sealed class JailState
 
     public ConcurrentDictionary<string, InFlightExecution> InFlight { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Cancels that arrived before their command registered; read and written only under <see cref="Sync" />.</summary>
+    public PendingCommandCancels PendingCancels { get; } = new();
+
     /// <summary>
     ///     Lowers the per-sandbox ceiling to <paramref name="requested" /> when that is stricter than what the sandbox already carries, and
     ///     does nothing otherwise — the one thing an attach under the same key may do to a create-time property.

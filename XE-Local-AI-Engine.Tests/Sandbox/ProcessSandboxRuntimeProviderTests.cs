@@ -590,6 +590,28 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    public async Task ProcessSandboxProvider_CancelBeforeTheCommandRegisters_EndsItAsSoonAsItStarts()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+
+        // The stop lands while the command is still starting (bwrap, MXC): it must not be a silent no-op.
+        await provider.CancelCommandAsync(handle, "early-1");
+        var (executable, arguments) = SleepCommand(30);
+        var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
+                                   {
+                                       ExecutionId = "early-1",
+                                       Executable = executable,
+                                       Arguments = arguments,
+                                       Timeout = TimeSpan.FromSeconds(30)
+                                   })
+                                   .WaitAsync(TimeSpan.FromSeconds(20));
+
+        AssertEx.False(result.Completed);
+        AssertEx.Equal("Command was cancelled before completion.", result.StandardError, "a stop, not the 30 s timeout");
+    }
+
+    [Test]
     public async Task ProcessSandboxProvider_Capabilities_AdvertiseOnlyServedSurface()
     {
         using var provider = CreateProvider();

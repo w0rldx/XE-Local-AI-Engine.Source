@@ -30,6 +30,7 @@ public sealed class DevelopmentEndpointTests
     [Arguments("GET", "/api/local/v1/development/projects/11111111-1111-1111-1111-111111111111/tasks/22222222-2222-2222-2222-222222222222")]
     [Arguments("POST", "/api/local/v1/development/projects/11111111-1111-1111-1111-111111111111/tasks/22222222-2222-2222-2222-222222222222/next-action")]
     [Arguments("POST", "/api/local/v1/development/projects/11111111-1111-1111-1111-111111111111/tasks/22222222-2222-2222-2222-222222222222/attempts/33333333-3333-3333-3333-333333333333/cancel")]
+    [Arguments("POST", "/api/local/v1/development/projects/11111111-1111-1111-1111-111111111111/tasks/22222222-2222-2222-2222-222222222222/attempts/33333333-3333-3333-3333-333333333333/commands/git_status-0/stop")]
     [Arguments("GET", "/api/local/v1/development/projects/11111111-1111-1111-1111-111111111111/events")]
     [Arguments("GET", "/api/local/v1/development/projects/11111111-1111-1111-1111-111111111111/tasks/22222222-2222-2222-2222-222222222222/artifacts")]
     [Arguments("GET", "/api/local/v1/development/projects/11111111-1111-1111-1111-111111111111/tasks/22222222-2222-2222-2222-222222222222/artifacts/44444444-4444-4444-4444-444444444444")]

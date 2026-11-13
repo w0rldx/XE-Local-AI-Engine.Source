@@ -24,6 +24,10 @@ const validationFailureLabels: Readonly<Record<string, readonly [string, string]
 		"pages.development.validation.failure.commandDidNotComplete",
 		"A validation command did not run to completion.",
 	],
+	command_stopped: [
+		"pages.development.validation.failure.commandStopped",
+		"An operator stopped a validation command, so this run judged nothing.",
+	],
 	missing_command_evidence: [
 		"pages.development.validation.failure.missingCommandEvidence",
 		"The report is missing evidence for a command this profile requires.",

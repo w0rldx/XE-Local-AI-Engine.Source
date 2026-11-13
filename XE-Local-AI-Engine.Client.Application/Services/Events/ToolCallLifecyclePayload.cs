@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
 ///     A single tool-call lifecycle transition for an invocation. Carries the minimal shape the local chat stream
@@ -46,6 +47,15 @@ public sealed record ToolCallLifecyclePayload
     ///     was measured (a provider-side or id-less call) and for the requested phase; never 0 as a stand-in.
     /// </summary>
     public long? DurationMs { get; init; }
+
+    /// <summary>The completed phase only: the redacted tail of the call's last sandbox command, for the persisted tool part; null when none ran.</summary>
+    public IReadOnlyList<NodeChatToolOutputLine>? OutputTail { get; init; }
+
+    /// <summary>The completed phase only: lines of that command not delivered live.</summary>
+    public int? OutputSkippedLines { get; init; }
+
+    /// <summary>The completed phase only: the redacted label of that command.</summary>
+    public string? LastCommandLabel { get; init; }
 }
 
 /// <summary>

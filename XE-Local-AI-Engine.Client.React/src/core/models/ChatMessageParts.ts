@@ -1,6 +1,8 @@
 // The ordered parts of an assistant message, shared by the chat stream fold, the part renderer and every feature that
 // shows a transcript. The members that ride the SignalR stream have no OpenAPI equivalent, so they stay hand-authored.
 
+import type { LiveOutputBuffer } from "@/core/ui/components/LiveOutputView/LiveOutputLines";
+
 /** One selectable option. `recommended` is advisory only — the card badges it but never pre-selects it. */
 export interface UserQuestionOption {
 	label: string;
@@ -102,6 +104,27 @@ export interface ChatToolPart {
 	// Live only: the global streamed-content offset at which this call was requested. The text before it is interim
 	// narration the reducer splits into a `text` part; never present on a reloaded turn.
 	contentOffset?: number;
+	// The sandbox command output of this call: live from `tool-call-output`, or the persisted tail on a reloaded turn.
+	commandOutput?: ChatToolCommandOutput;
+}
+
+/**
+ * A tool call's sandbox command output. `lines`/`hiddenLines` are the browser's capped buffer; `skippedLines` counts
+ * lines the server never sent. `running` and `exitCode` are live only: a reloaded tail is never running.
+ */
+export interface ChatToolCommandOutput extends LiveOutputBuffer {
+	skippedLines: number;
+	// The redacted executable and arguments of the current (or last) command.
+	label?: string;
+	running: boolean;
+	// The exit code of a command that finished on its own; absent while running and when stopped.
+	exitCode?: number;
+	// Counts the command starts seen on this card (a replacing, running event); a view keyed by it restarts its clock.
+	generation: number;
+	// Live only, browser epoch milliseconds stamped when the events were received: the current command's start and
+	// its last output line. Kept in state, not in the view, because a collapsed card's body runs no effects.
+	startedAt?: number;
+	lastOutputAt?: number;
 }
 
 /** One image a tool call returned. `src` is always a `data:image/` URI. */

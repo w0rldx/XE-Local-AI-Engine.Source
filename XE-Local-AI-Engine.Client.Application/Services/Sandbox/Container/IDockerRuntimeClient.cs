@@ -196,6 +196,9 @@ public sealed record DockerExecutionRequest
 
     /// <summary>Captured-output ceiling per stream, in bytes.</summary>
     public required int MaxCapturedBytes { get; init; }
+
+    /// <summary>Optional observer fed each output line as it is read, past the capture ceiling too; it never changes the outcome.</summary>
+    public ISandboxOutputObserver? OutputObserver { get; init; }
 }
 
 /// <summary>The outcome of one in-container command.</summary>

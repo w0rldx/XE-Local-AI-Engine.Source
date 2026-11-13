@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -145,7 +146,8 @@ public sealed record NodeChatConversationDto
 ///     Parts persist in the <c>metadata_json</c> column alongside the flattened <c>Reasoning</c> so reload restores
 ///     the exact interleave. The raw-ADO path writes that column through
 ///     <c>NodeChatDbContext.EncryptMessageMetadata</c>, so parts are encrypted at rest under the same per-record AAD
-///     as the reasoning already in the blob. Optional fields are null for the kinds that do not use them.
+///     as the reasoning already in the blob. Optional fields are null for the kinds that do not use them. A tool part
+///     whose sandbox command streamed output keeps its redacted tail; the three output keys are omitted when null.
 /// </remarks>
 public sealed record NodeChatMessagePart(
     string Kind,
@@ -156,7 +158,30 @@ public sealed record NodeChatMessagePart(
     string? State = null,
     string? Args = null,
     string? Result = null,
-    bool? RequiresApproval = null);
+    bool? RequiresApproval = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<NodeChatToolOutputLine>? OutputTail = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? OutputSkippedLines = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? LastCommandLabel = null);
+
+/// <summary>One redacted line of a tool's sandbox command output, live on the stream and persisted in a tool part's tail.</summary>
+public sealed class NodeChatToolOutputLine
+{
+    /// <summary>One of <see cref="NodeChatToolOutputStreams" />.</summary>
+    public string Stream { get; init; } = NodeChatToolOutputStreams.Stdout;
+
+    /// <summary>The ANSI-stripped, credential- and workspace-redacted, length-capped text.</summary>
+    public string Text { get; init; } = string.Empty;
+}
+
+/// <summary>The closed vocabulary of <see cref="NodeChatToolOutputLine.Stream" />.</summary>
+public static class NodeChatToolOutputStreams
+{
+    public const string Stdout = "stdout";
+    public const string Stderr = "stderr";
+}
 
 /// <summary>
 ///     One knowledge-base chunk that grounded a plain-chat assistant turn, captured at retrieval time from the fused

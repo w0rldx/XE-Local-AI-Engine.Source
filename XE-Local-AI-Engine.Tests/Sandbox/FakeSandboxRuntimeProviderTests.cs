@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Sandbox;
 
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -72,6 +73,38 @@ public sealed class FakeSandboxRuntimeProviderTests
         AssertEx.Equal(expected: 0, result.ExitCode);
         AssertEx.Equal("runtime: 10.0.0", result.StandardOutput);
         AssertEx.True(result.Completed);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_ReplaysScriptedLinesToTheObserver_ButNotALaunchFailure()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
+        provider.RegisterCommand("make test", exitCode: 1, "one\r\ntwo\rthree\n", "boom");
+        provider.RegisterLaunchFailure("missing-tool");
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        var observer = new RecordingSandboxOutputObserver();
+        var launchFailureObserver = new RecordingSandboxOutputObserver();
+
+        var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "exec-observed",
+            Executable = "make",
+            Arguments = ["test"],
+            OutputObserver = observer
+        });
+        _ = await provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "exec-missing",
+            Executable = "missing-tool",
+            OutputObserver = launchFailureObserver
+        });
+
+        AssertEx.Equal("one\r\ntwo\rthree\n", result.StandardOutput);
+        AssertEx.Equal("one|two|three", string.Join('|', observer.StandardOutput));
+        AssertEx.Equal("boom", string.Join('|', observer.StandardError));
+        // The launch-failure text is the provider's own message, not child output, exactly as on the process provider.
+        AssertEx.Empty(launchFailureObserver.StandardOutput);
+        AssertEx.Empty(launchFailureObserver.StandardError);
     }
 
     [Test]
@@ -262,6 +295,34 @@ public sealed class FakeSandboxRuntimeProviderTests
 
         AssertEx.False(result.Completed);
         AssertEx.Equal("block-1", result.ExecutionId);
+    }
+
+    [Test]
+    public async Task CancelCommandAsync_BeforeTheCommandStarts_EndsItWhenItStarts_UntilTheLatchExpires()
+    {
+        var clock = new ManualTimeProvider(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        provider.RegisterBlockingCommand("sleep");
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+
+        await provider.CancelCommandAsync(handle, "early-1");
+        var early = await provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "early-1",
+            Executable = "sleep"
+        });
+
+        await provider.CancelCommandAsync(handle, "stale-1");
+        clock.Advance(PendingCommandCancels.Lifetime + TimeSpan.FromSeconds(1));
+        var stale = await provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "stale-1",
+            Executable = "echo"
+        });
+
+        AssertEx.False(early.Completed, "a stop that beat the start must not be lost");
+        AssertEx.Equal("Command was cancelled before completion.", early.StandardError);
+        AssertEx.True(stale.Completed, "an expired latch cancels nothing");
     }
 
     [Test]

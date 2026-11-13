@@ -10,6 +10,38 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class NodeChatPartAccumulatorTests
 {
     [Test]
+    public void AttachCommandOutput_PastTheMessageBudget_DropsTheOldestTailsFirst_AndKeepsTheirLabels()
+    {
+        var acc = new NodeChatPartAccumulator();
+        const int Calls = 100;
+        // A full 16K tail per call: 100 of them would put 1.6M characters into one metadata blob.
+        var tail = Enumerable.Range(0, 16)
+                             .Select(static _ => new NodeChatToolOutputLine
+                             {
+                                 Text = new string('x', 1023)
+                             })
+                             .ToList();
+        for (var index = 0; index < Calls; index++)
+        {
+            var callId = "call-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            acc.AppendToolRequested(callId, "run_python", "{}", requiresApproval: false, sequence: index * 2);
+            acc.CompleteToolCall(callId, "run_python", "ok", isError: false, sequence: (index * 2) + 1);
+            acc.AttachCommandOutput(callId, tail, skippedLines: 0, commandLabel: "label-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        var parts = acc.Snapshot();
+        var kept = parts.Where(static part => part.OutputTail is not null).ToList();
+
+        AssertEx.True(kept.Sum(static part => part.OutputTail!.Sum(static line => line.Text.Length + 1)) <= NodeChatPartAccumulator.MaxPersistedOutputChars);
+        AssertEx.Equal(NodeChatPartAccumulator.MaxPersistedOutputChars / (16 * 1024), kept.Count);
+        AssertEx.Equal("call-" + (Calls - 1).ToString(System.Globalization.CultureInfo.InvariantCulture), kept[^1].ToolCallId, "the newest tail survives");
+        AssertEx.Null(parts[0].OutputTail, "the oldest tail is the first to go");
+        AssertEx.Null(parts[0].OutputSkippedLines);
+        AssertEx.Equal("label-0", parts[0].LastCommandLabel);
+        AssertEx.True(parts.All(static part => part.Result == "ok"), "only the tail is dropped, never the tool result");
+    }
+
+    [Test]
     public void AppendReasoning_ThenToolRequested_ThenAppendReasoning_ProducesThreePartsInOrder()
     {
         var acc = new NodeChatPartAccumulator();

@@ -227,6 +227,35 @@ internal static class ChatStreamEventMapper
         };
     }
 
+    /// <summary>Maps one batch of a tool call's live command output to a <see cref="ChatStreamEventTypes.ToolCallOutput" /> event.</summary>
+    public static ChatStreamEvent ToolCallOutputEvent(Guid conversationId,
+        Guid messageId,
+        Guid requestId,
+        ToolCallOutputPayload payload,
+        long timestampMs,
+        long sequence)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        return new ChatStreamEvent
+        {
+            Type = ChatStreamEventTypes.ToolCallOutput,
+            ConversationId = conversationId,
+            MessageId = messageId,
+            RequestId = requestId,
+            Status = NodeChatMessageStatusValues.Streaming,
+            Sequence = sequence,
+            OccurredAtUtc = timestampMs,
+            ToolCallId = payload.ToolCallId,
+            OutputLines = payload.Lines,
+            OutputSkippedLines = payload.SkippedLines,
+            CommandLabel = payload.CommandLabel,
+            CommandRunning = payload.CommandRunning,
+            CommandExitCode = payload.CommandExitCode,
+            OutputReplace = payload.Replace
+        };
+    }
+
     public static void AccumulateToolPart(NodeChatPartAccumulator parts, ToolCallLifecyclePayload payload, long sequence)
     {
         if (payload.Phase == ToolCallLifecyclePhase.Requested)
@@ -236,6 +265,10 @@ internal static class ChatStreamEventMapper
         }
 
         parts.CompleteToolCall(payload.ToolCallId, payload.ToolName, payload.Result, payload.IsError, sequence, payload.IsDenied);
+        if (payload.OutputTail is { } outputTail)
+        {
+            parts.AttachCommandOutput(payload.ToolCallId, outputTail, payload.OutputSkippedLines, payload.LastCommandLabel);
+        }
 
         // Only images render; other binary blocks keep just their placeholder in Result. Inline data URIs under a
         // fixed 1 MiB cap keep the metadata row bounded; store media as files if tools start returning larger ones.

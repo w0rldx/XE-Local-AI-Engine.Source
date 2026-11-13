@@ -4,6 +4,8 @@ using System.Globalization;
 using System.IO.Enumeration;
 using System.Text;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
 /// <summary>
 ///     Deterministic, in-memory <see cref="ISandboxRuntimeProvider" />, the CI-mandatory provider and the default until a real one ships.
@@ -129,6 +131,11 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
             var state = GetAliveState(handle);
             _executed.Add(request);
             scripted = ResolveScript(request);
+            if (state.PendingCancels.TryConsume(request.ExecutionId, _timeProvider))
+            {
+                return BuildResult(request, scripted, completed: false, startedAt);
+            }
+
             if (scripted.Blocks)
             {
                 if (state.InFlight.ContainsKey(request.ExecutionId))
@@ -143,6 +150,11 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
 
         if (inFlight is null)
         {
+            if (!scripted.FailsToLaunch)
+            {
+                ReplayOutput(request, scripted);
+            }
+
             return BuildResult(request, scripted, completed: !scripted.FailsToLaunch, startedAt);
         }
 
@@ -360,6 +372,11 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
             if (state.InFlight.TryGetValue(executionId, out var execution))
             {
                 execution.Completion.TrySetResult(false);
+            }
+            else
+            {
+                // Mirrors the real providers: a cancel that beats the command's start ends it as soon as it starts.
+                state.PendingCancels.Latch(executionId, _timeProvider);
             }
         }
 
@@ -595,6 +612,30 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
             : request.Executable + " " + string.Join(" ", request.Arguments);
     }
 
+    /// <summary>Feeds the scripted stdout, then stderr, to the request's observer line by line, split as the process pump splits them.</summary>
+    private static void ReplayOutput(SandboxCommandRequest request, ScriptedCommand scripted)
+    {
+        var observer = GuardedSandboxOutputObserver.Wrap(request.OutputObserver, NullLogger.Instance, request.ExecutionId);
+        if (observer is null)
+        {
+            return;
+        }
+
+        Replay(observer, SandboxOutputSource.StandardOutput, scripted.StandardOutput);
+        Replay(observer, SandboxOutputSource.StandardError, scripted.StandardError);
+
+        static void Replay(GuardedSandboxOutputObserver observer, SandboxOutputSource source, string text)
+        {
+            var lines = text.ReplaceLineEndings("\n").Split('\n');
+            // A trailing terminator ends the last line; it does not start an empty one.
+            var count = lines[^1].Length == 0 ? lines.Length - 1 : lines.Length;
+            foreach (var line in lines.AsSpan(0, count))
+            {
+                observer.OnLine(source, line);
+            }
+        }
+    }
+
     private SandboxCommandResult BuildResult(SandboxCommandRequest request, ScriptedCommand scripted, bool completed, DateTimeOffset startedAt)
     {
         return new SandboxCommandResult
@@ -635,6 +676,8 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         public Dictionary<string, string> SandboxFiles { get; } = new(StringComparer.Ordinal);
 
         public Dictionary<string, InFlightExecution> InFlight { get; } = new(StringComparer.Ordinal);
+
+        public PendingCommandCancels PendingCancels { get; } = new();
     }
 
     private sealed class InFlightExecution

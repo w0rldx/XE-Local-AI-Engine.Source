@@ -75,6 +75,21 @@ public sealed class ChatStreamFolderTests
     }
 
     [Test]
+    public void Fold_WhenToolCommandOutputArrives_ConsumesItSilently_AndKeepsTheText()
+    {
+        var folder = NewFolder();
+        _ = folder.Fold(Delta("Hel", 0));
+
+        var outcome = folder.Fold(Frame(ChatStreamEventTypes.ToolCallOutput));
+        var next = folder.Fold(Delta("lo", 3));
+
+        AssertEx.Null(outcome.Event, "up to ten frames a second per command must never print as status lines");
+        AssertEx.False(outcome.NeedsResume);
+        AssertEx.Equal("lo", AssertEx.NotNull(next.Event).Text);
+        AssertEx.Equal("Hello", folder.Content);
+    }
+
+    [Test]
     public void Fold_WhenTheServerAsksToReconcile_AsksForAResumeAndSurfacesNothing()
     {
         var folder = NewFolder();

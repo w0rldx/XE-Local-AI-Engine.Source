@@ -28,4 +28,7 @@ public sealed record SandboxCommandRequest
 
     /// <summary>Optional standard input piped to the command.</summary>
     public string? StandardInput { get; init; }
+
+    /// <summary>Optional live view of the output lines; observe-only, it never changes the result (see <see cref="ISandboxOutputObserver" />).</summary>
+    public ISandboxOutputObserver? OutputObserver { get; init; }
 }

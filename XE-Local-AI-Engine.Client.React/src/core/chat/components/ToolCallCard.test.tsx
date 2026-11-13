@@ -2,22 +2,24 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ToolCallCard } from "@/core/chat/components/ToolCallCard";
 import type { ChatToolPart } from "@/core/models/ChatMessageParts";
 import type { ToolCatalogEntry } from "@/core/tools/models/ToolCatalogModels";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 // The Approve/Deny controls fire the generated resolve-approval mutation; stub its mutationFn so the click wiring can
 // be asserted without a backend. The card spreads the mutation, which preserves the
 // mutationFn, so the spy still receives the mutate variables. Only this one export is overridden.
 const resolveApprovalSpy = vi.fn().mockResolvedValue({ requestId: "approval-42", approved: true });
+const stopCommandSpy = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>()),
 	resolveToolApprovalMutation: () => ({ mutationFn: resolveApprovalSpy }),
+	stopNodeChatToolCommandMutation: () => ({ mutationFn: stopCommandSpy }),
 }));
 
 // The card resolves the tool's risk class AND its session-scope eligibility from the shared catalog; mock it so both
@@ -672,6 +674,118 @@ describe("ToolCallCard", () => {
 			expect(screen.getByText("Review web content before the model reads it")).toBeTruthy();
 			expect(screen.getByRole("button", { name: "Add to conversation" })).toBeTruthy();
 			expect(screen.queryByTestId("chat-web-request-web_fetch")).toBeNull();
+		});
+	});
+
+	describe("command output", () => {
+		function runningPart(overrides: Partial<ChatToolPart> = {}): ChatToolPart {
+			return toolPart({
+				name: "run_python",
+				state: "requesting",
+				commandOutput: {
+					lines: [
+						{ stream: "stdout", text: "tick 1" },
+						{ stream: "stderr", text: "warning: slow" },
+					],
+					hiddenLines: 0,
+					skippedLines: 0,
+					label: "python script.py",
+					running: true,
+					generation: 1,
+				},
+				...overrides,
+			});
+		}
+
+		it("shows true times in a card expanded long after the output arrived, and restarts them for the next command", () => {
+			// The expanded body hosts a ScrollArea, which observes its size.
+			installJsdomEnvironmentMocks();
+			vi.useFakeTimers();
+			try {
+				vi.setSystemTime(new Date("2026-11-13T10:00:00Z"));
+				const receivedAt = Date.now();
+				const withTimes = (generation: number, startedAt: number, lastOutputAt?: number): ChatToolPart => {
+					// Its own id: the expand state outlives the test in the card's module map.
+					const part = runningPart({ id: "call-clock" });
+					return {
+						...part,
+						commandOutput: part.commandOutput && { ...part.commandOutput, generation, startedAt, lastOutputAt },
+					};
+				};
+				const { rerender } = renderWithProviders(
+					<ToolCallCard part={withTimes(1, receivedAt, receivedAt)} messageId="message-7" />,
+				);
+
+				// 30 s pass with the card collapsed, where the body runs no effects at all; then the operator expands it.
+				act(() => vi.advanceTimersByTime(30_000));
+				const details = screen.getByTestId("chat-tool-call-disclosure-run_python") as HTMLDetailsElement;
+				details.open = true;
+				fireEvent(details, new Event("toggle"));
+				act(() => vi.advanceTimersByTime(300));
+				const clock = () => screen.getByTestId("chat-tool-call-live-output-run_python-clock").textContent;
+
+				expect(clock()).toBe("Running for 30s, last output 30s ago");
+
+				// The next command under the same label: a new generation with its own start and no output yet.
+				rerender(
+					<QueryClientProvider client={new QueryClient()}>
+						<MantineProvider env="test" theme={testMantineTheme}>
+							<ToolCallCard part={withTimes(2, Date.now())} messageId="message-7" />
+						</MantineProvider>
+					</QueryClientProvider>,
+				);
+
+				expect(clock()).toBe("Running for 0s, no output yet");
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("shows the latest line in the header and a Stop that posts the message and call id", async () => {
+			renderWithProviders(<ToolCallCard part={runningPart()} messageId="message-7" />);
+
+			expect(screen.getByTestId("chat-tool-call-latest-line-run_python").textContent).toBe("warning: slow");
+			expect(screen.getByTestId("chat-tool-call-command-run_python").textContent).toContain("python script.py");
+			fireEvent.click(screen.getByTestId("chat-tool-call-stop-run_python"));
+
+			await waitFor(() => expect(stopCommandSpy).toHaveBeenCalledTimes(1));
+			expect(stopCommandSpy.mock.calls[0]?.[0]).toEqual({ path: { messageId: "message-7", toolCallId: "call-1" } });
+		});
+
+		it("offers no Stop without a message id, once the command ended, or once the card resolved", () => {
+			const { rerender } = renderWithProviders(<ToolCallCard part={runningPart()} />);
+			expect(screen.queryByTestId("chat-tool-call-stop-run_python")).toBeNull();
+
+			const rerenderWith = (part: ChatToolPart) =>
+				rerender(
+					<QueryClientProvider client={new QueryClient()}>
+						<MantineProvider env="test" theme={testMantineTheme}>
+							<ToolCallCard part={part} messageId="message-7" />
+						</MantineProvider>
+					</QueryClientProvider>,
+				);
+			const ended = runningPart();
+			rerenderWith({ ...ended, commandOutput: ended.commandOutput && { ...ended.commandOutput, running: false } });
+			expect(screen.queryByTestId("chat-tool-call-stop-run_python")).toBeNull();
+
+			rerenderWith(runningPart({ state: "received", result: "done" }));
+			expect(screen.queryByTestId("chat-tool-call-stop-run_python")).toBeNull();
+			expect(screen.queryByTestId("chat-tool-call-latest-line-run_python")).toBeNull();
+		});
+
+		it("keeps a finished call's output tail in the body, with stderr marked and the exit code named", () => {
+			const done = runningPart({ state: "received", result: "ok" });
+			renderWithProviders(
+				<ToolCallCard
+					part={{ ...done, commandOutput: done.commandOutput && { ...done.commandOutput, running: false, exitCode: 2 } }}
+					messageId="message-7"
+				/>,
+			);
+
+			const output = screen.getByTestId("chat-tool-call-output-run_python");
+			expect(output.textContent).toContain("Command output (exit code 2)");
+			expect(output.textContent).toContain("tick 1");
+			expect(output.querySelector('[data-stream="stderr"]')?.textContent).toBe("stderr: warning: slow");
 		});
 	});
 });

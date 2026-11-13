@@ -39,7 +39,12 @@ public sealed class DevelopmentAttemptHub : Hub
 
         var attempt = task.Attempts.SingleOrDefault(candidate => candidate.Id == attemptId)
                       ?? throw new HubException("The Development attempt does not belong to the requested project and task.");
-        if (attempt.Status is not (DevelopmentAttemptStatus.Pending or DevelopmentAttemptStatus.Running))
+        // Validation has no attempt of its own and streams its commands under the judged coder attempt: the task's latest, succeeded.
+        // Attempts are listed oldest first.
+        var validating = task.Task.Status == DevelopmentTaskStatus.Validation
+                         && attempt.Status == DevelopmentAttemptStatus.Succeeded
+                         && task.Attempts.LastOrDefault(static candidate => candidate.Role == DevelopmentAttemptRole.Coder)?.Id == attempt.Id;
+        if (!validating && attempt.Status is not (DevelopmentAttemptStatus.Pending or DevelopmentAttemptStatus.Running))
         {
             throw new HubException("Only the current active Development attempt can be subscribed.");
         }

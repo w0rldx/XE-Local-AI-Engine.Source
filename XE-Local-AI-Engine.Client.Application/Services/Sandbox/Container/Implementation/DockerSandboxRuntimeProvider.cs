@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
@@ -176,13 +177,25 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             execution.CancelAfter(timeout);
         }
 
-        if (!state.InFlight.TryAdd(request.ExecutionId, execution))
+        bool cancelledBeforeStart;
+        lock (state.Sync)
         {
-            throw new InvalidOperationException($"Execution id '{request.ExecutionId}' is already in flight for this sandbox.");
+            if (!state.InFlight.TryAdd(request.ExecutionId, execution))
+            {
+                throw new InvalidOperationException($"Execution id '{request.ExecutionId}' is already in flight for this sandbox.");
+            }
+
+            cancelledBeforeStart = state.PendingCancels.TryConsume(request.ExecutionId, _timeProvider);
         }
 
         try
         {
+            // A stop that arrived before this execution registered: the exec below sees a cancelled token and ends incomplete.
+            if (cancelledBeforeStart)
+            {
+                await execution.CancelAsync();
+            }
+
             var outcome = await state.Client.ExecuteAsync(state.ContainerId,
                 new DockerExecutionRequest
                 {
@@ -195,7 +208,8 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                         : DockerSandboxPaths.ResolveContainerPath(state.WorkspaceMountTarget, request.WorkingDirectory),
                     Environment = request.Environment,
                     StandardInput = request.StandardInput,
-                    MaxCapturedBytes = DefaultMaxCapturedOutputBytes
+                    MaxCapturedBytes = DefaultMaxCapturedOutputBytes,
+                    OutputObserver = GuardedSandboxOutputObserver.Wrap(request.OutputObserver, _logger, request.ExecutionId)
                 },
                 execution.Token);
 
@@ -325,7 +339,16 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = GetAliveState(handle);
-        if (state.InFlight.TryGetValue(executionId, out var execution))
+        CancellationTokenSource? execution;
+        lock (state.Sync)
+        {
+            if (!state.InFlight.TryGetValue(executionId, out execution))
+            {
+                state.PendingCancels.Latch(executionId, _timeProvider);
+            }
+        }
+
+        if (execution is not null)
         {
             await execution.CancelAsync();
         }
@@ -1051,5 +1074,11 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         public string WorkspaceMountTarget { get; }
 
         public ConcurrentDictionary<string, CancellationTokenSource> InFlight { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Guards registering an execution against latching a cancel for it, so neither slips past the other.</summary>
+        public Lock Sync { get; } = new();
+
+        /// <summary>Cancels that arrived before their execution registered; used only under <see cref="Sync" />.</summary>
+        public PendingCommandCancels PendingCancels { get; } = new();
     }
 }

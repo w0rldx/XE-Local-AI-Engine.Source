@@ -189,5 +189,15 @@ public sealed class DevelopmentAttemptFailureReportingTests
 
         public bool Complete(Guid attemptId) =>
             true;
+
+        public bool TrackCommand(Guid attemptId, string executionId, Func<CancellationToken, Task> stopCommand) =>
+            false;
+
+        public void UntrackCommand(Guid attemptId, string executionId)
+        {
+        }
+
+        public Task<bool> TryStopCommandAsync(Guid attemptId, string executionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
     }
 }

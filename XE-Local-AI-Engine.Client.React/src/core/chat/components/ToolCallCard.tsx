@@ -1,5 +1,14 @@
 import { Badge, Button, Collapse, Group, Stack, Text, ThemeIcon } from "@mantine/core";
-import { IconCheck, IconChevronDown, IconFileDiff, IconRefresh, IconShieldHalf, IconTool, IconX } from "@tabler/icons-react";
+import {
+	IconCheck,
+	IconChevronDown,
+	IconFileDiff,
+	IconPlayerStop,
+	IconRefresh,
+	IconShieldHalf,
+	IconTool,
+	IconX,
+} from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { m, useReducedMotion } from "framer-motion";
 import { memo, useCallback, useState } from "react";
@@ -14,14 +23,18 @@ import classes from "@/core/chat/components/ThoughtsSection.module.css";
 import { WebRequestConsentCard, WebReviewCard } from "@/core/chat/components/WebReviewCard";
 import { agentHomeRunIdWithPatch } from "@/core/chat/models/AgentHomePatchToolResult";
 import { buildChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGates";
+import { useStopToolCommand } from "@/core/chat/queries/useStopToolCommand";
 import type { ChatToolPart, ToolCallState } from "@/core/models/ChatMessageParts";
 import { ToolCategoryBadge } from "@/core/tools/components/ToolCategoryBadge/ToolCategoryBadge";
 import { useToolCatalog } from "@/core/tools/queries/useToolCatalog";
 import { AgentHomePatchApplyDialog } from "@/core/ui/components/AgentHomePatchApplyDialog/AgentHomePatchApplyDialog";
 import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
+import { LiveOutputView } from "@/core/ui/components/LiveOutputView/LiveOutputView";
 
 interface ToolCallCardProps {
 	part: ChatToolPart;
+	// The chat message the call belongs to. Only a chat transcript passes it, and only then can a command be stopped.
+	messageId?: string;
 }
 
 // Chat capability flags are a static client-side constant (see docs/agent-knowledge.md §5), so the tool-approval-controls gate
@@ -78,7 +91,7 @@ function formatStructured(value?: string): string | undefined {
  * name + at-a-glance state badge; expanding reveals the args/result body. `requesting`/`waiting` show a live badge,
  * `received` carries the result, `failed` surfaces the error. Args/result JSON is pretty-printed when parseable.
  */
-export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardProps) {
+export const ToolCallCard = memo(function ToolCallCard({ part, messageId }: ToolCallCardProps) {
 	const { t } = useTranslation();
 	const reduced = useReducedMotion();
 	const [expanded, setExpanded] = useState(() => expandedByToolId.get(part.id) ?? false);
@@ -145,6 +158,14 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 	const patchRunId = agentHomeRunIdWithPatch(part.name, part.result);
 	const canReviewPatch = patchRunId !== null && part.state === "received";
 
+	// A sandbox command this call runs. It counts as running only while the card itself is live, so a card a cancelled
+	// turn left behind never keeps a Stop button or a ticking clock.
+	const commandOutput = part.commandOutput;
+	const commandRunning = isLiveState(part.state) && commandOutput?.running === true;
+	const latestOutputLine = commandRunning ? commandOutput?.lines.at(-1)?.text : undefined;
+	const stopCommand = useStopToolCommand();
+	const canStopCommand = commandRunning && approvalControlsEnabled && messageId !== undefined;
+
 	const formattedArgs = formatStructured(part.args);
 	const formattedResult = formatStructured(part.result);
 	const stateLabel =
@@ -208,6 +229,18 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 								{isLiveState(part.state) ? (
 									<Text size="xs" c="dimmed">
 										{t("chat.toolCall.live", "live")}
+									</Text>
+								) : null}
+								{latestOutputLine ? (
+									<Text
+										component="span"
+										ff="monospace"
+										size="xs"
+										c="dimmed"
+										style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+										data-testid={`chat-tool-call-latest-line-${part.name}`}
+									>
+										{latestOutputLine}
 									</Text>
 								) : null}
 							</Group>
@@ -338,6 +371,31 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 						</Button>
 					</Group>
 				) : null}
+				{/* Outside the Collapse, like the approval row: stopping a runaway command must not need an expand first. */}
+				{canStopCommand ? (
+					<Group gap="xs" wrap="wrap" className={classes["tool-body"]} data-testid={`chat-tool-call-command-${part.name}`}>
+						{commandOutput?.label ? (
+							<Text size="xs" c="dimmed" ff="monospace" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+								{commandOutput.label}
+							</Text>
+						) : null}
+						<Button
+							size="compact-xs"
+							color="red"
+							variant="light"
+							leftSection={<IconPlayerStop size={12} />}
+							loading={stopCommand.isPending}
+							onClick={() => {
+								if (messageId) {
+									stopCommand.mutate({ path: { messageId, toolCallId: part.id } });
+								}
+							}}
+							data-testid={`chat-tool-call-stop-${part.name}`}
+						>
+							{t("chat.toolCall.stop", "Stop command")}
+						</Button>
+					</Group>
+				) : null}
 				{patchDialogOpen && patchRunId !== null ? (
 					<AgentHomePatchApplyDialog runId={patchRunId} onClose={() => setPatchDialogOpen(false)} />
 				) : null}
@@ -355,6 +413,35 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 									{t("chat.toolCall.argsLabel", "Arguments")}
 								</Text>
 								<CodeBlock language="json" code={formattedArgs} />
+							</Stack>
+						) : null}
+						{commandOutput ? (
+							<Stack gap={2} data-testid={`chat-tool-call-output-${part.name}`}>
+								<Text size="xs" c="dimmed" fw={600}>
+									{commandOutput.exitCode === undefined
+										? t("chat.toolCall.outputLabel", "Command output")
+										: t("chat.toolCall.outputLabelExit", {
+												defaultValue: "Command output (exit code {{code}})",
+												code: commandOutput.exitCode,
+											})}
+								</Text>
+								{commandOutput.label && !canStopCommand ? (
+									<Text size="xs" c="dimmed" ff="monospace" style={{ overflowWrap: "anywhere" }}>
+										{commandOutput.label}
+									</Text>
+								) : null}
+								<LiveOutputView
+									// Each command start, such as the next run_in_agent_home inner command, restarts the clock.
+									key={commandOutput.generation}
+									lines={commandOutput.lines}
+									hiddenLines={commandOutput.hiddenLines}
+									skippedLines={commandOutput.skippedLines}
+									running={commandRunning}
+									startedAt={commandOutput.startedAt}
+									lastOutputAt={commandOutput.lastOutputAt}
+									label={t("chat.toolCall.outputRegion", { defaultValue: "Output of {{tool}}", tool: toolName })}
+									testId={`chat-tool-call-live-output-${part.name}`}
+								/>
 							</Stack>
 						) : null}
 						{formattedResult ? (

@@ -1834,6 +1834,8 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactCont
 	content: z.string(),
 });
 
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptCommandRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse = z.object({
@@ -4022,6 +4024,8 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbac
 export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathRequest = z.object({
 	selectedPath: z.record(z.string(), z.guid()).nullish(),
 });
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1StopNodeChatToolCommandRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest = z.object({
 	file: z.string().nullish(),
@@ -6860,22 +6864,6 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowResp
 	trimmed: zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowTrimResponse.nullish(),
 });
 
-export const zXeLocalAiEngineClientServicesChatNodeChatMessagePart = z.object({
-	kind: z.string().optional(),
-	sequence: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	text: z.string().nullish(),
-	toolCallId: z.string().nullish(),
-	name: z.string().nullish(),
-	state: z.string().nullish(),
-	args: z.string().nullish(),
-	result: z.string().nullish(),
-	requiresApproval: z.boolean().nullish(),
-});
-
 export const zXeLocalAiEngineClientServicesChatNodeChatThroughputDto = z.object({
 	timeToFirstTokenMs: z.number().nullish(),
 	promptTokens: z
@@ -6895,6 +6883,34 @@ export const zXeLocalAiEngineClientServicesChatNodeChatThroughputDto = z.object(
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+});
+
+export const zXeLocalAiEngineClientServicesChatNodeChatToolOutputLine = z.object({
+	stream: z.string().optional(),
+	text: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientServicesChatNodeChatMessagePart = z.object({
+	kind: z.string().optional(),
+	sequence: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	text: z.string().nullish(),
+	toolCallId: z.string().nullish(),
+	name: z.string().nullish(),
+	state: z.string().nullish(),
+	args: z.string().nullish(),
+	result: z.string().nullish(),
+	requiresApproval: z.boolean().nullish(),
+	outputTail: z.array(zXeLocalAiEngineClientServicesChatNodeChatToolOutputLine).nullish(),
+	outputSkippedLines: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	lastCommandLabel: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientServicesCustomToolsCustomToolEnvironmentVariableModel = z.object({
@@ -11054,6 +11070,11 @@ export const zAnswerNowNodeChatMessagePath = z.object({
  */
 export const zAnswerNowNodeChatMessageResponse = z.void();
 
+export const zStopNodeChatToolCommandPath = z.object({
+	messageId: z.guid(),
+	toolCallId: z.string(),
+});
+
 export const zResolveUserQuestionBody = zXeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionRequest;
 
 /**
@@ -11286,6 +11307,13 @@ export const zCancelDevelopmentAttemptPath = z.object({
  * No Content
  */
 export const zCancelDevelopmentAttemptResponse = z.void();
+
+export const zStopDevelopmentAttemptCommandPath = z.object({
+	projectId: z.guid(),
+	taskId: z.guid(),
+	attemptId: z.guid(),
+	executionId: z.string(),
+});
 
 export const zStartDevelopmentNextActionBody = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;
 

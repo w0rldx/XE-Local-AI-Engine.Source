@@ -525,6 +525,7 @@ All modals route through `DialogShell` (`core/ui/components/DialogShell/DialogSh
 - `confirmCloseWhen` makes the dialog undismissable by overlay/Escape and routes the title-bar close through the shared `ConfirmContext` (read tolerantly via React `use()` so the shell still works outside a `ConfirmProvider`). Use it for editors with unsaved/in-flight state.
 - `useUnsavedChangesGuard` (`core/ui/hooks/useUnsavedChangesGuard.ts`) blocks **navigation** (and tab close) while a form is dirty, via TanStack Router's `useBlocker({ withResolver: true, enableBeforeUnload })` driving the same promise-based `useConfirm()` dialog. A `promptOpenRef` prevents the prompt re-opening on re-render. These two guards are complementary: `DialogShell.confirmCloseWhen` guards the close button; `useUnsavedChangesGuard` guards route changes.
 - `MarkdownEditorField` and `MarkdownView` (`core/ui/components/Markdown*`) are the shared markdown editor/renderer; `CodeBlock` provides syntax-highlighted code (used in chat tool-call rendering — see [Chat](05-chat.md)).
+- `LiveOutputView` (`core/ui/components/LiveOutputView/`) is the shared view of a sandbox command's live output ([Chat](05-chat.md#live-command-output-on-a-tool-card)).
 - Toasts go through `core/ui/notifications/Toast.tsx` (Mantine notifications). `ConfirmProvider`/`useConfirm` is the promise-based confirmation primitive.
 
 ### Table pagination

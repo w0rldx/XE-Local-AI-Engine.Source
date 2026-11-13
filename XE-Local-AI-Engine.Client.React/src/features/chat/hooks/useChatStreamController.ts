@@ -346,7 +346,7 @@ export function useChatStreamController({
 						latestConversation ??
 						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ??
 						optimisticConversation;
-					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent, lastStreaming);
+					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent, lastStreaming, Date.now());
 					latestConversation = applied.conversation;
 					lastStreaming = applied.streamingMessage;
 					scheduleAppliedEvent(streamScheduler, applied.conversation, applied);
@@ -495,7 +495,7 @@ export function useChatStreamController({
 						latestConversation ??
 						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ??
 						conversation;
-					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent, lastStreaming);
+					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent, lastStreaming, Date.now());
 					// Collapse the streaming variant onto the original in place (applyNodeChatStreamEvent rebuilds the
 					// variant row per event without a group id, so re-stamp every iteration). Only once the server id
 					// is latched and differs from the original — i.e. a genuine sibling, not an in-place re-render.
@@ -610,6 +610,7 @@ export function useChatStreamController({
 						currentConversation,
 						{ ...streamEvent, messageId: attachedMessageId },
 						lastStreaming,
+						Date.now(),
 					);
 					latestConversation = applied.conversation;
 					lastStreaming = applied.streamingMessage;

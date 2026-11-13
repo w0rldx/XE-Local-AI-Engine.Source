@@ -8,7 +8,8 @@ import type {
 	XeLocalAiEngineClientServicesChatNodeChatMessagePart,
 	XeLocalAiEngineClientServicesChatNodeChatMessageSource,
 } from "@/core/api/generated";
-import type { ChatMessagePart, ToolCallState } from "@/core/models/ChatMessageParts";
+import type { ChatMessagePart, ChatToolCommandOutput, ToolCallState } from "@/core/models/ChatMessageParts";
+import { appendLiveOutputLines, toLiveOutputStream } from "@/core/ui/components/LiveOutputView/LiveOutputLines";
 import type {
 	ChatConversationModel,
 	ChatFeedbackRating,
@@ -79,6 +80,7 @@ function mapParts(messageId: string, parts: NodeChatMessagePartDto[] | null | un
 				args: part.args ?? undefined,
 				result: part.result ?? undefined,
 				requiresApproval: part.requiresApproval ?? undefined,
+				commandOutput: mapCommandOutputTail(part),
 			});
 		} else if (kind === "reasoning" || kind === "text") {
 			accumulator.push({
@@ -105,6 +107,22 @@ function mapParts(messageId: string, parts: NodeChatMessagePartDto[] | null | un
 
 	attachToolImages(mapped, parts);
 	return mapped.length > 0 ? mapped : undefined;
+}
+
+/** The persisted output tail of a tool part, or undefined when its call streamed no command output. */
+function mapCommandOutputTail(part: NodeChatMessagePartDto): ChatToolCommandOutput | undefined {
+	if (!part.outputTail?.length && !part.outputSkippedLines && !part.lastCommandLabel) {
+		return undefined;
+	}
+
+	const lines = (part.outputTail ?? []).map((line) => ({ stream: toLiveOutputStream(line.stream), text: line.text ?? "" }));
+	return {
+		...appendLiveOutputLines(undefined, lines, true),
+		skippedLines: part.outputSkippedLines ?? 0,
+		label: part.lastCommandLabel ?? undefined,
+		running: false,
+		generation: 0,
+	};
 }
 
 /**

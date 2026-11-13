@@ -18,6 +18,11 @@ public sealed class NodeChatPartAccumulator
     private readonly List<MutablePart> _parts = [];
     internal const int MaxToolImagesPerMessage = 8;
     internal const int MaxToolImageBytesPerMessage = 4 * 1024 * 1024;
+
+    // Per message, across every tool part's command output tail (one tail is at most 16K characters).
+    internal const int MaxPersistedOutputChars = 256 * 1024;
+    private readonly Queue<MutablePart> _partsWithTails = new();
+    private int _outputTailChars;
     private int _imageParts;
     private int _imageBytes;
     private readonly Lock _syncRoot = new();
@@ -145,6 +150,49 @@ public sealed class NodeChatPartAccumulator
             _toolPartsByCallId[toolCallId] = part;
         }
     }
+
+    /// <summary>Attaches the redacted tail of the sandbox command a completed tool call ran to its part, for the reload render.</summary>
+    /// <remarks>
+    ///     All tails of one message share <see cref="MaxPersistedOutputChars" />; past it the oldest tails are dropped (their label stays),
+    ///     so a turn of many commands cannot grow the metadata row without bound.
+    /// </remarks>
+    public void AttachCommandOutput(string toolCallId, IReadOnlyList<NodeChatToolOutputLine> outputTail, int? skippedLines, string? commandLabel)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(toolCallId);
+        ArgumentNullException.ThrowIfNull(outputTail);
+
+        lock (_syncRoot)
+        {
+            if (!_toolPartsByCallId.TryGetValue(toolCallId, out var part))
+            {
+                return;
+            }
+
+            if (part.OutputTail is { } previous)
+            {
+                _outputTailChars -= TailChars(previous);
+            }
+            else
+            {
+                _partsWithTails.Enqueue(part);
+            }
+
+            part.OutputTail = outputTail;
+            part.OutputSkippedLines = skippedLines;
+            part.LastCommandLabel = commandLabel;
+            _outputTailChars += TailChars(outputTail);
+
+            while (_outputTailChars > MaxPersistedOutputChars && _partsWithTails.TryDequeue(out var oldest))
+            {
+                _outputTailChars -= TailChars(oldest.OutputTail!);
+                oldest.OutputTail = null;
+                oldest.OutputSkippedLines = null;
+            }
+        }
+    }
+
+    private static int TailChars(IReadOnlyList<NodeChatToolOutputLine> tail) =>
+        tail.Sum(static line => line.Text.Length + 1);
 
     /// <summary>
     ///     Appends an image a tool call returned as its own part keyed to that call: media type in
@@ -306,6 +354,12 @@ public sealed class NodeChatPartAccumulator
 
         public bool? RequiresApproval { get; init; }
 
+        public IReadOnlyList<NodeChatToolOutputLine>? OutputTail { get; set; }
+
+        public int? OutputSkippedLines { get; set; }
+
+        public string? LastCommandLabel { get; set; }
+
         // A text part's slice of the streamed content, materialized at Snapshot from the terminal's content.
         public int ContentStart { get; init; }
 
@@ -327,7 +381,10 @@ public sealed class NodeChatPartAccumulator
                 State,
                 Args,
                 Result,
-                RequiresApproval);
+                RequiresApproval,
+                OutputTail,
+                OutputSkippedLines,
+                LastCommandLabel);
         }
     }
 }

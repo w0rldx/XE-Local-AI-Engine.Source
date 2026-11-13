@@ -57,6 +57,13 @@ public static class ChatStreamEventTypes
     public const string ToolCallRequested = "tool-call-requested";
     public const string ToolCallCompleted = "tool-call-completed";
 
+    /// <summary>Live, redacted output of the sandbox command a tool call is running, coalesced before it is sequenced.</summary>
+    /// <remarks>
+    ///     Every event carries the command's label, running flag and exit code; <see cref="ChatStreamEvent.OutputReplace" />
+    ///     replaces the card's lines instead of appending (a new command, a resume replay, or a flood's final tail).
+    /// </remarks>
+    public const string ToolCallOutput = "tool-call-output";
+
     /// <summary>
     ///     A non-fatal turn notice (model substitution, tool disabled, history truncated) surfaced alongside the
     ///     content stream. See <see cref="XE_Local_AI_Engine.Client.Services.Events.TurnNoticePayload" />.
@@ -235,4 +242,22 @@ public sealed record ChatStreamEvent
     ///     carried no category.
     /// </summary>
     public string? FailureCategory { get; init; }
+
+    /// <summary>On <c>tool-call-output</c>: the redacted lines since the previous event, oldest first.</summary>
+    public IReadOnlyList<NodeChatToolOutputLine>? OutputLines { get; init; }
+
+    /// <summary>On <c>tool-call-output</c>: lines of the current command not delivered live so far (cumulative).</summary>
+    public int? OutputSkippedLines { get; init; }
+
+    /// <summary>On <c>tool-call-output</c>: the redacted executable and arguments of the current command; null when unnamed.</summary>
+    public string? CommandLabel { get; init; }
+
+    /// <summary>On <c>tool-call-output</c>: whether the current command is still running.</summary>
+    public bool? CommandRunning { get; init; }
+
+    /// <summary>On <c>tool-call-output</c>: the exit code of a command that finished on its own; null while running or when stopped.</summary>
+    public int? CommandExitCode { get; init; }
+
+    /// <summary>On <c>tool-call-output</c>: the lines replace the card's output instead of being appended.</summary>
+    public bool? OutputReplace { get; init; }
 }

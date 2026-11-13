@@ -1312,9 +1312,15 @@ import type {
 	SteerGraphWorkflowNodeRunData,
 	SteerGraphWorkflowNodeRunErrors,
 	SteerGraphWorkflowNodeRunResponses,
+	StopDevelopmentAttemptCommandData,
+	StopDevelopmentAttemptCommandErrors,
+	StopDevelopmentAttemptCommandResponses,
 	StopExternalAppData,
 	StopExternalAppErrors,
 	StopExternalAppResponses,
+	StopNodeChatToolCommandData,
+	StopNodeChatToolCommandErrors,
+	StopNodeChatToolCommandResponses,
 	StopProcessCaptureData,
 	StopProcessCaptureErrors,
 	StopProcessCaptureResponses,
@@ -4689,6 +4695,26 @@ export const answerNowNodeChatMessage = <ThrowOnError extends boolean = true>(
 		...options,
 	});
 
+export const stopNodeChatToolCommand = <ThrowOnError extends boolean = true>(
+	options: Options<StopNodeChatToolCommandData, ThrowOnError>,
+): RequestResult<StopNodeChatToolCommandResponses, StopNodeChatToolCommandErrors, ThrowOnError> =>
+	(options.client ?? client).post<StopNodeChatToolCommandResponses, StopNodeChatToolCommandErrors, ThrowOnError>({
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/chat/messages/{messageId}/tool-calls/{toolCallId}/stop",
+		...options,
+	});
+
 export const resolveUserQuestion = <ThrowOnError extends boolean = true>(
 	options: Options<ResolveUserQuestionData, ThrowOnError>,
 ): RequestResult<ResolveUserQuestionResponses, ResolveUserQuestionErrors, ThrowOnError> =>
@@ -5384,6 +5410,26 @@ export const cancelDevelopmentAttempt = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/attempts/{attemptId}/cancel",
+		...options,
+	});
+
+export const stopDevelopmentAttemptCommand = <ThrowOnError extends boolean = true>(
+	options: Options<StopDevelopmentAttemptCommandData, ThrowOnError>,
+): RequestResult<StopDevelopmentAttemptCommandResponses, StopDevelopmentAttemptCommandErrors, ThrowOnError> =>
+	(options.client ?? client).post<StopDevelopmentAttemptCommandResponses, StopDevelopmentAttemptCommandErrors, ThrowOnError>({
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/attempts/{attemptId}/commands/{executionId}/stop",
 		...options,
 	});
 

@@ -1680,6 +1680,10 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactRespon
 	isValid: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptCommandRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptRequest = {
 	[key: string]: never;
 };
@@ -3878,6 +3882,10 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathRequ
 	selectedPath?: {
 		[key: string]: string;
 	} | null;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1StopNodeChatToolCommandRequest = {
+	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest = {
@@ -6886,6 +6894,9 @@ export type XeLocalAiEngineClientServicesChatNodeChatMessagePart = {
 	args?: string | null;
 	result?: string | null;
 	requiresApproval?: boolean | null;
+	outputTail?: Array<XeLocalAiEngineClientServicesChatNodeChatToolOutputLine> | null;
+	outputSkippedLines?: number | null;
+	lastCommandLabel?: string | null;
 };
 
 export type XeLocalAiEngineClientServicesChatNodeChatMessageSource = {
@@ -6904,6 +6915,11 @@ export type XeLocalAiEngineClientServicesChatNodeChatThroughputDto = {
 	generationTokens?: number | null;
 	generationMs?: number | null;
 	cachedPromptTokens?: number | null;
+};
+
+export type XeLocalAiEngineClientServicesChatNodeChatToolOutputLine = {
+	stream?: string;
+	text?: string;
 };
 
 export type XeLocalAiEngineClientServicesCustomToolsCommandDefinition = {
@@ -11408,6 +11424,44 @@ export type AnswerNowNodeChatMessageResponses = {
 
 export type AnswerNowNodeChatMessageResponse = AnswerNowNodeChatMessageResponses[keyof AnswerNowNodeChatMessageResponses];
 
+export type StopNodeChatToolCommandData = {
+	body?: never;
+	path: {
+		messageId: string;
+		toolCallId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/chat/messages/{messageId}/tool-calls/{toolCallId}/stop";
+};
+
+export type StopNodeChatToolCommandErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type StopNodeChatToolCommandError = StopNodeChatToolCommandErrors[keyof StopNodeChatToolCommandErrors];
+
+export type StopNodeChatToolCommandResponses = {
+	/**
+	 * Accepted
+	 */
+	202: unknown;
+};
+
 export type ResolveUserQuestionData = {
 	body: XeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionRequest;
 	path?: never;
@@ -12305,6 +12359,40 @@ export type CancelDevelopmentAttemptResponses = {
 };
 
 export type CancelDevelopmentAttemptResponse = CancelDevelopmentAttemptResponses[keyof CancelDevelopmentAttemptResponses];
+
+export type StopDevelopmentAttemptCommandData = {
+	body?: never;
+	path: {
+		projectId: string;
+		taskId: string;
+		attemptId: string;
+		executionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/attempts/{attemptId}/commands/{executionId}/stop";
+};
+
+export type StopDevelopmentAttemptCommandErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type StopDevelopmentAttemptCommandResponses = {
+	/**
+	 * Accepted
+	 */
+	202: unknown;
+};
 
 export type StartDevelopmentNextActionData = {
 	body: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest;

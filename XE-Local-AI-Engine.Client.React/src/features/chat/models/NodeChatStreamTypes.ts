@@ -163,6 +163,22 @@ export interface NodeChatStreamEventDto {
 	// `assistant-queued` and `assistant-streaming` only. `NodeChatStreamGuard` is the only reader: it derives its own
 	// watchdog deadlines from it so the browser never pre-empts the node's own ceiling.
 	invocationTimeoutSeconds?: number | null;
+	// Command output fields: present on `tool-call-output` only, keyed by `toolCallId`. Every event re-states the
+	// command's whole state (label, running, exit code, cumulative skipped count); `outputLines` are the redacted lines
+	// since the previous event, and `outputReplace` says they replace the card's lines (a new command, a resume replay,
+	// or the tail after a flood). `commandExitCode` is null while running and when the command was stopped or timed out.
+	outputLines?: NodeChatToolOutputLineDto[] | null;
+	outputSkippedLines?: number | null;
+	commandLabel?: string | null;
+	commandRunning?: boolean | null;
+	commandExitCode?: number | null;
+	outputReplace?: boolean | null;
+}
+
+// One redacted line of a tool's sandbox command output; `stream` is "stdout" or "stderr".
+export interface NodeChatToolOutputLineDto {
+	stream: string;
+	text: string;
 }
 
 export const nodeChatToolStreamEventTypes = {
@@ -174,4 +190,6 @@ export const nodeChatToolStreamEventTypes = {
 	// A pending `ask_user` question: flips the matching tool card into a waiting state carrying the question payload
 	// the inline answer card renders and posts back. Structurally identical to approval-requested, richer payload.
 	questionRequested: "question-requested",
+	// A batch of a running tool's sandbox command output, merged into the matching tool card by tool-call id.
+	toolCallOutput: "tool-call-output",
 } as const;

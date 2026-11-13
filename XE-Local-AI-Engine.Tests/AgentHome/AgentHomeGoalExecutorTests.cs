@@ -6,13 +6,16 @@ using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.Coder.Implementation;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
@@ -491,7 +494,7 @@ public sealed class AgentHomeGoalExecutorTests : IDisposable
     }
 
     [Test]
-    public async Task RunCommand_AlwaysRunsInsideTheWorkspaceCopy_AndNoHostPathReachesTheModel()
+    public async Task RunCommand_AlwaysRunsInsideTheWorkspaceCopy_AndNoHostPathReachesTheModelOrTheOuterCallsLiveView()
     {
         SkipUnlessProcessJailIsUsable();
 
@@ -505,8 +508,19 @@ public sealed class AgentHomeGoalExecutorTests : IDisposable
             ["executable"] = "/bin/pwd",
             ["arguments"] = Array.Empty<string>()
         }));
+        var payloads = new List<ToolCallOutputPayload>();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.When(static d => d.ReportToolCallOutput(Arg.Any<ToolCallOutputPayload>())).Do(call => payloads.Add(call.Arg<ToolCallOutputPayload>()));
 
-        var outcome = await ExecuteAsync(provider, handle, client, AllActions);
+        // As RunInAgentHomeToolHandler binds it: the inner loop's own function invocation replaces the ambient call for its
+        // run_command, so only this OUTER binding names the card the live output belongs to.
+        AgentHomeGoalOutcome outcome;
+        using (ToolCommandOutputScope.Open(Guid.NewGuid(), Guid.NewGuid(), dispatcher, new ToolCommandStopRegistry(), TimeProvider.System, NullLogger.Instance))
+        using (AmbientToolCall.Enter("outer-call", "run_in_agent_home"))
+        using (ToolCommandOutputScope.BindCurrentCall())
+        {
+            outcome = await ExecuteAsync(provider, handle, client, AllActions);
+        }
 
         AssertEx.Equal(expected: 0, outcome.Commands[0].ExitCode);
 
@@ -516,6 +530,13 @@ public sealed class AgentHomeGoalExecutorTests : IDisposable
             AssertEx.False(result.Contains(jailRoot, StringComparison.Ordinal),
                 $"no tool result may carry the worker's own jail path; got: {result}");
         }
+
+        AssertEx.True(payloads.Count >= 2 && payloads.All(static payload => payload is { ToolCallId: "outer-call", CommandLabel: "/bin/pwd" }),
+            "the inner command's live output lands on the outer run_in_agent_home card");
+        var liveLine = payloads.SelectMany(static payload => payload.Lines).Single().Text;
+        AssertEx.False(liveLine.Contains(jailRoot, StringComparison.Ordinal), liveLine);
+        AssertEx.Contains(liveLine, SandboxIsolatedPaths.Posix.Work, StringComparison.Ordinal);
+        AssertEx.True(payloads[^1] is { CommandRunning: false, CommandExitCode: 0 });
 
         // It still tells the model where it is, and under a filesystem boundary the answer is already the SANDBOX's
         // own view (SandboxIsolatedPaths.Work) rather than a host path — the redaction has nothing left to do, which

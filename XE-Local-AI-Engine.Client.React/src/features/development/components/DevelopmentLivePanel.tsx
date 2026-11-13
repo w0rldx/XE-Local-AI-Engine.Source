@@ -1,30 +1,91 @@
-import { Alert, Badge, Code, Divider, Group, Paper, ScrollArea, SimpleGrid, Stack, Tabs, Text } from "@mantine/core";
+import { Alert, Badge, Button, Code, Divider, Group, Paper, ScrollArea, SimpleGrid, Stack, Tabs, Text } from "@mantine/core";
 import {
 	IconAlertTriangle,
 	IconCode,
 	IconFile,
 	IconInfoCircle,
 	IconListCheck,
+	IconPlayerStop,
 	IconTerminal2,
 	IconTool,
 } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { LiveOutputView } from "@/core/ui/components/LiveOutputView/LiveOutputView";
 import { ArtifactContentView, ArtifactViewButton } from "@/features/development/components/DevelopmentArtifactViewers";
 import { Metric } from "@/features/development/components/DevelopmentMetricTile";
 import { ValidationReportView } from "@/features/development/components/DevelopmentValidationReportView";
-import type { DevelopmentAttemptLiveState } from "@/features/development/hooks/useDevelopmentAttemptHub";
+import type {
+	DevelopmentAttemptLiveState,
+	DevelopmentCommandOutput,
+} from "@/features/development/hooks/useDevelopmentAttemptHub";
 import type { DevelopmentArtifact, DevelopmentAttempt, DevelopmentEvent } from "@/features/development/models/DevelopmentModels";
+
+interface DevelopmentCommandStop {
+	readonly stop: (executionId: string) => void;
+	// The execution whose stop request is in flight, or null.
+	readonly pendingExecutionId: string | null;
+}
 
 interface DevelopmentLivePanelProps {
 	readonly attempt: DevelopmentAttempt | null;
 	readonly live: DevelopmentAttemptLiveState;
 	readonly artifacts: readonly DevelopmentArtifact[];
 	readonly events: readonly DevelopmentEvent[];
+	// Absent where commands cannot be stopped; present, each running command offers Stop.
+	readonly commandStop?: DevelopmentCommandStop;
 }
 
-export function DevelopmentLivePanel({ attempt, live, artifacts, events }: DevelopmentLivePanelProps) {
+/** One block per command execution: its id, a Stop while it runs, and its output. */
+function CommandOutputList({
+	commands,
+	commandStop,
+}: {
+	readonly commands: readonly DevelopmentCommandOutput[];
+	readonly commandStop?: DevelopmentCommandStop;
+}) {
+	const { t } = useTranslation();
+	return commands.map((command) => (
+		<Stack key={command.executionId} gap={4} data-testid={`development-command-output-${command.executionId}`}>
+			<Group gap="xs" justify="space-between" wrap="wrap">
+				<Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+					<Code style={{ overflowWrap: "anywhere" }}>{command.commandId || command.executionId}</Code>
+					<Badge size="sm" variant="light" color={command.running ? "blue" : "gray"}>
+						{command.running
+							? t("pages.development.live.commandRunning", "Running")
+							: t("pages.development.live.commandEnded", "Ended")}
+					</Badge>
+				</Group>
+				{command.running && commandStop ? (
+					<Button
+						size="compact-xs"
+						color="red"
+						variant="light"
+						leftSection={<IconPlayerStop size={12} />}
+						loading={commandStop.pendingExecutionId === command.executionId}
+						onClick={() => commandStop.stop(command.executionId)}
+						data-testid={`development-command-stop-${command.executionId}`}
+					>
+						{t("pages.development.live.stopCommand", "Stop command")}
+					</Button>
+				) : null}
+			</Group>
+			<LiveOutputView
+				lines={command.output.lines}
+				hiddenLines={command.output.hiddenLines}
+				skippedLines={command.skippedLines}
+				running={command.running}
+				label={t("pages.development.live.commandOutputRegion", {
+					defaultValue: "Output of {{command}}",
+					command: command.commandId || command.executionId,
+				})}
+			/>
+		</Stack>
+	));
+}
+
+export function DevelopmentLivePanel({ attempt, live, artifacts, events, commandStop }: DevelopmentLivePanelProps) {
 	const { t } = useTranslation();
 	const [openArtifactId, setOpenArtifactId] = useState<string | null>(null);
 	const openArtifact = artifacts.find((artifact) => artifact.id === openArtifactId) ?? null;
@@ -34,6 +95,7 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 	const warnings = live.updates.filter((update) => update.kind === "Warning");
 	const tools = live.updates.filter((update) => update.kind === "Tool");
 	const commands = live.updates.filter((update) => update.kind === "Command");
+	const runningCommands = live.commands.filter((command) => command.running);
 	const output = live.updates.filter((update) => update.kind === "Output" || update.kind === "Activity");
 	const validationArtifacts = artifacts.filter(
 		(artifact) => artifact.kind === "ValidationReport" || artifact.kind === "ReviewReport",
@@ -146,6 +208,12 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 				</Tabs.List>
 
 				<Tabs.Panel value="live" pt="md">
+					{/* A running command is the most live thing an attempt does, so its output leads the default tab. */}
+					{runningCommands.length > 0 ? (
+						<Stack gap="xs" mb="md">
+							<CommandOutputList commands={runningCommands} commandStop={commandStop} />
+						</Stack>
+					) : null}
 					{/*
 					 * Viewport-relative rather than a flat 260px: on a short window (a phone in landscape, a split
 					 * desktop pane) a fixed 260 left the live output taller than the space the panel had, so the page
@@ -185,6 +253,7 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 						{commands.length === 0 ? (
 							<Text c="dimmed">{t("pages.development.live.noCommands", "No command activity yet.")}</Text>
 						) : null}
+						<CommandOutputList commands={live.commands} commandStop={commandStop} />
 						{commands.map((update) => (
 							<Code key={update.sequence}>
 								{update.currentCommandId ?? "command"} · {update.currentActivity ?? update.status}

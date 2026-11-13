@@ -376,6 +376,38 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         }
     }
 
+    /// <summary>Validation has no attempt of its own: with the judged coder attempt live, as the supervisor registers it, its commands stream there.</summary>
+    [Test]
+    public async Task Validation_WhenTheJudgedCoderAttemptIsLive_StreamsItsCommandOutputTaggedWithTheExecutionId()
+    {
+        var repository = await CreateRepositoryAsync();
+        var broker = new DevelopmentAttemptLiveBroker(Options.Create(new DevelopmentOptions()), TimeProvider.System);
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("trailing whitespace \n"), new ApprovingReviewerModel(), liveBroker: broker);
+        await using var scope = provider.CreateAsyncScope();
+        var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+        _ = await CodeAsync(scope.ServiceProvider, seed, repositoryBinding);
+        var coderAttemptId = (await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListAttemptsAsync(seed.TaskId)).Single().Id;
+        AssertEx.True(broker.Register(coderAttemptId));
+
+        var validation = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>().RunAsync(seed.TaskId, repositoryBinding);
+
+        AssertEx.False(validation.Passed, "git diff --check reports the trailing whitespace");
+        AssertEx.True(broker.TryGetDeliveryReader(coderAttemptId, out var reader));
+        var updates = new List<DevelopmentAttemptLiveUpdate>();
+        while (reader!.TryRead(out var update))
+        {
+            updates.Add(update);
+        }
+
+        var command = updates.Where(static update => update.CurrentCommandId == DevelopmentCommandIds.GitDiffCheck).ToArray();
+        var output = command.First(static update => update.Kind == DevelopmentAttemptLiveUpdateKind.CommandOutput);
+        AssertEx.Contains(output.OutputDelta!, "trailing whitespace");
+        AssertEx.NotEmpty(output.CurrentCommandExecutionId!);
+        AssertEx.True(command.All(update => update.CurrentCommandExecutionId == output.CurrentCommandExecutionId));
+        AssertEx.Equal(expected: 2, command.Count(static update => update.Kind == DevelopmentAttemptLiveUpdateKind.Command));
+    }
+
     /// <summary>A command that throws still leaves no validation sandbox running.</summary>
     [Test]
     public async Task Validation_WhenACommandThrows_StillKillsTheValidationSandbox()
@@ -1650,7 +1682,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     /// </param>
     private async Task<ServiceProvider> BuildProviderAsync(IDevelopmentCoderModel coderModel,
         IDevelopmentReviewerModel reviewerModel,
-        int maxAttemptDurationSeconds = 60)
+        int maxAttemptDurationSeconds = 60,
+        IDevelopmentAttemptLiveBroker? liveBroker = null)
     {
         Directory.CreateDirectory(_root);
         // Truncated for the same Windows path-budget reason as _root above.
@@ -1709,6 +1742,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         services.AddScoped<IDevelopmentHostApplyPort, TrustedDevelopmentHostApplyPort>();
         services.AddScoped<IDevelopmentCoordinator, DevelopmentCoordinator>();
         services.AddScoped<IDevelopmentApplyService, DevelopmentApplyService>();
+        if (liveBroker is not null)
+        {
+            services.AddSingleton(liveBroker);
+        }
+
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();

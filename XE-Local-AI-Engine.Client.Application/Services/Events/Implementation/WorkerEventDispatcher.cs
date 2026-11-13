@@ -53,6 +53,8 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 
     public event EventHandler<ToolCallLifecycleChangedEventArgs>? ToolCallLifecycleChanged;
 
+    public event EventHandler<ToolCallOutputChangedEventArgs>? ToolCallOutputChanged;
+
     public event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
 
     public event EventHandler<ApprovalRequestedChangedEventArgs>? ApprovalRequestedChanged;

@@ -89,6 +89,29 @@ public sealed class DevelopmentAttemptLiveBrokerTests
         AssertEx.False(broker.TryPublish(Update(attemptId, DevelopmentAttemptLiveUpdateKind.Activity, "late")));
     }
 
+    /// <summary>Validation re-registers the coder attempt's id while the coder stream may still drain: the new stream numbers above it.</summary>
+    [Test]
+    public async Task Register_AgainAfterComplete_NumbersTheNewStreamAboveEveryEarlierUpdate()
+    {
+        var attemptId = Guid.NewGuid();
+        var broker = CreateBroker(capacity: 8);
+        AssertEx.True(broker.Register(attemptId));
+        AssertEx.True(broker.TryPublish(Update(attemptId, DevelopmentAttemptLiveUpdateKind.Activity, "coder")));
+        AssertEx.True(broker.TryPublish(Update(attemptId, DevelopmentAttemptLiveUpdateKind.Terminal, "coder finished")));
+        AssertEx.True(broker.TryGetSnapshot(attemptId, out var coder));
+        AssertEx.True(broker.Complete(attemptId));
+
+        AssertEx.True(broker.Register(attemptId));
+        AssertEx.True(broker.TryGetSnapshot(attemptId, out var validation));
+        AssertEx.True(broker.TryPublish(Update(attemptId, DevelopmentAttemptLiveUpdateKind.Command, "validation")));
+
+        AssertEx.True(validation.Watermark >= coder.Watermark, "the new stream's watermark already covers the coder stream");
+        AssertEx.True(broker.TryGetDeliveryReader(attemptId, out var reader));
+        var first = await AssertEx.NotNull(reader).ReadAsync();
+        AssertEx.Equal("validation", first.CurrentActivity);
+        AssertEx.True(first.Sequence > coder.Watermark, "the first new update is numbered above the coder Terminal");
+    }
+
     private static DevelopmentAttemptLiveBroker CreateBroker(int capacity) =>
         new(Options.Create(new DevelopmentOptions
             {

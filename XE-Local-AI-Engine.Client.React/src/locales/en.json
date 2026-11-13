@@ -268,6 +268,9 @@
 			"live": "live",
 			"name": "tool",
 			"noOutput": "(no output)",
+			"outputLabel": "Command output",
+			"outputLabelExit": "Command output (exit code {{code}})",
+			"outputRegion": "Output of {{tool}}",
 			"patchApply": {
 				"appliedTitle": "Applied to your folders",
 				"apply": "Apply to my folders",
@@ -307,6 +310,9 @@
 			},
 			"resultLabel": "Result",
 			"sending": "Sending",
+			"stop": "Stop command",
+			"stopFailed": "Could not stop the command.",
+			"stopNothingRunning": "The command had already finished.",
 			"thinkingLive": "Thinking…"
 		},
 		"webRequest": {
@@ -415,6 +421,16 @@
 		},
 		"layout": {
 			"skipToContent": "Skip to main content"
+		},
+		"liveOutput": {
+			"empty": "No output yet.",
+			"hiddenLines_one": "{{count}} earlier line hidden",
+			"hiddenLines_other": "{{count}} earlier lines hidden",
+			"running": "Running for {{elapsed}}, last output {{ago}} ago",
+			"runningNoOutput": "Running for {{elapsed}}, no output yet",
+			"skippedLines_one": "{{count}} line skipped",
+			"skippedLines_other": "{{count}} lines skipped",
+			"stderrPrefix": "stderr: "
 		},
 		"markdownEditor": {
 			"edit": "Edit",
@@ -3229,6 +3245,9 @@
 			},
 			"live": {
 				"activityUpdated": "Activity updated",
+				"commandEnded": "Ended",
+				"commandOutputRegion": "Output of {{command}}",
+				"commandRunning": "Running",
 				"commands": "Commands",
 				"context": "Context headroom",
 				"details": {
@@ -3258,6 +3277,9 @@
 				"reasoningTokens": "Reasoning tokens",
 				"rounds": "Provider rounds",
 				"speed": "Output tokens/s",
+				"stopCommand": "Stop command",
+				"stopFailed": "Could not stop the command.",
+				"stopNothingRunning": "The command had already finished.",
 				"tabs": {
 					"commands": "Commands",
 					"details": "Details",
@@ -3403,6 +3425,7 @@
 				"failure": {
 					"commandDidNotComplete": "A validation command did not run to completion.",
 					"commandFailed": "A validation command exited non-zero.",
+					"commandStopped": "An operator stopped a validation command, so this run judged nothing.",
 					"missingCommandEvidence": "The report is missing evidence for a command this profile requires.",
 					"noTestsExecuted": "The suite ran but executed no tests, so this run evidences the build and nothing about behaviour.",
 					"runnerNotInstalled": "A validation command's runner could not be started on this host, so nothing the coder wrote was judged: it is not installed, or the filesystem boundary could not reach it. The detail says which; XE never installs it.",

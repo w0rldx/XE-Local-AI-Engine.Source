@@ -85,6 +85,7 @@ internal static class AddNodeInvocationExtensions
         builder.Services.AddSingleton<ApiToolCallBridge>();
         builder.Services.AddSingleton<InvocationLifecycleTracker>();
         builder.Services.AddSingleton<InvocationReasoningControl>();
+        builder.Services.AddSingleton<ToolCommandStopRegistry>();
         // SCOPED, and the singleton runner above may not hold it under any wrapper — not even Lazy<T>, which defers construction but
         // never opens a scope. InvocationRunner.RunAsync opens ONE explicit scope per `auto` turn; other efforts never resolve it.
         builder.Services.AddScoped<IReasoningEffortDispatcher, DefaultReasoningEffortDispatcher>();

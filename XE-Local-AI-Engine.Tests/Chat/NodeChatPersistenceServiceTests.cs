@@ -184,6 +184,91 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task TerminalizeAssistantMessageAsync_WithAToolOutputTail_RoundTrips_AndAPartWithoutOneWritesNoOutputKeys()
+    {
+        await using var provider = await BuildProviderAsync("parts-output-tail.sqlite");
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Output tail",
+            UserId = "node",
+            CreatedAtUtc = 2100
+        });
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = assistantMessageId,
+            RequestId = Guid.NewGuid()
+        };
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = assistantMessageId,
+            RequestId = correlation.RequestId,
+            CreatedAtUtc = 2101
+        });
+
+        var parts = new List<NodeChatMessagePart>
+        {
+            new(NodeChatMessagePartKinds.Tool, Sequence: 0, ToolCallId: "call-1", Name: "run_in_agent_home", State: NodeChatToolPartStates.Received, Result: "done",
+                OutputTail:
+                [
+                    new NodeChatToolOutputLine
+                    {
+                        Stream = NodeChatToolOutputStreams.Stdout,
+                        Text = "Passed: 12"
+                    },
+                    new NodeChatToolOutputLine
+                    {
+                        Stream = NodeChatToolOutputStreams.Stderr,
+                        Text = "warning: <workspace>/a.cs"
+                    }
+                ],
+                OutputSkippedLines: 4,
+                LastCommandLabel: "dotnet test"),
+            new(NodeChatMessagePartKinds.Tool, Sequence: 1, ToolCallId: "call-2", Name: "web_search", State: NodeChatToolPartStates.Received, Result: "hits")
+        };
+
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 2102,
+            Content = "the answer",
+            Parts = parts
+        });
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId));
+        var loadedParts = AssertEx.NotNull(loaded.Messages.Single(message => message.MessageId == assistantMessageId).Parts);
+        var tail = AssertEx.NotNull(loadedParts[0].OutputTail);
+        AssertEx.Equal(expected: 2, tail.Count);
+        AssertEx.Equal(NodeChatToolOutputStreams.Stdout, tail[0].Stream);
+        AssertEx.Equal("Passed: 12", tail[0].Text);
+        AssertEx.Equal(NodeChatToolOutputStreams.Stderr, tail[1].Stream);
+        AssertEx.Equal("warning: <workspace>/a.cs", tail[1].Text);
+        AssertEx.Equal(expected: 4, loadedParts[0].OutputSkippedLines);
+        AssertEx.Equal("dotnet test", loadedParts[0].LastCommandLabel);
+        AssertEx.Null(loadedParts[1].OutputTail);
+        AssertEx.Null(loadedParts[1].OutputSkippedLines);
+        AssertEx.Null(loadedParts[1].LastCommandLabel);
+
+        // A part without output writes the same keys it always did, and a blob from before the fields reads them as null.
+        var written = NodeChatMetadataSerializer.Decode(AssertEx.NotNull(NodeChatMetadataSerializer.SerializeMetadata(metadataJson: null, reasoning: null, model: null,
+            inputTokens: null, outputTokens: null, totalTokens: null, reasoningTokens: null, [parts[1]])));
+        AssertEx.False(written.Contains("outputTail", StringComparison.Ordinal)
+                       || written.Contains("outputSkippedLines", StringComparison.Ordinal)
+                       || written.Contains("lastCommandLabel", StringComparison.Ordinal),
+            written);
+        var legacy = NodeChatMetadataSerializer.DeserializeMetadata("""{"parts":[{"kind":"tool","sequence":0,"toolCallId":"call-1","result":"done"}]}""");
+        var legacyPart = AssertEx.NotNull(legacy.Parts).Single();
+        AssertEx.Equal("done", legacyPart.Result);
+        AssertEx.Null(legacyPart.OutputTail);
+        AssertEx.Null(legacyPart.OutputSkippedLines);
+        AssertEx.Null(legacyPart.LastCommandLabel);
+    }
+
+    [Test]
     public async Task TerminalizeAssistantMessageAsync_WithAFailureCategory_RoundTripsItThroughTheEncryptedBlob()
     {
         await using var provider = await BuildProviderAsync("failure-category-roundtrip.sqlite");

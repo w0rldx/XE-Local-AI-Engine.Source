@@ -280,11 +280,16 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // runaway command cannot exhaust memory, while the pump keeps draining so the child never blocks on a full buffer.
         var standardOutputBuilder = new CappedStringBuilder(DefaultMaxCapturedOutputBytes);
         var standardErrorBuilder = new CappedStringBuilder(DefaultMaxCapturedOutputBytes);
+        var observer = GuardedSandboxOutputObserver.Wrap(request.OutputObserver, _logger, request.ExecutionId);
 
         ISandboxChildProcess process;
         try
         {
-            process = await StartChildAsync(startInfo, launch, standardOutputBuilder.AppendLine, standardErrorBuilder.AppendLine, cancellationToken);
+            process = await StartChildAsync(startInfo,
+                launch,
+                Observed(standardOutputBuilder.AppendLine, observer, SandboxOutputSource.StandardOutput),
+                Observed(standardErrorBuilder.AppendLine, observer, SandboxOutputSource.StandardError),
+                cancellationToken);
         }
         catch (Exception exception) when (IsLaunchFailure(exception, launch, cancellationToken))
         {
@@ -708,12 +713,23 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         ArgumentException.ThrowIfNullOrWhiteSpace(executionId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Best-effort: cancel and tree-kill the in-flight command by execution id; firing the cancel source makes ExecuteAsync
-        // return a non-throwing Completed=false result. A missing id or gone sandbox is a no-op, as elsewhere.
-        if (_registry.FindState(handle.SandboxId) is { } state
-            && state.InFlight.TryGetValue(executionId, out var inFlight))
+        // Firing the cancel source makes ExecuteAsync return a non-throwing Completed=false result; an id still starting is latched and
+        // cancelled as it registers (TryRegisterInFlight). A gone sandbox is a no-op, as elsewhere.
+        if (_registry.FindState(handle.SandboxId) is not { } state)
         {
-            inFlight.RequestCancel();
+            return Task.CompletedTask;
+        }
+
+        lock (state.Sync)
+        {
+            if (state.InFlight.TryGetValue(executionId, out var inFlight))
+            {
+                inFlight.RequestCancel();
+            }
+            else if (state.Alive)
+            {
+                state.PendingCancels.Latch(executionId, _timeProvider);
+            }
         }
 
         return Task.CompletedTask;
@@ -724,7 +740,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///     A kill that ran while the child was starting (an MXC spawn is awaited) already swept the in-flight set, so registering after it
     ///     would leave the child where no teardown looks.
     /// </remarks>
-    private static InFlightRegistration TryRegisterInFlight(JailState state, string executionId, InFlightExecution inFlight)
+    private InFlightRegistration TryRegisterInFlight(JailState state, string executionId, InFlightExecution inFlight)
     {
         lock (state.Sync)
         {
@@ -733,7 +749,18 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 return InFlightRegistration.SandboxDead;
             }
 
-            return state.InFlight.TryAdd(executionId, inFlight) ? InFlightRegistration.Registered : InFlightRegistration.DuplicateExecutionId;
+            if (!state.InFlight.TryAdd(executionId, inFlight))
+            {
+                return InFlightRegistration.DuplicateExecutionId;
+            }
+
+            // A stop that arrived while the child was starting: cancel now, under the same lock the kill path cancels under.
+            if (state.PendingCancels.TryConsume(executionId, _timeProvider))
+            {
+                inFlight.RequestCancel();
+            }
+
+            return InFlightRegistration.Registered;
         }
     }
 
@@ -745,6 +772,24 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         _registry.RemoveAndTerminate(handle.SandboxId);
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>The capture callback alone without an observer, else capture first and then the observer, which also sees lines past the cap.</summary>
+    private static Action<string?> Observed(Action<string?> capture, GuardedSandboxOutputObserver? observer, SandboxOutputSource source)
+    {
+        if (observer is null)
+        {
+            return capture;
+        }
+
+        return line =>
+        {
+            capture(line);
+            if (line is not null)
+            {
+                observer.OnLine(source, line);
+            }
+        };
     }
 
     /// <summary>

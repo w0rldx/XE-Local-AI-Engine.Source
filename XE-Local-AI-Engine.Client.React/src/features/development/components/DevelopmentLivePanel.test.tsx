@@ -17,9 +17,14 @@ const queriesMock = vi.hoisted(() => ({ useDevelopmentArtifactContent: vi.fn() }
 vi.mock("react-i18next", () => ({
 	// Interpolates, unlike the previous fallback-only stub: the prompt rows name their attempt's role through
 	// `{{role}}`, and a stub that returned the raw template would have passed while the operator saw literal braces.
+	// The options-object form (`t(key, { defaultValue, ...values })`) is folded into the same shape.
 	useTranslation: () => ({
-		t: (key: string, fallback?: string, options?: Record<string, unknown>) =>
-			(fallback ?? key).replace(/{{(\w+)}}/g, (token: string, name: string) => String(options?.[name] ?? token)),
+		t: (key: string, fallbackOrOptions?: string | Record<string, unknown>, options?: Record<string, unknown>) => {
+			const values = typeof fallbackOrOptions === "object" ? fallbackOrOptions : options;
+			const fallback =
+				typeof fallbackOrOptions === "object" ? (fallbackOrOptions["defaultValue"] as string | undefined) : fallbackOrOptions;
+			return (fallback ?? key).replace(/{{(\w+)}}/g, (token: string, name: string) => String(values?.[name] ?? token));
+		},
 	}),
 }));
 vi.mock("@/features/development/queries/useDevelopment", () => queriesMock);
@@ -42,6 +47,7 @@ const live: DevelopmentAttemptLiveState = {
 	droppedOrCoalescedUpdateCount: 0,
 	latest: null,
 	updates: [],
+	commands: [],
 };
 
 const validationArtifact: DevelopmentArtifact = {
@@ -258,6 +264,15 @@ describe("DevelopmentLivePanel validation evidence", () => {
 		expect(screen.getByTestId("development-validation-failed-invalidated-note")).toBeTruthy();
 	});
 
+	it("labels an operator-stopped validation command", () => {
+		contentQuery(JSON.stringify(report({ passed: false, failureCode: "command_stopped", commands: [] })));
+
+		renderPanel([{ ...validationArtifact, isValid: false }]);
+
+		const failure = screen.getByTestId("development-validation-failure");
+		expect(within(failure).getByText("An operator stopped a validation command, so this run judged nothing.")).toBeTruthy();
+	});
+
 	it("keeps a superseded PASS out of the current result instead of presenting its counts", () => {
 		// The other half of the same separation. A pass that is no longer current would assert something untrue about
 		// the tree it is displayed beside, so its counts stay hidden — but the panel says so explicitly rather than
@@ -395,6 +410,92 @@ describe("DevelopmentLivePanel validation evidence", () => {
 		renderPanel([]);
 		expect(screen.getByTestId("development-validation-no-report")).toBeTruthy();
 		expect(queriesMock.useDevelopmentArtifactContent).toHaveBeenLastCalledWith(undefined, undefined, undefined);
+	});
+});
+
+describe("DevelopmentLivePanel command output", () => {
+	beforeEach(() => {
+		installDomMocks();
+		vi.clearAllMocks();
+		queriesMock.useDevelopmentArtifactContent.mockReturnValue({ data: undefined, isPending: true, error: null });
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	it("shows each command's output under its own block and stops only a running one by execution id", () => {
+		const stop = vi.fn();
+		const commands: DevelopmentAttemptLiveState["commands"] = [
+			{
+				executionId: "exec-1",
+				commandId: "build",
+				output: { lines: [{ stream: "stdout", text: "Build succeeded." }], hiddenLines: 0 },
+				skippedLines: 0,
+				running: false,
+			},
+			{
+				executionId: "exec-2",
+				commandId: "test",
+				output: { lines: [{ stream: "stdout", text: "Passed 3" }], hiddenLines: 0 },
+				skippedLines: 4,
+				running: true,
+			},
+		];
+		render(
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<DevelopmentLivePanel
+					attempt={coderAttempt}
+					live={{ ...live, commands }}
+					artifacts={[]}
+					events={[]}
+					commandStop={{ stop, pendingExecutionId: null }}
+				/>
+			</MantineProvider>,
+		);
+
+		// The running command leads the default Live tab and repeats in the Commands tab; the ended one is only there.
+		expect(screen.getAllByTestId("development-command-output-exec-2")).toHaveLength(2);
+		expect(screen.getAllByTestId("development-command-output-exec-1")).toHaveLength(1);
+		expect(screen.queryByTestId("development-command-stop-exec-1")).toBeNull();
+		expect(screen.getAllByText("Passed 3")).toHaveLength(2);
+
+		const [firstStop] = screen.getAllByTestId("development-command-stop-exec-2");
+		if (!firstStop) {
+			throw new Error("The running command offered no Stop button.");
+		}
+		fireEvent.click(firstStop);
+
+		expect(stop).toHaveBeenCalledWith("exec-2");
+	});
+
+	it("shows only the command whose stop is in flight as busy", () => {
+		const running = (executionId: string): DevelopmentAttemptLiveState["commands"][number] => ({
+			executionId,
+			commandId: executionId,
+			output: { lines: [], hiddenLines: 0 },
+			skippedLines: 0,
+			running: true,
+		});
+		render(
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<DevelopmentLivePanel
+					attempt={coderAttempt}
+					live={{ ...live, commands: [running("exec-2"), running("exec-3")] }}
+					artifacts={[]}
+					events={[]}
+					commandStop={{ stop: vi.fn(), pendingExecutionId: "exec-2" }}
+				/>
+			</MantineProvider>,
+		);
+
+		for (const button of screen.getAllByTestId("development-command-stop-exec-2")) {
+			expect(button.hasAttribute("data-loading")).toBe(true);
+		}
+		for (const button of screen.getAllByTestId("development-command-stop-exec-3")) {
+			expect(button.hasAttribute("data-loading")).toBe(false);
+			expect((button as HTMLButtonElement).disabled).toBe(false);
+		}
 	});
 });
 

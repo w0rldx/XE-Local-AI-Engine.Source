@@ -15,6 +15,9 @@ internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemp
 {
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _attempts = new();
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _validations = new();
+
+    /// <summary>Each running attempt's end, completed once its live stream is closed; it never faults.</summary>
+    private readonly ConcurrentDictionary<Guid, Task> _attemptRuns = new();
     private readonly CancellationTokenSource _shutdown = new();
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IDevelopmentAttemptLiveBroker _liveBroker;
@@ -53,8 +56,11 @@ internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemp
             return false;
         }
 
+        // Recorded before the run starts, so a validation started the moment the attempt commits always finds it.
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _attemptRuns[attemptId] = finished.Task;
         _ = DeliverLiveUpdatesObservedAsync(attemptId, _shutdown.Token);
-        _ = RunAttemptObservedAsync(attemptId, role, cancellation.Token);
+        _ = RunAttemptObservedAsync(attemptId, role, finished, cancellation.Token);
         return true;
     }
 
@@ -114,6 +120,7 @@ internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemp
 
     private async Task RunAttemptObservedAsync(Guid attemptId,
         DevelopmentAttemptRole role,
+        TaskCompletionSource finished,
         CancellationToken cancellationToken)
     {
         // Hoisted out of the try only so the failure paths below can name the task the attempt belonged to. Null
@@ -187,6 +194,9 @@ internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemp
             {
                 cancellation.Dispose();
             }
+
+            _ = _attemptRuns.TryRemove(new KeyValuePair<Guid, Task>(attemptId, finished.Task));
+            finished.TrySetResult();
         }
     }
 
@@ -237,15 +247,47 @@ internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemp
 
     private async Task RunValidationObservedAsync(Guid taskId, CancellationToken cancellationToken)
     {
+        DevelopmentAttemptLiveUpdate? liveTerminal = null;
+        var outcome = "Validation could not finish.";
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
-            var task = await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>()
-                                  .GetTaskAsync(taskId, cancellationToken);
+            var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+            var task = await store.GetTaskAsync(taskId, cancellationToken);
+
+            // Validation has no attempt of its own: its commands stream under the coder attempt it judges, the task's latest
+            // (attempts are listed oldest first), which the attempt hub accepts while the task validates.
+            var judged = (await store.ListAttemptsAsync(taskId, cancellationToken))
+                .LastOrDefault(static attempt => attempt.Role == DevelopmentAttemptRole.Coder);
+
+            // The attempt commits Succeeded before its run closes its live stream, and a workflow can start validation in between:
+            // wait for that close, or the re-registration below finds the coder stream still open and validation streams nothing.
+            if (judged is not null && _attemptRuns.TryGetValue(judged.Id, out var coderRun))
+            {
+                await coderRun.WaitAsync(cancellationToken);
+            }
+
+            if (judged is { Status: DevelopmentAttemptStatus.Succeeded } && _liveBroker.Register(judged.Id))
+            {
+                liveTerminal = new DevelopmentAttemptLiveUpdate
+                {
+                    ProjectId = task.ProjectId,
+                    TaskId = taskId,
+                    AttemptId = judged.Id,
+                    Kind = DevelopmentAttemptLiveUpdateKind.Terminal,
+                    Role = judged.Role,
+                    Status = judged.Status,
+                    ModelId = judged.ModelId,
+                    Provider = judged.Provider
+                };
+                _ = DeliverLiveUpdatesObservedAsync(judged.Id, _shutdown.Token);
+            }
+
             var repository = await scope.ServiceProvider.GetRequiredService<IDevelopmentRepositoryBindingService>()
                                         .ResolveProjectAsync(task.ProjectId, cancellationToken);
             var result = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
                                     .RunAsync(taskId, repository, cancellationToken);
+            outcome = result.Passed ? "Validation passed." : "Validation failed.";
 
             // The verdict is logged here or a scan of the backend log finds no "Deterministic validation" at all. The
             // result carries no reason of its own; the gate's complaint lives in ValidationReport and blocked_reason.
@@ -256,6 +298,7 @@ internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemp
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            outcome = "Validation was cancelled.";
             _logger.LogInformation("Development validation for task {TaskId} was cancelled.", taskId);
         }
         catch (Exception exception)
@@ -264,6 +307,16 @@ internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemp
         }
         finally
         {
+            // Terminal before Complete, so a subscriber reads that the validation stream ended, not that it was cut.
+            if (liveTerminal is not null)
+            {
+                _ = _liveBroker.TryPublish(liveTerminal with
+                {
+                    CurrentActivity = outcome
+                });
+                _ = _liveBroker.Complete(liveTerminal.AttemptId);
+            }
+
             if (_validations.TryRemove(taskId, out var cancellation))
             {
                 cancellation.Dispose();

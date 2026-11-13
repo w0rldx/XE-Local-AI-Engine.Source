@@ -91,6 +91,7 @@ export function AssistantMessageBubble({
 				{assistantMessage ? (
 					<MessageParts
 						parts={display.parts}
+						messageId={message.id}
 						isStreaming={isStreaming}
 						streamingReasoningOverflowBytes={streamingReasoningOverflowBytes}
 						hasContentStarted={display.hasContentStarted}
