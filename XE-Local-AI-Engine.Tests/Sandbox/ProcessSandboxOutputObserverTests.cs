@@ -73,6 +73,48 @@ public sealed class ProcessSandboxOutputObserverTests
         AssertEx.Equal(expected: 1, observer.Calls);
     }
 
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task CancelCommand_AfterTheCommandPrinted_KeepsThePartialOutput_AndEndsStderrWithTheCancelMessage()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var observer = new RecordingSandboxOutputObserver();
+
+        var executeTask = provider.ExecuteAsync(handle,
+            Shell("observe-stop", @"printf 'test-1 passed\ntest-2 passed\n'; printf 'warn-1\n' >&2; sleep 30", observer));
+        await AssertEx.EventuallyAsync(() => observer.StandardOutput.Count == 2 && observer.StandardError.Count == 1,
+            TimeSpan.FromSeconds(20),
+            "the command must print its lines before it is stopped");
+        await provider.CancelCommandAsync(handle, "observe-stop");
+        var result = await executeTask.WaitAsync(TimeSpan.FromSeconds(20));
+
+        AssertEx.False(result.Completed, "a stop does not complete the command");
+        AssertEx.Equal(expected: -1, result.ExitCode);
+        AssertEx.Equal("test-1 passed\ntest-2 passed\n", result.StandardOutput);
+        AssertEx.Equal("warn-1\nCommand was cancelled before completion.", result.StandardError);
+        AssertEx.False(result.StandardOutputTruncated);
+        AssertEx.False(result.StandardErrorTruncated);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Timeout_AfterTheCommandPrinted_KeepsItsOwnShape_WithNoPartialOutput()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+
+        // Only a stop keeps the partial output; the timeout result stays the shape it always had.
+        var result = await provider.ExecuteAsync(handle,
+                                        Shell("observe-timeout", "printf 'line-1\\n'; sleep 30", observer: null) with { Timeout = TimeSpan.FromSeconds(1) })
+                                    .WaitAsync(TimeSpan.FromSeconds(20));
+
+        AssertEx.False(result.Completed);
+        AssertEx.Equal(expected: -1, result.ExitCode);
+        AssertEx.Equal("Command timed out.", result.StandardError);
+        AssertEx.Equal(string.Empty, result.StandardOutput);
+    }
+
     private static SandboxCommandRequest Shell(string executionId, string script, ISandboxOutputObserver? observer)
     {
         return new SandboxCommandRequest

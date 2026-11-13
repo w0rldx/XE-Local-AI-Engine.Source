@@ -240,9 +240,12 @@ The view is observe-only: what the model reads is the tool's normal result, exce
 - **Stopping one command.** `POST chat/messages/{messageId}/tool-calls/{toolCallId}/stop` ([API &
   Hubs](09-api-and-hubs.md)) stops only the command `ToolCommandStopRegistry` holds for that message and call, through
   `ISandboxRuntimeProvider.CancelCommandAsync`. A command registers only when the provider advertises
-  `SupportsCommandCancellation`. The turn continues: the tool gets its normal not-completed result. `run_python`
+  `SupportsCommandCancellation`. The turn continues: the tool gets its normal not-completed result, which keeps the
+  stdout and stderr the command printed before the stop, so the model sees how far it got; the stderr ends with
+  `SandboxCommandResult.CancelledMessage`. The Docker provider (`DockerSandboxRuntimeProvider`) returns only that line. `run_python`
   reports it as `[tool error: stopped]`, never as a timeout ([Compute Tools](19-compute-tools.md)); an inner AgentHome
-  `run_command` reads like any other command that did not complete. Ending the whole turn is still `chat/cancel`.
+  `run_command` opens with "The operator stopped this command before it finished." (`AgentHomeGoalExecutor.RenderCommandResult`)
+  and keeps its partial output in the untrusted fence. Ending the whole turn is still `chat/cancel`.
 - **`xe` CLI.** `ChatStreamFolder` consumes `tool-call-output` silently, so command output never prints as status lines.
 
 ## MCP & local tools offered during a chat run

@@ -38,6 +38,9 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
     private const string SandboxKilledBeforeStart = "The sandbox was killed before the command started.";
 
+    // How long a torn-down child's output pumps get to reach end of stream before the capture so far is used as is.
+    private static readonly TimeSpan OutputDrainWait = TimeSpan.FromSeconds(2);
+
     /// <summary>
     ///     The only environment variables a sandboxed child inherits from the worker: system and toolchain names the
     ///     fixed production executables need on Linux and Windows, none of them secret-bearing.
@@ -413,7 +416,24 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // reads a cancelled command, not a caller cancel. Scope and group kills run here: a tree walk stops at the helper.
             process.Kill();
             await TerminateLaunchAsync(launch, process);
-            return NotCompleted(request.ExecutionId, "Command was cancelled before completion.", startedAt);
+
+            // Keep what the command printed before the stop, so the caller sees how far it got. The tree is gone, so the pumps reach end
+            // of stream; the wait is bounded as InteractiveProcess bounds its drain, and an expired one keeps the capture so far.
+            using (var drain = new CancellationTokenSource(OutputDrainWait, _timeProvider))
+            {
+                _ = await process.TryWaitForExitAsync(drain.Token);
+            }
+
+            // Every captured line ends in a newline, so the cancel message lands on its own line.
+            var cancelled = NotCompleted(request.ExecutionId,
+                standardErrorBuilder.ToString() + SandboxCommandResult.CancelledMessage,
+                startedAt,
+                standardOutputBuilder.ToString());
+            return cancelled with
+            {
+                StandardOutputTruncated = standardOutputBuilder.IsTruncated,
+                StandardErrorTruncated = standardErrorBuilder.IsTruncated
+            };
         }
         catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -1226,7 +1246,6 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         private readonly SandboxLaunchDescriptor _launch;
         private readonly string? _markerId;
         private readonly ISandboxChildProcess _process;
-        private static readonly TimeSpan StderrDrainWait = TimeSpan.FromSeconds(2);
 
         private readonly ProcessSandboxRuntimeProvider _provider;
         private readonly JailState _state;
@@ -1266,7 +1285,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             {
                 // Waits for exit AND the stderr reader's end of stream, so the last lines land; bounded, and never kills. Still running
                 // or torn down concurrently leaves the tail so far, the best answer there is.
-                using var drain = new CancellationTokenSource(StderrDrainWait, _provider._timeProvider);
+                using var drain = new CancellationTokenSource(OutputDrainWait, _provider._timeProvider);
                 _ = await _process.TryWaitForExitAsync(drain.Token);
             }
 
@@ -1285,7 +1304,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             if (_launch.MxcRequest is not null)
             {
                 // Reap, bounded: MXC clears the run's DACL grants once the workload has exited (ClearPolicyOnExit).
-                using var reap = new CancellationTokenSource(StderrDrainWait, _provider._timeProvider);
+                using var reap = new CancellationTokenSource(OutputDrainWait, _provider._timeProvider);
                 _ = await _process.TryWaitForExitAsync(reap.Token);
             }
 

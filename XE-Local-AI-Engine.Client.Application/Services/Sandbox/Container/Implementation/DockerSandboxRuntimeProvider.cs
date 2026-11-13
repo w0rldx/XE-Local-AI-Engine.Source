@@ -233,7 +233,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             {
                 ExecutionId = request.ExecutionId,
                 ExitCode = -1,
-                StandardError = "Command was cancelled before completion.",
+                StandardError = SandboxCommandResult.CancelledMessage,
                 Completed = false,
                 Duration = _timeProvider.GetUtcNow() - startedAt
             };

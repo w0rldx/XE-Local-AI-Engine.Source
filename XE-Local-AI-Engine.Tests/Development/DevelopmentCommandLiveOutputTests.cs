@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
+using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -135,6 +136,87 @@ public sealed class DevelopmentCommandLiveOutputTests : IDisposable
         var completed = Drain().Last(update => update.Kind == DevelopmentAttemptLiveUpdateKind.Command);
         AssertEx.Equal(executionId, completed.CurrentCommandExecutionId);
         AssertEx.Equal("Command git_status was stopped by the operator.", completed.CurrentActivity);
+    }
+
+    [Test]
+    public async Task StopCommand_KeepsTheOutputPrintedBeforeTheStop_AndOnlyTheCancelLineReadsAsTheOperatorStop()
+    {
+        var session = await CreateSessionAsync();
+        _sandbox.RegisterBlockingCommand(CommandLine(DevelopmentCommandIds.GitStatus), standardOutput: "M a.txt\n", standardError: "warn-1\n");
+        var tools = CreateTools(session, Live());
+
+        var running = tools.RunCommandAsync(DevelopmentCommandIds.GitStatus);
+        var executionId = Drain().Single(update => update.Kind == DevelopmentAttemptLiveUpdateKind.Command).CurrentCommandExecutionId!;
+        AssertEx.True(await _broker.TryStopCommandAsync(_snapshot.AttemptId, executionId));
+        var result = await running;
+
+        // The model and the evidence see how far the command got.
+        AssertEx.Equal($"git_status: exit=-1, completed=False\nM a.txt\n\nwarn-1\n{DevelopmentCommandEvidence.StoppedByOperatorMessage}", result);
+        var evidence = tools.CommandEvidence.Single();
+        AssertEx.True(evidence.StoppedByOperator);
+        AssertEx.Equal("M a.txt\n", evidence.StandardOutput);
+        AssertEx.Equal($"warn-1\n{DevelopmentCommandEvidence.StoppedByOperatorMessage}", evidence.StandardError);
+    }
+
+    [Test]
+    public async Task StopCommand_WithStderrPastTheEvidenceCap_StillEndsWithTheOperatorStop_WithinTheCap()
+    {
+        const int Cap = 200;
+        var session = await CreateSessionAsync();
+        _sandbox.RegisterBlockingCommand(CommandLine(DevelopmentCommandIds.GitStatus), standardOutput: "M a.txt\n", standardError: new string('w', 1000) + "\n");
+        var tools = CreateTools(session,
+            Live(),
+            new DevelopmentOptions
+            {
+                Enabled = true,
+                MaxAttemptDurationSeconds = 60,
+                LiveChannelCapacity = 64,
+                MaxCommandOutputBytes = Cap
+            });
+
+        var running = tools.RunCommandAsync(DevelopmentCommandIds.GitStatus);
+        var executionId = Drain().Single(update => update.Kind == DevelopmentAttemptLiveUpdateKind.Command).CurrentCommandExecutionId!;
+        AssertEx.True(await _broker.TryStopCommandAsync(_snapshot.AttemptId, executionId));
+        var result = await running;
+
+        // The cap keeps the head, so without reserved room the stop line would be the part cut off.
+        const string Header = "git_status: exit=-1, completed=False\nM a.txt\n\n";
+        AssertEx.True(result.StartsWith(Header, StringComparison.Ordinal), result);
+        var renderedStderr = result[Header.Length..];
+        AssertEx.True(renderedStderr.EndsWith(DevelopmentCommandEvidence.StoppedByOperatorMessage, StringComparison.Ordinal), renderedStderr);
+        AssertEx.Equal(expected: Cap, Encoding.UTF8.GetByteCount(renderedStderr), "the printed stderr fills the room the stop line leaves");
+        var evidence = tools.CommandEvidence.Single();
+        AssertEx.Equal(renderedStderr, evidence.StandardError);
+        AssertEx.True(evidence.OutputTruncated, "the printed stderr was cut");
+        AssertEx.True(evidence.StoppedByOperator);
+    }
+
+    [Test]
+    public async Task StopCommand_WithACapBelowTheStopLine_CutsTheStopLineToTheCap_AndReadsTruncated()
+    {
+        // Below the 54-byte stop line, yet above a 41-byte commit id, so the worktree invariant probes still read whole.
+        const int Cap = 50;
+        var session = await CreateSessionAsync();
+        _sandbox.RegisterBlockingCommand(CommandLine(DevelopmentCommandIds.GitStatus));
+        var tools = CreateTools(session,
+            Live(),
+            new DevelopmentOptions
+            {
+                Enabled = true,
+                MaxAttemptDurationSeconds = 60,
+                LiveChannelCapacity = 64,
+                MaxCommandOutputBytes = Cap
+            });
+
+        var running = tools.RunCommandAsync(DevelopmentCommandIds.GitStatus);
+        var executionId = Drain().Single(update => update.Kind == DevelopmentAttemptLiveUpdateKind.Command).CurrentCommandExecutionId!;
+        AssertEx.True(await _broker.TryStopCommandAsync(_snapshot.AttemptId, executionId));
+        _ = await running;
+
+        var evidence = tools.CommandEvidence.Single();
+        AssertEx.Equal(DevelopmentCommandEvidence.StoppedByOperatorMessage[..Cap], evidence.StandardError);
+        AssertEx.True(evidence.OutputTruncated, "a stop line cut to the cap reads truncated");
+        AssertEx.True(evidence.StoppedByOperator);
     }
 
     [Test]
@@ -307,8 +389,10 @@ public sealed class DevelopmentCommandLiveOutputTests : IDisposable
     private DevelopmentAttemptLiveProgress Live() =>
         new(_snapshot, _broker, Options.Create(OptionsValue()), _clock, maxOutputTokens: 2048, maxToolCalls: 16);
 
-    private DevelopmentWorkspaceTools CreateTools(DevelopmentWorkspaceSession session, DevelopmentAttemptLiveProgress? liveProgress) =>
-        new(_sandbox, session, Options.Create(OptionsValue()), GenericProfile, liveProgress);
+    private DevelopmentWorkspaceTools CreateTools(DevelopmentWorkspaceSession session,
+        DevelopmentAttemptLiveProgress? liveProgress,
+        DevelopmentOptions? options = null) =>
+        new(_sandbox, session, Options.Create(options ?? OptionsValue()), GenericProfile, liveProgress);
 
     /// <summary>A fake sandbox session whose identity mount covers the worktree and runtime directories, with the invariant probes scripted green.</summary>
     private async Task<DevelopmentWorkspaceSession> CreateSessionAsync()

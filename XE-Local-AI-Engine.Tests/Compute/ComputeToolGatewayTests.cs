@@ -1285,7 +1285,9 @@ public sealed class ComputeToolGatewayTests
             ExecutionId = "x",
             ExitCode = -1,
             Completed = false,
-            StandardError = "Command was cancelled before completion."
+            // What the providers return for a stop: the output printed so far, then the cancel line.
+            StandardOutput = "epoch 1 done\nepoch 2 done\n",
+            StandardError = "warn-1\nCommand was cancelled before completion."
         };
         var handler = new RunPythonToolHandler(CreateGateway(new RecordingSandboxProvider(Contained | SandboxProviderCapabilities.SupportsCommandCancellation)
         {
@@ -1308,7 +1310,9 @@ public sealed class ComputeToolGatewayTests
         })).ExecuteAsync(Arguments);
 
         AssertEx.Equal(ToolFailureText.StoppedCode, ToolFailureText.GetCodeOrNull(stopped));
-        AssertEx.True(stopped.StartsWith("[tool error: stopped] The operator stopped this command before it finished.\nexit_code: -1\n", StringComparison.Ordinal), stopped);
+        AssertEx.True(stopped.StartsWith("[tool error: stopped] The operator stopped this command before it finished.\nexit_code: -1\nstdout:\nepoch 1 done\nepoch 2 done\n",
+            StringComparison.Ordinal), stopped);
+        AssertEx.Contains(stopped, "warn-1\nCommand was cancelled before completion.", StringComparison.Ordinal);
         AssertEx.False(stopped.Contains("did not finish within", StringComparison.Ordinal), stopped);
         AssertEx.Equal(ToolFailureText.TimeoutCode, ToolFailureText.GetCodeOrNull(timedOut));
         AssertEx.Contains(timedOut, "did not finish within", StringComparison.Ordinal);

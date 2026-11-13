@@ -133,7 +133,8 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
             scripted = ResolveScript(request);
             if (state.PendingCancels.TryConsume(request.ExecutionId, _timeProvider))
             {
-                return BuildResult(request, scripted, completed: false, startedAt);
+                // Stopped before it started, so it printed nothing.
+                return BuildResult(request, scripted with { StandardOutput = string.Empty, StandardError = string.Empty }, completed: false, startedAt);
             }
 
             if (scripted.Blocks)
@@ -161,6 +162,9 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         await using var registration = cancellationToken
             .Register(static state => ((InFlightExecution)state!).Completion.TrySetCanceled(CancellationToken.None),
                 inFlight);
+
+        // A blocking command prints its scripted output first, then blocks: a stop keeps that output, as the process provider does.
+        ReplayOutput(request, scripted);
 
         bool completedNormally;
         try
@@ -460,10 +464,15 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         }
     }
 
-    /// <summary>Register a command that blocks until it is cancelled or the sandbox is killed (for cancel/kill tests).</summary>
-    public void RegisterBlockingCommand(string commandLine)
+    /// <summary>
+    ///     Register a command that prints <paramref name="standardOutput" /> and <paramref name="standardError" />, then blocks
+    ///     until it is cancelled or the sandbox is killed (for cancel/kill tests); the stopped result keeps that output.
+    /// </summary>
+    public void RegisterBlockingCommand(string commandLine, string standardOutput = "", string standardError = "")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
+        ArgumentNullException.ThrowIfNull(standardOutput);
+        ArgumentNullException.ThrowIfNull(standardError);
 
         lock (_sync)
         {
@@ -471,8 +480,8 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
             {
                 Blocks = true,
                 ExitCode = 0,
-                StandardOutput = string.Empty,
-                StandardError = string.Empty
+                StandardOutput = standardOutput,
+                StandardError = standardError
             };
         }
     }
@@ -642,11 +651,23 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         {
             ExecutionId = request.ExecutionId,
             ExitCode = completed ? scripted.ExitCode : -1,
-            StandardOutput = completed ? scripted.StandardOutput : string.Empty,
-            StandardError = completed || scripted.FailsToLaunch ? scripted.StandardError : "Command was cancelled before completion.",
+            // A stopped command keeps what it printed; a launch failure scripts no stdout.
+            StandardOutput = scripted.StandardOutput,
+            StandardError = completed || scripted.FailsToLaunch ? scripted.StandardError : CancelledStandardError(scripted.StandardError),
             Completed = completed,
             Duration = _timeProvider.GetUtcNow() - startedAt
         };
+    }
+
+    // The process provider's shape: the stderr printed so far, then the cancel message on its own line.
+    private static string CancelledStandardError(string printed)
+    {
+        if (printed.Length == 0)
+        {
+            return SandboxCommandResult.CancelledMessage;
+        }
+
+        return printed.EndsWith('\n') ? printed + SandboxCommandResult.CancelledMessage : printed + "\n" + SandboxCommandResult.CancelledMessage;
     }
 
     private void RemoveInFlight(string sandboxId, string executionId, InFlightExecution expected)

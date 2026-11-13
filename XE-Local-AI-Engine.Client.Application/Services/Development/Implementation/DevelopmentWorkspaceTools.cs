@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Development.Implementation;
 
 using System.Text;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -339,12 +340,17 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         }
 
         // Providers report a stop with the generic cancel text Docker also uses for a timeout; the model and the verdict must read the stop.
+        // Only that closing line is replaced: the stderr printed before the stop stays, so the evidence shows how far the command got.
         var stoppedByOperator = !raw.Completed && Volatile.Read(ref stopRequested) == 1;
+        var printedBeforeStop = string.Empty;
         if (stoppedByOperator)
         {
+            printedBeforeStop = raw.StandardError.EndsWith(SandboxCommandResult.CancelledMessage, StringComparison.Ordinal)
+                ? raw.StandardError[..^SandboxCommandResult.CancelledMessage.Length]
+                : string.Empty;
             raw = raw with
             {
-                StandardError = DevelopmentCommandEvidence.StoppedByOperatorMessage
+                StandardError = printedBeforeStop + DevelopmentCommandEvidence.StoppedByOperatorMessage
             };
         }
 
@@ -354,6 +360,21 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
                                                            raw.StandardOutputTruncated || raw.StandardErrorTruncated);
 
         var result = TruncateForEvidence(raw);
+        if (stoppedByOperator)
+        {
+            // The evidence cap keeps the head, so the stop line gets its room first: the model must always read why the command ended.
+            var room = _options.MaxCommandOutputBytes - Encoding.UTF8.GetByteCount(DevelopmentCommandEvidence.StoppedByOperatorMessage);
+            var kept = room > 0 ? Utf8Truncation.TruncateToUtf8ByteBudget(printedBeforeStop, room) : string.Empty;
+            // A cap below the stop line itself is still a cap: the line is cut to it and the result reads truncated.
+            var stopLine = room >= 0
+                ? DevelopmentCommandEvidence.StoppedByOperatorMessage
+                : Utf8Truncation.TruncateToUtf8ByteBudget(DevelopmentCommandEvidence.StoppedByOperatorMessage, _options.MaxCommandOutputBytes);
+            result = result with
+            {
+                StandardError = kept + stopLine,
+                StandardErrorTruncated = raw.StandardErrorTruncated || kept.Length < printedBeforeStop.Length || room < 0
+            };
+        }
 
         // A command the engine never started cannot have changed the worktree, and the invariant probes would fail through the same
         // dead boundary and throw before this evidence is kept: the verdict then reads the launch failure as runner_not_installed.

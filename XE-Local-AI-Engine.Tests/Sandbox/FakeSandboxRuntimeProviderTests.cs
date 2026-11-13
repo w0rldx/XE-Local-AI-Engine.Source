@@ -298,11 +298,35 @@ public sealed class FakeSandboxRuntimeProviderTests
     }
 
     [Test]
+    public async Task CancelCommandAsync_KeepsTheOutputPrintedBeforeTheStop_AndEndsStderrWithTheCancelMessage()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new ManualTimeProvider(FixedNow));
+        provider.RegisterBlockingCommand("pytest", standardOutput: "test_a PASSED\ntest_b PASSED\n", standardError: "warn-1\n");
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        var observer = new RecordingSandboxOutputObserver();
+
+        var executeTask = provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "partial-1",
+            Executable = "pytest",
+            OutputObserver = observer
+        });
+        AssertEx.Equal("test_a PASSED|test_b PASSED", string.Join('|', observer.StandardOutput), "the output is printed before the command blocks");
+        await provider.CancelCommandAsync(handle, "partial-1");
+        var result = await executeTask;
+
+        AssertEx.False(result.Completed);
+        AssertEx.Equal(expected: -1, result.ExitCode);
+        AssertEx.Equal("test_a PASSED\ntest_b PASSED\n", result.StandardOutput);
+        AssertEx.Equal("warn-1\nCommand was cancelled before completion.", result.StandardError);
+    }
+
+    [Test]
     public async Task CancelCommandAsync_BeforeTheCommandStarts_EndsItWhenItStarts_UntilTheLatchExpires()
     {
         var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
-        provider.RegisterBlockingCommand("sleep");
+        provider.RegisterBlockingCommand("sleep", standardOutput: "never printed\n");
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
         await provider.CancelCommandAsync(handle, "early-1");
@@ -322,6 +346,7 @@ public sealed class FakeSandboxRuntimeProviderTests
 
         AssertEx.False(early.Completed, "a stop that beat the start must not be lost");
         AssertEx.Equal("Command was cancelled before completion.", early.StandardError);
+        AssertEx.Equal(string.Empty, early.StandardOutput, "a command stopped before it started printed nothing");
         AssertEx.True(stale.Completed, "an expired latch cancels nothing");
     }
 
