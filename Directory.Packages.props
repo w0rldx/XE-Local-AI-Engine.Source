@@ -6,8 +6,8 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Avalonia.Desktop" Version="12.1.4" />
-    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.1.6" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.6" />
     <PackageVersion Include="Avalonia.Controls.WebView" Version="12.1.1" />
     <PackageVersion Include="Aspire.Hosting.Browsers" Version="13.6.5-preview.1.26559.7" />
     <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.6.5" />
@@ -47,7 +47,7 @@
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.6.1" />
     <PackageVersion Include="FastEndpoints" Version="8.3.0" />
     <PackageVersion Include="FastEndpoints.Swagger" Version="8.3.0" />
-    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.317" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.331" />
     <!-- Architecture conformance tests (layer-dependency direction). Test-project only. -->
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <!-- Architecture conformance tests (intra-project file/namespace placement). Test-project only, Apache-2.0.
@@ -72,13 +72,13 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.14" />
     <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.0" />
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.12.0" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.2" />
-    <PackageVersion Include="Microsoft.Testing.Platform" Version="2.5.2" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.3" />
+    <PackageVersion Include="Microsoft.Testing.Platform" Version="2.5.3" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.64.1" />
     <!-- Coupled to the Microsoft.Playwright pin above: TUnit.Playwright's nuspec sets the Microsoft.Playwright
          floor (1.68.4 requires >= 1.62.0), so check that floor before moving either package. A Microsoft.Playwright
          bump additionally needs `playwright.ps1 install` to refresh ~/.cache/ms-playwright and CI's browser layer. -->
-    <PackageVersion Include="TUnit.Playwright" Version="1.76.45" />
+    <PackageVersion Include="TUnit.Playwright" Version="1.84.0" />
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.11.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.11.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.11.0" />
@@ -141,18 +141,18 @@
     <PackageVersion Include="NSubstitute.Analyzers.CSharp" Version="1.0.17" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.1" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.1" />
     <!-- Quartz 4 folds hosting and System.Text.Json serialization into the core package, and its JobTimeout middleware
          replaces the Quartz.Plugins interrupt monitor, so only these two remain. -->
-    <PackageVersion Include="Quartz" Version="4.6.2" />
-    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="4.6.2" />
+    <PackageVersion Include="Quartz" Version="4.7.3" />
+    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="4.7.3" />
     <!-- Transitive-only pin: Quartz.Plugins.TimeZoneConverter 4.x floors it at 7.1.0, and the backend license corpus keys
          the curated MIT text on 7.2.0. -->
     <PackageVersion Include="TimeZoneConverter" Version="7.2.0" />
     <PackageVersion Include="Serilog" Version="4.4.0" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.18.5" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.21.0" />
     <PackageVersion Include="Scrutor" Version="7.0.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
@@ -169,7 +169,7 @@
     <PackageVersion Include="System.CommandLine" Version="2.0.14" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.14" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
-    <PackageVersion Include="TUnit" Version="1.76.45" />
+    <PackageVersion Include="TUnit" Version="1.84.0" />
     <PackageVersion Include="Velopack" Version="1.2.161" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
