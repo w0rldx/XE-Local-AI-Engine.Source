@@ -43,9 +43,10 @@ public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
     {
         ArgumentNullException.ThrowIfNull(notifier);
         _notifier = notifier;
-        // The gauge is owned (rooted) by the shared static XE.Node meter for the process lifetime; the singleton dispatcher
-        // needs no reference back. Its callback reads this instance's live queue depth.
-        _ = NodeMetrics.CreateKnowledgeIngestionQueueDepthGauge(() => PendingCount);
+        // The static XE.Node meter roots the gauge for the process lifetime, so its callback captures only the queue reader:
+        // capturing `this` would root the notifier and through it the whole host graph, once per host built in a process.
+        var reader = _queue.Reader;
+        _ = NodeMetrics.CreateKnowledgeIngestionQueueDepthGauge(() => reader.Count);
     }
 
     /// <summary>The queue reader the background worker drains.</summary>

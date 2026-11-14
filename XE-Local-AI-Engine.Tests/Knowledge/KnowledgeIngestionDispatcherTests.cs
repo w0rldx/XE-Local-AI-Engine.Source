@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Knowledge;
 
 using System.Diagnostics.Metrics;
+using System.Runtime.CompilerServices;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -195,5 +196,29 @@ public sealed class KnowledgeIngestionDispatcherTests
         AssertEx.True(rejected >= 3, $"rejected counter should reflect at least 3 rejections, saw {rejected}.");
         AssertEx.True(observedDepth == KnowledgeIngestionDispatcher.Capacity,
             $"the queue-depth gauge should have reported the filled depth of {KnowledgeIngestionDispatcher.Capacity}, saw {observedDepth?.ToString() ?? "no matching reading"}.");
+    }
+
+    [Test]
+    public void DepthGauge_OnTheStaticMeter_DoesNotKeepTheNotifierAlive()
+    {
+        // The process-lifetime XE.Node meter roots the gauge. Were its callback to capture the dispatcher, the notifier
+        // (and in a host, everything it reaches) would outlive the host: one leaked host per test host built in a run.
+        var notifier = CreateDispatcherAndDropIt();
+
+#pragma warning disable S1215 // Only a forced collection can show that nothing still roots the dropped notifier.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+#pragma warning restore S1215
+
+        AssertEx.False(notifier.IsAlive, "the queue-depth gauge must not root the dispatcher's notifier.");
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference CreateDispatcherAndDropIt()
+    {
+        var notifier = new NullKnowledgeIndexingNotifier();
+        _ = new KnowledgeIngestionDispatcher(notifier);
+        return new WeakReference(notifier);
     }
 }

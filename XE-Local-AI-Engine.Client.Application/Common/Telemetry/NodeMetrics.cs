@@ -502,9 +502,9 @@ public static class NodeMetrics
     ///     meter.
     /// </summary>
     /// <remarks>
-    ///     The queue owner (the singleton dispatcher) supplies the live count callback and holds the returned instrument for its lifetime.
-    ///     Kept as a factory (rather than a static instrument) because the depth is read from the live channel, which only the dispatcher
-    ///     instance can observe.
+    ///     The queue owner (the singleton dispatcher) supplies the live count callback. Kept as a factory (rather than a static
+    ///     instrument) because the depth is read from the live channel, which only the dispatcher instance can observe. The static meter
+    ///     roots the gauge and its callback for the process lifetime, so the callback must capture only the channel, never its owner.
     /// </remarks>
     public static ObservableGauge<long> CreateKnowledgeIngestionQueueDepthGauge(Func<long> observeDepth)
     {
