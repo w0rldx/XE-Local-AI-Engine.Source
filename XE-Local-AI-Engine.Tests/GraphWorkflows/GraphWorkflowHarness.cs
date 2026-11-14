@@ -357,7 +357,7 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
         return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetRunAsync(runId);
     }
 
-    public async Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ReadConversationRunsAsync(Guid conversationId)
+    public async Task<IReadOnlyList<GraphWorkflowRunSummary>> ReadConversationRunsAsync(Guid conversationId)
     {
         await using var scope = Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().ListRunsByConversationAsync(conversationId, limit: 50);

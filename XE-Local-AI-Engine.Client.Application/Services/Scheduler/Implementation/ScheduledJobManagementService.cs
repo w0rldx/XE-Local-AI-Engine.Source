@@ -369,13 +369,24 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         ];
     }
 
-    public Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(ScheduledRunStatus? status = null,
-        long? fromUtc = null,
-        long? toUtc = null,
-        Guid? scheduledJobId = null,
+    public Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(ScheduledRunStatus? status,
+        long? fromUtc,
+        long? toUtc,
+        Guid? scheduledJobId,
+        int limit,
+        int offset,
         CancellationToken cancellationToken = default)
     {
-        return _runStore.ListAsync(status, fromUtc, toUtc, scheduledJobId, cancellationToken);
+        return _runStore.ListAsync(status, fromUtc, toUtc, scheduledJobId, limit, offset, cancellationToken);
+    }
+
+    public Task<int> CountRunsAsync(ScheduledRunStatus? status,
+        long? fromUtc,
+        long? toUtc,
+        Guid? scheduledJobId,
+        CancellationToken cancellationToken = default)
+    {
+        return _runStore.CountAsync(status, fromUtc, toUtc, scheduledJobId, cancellationToken);
     }
 
     public async Task<ScheduledJobRunRecord> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)

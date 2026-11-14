@@ -251,6 +251,12 @@ public sealed class ListScheduledJobRunsRequest
 
     /// <summary>Filter by the definition id that produced the run; null = all jobs.</summary>
     public Guid? ScheduledJobId { get; init; }
+
+    /// <summary>Page size; null = the default page. Paging is server-side: a 30-day history can hold thousands of runs.</summary>
+    public int? Limit { get; init; }
+
+    /// <summary>Runs to skip, newest first; null = 0.</summary>
+    public int? Offset { get; init; }
 }
 
 /// <summary>Route-only request for <c>GET scheduler/runs/{runId}</c>.</summary>
@@ -301,6 +307,9 @@ public sealed class ScheduledJobRunResponse
 public sealed class ListScheduledJobRunsResponse
 {
     public required IReadOnlyList<ScheduledJobRunResponse> Items { get; init; }
+
+    /// <summary>Runs the filters match across every page.</summary>
+    public required int TotalCount { get; init; }
 }
 
 /// <summary>

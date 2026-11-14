@@ -48,10 +48,19 @@ internal sealed class DisabledScheduledJobManagementService : IScheduledJobManag
     public Task<IReadOnlyList<UpcomingScheduledJob>> ListUpcomingAsync(int limit, CancellationToken cancellationToken = default) =>
         throw Disabled();
 
-    public Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(ScheduledRunStatus? status = null,
-        long? fromUtc = null,
-        long? toUtc = null,
-        Guid? scheduledJobId = null,
+    public Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(ScheduledRunStatus? status,
+        long? fromUtc,
+        long? toUtc,
+        Guid? scheduledJobId,
+        int limit,
+        int offset,
+        CancellationToken cancellationToken = default) =>
+        throw Disabled();
+
+    public Task<int> CountRunsAsync(ScheduledRunStatus? status,
+        long? fromUtc,
+        long? toUtc,
+        Guid? scheduledJobId,
         CancellationToken cancellationToken = default) =>
         throw Disabled();
 

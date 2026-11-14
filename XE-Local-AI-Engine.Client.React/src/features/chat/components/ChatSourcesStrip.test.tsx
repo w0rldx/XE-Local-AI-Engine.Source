@@ -8,11 +8,11 @@ import type { KnowledgeDocumentDetail } from "@/features/knowledge/models/Knowle
 
 // Control the document-detail read so a card click can be asserted without a real network fetch. The mock records the
 // (documentId, enabled) args so the test can prove the clicked source's document id is what drives the drawer query.
-const { detailMock, documentsMock } = vi.hoisted(() => ({ detailMock: vi.fn(), documentsMock: vi.fn() }));
+const { detailMock, namesMock } = vi.hoisted(() => ({ detailMock: vi.fn(), namesMock: vi.fn() }));
 
 vi.mock("@/features/knowledge/queries/useKnowledgeDocuments", () => ({
 	useKnowledgeDocumentDetail: (documentId: string, enabled: boolean) => detailMock(documentId, enabled),
-	useKnowledgeDocuments: (enabled: boolean) => documentsMock(enabled),
+	useKnowledgeDocumentNames: (documentIds: readonly string[]) => namesMock(documentIds),
 }));
 
 import { ChatSourcesStrip } from "@/features/chat/components/ChatSourcesStrip";
@@ -61,8 +61,8 @@ describe("ChatSourcesStrip", () => {
 	beforeEach(() => {
 		detailMock.mockReset();
 		detailMock.mockReturnValue({ data: undefined, isFetching: false });
-		documentsMock.mockReset();
-		documentsMock.mockReturnValue({ data: undefined });
+		namesMock.mockReset();
+		namesMock.mockReturnValue(new Map());
 		Object.defineProperty(window, "matchMedia", {
 			writable: true,
 			value: vi.fn().mockImplementation((query: string) => ({
@@ -106,17 +106,19 @@ describe("ChatSourcesStrip", () => {
 	});
 
 	it("labels a heading-less source with its document's display name instead of the storage GUID", () => {
-		documentsMock.mockReturnValue({ data: [detail({ displayName: "glimmerfen-manual.pdf" })] });
+		namesMock.mockReturnValue(new Map([["11111111-1111-1111-1111-111111111111", "glimmerfen-manual.pdf"]]));
 
 		renderWithProviders(
 			<ChatSourcesStrip sources={[source({ title: "11111111-1111-1111-1111-111111111111.pdf", section: undefined })]} />,
 		);
 
 		expect(screen.getByTestId("chat-source-title").textContent).toBe("glimmerfen-manual.pdf");
+		// Only the sources' own documents are asked for, never the whole list.
+		expect(namesMock).toHaveBeenLastCalledWith(["11111111-1111-1111-1111-111111111111"]);
 	});
 
-	it("keeps the server title for a source whose document is not in the list", () => {
-		documentsMock.mockReturnValue({ data: [detail({ documentId: "other" })] });
+	it("keeps the server title for a source whose document name is not known", () => {
+		namesMock.mockReturnValue(new Map([["other", "Other.md"]]));
 
 		renderWithProviders(<ChatSourcesStrip sources={[source({ title: "Design Doc" })]} />);
 

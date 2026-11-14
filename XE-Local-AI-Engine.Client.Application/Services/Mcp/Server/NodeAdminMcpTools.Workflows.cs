@@ -152,7 +152,7 @@ public sealed partial class NodeAdminMcpTools
     private async Task<IReadOnlyDictionary<Guid, string>> DefinitionNamesAsync(CancellationToken cancellationToken) =>
         (await _graphWorkflowStore.ListDefinitionsAsync(cancellationToken)).ToDictionary(static definition => definition.Id, static definition => definition.Name);
 
-    private static McpWorkflowRunSummary Summary(GraphWorkflowRunSnapshot run, IReadOnlyDictionary<Guid, string> names) =>
+    private static McpWorkflowRunSummary Summary(GraphWorkflowRunSummary run,IReadOnlyDictionary<Guid, string> names) =>
         new(run.Id.ToString("D"),
             run.DefinitionId.ToString("D"),
             names.GetValueOrDefault(run.DefinitionId),

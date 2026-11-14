@@ -184,6 +184,45 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         AssertEx.Equal(owned.Id, result[0].Id);
     }
 
+    /// <summary>
+    ///     A page holds at most its limit, the pages together reach every run exactly once newest first, and the count
+    ///     is the whole filtered set. Two runs share a fire time on purpose: without a tiebreak their page is arbitrary.
+    /// </summary>
+    [Test]
+    public async Task ListAsync_PagesReachEveryRunOnceAndCountAsyncCountsThemAll()
+    {
+        var databasePath = GetDatabasePath("run-list-paged.sqlite");
+        using var keyHolder = CreateKeyHolder();
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var jobId = Guid.NewGuid();
+        var store = new ScheduledJobRunStore(context, TimeProvider.System);
+        long[] fireTimes = [100, 200, 200, 300, 400];
+        foreach (var fireTime in fireTimes)
+        {
+            _ = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded) with
+            {
+                ActualFireTimeUtc = fireTime
+            });
+        }
+
+        var pages = new List<IReadOnlyList<ScheduledJobRunRecord>>();
+        for (var offset = 0; offset < fireTimes.Length; offset += 2)
+        {
+            pages.Add(await store.ListAsync(scheduledJobId: jobId, limit: 2, offset: offset));
+        }
+
+        AssertEx.True(pages.All(static page => page.Count <= 2), "no page exceeds its limit.");
+        var paged = pages.SelectMany(static page => page).ToList();
+        AssertEx.Equal(fireTimes.Length, paged.Select(static run => run.Id).Distinct().Count(), "the pages reach every run exactly once.");
+        AssertEx.True(paged.Select(static run => run.ActualFireTimeUtc).SequenceEqual(fireTimes.OrderDescending().Select(static time => (long?)time)),
+            "newest first across the pages.");
+        AssertEx.Equal(fireTimes.Length, await store.CountAsync(scheduledJobId: jobId));
+    }
+
 
     [Test]
     public async Task UpsertByFireInstanceAsync_WhenCalledTwiceWithSameFireInstanceId_DoesNotDuplicate()

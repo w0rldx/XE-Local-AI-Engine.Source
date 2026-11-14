@@ -1,18 +1,19 @@
 import { ActionIcon, Alert, Badge, Card, Group, Loader, Stack, Text, TextInput } from "@mantine/core";
 import { IconInfoCircle, IconSearch } from "@tabler/icons-react";
-import { type FormEvent, useCallback, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { KnowledgeScoreBadge } from "@/core/ui/components/KnowledgeScoreBadge/KnowledgeScoreBadge";
 import { KnowledgeLastKnownGoodBadge } from "@/features/knowledge/components/KnowledgeLastKnownGoodBadge";
-import type { KnowledgeDocument, KnowledgeSearchDegradation } from "@/features/knowledge/models/KnowledgeModels";
+import type { KnowledgeSearchDegradation } from "@/features/knowledge/models/KnowledgeModels";
 import { knowledgeErrorMessage } from "@/features/knowledge/queries/KnowledgeErrorMessage";
 import type { UseKnowledgeSearchResult } from "@/features/knowledge/queries/useKnowledgeSearch";
 
 interface KnowledgeSearchPanelProps {
 	readonly search: UseKnowledgeSearchResult;
-	readonly documents: readonly KnowledgeDocument[];
+	/** Decrypted display names by document id, for the hits on screen; absent while they load. */
+	readonly documentNames?: ReadonlyMap<string, string>;
 }
 
 // One notice per degradation the last search ran under, so a cold reranker or a missing embedder never passes silently.
@@ -40,20 +41,16 @@ const DEGRADATION_NOTICES: Record<KnowledgeSearchDegradation, DegradationNotice>
 
 // Semantic-search probe: a query box + ranked hit list (title · section · score · snippet). Distinguishes the
 // three empty states — nothing searched yet, an in-flight search, and a resolved search with no hits. The parent
-// owns the search hook (useKnowledgeSearch) and the document list; this panel is presentational over both.
-export function KnowledgeSearchPanel({ search, documents }: KnowledgeSearchPanelProps) {
+// owns the search hook (useKnowledgeSearch) and the hits' names; this panel is presentational over both.
+export function KnowledgeSearchPanel({ search, documentNames }: KnowledgeSearchPanelProps) {
 	const { t } = useTranslation();
 	const [query, setQuery] = useState("");
 
 	// A hit's server-side `title` is deliberately non-sensitive: the original file name is encrypted at rest, so the
 	// search endpoint falls back to the GUID storage reference whenever a chunk has no heading trail — which is the
-	// common case for ordinary markdown, and unreadable for the operator. The already-loaded document list carries the
-	// decrypted display name for the same authenticated viewer, so resolve the label here by documentId and leave the
-	// API invariant untouched. Falls back to `hit.title` when the document is not in the list (still loading, deleted).
-	const documentNames = useMemo(
-		() => new Map(documents.map((document) => [document.documentId, document.displayName])),
-		[documents],
-	);
+	// common case for ordinary markdown, and unreadable for the operator. The parent reads the decrypted display names of
+	// exactly the hits' documents for the same authenticated viewer, so the label resolves here by documentId and the
+	// API invariant stays untouched. Falls back to `hit.title` when a name is not known (still loading, deleted).
 
 	const handleSubmit = useCallback(
 		(event: FormEvent<HTMLFormElement>): void => {
@@ -134,7 +131,7 @@ export function KnowledgeSearchPanel({ search, documents }: KnowledgeSearchPanel
 								<Group justify="space-between" wrap="nowrap" align="flex-start" gap="sm">
 									<Stack gap={0} style={{ minWidth: 0 }}>
 										<Text fw={600} truncate="end" data-testid="knowledge-search-hit-title">
-											{documentNames.get(hit.documentId) ?? hit.title}
+											{documentNames?.get(hit.documentId) ?? hit.title}
 										</Text>
 										{hit.section ? (
 											<Text size="xs" c="dimmed" truncate="end">

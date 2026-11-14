@@ -405,7 +405,7 @@ wraps every resolved definition in `ApprovalRequiredAIFunction` unconditionally.
 spawned-child paths therefore strip or retain it as approval-gated according to their existing
 curation and no stored/per-agent flag lowers that floor. A trusted agentic-scope **root** MCP run is
 the deliberate exception: it may adapt the wrapper only through ADR 0006's strict audit-before-call
-path. `CustomToolsEnabled` remains excluded from the agentic settings whitelist, so the MCP settings
+path. `CustomToolsEnabled` remains excluded from the agentic settings allowlist, so the MCP settings
 surface cannot enable host-command authoring unattended.
 
 **Stored and browser-visible secrets.** `custom_tools.config_json` contains HTTP header or command-environment secret
@@ -426,7 +426,9 @@ Loopback, link-local including the cloud-metadata address, multicast, unspecifie
 IPv4-compatible IPv6 form stay denied even when listed (`CustomToolSsrfGuard.IsAlwaysDeniedAddress`). Both layers
 enforce it: `ValidateRequestUrl` admits a listed literal, and the shared, stateless connect callback reads the list from
 the request's `CustomToolSsrfGuard.PrivateHostsOption`, refusing a resolution in which any address is neither public nor
-a listed LAN address. A request without the option, which includes every `web_fetch` request, gets the deny-all rule
+a listed LAN address. The callback also refuses an address assigned to one of this machine's own network interfaces
+unless the host is listed; a redirect to the router's public address, which can hairpin to its admin UI, remains a
+residual risk. A request without the option, which includes every `web_fetch` request, gets the deny-all rule
 unchanged; a request under the exception sends `Connection: close`, so its pinned connection never returns to the shared
 pool for a request without it. Requests have a 30-second wall-clock limit, a 64 KiB response-body cap,
 credential-bearing response headers are stripped, and the process-wide concurrency limiter defaults to four runs.
@@ -497,7 +499,8 @@ is the decision record.
   unconfirmed); the first time a user enables it they acknowledge a risk notice (stored in their tutorial state). Unattended runs never fetch; orchestration participants and the agentic
   MCP scope (no operator to review) are not offered the tools.
 - **Graphs.** Agent nodes are never offered either tool. A Tool node may run `web_fetch` only against its own
-  allowlist of URL prefixes (path-segment boundary; private addresses stay blocked even when listed), which is the
+  allowlist of URL prefixes (path-segment boundary; under an entry with a path, a URL whose path carries an encoded
+  `/`, `\` or `.` is refused; private addresses stay blocked even when listed), which is the
   consent that replaces the review for those URLs.
 
 ---

@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DevelopmentAttemptLiveState } from "@/features/development/hooks/useDevelopmentAttemptHub";
-import type { DevelopmentArtifact, DevelopmentAttempt } from "@/features/development/models/DevelopmentModels";
+import type { DevelopmentArtifact, DevelopmentAttempt, DevelopmentEvent } from "@/features/development/models/DevelopmentModels";
 import type {
 	DevelopmentTestOutcome,
 	DevelopmentValidationCommand,
@@ -156,12 +156,28 @@ function installDomMocks(): void {
 function renderPanel(
 	artifacts: readonly DevelopmentArtifact[] = [validationArtifact],
 	attempt: DevelopmentAttempt | null = null,
+	events: readonly DevelopmentEvent[] = [],
 ): void {
 	render(
 		<MantineProvider env="test" theme={testMantineTheme}>
-			<DevelopmentLivePanel attempt={attempt} live={live} artifacts={artifacts} events={[]} />
+			<DevelopmentLivePanel attempt={attempt} live={live} artifacts={artifacts} events={events} />
 		</MantineProvider>,
 	);
+}
+
+function durableEvents(count: number): DevelopmentEvent[] {
+	return Array.from({ length: count }, (_, index) => ({
+		id: `event-${index}`,
+		projectId: "project-1",
+		taskId: "task-1",
+		attemptId: null,
+		sequence: index + 1,
+		eventType: "AttemptStarted",
+		occurredAtUtc: 1,
+		operationId: null,
+		operationPhase: null,
+		outcome: null,
+	}));
 }
 
 function contentQuery(content: string): void {
@@ -595,6 +611,19 @@ describe("DevelopmentLivePanel artifact viewer", () => {
 		const prompts = screen.getByTestId("development-prompt-artifacts");
 		expect(within(prompts).getByText("Coder prompt 1")).toBeTruthy();
 		expect(within(prompts).getByText("Coder prompt 2")).toBeTruthy();
+	});
+
+	// The project detail carries each task's newest 200 events, so a task at that cap may hold more than the count shows.
+	it("marks the durable-event count as a floor once the task reaches the server's per-task cap", () => {
+		renderPanel([validationArtifact], coderAttempt, durableEvents(200));
+
+		expect(screen.getByTestId("development-durable-events").textContent).toBe("Durable events: 200+ (newest)");
+	});
+
+	it("shows the plain durable-event count below the cap", () => {
+		renderPanel([validationArtifact], coderAttempt, durableEvents(3));
+
+		expect(screen.getByTestId("development-durable-events").textContent).toBe("Durable events: 3");
 	});
 
 	it("says so when the displayed attempt recorded no prompt, rather than showing an empty section", () => {

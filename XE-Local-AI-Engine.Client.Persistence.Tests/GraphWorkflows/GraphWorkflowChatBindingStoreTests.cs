@@ -32,6 +32,44 @@ public sealed class GraphWorkflowChatBindingStoreTests
         AssertEx.Empty(await store.ListRunsByConversationAsync(Guid.NewGuid(), limit: 10), "a conversation with no runs lists none.");
     }
 
+    /// <summary>Run lists carry plaintext columns only: the four encrypted blobs are never selected, so never decrypted.</summary>
+    [Test]
+    public async Task RunLists_SelectNoEncryptedColumn()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        Guid conversationId;
+        Guid runId;
+        await using (var seedContext = await fixture.CreateSchemaAsync())
+        {
+            var seedStore = GraphWorkflowTestFixture.StoreFor(seedContext);
+            var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(seedStore);
+            conversationId = await SeedConversationAsync(seedContext);
+            runId = (await seedStore.StartRunAsync(StartCommand(definition, conversationId, Guid.NewGuid()))).Id;
+        }
+
+        using var keyHolder = new NullNodeSqliteKeyHolder();
+        var recorder = new RecordingCommandInterceptor();
+        await using var context = AgentDefinitionTestContextFactory.Create(fixture.DatabasePath, keyHolder, recorder);
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+
+        var all = await store.ListRunsAsync();
+        var pending = await store.ListRunsAsync(GraphWorkflowRunStatus.Pending);
+        var bound = await store.ListRunsByConversationAsync(conversationId, limit: 10);
+
+        AssertEx.Equal(runId, all.Single().Id);
+        AssertEx.Equal(runId, pending.Single().Id);
+        AssertEx.Equal(conversationId, bound.Single().ConversationId);
+        AssertEx.Equal(expected: 3, recorder.Queries.Count, "each list read is one query.");
+        foreach (var sql in recorder.Queries)
+        {
+            AssertEx.False(sql.Contains("graph_json", StringComparison.Ordinal)
+                           || sql.Contains("input_json", StringComparison.Ordinal)
+                           || sql.Contains("output_json", StringComparison.Ordinal)
+                           || sql.Contains("previous_json", StringComparison.Ordinal),
+                $"A run list must not select an encrypted column. SQL was: {sql}");
+        }
+    }
+
     /// <summary>The database, not the chat service, is what makes a second live run on one conversation impossible.</summary>
     [Test]
     public async Task StartRun_WhileTheConversationHasALiveRun_AnswersBusyAndWritesNoSecondRun()

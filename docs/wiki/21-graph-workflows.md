@@ -935,7 +935,8 @@ classification, where custom tools are never under the local-data rule.
 
 **The one web exception** ([ADR 0017](../adr/0017-web-access-tools-and-graph-allowlist.md) decision 6; ADR 0006 is its
 basis and is not amended). While web access is on, a Tool node may name `web_fetch` if it carries a non-empty
-`allowedUrls` list of absolute http(s) URL prefixes (same scheme, host and port; a path prefix on a segment boundary).
+`allowedUrls` list of absolute http(s) URL prefixes (same scheme, host and port; a path prefix on a segment boundary,
+and under an entry with a path, a URL whose path carries an encoded `/`, `\` or `.` is refused).
 The list, written before the run, is the consent an unattended node cannot ask for, so there is no pause and no result
 review. The gate checks the list's shape and any **literal** `url` argument at save and start; a **bound** `url`,
 usually upstream model output, is checked at dispatch, which is the real gate: `GraphWorkflowToolExecutor` calls the
@@ -1815,7 +1816,7 @@ their names. The tool's name is stored with the `custom__` prefix whether or not
 - **What stays denied.** The exception covers the private LAN ranges only (RFC 1918, CGNAT, IPv6 unique-local).
   Loopback, link-local, cloud-metadata, multicast and unspecified addresses are refused even when listed, and a name
   that resolves to a listed private address plus any denied one is refused. Any host you did not list stays under the
-  normal rule.
+  normal rule, which also refuses an address of this machine; a listed host may run on this machine at its LAN address.
 - The token is a secret header: the read routes return a masking sentinel in its place, and the tool's result text is
   scrubbed of it.
 - A response outside 2xx, a transport error and the fixed 30 s fetch timeout all count as a failed call (§10.5).

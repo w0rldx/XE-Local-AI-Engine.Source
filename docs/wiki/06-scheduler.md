@@ -321,7 +321,7 @@ All under the FastEndpoints local prefix; route constants in `LocalApiRoutes.Sch
 | `jobs/{scheduledJobId}/enable` · `/disable` | `EnableScheduledJobEndpoint` / `DisableScheduledJobEndpoint` |
 | `jobs/{scheduledJobId}/trigger` | `TriggerScheduledJobEndpoint` |
 | `upcoming` (GET, `?limit=` 1–20, default 5) | `ListUpcomingScheduledJobsEndpoint` |
-| `runs` (GET, query-filtered) | `ListScheduledJobRunsEndpoint` |
+| `runs` (GET, query-filtered, paged by `?limit=` 1–200, default 50, and `?offset=`; carries `totalCount`) | `ListScheduledJobRunsEndpoint` |
 | `runs/{runId}` (GET) | `GetScheduledJobRunEndpoint` |
 | `runs/{runId}/cancel` | `CancelScheduledJobRunEndpoint` |
 

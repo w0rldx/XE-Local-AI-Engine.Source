@@ -1,11 +1,13 @@
 import { useTranslation } from "react-i18next";
 
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import type { TablePaginationFooterProps } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { ScheduledJobRunHistoryPanel } from "@/features/scheduler/components/ScheduledJobRunHistoryPanel";
 import type { ScheduledJob, ScheduledJobRun, ScheduledJobRunFilters } from "@/features/scheduler/models/SchedulerModels";
 
 interface SchedulerRunsSectionProps {
 	runs: readonly ScheduledJobRun[];
+	pagination: TablePaginationFooterProps;
 	jobs: readonly ScheduledJob[];
 	filters: ScheduledJobRunFilters;
 	isLoading: boolean;
@@ -20,6 +22,7 @@ interface SchedulerRunsSectionProps {
 // Run-history card for the scheduler page. Split out of SchedulerPage to keep the page component small.
 export function SchedulerRunsSection({
 	runs,
+	pagination,
 	jobs,
 	filters,
 	isLoading,
@@ -36,6 +39,7 @@ export function SchedulerRunsSection({
 		<SectionCard title={t("pages.scheduler.runs.title", "Run history")} data-testid="scheduler-runs-card">
 			<ScheduledJobRunHistoryPanel
 				runs={runs}
+				pagination={pagination}
 				jobs={jobs}
 				filters={filters}
 				isLoading={isLoading}

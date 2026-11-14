@@ -4968,6 +4968,10 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse =
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse),
+	totalCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy = z.enum(["Smart", "SkipMissed", "FireOnceNow"]);
@@ -7259,6 +7263,12 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse),
+	totalCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	hasStaleDocuments: z.boolean(),
+	hasSearchableDocuments: z.boolean(),
 	embeddingModel: z.string(),
 	embeddingModelAvailable: z.boolean(),
 });
@@ -12276,6 +12286,17 @@ export const zListKnowledgeCollectionsResponse = zXeLocalAiEngineClientEndpoints
 
 export const zListKnowledgeDocumentsQuery = z.object({
 	collectionId: z.string().nullish(),
+	documentIds: z.array(z.guid()).nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	offset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 });
 
 /**
@@ -13030,6 +13051,16 @@ export const zListScheduledJobRunsQuery = z.object({
 	fromUtc: z.int().nullish(),
 	toUtc: z.int().nullish(),
 	scheduledJobId: z.guid().nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	offset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 });
 
 /**

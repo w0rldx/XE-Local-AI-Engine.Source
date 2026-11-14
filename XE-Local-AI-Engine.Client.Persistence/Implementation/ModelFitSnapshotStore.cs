@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+using System.Linq.Expressions;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -16,6 +17,29 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </remarks>
 public sealed class ModelFitSnapshotStore : IModelFitSnapshotStore
 {
+    /// <summary>Plaintext columns only, so a summary read in SQL never loads or decrypts the raw output columns.</summary>
+    private static readonly Expression<Func<ModelFitSnapshot, ModelFitSnapshotSummaryRecord>> SummaryProjection = entity =>
+        new ModelFitSnapshotSummaryRecord
+        {
+            Id = entity.Id,
+            ApprovedImageId = entity.ApprovedImageId,
+            Operation = entity.Operation,
+            UseCase = entity.UseCase,
+            ProviderName = entity.ProviderName,
+            ModelName = entity.ModelName,
+            Status = entity.Status,
+            StartedAtUtc = entity.StartedAtUtc,
+            CompletedAtUtc = entity.CompletedAtUtc,
+            DurationMs = entity.DurationMs,
+            ExitCode = entity.ExitCode,
+            IsLatestSuccessful = entity.IsLatestSuccessful,
+            CreatedByRunId = entity.CreatedByRunId,
+            CreatedAtUtc = entity.CreatedAtUtc
+        };
+
+    /// <summary>The same shape over an entity already in hand (after a write).</summary>
+    private static readonly Func<ModelFitSnapshot, ModelFitSnapshotSummaryRecord> ToSummary = SummaryProjection.Compile();
+
     private readonly NodeChatDbContext _dbContext;
     private readonly TimeProvider _timeProvider;
 
@@ -131,18 +155,17 @@ public sealed class ModelFitSnapshotStore : IModelFitSnapshotStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(providerName);
 
-        var entity = await _dbContext.ModelFitSnapshots
-                                     .AsNoTracking()
-                                     .Where(snapshot =>
-                                         snapshot.IsLatestSuccessful &&
-                                         snapshot.Operation == operation &&
-                                         snapshot.UseCase == useCase &&
-                                         snapshot.ProviderName == providerName &&
-                                         snapshot.ModelName == modelName)
-                                     .OrderByDescending(snapshot => snapshot.CreatedAtUtc)
-                                     .FirstOrDefaultAsync(cancellationToken);
-
-        return entity is null ? null : ToSummary(entity);
+        return await _dbContext.ModelFitSnapshots
+                               .AsNoTracking()
+                               .Where(snapshot =>
+                                   snapshot.IsLatestSuccessful &&
+                                   snapshot.Operation == operation &&
+                                   snapshot.UseCase == useCase &&
+                                   snapshot.ProviderName == providerName &&
+                                   snapshot.ModelName == modelName)
+                               .OrderByDescending(snapshot => snapshot.CreatedAtUtc)
+                               .Select(SummaryProjection)
+                               .FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<ModelFitSnapshotSummaryRecord>> ListRecentSummariesAsync(ModelFitOperation? operation = null,
@@ -162,12 +185,11 @@ public sealed class ModelFitSnapshotStore : IModelFitSnapshotStore
             query = query.Where(snapshot => snapshot.ProviderName == providerName);
         }
 
-        var entities = await query
-                             .OrderByDescending(snapshot => snapshot.CreatedAtUtc)
-                             .Take(limit < 1 ? 1 : limit)
-                             .ToListAsync(cancellationToken);
-
-        return entities.Select(ToSummary).ToArray();
+        return await query
+                     .OrderByDescending(snapshot => snapshot.CreatedAtUtc)
+                     .Take(limit < 1 ? 1 : limit)
+                     .Select(SummaryProjection)
+                     .ToArrayAsync(cancellationToken);
     }
 
     public async Task<ModelFitSnapshotRawRecord?> GetRawByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -216,27 +238,6 @@ public sealed class ModelFitSnapshotStore : IModelFitSnapshotStore
         entity.RawJson = EncodeOptional(rawJson);
         entity.StderrExcerpt = EncodeOptional(stderrExcerpt);
         entity.DiagnosticsJson = EncodeOptional(diagnosticsJson);
-    }
-
-    private static ModelFitSnapshotSummaryRecord ToSummary(ModelFitSnapshot entity)
-    {
-        return new ModelFitSnapshotSummaryRecord
-        {
-            Id = entity.Id,
-            ApprovedImageId = entity.ApprovedImageId,
-            Operation = entity.Operation,
-            UseCase = entity.UseCase,
-            ProviderName = entity.ProviderName,
-            ModelName = entity.ModelName,
-            Status = entity.Status,
-            StartedAtUtc = entity.StartedAtUtc,
-            CompletedAtUtc = entity.CompletedAtUtc,
-            DurationMs = entity.DurationMs,
-            ExitCode = entity.ExitCode,
-            IsLatestSuccessful = entity.IsLatestSuccessful,
-            CreatedByRunId = entity.CreatedByRunId,
-            CreatedAtUtc = entity.CreatedAtUtc
-        };
     }
 
     private static byte[]? EncodeOptional(string? value)

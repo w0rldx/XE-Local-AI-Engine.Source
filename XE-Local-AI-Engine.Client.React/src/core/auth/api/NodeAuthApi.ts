@@ -91,7 +91,7 @@ export function refreshRateLimitedForSeconds(): number {
 }
 
 // The deadline of the Retry-After wait a refresh is sitting out right now, read by the boot's loading screen so the
-// operator sees why it waits instead of a bare "Loading..." for a minute.
+// operator sees why it waits instead of a bare "Loading…" for a minute.
 let refreshWaitUntil: number | undefined;
 
 /** Seconds left on the Retry-After wait a refresh is sitting out right now, rounded up; 0 when none is running. */

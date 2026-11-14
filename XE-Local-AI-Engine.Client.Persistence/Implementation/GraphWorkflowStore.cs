@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+using System.Linq.Expressions;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
@@ -56,6 +57,30 @@ public sealed partial class GraphWorkflowStore : IGraphWorkflowStore
         GraphWorkflowRunStatus.WaitingForApproval,
         GraphWorkflowRunStatus.Cancelling
     ];
+
+    /// <summary>A run list's shape, translated to SQL: the four encrypted blobs are never selected, so never decrypted.</summary>
+    private static readonly Expression<Func<GraphWorkflowRun, GraphWorkflowRunSummary>> RunSummaryProjection = run =>
+        new GraphWorkflowRunSummary
+        {
+            Id = run.Id,
+            RequestId = run.RequestId,
+            DefinitionId = run.DefinitionId,
+            DefinitionVersion = run.DefinitionVersion,
+            GraphHash = run.GraphHash,
+            Status = run.Status,
+            FailureClass = run.FailureClass,
+            Seq = run.Seq,
+            Version = run.Version,
+            CancelRequestedAtUtc = run.CancelRequestedAtUtc,
+            StartedAtUtc = run.StartedAtUtc,
+            CompletedAtUtc = run.CompletedAtUtc,
+            CreatedAtUtc = run.CreatedAtUtc,
+            ConversationId = run.ConversationId,
+            TriggerMessageId = run.TriggerMessageId,
+            TriggerSource = run.TriggerSource,
+            PrincipalId = run.PrincipalId,
+            KeyPrefix = run.KeyPrefix
+        };
 
     private readonly NodeChatDbContext _dbContext;
     private readonly TimeProvider _timeProvider;

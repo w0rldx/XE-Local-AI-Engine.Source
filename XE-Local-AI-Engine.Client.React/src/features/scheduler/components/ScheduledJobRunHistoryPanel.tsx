@@ -6,8 +6,10 @@ import { useTranslation } from "react-i18next";
 import { formatDurationSeconds, formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
-import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
-import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
+import {
+	TablePaginationFooter,
+	type TablePaginationFooterProps,
+} from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { scheduledRunStatusColor } from "@/features/scheduler/components/SchedulerRunFormatters";
 import {
 	isActiveRunStatus,
@@ -19,7 +21,9 @@ import {
 } from "@/features/scheduler/models/SchedulerModels";
 
 interface ScheduledJobRunHistoryPanelProps {
+	/** The server page on screen, not the whole history. */
 	runs: readonly ScheduledJobRun[];
+	pagination: TablePaginationFooterProps;
 	jobs: readonly ScheduledJob[];
 	filters: ScheduledJobRunFilters;
 	isLoading: boolean;
@@ -39,6 +43,7 @@ const ALL_VALUE = "__all__";
 // detail panel owned by the parent.
 export function ScheduledJobRunHistoryPanel({
 	runs,
+	pagination,
 	jobs,
 	filters,
 	isLoading,
@@ -50,11 +55,6 @@ export function ScheduledJobRunHistoryPanel({
 	onCancelRun,
 }: ScheduledJobRunHistoryPanelProps) {
 	const { t } = useTranslation();
-
-	// Client-side pagination over the full filtered run set. The hook clamps the active page when the filters
-	// narrow the list, so a server refetch never strands the operator on an out-of-range page. The chosen page
-	// size persists across reloads under this storageKey.
-	const pagination = useTablePagination(runs, { storageKey: "scheduler-run-history" });
 
 	const jobData = useMemo(
 		() => [
@@ -123,7 +123,7 @@ export function ScheduledJobRunHistoryPanel({
 			{!isLoading && !error && runs.length > 0 ? (
 				<>
 					<ResponsiveTable
-						rows={pagination.pageItems}
+						rows={runs}
 						rowKey={(run) => run.id}
 						rowTestId={(run) => `scheduler-run-row-${run.id}`}
 						rowStyle={(run) => (run.id === selectedRunId ? { background: "var(--mantine-primary-color-light)" } : undefined)}
@@ -191,18 +191,8 @@ export function ScheduledJobRunHistoryPanel({
 							</>
 						)}
 					/>
-					<TablePaginationFooter
-						page={pagination.page}
-						pageCount={pagination.pageCount}
-						pageSize={pagination.pageSize}
-						totalItems={pagination.totalItems}
-						firstItemIndex={pagination.firstItemIndex}
-						lastItemIndex={pagination.lastItemIndex}
-						pageSizeOptions={pagination.pageSizeOptions}
-						onPageChange={pagination.setPage}
-						onPageSizeChange={pagination.setPageSize}
-						data-testid="scheduler-runs-pagination"
-					/>
+					{/* Server-side: the total counts every run the filters match, not the page on screen. */}
+					<TablePaginationFooter {...pagination} data-testid="scheduler-runs-pagination" />
 				</>
 			) : null}
 		</Stack>

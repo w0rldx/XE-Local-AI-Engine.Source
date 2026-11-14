@@ -6,7 +6,7 @@ import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { KnowledgeSearchPanel } from "@/features/knowledge/components/KnowledgeSearchPanel";
-import type { KnowledgeDocument, KnowledgeSearchHit } from "@/features/knowledge/models/KnowledgeModels";
+import type { KnowledgeSearchHit } from "@/features/knowledge/models/KnowledgeModels";
 import type { UseKnowledgeSearchResult } from "@/features/knowledge/queries/useKnowledgeSearch";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
@@ -18,21 +18,7 @@ function renderWithProviders(ui: ReactElement) {
 	);
 }
 
-function knowledgeDocument(overrides: Partial<KnowledgeDocument> = {}): KnowledgeDocument {
-	return {
-		documentId: "doc-1",
-		displayName: "12-security-and-privacy.md",
-		status: "Indexed",
-		chunkCount: 3,
-		embeddingModel: "nomic-embed-text",
-		staleModel: false,
-		sizeBytes: 1024,
-		createdAtUtc: 1_700_000_000_000,
-		collectionId: "DEFAULT",
-		sourceKind: "upload",
-		...overrides,
-	};
-}
+const securityDocumentNames: ReadonlyMap<string, string> = new Map([["doc-1", "12-security-and-privacy.md"]]);
 
 function hit(overrides: Partial<KnowledgeSearchHit> = {}): KnowledgeSearchHit {
 	return {
@@ -98,7 +84,6 @@ describe("KnowledgeSearchPanel disclosure badge", () => {
 	it("shows the last-known-good badge only on stale hits", () => {
 		renderWithProviders(
 			<KnowledgeSearchPanel
-				documents={[]}
 				search={searchBag([
 					hit({ chunkId: "fresh", documentStatus: "Indexed", servingLastKnownGood: false }),
 					hit({ chunkId: "stale", documentStatus: "Pending", servingLastKnownGood: true }),
@@ -111,7 +96,7 @@ describe("KnowledgeSearchPanel disclosure badge", () => {
 	});
 
 	it("shows no badge when every hit is freshly indexed", () => {
-		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit({ servingLastKnownGood: false })])} />);
+		renderWithProviders(<KnowledgeSearchPanel search={searchBag([hit({ servingLastKnownGood: false })])} />);
 
 		expect(screen.queryByTestId("knowledge-last-known-good")).toBeNull();
 	});
@@ -130,7 +115,6 @@ describe("KnowledgeSearchPanel score kind", () => {
 	it("renders a score-kind badge per hit instead of a bare number", () => {
 		renderWithProviders(
 			<KnowledgeSearchPanel
-				documents={[]}
 				search={searchBag([
 					hit({ chunkId: "reranked", score: 7.3312, scoreKind: "Rerank" }),
 					hit({ chunkId: "fused", score: 0.03125, scoreKind: "Fusion" }),
@@ -157,7 +141,7 @@ describe("KnowledgeSearchPanel hit title", () => {
 	it("labels a hit with the document's display name instead of the GUID storage path", () => {
 		renderWithProviders(
 			<KnowledgeSearchPanel
-				documents={[knowledgeDocument()]}
+				documentNames={securityDocumentNames}
 				search={searchBag([hit({ documentId: "doc-1", title: "48ecbdcd-2b4c-4fa4-b748-d368a2510168.md" })])}
 			/>,
 		);
@@ -165,10 +149,10 @@ describe("KnowledgeSearchPanel hit title", () => {
 		expect(screen.getByTestId("knowledge-search-hit-title").textContent).toBe("12-security-and-privacy.md");
 	});
 
-	it("falls back to the server title when the document is not in the loaded list", () => {
+	it("falls back to the server title when the document's name is not known", () => {
 		renderWithProviders(
 			<KnowledgeSearchPanel
-				documents={[knowledgeDocument({ documentId: "other-doc" })]}
+				documentNames={new Map([["other-doc", "12-security-and-privacy.md"]])}
 				search={searchBag([hit({ documentId: "doc-1", title: "48ecbdcd-2b4c-4fa4-b748-d368a2510168.md" })])}
 			/>,
 		);
@@ -179,7 +163,7 @@ describe("KnowledgeSearchPanel hit title", () => {
 	it("keeps the heading path as the section sub-label beneath the resolved name", () => {
 		renderWithProviders(
 			<KnowledgeSearchPanel
-				documents={[knowledgeDocument()]}
+				documentNames={securityDocumentNames}
 				search={searchBag([hit({ documentId: "doc-1", section: "Encryption at rest" })])}
 			/>,
 		);
@@ -191,7 +175,7 @@ describe("KnowledgeSearchPanel hit title", () => {
 	it("labels every hit from the same document identically", () => {
 		renderWithProviders(
 			<KnowledgeSearchPanel
-				documents={[knowledgeDocument()]}
+				documentNames={securityDocumentNames}
 				search={searchBag([
 					hit({ chunkId: "chunk-1", documentId: "doc-1", section: "Encryption at rest" }),
 					hit({ chunkId: "chunk-2", documentId: "doc-1", section: "Key rotation" }),
@@ -215,7 +199,7 @@ describe("KnowledgeSearchPanel degradation notice", () => {
 	});
 
 	it("names a cold reranker instead of serving fusion order silently", () => {
-		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit()], ["RerankerUnavailable"])} />);
+		renderWithProviders(<KnowledgeSearchPanel search={searchBag([hit()], ["RerankerUnavailable"])} />);
 
 		expect(screen.getByTestId("knowledge-search-degradation-RerankerUnavailable").textContent).toContain(
 			"The reranker is not ready yet",
@@ -224,7 +208,7 @@ describe("KnowledgeSearchPanel degradation notice", () => {
 	});
 
 	it("names an embedder change instead of serving stale vectors silently", () => {
-		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit()], ["EmbedderChanged"])} />);
+		renderWithProviders(<KnowledgeSearchPanel search={searchBag([hit()], ["EmbedderChanged"])} />);
 
 		expect(screen.getByTestId("knowledge-search-degradation-EmbedderChanged").textContent).toContain(
 			"The embedding model changed since some documents were indexed",
@@ -233,14 +217,14 @@ describe("KnowledgeSearchPanel degradation notice", () => {
 
 	it("skips a degradation value it has no notice for instead of throwing", () => {
 		const unknown = "SomethingNewer" as UseKnowledgeSearchResult["degradations"][number];
-		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit()], [unknown, "LexicalOnly"])} />);
+		renderWithProviders(<KnowledgeSearchPanel search={searchBag([hit()], [unknown, "LexicalOnly"])} />);
 
 		expect(screen.queryByTestId("knowledge-search-degradation-SomethingNewer")).toBeNull();
 		expect(screen.getByTestId("knowledge-search-degradation-LexicalOnly")).toBeTruthy();
 	});
 
 	it("shows no notice when the full pipeline ran", () => {
-		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit()])} />);
+		renderWithProviders(<KnowledgeSearchPanel search={searchBag([hit()])} />);
 
 		expect(screen.queryByTestId(/knowledge-search-degradation-/)).toBeNull();
 	});
@@ -256,16 +240,14 @@ describe("KnowledgeSearchPanel weak-match notice", () => {
 	});
 
 	it("says the documents hold no strong match when the reranked best hit scored low, and keeps the hits", () => {
-		renderWithProviders(
-			<KnowledgeSearchPanel documents={[]} search={searchBag([hit({ scoreKind: "Rerank", score: -2.1 })], [], true)} />,
-		);
+		renderWithProviders(<KnowledgeSearchPanel search={searchBag([hit({ scoreKind: "Rerank", score: -2.1 })], [], true)} />);
 
 		expect(screen.getByTestId("knowledge-search-weak-match").textContent).toContain("No strong match in your documents");
 		expect(screen.getByTestId("knowledge-search-results")).toBeTruthy();
 	});
 
 	it.each([false, null])("shows no weak-match notice when the verdict is %s", (weakMatch) => {
-		renderWithProviders(<KnowledgeSearchPanel documents={[]} search={searchBag([hit()], [], weakMatch)} />);
+		renderWithProviders(<KnowledgeSearchPanel search={searchBag([hit()], [], weakMatch)} />);
 
 		expect(screen.queryByTestId("knowledge-search-weak-match")).toBeNull();
 	});

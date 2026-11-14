@@ -18,7 +18,7 @@ public interface ISchedulerDispatchExecutor
     ///     resolves the handler, builds the execution context with decrypted parameters, and invokes the handler.
     /// </summary>
     /// <remarks>
-    ///     Only the keys the dispatcher explicitly whitelists are applied over the stored parameters before the context
+    ///     Only the keys the dispatcher explicitly allowlists are applied over the stored parameters before the context
     ///     is built: the stored definition is never mutated, and no other key can override a stored parameter.
     /// </remarks>
     /// <param name="scheduledJobId">Definition id read from the firing trigger's <c>JobDataMap</c>.</param>

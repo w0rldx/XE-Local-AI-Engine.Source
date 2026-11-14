@@ -285,6 +285,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
                     b.HasIndex("AgentDefinitionId", "CreatedAtUtc");
 
+                    b.HasIndex("ConversationId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_agent_execution_logs_conversation_created");
+
                     b.ToTable("agent_execution_logs", (string)null);
                 });
 
@@ -4057,6 +4060,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsUnique()
                         .HasDatabaseName("ux_integration_executions_principal_request");
 
+                    b.HasIndex("ReceivedAtUtc", "Id")
+                        .HasDatabaseName("ix_integration_executions_received");
+
                     b.HasIndex("Status", "ReceivedAtUtc")
                         .HasDatabaseName("ix_integration_executions_status_received");
 
@@ -4409,6 +4415,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasFilter("source_kind <> 'repository'");
 
                     b.HasIndex("CollectionId", "Status");
+
+                    b.HasIndex("CreatedAtUtc", "DocumentId")
+                        .HasDatabaseName("ix_knowledge_documents_created");
 
                     b.HasIndex("CollectionId", "SourceKind", "SourceId", "SourcePath")
                         .IsUnique()
@@ -6006,6 +6015,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasIndex("QuartzFireInstanceId")
                         .IsUnique()
                         .HasFilter("quartz_fire_instance_id IS NOT NULL");
+
+                    b.HasIndex("ActualFireTimeUtc", "Id")
+                        .HasDatabaseName("ix_scheduled_job_runs_fire_time");
 
                     b.HasIndex("ScheduledJobId", "ActualFireTimeUtc");
 

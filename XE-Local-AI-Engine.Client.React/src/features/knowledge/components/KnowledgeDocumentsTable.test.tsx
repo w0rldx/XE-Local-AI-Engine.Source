@@ -27,6 +27,17 @@ function renderTable(documents: readonly KnowledgeDocument[]) {
 	return renderWithProviders(
 		<KnowledgeDocumentsTable
 			documents={documents}
+			pagination={{
+				page: 1,
+				pageCount: 1,
+				pageSize: 25,
+				totalItems: documents.length,
+				firstItemIndex: 1,
+				lastItemIndex: documents.length,
+				pageSizeOptions: [25],
+				onPageChange: vi.fn(),
+				onPageSizeChange: vi.fn(),
+			}}
 			isActionPending={false}
 			onOpenDetail={vi.fn()}
 			onReindex={vi.fn()}

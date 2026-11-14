@@ -690,7 +690,7 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
             CancelledAtUtc = 13
         });
 
-        // Interrupted is NOT whitelisted to supersede Cancelled, so the terminalize message UPDATE is a guard-rejected no-op
+        // Interrupted is NOT allowlisted to supersede Cancelled, so the terminalize message UPDATE is a guard-rejected no-op
         // and its envelope write never runs. The row stays Cancelled and the envelope stays Cancelled: status equality holds.
         var interrupted = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {

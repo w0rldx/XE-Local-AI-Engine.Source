@@ -11,7 +11,7 @@ import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
 import { allKnowledgeCollectionsId, useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
-import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
+import { useKnowledgeHasSearchableDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
@@ -81,12 +81,12 @@ vi.mock("@/features/chat/api/NodeChatConnection", () => ({
 // collections listed, so the collection picker has a choice to offer.
 vi.mock("@/features/knowledge/queries/useKnowledgeDocuments", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/features/knowledge/queries/useKnowledgeDocuments")>()),
-	useKnowledgeDocuments: vi.fn(() => ({ data: [{ status: "Indexed", chunkCount: 1 }] })),
+	useKnowledgeHasSearchableDocuments: vi.fn(() => ({ data: true })),
 	useKnowledgeCollections: vi.fn(() => ({ data: ["DEFAULT", "PROJECT-A"] })),
 }));
 
 const adapter = vi.mocked(nodeChatAdapter);
-const knowledgeDocuments = vi.mocked(useKnowledgeDocuments);
+const knowledgeDocuments = vi.mocked(useKnowledgeHasSearchableDocuments);
 
 function renderChat(): void {
 	renderWithProviders(

@@ -35,7 +35,7 @@ public static class SchedulerJobKeys
     ///     else, so the dispatcher records the run as <c>Manual</c> rather than <c>Schedule</c>.
     /// </summary>
     /// <remarks>
-    ///     A recurring cron fire never carries it, and it is NOT a parameter override: the dispatcher's whitelist never
+    ///     A recurring cron fire never carries it, and it is NOT a parameter override: the dispatcher's allowlist never
     ///     sees it.
     /// </remarks>
     public const string ManualFireKey = "manualFire";
@@ -57,7 +57,7 @@ public static class SchedulerJobKeys
     /// <remarks>
     ///     A manual <c>TriggerNowAsync</c> fire may stamp it so the run produces the selected use-case instead of the
     ///     definition's baked one; the recurring cron fire never sets it, leaving a scheduled run unchanged. The
-    ///     dispatcher merges ONLY whitelisted keys over the stored parameters — no other key from the per-fire map can
+    ///     dispatcher merges ONLY allowlisted keys over the stored parameters — no other key from the per-fire map can
     ///     override a stored parameter.
     /// </remarks>
     public const string ModelFitUseCaseOverrideKey = "modelFitUseCaseOverride";
@@ -68,7 +68,7 @@ public static class SchedulerJobKeys
     /// </summary>
     /// <remarks>
     ///     Like <see cref="ModelFitUseCaseOverrideKey" /> it is set only on a manual <c>TriggerNowAsync</c> fire, never
-    ///     on the recurring cron fire, and the dispatcher merges ONLY this whitelisted key over the stored parameters.
+    ///     on the recurring cron fire, and the dispatcher merges ONLY this allowlisted key over the stored parameters.
     ///     It is written back as a JSON number, so the handler's numeric <c>limit</c> parse is unchanged, and the value
     ///     is validated to the supported <c>1..50</c> range before it is stamped.
     /// </remarks>
@@ -80,7 +80,7 @@ public static class SchedulerJobKeys
     /// </summary>
     /// <remarks>
     ///     Like the other model-fit override keys it is set only on a manual <c>TriggerNowAsync</c> fire, never on the
-    ///     recurring cron fire, and the dispatcher merges ONLY this whitelisted key over the stored parameters,
+    ///     recurring cron fire, and the dispatcher merges ONLY this allowlisted key over the stored parameters,
     ///     replacing the default <c>Q4_K_M</c> the advisor would otherwise estimate against.
     /// </remarks>
     public const string ModelFitQuantOverrideKey = "modelFitQuantOverride";

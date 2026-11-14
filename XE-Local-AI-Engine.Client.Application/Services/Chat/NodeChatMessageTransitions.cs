@@ -60,7 +60,7 @@ public static class NodeChatMessageTransitions
     /// </summary>
     /// <remarks>
     ///     Interrupted may overwrite only a non-terminal row, so it can never downgrade a user Cancelled. The
-    ///     true-outcome terminals additionally whitelist Cancelled as a source, because the pump derives its status
+    ///     true-outcome terminals additionally allowlist Cancelled as a source, because the pump derives its status
     ///     from the real run outcome, so an authoritative completion supersedes an optimistic cancel marker. Every
     ///     other terminal source is rejected.
     /// </remarks>

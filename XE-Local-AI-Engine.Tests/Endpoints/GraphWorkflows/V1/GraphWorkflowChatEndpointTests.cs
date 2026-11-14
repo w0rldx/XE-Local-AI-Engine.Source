@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 using static Tests.GraphWorkflows.GraphWorkflowChatTestSupport;
@@ -117,6 +118,35 @@ public sealed class GraphWorkflowChatEndpointTests
         using var confirmed = await PostMessageAsync(Host.Factory, conversationId, Body(definitionId, "again", confirmRerun: true));
         AssertEx.Equal(HttpStatusCode.Accepted, confirmed.StatusCode);
         AssertEx.Equal(2, (await harness.ReadConversationRunsAsync(conversationId)).Count);
+    }
+
+    /// <summary>The run list carries no graph, so the rerun gate must read the finished run's PINNED graph, not the edited definition.</summary>
+    [Test]
+    public async Task Send_AfterACompletedRun_AsksByThePinnedSettings_EvenWhenTheDefinitionDroppedTheConfirmation()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var definitionId = await harness.SeedDefinitionAsync(ChatInputGraph(requireRerunConfirmation: true));
+        var conversationId = await CreateConversationAsync(harness.Services);
+        var runId = await StartAndParkAsync(harness, definitionId, conversationId);
+        using (var answer = await PostMessageAsync(Host.Factory, conversationId, Body(definitionId, "postgres")))
+        {
+            AssertEx.Equal(HttpStatusCode.Accepted, answer.StatusCode);
+        }
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
+        await using (var scope = harness.Services.CreateAsyncScope())
+        {
+            var current = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetDefinitionAsync(definitionId);
+            _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>()
+                           .UpdateAsync(definitionId, current.Version, name: null, description: null, ChatInputGraph(requireRerunConfirmation: false));
+        }
+
+        using var refused = await PostMessageAsync(Host.Factory, conversationId, Body(definitionId, "again"));
+
+        AssertEx.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        AssertEx.Equal("GraphWorkflowRerunConfirmationRequired", await ConflictTypeAsync(refused));
+        AssertEx.Equal(1, (await harness.ReadConversationRunsAsync(conversationId)).Count);
     }
 
     [Test]

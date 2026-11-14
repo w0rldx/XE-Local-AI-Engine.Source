@@ -137,7 +137,7 @@ public sealed class DevelopmentManagementServiceTests
              .Returns(call => ProjectSnapshot(call.ArgAt<Guid>(0), selectedFolderId));
         store.ListTasksAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
              .Returns(Array.Empty<DevelopmentTaskSnapshot>());
-        store.ListEventsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+        store.ListLatestEventsAsync(Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
              .Returns(Array.Empty<DevelopmentEventSnapshot>());
 
         var service = CreateService(store,
@@ -257,12 +257,12 @@ public sealed class DevelopmentManagementServiceTests
     }
 
     /// <summary>
-    ///     The project read always has the whole task list, so it asks for every task's workflow pointer ONCE. Asking
-    ///     per task was a round trip per row on the page that renders most often, and the single-task read still
-    ///     answers the single-task question.
+    ///     The project read always has the whole task list, so it asks for every task's workflow pointer, attempts and
+    ///     artifacts ONCE each. Asking per task was a round trip per row on the page that renders most often, and the
+    ///     single-task read still answers the single-task question.
     /// </summary>
     [Test]
-    public async Task GetProject_ResolvesEveryTasksWorkflowRunIdInOneStoreCall()
+    public async Task GetProject_ReadsEveryTasksRowsInOneStoreCallEach()
     {
         var projectId = Guid.NewGuid();
         var operatorDriven = Guid.NewGuid();
@@ -280,9 +280,14 @@ public sealed class DevelopmentManagementServiceTests
         var graphWorkflows = Substitute.For<IGraphWorkflowStore>();
         graphWorkflows.ListDevelopmentTaskRunsAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
                       .Returns([GraphOwner(graphDriven, graphRunId, GraphWorkflowRunStatus.Running)]);
-        store.ListAttemptsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<DevelopmentAttemptSnapshot>());
-        store.ListArtifactsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<DevelopmentArtifactSnapshot>());
-        store.ListEventsAsync(projectId, Arg.Any<CancellationToken>()).Returns(Array.Empty<DevelopmentEventSnapshot>());
+        var firstAttempt = AttemptSnapshot(graphDriven, startedAtUtc: 1);
+        var secondAttempt = AttemptSnapshot(graphDriven, startedAtUtc: 2);
+        var otherAttempt = AttemptSnapshot(operatorDriven, startedAtUtc: 3);
+        store.ListAttemptsForTasksAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+             .Returns([firstAttempt, secondAttempt, otherAttempt]);
+        store.ListArtifactsForTasksAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+             .Returns(Array.Empty<DevelopmentArtifactSnapshot>());
+        store.ListLatestEventsAsync(projectId, Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<DevelopmentEventSnapshot>());
 
         var service = CreateService(store,
             Substitute.For<IDevelopmentCoordinator>(),
@@ -292,6 +297,16 @@ public sealed class DevelopmentManagementServiceTests
         var project = await service.GetProjectAsync(projectId);
 
         AssertEx.Equal(3, project.Tasks.Count);
+        AssertEx.True(project.Tasks[0].Attempts.Select(static attempt => attempt.Id).SequenceEqual([otherAttempt.Id]));
+        AssertEx.Empty(project.Tasks[1].Attempts);
+        AssertEx.True(project.Tasks[2].Attempts.Select(static attempt => attempt.Id).SequenceEqual([firstAttempt.Id, secondAttempt.Id]),
+            "the one batched read is split back per task, keeping the store's order.");
+        await store.Received(1).ListAttemptsForTasksAsync(Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 3), Arg.Any<CancellationToken>());
+        await store.Received(1).ListArtifactsForTasksAsync(Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 3), Arg.Any<CancellationToken>());
+        await store.DidNotReceive().ListAttemptsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await store.DidNotReceive().ListArtifactsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await store.Received(1).ListLatestEventsAsync(projectId, DevelopmentManagementService.ProjectDetailEventsPerTask, Arg.Any<CancellationToken>());
+        await store.DidNotReceive().ListEventsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
         AssertEx.Null(project.Tasks[0].WorkflowRun);
         AssertEx.Null(project.Tasks[1].WorkflowRun);
         AssertEx.Equal(new DevelopmentWorkflowRunReference
@@ -605,6 +620,24 @@ public sealed class DevelopmentManagementServiceTests
             RunId = runId
         };
 
+    private static DevelopmentAttemptSnapshot AttemptSnapshot(Guid taskId, long startedAtUtc) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            TaskId = taskId,
+            PredecessorAttemptId = null,
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "coder-model",
+            Provider = "local",
+            Status = PersistenceAttemptStatus.Succeeded,
+            StartedAtUtc = startedAtUtc,
+            EndedAtUtc = startedAtUtc + 1,
+            TerminalReason = null,
+            InputTokens = 10,
+            OutputTokens = 10,
+            Version = 1
+        };
+
     private static DevelopmentTaskSnapshot TaskSnapshot(Guid projectId, Guid taskId) =>
         new()
         {
@@ -646,7 +679,7 @@ public sealed class DevelopmentManagementServiceTests
             };
     }
 
-    private sealed class UnusedApplyService : IDevelopmentApplyService
+    internal sealed class UnusedApplyService : IDevelopmentApplyService
     {
         public Task<DevelopmentPatchPreview> PreviewAsync(Guid taskId,
             DevelopmentRepositoryBinding repository,

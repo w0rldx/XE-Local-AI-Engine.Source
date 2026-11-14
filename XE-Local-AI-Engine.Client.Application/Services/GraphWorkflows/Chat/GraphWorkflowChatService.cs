@@ -125,7 +125,7 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         var newest = await NewestBoundRunAsync(conversationId, cancellationToken);
         if (newest is null || GraphWorkflowStateMachine.IsTerminal(newest.Status))
         {
-            if (newest is not null && !request.ConfirmRerun && PinnedChatSettings(newest).RequireRerunConfirmation)
+            if (newest is not null && !request.ConfirmRerun && await RerunNeedsConfirmationAsync(newest.Id, cancellationToken))
             {
                 throw new GraphWorkflowRerunConfirmationRequiredException("This conversation already ran a workflow. Confirm to start another run.");
             }
@@ -218,7 +218,8 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
             {
                 var nodeRuns = await _store.ListNodeRunsAsync(run.Id, cancellationToken);
                 pendingKey = ParkedInputKey(run, nodeRuns);
-                prompt = pendingKey is null ? null : PromptOf(run, pendingKey);
+                // The list carries no blobs: only a run parked on an input reads its pinned graph, for the prompt.
+                prompt = pendingKey is null ? null : PromptOf(await _store.GetRunAsync(run.Id, cancellationToken), pendingKey);
                 steerable = nodeRuns.FirstOrDefault(static nodeRun => nodeRun.Kind is GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.LlmCall
                                                                       && nodeRun.Status is GraphWorkflowNodeRunStatus.Queued or GraphWorkflowNodeRunStatus.Running)
                                     ?.NodeKey;
@@ -308,7 +309,7 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         }
     }
 
-    private async Task<GraphWorkflowRunSnapshot?> NewestBoundRunAsync(Guid conversationId, CancellationToken cancellationToken)
+    private async Task<GraphWorkflowRunSummary?> NewestBoundRunAsync(Guid conversationId, CancellationToken cancellationToken)
     {
         var runs = await _store.ListRunsByConversationAsync(conversationId, limit: 1, cancellationToken);
         return runs.Count == 0 ? null : runs[0];
@@ -451,10 +452,24 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
             cancellationToken);
 
     /// <summary>The node key of the <c>ChatInput</c> a waiting run is parked on, or null when it is busy or waits on a <c>Pause</c>.</summary>
-    private async Task<string?> ParkedInputAsync(GraphWorkflowRunSnapshot run, CancellationToken cancellationToken) =>
+    private async Task<string?> ParkedInputAsync(GraphWorkflowRunSummary run, CancellationToken cancellationToken) =>
         run.Status == GraphWorkflowRunStatus.WaitingForApproval ? ParkedInputKey(run, await _store.ListNodeRunsAsync(run.Id, cancellationToken)) : null;
 
-    private static string? ParkedInputKey(GraphWorkflowRunSnapshot run, IReadOnlyList<GraphWorkflowNodeRunSnapshot> nodeRuns) =>
+    /// <summary>Whether a rerun after the finished <paramref name="runId" /> must be confirmed, by the settings that run pinned.</summary>
+    private async Task<bool> RerunNeedsConfirmationAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return PinnedChatSettings(await _store.GetRunAsync(runId, cancellationToken)).RequireRerunConfirmation;
+        }
+        catch (GraphWorkflowNotFoundException)
+        {
+            // Deleted since the list read: no earlier run is left to confirm against.
+            return false;
+        }
+    }
+
+    private static string? ParkedInputKey(GraphWorkflowRunSummary run,IReadOnlyList<GraphWorkflowNodeRunSnapshot> nodeRuns) =>
         run.Status != GraphWorkflowRunStatus.WaitingForApproval
         || nodeRuns.Any(static nodeRun => nodeRun.Status is GraphWorkflowNodeRunStatus.Queued or GraphWorkflowNodeRunStatus.Running)
             ? null

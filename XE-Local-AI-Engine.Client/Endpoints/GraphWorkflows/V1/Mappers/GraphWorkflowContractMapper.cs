@@ -138,7 +138,7 @@ internal static class GraphWorkflowContractMapper
     public static GraphWorkflowTriggerSource? FromWireTriggerSources(IReadOnlyList<string>? names) =>
         names?.Aggregate((GraphWorkflowTriggerSource)0, static (sources, name) => sources | Enum.Parse<GraphWorkflowTriggerSource>(name));
 
-    public static GraphWorkflowRunSummaryResponse ToResponse(this GraphWorkflowRunSnapshot value)
+    public static GraphWorkflowRunSummaryResponse ToResponse(this GraphWorkflowRunSummary value)
     {
         ArgumentNullException.ThrowIfNull(value);
         return new GraphWorkflowRunSummaryResponse

@@ -172,10 +172,10 @@ public static class GraphWorkflowVersions
 }
 
 /// <summary>
-///     One run row with its encrypted columns decoded to text. <see cref="GraphJson" /> is the copy pinned at start:
-///     the definition row may be edited, or deleted, without changing what this run executes.
+///     One run row's plaintext columns: what a run list carries. It never holds the encrypted blobs, so a list read
+///     neither loads nor decrypts them; <see cref="GraphWorkflowRunSnapshot" /> adds them for a single-run read.
 /// </summary>
-public sealed class GraphWorkflowRunSnapshot
+public class GraphWorkflowRunSummary
 {
     public required Guid Id { get; init; }
 
@@ -190,15 +190,6 @@ public sealed class GraphWorkflowRunSnapshot
     public required GraphWorkflowRunStatus Status { get; init; }
 
     public required GraphWorkflowFailureClass FailureClass { get; init; }
-
-    public required string GraphJson { get; init; }
-
-    public required string? InputJson { get; init; }
-
-    public required string? OutputJson { get; init; }
-
-    /// <summary>The previous Completed run of this definition, pinned at start as <c>{ runId, completedAtUtc, output }</c>; null when there was none.</summary>
-    public string? PreviousJson { get; init; }
 
     public required long Seq { get; init; }
 
@@ -226,6 +217,22 @@ public sealed class GraphWorkflowRunSnapshot
 
     /// <summary>The prefix of the API key that started the run; audit metadata only.</summary>
     public string? KeyPrefix { get; init; }
+}
+
+/// <summary>
+///     One run row with its encrypted columns decoded to text. <see cref="GraphJson" /> is the copy pinned at start:
+///     the definition row may be edited, or deleted, without changing what this run executes.
+/// </summary>
+public sealed class GraphWorkflowRunSnapshot : GraphWorkflowRunSummary
+{
+    public required string GraphJson { get; init; }
+
+    public required string? InputJson { get; init; }
+
+    public required string? OutputJson { get; init; }
+
+    /// <summary>The previous Completed run of this definition, pinned at start as <c>{ runId, completedAtUtc, output }</c>; null when there was none.</summary>
+    public string? PreviousJson { get; init; }
 }
 
 /// <summary>One entry of a run's append-only change log. <see cref="Seq" /> is its order as well as its watermark.</summary>
@@ -678,8 +685,8 @@ public interface IGraphWorkflowStore
     /// </summary>
     Task DeleteRunAsync(Guid runId, CancellationToken cancellationToken = default);
 
-    /// <summary>Newest first, optionally filtered by status.</summary>
-    Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null, int limit = 50, CancellationToken cancellationToken = default);
+    /// <summary>Newest first, optionally filtered by status; plaintext columns only (<see cref="GetRunAsync" /> reads the blobs).</summary>
+    Task<IReadOnlyList<GraphWorkflowRunSummary>> ListRunsAsync(GraphWorkflowRunStatus? status = null, int limit = 50, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     How many runs are EXECUTING — <c>Running</c>, <c>WaitingForApproval</c> or <c>Cancelling</c> — counted no
@@ -694,8 +701,8 @@ public interface IGraphWorkflowStore
     /// </remarks>
     Task<int> CountActiveRunsAsync(int probeLimit, CancellationToken cancellationToken = default);
 
-    /// <summary>The runs bound to one chat conversation, newest first, every status.</summary>
-    Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsByConversationAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default);
+    /// <summary>The runs bound to one chat conversation, newest first, every status; plaintext columns only.</summary>
+    Task<IReadOnlyList<GraphWorkflowRunSummary>> ListRunsByConversationAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     The node run one operation id decided on ANY run bound to <paramref name="conversationId" />, or

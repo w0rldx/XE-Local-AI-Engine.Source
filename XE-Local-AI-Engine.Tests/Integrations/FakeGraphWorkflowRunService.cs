@@ -123,7 +123,7 @@ internal sealed class FakeGraphWorkflowRunService : IGraphWorkflowRunService
     public Task DeleteAsync(Guid runId, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
-    public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status, int limit, CancellationToken cancellationToken = default) =>
+    public Task<IReadOnlyList<GraphWorkflowRunSummary>> ListRunsAsync(GraphWorkflowRunStatus? status, int limit, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
     public Task<GraphWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid runId, string nodeKey, CancellationToken cancellationToken = default) =>

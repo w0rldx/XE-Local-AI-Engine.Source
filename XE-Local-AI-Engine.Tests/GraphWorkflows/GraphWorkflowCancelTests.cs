@@ -531,7 +531,7 @@ internal sealed class GatedDrainGraphWorkflowStore : IGraphWorkflowStore
     public Task DeleteRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
         _inner.DeleteRunAsync(runId, cancellationToken);
 
-    public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null,
+    public Task<IReadOnlyList<GraphWorkflowRunSummary>> ListRunsAsync(GraphWorkflowRunStatus? status = null,
         int limit = 50,
         CancellationToken cancellationToken = default) =>
         _inner.ListRunsAsync(status, limit, cancellationToken);
@@ -539,7 +539,7 @@ internal sealed class GatedDrainGraphWorkflowStore : IGraphWorkflowStore
     public Task<int> CountActiveRunsAsync(int probeLimit, CancellationToken cancellationToken = default) =>
         _inner.CountActiveRunsAsync(probeLimit, cancellationToken);
 
-    public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsByConversationAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default) =>
+    public Task<IReadOnlyList<GraphWorkflowRunSummary>> ListRunsByConversationAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default) =>
         _inner.ListRunsByConversationAsync(conversationId, limit, cancellationToken);
 
     public Task<GraphWorkflowNodeRunSnapshot?> FindConversationDecisionAsync(Guid conversationId, Guid operationId, CancellationToken cancellationToken = default) =>

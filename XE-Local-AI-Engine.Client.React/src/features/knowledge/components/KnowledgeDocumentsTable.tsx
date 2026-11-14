@@ -3,8 +3,10 @@ import { IconAlertTriangle, IconEye, IconRefresh, IconTrash } from "@tabler/icon
 import { useTranslation } from "react-i18next";
 
 import { ResponsiveTable, type ResponsiveTableColumn } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
-import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
-import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
+import {
+	TablePaginationFooter,
+	type TablePaginationFooterProps,
+} from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { KnowledgeLastKnownGoodBadge } from "@/features/knowledge/components/KnowledgeLastKnownGoodBadge";
 import { KnowledgeStatusBadge } from "@/features/knowledge/components/KnowledgeStatusBadge";
 import {
@@ -15,28 +17,27 @@ import {
 } from "@/features/knowledge/models/KnowledgeModels";
 
 interface KnowledgeDocumentsTableProps {
+	/** The server page on screen, not the whole list. */
 	readonly documents: readonly KnowledgeDocument[];
+	readonly pagination: TablePaginationFooterProps;
 	readonly isActionPending: boolean;
 	onOpenDetail(documentId: string): void;
 	onReindex(documentId: string): void;
 	onDelete(document: KnowledgeDocument): void;
 }
 
-// Persisted page-size preference (its own key so the KB table remembers a separate size from other tables).
-const KNOWLEDGE_PAGE_SIZE_STORAGE_KEY = "knowledge-documents";
-
 // Paginated documents table: name (+ failure reason inline for failed rows), status pill, chunk count, embedding
 // model (+ a "stale — reindex" badge when the embedding model has moved on), size, created, and row actions
-// (view / reindex / delete). Client-side pagination over the already-loaded list via useTablePagination.
+// (view / reindex / delete). The server pages the list; the parent owns the page and passes the footer's props in.
 export function KnowledgeDocumentsTable({
 	documents,
+	pagination,
 	isActionPending,
 	onOpenDetail,
 	onReindex,
 	onDelete,
 }: KnowledgeDocumentsTableProps) {
 	const { t } = useTranslation();
-	const pagination = useTablePagination(documents, { storageKey: KNOWLEDGE_PAGE_SIZE_STORAGE_KEY });
 
 	const columns: readonly ResponsiveTableColumn<KnowledgeDocument>[] = [
 		{
@@ -129,7 +130,7 @@ export function KnowledgeDocumentsTable({
 	return (
 		<Stack gap="sm">
 			<ResponsiveTable
-				rows={pagination.pageItems}
+				rows={documents}
 				columns={columns}
 				rowKey={(document) => document.documentId}
 				rowTestId={(document) => `knowledge-row-${document.documentId}`}
@@ -182,20 +183,7 @@ export function KnowledgeDocumentsTable({
 				)}
 			/>
 
-			{documents.length > 0 ? (
-				<TablePaginationFooter
-					page={pagination.page}
-					pageCount={pagination.pageCount}
-					pageSize={pagination.pageSize}
-					totalItems={pagination.totalItems}
-					firstItemIndex={pagination.firstItemIndex}
-					lastItemIndex={pagination.lastItemIndex}
-					pageSizeOptions={pagination.pageSizeOptions}
-					onPageChange={pagination.setPage}
-					onPageSizeChange={pagination.setPageSize}
-					data-testid="knowledge-pagination"
-				/>
-			) : null}
+			{pagination.totalItems > 0 ? <TablePaginationFooter {...pagination} data-testid="knowledge-pagination" /> : null}
 		</Stack>
 	);
 }

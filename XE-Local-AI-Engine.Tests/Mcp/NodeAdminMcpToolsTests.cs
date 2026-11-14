@@ -94,7 +94,7 @@ public sealed class NodeAdminMcpToolsTests
     }
 
     [Test]
-    public void UpdateNodeSettings_ExposesOnlyTheExactSeventeenFieldWhitelist()
+    public void UpdateNodeSettings_ExposesOnlyTheExactSeventeenFieldAllowlist()
     {
         var method = AssertEx.NotNull(typeof(NodeAdminMcpTools).GetMethod(nameof(NodeAdminMcpTools.UpdateNodeSettingsAsync)));
         var names = method.GetParameters()
@@ -104,7 +104,7 @@ public sealed class NodeAdminMcpToolsTests
                           .ToArray();
 
         // The tool DESCRIPTION states the field count, and an agent reads that description as the contract. It had
-        // already drifted once — a seventeenth field was whitelisted while the sentence still promised sixteen — so
+        // already drifted once — a seventeenth field was allowlisted while the sentence still promised sixteen — so
         // the number is DERIVED from the parameter list here rather than restated, and the next field added fails this
         // test until the sentence is corrected too.
         var description = AssertEx.NotNull(method.GetCustomAttribute<DescriptionAttribute>()).Description;
@@ -1189,7 +1189,7 @@ public sealed class NodeAdminMcpToolsTests
         };
 
     // The switch throws on an unmapped member, and a validation error is the only thing that reaches it — so a new
-    // whitelisted setting whose arm was forgotten turns an operator's rejection into a 500 on the one path that was
+    // allowlisted setting whose arm was forgotten turns an operator's rejection into a 500 on the one path that was
     // supposed to explain what they got wrong. Asked over the enum, so the next member cannot regress it either.
     [Test]
     public void SettingsField_NamesEveryNodeSettingsField()

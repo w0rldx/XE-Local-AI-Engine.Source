@@ -77,6 +77,9 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     /// </remarks>
     private const string ReviewRoundLimitReason = "The configured maximum number of rounds has been reached.";
 
+    /// <summary>How many of each task's newest events <see cref="GetProjectAsync" /> carries.</summary>
+    internal const int ProjectDetailEventsPerTask = 200;
+
     private readonly IDevelopmentApplyService _applyService;
     private readonly IDevelopmentArtifactBlobStore _blobStore;
     private readonly IDevelopmentCoordinator _coordinator;
@@ -273,27 +276,29 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         var project = await _store.GetProjectAsync(projectId, cancellationToken);
         var tasks = await _store.ListTasksAsync(projectId, cancellationToken);
 
-        // ONE query for every task's workflow pointer, not one per task: this read always has the whole task list, so
-        // asking the single-task question in a loop is a round trip per row on the page that renders most often.
+        // ONE query each for every task's workflow pointer, attempts and artifacts, not one per task: this read always
+        // has the whole task list, and the page that renders it most often polls it every few seconds.
         Guid[] taskIds = [.. tasks.Select(static task => task.Id)];
         var graphRuns = await _graphWorkflows.ListDevelopmentTaskRunsAsync(taskIds, cancellationToken);
-        var aggregates = new List<DevelopmentTaskAggregate>(tasks.Count);
-        foreach (var task in tasks)
-        {
-            aggregates.Add(new DevelopmentTaskAggregate
-            {
-                Task = task,
-                Attempts = await _store.ListAttemptsAsync(task.Id, cancellationToken),
-                Artifacts = await _store.ListArtifactsAsync(task.Id, cancellationToken),
-                WorkflowRun = WorkflowRunOf(task.Id, graphRuns)
-            });
-        }
+        var attempts = (await _store.ListAttemptsForTasksAsync(taskIds, cancellationToken)).ToLookup(static attempt => attempt.TaskId);
+        var artifacts = (await _store.ListArtifactsForTasksAsync(taskIds, cancellationToken)).ToLookup(static artifact => artifact.TaskId);
+        var aggregates = tasks.Select(task => new DevelopmentTaskAggregate
+                              {
+                                  Task = task,
+                                  Attempts = [.. attempts[task.Id]],
+                                  Artifacts = [.. artifacts[task.Id]],
+                                  WorkflowRun = WorkflowRunOf(task.Id, graphRuns)
+                              })
+                              .ToList();
 
         return new DevelopmentProjectAggregate
         {
             Project = project,
             Tasks = aggregates,
-            Events = await _store.ListEventsAsync(projectId, cancellationToken)
+
+            // The detail is polled and every event decrypts its detail, so it carries each task's newest window: the page
+            // shows one task's events, and a busy sibling must not crowd them out. The events endpoint serves the ledger.
+            Events = await _store.ListLatestEventsAsync(projectId, ProjectDetailEventsPerTask, cancellationToken)
         };
     }
 

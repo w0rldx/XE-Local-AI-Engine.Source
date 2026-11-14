@@ -391,6 +391,13 @@ public sealed class WebFetchServiceTests
     [Arguments("https://docs.example.com/guide", "https://docs.example.com/guide/%2E%2E/admin", false)]
     [Arguments("https://docs.example.com/guide", "https://docs.example.com/guide/a/../b", true)]
     [Arguments("https://docs.example.com/gu%69de", "https://docs.example.com/guide/x", true)]
+    [Arguments("https://docs.example.com/docs/", "https://docs.example.com/docs/..%2Fadmin", false)] // decoded "/" climbs out server-side
+    [Arguments("https://docs.example.com/docs/", "https://docs.example.com/docs/..%2fadmin", false)]
+    [Arguments("https://docs.example.com/docs/", "https://docs.example.com/docs/%2e%2e/admin", false)]
+    [Arguments("https://docs.example.com/docs/", "https://docs.example.com/docs/a%5Cb", false)] // decoded "\" is a separator on some servers
+    [Arguments("https://docs.example.com/docs/", "https://docs.example.com/docs/a/b", true)]
+    [Arguments("https://gitlab.example.com/", "https://gitlab.example.com/api/v4/projects/group%2Fproject", true)] // a bare origin admits every path
+    [Arguments("https://gitlab.example.com", "https://gitlab.example.com/a%5Cb", true)]
     public void IsAllowed_MatchesSchemeHostPortAndPathPrefix(string entry, string url, bool expected)
     {
         AssertEx.Equal(expected, WebFetchService.IsAllowed(new Uri(url), [entry]));

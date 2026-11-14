@@ -1279,7 +1279,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 82);
 
         // HTTP cancel wins the row first (Streaming -> Cancelled). The pump's authoritative Completed terminalize then
-        // arrives: Cancelled is whitelisted as a source for a true-outcome terminal, so the completion supersedes it and
+        // arrives: Cancelled is allowlisted as a source for a true-outcome terminal, so the completion supersedes it and
         // the real content is persisted.
         var cancel = await service.CancelMessageAsync(new NodeChatCancelRequest
         {
@@ -1338,7 +1338,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
             CancelledAtUtc = 93
         });
 
-        // Interrupted (stream loss) is NOT whitelisted to overwrite Cancelled, so an interrupt terminalize against a
+        // Interrupted (stream loss) is NOT allowlisted to overwrite Cancelled, so an interrupt terminalize against a
         // user-cancelled row is an atomic no-op — the cancel is never downgraded.
         var interrupted = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
@@ -1468,7 +1468,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     public async Task CancelAndTerminalize_RunConcurrently_ConvergeOnCompletedTerminal()
     {
         // Real concurrency: for each of many messages, fire cancel and the authoritative Completed terminalize in
-        // parallel. Whatever the interleave, the transition table's whitelist makes the completion win, so every row
+        // parallel. Whatever the interleave, the transition table's allowlist makes the completion win, so every row
         // converges on the same terminal — no torn or non-terminal state, and the reported status agrees with the row.
         await using var provider = await BuildProviderAsync("cancel-terminalize-race.sqlite");
         var service = CreateService(provider);

@@ -30,10 +30,20 @@ public interface IScheduledJobRunStore
 
     /// <summary>
     ///     Returns runs filtered by the supplied criteria (each <c>null</c> filter is ignored), ordered by
-    ///     ActualFireTimeUtc descending. The <paramref name="fromUtc" />/<paramref name="toUtc" /> bounds match against
-    ///     ActualFireTimeUtc.
+    ///     ActualFireTimeUtc descending then id, skipping <paramref name="offset" /> and returning at most
+    ///     <paramref name="limit" /> (all when <c>null</c>). The <paramref name="fromUtc" />/<paramref name="toUtc" />
+    ///     bounds match against ActualFireTimeUtc.
     /// </summary>
     Task<IReadOnlyList<ScheduledJobRunRecord>> ListAsync(ScheduledRunStatus? status = null,
+        long? fromUtc = null,
+        long? toUtc = null,
+        Guid? scheduledJobId = null,
+        int? limit = null,
+        int offset = 0,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Counts the runs <see cref="ListAsync" /> would return across every page for the same filters.</summary>
+    Task<int> CountAsync(ScheduledRunStatus? status = null,
         long? fromUtc = null,
         long? toUtc = null,
         Guid? scheduledJobId = null,

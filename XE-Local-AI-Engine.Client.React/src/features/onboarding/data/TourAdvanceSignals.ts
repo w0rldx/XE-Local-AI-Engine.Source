@@ -4,7 +4,7 @@ import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse as L
 import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { isLocalChatModel } from "@/core/models/ChatModelOptions";
 
-// A model counts as chat-capable only when its kind is exactly "Chat" — a whitelist matching the chat picker
+// A model counts as chat-capable only when its kind is exactly "Chat" — an allowlist matching the chat picker
 // (toChatModelOptions), which likewise offers `kind === "Chat"` and excludes every non-chat kind (Embedding, Reranker,
 // Unknown, and any future kind). A blacklist such as `!== "Embedding"` would silently treat a reranker-only or
 // future-kind install as chat-capable and falsely advance the tour. Deriving from the same list and rule the picker

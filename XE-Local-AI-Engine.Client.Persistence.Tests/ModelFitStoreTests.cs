@@ -50,6 +50,39 @@ public sealed class ModelFitStoreTests : IDisposable
     }
 
     [Test]
+    public async Task SummaryReads_SelectNoEncryptedColumn()
+    {
+        var databasePath = GetDatabasePath("snapshot-summary-projection.sqlite");
+        using var keyHolder = CreateKeyHolder();
+        var recorder = new RecordingCommandInterceptor();
+
+        await using var context = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder, recorder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var store = new ModelFitSnapshotStore(context, TimeProvider.System);
+        var created = await store.CreateRunningAsync(CreateRecommendInput("coding"));
+        _ = await store.MarkTerminalAsync(created.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 10,
+            rawJson: """{"models":[]}""", stderrExcerpt: "stderr", diagnosticsJson: "{}", completedAtUtc: 1_000);
+        recorder.Clear();
+
+        var listed = await store.ListRecentSummariesAsync();
+        var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "llama.cpp", modelName: null));
+
+        AssertEx.Equal(created.Id, listed.Single().Id);
+        AssertEx.Equal(created.Id, latest.Id);
+        AssertEx.Equal(expected: 2, recorder.Queries.Count, "each summary read is one query.");
+        foreach (var sql in recorder.Queries)
+        {
+            // The three columns are encrypted at rest: a summary read that selects them decrypts output nobody returns.
+            AssertEx.False(sql.Contains("raw_json", StringComparison.Ordinal)
+                           || sql.Contains("stderr_excerpt", StringComparison.Ordinal)
+                           || sql.Contains("diagnostics_json", StringComparison.Ordinal),
+                $"A summary read must not select an encrypted column. SQL was: {sql}");
+        }
+    }
+
+    [Test]
     public async Task Snapshot_MarkSucceeded_ClearsPriorLatestForSameKey()
     {
         var databasePath = GetDatabasePath("snapshot-latest-replacement.sqlite");

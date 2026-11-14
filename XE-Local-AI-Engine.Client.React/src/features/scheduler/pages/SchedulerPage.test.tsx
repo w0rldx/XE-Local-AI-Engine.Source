@@ -136,7 +136,7 @@ describe("SchedulerPage", () => {
 		useSchedulerManagementStore.setState({ editorTarget: null, selectedRunId: null });
 		hooksMock.useScheduledJobTemplates.mockReturnValue(makeQuery([]));
 		hooksMock.useScheduledJobs.mockReturnValue(makeQuery([cronJob]));
-		hooksMock.useScheduledJobRuns.mockReturnValue(makeQuery([]));
+		hooksMock.useScheduledJobRuns.mockReturnValue(makeQuery({ items: [], totalCount: 0 }));
 		hooksMock.useScheduledJobRun.mockReturnValue(makeQuery(undefined));
 		hooksMock.useCreateScheduledJob.mockReturnValue(makeMutation());
 		hooksMock.useUpdateScheduledJob.mockReturnValue(makeMutation());
@@ -161,7 +161,7 @@ describe("SchedulerPage", () => {
 	it("does not poll run history while the scheduler hub is still connecting", () => {
 		renderPage();
 
-		expect(hooksMock.useScheduledJobRuns).toHaveBeenCalledWith({}, { refetchInterval: false });
+		expect(hooksMock.useScheduledJobRuns).toHaveBeenCalledWith({}, { refetchInterval: false, limit: 25, offset: 0 });
 	});
 
 	it("polls run history only at the slow floor while the scheduler hub is live", () => {
@@ -169,7 +169,7 @@ describe("SchedulerPage", () => {
 
 		renderPage();
 
-		expect(hooksMock.useScheduledJobRuns).toHaveBeenCalledWith({}, { refetchInterval: 60_000 });
+		expect(hooksMock.useScheduledJobRuns).toHaveBeenCalledWith({}, { refetchInterval: 60_000, limit: 25, offset: 0 });
 	});
 
 	it("polls run history at the hub's fallback cadence while the hub is degraded", () => {
@@ -177,7 +177,42 @@ describe("SchedulerPage", () => {
 
 		renderPage();
 
-		expect(hooksMock.useScheduledJobRuns).toHaveBeenCalledWith({}, { refetchInterval: 5000 });
+		expect(hooksMock.useScheduledJobRuns).toHaveBeenCalledWith({}, { refetchInterval: 5000, limit: 25, offset: 0 });
+	});
+
+	// A 30-day history of a frequent job is thousands of runs: the server pages it, and the pager reaches the rest.
+	it("asks for one bounded page of run history and reaches the next through the pager", async () => {
+		hooksMock.useScheduledJobRuns.mockImplementation((_filters: unknown, options: { offset: number }) =>
+			makeQuery({
+				items: [
+					{
+						id: `run-${options.offset}`,
+						scheduledJobId: "job-1",
+						templateId: "cleanup",
+						triggeredBy: "Schedule",
+						status: "Succeeded",
+						scheduledFireTimeUtc: null,
+						actualFireTimeUtc: 1000,
+						completedAtUtc: null,
+						durationMs: null,
+						summary: null,
+						errorMessage: null,
+						cancellationRequestedAtUtc: null,
+						createdAtUtc: 1000,
+					},
+				],
+				totalCount: 60,
+			}),
+		);
+
+		renderPage();
+
+		expect(screen.getByTestId("scheduler-run-row-run-0")).toBeTruthy();
+		const controls = screen.getByTestId("scheduler-runs-pagination-controls");
+		fireEvent.click(within(controls).getByRole("button", { name: "2" }));
+
+		await waitFor(() => expect(screen.getByTestId("scheduler-run-row-run-25")).toBeTruthy());
+		expect(hooksMock.useScheduledJobRuns).toHaveBeenLastCalledWith({}, expect.objectContaining({ limit: 25, offset: 25 }));
 	});
 
 	it("renders the list of scheduled jobs", () => {

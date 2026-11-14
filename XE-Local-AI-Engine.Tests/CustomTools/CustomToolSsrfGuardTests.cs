@@ -35,6 +35,7 @@ public sealed class CustomToolSsrfGuardTests
     [Arguments("fec0::1")] // deprecated site-local
     [Arguments("ff02::1")] // IPv6 multicast
     [Arguments("64:ff9b::7f00:1")] // NAT64
+    [Arguments("64:ff9b:1::a00:1")] // local-use NAT64 (RFC 8215) embedding 10.0.0.1
     [Arguments("::")] // unspecified
     [Arguments("::ffff:127.0.0.1")] // IPv4-mapped loopback → re-tested as v4
     [Arguments("::ffff:169.254.169.254")] // IPv4-mapped metadata
@@ -252,6 +253,63 @@ public sealed class CustomToolSsrfGuardTests
         AssertEx.False(CustomToolSsrfGuard.IsListedHost("other.lan", ["homeassistant.lan"]), "An unlisted name does not match.");
         AssertEx.False(CustomToolSsrfGuard.IsListedHost("192.168.1.21", ["192.168.1.20"]), "An unlisted literal does not match.");
         await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task PinnedConnectCallback_ForAnAddressOfThisMachine_Denies()
+    {
+        // 203.0.113.7 (TEST-NET-3) is outside every denied range; the seam names it, in IPv4-mapped form, as one of this machine's
+        // own addresses, so the callback must refuse before dialing. Without the check it would try to connect and time out instead.
+        using var handler = new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+            ConnectCallback = CustomToolSsrfGuard.CreatePinnedConnectCallback(static () => [IPAddress.Parse("::ffff:203.0.113.7")])
+        };
+        using var client = new HttpClient(handler);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        Exception? captured = null;
+        try
+        {
+            using var response = await client.GetAsync(new Uri("http://203.0.113.7:9/"), timeout.Token);
+        }
+        catch (Exception exception)
+        {
+            captured = exception;
+        }
+
+        var notNull = AssertEx.NotNull(captured);
+        var blocked = notNull as CustomToolExecutionException ?? notNull.InnerException as CustomToolExecutionException;
+        AssertEx.NotNull(blocked, $"Expected the connect pin to refuse an own address, but got {notNull.GetType().Name}: {notNull.Message}");
+    }
+
+    [Test]
+    public async Task PinnedConnectCallback_ListedPrivateHostAtAnAddressOfThisMachine_IsDialed()
+    {
+        // A listed LAN service may run on this machine (ADR 0021). The seam names 10.255.255.1 as an own address and the request lists
+        // it, so the pin must dial it: whatever the dial does on this network, it is never the pin's refusal.
+        using var handler = new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+            ConnectCallback = CustomToolSsrfGuard.CreatePinnedConnectCallback(static () => [IPAddress.Parse("10.255.255.1")])
+        };
+        using var client = new HttpClient(handler);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri("http://10.255.255.1:9/"));
+        request.Options.Set(CustomToolSsrfGuard.PrivateHostsOption, (IReadOnlyList<string>)["10.255.255.1"]);
+
+        Exception? captured = null;
+        try
+        {
+            using var response = await client.SendAsync(request, timeout.Token);
+        }
+        catch (Exception exception)
+        {
+            captured = exception;
+        }
+
+        var blocked = captured as CustomToolExecutionException ?? captured?.InnerException as CustomToolExecutionException;
+        AssertEx.Null(blocked, $"A listed private host on this machine must not be refused, but the pin said: {blocked?.Message}");
     }
 
     [Test]

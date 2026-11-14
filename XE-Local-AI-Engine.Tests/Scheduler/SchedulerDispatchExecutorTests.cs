@@ -205,7 +205,7 @@ public sealed class SchedulerDispatchExecutorTests
     }
 
     [Test]
-    public async Task Dispatch_WhenUseCaseAndLimitOverride_MergesBothWhitelistedKeysOnly()
+    public async Task Dispatch_WhenUseCaseAndLimitOverride_MergesBothAllowlistedKeysOnly()
     {
         const string storedJson =
             """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"llama.cpp"}""";
@@ -237,7 +237,7 @@ public sealed class SchedulerDispatchExecutorTests
     }
 
     [Test]
-    public async Task Dispatch_WhenOverrideCarriesNonWhitelistedKey_IgnoresItAndPassesStoredThrough()
+    public async Task Dispatch_WhenOverrideCarriesNonAllowlistedKey_IgnoresItAndPassesStoredThrough()
     {
         const string storedJson =
             """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"llama.cpp"}""";
@@ -250,17 +250,17 @@ public sealed class SchedulerDispatchExecutorTests
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
 
-        // A per-fire map carrying only a NON-whitelisted key must not override any stored parameter — the stored JSON
-        // passes through verbatim. This is the security boundary: only the two whitelisted keys can ever override.
+        // A per-fire map carrying only a NON-allowlisted key must not override any stored parameter — the stored JSON
+        // passes through verbatim. This is the security boundary: only the two allowlisted keys can ever override.
         var overrides = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["providerName"] = "evil",
             ["operation"] = "Benchmark"
         };
 
-        await executor.DispatchAsync(JobId, "fire-nonwhitelisted", Now, Now, CancellationToken.None, overrides);
+        await executor.DispatchAsync(JobId, "fire-nonallowlisted", Now, Now, CancellationToken.None, overrides);
 
-        AssertEx.Equal(storedJson, handler.LastContext?.Parameters, "A non-whitelisted override key must leave the stored parameters unchanged.");
+        AssertEx.Equal(storedJson, handler.LastContext?.Parameters, "A non-allowlisted override key must leave the stored parameters unchanged.");
     }
 
     [Test]

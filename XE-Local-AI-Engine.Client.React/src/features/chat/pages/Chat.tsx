@@ -37,7 +37,7 @@ import { useConversationContentSearch } from "@/features/chat/queries/useConvers
 import { allKnowledgeCollectionsId, useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 import { forgetWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
 import { useChatWorkflow } from "@/features/chat/workflow/useChatWorkflow";
-import { useKnowledgeCollections, useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
+import { useKnowledgeCollections, useKnowledgeHasSearchableDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import { useVoicePlayback } from "@/features/voice/hooks/useVoicePlayback";
 import { useVoiceRuntime } from "@/features/voice/hooks/VoiceRuntimeContext";
 
@@ -118,13 +118,9 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 		() => ({ options: knowledgeCollections ?? [], selected: knowledgeCollectionId, onChange: setKnowledgeCollectionId }),
 		[knowledgeCollections, knowledgeCollectionId, setKnowledgeCollectionId],
 	);
-	const { data: knowledgeDocuments } = useKnowledgeDocuments(
+	const { data: knowledgeBaseHasDocuments = false } = useKnowledgeHasSearchableDocuments(
 		chatUiCapabilities.showKnowledgeBaseControls,
 		knowledgeCollectionId === allKnowledgeCollectionsId ? undefined : knowledgeCollectionId,
-	);
-	const knowledgeBaseHasDocuments = useMemo(
-		() => (knowledgeDocuments ?? []).some((document) => document.status === "Indexed" || document.chunkCount > 0),
-		[knowledgeDocuments],
 	);
 	const { readiness: connectionReadiness, error: connectionError, retry: retryConnection } = useNodeChatConnectionReadiness();
 	const {

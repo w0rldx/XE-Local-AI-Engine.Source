@@ -226,12 +226,13 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
     ///     this and not just <see cref="IndexExistsAsync" />: that an index was created says nothing about whether the
     ///     planner picks it, and a wrong column order shows up here as a <c>SCAN</c> or a <c>USE TEMP B-TREE</c>.
     /// </summary>
-    public async Task<IReadOnlyList<string>> QueryPlanAsync(string sql)
+    public async Task<IReadOnlyList<string>> QueryPlanAsync(string sql, Action<SqliteCommand>? configure = null)
     {
         await using var command = _connection.CreateCommand();
 #pragma warning disable CA2100 // The SQL is a fixed literal in the calling suite; every value goes in through `configure` as a bound parameter.
         command.CommandText = "EXPLAIN QUERY PLAN " + sql;
 #pragma warning restore CA2100
+        configure?.Invoke(command);
 
         var steps = new List<string>();
         await using var reader = await command.ExecuteReaderAsync();

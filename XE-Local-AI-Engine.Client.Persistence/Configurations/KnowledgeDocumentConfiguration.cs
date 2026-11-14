@@ -113,5 +113,13 @@ internal sealed class KnowledgeDocumentConfiguration : IEntityTypeConfiguration<
             entity.CollectionId,
             entity.Status
         });
+
+        // The document list pages newest-first; its `$collection_id IS NULL OR …` filter cannot seek a collection-leading
+        // index, so this order index is what spares every page a sort of the whole table.
+        builder.HasIndex(entity => new
+        {
+            entity.CreatedAtUtc,
+            entity.DocumentId
+        }).HasDatabaseName("ix_knowledge_documents_created");
     }
 }

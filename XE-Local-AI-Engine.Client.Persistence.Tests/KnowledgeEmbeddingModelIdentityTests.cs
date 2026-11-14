@@ -118,6 +118,59 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         AssertEx.False(pending.StaleModel, "A not-yet-indexed document holding only the upload placeholder must never be flagged stale.");
     }
 
+    /// <summary>
+    ///     The management list is paged: no page exceeds its limit, the pages reach every document once, and the total
+    ///     and both flags describe the whole filtered set, not the page.
+    /// </summary>
+    /// <remarks>Every row shares one creation time on purpose: without a tiebreak the offset pages would overlap.</remarks>
+    [Test]
+    public async Task ListWithEmbeddingStatusAsync_PagesReachEveryDocumentAndFlagsDescribeTheWholeSet()
+    {
+        var databasePath = GetDatabasePath("catalog-paged.sqlite");
+        var staleId = Guid.NewGuid();
+        Guid[] pendingIds = [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()];
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, staleId, ConfiguredName, KnowledgeDocumentStatus.Indexed);
+        foreach (var pendingId in pendingIds)
+        {
+            await SeedDocumentAsync(databasePath, pendingId, ConfiguredName, KnowledgeDocumentStatus.Pending);
+        }
+
+        var pages = new List<KnowledgeDocumentListing>();
+        KnowledgeDocumentListing byId;
+        await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
+        {
+            var catalog = CreateCatalogService(context);
+            for (var offset = 0; offset < 5; offset += 2)
+            {
+                pages.Add(await catalog.ListWithEmbeddingStatusAsync(new KnowledgeDocumentListQuery
+                    {
+                        Limit = 2,
+                        Offset = offset
+                    },
+                    CancellationToken.None));
+            }
+
+            byId = await catalog.ListWithEmbeddingStatusAsync(new KnowledgeDocumentListQuery
+                {
+                    DocumentIds = [pendingIds[0], pendingIds[2]],
+                    Limit = 50
+                },
+                CancellationToken.None);
+        }
+
+        AssertEx.True(pages.All(static page => page.Items.Count <= 2), "no page exceeds its limit.");
+        var listed = pages.SelectMany(static page => page.Items).Select(static document => document.DocumentId).ToList();
+        AssertEx.Equal(expected: 5, listed.Distinct().Count(), "the pages reach every document exactly once.");
+        AssertEx.True(pages.All(static page => page.TotalCount == 5), "the total counts the whole set on every page.");
+        AssertEx.True(pages.All(static page => page.HasStaleDocuments), "the stale document is reported from pages it is not on.");
+        AssertEx.True(pages.All(static page => page.HasSearchableDocuments), "the indexed document is searchable from pages it is not on.");
+        AssertEx.True(byId.Items.Select(static document => document.DocumentId).Order().SequenceEqual(new[] { pendingIds[0], pendingIds[2] }.Order()),
+            "a by-id read returns exactly the named documents.");
+        AssertEx.False(byId.HasSearchableDocuments, "the flags follow the filter: two pending documents hold nothing to search.");
+    }
+
     [Test]
     public async Task ResetStaleDocumentsToPendingAsync_SelectsOnlyDocumentsWhoseStoredModelDiffersFromResolved()
     {

@@ -436,6 +436,9 @@
 			"edit": "Edit",
 			"preview": "Preview"
 		},
+		"markdownView": {
+			"imageFallback": "image"
+		},
 		"mobileNavigation": {
 			"languageTitle": "Language"
 		},
@@ -3254,6 +3257,7 @@
 					"activity": "Current activity",
 					"attempt": "Attempt",
 					"events": "Durable events",
+					"eventsCapped": "{{count}}+ (newest)",
 					"noPrompts": "No prompt was recorded for this attempt yet.",
 					"predecessor": "Predecessor",
 					"promptRole": "{{role}} prompt",

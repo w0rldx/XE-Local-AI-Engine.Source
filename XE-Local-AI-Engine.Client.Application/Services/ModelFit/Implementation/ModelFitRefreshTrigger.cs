@@ -39,7 +39,7 @@ public sealed class ModelFitRefreshTrigger : IModelFitRefreshTrigger
             throw new ScheduledJobValidationException("The scheduled job is not a model-recommendation-check job.");
         }
 
-        // Widen the run ONLY by the whitelisted keys, each validated exactly as the run validator would BEFORE anything fires:
+        // Widen the run ONLY by the allowlisted keys, each validated exactly as the run validator would BEFORE anything fires:
         // never free text. Empty overrides fire the baked values; the rest ride the per-fire JobDataMap the dispatcher merges.
         var parameterOverrides = new Dictionary<string, string>(StringComparer.Ordinal);
 

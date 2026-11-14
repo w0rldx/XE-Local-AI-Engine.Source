@@ -82,7 +82,7 @@ public sealed class ModelFitRefreshTriggerTests
 
         await trigger.TriggerRecommendationRefreshAsync(jobId, "general", cancellationToken: CancellationToken.None);
 
-        // The validated use-case rides the per-fire override map under the whitelisted key — and nothing else.
+        // The validated use-case rides the per-fire override map under the allowlisted key — and nothing else.
         await management.Received(1).TriggerNowAsync(jobId,
             Arg.Is<IReadOnlyDictionary<string, string>?>(overrides =>
                 overrides != null
@@ -103,7 +103,7 @@ public sealed class ModelFitRefreshTriggerTests
 
         await trigger.TriggerRecommendationRefreshAsync(jobId, limitOverride: 20, cancellationToken: CancellationToken.None);
 
-        // The validated limit rides the per-fire override map under its own whitelisted key — and nothing else.
+        // The validated limit rides the per-fire override map under its own allowlisted key — and nothing else.
         await management.Received(1).TriggerNowAsync(jobId,
             Arg.Is<IReadOnlyDictionary<string, string>?>(overrides =>
                 overrides != null

@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Node-settings tools of <see cref="NodeAdminMcpTools" />: reading the restricted agentic view and applying a
-///     partial update to the same whitelist.
+///     partial update to the same allowlist.
 /// </summary>
 public sealed partial class NodeAdminMcpTools
 {
@@ -17,7 +17,7 @@ public sealed partial class NodeAdminMcpTools
             _nodeSettingsAdministrationService.GetAgenticViewAsync(cancellationToken));
 
     [McpServerTool(Name = "update_node_settings", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Apply a partial update to the exact restricted 18-field agentic node-settings whitelist.")]
+    [Description("Apply a partial update to the exact restricted 18-field agentic node-settings allowlist.")]
     // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public async Task<McpNodeSettingsUpdateResponse> UpdateNodeSettingsAsync(CancellationToken cancellationToken,
         string? default_model_name = null,

@@ -8,6 +8,69 @@ import { useTablePaginationStore } from "@/core/ui/components/TablePagination/us
 export const DEFAULT_PAGE_SIZE = 25;
 const DEFAULT_PAGE_SIZE_OPTIONS: readonly number[] = [10, 25, 50, 100];
 
+/** The page a server-paged table is on and its page size, persisted under `storageKey` like the client-side twin's. */
+export function useServerPageState(storageKey: string): Omit<ServerTablePaginationInput, "totalItems"> {
+	return usePageState({ storageKey });
+}
+
+// The requested page and page size both pagination hooks own. The size comes from the persisted store when a
+// storageKey is supplied (so it survives a reload), otherwise from local state; both selectors are read
+// unconditionally to satisfy the rules of hooks.
+function usePageState(options: UseTablePaginationOptions): Omit<ServerTablePaginationInput, "totalItems"> {
+	const { storageKey } = options;
+	const pageSizeOptions = options.pageSizeOptions ?? DEFAULT_PAGE_SIZE_OPTIONS;
+	const fallbackPageSize = options.initialPageSize ?? DEFAULT_PAGE_SIZE;
+	const persistedPageSize = useTablePaginationStore((state) =>
+		storageKey === undefined ? undefined : state.pageSizeByKey[storageKey],
+	);
+	const persistSetPageSize = useTablePaginationStore((state) => state.setPageSize);
+	const [localPageSize, setLocalPageSize] = useState(fallbackPageSize);
+	const [page, setPage] = useState(1);
+
+	// Changing the page size resets to the first page: the old page number means nothing against the new size.
+	const onPageSizeChange = useCallback(
+		(next: number) => {
+			if (storageKey === undefined) {
+				setLocalPageSize(next);
+			} else {
+				persistSetPageSize(storageKey, next);
+			}
+			setPage(1);
+		},
+		[storageKey, persistSetPageSize],
+	);
+
+	return {
+		page,
+		// Storage is untrusted: a 0 emptied the table, a string made `start + pageSize` concatenate, and a size no
+		// longer offered left the selector blank. Only a size the selector offers is used.
+		pageSize:
+			storageKey === undefined
+				? localPageSize
+				: persistedPageSize !== undefined && pageSizeOptions.includes(persistedPageSize)
+					? persistedPageSize
+					: fallbackPageSize,
+		pageSizeOptions,
+		onPageChange: setPage,
+		onPageSizeChange,
+	};
+}
+
+/**
+ * `placeholderData` for a server-paged list query: while the next page loads, hold the previous page of the SAME list
+ * (only `limit`/`offset` changed) so the pager keeps its total, but never another filter's rows.
+ */
+export function keepPreviousPageOf(query: object) {
+	const list = listIdentity(query);
+	return <T>(previous: T | undefined, previousQuery?: { readonly queryKey: readonly unknown[] }): T | undefined =>
+		listIdentity((previousQuery?.queryKey[0] as { query?: object } | undefined)?.query) === list ? previous : undefined;
+}
+
+// The list a query reads, whatever page: its parameters with the paging pair blanked.
+function listIdentity(query: object | undefined): string {
+	return JSON.stringify({ ...query, limit: 0, offset: 0 });
+}
+
 export interface UseTablePaginationOptions {
 	/** Rows per page on first render. Defaults to {@link DEFAULT_PAGE_SIZE}. */
 	readonly initialPageSize?: number;
@@ -44,26 +107,13 @@ export interface TablePagination<T> {
 // an effect, so the page stays valid when the list shrinks (e.g. a filter narrows it) WITHOUT resetting on every
 // data refresh — important for lists behind a polling query whose array identity changes on each refetch.
 export function useTablePagination<T>(items: readonly T[], options: UseTablePaginationOptions = {}): TablePagination<T> {
-	const { storageKey } = options;
-	const pageSizeOptions = options.pageSizeOptions ?? DEFAULT_PAGE_SIZE_OPTIONS;
-	const fallbackPageSize = options.initialPageSize ?? DEFAULT_PAGE_SIZE;
-
-	// Page size is sourced from the persisted store when a storageKey is supplied (so it survives a reload),
-	// otherwise from local component state. Both selectors are read unconditionally to satisfy the rules of
-	// hooks; only one is authoritative per render.
-	const persistedPageSize = useTablePaginationStore((state) =>
-		storageKey === undefined ? undefined : state.pageSizeByKey[storageKey],
-	);
-	const persistSetPageSize = useTablePaginationStore((state) => state.setPageSize);
-	const [localPageSize, setLocalPageSize] = useState(fallbackPageSize);
-
-	const [requestedPage, setRequestedPage] = useState(1);
-
-	// Storage is untrusted: a 0 emptied the table, a string made `start + pageSize` concatenate, and a size no longer
-	// offered left the selector blank. Only a size the selector offers is used.
-	const validPersistedPageSize =
-		persistedPageSize !== undefined && pageSizeOptions.includes(persistedPageSize) ? persistedPageSize : undefined;
-	const pageSize = storageKey === undefined ? localPageSize : (validPersistedPageSize ?? fallbackPageSize);
+	const {
+		page: requestedPage,
+		pageSize,
+		pageSizeOptions,
+		onPageChange: setRequestedPage,
+		onPageSizeChange: setPageSize,
+	} = usePageState(options);
 
 	const totalItems = items.length;
 	const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -76,21 +126,6 @@ export function useTablePagination<T>(items: readonly T[], options: UseTablePagi
 
 	const firstItemIndex = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
 	const lastItemIndex = totalItems === 0 ? 0 : firstItemIndex + pageItems.length - 1;
-
-	// Changing the page size resets to the first page so the operator always lands on a predictable position
-	// rather than an arbitrary offset computed from the previous size. The new size is persisted when a
-	// storageKey is supplied, otherwise it stays in local state.
-	const setPageSize = useCallback(
-		(next: number) => {
-			if (storageKey === undefined) {
-				setLocalPageSize(next);
-			} else {
-				persistSetPageSize(storageKey, next);
-			}
-			setRequestedPage(1);
-		},
-		[storageKey, persistSetPageSize],
-	);
 
 	return {
 		page,

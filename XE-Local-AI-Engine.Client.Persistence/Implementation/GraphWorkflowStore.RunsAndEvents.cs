@@ -152,7 +152,7 @@ public sealed partial class GraphWorkflowStore
         await transaction.CommitAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null,
+    public async Task<IReadOnlyList<GraphWorkflowRunSummary>> ListRunsAsync(GraphWorkflowRunStatus? status = null,
         int limit = 50,
         CancellationToken cancellationToken = default)
     {
@@ -167,11 +167,11 @@ public sealed partial class GraphWorkflowStore
             query = query.Where(entity => entity.Status == wanted);
         }
 
-        var runs = await query.OrderByDescending(entity => entity.CreatedAtUtc)
-                              .ThenByDescending(entity => entity.Id)
-                              .Take(limit)
-                              .ToListAsync(cancellationToken);
-        return [.. runs.Select(RunSnapshot)];
+        return await query.OrderByDescending(entity => entity.CreatedAtUtc)
+                          .ThenByDescending(entity => entity.Id)
+                          .Take(limit)
+                          .Select(RunSummaryProjection)
+                          .ToArrayAsync(cancellationToken);
     }
 
     public async Task<int> CountActiveRunsAsync(int probeLimit, CancellationToken cancellationToken = default)
@@ -195,20 +195,20 @@ public sealed partial class GraphWorkflowStore
                                .CountAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsByConversationAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<GraphWorkflowRunSummary>> ListRunsByConversationAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default)
     {
         if (limit <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(limit), "A run list limit must be positive.");
         }
 
-        var runs = await _dbContext.GraphWorkflowRuns.AsNoTracking()
-                                   .Where(entity => entity.ConversationId == conversationId)
-                                   .OrderByDescending(entity => entity.CreatedAtUtc)
-                                   .ThenByDescending(entity => entity.Id)
-                                   .Take(limit)
-                                   .ToListAsync(cancellationToken);
-        return [.. runs.Select(RunSnapshot)];
+        return await _dbContext.GraphWorkflowRuns.AsNoTracking()
+                               .Where(entity => entity.ConversationId == conversationId)
+                               .OrderByDescending(entity => entity.CreatedAtUtc)
+                               .ThenByDescending(entity => entity.Id)
+                               .Take(limit)
+                               .Select(RunSummaryProjection)
+                               .ToArrayAsync(cancellationToken);
     }
 
     public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default)

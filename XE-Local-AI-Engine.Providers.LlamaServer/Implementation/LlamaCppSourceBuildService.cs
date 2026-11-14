@@ -849,7 +849,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         };
     }
 
-    // nvidia-smi compute_cap → whitelisted CUDA architecture list, else the conservative default set.
+    // nvidia-smi compute_cap → allowlisted CUDA architecture list, else the conservative default set.
     private async Task<string> ResolveCudaArchitecturesAsync(IReadOnlyDictionary<string, string> environment, string workDir, CancellationToken ct)
     {
         try

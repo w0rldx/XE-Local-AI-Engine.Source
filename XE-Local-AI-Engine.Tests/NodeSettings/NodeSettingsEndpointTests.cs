@@ -527,9 +527,9 @@ public sealed class NodeSettingsEndpointTests
 
     /// <summary>
     ///     Bypass table: a refused value names its camelCase wire field, never <c>x.Value</c>. The flag marks the agentic
-    ///     whitelist rows, which McpInboundProtocolTests drives through the real update_node_settings tool.
+    ///     allowlist rows, which McpInboundProtocolTests drives through the real update_node_settings tool.
     /// </summary>
-    // Every later validation finding adds a row here (and an MCP row there when it is on the whitelist).
+    // Every later validation finding adds a row here (and an MCP row there when it is on the allowlist).
     [Test]
     // InclusiveBetween over int? / int.
     [Arguments("llamaChatCacheRamMiB", "-2", "'llamaChatCacheRamMiB' must be between", false)]
@@ -552,7 +552,7 @@ public sealed class NodeSettingsEndpointTests
     [Arguments("usageRates", "{\"m\":{\"inputPer1M\":-1,\"outputPer1M\":0}}", "Usage rates must have", false)]
     // A body the serializer cannot convert names the wire path, never the CLR type.
     [Arguments("usageRates.x", "1", "The value of 'usageRates.x' has the wrong JSON type or shape.", false)]
-    // Shape checks on the agentic whitelist.
+    // Shape checks on the agentic allowlist.
     [Arguments("speculativeMode", "\"bogus\"", "Unknown speculative decoding mode.", true)]
     [Arguments("kvCacheType", "\"bogus\"", "Unknown KV cache type.", true)]
     [Arguments("huggingFaceDefaultQuant", "\"notaquant\"", "Unknown Hugging Face default quant.", true)]
@@ -563,7 +563,7 @@ public sealed class NodeSettingsEndpointTests
     [Arguments("toolCapableModels", "[]", "Tool-capable models must be", true)]
     [Arguments("toolCapableModels", "[\" \"]", "Tool-capable models must be", true)]
     public async Task SaveNodeSettings_BypassTable_RefusesUnderTheWireField(string wireName, string jsonValue, string reasonFragment,
-        bool onAgenticWhitelist)
+        bool onAgenticAllowlist)
     {
         var body = wireName.Split('.') is [var parent, var child]
             ? $"{{\"{parent}\":{{\"{child}\":{jsonValue}}}}}"
@@ -588,7 +588,7 @@ public sealed class NodeSettingsEndpointTests
 
         var patchHasField = typeof(NodeSettingsAgenticPatch).GetProperty(wireName.Split('.')[0],
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is not null;
-        AssertEx.Equal(onAgenticWhitelist, patchHasField);
+        AssertEx.Equal(onAgenticAllowlist, patchHasField);
     }
 
     /// <summary>Shape only: a model that is not installed yet is accepted, in both the <c>repo:quant</c> and the <c>ext:</c> form.</summary>

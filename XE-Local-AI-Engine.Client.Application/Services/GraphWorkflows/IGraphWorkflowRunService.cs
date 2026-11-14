@@ -130,7 +130,7 @@ public interface IGraphWorkflowRunService
     /// <summary>Deletes a finished run with its node runs and events. A live run answers a 409: cancel it first.</summary>
     Task DeleteAsync(Guid runId, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status,
+    Task<IReadOnlyList<GraphWorkflowRunSummary>> ListRunsAsync(GraphWorkflowRunStatus? status,
         int limit,
         CancellationToken cancellationToken = default);
 

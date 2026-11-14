@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+using System.Linq.Expressions;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -23,22 +24,55 @@ public sealed partial class DevelopmentStore
                                      .Where(entity => entity.ProjectId == projectId)
                                      .OrderBy(entity => entity.Sequence)
                                      .ToListAsync(cancellationToken);
-        return events.Select(static entity => new DevelopmentEventSnapshot
-                     {
-                         Id = entity.Id,
-                         ProjectId = entity.ProjectId,
-                         TaskId = entity.TaskId,
-                         AttemptId = entity.AttemptId,
-                         Sequence = entity.Sequence,
-                         EventType = entity.EventType,
-                         OccurredAtUtc = entity.OccurredAtUtc,
-                         OperationId = entity.OperationId,
-                         OperationPhase = entity.OperationPhase,
-                         Outcome = entity.Outcome,
-                         Reason = ReasonOf(entity.DetailJson)
-                     })
-                     .ToArray();
+        return events.Select(EventSnapshot).ToArray();
     }
+
+    public async Task<IReadOnlyList<DevelopmentEventSnapshot>> ListLatestEventsAsync(Guid projectId,
+        int limitPerTask,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(limitPerTask, 1);
+
+        // Two statements whatever the project holds. The cap is chosen over plaintext keys, so a row it drops is never
+        // decrypted; per task, so a busy sibling cannot push the selected task's history out of the window.
+        var keys = await _dbContext.DevelopmentEvents.AsNoTracking()
+                                   .Where(entity => entity.ProjectId == projectId)
+                                   .Select(entity => new
+                                   {
+                                       entity.Id,
+                                       entity.TaskId,
+                                       entity.Sequence
+                                   })
+                                   .ToListAsync(cancellationToken);
+        Guid[] kept =
+        [
+            .. keys.GroupBy(static key => key.TaskId)
+                   .SelectMany(group => group.OrderByDescending(static key => key.Sequence).Take(limitPerTask))
+                   .Select(static key => key.Id)
+        ];
+        var events = await _dbContext.DevelopmentEvents.AsNoTracking()
+                                     // ONE JSON parameter (json_each), not one per id: a long ledger exceeds SQLite's variable limit.
+                                     .Where(entity => EF.Parameter(kept).Contains(entity.Id))
+                                     .OrderBy(entity => entity.Sequence)
+                                     .ToListAsync(cancellationToken);
+        return events.Select(EventSnapshot).ToArray();
+    }
+
+    private static DevelopmentEventSnapshot EventSnapshot(DevelopmentEvent entity) =>
+        new()
+        {
+            Id = entity.Id,
+            ProjectId = entity.ProjectId,
+            TaskId = entity.TaskId,
+            AttemptId = entity.AttemptId,
+            Sequence = entity.Sequence,
+            EventType = entity.EventType,
+            OccurredAtUtc = entity.OccurredAtUtc,
+            OperationId = entity.OperationId,
+            OperationPhase = entity.OperationPhase,
+            Outcome = entity.Outcome,
+            Reason = ReasonOf(entity.DetailJson)
+        };
 
     public async Task<DevelopmentExecutionSnapshot> GetExecutionSnapshotAsync(Guid attemptId, CancellationToken cancellationToken = default)
     {
@@ -288,10 +322,25 @@ public sealed partial class DevelopmentStore
         return tasks.Select(TaskSnapshot).ToArray();
     }
 
-    public async Task<IReadOnlyList<DevelopmentAttemptSnapshot>> ListAttemptsAsync(Guid taskId, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<DevelopmentAttemptSnapshot>> ListAttemptsAsync(Guid taskId, CancellationToken cancellationToken = default) =>
+        ListAttemptsWhereAsync(entity => entity.TaskId == taskId, cancellationToken);
+
+    public Task<IReadOnlyList<DevelopmentAttemptSnapshot>> ListAttemptsForTasksAsync(IReadOnlyCollection<Guid> taskIds,
+        CancellationToken cancellationToken = default) =>
+        ListAttemptsWhereAsync(entity => taskIds.Contains(entity.TaskId), cancellationToken);
+
+    public Task<IReadOnlyList<DevelopmentArtifactSnapshot>> ListArtifactsAsync(Guid taskId, CancellationToken cancellationToken = default) =>
+        ListArtifactsWhereAsync(entity => entity.TaskId == taskId, cancellationToken);
+
+    public Task<IReadOnlyList<DevelopmentArtifactSnapshot>> ListArtifactsForTasksAsync(IReadOnlyCollection<Guid> taskIds,
+        CancellationToken cancellationToken = default) =>
+        ListArtifactsWhereAsync(entity => taskIds.Contains(entity.TaskId), cancellationToken);
+
+    private async Task<IReadOnlyList<DevelopmentAttemptSnapshot>> ListAttemptsWhereAsync(Expression<Func<DevelopmentAttempt, bool>> predicate,
+        CancellationToken cancellationToken)
     {
         return await _dbContext.DevelopmentAttempts.AsNoTracking()
-                               .Where(entity => entity.TaskId == taskId)
+                               .Where(predicate)
                                .OrderBy(entity => entity.StartedAtUtc)
                                .ThenBy(entity => entity.Id)
                                .Select(entity => new DevelopmentAttemptSnapshot
@@ -313,10 +362,11 @@ public sealed partial class DevelopmentStore
                                .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<DevelopmentArtifactSnapshot>> ListArtifactsAsync(Guid taskId, CancellationToken cancellationToken = default)
+    private async Task<IReadOnlyList<DevelopmentArtifactSnapshot>> ListArtifactsWhereAsync(Expression<Func<DevelopmentArtifact, bool>> predicate,
+        CancellationToken cancellationToken)
     {
         var artifacts = await _dbContext.DevelopmentArtifacts.AsNoTracking()
-                                        .Where(entity => entity.TaskId == taskId)
+                                        .Where(predicate)
                                         .OrderBy(entity => entity.CreatedAtUtc)
                                         .ThenBy(entity => entity.Id)
                                         .ToListAsync(cancellationToken);

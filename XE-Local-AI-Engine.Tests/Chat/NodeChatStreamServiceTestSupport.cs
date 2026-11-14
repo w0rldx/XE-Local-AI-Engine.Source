@@ -87,8 +87,8 @@ internal static partial class NodeChatStreamServiceTestSupport
     {
         var store = Substitute.For<IGraphWorkflowStore>();
         store.ListRunsByConversationAsync(conversationId, Arg.Any<int>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<IReadOnlyList<GraphWorkflowRunSnapshot>>([
-                 new GraphWorkflowRunSnapshot
+             .Returns(Task.FromResult<IReadOnlyList<GraphWorkflowRunSummary>>([
+                 new GraphWorkflowRunSummary
                  {
                      Id = Guid.NewGuid(),
                      RequestId = Guid.NewGuid(),
@@ -97,9 +97,6 @@ internal static partial class NodeChatStreamServiceTestSupport
                      GraphHash = "hash",
                      Status = status,
                      FailureClass = GraphWorkflowFailureClass.None,
-                     GraphJson = "{}",
-                     InputJson = null,
-                     OutputJson = null,
                      Seq = 1,
                      Version = 1,
                      CancelRequestedAtUtc = null,

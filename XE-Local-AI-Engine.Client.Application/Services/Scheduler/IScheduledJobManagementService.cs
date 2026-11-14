@@ -97,13 +97,22 @@ public interface IScheduledJobManagementService
     Task<IReadOnlyList<UpcomingScheduledJob>> ListUpcomingAsync(int limit, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Returns run-history records matching the supplied filters (each <c>null</c> filter is ignored), ordered by
-    ///     actual fire time descending.
+    ///     Returns one page of run-history records matching the supplied filters (each <c>null</c> filter is ignored),
+    ///     ordered by actual fire time descending.
     /// </summary>
-    Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(ScheduledRunStatus? status = null,
-        long? fromUtc = null,
-        long? toUtc = null,
-        Guid? scheduledJobId = null,
+    Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(ScheduledRunStatus? status,
+        long? fromUtc,
+        long? toUtc,
+        Guid? scheduledJobId,
+        int limit,
+        int offset,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Counts every run <see cref="ListRunsAsync" /> would page through for the same filters.</summary>
+    Task<int> CountRunsAsync(ScheduledRunStatus? status,
+        long? fromUtc,
+        long? toUtc,
+        Guid? scheduledJobId,
         CancellationToken cancellationToken = default);
 
     /// <summary>Returns the run for <paramref name="runId" />.</summary>

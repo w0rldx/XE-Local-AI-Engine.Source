@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Tests.Coder;
 
 using System.Text;
 using Microsoft.Extensions.Options;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
@@ -512,6 +514,76 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         AssertEx.False(listAbsolute.Contains("OUTSIDE-THE-JAIL", StringComparison.Ordinal), "an absolute arg must never read outside the jail");
         AssertEx.False(searchAbsolute.Contains("OUTSIDE-THE-JAIL", StringComparison.Ordinal), "an absolute arg must never read outside the jail");
         AssertEx.False(searchTraversal.Contains("OUTSIDE-THE-JAIL", StringComparison.Ordinal), "a '..' arg must never read outside the jail");
+    }
+
+    [Test]
+    public async Task ReadFile_WhenAgentHomeFileExceedsTheReadBound_RefusesInsteadOfReadingItWhole()
+    {
+        // 9 MiB: over the 8 MiB read bound, under the provider's 64 MiB copy cap that seeds it.
+        using var provider = CreateProvider();
+        await SeedWorkspaceFileAsync(provider, "logs/huge.log", new string('a', 9 * 1024 * 1024));
+        var reader = CreateReader(provider);
+
+        var result = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "logs/huge.log"
+        });
+
+        AssertEx.Contains(result, "is too large to read");
+        AssertEx.False(result.Contains("aaaa", StringComparison.Ordinal), "an over-bound file must not reach the model");
+    }
+
+    [Test]
+    public async Task ReadFile_WhenProviderReportsAMissingDirectory_ReturnsNotFound()
+    {
+        // A provider may report a missing parent as DirectoryNotFoundException; it must become the not-found sentence, not escape the tool.
+        // Both overloads throw, so the test does not depend on which one the reader calls.
+        var provider = Substitute.For<IAgentSandboxRuntimeProvider>();
+        provider.ProviderName.Returns("fake");
+        provider.ConnectAsync(Arg.Any<SandboxAttachKey>(), Arg.Any<CancellationToken>()).Returns(new SandboxHandle
+        {
+            ProviderName = "fake",
+            SandboxId = "sandbox",
+            AttachKey = AttachKey("fake"),
+            CreatedAt = DateTimeOffset.UtcNow,
+            ManifestVersion = AgentHomeManifest.CurrentVersion
+        });
+        provider.ReadFileAsync(Arg.Any<SandboxHandle>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .ThrowsAsync(new DirectoryNotFoundException("missing"));
+        provider.ReadFileAsync(Arg.Any<SandboxHandle>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                .ThrowsAsync(new DirectoryNotFoundException("missing"));
+        var reader = CreateReader(provider);
+
+        var result = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "nodir/file.txt"
+        });
+
+        AssertEx.Equal("read_file: 'nodir/file.txt' was not found in the workspace.", result);
+    }
+
+    [Test]
+    public async Task ListFiles_WhenAgentHomeRootIsASecretDirectory_RefusesWithoutListingNames()
+    {
+        // The entry post-filter sees names relative to the scan root ("profilesentinel"), so the root itself has to be checked.
+        using var provider = CreateProvider();
+        await SeedWorkspaceFileAsync(provider, ".aws/profilesentinel", "x");
+        await SeedWorkspaceFileAsync(provider, "bin/out.txt", "x");
+        var reader = CreateReader(provider);
+
+        var secret = await reader.ListFilesAsync(new ListFilesToolRequest
+        {
+            Path = ".aws"
+        });
+        var buildOutput = await reader.ListFilesAsync(new ListFilesToolRequest
+        {
+            Path = "bin"
+        });
+
+        AssertEx.Contains(secret, "list_files rejected");
+        AssertEx.False(secret.Contains("profilesentinel", StringComparison.Ordinal), "a secret directory's file names must not be listed");
+        // Build output is not a secret: listing it after a failed build stays allowed.
+        AssertEx.Contains(buildOutput, "bin/out.txt");
     }
 
     [Test]

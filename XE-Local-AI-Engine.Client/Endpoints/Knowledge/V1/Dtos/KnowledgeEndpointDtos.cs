@@ -21,10 +21,20 @@ public sealed class UploadKnowledgeDocumentRequest
     public string CollectionId { get; init; } = KnowledgeCollectionScope.DefaultId;
 }
 
-/// <summary>Optional collection filter for the management document list.</summary>
+/// <summary>
+///     Query for the management document list. Paging is server-side through <see cref="Limit" /> and
+///     <see cref="Offset" />, so a repository import of thousands of files never ships as one response.
+/// </summary>
 public sealed class ListKnowledgeDocumentsRequest
 {
     public string? CollectionId { get; init; }
+
+    /// <summary>Only these documents (repeat the parameter); how a caller labels search hits or chat sources by id.</summary>
+    public IReadOnlyList<Guid>? DocumentIds { get; init; }
+
+    public int? Limit { get; init; }
+
+    public int? Offset { get; init; }
 }
 
 /// <summary>Route-only request for <c>GET/DELETE knowledge-base/documents/{documentId}</c> and the reindex action.</summary>
@@ -136,10 +146,19 @@ public sealed class KnowledgeDocumentResponse
     public required string SourceKind { get; init; }
 }
 
-/// <summary>Response envelope for <c>GET knowledge-base/documents</c>.</summary>
+/// <summary>Response envelope for <c>GET knowledge-base/documents</c>: one page, newest first.</summary>
 public sealed class ListKnowledgeDocumentsResponse
 {
     public required IReadOnlyList<KnowledgeDocumentResponse> Items { get; init; }
+
+    /// <summary>Documents the filter matches across every page.</summary>
+    public required int TotalCount { get; init; }
+
+    /// <summary>Whether any matching document, on any page, was indexed by a model or pipeline other than the current one.</summary>
+    public required bool HasStaleDocuments { get; init; }
+
+    /// <summary>Whether any matching document is indexed or still holds chunks, so a search can find something.</summary>
+    public required bool HasSearchableDocuments { get; init; }
 
     /// <summary>The embedding model a new upload would be indexed with right now.</summary>
     public required string EmbeddingModel { get; init; }

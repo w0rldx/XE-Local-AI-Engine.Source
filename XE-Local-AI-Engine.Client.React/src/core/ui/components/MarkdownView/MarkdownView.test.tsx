@@ -2,10 +2,12 @@
 
 import { MantineProvider } from "@mantine/core";
 import { cleanup, render, screen } from "@testing-library/react";
+import i18next from "i18next";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MarkdownView } from "@/core/ui/components/MarkdownView/MarkdownView";
+import de from "@/locales/de.json";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
@@ -39,8 +41,10 @@ describe("MarkdownView", () => {
 		});
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
 		cleanup();
+		// The app's real i18next instance is shared across the file, so a language switch must be undone.
+		await i18next.changeLanguage("en");
 	});
 
 	it("renders plain paragraph text", () => {
@@ -88,5 +92,18 @@ describe("MarkdownView", () => {
 		expect(screen.getByRole("cell", { name: "1" }).classList.contains("mantine-Table-td")).toBe(true);
 		expect(screen.getByRole("cell", { name: "2" }).style.textAlign).toBe("right");
 		expect(header.hasAttribute("node")).toBe(false);
+	});
+
+	it.each([
+		{ language: "en", label: "[image] https://example.test/a.png" },
+		{ language: "de", label: "[Bild] https://example.test/a.png" },
+	])("renders an image without alt as its translated $language label and no <img>", async ({ language, label }) => {
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage(language);
+
+		const { container } = renderWithProviders(<MarkdownView content="![](https://example.test/a.png)" />);
+
+		expect(screen.getByText(label)).toBeTruthy();
+		expect(container.querySelector("img")).toBeNull();
 	});
 });

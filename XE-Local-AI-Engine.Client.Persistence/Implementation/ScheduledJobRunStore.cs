@@ -59,7 +59,37 @@ public sealed class ScheduledJobRunStore : IScheduledJobRunStore
         long? fromUtc = null,
         long? toUtc = null,
         Guid? scheduledJobId = null,
+        int? limit = null,
+        int offset = 0,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(offset);
+        var query = Filter(status, fromUtc, toUtc, scheduledJobId)
+                    .OrderByDescending(run => run.ActualFireTimeUtc)
+                    .ThenByDescending(run => run.Id)
+                    .Skip(offset);
+        if (limit < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(limit), limit, "A page holds at least one run.");
+        }
+
+        if (limit is not null)
+        {
+            query = query.Take(limit.Value);
+        }
+
+        var entities = await query.ToListAsync(cancellationToken);
+        return entities.Select(ToRecord).ToArray();
+    }
+
+    public Task<int> CountAsync(ScheduledRunStatus? status = null,
+        long? fromUtc = null,
+        long? toUtc = null,
+        Guid? scheduledJobId = null,
+        CancellationToken cancellationToken = default) =>
+        Filter(status, fromUtc, toUtc, scheduledJobId).CountAsync(cancellationToken);
+
+    private IQueryable<ScheduledJobRun> Filter(ScheduledRunStatus? status, long? fromUtc, long? toUtc, Guid? scheduledJobId)
     {
         var query = _dbContext.ScheduledJobRuns.AsNoTracking();
 
@@ -83,11 +113,7 @@ public sealed class ScheduledJobRunStore : IScheduledJobRunStore
             query = query.Where(run => run.ActualFireTimeUtc <= toUtc.Value);
         }
 
-        var entities = await query
-                             .OrderByDescending(run => run.ActualFireTimeUtc)
-                             .ToListAsync(cancellationToken);
-
-        return entities.Select(ToRecord).ToArray();
+        return query;
     }
 
     public async Task<ScheduledJobRunRecord> UpsertByFireInstanceAsync(ScheduledJobRunInput input, CancellationToken cancellationToken = default)

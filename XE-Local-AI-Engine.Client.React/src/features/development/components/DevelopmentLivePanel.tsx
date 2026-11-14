@@ -22,6 +22,10 @@ import type {
 } from "@/features/development/hooks/useDevelopmentAttemptHub";
 import type { DevelopmentArtifact, DevelopmentAttempt, DevelopmentEvent } from "@/features/development/models/DevelopmentModels";
 
+// The project detail carries each task's newest events up to this many (`ProjectDetailEventsPerTask`), so a task at
+// the cap may hold more than it shows.
+const developmentEventsPerTask = 200;
+
 interface DevelopmentCommandStop {
 	readonly stop: (executionId: string) => void;
 	// The execution whose stop request is in flight, or null.
@@ -328,8 +332,11 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events, command
 						<Text size="sm">
 							{t("pages.development.live.details.subject", "Subject")}: {latest?.subjectHash?.slice(0, 16) ?? "—"}
 						</Text>
-						<Text size="sm">
-							{t("pages.development.live.details.events", "Durable events")}: {events.length}
+						<Text size="sm" data-testid="development-durable-events">
+							{t("pages.development.live.details.events", "Durable events")}:{" "}
+							{events.length >= developmentEventsPerTask
+								? t("pages.development.live.details.eventsCapped", "{{count}}+ (newest)", { count: events.length })
+								: events.length}
 						</Text>
 						<Divider />
 						<Stack gap="xs" data-testid="development-prompt-artifacts">

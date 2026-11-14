@@ -7,6 +7,7 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { useServerPageState, useServerTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { ScheduledJobForm, type ScheduledJobFormHandle } from "@/features/scheduler/components/ScheduledJobForm";
@@ -52,6 +53,16 @@ export function SchedulerPage() {
 	}, [closeEditor, selectRun]);
 
 	const [runFilters, setRunFilters] = useState<ScheduledJobRunFilters>({});
+	// The server pages run history. A filter is a server parameter, so a narrowed list starts again at page 1.
+	const runPager = useServerPageState("scheduler-run-history");
+	const setRunPage = runPager.onPageChange;
+	const handleRunFiltersChange = useCallback(
+		(next: ScheduledJobRunFilters) => {
+			setRunFilters(next);
+			setRunPage(1);
+		},
+		[setRunPage],
+	);
 
 	// Dirty tracking: the form calls onDirtyChange whenever its internal values differ from initialValues.
 	const [isFormDirty, setIsFormDirty] = useState(false);
@@ -66,7 +77,12 @@ export function SchedulerPage() {
 	const templatesQuery = useScheduledJobTemplates();
 	const jobsQuery = useScheduledJobs();
 	// Case (b): the fallback cadence while the hub is degraded, the slow floor while it is live; run transitions are pushed.
-	const runsQuery = useScheduledJobRuns(runFilters, { refetchInterval: schedulerHub.pollIntervalMs ?? false });
+	const runsQuery = useScheduledJobRuns(runFilters, {
+		refetchInterval: schedulerHub.pollIntervalMs ?? false,
+		limit: runPager.pageSize,
+		offset: (runPager.page - 1) * runPager.pageSize,
+	});
+	const runPagination = useServerTablePagination({ ...runPager, totalItems: runsQuery.data?.totalCount ?? 0 });
 	const runQuery = useScheduledJobRun(selectedRunId);
 
 	const createMutation = useCreateScheduledJob();
@@ -75,7 +91,7 @@ export function SchedulerPage() {
 
 	const jobs = useMemo(() => jobsQuery.data ?? [], [jobsQuery.data]);
 	const templates = templatesQuery.data ?? [];
-	const runs = runsQuery.data ?? [];
+	const runs = runsQuery.data?.items ?? [];
 
 	const editingJob = useMemo(() => {
 		if (editorTarget?.mode !== "edit") {
@@ -234,6 +250,7 @@ export function SchedulerPage() {
 
 			<SchedulerRunsSection
 				runs={runs}
+				pagination={runPagination}
 				jobs={jobs}
 				filters={runFilters}
 				isLoading={runsQuery.isLoading}
@@ -244,7 +261,7 @@ export function SchedulerPage() {
 						: undefined
 				}
 				selectedRunId={selectedRunId}
-				onFiltersChange={setRunFilters}
+				onFiltersChange={handleRunFiltersChange}
 				onSelectRun={selectRun}
 				onCancelRun={jobActions.cancelRun}
 			/>

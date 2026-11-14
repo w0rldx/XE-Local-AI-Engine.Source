@@ -409,7 +409,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     public async Task<GraphWorkflowRunDetail> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
         await ComposeAsync(await _store.GetRunAsync(runId, cancellationToken), cancellationToken);
 
-    public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status,
+    public Task<IReadOnlyList<GraphWorkflowRunSummary>> ListRunsAsync(GraphWorkflowRunStatus? status,
         int limit,
         CancellationToken cancellationToken = default) =>
         _store.ListRunsAsync(status, limit, cancellationToken);

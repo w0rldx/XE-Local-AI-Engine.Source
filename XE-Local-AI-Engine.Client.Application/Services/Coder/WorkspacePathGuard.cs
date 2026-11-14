@@ -75,6 +75,13 @@ internal static class WorkspacePathGuard
 
                     resolvedSegments.RemoveAt(resolvedSegments.Count - 1);
                     continue;
+                // Windows drops a trailing dot or space on open and reads ':' as a stream separator, so ".git./config" or ".env::$DATA" (and ".. ")
+                // would pass the name-based exclusion yet open ".git/config", ".env" or the parent. Refused on every OS; no workspace name needs them.
+                case var _ when segment.EndsWith('.') || segment.EndsWith(' ') || segment.Contains(':', StringComparison.Ordinal):
+                    return ConfinedPath.Rejected("the path contains a segment that ends with a dot or a space, or contains ':', and was rejected.");
+                // An 8.3 short name ("GIT~1") opens the long-named entry (".git") on a volume that keeps them, past the name-based exclusion.
+                case var _ when Enumerable.Range(1, segment.Length - 1).Any(i => segment[i - 1] == '~' && char.IsAsciiDigit(segment[i])):
+                    return ConfinedPath.Rejected("the path contains a '~' followed by a digit (a Windows short-name alias) and was rejected.");
                 default:
                     resolvedSegments.Add(segment);
                     continue;

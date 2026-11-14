@@ -22,10 +22,10 @@ public interface IKnowledgeDocumentCatalogService
     }
 
     /// <summary>
-    ///     Lists documents (optionally in one collection) together with the embedding-model resolution the ingestion
-    ///     lane would use right now, so a caller can gate uploads on the same truth ingestion runs on.
+    ///     Lists one page of documents (newest first) together with the embedding-model resolution the ingestion lane
+    ///     would use right now, so a caller can gate uploads on the same truth ingestion runs on.
     /// </summary>
-    Task<KnowledgeDocumentListing> ListWithEmbeddingStatusAsync(string? collectionId, CancellationToken cancellationToken);
+    Task<KnowledgeDocumentListing> ListWithEmbeddingStatusAsync(KnowledgeDocumentListQuery query, CancellationToken cancellationToken);
 
     /// <summary>Lists documents belonging to one durable source inside a collection.</summary>
     Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(string collectionId,
@@ -105,7 +105,21 @@ public sealed class KnowledgeCollectionSummary
     public required int DocumentCount { get; init; }
 }
 
-/// <summary>Documents plus the embedding model ingestion would embed them with right now.</summary>
+/// <summary>One page of the management document list.</summary>
+public sealed class KnowledgeDocumentListQuery
+{
+    /// <summary>One collection namespace, or every collection when blank.</summary>
+    public string? CollectionId { get; init; }
+
+    /// <summary>Only these documents, when set: how a caller labels search hits or chat sources by id.</summary>
+    public IReadOnlyList<Guid>? DocumentIds { get; init; }
+
+    public required int Limit { get; init; }
+
+    public int Offset { get; init; }
+}
+
+/// <summary>One page of documents plus the facts about the whole filtered set a page alone cannot answer.</summary>
 /// <remarks>
 ///     <see cref="EmbeddingModelResolution.IsConfident" /> is the upload precondition: a NOT-confident resolution means
 ///     no installed model was matched, so an accepted upload would fail later in the background embedder.
@@ -113,6 +127,15 @@ public sealed class KnowledgeCollectionSummary
 public sealed class KnowledgeDocumentListing
 {
     public required IReadOnlyList<KnowledgeDocumentSummary> Items { get; init; }
+
+    /// <summary>Documents the filter matches across every page.</summary>
+    public required int TotalCount { get; init; }
+
+    /// <summary>Whether any matching document is <see cref="KnowledgeDocumentSummary.StaleModel" />, on any page.</summary>
+    public required bool HasStaleDocuments { get; init; }
+
+    /// <summary>Whether any matching document is Indexed or still holds chunks, so a search can find something.</summary>
+    public required bool HasSearchableDocuments { get; init; }
 
     public required EmbeddingModelResolution Embedding { get; init; }
 }

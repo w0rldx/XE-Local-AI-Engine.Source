@@ -24,7 +24,7 @@ public interface IModelFitRefreshTrigger
     /// <param name="quantOverride">Replaces the advisor's default <c>Q4_K_M</c> quant for this run.</param>
     /// <param name="ctxTarget">Overrides the context window the KV-cache fit is sized against, validated to ≥256 before it is stamped.</param>
     /// <remarks>
-    ///     Only these whitelisted parameters are widened — never an image reference or command line. Each is validated
+    ///     Only these allowlisted parameters are widened — never an image reference or command line. Each is validated
     ///     BEFORE the run: an invalid value throws and nothing fires; a <c>null</c>/empty one fires the definition's
     ///     baked value unchanged. All ride the same per-fire JobDataMap.
     /// </remarks>

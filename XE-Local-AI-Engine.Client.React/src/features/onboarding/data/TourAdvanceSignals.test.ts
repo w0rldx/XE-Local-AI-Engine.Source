@@ -59,7 +59,7 @@ describe("hasInstalledChatModel (install step advances on real state, not a time
 		expect(hasInstalledChatModel([embeddingModel])).toBe(false);
 	});
 
-	it("is false when only a reranker model is installed (whitelist excludes non-chat kinds)", () => {
+	it("is false when only a reranker model is installed (allowlist excludes non-chat kinds)", () => {
 		// A reranker (cross-encoder) has no completion head; the tour must not treat it as an installed chat model.
 		expect(hasInstalledChatModel([rerankerModel])).toBe(false);
 	});

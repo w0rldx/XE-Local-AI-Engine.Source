@@ -485,13 +485,13 @@ internal sealed class DriftingGraphWorkflowStore : IGraphWorkflowStore
     public Task DeleteRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
-    public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null, int limit = 50, CancellationToken cancellationToken = default) =>
+    public Task<IReadOnlyList<GraphWorkflowRunSummary>> ListRunsAsync(GraphWorkflowRunStatus? status = null, int limit = 50, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
     public Task<int> CountActiveRunsAsync(int probeLimit, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
-    public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsByConversationAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default) =>
+    public Task<IReadOnlyList<GraphWorkflowRunSummary>> ListRunsByConversationAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
     public Task<GraphWorkflowNodeRunSnapshot?> FindConversationDecisionAsync(Guid conversationId, Guid operationId, CancellationToken cancellationToken = default) =>

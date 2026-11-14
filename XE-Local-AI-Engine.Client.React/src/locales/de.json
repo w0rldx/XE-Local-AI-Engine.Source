@@ -436,6 +436,9 @@
 			"edit": "Bearbeiten",
 			"preview": "Vorschau"
 		},
+		"markdownView": {
+			"imageFallback": "Bild"
+		},
 		"mobileNavigation": {
 			"languageTitle": "Sprache"
 		},
@@ -3254,6 +3257,7 @@
 					"activity": "Aktuelle Aktivität",
 					"attempt": "Versuch",
 					"events": "Dauerhafte Ereignisse",
+					"eventsCapped": "{{count}}+ (neueste)",
 					"noPrompts": "Für diesen Versuch wurde noch kein Prompt aufgezeichnet.",
 					"predecessor": "Vorgänger",
 					"promptRole": "{{role}}-Prompt",

@@ -14,6 +14,7 @@ import {
 	triggerScheduledJobMutation,
 	updateScheduledJobMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { keepPreviousPageOf } from "@/core/ui/components/TablePagination/useTablePagination";
 import { toScheduledJob, toScheduledJobRun, toScheduledJobTemplate } from "@/features/scheduler/models/SchedulerMappers";
 import type { ScheduledJobRun, ScheduledJobRunFilters } from "@/features/scheduler/models/SchedulerModels";
 
@@ -50,43 +51,47 @@ export function useScheduledJobs(includeDeleted = false) {
 	});
 }
 
-// One job definition. Disabled until an id is supplied so the detail query only fires when a job is selected.
 interface ScheduledJobRunsQueryOptions {
 	readonly enabled?: boolean;
 	readonly refetchInterval?: number | false;
+	readonly limit: number;
+	readonly offset: number;
 }
 
-// Shared run-history query options (validated). Only the active filters ride the query string; an absent filter is
-// left undefined. Reused by the hook and by the imperative one-shot fetch so both build the key/validation identically.
-function scheduledJobRunsQueryOptions(filters: ScheduledJobRunFilters) {
-	return listScheduledJobRunsOptions({
-		query: {
-			...(filters.status !== undefined ? { status: filters.status } : {}),
-			...(filters.fromUtc !== undefined ? { fromUtc: filters.fromUtc } : {}),
-			...(filters.toUtc !== undefined ? { toUtc: filters.toUtc } : {}),
-			...(filters.scheduledJobId !== undefined ? { scheduledJobId: filters.scheduledJobId } : {}),
-		},
-	});
+/** One server page of run history, newest first, and how many runs the filters match in all. */
+export interface ScheduledJobRunPage {
+	readonly items: ScheduledJobRun[];
+	readonly totalCount: number;
 }
 
-export function useScheduledJobRuns(filters: ScheduledJobRunFilters = {}, options: ScheduledJobRunsQueryOptions = {}) {
+// The server pages run history (a 30-day window of a frequent job is thousands of runs). An absent filter stays
+// undefined, which neither the query key nor the query string carries.
+export function useScheduledJobRuns(filters: ScheduledJobRunFilters, options: ScheduledJobRunsQueryOptions) {
+	const query = { ...filters, limit: options.limit, offset: options.offset };
 	return useQuery({
-		...scheduledJobRunsQueryOptions(filters),
+		...listScheduledJobRunsOptions({ query }),
 		enabled: options.enabled ?? true,
 		refetchInterval: options.refetchInterval,
-		select: (data) => (data.items ?? []).map(toScheduledJobRun),
+		// The next page has no data yet: the previous page of the same filters keeps `totalCount`, so the pager does not
+		// clamp back to page 1 mid-request. Another filter's runs are never shown in its place.
+		placeholderData: keepPreviousPageOf(query),
+		select: (data): ScheduledJobRunPage => ({ items: data.items.map(toScheduledJobRun), totalCount: data.totalCount }),
 	});
 }
 
 // Imperative one-shot fetch of run history (mapped to the domain view-model) for callers that reconcile OUTSIDE the
 // React Query hook lifecycle — e.g. a SignalR catch-up after the model-fit hub (re)connects. staleTime:0 forces a
-// fresh read each call so the reconciliation never sees cached data.
+// fresh read each call so the reconciliation never sees cached data. It reads the newest 200 runs, the server's
+// ceiling: a catch-up is scoped to one job and a short window, so more than that would itself be a reason to reload.
 export async function fetchScheduledJobRuns(
 	queryClient: QueryClient,
 	filters: ScheduledJobRunFilters = {},
 ): Promise<ScheduledJobRun[]> {
-	const data = await queryClient.fetchQuery({ ...scheduledJobRunsQueryOptions(filters), staleTime: 0 });
-	return (data.items ?? []).map(toScheduledJobRun);
+	const data = await queryClient.fetchQuery({
+		...listScheduledJobRunsOptions({ query: { ...filters, limit: 200 } }),
+		staleTime: 0,
+	});
+	return data.items.map(toScheduledJobRun);
 }
 
 // One run's detail. Disabled until a run id is supplied so the detail query only fires when a run is selected.

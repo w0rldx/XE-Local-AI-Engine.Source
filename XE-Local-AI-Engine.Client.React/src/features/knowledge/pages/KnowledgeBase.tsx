@@ -11,6 +11,7 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { useServerPageState, useServerTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { KnowledgeDocumentDrawer } from "@/features/knowledge/components/KnowledgeDocumentDrawer";
@@ -30,7 +31,8 @@ import {
 	useDeleteKnowledgeDocument,
 	useKnowledgeCollections,
 	useKnowledgeDocumentDetail,
-	useKnowledgeDocuments,
+	useKnowledgeDocumentNames,
+	useKnowledgeDocumentPage,
 	useKnowledgeEmbeddingAvailability,
 	useReindexKnowledgeCorpus,
 	useReindexKnowledgeDocument,
@@ -59,9 +61,20 @@ export function KnowledgeBase() {
 	// Live indexing-status invalidation for the lifetime of this page.
 	useKnowledgeBaseHub();
 
-	const { data: documents, isLoading, error, refetch, isFetching } = useKnowledgeDocuments(true, collectionId);
-	const documentList = useMemo<readonly KnowledgeDocument[]>(() => documents ?? [], [documents]);
-	const hasStaleDocuments = useMemo(() => documentList.some((document) => document.staleModel), [documentList]);
+	// The server pages the list; a repository import can hold tens of thousands of documents.
+	const pager = useServerPageState("knowledge-documents");
+	const {
+		data: documentPage,
+		isLoading,
+		error,
+		refetch,
+		isFetching,
+	} = useKnowledgeDocumentPage(collectionId, pager.pageSize, (pager.page - 1) * pager.pageSize);
+	const documentList = useMemo<readonly KnowledgeDocument[]>(() => documentPage?.items ?? [], [documentPage]);
+	const totalDocuments = documentPage?.totalCount ?? 0;
+	// From the server, over the whole collection: a stale document on another page still offers the reindex.
+	const hasStaleDocuments = documentPage?.hasStaleDocuments === true;
+	const pagination = useServerTablePagination({ ...pager, totalItems: totalDocuments });
 
 	// Ingestion precondition: the background embedder needs a resolvable embedding model, and without one the server
 	// accepts the upload and fails the document minutes later. The verdict comes from the list endpoint because that is
@@ -72,6 +85,8 @@ export function KnowledgeBase() {
 
 	const upload = useKnowledgeUpload(collectionId);
 	const search = useKnowledgeSearch(collectionId);
+	// The hits' documents can sit on any page of the list, so their names are asked for by id.
+	const hitDocumentNames = useKnowledgeDocumentNames(search.results.map((hit) => hit.documentId));
 	const repositoriesQuery = useDevelopmentRepositories();
 
 	// The document whose detail drawer is open (also the only document whose detail endpoint is fetched).
@@ -146,11 +161,12 @@ export function KnowledgeBase() {
 			}
 			setCollectionId(next);
 			setCollectionDraft(next);
+			pager.onPageChange(1);
 			search.reset();
 			closeDrawer();
 			setDetailDocumentId(undefined);
 		},
-		[closeDrawer, collectionId, search],
+		[closeDrawer, collectionId, pager.onPageChange, search],
 	);
 
 	const openDetail = useCallback(
@@ -301,11 +317,12 @@ export function KnowledgeBase() {
 						<Loader size="sm" />
 						<Text c="dimmed">{t("pages.knowledgeBase.documents.loading", "Loading documents…")}</Text>
 					</Group>
-				) : documentList.length === 0 ? (
+				) : totalDocuments === 0 ? (
 					<EmptyState message={t("pages.knowledgeBase.documents.empty", "No documents yet. Upload one above to get started.")} />
 				) : (
 					<KnowledgeDocumentsTable
 						documents={documentList}
+						pagination={pagination}
 						isActionPending={isActionPending}
 						onOpenDetail={openDetail}
 						onReindex={handleReindex}
@@ -315,7 +332,7 @@ export function KnowledgeBase() {
 			</SectionCard>
 
 			<SectionCard title={t("pages.knowledgeBase.search.heading", "Search")} data-tour="knowledge-search">
-				<KnowledgeSearchPanel search={search} documents={documentList} />
+				<KnowledgeSearchPanel search={search} documentNames={hitDocumentNames} />
 			</SectionCard>
 
 			<KnowledgeDocumentDrawer opened={drawerOpened} detail={detail} isLoading={detailIsFetching} onClose={closeDrawer} />

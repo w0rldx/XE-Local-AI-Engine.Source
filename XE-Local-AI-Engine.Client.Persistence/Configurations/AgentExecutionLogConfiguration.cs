@@ -133,5 +133,13 @@ internal sealed class AgentExecutionLogConfiguration : IEntityTypeConfiguration<
                .IsUnique()
                .HasFilter($"record_kind = {(int)AgentExecutionLogRecordKind.ChatRunEnvelope}")
                .HasDatabaseName("ix_agent_execution_logs_envelope_message_id");
+
+        // Every per-conversation read and delete (conversation purge, message delete, the envelope list) seeks here
+        // instead of scanning the table; created_at_utc serves the envelope list's newest-first order.
+        builder.HasIndex(entity => new
+        {
+            entity.ConversationId,
+            entity.CreatedAtUtc
+        }).HasDatabaseName("ix_agent_execution_logs_conversation_created");
     }
 }

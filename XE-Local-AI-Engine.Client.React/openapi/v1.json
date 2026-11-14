@@ -14886,6 +14886,38 @@
               "type": "string",
               "nullable": true
             }
+          },
+          {
+            "name": "documentIds",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "nullable": true,
+              "items": {
+                "type": "string",
+                "format": "guid"
+              }
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
           }
         ],
         "responses": {
@@ -14895,6 +14927,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -19791,6 +19833,24 @@
               "format": "guid",
               "nullable": true
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
           }
         ],
         "responses": {
@@ -19800,6 +19860,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -38580,6 +38650,9 @@
         "additionalProperties": false,
         "required": [
           "items",
+          "totalCount",
+          "hasStaleDocuments",
+          "hasSearchableDocuments",
           "embeddingModel",
           "embeddingModelAvailable"
         ],
@@ -38589,6 +38662,16 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse"
             }
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasStaleDocuments": {
+            "type": "boolean"
+          },
+          "hasSearchableDocuments": {
+            "type": "boolean"
           },
           "embeddingModel": {
             "type": "string"
@@ -45759,7 +45842,8 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "items"
+          "items",
+          "totalCount"
         ],
         "properties": {
           "items": {
@@ -45767,6 +45851,10 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobRunResponse"
             }
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Tests for <see cref="SchedulerDispatchJobRunner" />, the Quartz <c>IJob</c> → executor hop: it forwards EVERY
-///     whitelisted per-fire override key (model-fit use case AND breadth limit), else the run falls back silently.
+///     allowlisted per-fire override key (model-fit use case AND breadth limit), else the run falls back silently.
 /// </summary>
 /// <remarks>
 ///     A cron or no-override fire forwards a null override map. The manual-fire marker means trigger kind Manual; its
@@ -21,7 +21,7 @@ public sealed class SchedulerDispatchJobRunnerTests
     private static readonly DateTimeOffset Now = new(year: 2026, month: 6, day: 3, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
 
     [Test]
-    public async Task RunAsync_WhenFireCarriesUseCaseAndLimit_ForwardsBothWhitelistedOverrides()
+    public async Task RunAsync_WhenFireCarriesUseCaseAndLimit_ForwardsBothAllowlistedOverrides()
     {
         var executor = Substitute.For<ISchedulerDispatchExecutor>();
         var context = BuildContext(new JobDataMap

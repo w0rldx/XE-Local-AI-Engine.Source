@@ -3445,6 +3445,9 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsReque
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse>;
+	totalCount: number;
+	hasStaleDocuments: boolean;
+	hasSearchableDocuments: boolean;
 	embeddingModel: string;
 	embeddingModelAvailable: boolean;
 };
@@ -5377,6 +5380,7 @@ export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsRequest
 
 export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse>;
+	totalCount: number;
 };
 
 export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesResponse = {
@@ -15964,11 +15968,18 @@ export type ListKnowledgeDocumentsData = {
 	path?: never;
 	query?: {
 		collectionId?: string | null;
+		documentIds?: Array<string> | null;
+		limit?: number | null;
+		offset?: number | null;
 	};
 	url: "/api/local/v1/knowledge-base/documents";
 };
 
 export type ListKnowledgeDocumentsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -15978,6 +15989,8 @@ export type ListKnowledgeDocumentsErrors = {
 	 */
 	403: unknown;
 };
+
+export type ListKnowledgeDocumentsError = ListKnowledgeDocumentsErrors[keyof ListKnowledgeDocumentsErrors];
 
 export type ListKnowledgeDocumentsResponses = {
 	/**
@@ -19078,11 +19091,17 @@ export type ListScheduledJobRunsData = {
 		fromUtc?: number | null;
 		toUtc?: number | null;
 		scheduledJobId?: string | null;
+		limit?: number | null;
+		offset?: number | null;
 	};
 	url: "/api/local/v1/scheduler/runs";
 };
 
 export type ListScheduledJobRunsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -19092,6 +19111,8 @@ export type ListScheduledJobRunsErrors = {
 	 */
 	403: unknown;
 };
+
+export type ListScheduledJobRunsError = ListScheduledJobRunsErrors[keyof ListScheduledJobRunsErrors];
 
 export type ListScheduledJobRunsResponses = {
 	/**

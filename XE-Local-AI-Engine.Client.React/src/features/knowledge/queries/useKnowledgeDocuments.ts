@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
+import type { ListKnowledgeDocumentsResponse } from "@/core/api/generated";
 import {
 	deleteKnowledgeDocumentMutation,
 	getKnowledgeDocumentOptions,
@@ -9,7 +10,8 @@ import {
 	reindexCorpusMutation,
 	reindexKnowledgeDocumentMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import type { KnowledgeDocument, KnowledgeDocumentDetail } from "@/features/knowledge/models/KnowledgeModels";
+import { keepPreviousPageOf } from "@/core/ui/components/TablePagination/useTablePagination";
+import type { KnowledgeDocumentDetail } from "@/features/knowledge/models/KnowledgeModels";
 
 // Server state for the knowledge-base surface. Reads run through the generated hey-api `*Options()` (which wire the
 // shared axios instance + TanStack Query AbortSignal automatically). Mutations invalidate by the generated
@@ -31,17 +33,57 @@ export function knowledgeInvalidationKey(operationId: string): readonly [{ _id: 
 }
 
 /**
- * The full document list (indexing status + metadata). Items are the authoritative server rows. `enabled` gates the
- * fetch for consumers that must not hit the endpoint until the knowledge-base surface is active (e.g. the chat composer,
- * which only needs the list to decide whether the "Use Knowledge Base" toggle has indexed docs to search); it defaults
- * to true so the knowledge-base page keeps fetching unconditionally.
+ * One page of the document list, newest first, plus the facts about the whole collection a page alone cannot answer
+ * (`totalCount`, `hasStaleDocuments`). The server pages it: a repository import can hold tens of thousands of
+ * documents, and every row costs a decrypted name.
  */
-export function useKnowledgeDocuments(enabled = true, collectionId?: string) {
+export function useKnowledgeDocumentPage(collectionId: string, limit: number, offset: number) {
+	const query = { collectionId, limit, offset };
 	return useQuery({
-		...listKnowledgeDocumentsOptions({ query: collectionId ? { collectionId } : undefined }),
-		select: (data): readonly KnowledgeDocument[] => data.items ?? [],
+		...listKnowledgeDocumentsOptions({ query }),
+		// The next page has no data yet: the previous page of the same collection keeps `totalCount`, so the pager does
+		// not clamp back to page 1 mid-request. Another collection's rows are never shown in its place.
+		placeholderData: keepPreviousPageOf(query),
+	});
+}
+
+// The flags ride the envelope, so a one-row read answers them; the availability and toggle reads share this key.
+function oneRowOptions(collectionId: string | undefined) {
+	return listKnowledgeDocumentsOptions({ query: { ...(collectionId ? { collectionId } : {}), limit: 1 } });
+}
+
+/**
+ * Whether the collection (every collection when none is named) holds anything a search can find — for the chat
+ * composer's "Use Knowledge Base" toggle.
+ */
+export function useKnowledgeHasSearchableDocuments(enabled: boolean, collectionId?: string) {
+	return useQuery({
+		...oneRowOptions(collectionId),
+		select: (data): boolean => data.hasSearchableDocuments,
 		enabled,
 	});
+}
+
+const noDocumentNames: ReadonlyMap<string, string> = new Map();
+
+function toDocumentNames(data: ListKnowledgeDocumentsResponse): ReadonlyMap<string, string> {
+	return new Map(data.items.map((document) => [document.documentId, document.displayName]));
+}
+
+/**
+ * The decrypted display names of exactly these documents (empty until they load), for labelling search hits and chat
+ * sources: a hit's own title is the storage reference, and its document may sit on any page of the list.
+ */
+export function useKnowledgeDocumentNames(documentIds: readonly string[]): ReadonlyMap<string, string> {
+	// 200 is the server's ceiling for an id set (`ListKnowledgeDocumentsRequestValidator.MaxLimit`).
+	const ids = [...new Set(documentIds)].sort().slice(0, 200);
+	return (
+		useQuery({
+			...listKnowledgeDocumentsOptions({ query: { documentIds: ids, limit: Math.max(ids.length, 1) } }),
+			select: toDocumentNames,
+			enabled: ids.length > 0,
+		}).data ?? noDocumentNames
+	);
 }
 
 /**
@@ -58,13 +100,13 @@ export function useKnowledgeCollections(enabled = true) {
 
 /**
  * Whether this node can actually embed a new upload: the list endpoint reports the embedding-model resolution the
- * ingestion lane itself runs, so the upload gate and the background embedder agree. Shares the document-list query
- * key, so it costs no extra request. While no model is resolved it polls, because a finished GGUF download
- * invalidates only the installed-model list — a different key — and the gate must clear without a page reload.
+ * ingestion lane itself runs, so the upload gate and the background embedder agree. It asks for ONE row, because the
+ * verdict rides the envelope and the rows are never read. While no model is resolved it polls, because a finished GGUF
+ * download invalidates only the installed-model list — a different key — and the gate must clear without a page reload.
  */
 export function useKnowledgeEmbeddingAvailability(collectionId?: string) {
 	return useQuery({
-		...listKnowledgeDocumentsOptions({ query: collectionId ? { collectionId } : undefined }),
+		...oneRowOptions(collectionId),
 		select: (data): boolean => data.embeddingModelAvailable,
 		refetchInterval: (query) => (query.state.data?.embeddingModelAvailable === false ? 10_000 : false),
 	});

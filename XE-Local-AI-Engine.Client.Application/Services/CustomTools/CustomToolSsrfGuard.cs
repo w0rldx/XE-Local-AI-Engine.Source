@@ -1,14 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
 /// <summary>The SSRF containment for <c>HttpFetch</c> tools, in two layers: URL validation and a pinned connect callback.</summary>
 /// <remarks>
 ///     <see cref="ValidateRequestUrl" /> runs on the FINAL assembled URL: scheme allow-list, no userinfo, no numeric or encoded host literal,
 ///     a mandatory <c>allowedHosts</c> check when the template host is parameterized, and rejection of a literal IP in any denied range.
-///     <see cref="CreatePinnedConnectCallback" />, on the fetch handler's <see cref="SocketsHttpHandler" />, validates EVERY resolved address
-///     and dials a validated one itself, so a DNS rebind has no re-resolve gap. A tool's <c>privateHosts</c> (ADR 0021, read from
+///     <see cref="CreatePinnedConnectCallback()" />, on the fetch handler's <see cref="SocketsHttpHandler" />, validates EVERY resolved address
+///     and dials a validated one itself, so a DNS rebind has no re-resolve gap, and refuses an address of this machine. A tool's <c>privateHosts</c> (ADR 0021, read from
 ///     <see cref="PrivateHostsOption" />) admit a listed LAN address on both layers, never an <see cref="IsAlwaysDeniedAddress" /> one.
 /// </remarks>
 internal static class CustomToolSsrfGuard
@@ -90,6 +91,18 @@ internal static class CustomToolSsrfGuard
     /// </remarks>
     public static Func<SocketsHttpConnectionContext, CancellationToken, ValueTask<Stream>> CreatePinnedConnectCallback()
     {
+        return CreatePinnedConnectCallback(OwnInterfaceAddresses);
+    }
+
+    /// <summary>The pinned connect callback with the source of this machine's own addresses supplied, so a test can name them.</summary>
+    /// <remarks>
+    ///     A global IPv6 or public IPv4 of this machine is outside every denied range yet reaches every socket bound to the wildcard
+    ///     address, so it is refused unless the host is a listed private host (ADR 0021), which may run on this machine. Residual risk: a redirect to the router's public
+    ///     WAN address can hairpin to its admin UI; this machine cannot see that address.
+    /// </remarks>
+    internal static Func<SocketsHttpConnectionContext, CancellationToken, ValueTask<Stream>> CreatePinnedConnectCallback(Func<IEnumerable<IPAddress>> ownAddresses)
+    {
+        ArgumentNullException.ThrowIfNull(ownAddresses);
         return async (context, cancellationToken) =>
         {
             var host = context.DnsEndPoint.Host;
@@ -119,6 +132,12 @@ internal static class CustomToolSsrfGuard
                 throw new CustomToolExecutionException("The host resolved to a private, loopback, link-local, or otherwise reserved address.");
             }
 
+            // Read per connection, never cached: addresses change (DHCP, IPv6 privacy rotation), and pooled connections make this rare.
+            if (!hostIsListed && addresses.Select(Unmapped).Intersect(ownAddresses().Select(Unmapped)).Any())
+            {
+                throw new CustomToolExecutionException("The host resolved to an address of this machine.");
+            }
+
             var socket = new Socket(SocketType.Stream, ProtocolType.Tcp)
             {
                 NoDelay = true
@@ -134,6 +153,16 @@ internal static class CustomToolSsrfGuard
                 throw;
             }
         };
+    }
+
+    private static IEnumerable<IPAddress> OwnInterfaceAddresses()
+    {
+        return NetworkInterface.GetAllNetworkInterfaces().SelectMany(static nic => nic.GetIPProperties().UnicastAddresses).Select(static unicast => unicast.Address);
+    }
+
+    private static IPAddress Unmapped(IPAddress address)
+    {
+        return address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
     }
 
     /// <summary>True when every resolved address is reachable: not denied, or admitted by the private-host exception and not always denied.</summary>
@@ -286,10 +315,11 @@ internal static class CustomToolSsrfGuard
             return true; // fec0::/10 deprecated site-local
         }
 
-        // 64:ff9b::/96 NAT64 — the low 32 bits embed an IPv4 address, so treat the whole prefix as reachable-through.
-        return b[0] == 0x00 && b[1] == 0x64 && b[2] == 0xFF && b[3] == 0x9B
-               && b[4] == 0 && b[5] == 0 && b[6] == 0 && b[7] == 0
-               && b[8] == 0 && b[9] == 0 && b[10] == 0 && b[11] == 0;
+        // NAT64 embeds an IPv4 address, so treat each whole prefix as reachable-through: well-known 64:ff9b::/96 and local-use 64:ff9b:1::/48.
+        var isNat64Prefix = b[0] == 0x00 && b[1] == 0x64 && b[2] == 0xFF && b[3] == 0x9B;
+        return isNat64Prefix
+               && ((b[4] == 0 && b[5] == 1)
+                   || (b[4] == 0 && b[5] == 0 && b[6] == 0 && b[7] == 0 && b[8] == 0 && b[9] == 0 && b[10] == 0 && b[11] == 0));
     }
 
     private static bool IsAllZero(byte[] bytes)

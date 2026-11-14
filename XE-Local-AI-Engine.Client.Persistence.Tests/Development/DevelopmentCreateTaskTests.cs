@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Development;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -175,5 +176,84 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
         }));
 
         AssertEx.Empty(await store.ListTasksAsync(missingProjectId));
+    }
+
+    /// <summary>
+    ///     The kept ids reach SQL as ONE parameter, not one per id: a long ledger keeps more ids than SQLite's default
+    ///     limit of 32,766 bound variables, which a per-id expansion would hit.
+    /// </summary>
+    [Test]
+    public async Task LatestEvents_KeepMoreIdsThanSqliteBindsVariables()
+    {
+        const int ledgerEvents = 33_000;
+        await using var provider = await _fixture.BuildProviderAsync();
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var seed = DevelopmentTestFixture.CreateSeed();
+        _ = await store.CreateProjectAsync(seed);
+
+        // One statement, copying the project and task keys from the row the store wrote so they match its storage form.
+        var context = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        _ = await context.Database.ExecuteSqlRawAsync(
+            """
+            WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < {0})
+            INSERT INTO development_events (id, project_id, task_id, sequence, event_type, occurred_at_utc)
+            SELECT printf('00000000-0000-4000-8000-%012d', i), seeded.project_id, seeded.task_id, seeded.top + i, 'Synthetic', 1
+            FROM n, (SELECT project_id, task_id, MAX(sequence) AS top FROM development_events WHERE task_id IS NOT NULL) AS seeded;
+            """,
+            ledgerEvents);
+
+        var latest = await store.ListLatestEventsAsync(seed.ProjectId, limitPerTask: ledgerEvents * 2);
+
+        AssertEx.Equal((await store.ListEventsAsync(seed.ProjectId)).Count, latest.Count, "every event is under the cap, so all of them come back.");
+        AssertEx.True(latest.Count > ledgerEvents, "the read carried more ids than SQLite binds as separate variables.");
+    }
+
+    /// <summary>
+    ///     The capped ledger read the polled project detail uses keeps each task's NEWEST events, in ledger order. The
+    ///     project's own task logs first, so a project-wide cap would let its newer siblings push it out entirely.
+    /// </summary>
+    [Test]
+    public async Task LatestEvents_KeepEachTasksTailEvenWhenSiblingsLogLater()
+    {
+        await using var provider = await _fixture.BuildProviderAsync();
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var seed = DevelopmentTestFixture.CreateSeed();
+        _ = await store.CreateProjectAsync(seed);
+        // A second event on the project's own task, so it holds more than the cap — all of it older than any sibling's.
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Ready,
+            ExpectedTaskVersion = 1
+        });
+        for (var index = 0; index < 3; index++)
+        {
+            _ = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand
+            {
+                ProjectId = seed.ProjectId,
+                TaskId = Guid.NewGuid(),
+                OperationId = Guid.NewGuid(),
+                Title = $"Slice {index}",
+                Requirements = "requirements",
+                AcceptanceCriteriaJson = "[]"
+            });
+        }
+
+        var all = await store.ListEventsAsync(seed.ProjectId);
+        var latest = await store.ListLatestEventsAsync(seed.ProjectId, limitPerTask: 1);
+
+        long[] expected =
+        [
+            .. all.GroupBy(static entry => entry.TaskId)
+                  .Select(static group => group.Max(static entry => entry.Sequence))
+                  .Order()
+        ];
+        AssertEx.True(all.Any(entry => entry.TaskId == seed.TaskId), "the project's own task logged before its siblings.");
+        AssertEx.True(all.Count > expected.Length, "some task must log more than the cap for the cap to mean anything.");
+        AssertEx.True(latest.Select(static entry => entry.Sequence).SequenceEqual(expected),
+            "each task keeps its own newest event, the earliest-logging task included, oldest first.");
     }
 }

@@ -3,6 +3,7 @@ import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
+import { MarkdownImageText } from "@/core/ui/components/MarkdownView/MarkdownImageText";
 
 // Re-export remarkGfm so consumers share the same instance.
 export { remarkGfm };
@@ -57,12 +58,5 @@ export const markdownComponents: Components = {
 	// An image's alt text and URL as plain text: no `<img>`, no anchor, no request. Rendered markdown is often model
 	// output nobody vetted, and an image `src` is fetched the moment it renders, so it could carry data out to whoever
 	// owns that URL. Chat overrides this with SafeMarkdownImage's click-to-load consent.
-	img({ src, alt }) {
-		const label = typeof alt === "string" && alt.length > 0 ? alt : "image";
-		return (
-			<Text span={true} size="sm" c="dimmed">
-				[{label}] {typeof src === "string" ? src : ""}
-			</Text>
-		);
-	},
+	img: ({ src, alt }) => <MarkdownImageText src={src} alt={alt} />,
 };

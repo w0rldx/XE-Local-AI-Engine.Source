@@ -25,7 +25,7 @@ are auto-approved only after a strict metadata-only audit write; failure to pers
 invocation. Arguments, prompts, message content, tokens, passwords, full keys, and host paths are not
 recorded. Spawned children retain ordinary curated tools and do not inherit the root elevation.
 
-The exact surface and settings whitelist live in the
+The exact surface and settings allowlist live in the
 [external-agent skill tool reference](../../skills/xe-local-ai-engine/references/mcp-tools.md).
 
 ## 2. Start MCP-only mode and capture the endpoint

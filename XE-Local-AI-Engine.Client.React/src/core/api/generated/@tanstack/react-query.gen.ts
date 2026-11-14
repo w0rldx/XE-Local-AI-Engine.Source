@@ -1222,6 +1222,7 @@ import type {
 	ListKnowledgeCollectionsData,
 	ListKnowledgeCollectionsResponse,
 	ListKnowledgeDocumentsData,
+	ListKnowledgeDocumentsError,
 	ListKnowledgeDocumentsResponse,
 	ListLocalModelsData,
 	ListLocalModelsResponse,
@@ -1243,6 +1244,7 @@ import type {
 	ListRunningModelsData,
 	ListRunningModelsResponse,
 	ListScheduledJobRunsData,
+	ListScheduledJobRunsError,
 	ListScheduledJobRunsResponse,
 	ListScheduledJobsData,
 	ListScheduledJobsResponse,
@@ -7801,7 +7803,7 @@ export const listKnowledgeDocumentsQueryKey = (options?: Options<ListKnowledgeDo
 export const listKnowledgeDocumentsOptions = (options?: Options<ListKnowledgeDocumentsData>) =>
 	queryOptions<
 		ListKnowledgeDocumentsResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ListKnowledgeDocumentsError>,
 		ListKnowledgeDocumentsResponse,
 		ReturnType<typeof listKnowledgeDocumentsQueryKey>
 	>({
@@ -7816,6 +7818,45 @@ export const listKnowledgeDocumentsOptions = (options?: Options<ListKnowledgeDoc
 		},
 		queryKey: listKnowledgeDocumentsQueryKey(options),
 	});
+
+export const listKnowledgeDocumentsInfiniteQueryKey = (
+	options?: Options<ListKnowledgeDocumentsData>,
+): QueryKey<Options<ListKnowledgeDocumentsData>> => createQueryKey("listKnowledgeDocuments", options, true, ["Knowledge-Base"]);
+
+export const listKnowledgeDocumentsInfiniteOptions = (options?: Options<ListKnowledgeDocumentsData>) => {
+	const opts = infiniteQueryOptions<
+		ListKnowledgeDocumentsResponse,
+		AxiosError<ListKnowledgeDocumentsError>,
+		InfiniteData<ListKnowledgeDocumentsResponse>,
+		QueryKey<Options<ListKnowledgeDocumentsData>>,
+		number | null | Pick<QueryKey<Options<ListKnowledgeDocumentsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListKnowledgeDocumentsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									offset: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listKnowledgeDocuments({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listKnowledgeDocumentsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
 
 export const uploadKnowledgeDocumentMutation = (
 	options?: Partial<Options<UploadKnowledgeDocumentData>>,
@@ -9956,7 +9997,7 @@ export const listScheduledJobRunsQueryKey = (options?: Options<ListScheduledJobR
 export const listScheduledJobRunsOptions = (options?: Options<ListScheduledJobRunsData>) =>
 	queryOptions<
 		ListScheduledJobRunsResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ListScheduledJobRunsError>,
 		ListScheduledJobRunsResponse,
 		ReturnType<typeof listScheduledJobRunsQueryKey>
 	>({
@@ -9971,6 +10012,45 @@ export const listScheduledJobRunsOptions = (options?: Options<ListScheduledJobRu
 		},
 		queryKey: listScheduledJobRunsQueryKey(options),
 	});
+
+export const listScheduledJobRunsInfiniteQueryKey = (
+	options?: Options<ListScheduledJobRunsData>,
+): QueryKey<Options<ListScheduledJobRunsData>> => createQueryKey("listScheduledJobRuns", options, true, ["Scheduler"]);
+
+export const listScheduledJobRunsInfiniteOptions = (options?: Options<ListScheduledJobRunsData>) => {
+	const opts = infiniteQueryOptions<
+		ListScheduledJobRunsResponse,
+		AxiosError<ListScheduledJobRunsError>,
+		InfiniteData<ListScheduledJobRunsResponse>,
+		QueryKey<Options<ListScheduledJobRunsData>>,
+		number | null | Pick<QueryKey<Options<ListScheduledJobRunsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListScheduledJobRunsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									offset: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listScheduledJobRuns({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listScheduledJobRunsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
 
 export const getScheduledJobRunQueryKey = (options: Options<GetScheduledJobRunData>) =>
 	createQueryKey("getScheduledJobRun", options, false, ["Scheduler"]);

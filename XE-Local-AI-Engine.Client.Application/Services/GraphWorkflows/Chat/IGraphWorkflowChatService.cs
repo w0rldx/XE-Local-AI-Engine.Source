@@ -53,7 +53,7 @@ public sealed class GraphWorkflowChatPendingInput
 /// <summary>A run bound to a conversation, with what the chat page needs to render it after a reload.</summary>
 public sealed class GraphWorkflowChatBoundRun
 {
-    public required GraphWorkflowRunSnapshot Run { get; init; }
+    public required GraphWorkflowRunSummary Run { get; init; }
 
     /// <summary>Null when the definition was deleted: runs carry no foreign key to it.</summary>
     public required string? DefinitionName { get; init; }

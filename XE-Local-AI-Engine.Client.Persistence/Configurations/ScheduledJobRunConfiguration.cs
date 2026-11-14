@@ -65,6 +65,13 @@ internal sealed class ScheduledJobRunConfiguration : IEntityTypeConfiguration<Sc
             entity.ActualFireTimeUtc
         });
 
+        // The unfiltered run history pages newest-first by (actual_fire_time_utc, id): an ordered walk, not a sort per page.
+        builder.HasIndex(entity => new
+        {
+            entity.ActualFireTimeUtc,
+            entity.Id
+        }).HasDatabaseName("ix_scheduled_job_runs_fire_time");
+
         // The fire-instance id is the idempotency key for the upsert, so it is unique — but only among rows that
         // actually carry one (manual/system runs leave it null), hence the filtered unique index.
         builder.HasIndex(entity => entity.QuartzFireInstanceId)

@@ -38,7 +38,7 @@ public sealed class NodeChatMessageTransitionsTests
     [Arguments(NodeChatMessageStatusValues.Completed)]
     [Arguments(NodeChatMessageStatusValues.Failed)]
     [Arguments(NodeChatMessageStatusValues.Cancelled)]
-    public void TerminalizeSources_ForTrueOutcomeTerminals_WhitelistCancelled(string terminalStatus)
+    public void TerminalizeSources_ForTrueOutcomeTerminals_AllowlistCancelled(string terminalStatus)
     {
         var sources = NodeChatMessageTransitions.TerminalizeSources(terminalStatus);
 
@@ -64,7 +64,7 @@ public sealed class NodeChatMessageTransitionsTests
     [Test]
     public void NoAllowedSourceSet_ContainsATerminalOtherThanCancelled()
     {
-        // Completed / failed / interrupted are never a legal source for any intent — only Cancelled is ever whitelisted.
+        // Completed / failed / interrupted are never a legal source for any intent — only Cancelled is ever allowlisted.
         string[] intents =
         [
             NodeChatMessageStatusValues.Completed,

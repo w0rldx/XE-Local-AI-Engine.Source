@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -51,7 +53,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 
     public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(CancellationToken cancellationToken)
     {
-        return (await ListCoreAsync(collectionId: null, sourceKind: null, sourceId: null, cancellationToken)).Items;
+        return await ListCoreAsync(new DocumentFilter(), limit: -1, offset: 0, await ResolveEmbeddingModelAsync(cancellationToken), cancellationToken);
     }
 
     public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(string collectionId, CancellationToken cancellationToken)
@@ -61,24 +63,74 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             return [];
         }
 
-        return (await ListCoreAsync(normalizedCollectionId, sourceKind: null, sourceId: null, cancellationToken)).Items;
+        return await ListCoreAsync(new DocumentFilter
+            {
+                CollectionId = normalizedCollectionId
+            },
+            limit: -1,
+            offset: 0,
+            await ResolveEmbeddingModelAsync(cancellationToken),
+            cancellationToken);
     }
 
-    public async Task<KnowledgeDocumentListing> ListWithEmbeddingStatusAsync(string? collectionId, CancellationToken cancellationToken)
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Only the filter's fixed clause and internally generated placeholder names are interpolated; every value is bound.")]
+    [SuppressMessage("Security Hotspot", "S2077:Formatting SQL queries is security-sensitive",
+        Justification = "Only the filter's fixed clause and internally generated placeholder names are interpolated; every value is bound.")]
+    public async Task<KnowledgeDocumentListing> ListWithEmbeddingStatusAsync(KnowledgeDocumentListQuery query, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(collectionId))
+        ArgumentNullException.ThrowIfNull(query);
+        if (query.Limit < 1 || query.Offset < 0)
         {
-            return await ListCoreAsync(collectionId: null, sourceKind: null, sourceId: null, cancellationToken);
+            throw new ArgumentOutOfRangeException(nameof(query), "A page holds at least one document and starts at a non-negative offset.");
         }
 
+        var resolution = await ResolveEmbeddingModelAsync(cancellationToken);
+        string? normalizedCollectionId = null;
+
         // An unusable namespace holds no documents, but the embedding verdict is node-wide and still gates the upload.
-        return KnowledgeCollectionScope.TryNormalize(collectionId, out var normalizedCollectionId)
-            ? await ListCoreAsync(normalizedCollectionId, sourceKind: null, sourceId: null, cancellationToken)
-            : new KnowledgeDocumentListing
+        if (!string.IsNullOrWhiteSpace(query.CollectionId) && !KnowledgeCollectionScope.TryNormalize(query.CollectionId, out normalizedCollectionId))
+        {
+            return new KnowledgeDocumentListing
             {
                 Items = [],
-                Embedding = await ResolveEmbeddingModelAsync(cancellationToken)
+                TotalCount = 0,
+                HasStaleDocuments = false,
+                HasSearchableDocuments = false,
+                Embedding = resolution
             };
+        }
+
+        var filter = new DocumentFilter
+        {
+            CollectionId = normalizedCollectionId,
+            DocumentIds = query.DocumentIds
+        };
+        var connection = _dbContext.Database.GetDbConnection();
+        await OpenIfNeededAsync(connection, cancellationToken);
+
+        // The page alone cannot answer what the whole filtered set holds, so the count and the two corpus facts the
+        // page's callers act on come from one aggregate over plaintext columns: nothing here is decrypted.
+        int totalCount;
+        bool hasSearchable;
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = $"SELECT COUNT(*), COALESCE(MAX(status = $indexed OR chunk_count > 0), 0) FROM knowledge_documents {AddFilter(command, filter)};";
+            AddParameter(command, "$indexed", KnowledgeDocumentStatus.Indexed.ToString());
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            _ = await reader.ReadAsync(cancellationToken);
+            totalCount = reader.GetInt32(0);
+            hasSearchable = reader.GetInt64(1) != 0;
+        }
+
+        return new KnowledgeDocumentListing
+        {
+            Items = await ListCoreAsync(filter, query.Limit, query.Offset, resolution, cancellationToken),
+            TotalCount = totalCount,
+            HasStaleDocuments = await HasStaleDocumentsAsync(connection, filter, resolution, cancellationToken),
+            HasSearchableDocuments = hasSearchable,
+            Embedding = resolution
+        };
     }
 
     public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(string collectionId,
@@ -93,33 +145,106 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             return [];
         }
 
-        return (await ListCoreAsync(normalizedCollectionId, sourceKind, sourceId, cancellationToken)).Items;
+        return await ListCoreAsync(new DocumentFilter
+            {
+                CollectionId = normalizedCollectionId,
+                SourceKind = sourceKind,
+                SourceId = sourceId
+            },
+            limit: -1,
+            offset: 0,
+            await ResolveEmbeddingModelAsync(cancellationToken),
+            cancellationToken);
     }
 
-    private async Task<KnowledgeDocumentListing> ListCoreAsync(string? collectionId,
-        string? sourceKind,
-        string? sourceId,
+    // Staleness needs the C# vector-policy check, so it is judged over the DISTINCT index identities (a handful, however
+    // many documents share them) rather than per row.
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Only the filter's fixed clause and internally generated placeholder names are interpolated; every value is bound.")]
+    [SuppressMessage("Security Hotspot", "S2077:Formatting SQL queries is security-sensitive",
+        Justification = "Only the filter's fixed clause and internally generated placeholder names are interpolated; every value is bound.")]
+    private async Task<bool> HasStaleDocumentsAsync(DbConnection connection,
+        DocumentFilter filter,
+        EmbeddingModelResolution resolution,
         CancellationToken cancellationToken)
     {
-        var resolution = await ResolveEmbeddingModelAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+                               SELECT DISTINCT embedding_model, vector_identity, vector_dim, parser_version, chunker_version
+                               FROM knowledge_documents {AddFilter(command, filter)} AND status = $indexed;
+                               """;
+        AddParameter(command, "$indexed", KnowledgeDocumentStatus.Indexed.ToString());
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            if (IsStaleIndex(KnowledgeDocumentStatus.Indexed,
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetInt32(2),
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    resolution))
+            {
+                return true;
+            }
+        }
 
+        return false;
+    }
+
+    // Returns the WHERE clause for the filter and binds its parameters. Document ids get generated placeholder names,
+    // never interpolated values; SQLite reads an empty IN list as false.
+    private static string AddFilter(DbCommand command, DocumentFilter filter)
+    {
+        AddParameter(command, "$collection_id", filter.CollectionId);
+        AddParameter(command, "$source_kind", filter.SourceKind);
+        AddParameter(command, "$source_id", filter.SourceId);
+        const string where = """
+                             WHERE ($collection_id IS NULL OR collection_id = $collection_id)
+                               AND ($source_kind IS NULL OR source_kind = $source_kind)
+                               AND ($source_id IS NULL OR source_id = $source_id)
+                             """;
+        if (filter.DocumentIds is not { } documentIds)
+        {
+            return where;
+        }
+
+        var names = new string[documentIds.Count];
+        for (var index = 0; index < documentIds.Count; index++)
+        {
+            names[index] = "$document_id_" + index.ToString(CultureInfo.InvariantCulture);
+            AddParameter(command, names[index], documentIds[index]);
+        }
+
+        return where + " AND document_id IN (" + string.Join(", ", names) + ")";
+    }
+
+    // limit -1 is SQLite's "no limit": the internal source and collection reads still want every row.
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Only the filter's fixed clause and internally generated placeholder names are interpolated; every value is bound.")]
+    [SuppressMessage("Security Hotspot", "S2077:Formatting SQL queries is security-sensitive",
+        Justification = "Only the filter's fixed clause and internally generated placeholder names are interpolated; every value is bound.")]
+    private async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListCoreAsync(DocumentFilter filter,
+        int limit,
+        int offset,
+        EmbeddingModelResolution resolution,
+        CancellationToken cancellationToken)
+    {
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
-        command.CommandText = """
-                              SELECT document_id, original_file_name, status, failure_reason, chunk_count, embedding_model,
-                                     vector_identity, vector_dim, size_bytes, created_at_utc, collection_id, source_path,
-                                     source_kind, parser_version, chunker_version
-                              FROM knowledge_documents
-                              WHERE ($collection_id IS NULL OR collection_id = $collection_id)
-                                AND ($source_kind IS NULL OR source_kind = $source_kind)
-                                AND ($source_id IS NULL OR source_id = $source_id)
-                              ORDER BY created_at_utc DESC;
-                              """;
-        AddParameter(command, "$collection_id", collectionId);
-        AddParameter(command, "$source_kind", sourceKind);
-        AddParameter(command, "$source_id", sourceId);
+        command.CommandText = $"""
+                               SELECT document_id, original_file_name, status, failure_reason, chunk_count, embedding_model,
+                                      vector_identity, vector_dim, size_bytes, created_at_utc, collection_id, source_path,
+                                      source_kind, parser_version, chunker_version
+                               FROM knowledge_documents
+                               {AddFilter(command, filter)}
+                               ORDER BY created_at_utc DESC, document_id DESC
+                               LIMIT $limit OFFSET $offset;
+                               """;
+        AddParameter(command, "$limit", limit);
+        AddParameter(command, "$offset", offset);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var documents = new List<KnowledgeDocumentSummary>();
@@ -152,11 +277,18 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             });
         }
 
-        return new KnowledgeDocumentListing
-        {
-            Items = documents,
-            Embedding = resolution
-        };
+        return documents;
+    }
+
+    private sealed record DocumentFilter
+    {
+        public string? CollectionId { get; init; }
+
+        public string? SourceKind { get; init; }
+
+        public string? SourceId { get; init; }
+
+        public IReadOnlyList<Guid>? DocumentIds { get; init; }
     }
 
     public async Task<KnowledgeDocumentDetail> GetAsync(Guid documentId, CancellationToken cancellationToken)

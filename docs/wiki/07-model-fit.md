@@ -269,7 +269,7 @@ sidecar schema change; a weights-only install is indistinguishable from a projec
 |---|---|---|
 | Handler | `ModelRecommendationCheckHandler` (template id `model-recommendation-check`) | Validates decrypted params against a draft-07 JSON schema, opens a DI scope, invokes `IModelFitRefreshService`. Owns **no** scheduler state. |
 | Seeder | `ModelRecommendationScheduleSeeder` (`IHostedService`) | Idempotently seeds **one** enabled `ScheduleKind.Manual` job (durable Quartz job, **no trigger**, never auto-fires) so the React "Refresh now" button works without the operator hand-creating a schedule. **Self-healing** — re-seeds if deleted. |
-| Trigger facade | `ModelFitRefreshTrigger` (`IModelFitRefreshTrigger`) | Template-guarded: rejects any job that is not a `model-recommendation-check` job, validates whitelisted per-fire overrides (`useCase` against the six-value allowlist, `limit` bounds, trimmed `quantOverride`, `ctxTarget` min) **before** firing, then delegates to `TriggerNowAsync`. |
+| Trigger facade | `ModelFitRefreshTrigger` (`IModelFitRefreshTrigger`) | Template-guarded: rejects any job that is not a `model-recommendation-check` job, validates allowlisted per-fire overrides (`useCase` against the six-value allowlist, `limit` bounds, trimmed `quantOverride`, `ctxTarget` min) **before** firing, then delegates to `TriggerNowAsync`. |
 
 Default seeded parameters: `{"operation":"Recommend","useCase":"coding","limit":5}` — no approved-image/provider fields. The handler also supports `Cron`/`OneShot`/`SimpleInterval` for operators who want a recurring refresh, but `Manual` (on-demand) is the recommended kind. See [Scheduler](06-scheduler.md) for the dispatcher, run-history, and SignalR hub mechanics.
 

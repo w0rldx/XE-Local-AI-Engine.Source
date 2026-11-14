@@ -1,13 +1,13 @@
 import { Badge, Collapse, Group, Paper, Stack, Text, UnstyledButton } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconBooks, IconChevronRight } from "@tabler/icons-react";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { KnowledgeScoreBadge } from "@/core/ui/components/KnowledgeScoreBadge/KnowledgeScoreBadge";
 import type { ChatMessageSource } from "@/features/chat/models/ChatModels";
 import { KnowledgeDocumentDrawer } from "@/features/knowledge/components/KnowledgeDocumentDrawer";
-import { useKnowledgeDocumentDetail, useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
+import { useKnowledgeDocumentDetail, useKnowledgeDocumentNames } from "@/features/knowledge/queries/useKnowledgeDocuments";
 
 interface ChatSourcesStripProps {
 	sources: readonly ChatMessageSource[];
@@ -39,12 +39,8 @@ export const ChatSourcesStrip = memo(function ChatSourcesStrip({ sources }: Chat
 	const { data: detail, isFetching: detailIsFetching } = useKnowledgeDocumentDetail(activeSource?.documentId ?? "", drawerOpened);
 
 	// A source's server title is the non-sensitive storage reference (a GUID file name) when its chunk has no heading
-	// trail; label it with the decrypted display name the operator's own document list carries, as the KB page does.
-	const { data: documents } = useKnowledgeDocuments(sources.length > 0);
-	const documentNames = useMemo(
-		() => new Map((documents ?? []).map((document) => [document.documentId, document.displayName])),
-		[documents],
-	);
+	// trail; label it with the decrypted display name of exactly these sources' documents, as the KB page does.
+	const documentNames = useKnowledgeDocumentNames(sources.map((source) => source.documentId));
 
 	const openSource = useCallback(
 		(source: ChatMessageSource): void => {

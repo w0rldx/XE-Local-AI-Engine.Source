@@ -94,7 +94,8 @@ internal sealed class WebFetchService
                 && string.Equals(allowed.Scheme, url.Scheme, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(allowed.IdnHost, url.IdnHost, StringComparison.OrdinalIgnoreCase)
                 && allowed.Port == url.Port
-                && IsUnderPath(url.AbsolutePath, allowed.AbsolutePath))
+                && IsUnderPath(url.AbsolutePath, allowed.AbsolutePath)
+                && (allowed.AbsolutePath == "/" || !HasAmbiguousPathSegment(url.AbsolutePath)))
             {
                 return true;
             }
@@ -102,6 +103,14 @@ internal sealed class WebFetchService
 
         return false;
     }
+
+    // Uri keeps %2F and %5C escaped, so "/docs/..%2Fadmin" is one segment under "/docs/" here but "/admin" on a server that decodes
+    // before routing; a leftover dot segment or escaped dot is refused for the same reason.
+    private static bool HasAmbiguousPathSegment(string path) =>
+        path.Contains("%2F", StringComparison.OrdinalIgnoreCase)
+        || path.Contains("%5C", StringComparison.OrdinalIgnoreCase)
+        || path.Contains("%2E", StringComparison.OrdinalIgnoreCase)
+        || path.Split('/').Any(static segment => segment is "." or "..");
 
     // AbsolutePath is percent- and dot-segment-normalized by Uri for http(s), so ".." cannot climb out of the prefix.
     // "/docs" admits "/docs" and "/docs/x" but not "/docs-private"; an entry ending in "/" (or the bare origin) admits all below it.

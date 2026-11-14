@@ -49,6 +49,14 @@ internal sealed class IntegrationExecutionConfiguration : IEntityTypeConfigurati
             entity.ReceivedAtUtc
         }).HasDatabaseName("ix_integration_executions_status_received");
 
+        // The unfiltered admin list (polled every few seconds) pages newest-first by (received_at_utc, id): an ordered
+        // walk of this index instead of sorting the whole table per page.
+        builder.HasIndex(entity => new
+        {
+            entity.ReceivedAtUtc,
+            entity.Id
+        }).HasDatabaseName("ix_integration_executions_received");
+
         // No index on stop_requested_at_utc or output_bytes: every reader of either already holds the execution id.
     }
 }

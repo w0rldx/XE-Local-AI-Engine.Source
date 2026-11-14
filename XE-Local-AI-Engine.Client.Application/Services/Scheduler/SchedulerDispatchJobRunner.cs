@@ -42,7 +42,7 @@ internal static class SchedulerDispatchJobRunner
         using var budget = new CancellationTokenSource(ResolveMaxRuntime(context, defaultMaxRuntime), timeProvider);
         await using var interruptOnExpiry = budget.Token.Register(() => _ = InterruptAsync(context, logger));
 
-        // A manual fire may carry per-fire overrides on the firing trigger's data map. Forward ONLY the whitelisted keys, which the
+        // A manual fire may carry per-fire overrides on the firing trigger's data map. Forward ONLY the allowlisted keys, which the
         // executor decides how to apply; a cron fire has none and dispatches the stored parameters unchanged.
         var parameterOverrides = ExtractParameterOverrides(context);
 
@@ -62,7 +62,7 @@ internal static class SchedulerDispatchJobRunner
     }
 
     /// <summary>
-    ///     Reads the whitelisted per-fire override keys — the model-fit use-case, breadth limit, quant and context
+    ///     Reads the allowlisted per-fire override keys — the model-fit use-case, breadth limit, quant and context
     ///     target — from the merged data map.
     /// </summary>
     /// <remarks>

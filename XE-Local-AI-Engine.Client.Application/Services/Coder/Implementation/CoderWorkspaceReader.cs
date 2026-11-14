@@ -26,8 +26,8 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
     private const string WorkspaceBusyMessage =
         "The project workspace is busy with another operation. Try again after it finishes.";
 
-    /// <summary>The largest repository file read whole before the line and byte caps trim what the model sees.</summary>
-    private const int MaxRepositoryReadBytes = 8 * 1024 * 1024;
+    /// <summary>The largest file (repository or AgentHome) read whole before the line and byte caps trim what the model sees.</summary>
+    private const int MaxFileReadBytes = 8 * 1024 * 1024;
 
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly IAgentHomeExecutionLeaseManager _leaseManager;
@@ -94,6 +94,13 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         }
         else
         {
+            // The entry post-filter below sees paths relative to the scan root, so a root inside .aws or .kube would list its file names.
+            // Gated on IsSecret like read_file, not the copy filter: listing bin/ or obj/ after a failed build stays allowed.
+            if (IsSecretRelativePath(confined.RelativePath))
+            {
+                return $"list_files rejected: '{confined.RelativePath}' is excluded because files with that name commonly hold credentials.";
+            }
+
             using var access = await TryOpenAsync(cancellationToken);
             if (access.IsBusy)
             {
@@ -183,11 +190,15 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         {
             // The jail-guarded read: the provider re-applies ResolveJailPath and EnsureNoSymlinkComponentsUnderJail to the sandbox-absolute path, so a
             // symlink component or traversal is rejected here even though the guard already confined the model string.
-            content = await _provider.ReadFileAsync(handle, confined.SandboxPath, cancellationToken);
+            content = await _provider.ReadFileAsync(handle, confined.SandboxPath, MaxFileReadBytes, cancellationToken);
         }
-        catch (FileNotFoundException)
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
         {
             return $"read_file: '{confined.RelativePath}' was not found in the workspace.";
+        }
+        catch (InvalidDataException)
+        {
+            return $"read_file: '{confined.RelativePath}' is too large to read.";
         }
         catch (UnauthorizedAccessException)
         {
@@ -297,7 +308,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         string content;
         try
         {
-            content = await SandboxFileSurveyOperations.ReadFileAsync(repository, confined.RelativePath, MaxRepositoryReadBytes, cancellationToken);
+            content = await SandboxFileSurveyOperations.ReadFileAsync(repository, confined.RelativePath, MaxFileReadBytes, cancellationToken);
         }
         catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
         {

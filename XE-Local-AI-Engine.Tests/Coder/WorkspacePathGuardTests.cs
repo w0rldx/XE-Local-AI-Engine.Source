@@ -90,6 +90,51 @@ public sealed class WorkspacePathGuardTests
         AssertEx.False(confined.IsConfined);
     }
 
+    // Windows trims a trailing dot or space and reads ':' as a stream separator, so each of these would open an excluded name
+    // (or, for ".. ", the parent) while the name-based exclusion saw something else. Rejected on every OS.
+    [Test]
+    [Arguments(".git.")]
+    [Arguments(".git./config")]
+    [Arguments("sub/.git./config")]
+    [Arguments(".env ")]
+    [Arguments(".. ")]
+    [Arguments("src/a:b")]
+    [Arguments(".env::$DATA")]
+    public void Confine_WhenSegmentWindowsWouldRewrite_Rejects(string path)
+    {
+        var confined = WorkspacePathGuard.Confine(path);
+
+        AssertEx.False(confined.IsConfined);
+        AssertEx.Contains(confined.RejectionReason!, "ends with a dot or a space");
+    }
+
+    [Test]
+    [Arguments("GIT~1/config")]
+    [Arguments("AWS~1/credentials")]
+    [Arguments("src/PROGRA~1")]
+    public void Confine_WhenSegmentIsAShortNameAlias_Rejects(string path)
+    {
+        var confined = WorkspacePathGuard.Confine(path);
+
+        AssertEx.False(confined.IsConfined);
+        AssertEx.Contains(confined.RejectionReason!, "short-name alias");
+    }
+
+    [Test]
+    [Arguments("file.txt", "file.txt")]
+    [Arguments("a.b/c", "a.b/c")]
+    [Arguments(".env.local/../src/.editorconfig", "src/.editorconfig")]
+    [Arguments("a~b", "a~b")]
+    [Arguments("file~", "file~")]
+    [Arguments("~/notes", "~/notes")]
+    public void Confine_WhenDotOrTildeIsOrdinaryPartOfAName_Confines(string path, string expectedRelative)
+    {
+        var confined = WorkspacePathGuard.Confine(path);
+
+        AssertEx.True(confined.IsConfined);
+        AssertEx.Equal(expectedRelative, confined.RelativePath);
+    }
+
     [Test]
     public void Confine_WhenControlCharacters_Rejects()
     {

@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
 {
     /// <summary>
-    ///     The whitelisted parameter keys a per-fire override may replace. Compared case-insensitively against the stored
+    ///     The allowlisted parameter keys a per-fire override may replace. Compared case-insensitively against the stored
     ///     JSON's property names; the stored key's original casing is preserved when it already exists.
     /// </summary>
     private const string OverridableUseCaseProperty = "useCase";
@@ -142,7 +142,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
 
         await SafePublishRunAsync(run, SchedulerRunEventKind.Started, manualFireId);
 
-        // The stored definition is NEVER mutated: a per-fire override is merged, whitelisted keys only, onto the copy of the
+        // The stored definition is NEVER mutated: a per-fire override is merged, allowlisted keys only, onto the copy of the
         // parameters the handler sees. A cron fire without overrides passes the stored parameters through unchanged.
         var effectiveParameters = ApplyParameterOverrides(definition.ParameterJson, parameterOverrides);
 
@@ -259,14 +259,14 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
     }
 
     /// <summary>
-    ///     Returns <paramref name="storedParametersJson" /> with ONLY the whitelisted <c>useCase</c> and <c>limit</c>
+    ///     Returns <paramref name="storedParametersJson" /> with ONLY the allowlisted <c>useCase</c> and <c>limit</c>
     ///     properties replaced by the per-fire override, every other property untouched.
     /// </summary>
     /// <remarks>
-    ///     It works on a parsed copy, so the stored definition is never mutated. No override, no whitelisted key in the
+    ///     It works on a parsed copy, so the stored definition is never mutated. No override, no allowlisted key in the
     ///     override, or unparseable or empty stored JSON returns the stored JSON verbatim, which the handler then
     ///     validates exactly as it would a normal fire: an override can neither fabricate parameters nor reach a
-    ///     non-whitelisted key. The <c>limit</c> override is written back as a JSON number, the stored shape, so the
+    ///     non-allowlisted key. The <c>limit</c> override is written back as a JSON number, the stored shape, so the
     ///     handler's numeric parse is unchanged.
     /// </remarks>
     private static string? ApplyParameterOverrides(string? storedParametersJson,
@@ -328,24 +328,24 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
 
         if (useCaseOverride is not null)
         {
-            SetWhitelistedProperty(parametersObject, OverridableUseCaseProperty, JsonValue.Create(useCaseOverride));
+            SetAllowlistedProperty(parametersObject, OverridableUseCaseProperty, JsonValue.Create(useCaseOverride));
         }
 
         if (limitOverride is { } limit)
         {
             // The stored `limit` is a JSON number; write the override as a number so the handler's int parse still works.
-            SetWhitelistedProperty(parametersObject, OverridableLimitProperty, JsonValue.Create(limit));
+            SetAllowlistedProperty(parametersObject, OverridableLimitProperty, JsonValue.Create(limit));
         }
 
         if (quantOverride is not null)
         {
-            SetWhitelistedProperty(parametersObject, OverridableQuantProperty, JsonValue.Create(quantOverride));
+            SetAllowlistedProperty(parametersObject, OverridableQuantProperty, JsonValue.Create(quantOverride));
         }
 
         if (ctxTargetOverride is { } ctxTarget)
         {
             // The stored `ctxTarget` is a JSON number; write the override as a number so the handler's int parse works.
-            SetWhitelistedProperty(parametersObject, OverridableCtxTargetProperty, JsonValue.Create(ctxTarget));
+            SetAllowlistedProperty(parametersObject, OverridableCtxTargetProperty, JsonValue.Create(ctxTarget));
         }
 
         return parametersObject.ToJsonString();
@@ -354,9 +354,9 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
     /// <summary>
     ///     Sets <paramref name="property" /> on <paramref name="parametersObject" /> to <paramref name="value" />,
     ///     replacing an existing property in place (preserving its original casing) or adding a camelCase one when absent.
-    ///     ONLY the named whitelisted property is touched; every other stored parameter is left untouched.
+    ///     ONLY the named allowlisted property is touched; every other stored parameter is left untouched.
     /// </summary>
-    private static void SetWhitelistedProperty(JsonObject parametersObject, string property, JsonNode? value)
+    private static void SetAllowlistedProperty(JsonObject parametersObject, string property, JsonNode? value)
     {
         var existingKey = parametersObject
                           .Select(pair => pair.Key)

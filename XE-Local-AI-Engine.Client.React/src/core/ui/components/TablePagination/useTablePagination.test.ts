@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
 	DEFAULT_PAGE_SIZE,
+	useServerPageState,
 	useServerTablePagination,
 	useTablePagination,
 } from "@/core/ui/components/TablePagination/useTablePagination";
@@ -180,5 +181,26 @@ describe("useServerTablePagination", () => {
 		expect(footer.firstItemIndex).toBe(0);
 		expect(footer.lastItemIndex).toBe(0);
 		expect(onPageChange).not.toHaveBeenCalled();
+	});
+});
+
+describe("useServerPageState", () => {
+	afterEach(() => {
+		useTablePaginationStore.setState({ pageSizeByKey: {} });
+		localStorage.clear();
+	});
+
+	it("persists a chosen page size under its key, returns to page 1, and ignores a size the selector does not offer", () => {
+		const { result } = renderHook(() => useServerPageState("server-table"));
+		act(() => result.current.onPageChange(3));
+		act(() => result.current.onPageSizeChange(50));
+
+		expect(result.current.page).toBe(1);
+		expect(useTablePaginationStore.getState().pageSizeByKey["server-table"]).toBe(50);
+		// A remount (a reload) reads the remembered size back.
+		expect(renderHook(() => useServerPageState("server-table")).result.current.pageSize).toBe(50);
+
+		useTablePaginationStore.setState({ pageSizeByKey: { "server-table": 7 } });
+		expect(renderHook(() => useServerPageState("server-table")).result.current.pageSize).toBe(DEFAULT_PAGE_SIZE);
 	});
 });

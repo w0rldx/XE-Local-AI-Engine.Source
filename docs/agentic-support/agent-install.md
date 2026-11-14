@@ -209,7 +209,7 @@ CLI; use the linked runbook rather than translating syntax between clients.
 
 A `delegate` key sees exactly 8 shared tools; the `agentic` key additionally exposes the
 administration tools listed in the shipped skill reference. The exact names, scopes, inputs,
-lifecycle values, and 18-field settings whitelist are in the
+lifecycle values, and 18-field settings allowlist are in the
 [MCP tools reference](../../skills/xe-local-ai-engine/references/mcp-tools.md).
 
 ## 7. Security model
@@ -223,7 +223,7 @@ lifecycle values, and 18-field settings whitelist are in the
   logged. Spawned children retain normal curated tools and do not inherit agentic elevation.
 - A durable run accepted before key rotation retains the captured authority across disconnect,
   restart, and rotation. Cancel it explicitly if it must not execute.
-- `CustomToolsEnabled` is excluded from the agentic settings whitelist.
+- `CustomToolsEnabled` is excluded from the agentic settings allowlist.
 
 For a client on another machine, keep the engine bound to loopback and use an operator-owned tunnel
 whose engine-side connection terminates on loopback, for example SSH local forwarding. A same-host

@@ -294,6 +294,64 @@ public sealed class SchedulerEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    /// <summary>
+    ///     The run history is paged on the server: a page holds at most its limit, the total counts every matching run,
+    ///     and the next offset reaches the rest. A 5-minute job alone writes thousands of runs inside the retention window.
+    /// </summary>
+    [Test]
+    public async Task ListRuns_PagesByLimitAndOffsetAndReportsTheTotal()
+    {
+        var factory = Factory;
+        var jobId = Guid.NewGuid();
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IScheduledJobRunStore>();
+            for (var index = 0; index < 3; index++)
+            {
+                _ = await store.AddAsync(new ScheduledJobRunInput
+                {
+                    ScheduledJobId = jobId,
+                    TemplateId = "tpl-paging",
+                    QuartzFireInstanceId = null,
+                    TriggeredBy = ScheduledRunTrigger.Manual,
+                    Status = ScheduledRunStatus.Succeeded,
+                    ScheduledFireTimeUtc = null,
+                    ActualFireTimeUtc = 1_000 + index
+                });
+            }
+        }
+
+        using var client = factory.CreateClient();
+        var first = await GetRunsPageAsync(client, $"{RunsRoute()}?scheduledJobId={jobId}&limit=2");
+        var rest = await GetRunsPageAsync(client, $"{RunsRoute()}?scheduledJobId={jobId}&limit=2&offset=2");
+
+        AssertEx.Equal(expected: 2, first.GetProperty("items").GetArrayLength());
+        AssertEx.Equal(expected: 3, first.GetProperty("totalCount").GetInt32());
+        AssertEx.Equal(expected: 1, rest.GetProperty("items").GetArrayLength(), "the next offset reaches the run the first page left out.");
+    }
+
+    [Test]
+    public async Task ListRuns_WhenLimitExceedsTheCeiling_ReturnsBadRequest()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{RunsRoute()}?limit=201");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    private async Task<JsonElement> GetRunsPageAsync(HttpClient client, string route)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, route);
+        Factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
     [Test]
     public async Task GetRun_WhenRunMissing_WithOperatorToken_ReturnsNotFound()
     {

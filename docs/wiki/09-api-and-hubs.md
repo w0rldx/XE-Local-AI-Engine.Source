@@ -142,7 +142,7 @@ restates it. Direct calls to unauthorized admin tools are rejected too.
 
 The admin class calls application services directly — no internal HTTP hop — for node/runtime
 status, runtime acquisition, GGUF pull lifecycle, model delete/default selection, the exact 18-field
-node-settings whitelist, and saved-agent CRUD. The canonical names and inputs are drift-tested
+node-settings allowlist, and saved-agent CRUD. The canonical names and inputs are drift-tested
 against [`references/mcp-tools.md`](../../skills/xe-local-ai-engine/references/mcp-tools.md).
 
 The transport answers only `POST` with `Content-Type: application/json`. `McpEndpointMethodGuard`

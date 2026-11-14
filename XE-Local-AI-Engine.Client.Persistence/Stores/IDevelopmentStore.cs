@@ -601,6 +601,13 @@ public interface IDevelopmentStore
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<DevelopmentEventSnapshot>> ListEventsAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The newest <paramref name="limitPerTask" /> events of EACH task (events bound to no task count as one group),
+    ///     returned oldest first like <see cref="ListEventsAsync" />.
+    /// </summary>
+    Task<IReadOnlyList<DevelopmentEventSnapshot>> ListLatestEventsAsync(Guid projectId, int limitPerTask, CancellationToken cancellationToken = default);
+
     Task<DevelopmentExecutionSnapshot> GetExecutionSnapshotAsync(Guid attemptId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default);
     Task<DevelopmentProjectSnapshot> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
@@ -614,6 +621,13 @@ public interface IDevelopmentStore
     Task<DevelopmentTaskSnapshot> GetTaskAsync(Guid taskId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentAttemptSnapshot>> ListAttemptsAsync(Guid taskId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentArtifactSnapshot>> ListArtifactsAsync(Guid taskId, CancellationToken cancellationToken = default);
+
+    /// <summary>Every attempt of every listed task in ONE query, each task's in <see cref="ListAttemptsAsync" /> order.</summary>
+    Task<IReadOnlyList<DevelopmentAttemptSnapshot>> ListAttemptsForTasksAsync(IReadOnlyCollection<Guid> taskIds, CancellationToken cancellationToken = default);
+
+    /// <summary>Every artifact of every listed task in ONE query, each task's in <see cref="ListArtifactsAsync" /> order.</summary>
+    Task<IReadOnlyList<DevelopmentArtifactSnapshot>> ListArtifactsForTasksAsync(IReadOnlyCollection<Guid> taskIds, CancellationToken cancellationToken = default);
+
     Task<DevelopmentArtifactSnapshot> GetArtifactAsync(Guid artifactId, CancellationToken cancellationToken = default);
 }
 
