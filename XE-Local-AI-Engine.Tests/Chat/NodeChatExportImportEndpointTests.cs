@@ -143,7 +143,7 @@ public sealed class NodeChatExportImportEndpointTests
         using var client = Factory.CreateClient();
 
         var exported = (await ExportAsync(client, conversationId: null)).Conversations.Where(conversation => conversation.Title?.EndsWith(suffix, StringComparison.Ordinal) == true)
-                                                                             .ToDictionary(static conversation => conversation.Title!);
+                                                                        .ToDictionary(static conversation => conversation.Title!);
         using var byIdRequest = Request(HttpMethod.Get, $"/api/local/v1/chat/export?conversationId={workSession}");
         using var byIdResponse = await client.SendAsync(byIdRequest);
         using var scheduledByIdRequest = Request(HttpMethod.Get, $"/api/local/v1/chat/export?conversationId={scheduled}");
@@ -195,7 +195,15 @@ public sealed class NodeChatExportImportEndpointTests
         {
             Title = title,
             CreatedAtUtc = chatCreatedAtUtc,
-            Messages = [new NodeChatExportMessage { Role = "user", Content = marker, CreatedAtUtc = messageCreatedAtUtc }]
+            Messages =
+            [
+                new NodeChatExportMessage
+                {
+                    Role = "user",
+                    Content = marker,
+                    CreatedAtUtc = messageCreatedAtUtc
+                }
+            ]
         });
         using var client = Factory.CreateClient();
 
@@ -217,7 +225,7 @@ public sealed class NodeChatExportImportEndpointTests
         using var client = Factory.CreateClient();
         using var request = Request(HttpMethod.Post, "/api/local/v1/chat/import");
         request.Content = new StringContent($$"""{"format":"{{NodeChatExportFile.Format}}","formatVersion":{{NodeChatExportFile.FormatVersion}},"conversations":{{conversationsJson}}}""",
-            System.Text.Encoding.UTF8, "application/json");
+            Encoding.UTF8, "application/json");
 
         using var response = await client.SendAsync(request);
 
@@ -252,26 +260,29 @@ public sealed class NodeChatExportImportEndpointTests
         AssertEx.Contains(await response.Content.ReadAsStringAsync(), "MB this node imports at once");
     }
 
-    private static NodeChatExportDocument Document(params NodeChatExportConversation[] conversations) => new()
-    {
-        Format = NodeChatExportFile.Format,
-        FormatVersion = NodeChatExportFile.FormatVersion,
-        Conversations = conversations
-    };
+    private static NodeChatExportDocument Document(params NodeChatExportConversation[] conversations) =>
+        new()
+        {
+            Format = NodeChatExportFile.Format,
+            FormatVersion = NodeChatExportFile.FormatVersion,
+            Conversations = conversations
+        };
 
-    private static NodeChatExportConversation Chat(string title, params NodeChatExportMessage[] messages) => new()
-    {
-        Title = title,
-        CreatedAtUtc = 10,
-        Messages = messages
-    };
+    private static NodeChatExportConversation Chat(string title, params NodeChatExportMessage[] messages) =>
+        new()
+        {
+            Title = title,
+            CreatedAtUtc = 10,
+            Messages = messages
+        };
 
-    private static NodeChatExportMessage Message(string role, string content) => new()
-    {
-        Role = role,
-        Content = content,
-        CreatedAtUtc = 11
-    };
+    private static NodeChatExportMessage Message(string role, string content) =>
+        new()
+        {
+            Role = role,
+            Content = content,
+            CreatedAtUtc = 11
+        };
 
     private static async Task<Guid> CreateAsync(INodeChatPersistenceService persistence, string title, string kind) =>
         (await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
@@ -333,8 +344,11 @@ public sealed class NodeChatExportImportEndpointTests
             UpdatedAtUtc = updatedAtUtc,
             Content = content,
             Parts = withToolCall
-                ? [new NodeChatMessagePart(NodeChatMessagePartKinds.Tool, 0, ToolCallId: "call-1", Name: "web_search", State: "completed", Args: "{}", Result: "secret result"),
-                    new NodeChatMessagePart(NodeChatMessagePartKinds.Text, 1, Text: content)]
+                ?
+                [
+                    new NodeChatMessagePart(NodeChatMessagePartKinds.Tool, 0, ToolCallId: "call-1", Name: "web_search", State: "completed", Args: "{}", Result: "secret result"),
+                    new NodeChatMessagePart(NodeChatMessagePartKinds.Text, 1, Text: content)
+                ]
                 : null
         });
 

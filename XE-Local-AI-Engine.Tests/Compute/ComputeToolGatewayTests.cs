@@ -1261,10 +1261,10 @@ public sealed class ComputeToolGatewayTests
         dispatcher.When(static d => d.ReportToolCallOutput(Arg.Any<ToolCallOutputPayload>())).Do(call => payloads.Add(call.Arg<ToolCallOutputPayload>()));
         string observed;
         using (ToolCommandOutputScope.Open(Guid.NewGuid(), Guid.NewGuid(), dispatcher, new ToolCommandStopRegistry(), TimeProvider.System, NullLogger.Instance))
-        using (AmbientToolCall.Enter("call-py", "run_python"))
-        {
-            observed = await handler.ExecuteAsync(Arguments);
-        }
+            using (AmbientToolCall.Enter("call-py", "run_python"))
+            {
+                observed = await handler.ExecuteAsync(Arguments);
+            }
 
         AssertEx.Equal(unobserved, observed);
         AssertEx.True(payloads.Count >= 2 && payloads.All(static payload => payload.ToolCallId == "call-py"));
@@ -1299,10 +1299,10 @@ public sealed class ComputeToolGatewayTests
 
         string stopped;
         using (ToolCommandOutputScope.Open(Guid.NewGuid(), messageId, Substitute.For<IWorkerEventDispatcher>(), stops, TimeProvider.System, NullLogger.Instance))
-        using (AmbientToolCall.Enter("call-py", "run_python"))
-        {
-            stopped = await handler.ExecuteAsync(Arguments);
-        }
+            using (AmbientToolCall.Enter("call-py", "run_python"))
+            {
+                stopped = await handler.ExecuteAsync(Arguments);
+            }
 
         var timedOut = await new RunPythonToolHandler(CreateGateway(new RecordingSandboxProvider(Contained)
         {

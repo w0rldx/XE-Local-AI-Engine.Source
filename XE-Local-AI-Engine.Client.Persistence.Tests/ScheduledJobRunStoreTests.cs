@@ -538,16 +538,17 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         AssertEx.True(messageOwners.Contains(chatId), "The run sweep never touches a chat's messages.");
     }
 
-    private static NodeMessage Message(Guid conversationId) => new()
-    {
-        MessageId = Guid.NewGuid(),
-        ConversationId = conversationId,
-        Sequence = 1,
-        Role = "assistant",
-        Content = [1, 2, 3],
-        CreatedAtUtc = 1,
-        UpdatedAtUtc = 1
-    };
+    private static NodeMessage Message(Guid conversationId) =>
+        new()
+        {
+            MessageId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            Sequence = 1,
+            Role = "assistant",
+            Content = [1, 2, 3],
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1
+        };
 
     [Test]
     public async Task SweepOlderThanAsync_WhenNoneExpired_ReturnsZero()
@@ -838,13 +839,14 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         };
     }
 
-    private static NodeConversation Conversation(Guid id, string kind) => new()
-    {
-        ConversationId = id,
-        CreatedAtUtc = 1,
-        LastSeenUtc = 1,
-        Kind = kind
-    };
+    private static NodeConversation Conversation(Guid id, string kind) =>
+        new()
+        {
+            ConversationId = id,
+            CreatedAtUtc = 1,
+            LastSeenUtc = 1,
+            Kind = kind
+        };
 
     private sealed class MutableTimeProvider : TimeProvider
     {

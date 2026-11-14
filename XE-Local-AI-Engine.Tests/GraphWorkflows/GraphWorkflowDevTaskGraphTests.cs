@@ -203,18 +203,32 @@ public sealed class GraphWorkflowDevTaskGraphTests
             "unconditional-from-pause" => Graph([StartNode, Implement, Pause("review"), Apply("impl"), End("shipped"), End("declined")],
                 [Edge("e1", "start", "impl"), Edge("e2", "impl", "review"), Edge("e3", "review", "apply"), Edge("e4", "review", "declined", Reject), Edge("e5", "apply", "shipped")]),
             "fed-by-a-non-pause" => Graph([StartNode, Implement, Pause("review"), """{ "key": "fan", "kind": "Parallel" }""", Apply("impl"), End("shipped"), End("declined")],
-                [Edge("e1", "start", "impl"), Edge("e2", "impl", "review"), Edge("e3", "review", "fan", Approve), Edge("e4", "review", "declined", Reject), Edge("e5", "fan", "apply"), Edge("e6", "apply", "shipped")]),
+            [
+                Edge("e1", "start", "impl"), Edge("e2", "impl", "review"), Edge("e3", "review", "fan", Approve), Edge("e4", "review", "declined", Reject), Edge("e5", "fan", "apply"),
+                Edge("e6", "apply", "shipped")
+            ]),
             "two-inbound-one-ungated" => Graph([StartNode, Implement, Pause("review"), Apply("impl"), End("shipped"), End("declined")],
-                [Edge("e1", "start", "impl"), Edge("e2", "impl", "review"), Edge("e3", "review", "apply", Approve), Edge("e4", "review", "declined", Reject), Edge("e5", "apply", "shipped"), Edge("e6", "impl", "apply")]),
+            [
+                Edge("e1", "start", "impl"), Edge("e2", "impl", "review"), Edge("e3", "review", "apply", Approve), Edge("e4", "review", "declined", Reject), Edge("e5", "apply", "shipped"),
+                Edge("e6", "impl", "apply")
+            ]),
             "pause-before-the-implement" => Graph([StartNode, Pause("review"), Implement, Apply("impl"), End("shipped"), End("declined"), End("built")],
-                [Edge("e1", "start", "review"), Edge("e2", "review", "impl", Approve), Edge("e3", "review", "apply", Approve), Edge("e4", "review", "declined", Reject), Edge("e5", "apply", "shipped"), Edge("e6", "impl", "built")]),
+            [
+                Edge("e1", "start", "review"), Edge("e2", "review", "impl", Approve), Edge("e3", "review", "apply", Approve), Edge("e4", "review", "declined", Reject), Edge("e5", "apply", "shipped"),
+                Edge("e6", "impl", "built")
+            ]),
             "implement-on-a-sibling-branch" => Graph([StartNode, Implement, Pause("review"), Apply("impl"), End("shipped"), End("declined"), End("built")],
-                [Edge("e1", "start", "impl"), Edge("e2", "start", "review"), Edge("e3", "review", "apply", Approve), Edge("e4", "review", "declined", Reject), Edge("e5", "apply", "shipped"), Edge("e6", "impl", "built")]),
+            [
+                Edge("e1", "start", "impl"), Edge("e2", "start", "review"), Edge("e3", "review", "apply", Approve), Edge("e4", "review", "declined", Reject), Edge("e5", "apply", "shipped"),
+                Edge("e6", "impl", "built")
+            ]),
             "names-a-missing-node" => Standard(Approve, task: "ghost"),
             "names-a-non-devtask" => Standard(Approve, task: "review"),
             "names-another-apply" => Graph([StartNode, Implement, Pause("review"), Apply("impl"), Apply("apply", key: "apply2"), End("shipped"), End("shipped2"), End("declined")],
-                [Edge("e1", "start", "impl"), Edge("e2", "impl", "review"), Edge("e3", "review", "apply", Approve), Edge("e4", "review", "declined", Reject), Edge("e5", "apply", "shipped"),
-                    Edge("e6", "review", "apply2", Approve), Edge("e7", "apply2", "shipped2")]),
+            [
+                Edge("e1", "start", "impl"), Edge("e2", "impl", "review"), Edge("e3", "review", "apply", Approve), Edge("e4", "review", "declined", Reject), Edge("e5", "apply", "shipped"),
+                Edge("e6", "review", "apply2", Approve), Edge("e7", "apply2", "shipped2")
+            ]),
             "in-a-chat-graph" => Standard(Approve, kind: "Chat"),
             _ => throw new ArgumentOutOfRangeException(nameof(row), row, "no such row")
         };

@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Hosting;
 
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;

@@ -383,7 +383,11 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     /// <summary>Walks an in-progress task through validation back to review, where a rework is asked from, and answers its version.</summary>
     private static async Task<long> BackToReviewAsync(IDevelopmentStore store, Guid taskId)
     {
-        foreach (var target in new[] { DevelopmentTaskStatus.Validation, DevelopmentTaskStatus.InReview })
+        foreach (var target in new[]
+                 {
+                     DevelopmentTaskStatus.Validation,
+                     DevelopmentTaskStatus.InReview
+                 })
         {
             _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
             {

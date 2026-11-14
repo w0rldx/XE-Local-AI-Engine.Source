@@ -57,7 +57,8 @@ public sealed class ToolCommandStopRegistry
         }
     }
 
-    private static string KeyOf(Guid messageId, string toolCallId) => messageId.ToString("N") + "/" + toolCallId;
+    private static string KeyOf(Guid messageId, string toolCallId) =>
+        messageId.ToString("N") + "/" + toolCallId;
 
     private void Remove(ToolCommandStopRegistration registration)
     {

@@ -166,7 +166,11 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         AssertEx.True(pages.All(static page => page.TotalCount == 5), "the total counts the whole set on every page.");
         AssertEx.True(pages.All(static page => page.HasStaleDocuments), "the stale document is reported from pages it is not on.");
         AssertEx.True(pages.All(static page => page.HasSearchableDocuments), "the indexed document is searchable from pages it is not on.");
-        AssertEx.True(byId.Items.Select(static document => document.DocumentId).Order().SequenceEqual(new[] { pendingIds[0], pendingIds[2] }.Order()),
+        AssertEx.True(byId.Items.Select(static document => document.DocumentId).Order().SequenceEqual(new[]
+            {
+                pendingIds[0],
+                pendingIds[2]
+            }.Order()),
             "a by-id read returns exactly the named documents.");
         AssertEx.False(byId.HasSearchableDocuments, "the flags follow the filter: two pending documents hold nothing to search.");
     }

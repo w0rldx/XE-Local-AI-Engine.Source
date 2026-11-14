@@ -352,7 +352,8 @@ public sealed partial class ModelLabPyTorchSourceService
         }
         catch (HuggingFaceDownloadException exception)
         {
-            return ConfigRefused(exception.Reason is HuggingFaceDownloadFailure.Gated or HuggingFaceDownloadFailure.Unauthorized ? ModelLabPyTorchRefusal.RepoGated : ModelLabPyTorchRefusal.RepoUnreachable,
+            return ConfigRefused(
+                exception.Reason is HuggingFaceDownloadFailure.Gated or HuggingFaceDownloadFailure.Unauthorized ? ModelLabPyTorchRefusal.RepoGated : ModelLabPyTorchRefusal.RepoUnreachable,
                 exception.Message);
         }
         finally

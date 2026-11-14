@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Globalization;
 using System.Text.Json;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -657,7 +658,7 @@ public sealed class LlamaServerLaunchProjectionTests
 
     // The chat role's two-slot pool flags, emitted after --cache-ram.
     private static string[] ChatSlotArgs(int window) =>
-        ["--kv-unified", "--kv-unified-per-slot", window.ToString(System.Globalization.CultureInfo.InvariantCulture), "--no-cache-idle-slots"];
+        ["--kv-unified", "--kv-unified-per-slot", window.ToString(CultureInfo.InvariantCulture), "--no-cache-idle-slots"];
 
     private static void AssertVector(LlamaServerLaunchSpec spec, IReadOnlyList<string> expected)
     {

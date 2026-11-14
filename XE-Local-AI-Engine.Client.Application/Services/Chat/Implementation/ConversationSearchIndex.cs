@@ -133,7 +133,8 @@ internal sealed class ConversationSearchIndex
         NodeMetrics.ChatSearchIndexedCharsOverThreshold.Add(isOver ? 1 : -1);
         if (isOver)
         {
-            _logger?.LogWarning("The conversation search index holds {IndexedChars} chars of decrypted text (about {IndexedMegabytes} MB), past its {ThresholdChars}-char warning threshold. It keeps indexing; the node's memory grows with the chat history.",
+            _logger?.LogWarning(
+                "The conversation search index holds {IndexedChars} chars of decrypted text (about {IndexedMegabytes} MB), past its {ThresholdChars}-char warning threshold. It keeps indexing; the node's memory grows with the chat history.",
                 after,
                 after * 2 / 1_000_000,
                 _warningThresholdChars);

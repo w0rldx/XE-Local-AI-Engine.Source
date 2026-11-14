@@ -80,7 +80,10 @@ internal static class AppUpdateVersions
         var runningNote = kept.Where(note => VersionOf(note) == running);
         var newer = kept.Where(note => VersionOf(note) > running)
                         .OrderByDescending(VersionOf)
-                        .Select(static note => note with { IsNewerThanRunning = true });
+                        .Select(static note => note with
+                        {
+                            IsNewerThanRunning = true
+                        });
         return [.. runningNote.Concat(newer).Take(MaxReleaseNotes)];
     }
 
@@ -91,11 +94,20 @@ internal static class AppUpdateVersions
     {
         if (markdown.Length <= MaxNotesLength)
         {
-            return new AppReleaseNote { Version = version, NotesMarkdown = markdown };
+            return new AppReleaseNote
+            {
+                Version = version,
+                NotesMarkdown = markdown
+            };
         }
 
         // Never cut between the two halves of a surrogate pair.
         var length = char.IsHighSurrogate(markdown[MaxNotesLength - 1]) ? MaxNotesLength - 1 : MaxNotesLength;
-        return new AppReleaseNote { Version = version, NotesMarkdown = markdown[..length], IsTruncated = true };
+        return new AppReleaseNote
+        {
+            Version = version,
+            NotesMarkdown = markdown[..length],
+            IsTruncated = true
+        };
     }
 }

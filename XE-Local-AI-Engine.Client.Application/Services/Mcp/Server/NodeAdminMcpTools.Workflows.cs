@@ -20,8 +20,7 @@ public sealed partial class NodeAdminMcpTools
     // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public Task<McpWorkflowRunListResponse> ListWorkflowRunsAsync(CancellationToken cancellationToken,
         [Description("Maximum runs to return. Values are clamped to the server's bounded range.")] int? limit = null,
-        [Description("Optional run status: pending, running, waitingForApproval, cancelling, completed, failed, or cancelled.")]
-        string? status = null) =>
+        [Description("Optional run status: pending, running, waitingForApproval, cancelling, completed, failed, or cancelled.")] string? status = null) =>
         InvokeAuditedAsync("list_workflow_runs", AuditArguments(new("limit", limit), new("status", status)), async () =>
         {
             var boundedLimit = Math.Clamp(limit ?? DefaultWorkflowListLimit, 1, MaxWorkflowListLimit);
@@ -152,7 +151,7 @@ public sealed partial class NodeAdminMcpTools
     private async Task<IReadOnlyDictionary<Guid, string>> DefinitionNamesAsync(CancellationToken cancellationToken) =>
         (await _graphWorkflowStore.ListDefinitionsAsync(cancellationToken)).ToDictionary(static definition => definition.Id, static definition => definition.Name);
 
-    private static McpWorkflowRunSummary Summary(GraphWorkflowRunSummary run,IReadOnlyDictionary<Guid, string> names) =>
+    private static McpWorkflowRunSummary Summary(GraphWorkflowRunSummary run, IReadOnlyDictionary<Guid, string> names) =>
         new(run.Id.ToString("D"),
             run.DefinitionId.ToString("D"),
             names.GetValueOrDefault(run.DefinitionId),

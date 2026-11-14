@@ -261,7 +261,12 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
             AssertEx.Equal(chunkA, grounded.Sources[0].ChunkId);
         }
 
-        foreach (var name in new[] { "alpha", "bravo", "charlie" })
+        foreach (var name in new[]
+                 {
+                     "alpha",
+                     "bravo",
+                     "charlie"
+                 })
         {
             AssertEx.Equal(expected.Contains(name, StringComparer.Ordinal),
                 grounded.Message.Content.Contains($"{name} grounding needle", StringComparison.Ordinal),

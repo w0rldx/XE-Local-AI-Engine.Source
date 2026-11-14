@@ -14,7 +14,8 @@ internal sealed class RecordingCommandInterceptor : DbCommandInterceptor
 
     public IReadOnlyList<string> Queries => [.. _queries];
 
-    public void Clear() => _queries.Clear();
+    public void Clear() =>
+        _queries.Clear();
 
     public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
         CommandEventData eventData,

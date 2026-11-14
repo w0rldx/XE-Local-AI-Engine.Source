@@ -87,7 +87,8 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>(), Substitute.For<IKnowledgeIndexingNotifier>(), NullLogger<KnowledgeDocumentPurgeService>.Instance);
+            var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>(), Substitute.For<IKnowledgeIndexingNotifier>(),
+                NullLogger<KnowledgeDocumentPurgeService>.Instance);
             _ = await purge.PurgeAsync(documentId, CancellationToken.None);
         }
 

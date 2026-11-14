@@ -82,7 +82,11 @@ public sealed class GraphWorkflowSampleContractTests
 
         var research = samples["research-plan-approval.json"];
         AssertEx.Empty(research.Nodes.Values.Where(static node => node.Kind == GraphWorkflowNodeKind.DevTask), "research-plan-approval implements nothing.");
-        foreach (var graph in new[] { intake, research })
+        foreach (var graph in new[]
+                 {
+                     intake,
+                     research
+                 })
         {
             AssertEx.Contains(graph.Nodes.Values, static node => node.Config is GraphWorkflowAgentConfig { Repository: true }, "a Development sample reads its project's repository.");
 

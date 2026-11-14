@@ -18,6 +18,7 @@ internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemp
 
     /// <summary>Each running attempt's end, completed once its live stream is closed; it never faults.</summary>
     private readonly ConcurrentDictionary<Guid, Task> _attemptRuns = new();
+
     private readonly CancellationTokenSource _shutdown = new();
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IDevelopmentAttemptLiveBroker _liveBroker;

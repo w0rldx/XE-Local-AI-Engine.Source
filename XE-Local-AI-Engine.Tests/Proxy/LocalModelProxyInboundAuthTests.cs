@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Proxy;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
@@ -133,7 +134,7 @@ public sealed class LocalModelProxyInboundAuthTests
             using var request = new HttpRequestMessage(new HttpMethod(method), route);
             if (method == "POST")
             {
-                request.Content = new StringContent("{\"model\":\"not-installed\",\"messages\":[],\"input\":\"hi\"}", System.Text.Encoding.UTF8, "application/json");
+                request.Content = new StringContent("{\"model\":\"not-installed\",\"messages\":[],\"input\":\"hi\"}", Encoding.UTF8, "application/json");
             }
 
             if (authorization is not null)

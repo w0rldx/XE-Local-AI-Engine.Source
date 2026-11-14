@@ -914,14 +914,14 @@ public sealed class BenchmarkRunFreezeServiceTests
             // ONE store call per freeze, however many repeats: the group is inserted atomically, so a mid-group
             // conflict cannot leave orphan runs queued behind an exception the caller reads as "nothing started".
             runStore.StartRunsAsync(Arg.Do<IReadOnlyList<BenchmarkStartRunCommand>>(batch =>
-                     {
-                         StoreCalls++;
-                         Command = batch[^1];
-                         Commands.AddRange(batch);
-                     }),
-                     Arg.Do<long>(version => ExpectedVersions.Add(version)),
-                     Arg.Any<CancellationToken>())
-                 .Returns(call => (IReadOnlyList<BenchmarkRunRecord>)[.. call.Arg<IReadOnlyList<BenchmarkStartRunCommand>>().Select(Run)]);
+                        {
+                            StoreCalls++;
+                            Command = batch[^1];
+                            Commands.AddRange(batch);
+                        }),
+                        Arg.Do<long>(version => ExpectedVersions.Add(version)),
+                        Arg.Any<CancellationToken>())
+                    .Returns(call => (IReadOnlyList<BenchmarkRunRecord>)[.. call.Arg<IReadOnlyList<BenchmarkStartRunCommand>>().Select(Run)]);
 
             var definitions = Substitute.For<IAgentDefinitionStore>();
             definitions.GetByIdAsync(AgentId, Arg.Any<CancellationToken>()).Returns(Definition(AgentId));

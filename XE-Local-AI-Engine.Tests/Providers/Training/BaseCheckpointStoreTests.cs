@@ -323,7 +323,8 @@ public sealed class BaseCheckpointStoreTests : IDisposable
         var store = Store(handler, HubDetail(BaseRepo, payloads, license: null, revision: "sha"));
 
         var missing = await AssertEx.ThrowsAsync<BaseCheckpointConfigException>(() => store.FetchConfigAsync(BaseRepo, revision: null, Path.Combine(_root, "none"), CancellationToken.None));
-        var unknown = await AssertEx.ThrowsAsync<BaseCheckpointConfigException>(() => store.FetchConfigAsync("someone/Unknown", revision: null, Path.Combine(_root, "unknown"), CancellationToken.None));
+        var unknown = await AssertEx.ThrowsAsync<BaseCheckpointConfigException>(() =>
+            store.FetchConfigAsync("someone/Unknown", revision: null, Path.Combine(_root, "unknown"), CancellationToken.None));
 
         AssertEx.Equal(BaseCheckpointConfigFailure.ConfigMissing, missing.Failure);
         AssertEx.Equal(BaseCheckpointConfigFailure.Unreachable, unknown.Failure);

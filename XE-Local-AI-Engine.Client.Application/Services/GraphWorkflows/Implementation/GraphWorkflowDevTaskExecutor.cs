@@ -119,7 +119,8 @@ internal sealed class GraphWorkflowDevTaskExecutor : IGraphWorkflowNodeExecutor
 
         if (node.Config is not GraphWorkflowDevTaskConfig config)
         {
-            return await FailAsync(store, graph, run, node, nodeRun, GraphWorkflowFailureClass.ValidationFailed, $"Node '{node.NodeKey}' is a DevTask node without DevTask settings.", cancellationToken);
+            return await FailAsync(store, graph, run, node, nodeRun, GraphWorkflowFailureClass.ValidationFailed, $"Node '{node.NodeKey}' is a DevTask node without DevTask settings.",
+                cancellationToken);
         }
 
         // Registration is the startup switch; the live switch only stops a node from STARTING work, so an attempt in flight finishes.
@@ -330,7 +331,8 @@ internal sealed class GraphWorkflowDevTaskExecutor : IGraphWorkflowNodeExecutor
 
         if (!await _runtimeSettings.GetDevelopmentEnabledAsync(cancellationToken))
         {
-            return await EndImplementAsync(store, graph, run, node, nodeRun, development, task, GraphWorkflowNodeRunStatus.Failed, GraphWorkflowFailureClass.ValidationFailed, DevelopmentOff, cancellationToken);
+            return await EndImplementAsync(store, graph, run, node, nodeRun, development, task, GraphWorkflowNodeRunStatus.Failed, GraphWorkflowFailureClass.ValidationFailed, DevelopmentOff,
+                cancellationToken);
         }
 
         return await StartNextActionAsync(store, graph, run, node, nodeRun, development, management, projectId, task, attempts.Count, cancellationToken);
@@ -372,7 +374,8 @@ internal sealed class GraphWorkflowDevTaskExecutor : IGraphWorkflowNodeExecutor
                 return 0;
             }
 
-            return await EndImplementAsync(store, graph, run, node, nodeRun, development, task, GraphWorkflowNodeRunStatus.Failed, GraphWorkflowFailureClass.ValidationFailed, Sanitized(exception), cancellationToken);
+            return await EndImplementAsync(store, graph, run, node, nodeRun, development, task, GraphWorkflowNodeRunStatus.Failed, GraphWorkflowFailureClass.ValidationFailed, Sanitized(exception),
+                cancellationToken);
         }
         catch (DevelopmentConcurrencyException)
         {
@@ -381,7 +384,8 @@ internal sealed class GraphWorkflowDevTaskExecutor : IGraphWorkflowNodeExecutor
         catch (DevelopmentWorkspaceSecurityException exception)
         {
             // An expired trust acknowledgement or a model this project may not send its repository to: the same refusal next time.
-            return await EndImplementAsync(store, graph, run, node, nodeRun, development, task, GraphWorkflowNodeRunStatus.Failed, GraphWorkflowFailureClass.ValidationFailed, Sanitized(exception), cancellationToken);
+            return await EndImplementAsync(store, graph, run, node, nodeRun, development, task, GraphWorkflowNodeRunStatus.Failed, GraphWorkflowFailureClass.ValidationFailed, Sanitized(exception),
+                cancellationToken);
         }
         catch (Exception exception) when (exception is not (OperationCanceledException or KeyNotFoundException))
         {
@@ -440,7 +444,8 @@ internal sealed class GraphWorkflowDevTaskExecutor : IGraphWorkflowNodeExecutor
 
         if ((await development.GetTaskAsync(taskId, cancellationToken)).Status == DevelopmentTaskStatus.Completed)
         {
-            return written + await SettleAsync(store, graph, run, node, nodeRun, GraphWorkflowNodeRunStatus.Succeeded, failureClass: null, reason: null, ApplyOutput(taskId, alreadyApplied: true), cancellationToken);
+            return written + await SettleAsync(store, graph, run, node, nodeRun, GraphWorkflowNodeRunStatus.Succeeded, failureClass: null, reason: null, ApplyOutput(taskId, alreadyApplied: true),
+                cancellationToken);
         }
 
         string refusal;
@@ -458,7 +463,8 @@ internal sealed class GraphWorkflowDevTaskExecutor : IGraphWorkflowNodeExecutor
                 cancellationToken);
             if (!string.Equals(result.Phase, DevelopmentOperationPhases.ApplyBlocked, StringComparison.Ordinal))
             {
-                return written + await SettleAsync(store, graph, run, node, nodeRun, GraphWorkflowNodeRunStatus.Succeeded, failureClass: null, reason: null, ApplyOutput(taskId, alreadyApplied: false), cancellationToken);
+                return written + await SettleAsync(store, graph, run, node, nodeRun, GraphWorkflowNodeRunStatus.Succeeded, failureClass: null, reason: null, ApplyOutput(taskId, alreadyApplied: false),
+                    cancellationToken);
             }
 
             refusal = "The Development apply gate declined the patch: the repository is not at the exact base the approved patch was reviewed against.";

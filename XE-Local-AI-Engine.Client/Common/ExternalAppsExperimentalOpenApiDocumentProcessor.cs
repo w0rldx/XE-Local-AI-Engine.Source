@@ -33,7 +33,10 @@ internal sealed class ExternalAppsExperimentalOpenApiDocumentProcessor : IDocume
         {
             Name = TagName,
             Description = "Experimental: frozen and outside the 1.0 API promise; it may change or be removed without notice.",
-            ExtensionData = new Dictionary<string, object?>(StringComparer.Ordinal) { [ExtensionName] = true }
+            ExtensionData = new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [ExtensionName] = true
+            }
         });
     }
 }

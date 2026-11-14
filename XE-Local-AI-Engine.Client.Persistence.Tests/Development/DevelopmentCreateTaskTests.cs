@@ -194,13 +194,12 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
 
         // One statement, copying the project and task keys from the row the store wrote so they match its storage form.
         var context = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        _ = await context.Database.ExecuteSqlRawAsync(
-            """
-            WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < {0})
-            INSERT INTO development_events (id, project_id, task_id, sequence, event_type, occurred_at_utc)
-            SELECT printf('00000000-0000-4000-8000-%012d', i), seeded.project_id, seeded.task_id, seeded.top + i, 'Synthetic', 1
-            FROM n, (SELECT project_id, task_id, MAX(sequence) AS top FROM development_events WHERE task_id IS NOT NULL) AS seeded;
-            """,
+        _ = await context.Database.ExecuteSqlRawAsync("""
+                                                      WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < {0})
+                                                      INSERT INTO development_events (id, project_id, task_id, sequence, event_type, occurred_at_utc)
+                                                      SELECT printf('00000000-0000-4000-8000-%012d', i), seeded.project_id, seeded.task_id, seeded.top + i, 'Synthetic', 1
+                                                      FROM n, (SELECT project_id, task_id, MAX(sequence) AS top FROM development_events WHERE task_id IS NOT NULL) AS seeded;
+                                                      """,
             ledgerEvents);
 
         var latest = await store.ListLatestEventsAsync(seed.ProjectId, limitPerTask: ledgerEvents * 2);

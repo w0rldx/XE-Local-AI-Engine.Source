@@ -355,19 +355,19 @@ public sealed class BenchmarkQueueHostedServiceTests
         public Harness(IBenchmarkPairwisePlanner? pairwisePlanner = null)
         {
             QueueStore.RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>())
-                 .Returns(_ => Task.FromResult<IReadOnlyList<BenchmarkRunRecord>>(Recovered));
+                      .Returns(_ => Task.FromResult<IReadOnlyList<BenchmarkRunRecord>>(Recovered));
             QueueStore.ClaimNextAsync(Arg.Any<CancellationToken>())
-                 .Returns(_ =>
-                 {
-                     ClaimCount++;
-                     if (FirstClaimBehavior is { } behavior)
-                     {
-                         FirstClaimBehavior = null;
-                         return behavior();
-                     }
+                      .Returns(_ =>
+                      {
+                          ClaimCount++;
+                          if (FirstClaimBehavior is { } behavior)
+                          {
+                              FirstClaimBehavior = null;
+                              return behavior();
+                          }
 
-                     return Task.FromResult(_queued.Count > 0 ? _queued.Dequeue() : null);
-                 });
+                          return Task.FromResult(_queued.Count > 0 ? _queued.Dequeue() : null);
+                      });
 
             var services = new ServiceCollection();
             _ = services.AddSingleton(QueueStore);

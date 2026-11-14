@@ -29,6 +29,7 @@ public sealed class LocalModelProxyForwarderTests
 
     // Fields the Messages fold must carry through unchanged, unknown ones and a number's own spelling included.
     private const string SystemFoldTail = ",\"thinking\":{\"type\":\"adaptive\"},\"context_management\":{\"edits\":[{\"type\":\"clear\",\"keep\":1.50}]},\"stream\":true}";
+
     // Bodies every route must refuse: a repeated top-level name, and a repeated name inside a message object.
     private const string DuplicateTopLevelKey = "{\"model\":\"test-model\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"input\":\"hi\",\"messages\":[]}";
     private const string DuplicateKeyInAMessage = "{\"model\":\"test-model\",\"messages\":[{\"role\":\"system\",\"content\":\"S\",\"role\":\"user\"}],\"input\":\"hi\"}";
@@ -363,8 +364,7 @@ public sealed class LocalModelProxyForwarderTests
         // Claude Code sends a system-role message after a user turn; a template that wants the system message first answers 500.
         using var upstream = new CapturingHandler(HttpStatusCode.OK, "application/json", "{}");
         var forwarder = CreateForwarder(out _, out _, upstream);
-        var context = BuildContext(
-            $"{{\"model\":\"test-model\"{system},\"messages\":[{{\"role\":\"user\",\"content\":\"hi\"}},{systemMessages}]{SystemFoldTail}", out _);
+        var context = BuildContext($"{{\"model\":\"test-model\"{system},\"messages\":[{{\"role\":\"user\",\"content\":\"hi\"}},{systemMessages}]{SystemFoldTail}", out _);
 
         await ForwardRouteAsync(forwarder, route, context);
 
@@ -414,8 +414,7 @@ public sealed class LocalModelProxyForwarderTests
                       BaseAddress = ChildEndpoint,
                       ParallelSlots = LlamaServerChatSlots.Count
                   });
-        var context = BuildContext(
-            "{\"model\":\"test-model\",\"system\":\"T\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"system\",\"content\":\"S1\"}],\"id_slot\":1}", out _);
+        var context = BuildContext("{\"model\":\"test-model\",\"system\":\"T\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"system\",\"content\":\"S1\"}],\"id_slot\":1}", out _);
 
         await ForwardRouteAsync(forwarder, "messages", context);
 
@@ -576,10 +575,14 @@ public sealed class LocalModelProxyForwarderTests
     }
 
     [Test]
-    [Arguments("messages", 400, "{\"error\":{\"code\":400,\"message\":\"[json.exception.parse_error.101] bad\",\"type\":\"invalid_request_error\"}}", "invalid_request_error", "[json.exception.parse_error.101] bad")]
-    [Arguments("messages", 400, "{\"error\":{\"code\":400,\"message\":\"request (26408 tokens) exceeds the available context size (16384 tokens), try increasing it\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":26408,\"n_ctx\":16384}}", "invalid_request_error", "prompt is too long: 26408 tokens > 16384 maximum")]
+    [Arguments("messages", 400, "{\"error\":{\"code\":400,\"message\":\"[json.exception.parse_error.101] bad\",\"type\":\"invalid_request_error\"}}", "invalid_request_error",
+        "[json.exception.parse_error.101] bad")]
+    [Arguments("messages", 400,
+        "{\"error\":{\"code\":400,\"message\":\"request (26408 tokens) exceeds the available context size (16384 tokens), try increasing it\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":26408,\"n_ctx\":16384}}",
+        "invalid_request_error", "prompt is too long: 26408 tokens > 16384 maximum")]
     [Arguments("messages", 400, "{\"error\":{\"message\":\"too big\",\"type\":\"exceed_context_size_error\"}}", "invalid_request_error", "prompt is too long: too big")]
-    [Arguments("messages/count_tokens", 400, "{\"error\":{\"code\":400,\"message\":\"request (9 tokens) exceeds\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":9,\"n_ctx\":8}}", "invalid_request_error", "prompt is too long: 9 tokens > 8 maximum")]
+    [Arguments("messages/count_tokens", 400, "{\"error\":{\"code\":400,\"message\":\"request (9 tokens) exceeds\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":9,\"n_ctx\":8}}",
+        "invalid_request_error", "prompt is too long: 9 tokens > 8 maximum")]
     [Arguments("messages", 500, "{\"error\":{\"code\":500,\"message\":\"boom\",\"type\":\"server_error\"}}", "api_error", "boom")]
     [Arguments("messages", 503, "{\"error\":{\"code\":503,\"message\":\"Loading model\",\"type\":\"unavailable_error\"}}", "overloaded_error", "Loading model")]
     [Arguments("messages", 404, "{\"error\":\"File Not Found\"}", "not_found_error", "File Not Found")]
@@ -655,16 +658,17 @@ public sealed class LocalModelProxyForwarderTests
         AssertEx.False(context.RequestAborted.IsCancellationRequested, "An event stream is ended deliberately, not aborted.");
     }
 
-    private static Task ForwardRouteAsync(LocalModelProxyForwarder forwarder, string route, HttpContext context) => route switch
-    {
-        "chat/completions" => forwarder.ForwardChatCompletionsAsync(context),
-        "embeddings" => forwarder.ForwardEmbeddingsAsync(context),
-        "messages" => forwarder.ForwardMessagesAsync(context),
-        "messages/count_tokens" => forwarder.ForwardMessagesCountTokensAsync(context),
-        "responses" => forwarder.ForwardResponsesAsync(context),
-        "responses/input_tokens" => forwarder.ForwardResponsesInputTokensAsync(context),
-        _ => throw new ArgumentOutOfRangeException(nameof(route), route, "No forwarder entry point for this route.")
-    };
+    private static Task ForwardRouteAsync(LocalModelProxyForwarder forwarder, string route, HttpContext context) =>
+        route switch
+        {
+            "chat/completions" => forwarder.ForwardChatCompletionsAsync(context),
+            "embeddings" => forwarder.ForwardEmbeddingsAsync(context),
+            "messages" => forwarder.ForwardMessagesAsync(context),
+            "messages/count_tokens" => forwarder.ForwardMessagesCountTokensAsync(context),
+            "responses" => forwarder.ForwardResponsesAsync(context),
+            "responses/input_tokens" => forwarder.ForwardResponsesInputTokensAsync(context),
+            _ => throw new ArgumentOutOfRangeException(nameof(route), route, "No forwarder entry point for this route.")
+        };
 
     /// <summary>Drives one route into a failure the proxy answers itself, and parses what it wrote.</summary>
     private static async Task<FailureResult> RunFailureAsync(string route, string failure)

@@ -109,7 +109,12 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         }, CancellationToken.None);
         await WaitForPhaseAsync(coordinator, ticket.ModelName, GgufDownloadPhase.Failed);
 
-        foreach (var row in new[] { coordinator.GetStatus(ticket.ModelName), coordinator.GetStatus(ticket.OperationId), coordinator.ListStatuses().Single() }
+        foreach (var row in new[]
+                     {
+                         coordinator.GetStatus(ticket.ModelName),
+                         coordinator.GetStatus(ticket.OperationId),
+                         coordinator.ListStatuses().Single()
+                     }
                      .Select(static row => AssertEx.NotNull(row)))
         {
             AssertEx.Equal("model-Q4_K_M.gguf", row.FileName);

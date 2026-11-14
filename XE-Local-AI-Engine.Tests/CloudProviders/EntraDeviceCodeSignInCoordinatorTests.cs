@@ -23,8 +23,7 @@ public sealed class EntraDeviceCodeSignInCoordinatorTests
     public async Task StartAsync_WhenSupersededBeforeTheDeviceCodeArrives_FirstCallEndsCancelled()
     {
         var firstAuthenticating = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var coordinator = CreateCoordinator(
-            (_, cancellationToken) =>
+        using var coordinator = CreateCoordinator((_, cancellationToken) =>
             {
                 firstAuthenticating.TrySetResult();
                 return PendingUntilCancelledAsync(cancellationToken);
@@ -65,8 +64,7 @@ public sealed class EntraDeviceCodeSignInCoordinatorTests
     public async Task StartAsync_WhenPersistenceIsUnavailableBeforeTheDeviceCode_RetriesWithoutPersistence()
     {
         DeviceCodeCredentialOptions? retryOptions = null;
-        using var coordinator = CreateCoordinator(
-            (_, _) => Task.FromException<AuthenticationRecord>(new CredentialUnavailableException("no secret service")),
+        using var coordinator = CreateCoordinator((_, _) => Task.FromException<AuthenticationRecord>(new CredentialUnavailableException("no secret service")),
             async (options, cancellationToken) =>
             {
                 retryOptions = options;

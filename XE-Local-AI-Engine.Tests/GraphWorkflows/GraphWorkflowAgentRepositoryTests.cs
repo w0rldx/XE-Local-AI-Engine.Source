@@ -396,10 +396,12 @@ public sealed class GraphWorkflowRepositoryHostFixture : IAsyncInitializer, IAsy
                 yield break;
             }
 
-            yield return new ChatResponseUpdate(ChatRole.Assistant, [new FunctionCallContent("call-read", "read_file", new Dictionary<string, object?>
-            {
-                ["path"] = "notes.txt"
-            })])
+            yield return new ChatResponseUpdate(ChatRole.Assistant, [
+                new FunctionCallContent("call-read", "read_file", new Dictionary<string, object?>
+                {
+                    ["path"] = "notes.txt"
+                })
+            ])
             {
                 FinishReason = ChatFinishReason.ToolCalls
             };

@@ -134,7 +134,11 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
             if (state.PendingCancels.TryConsume(request.ExecutionId, _timeProvider))
             {
                 // Stopped before it started, so it printed nothing.
-                return BuildResult(request, scripted with { StandardOutput = string.Empty, StandardError = string.Empty }, completed: false, startedAt);
+                return BuildResult(request, scripted with
+                {
+                    StandardOutput = string.Empty,
+                    StandardError = string.Empty
+                }, completed: false, startedAt);
             }
 
             if (scripted.Blocks)

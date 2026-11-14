@@ -724,8 +724,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
         var baseAddress = existing.Endpoint.BaseAddress;
         var responsive = await ProcessLivenessProbe.CheckResponsiveWithinAsync(token => _healthProbe.CheckResponsiveAsync(baseAddress, token),
-                                                                               _options.ReuseLivenessProbeTimeout,
-                                                                               ct)
+                                                       _options.ReuseLivenessProbeTimeout,
+                                                       ct)
                                                    .ConfigureAwait(false);
         if (responsive)
         {
@@ -1277,18 +1277,22 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         }
 
         /// <summary>Refreshes the idle clock only; unlike <see cref="MarkUsed" /> it never touches the transient mark.</summary>
-        public void StampLastUsed(DateTimeOffset now) => _liveness.MarkUsed(now);
+        public void StampLastUsed(DateTimeOffset now) =>
+            _liveness.MarkUsed(now);
 
         public void ClearTransient()
         {
             Volatile.Write(ref _transient, value: 0);
         }
 
-        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval) => _liveness.TryClaimLivenessProbe(now, interval);
+        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval) =>
+            _liveness.TryClaimLivenessProbe(now, interval);
 
-        public void ResetLivenessFailures() => _liveness.ResetLivenessFailures();
+        public void ResetLivenessFailures() =>
+            _liveness.ResetLivenessFailures();
 
-        public int RecordLivenessFailure() => _liveness.RecordLivenessFailure();
+        public int RecordLivenessFailure() =>
+            _liveness.RecordLivenessFailure();
 
         /// <summary>Reserves this process for a profiling benchmark, exempting it from idle eviction.</summary>
         public void Pin()

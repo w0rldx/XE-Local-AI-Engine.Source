@@ -124,7 +124,8 @@ internal sealed class NodeChatReadModel
                             ? null
                             : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 20, token),
                         conversationId),
-                    SamplingOptions = DeserializeSamplingOptions(await conversationReader.IsDBNullAsync(ordinal: 21, token) ? null : conversationReader.GetString(21), dbContext.GetService<ILoggerFactory>(), conversationId)
+                    SamplingOptions = DeserializeSamplingOptions(await conversationReader.IsDBNullAsync(ordinal: 21, token) ? null : conversationReader.GetString(21),
+                        dbContext.GetService<ILoggerFactory>(), conversationId)
                 };
 
                 return dto;

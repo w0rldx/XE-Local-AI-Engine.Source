@@ -159,12 +159,9 @@ public sealed record NodeChatMessagePart(
     string? Args = null,
     string? Result = null,
     bool? RequiresApproval = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<NodeChatToolOutputLine>? OutputTail = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    int? OutputSkippedLines = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? LastCommandLabel = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<NodeChatToolOutputLine>? OutputTail = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? OutputSkippedLines = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LastCommandLabel = null);
 
 /// <summary>One redacted line of a tool's sandbox command output, live on the stream and persisted in a tool part's tail.</summary>
 public sealed class NodeChatToolOutputLine

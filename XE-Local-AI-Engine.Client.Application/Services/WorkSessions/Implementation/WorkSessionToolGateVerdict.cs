@@ -18,6 +18,5 @@ internal readonly record struct WorkSessionToolGateVerdict(
     bool IsAllowListed)
 {
     /// <summary>How a refusal names the model, which has to name the thing the operator would go and change.</summary>
-    public string Subject =>
-        $"'{AgentName}' runs on '{EffectiveModel}'";
+    public string Subject => $"'{AgentName}' runs on '{EffectiveModel}'";
 }

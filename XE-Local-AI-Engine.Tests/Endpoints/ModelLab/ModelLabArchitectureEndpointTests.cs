@@ -111,7 +111,8 @@ public sealed class ModelLabArchitectureEndpointTests
         AssertEx.Equal(expected: 1, json.RootElement.GetProperty("descriptorVersion").GetInt32());
     }
 
-    private static string Route(string encodedModelName) => $"/api/local/v1/model-lab/architecture/{encodedModelName}";
+    private static string Route(string encodedModelName) =>
+        $"/api/local/v1/model-lab/architecture/{encodedModelName}";
 
     private static TestServerWebAppFactory CreateFactory(string registeredPath)
     {

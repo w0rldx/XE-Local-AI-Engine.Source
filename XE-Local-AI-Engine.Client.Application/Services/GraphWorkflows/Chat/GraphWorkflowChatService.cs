@@ -469,7 +469,7 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         }
     }
 
-    private static string? ParkedInputKey(GraphWorkflowRunSummary run,IReadOnlyList<GraphWorkflowNodeRunSnapshot> nodeRuns) =>
+    private static string? ParkedInputKey(GraphWorkflowRunSummary run, IReadOnlyList<GraphWorkflowNodeRunSnapshot> nodeRuns) =>
         run.Status != GraphWorkflowRunStatus.WaitingForApproval
         || nodeRuns.Any(static nodeRun => nodeRun.Status is GraphWorkflowNodeRunStatus.Queued or GraphWorkflowNodeRunStatus.Running)
             ? null

@@ -160,16 +160,31 @@ public sealed class ConversationSearchTests : IDisposable
         var conversation = await CreateChatAsync(service, "oldtitle", createdAtUtc: 10);
         var userMessage = await PersistUserMessageAsync(service, conversation, "lifecyclemarker text", createdAtUtc: 11);
 
-        await service.RenameConversationAsync(new NodeChatRenameConversationRequest { ConversationId = conversation, Title = "newtitle", UpdatedAtUtc = 12 });
+        await service.RenameConversationAsync(new NodeChatRenameConversationRequest
+        {
+            ConversationId = conversation,
+            Title = "newtitle",
+            UpdatedAtUtc = 12
+        });
         AssertEx.Empty((await SearchAsync(service, "oldtitle")).Items);
         AssertEx.Equal(Expected(conversation), Found(await SearchAsync(service, "newtitle")));
 
-        await service.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest { ConversationId = conversation, Archived = true, UpdatedAtUtc = 13 });
+        await service.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest
+        {
+            ConversationId = conversation,
+            Archived = true,
+            UpdatedAtUtc = 13
+        });
         AssertEx.Empty((await SearchAsync(service, "lifecyclemarker")).Items, "An archived chat is hidden unless archived ones are included, as in the list.");
         var archived = await SearchAsync(service, "lifecyclemarker", includeArchived: true);
         AssertEx.Equal(Expected(conversation), Found(archived));
         AssertEx.True(archived.Items[0].Archived);
-        await service.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest { ConversationId = conversation, Archived = false, UpdatedAtUtc = 14 });
+        await service.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest
+        {
+            ConversationId = conversation,
+            Archived = false,
+            UpdatedAtUtc = 14
+        });
         AssertEx.Equal(Expected(conversation), Found(await SearchAsync(service, "lifecyclemarker")));
 
         var branch = await service.BranchConversationAsync(new NodeChatBranchConversationRequest
@@ -181,7 +196,11 @@ public sealed class ConversationSearchTests : IDisposable
         AssertEx.Contains(Found(await SearchAsync(service, "lifecyclemarker")), branch.BranchedConversationId.ToString(), StringComparison.Ordinal,
             "A branch copies the messages into a new conversation, which must be searchable at once.");
 
-        await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = conversation, DeletedAtUtc = 16 });
+        await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest
+        {
+            ConversationId = conversation,
+            DeletedAtUtc = 16
+        });
         AssertEx.Equal(Expected(branch.BranchedConversationId), Found(await SearchAsync(service, "lifecyclemarker", includeArchived: true)),
             "A deleted conversation must leave the index even though its rows remain until purge.");
 
@@ -367,9 +386,23 @@ public sealed class ConversationSearchTests : IDisposable
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
             // A title too short to hold a nonce and tag, and a content envelope whose tag no longer authenticates.
-            _ = await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET title = {0} WHERE conversation_id = {1};", [new byte[] { 1, 2 }, broken]);
+            _ = await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET title = {0} WHERE conversation_id = {1};", [
+                new byte[]
+                {
+                    1,
+                    2
+                },
+                broken
+            ]);
             _ = await dbContext.Database.ExecuteSqlRawAsync("UPDATE messages SET content = {0} WHERE message_id = {1};",
-                [new byte[] { 0xFE, 0x01 }.Concat(new byte[40]).ToArray(), tampered.MessageId]);
+            [
+                new byte[]
+                {
+                    0xFE,
+                    0x01
+                }.Concat(new byte[40]).ToArray(),
+                tampered.MessageId
+            ]);
         }
 
         // A restarted node meets the damaged rows in its backfill.
@@ -393,7 +426,11 @@ public sealed class ConversationSearchTests : IDisposable
         await PersistUserMessageAsync(service, conversation, "eagermarker", createdAtUtc: 11);
         AssertEx.Equal(Expected(conversation), Found(await SearchAsync(service, "eagermarker")));
 
-        await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = conversation, DeletedAtUtc = 12 });
+        await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest
+        {
+            ConversationId = conversation,
+            DeletedAtUtc = 12
+        });
 
         AssertEx.False(index.Contains(conversation), "A deleted chat's decrypted text must leave memory when the delete commits.");
     }

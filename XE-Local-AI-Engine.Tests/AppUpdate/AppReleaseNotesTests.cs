@@ -122,8 +122,15 @@ public sealed class AppReleaseNotesTests
             CurrentVersion = "1.0.0",
             ReleaseNotes =
             [
-                Note("1.0.0") with { NotesMarkdown = "## 1.0.0", IsTruncated = true },
-                Note("1.0.1") with { IsNewerThanRunning = true }
+                Note("1.0.0") with
+                {
+                    NotesMarkdown = "## 1.0.0",
+                    IsTruncated = true
+                },
+                Note("1.0.1") with
+                {
+                    IsNewerThanRunning = true
+                }
             ]
         };
 

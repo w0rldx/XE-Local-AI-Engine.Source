@@ -376,7 +376,15 @@ public sealed class ModelLabPyTorchSourceServiceTests
             {
                 TransformersVersion = FakeRuntime.TransformersVersion,
                 TorchVersion = runtime.TorchVersion,
-                Files = [.. fixture.Files.Select(file => file.File == ModelingFile ? file with { Sha256 = Sha256(FakeRuntime.ModelingSource) } : file)]
+                Files =
+                [
+                    .. fixture.Files.Select(file => file.File == ModelingFile
+                        ? file with
+                        {
+                            Sha256 = Sha256(FakeRuntime.ModelingSource)
+                        }
+                        : file)
+                ]
             }, JsonSerializerOptions.Web)
         };
         await using var lab = await Lab.StartAsync(runtime, script, Qwen35TensorFixture.Qwen35_27BLike());

@@ -222,9 +222,9 @@ public sealed class WhisperModelDownloadCoordinatorTests
         fixture.Coordinator.Start("base");
         await store.FirstCallReached.Task;
         _ = fixture.Publisher.Received(1)
-                     .PublishModelDownloadAsync(Arg.Is<WhisperModelDownloadStatus>(static status =>
-                             status.ModelId == "base" && status.Phase == WhisperModelDownloadPhase.Running && status.CompletedBytes == null),
-                         Arg.Any<CancellationToken>());
+                   .PublishModelDownloadAsync(Arg.Is<WhisperModelDownloadStatus>(static status =>
+                           status.ModelId == "base" && status.Phase == WhisperModelDownloadPhase.Running && status.CompletedBytes == null),
+                       Arg.Any<CancellationToken>());
 
         store.Gate.SetResult();
         await AssertEx.EventuallyAsync(() => fixture.Publisher.ReceivedCalls()

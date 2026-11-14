@@ -156,7 +156,8 @@ internal static class NodeChatPersistenceSql
             PlainSystemPrompt = dbContext.DecryptConversationPlainSystemPrompt(
                 await reader.IsDBNullAsync(ordinal: 19, cancellationToken) ? null : await reader.GetFieldValueAsync<byte[]>(ordinal: 19, cancellationToken),
                 conversationId),
-            SamplingOptions = DeserializeSamplingOptions(await reader.IsDBNullAsync(ordinal: 20, cancellationToken) ? null : reader.GetString(20), dbContext.GetService<ILoggerFactory>(), conversationId)
+            SamplingOptions = DeserializeSamplingOptions(await reader.IsDBNullAsync(ordinal: 20, cancellationToken) ? null : reader.GetString(20), dbContext.GetService<ILoggerFactory>(),
+                conversationId)
         };
     }
 

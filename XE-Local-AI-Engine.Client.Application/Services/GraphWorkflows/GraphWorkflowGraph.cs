@@ -94,7 +94,8 @@ internal sealed class GraphWorkflowGraph
     internal static readonly IReadOnlyDictionary<GraphWorkflowNodeKind, string[]> ConfigMembers = new Dictionary<GraphWorkflowNodeKind, string[]>
     {
         [GraphWorkflowNodeKind.Start] = ["inputSchema", "defaultInput", "aliases"],
-        [GraphWorkflowNodeKind.Agent] = ["agentDefinitionId", "instructions", "model", "reasoningEffort", "responseJsonSchema", "includeUpstreamOutputs", "publishToChat", "includeAttachments", "repository"],
+        [GraphWorkflowNodeKind.Agent] =
+            ["agentDefinitionId", "instructions", "model", "reasoningEffort", "responseJsonSchema", "includeUpstreamOutputs", "publishToChat", "includeAttachments", "repository"],
         [GraphWorkflowNodeKind.LlmCall] = ["model", "systemPrompt", "prompt", "inputBindings", "reasoningEffort", "responseJsonSchema", "samplingOptions", "publishToChat", "includeAttachments"],
         [GraphWorkflowNodeKind.Tool] = ["toolName", "arguments", "argumentBindings", "allowedUrls"],
         [GraphWorkflowNodeKind.Condition] = ["path"],

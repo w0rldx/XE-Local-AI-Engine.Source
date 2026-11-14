@@ -65,7 +65,12 @@ public sealed class DevelopmentCommandLiveOutputTests : IDisposable
         var output = updates.Single(update => update.Kind == DevelopmentAttemptLiveUpdateKind.CommandOutput);
         var completed = updates.Last(update => update.Kind == DevelopmentAttemptLiveUpdateKind.Command);
         AssertEx.True(updates.IndexOf(started) < updates.IndexOf(output) && updates.IndexOf(output) < updates.IndexOf(completed));
-        foreach (var update in new[] { started, output, completed })
+        foreach (var update in new[]
+                 {
+                     started,
+                     output,
+                     completed
+                 })
         {
             AssertEx.Equal(DevelopmentCommandIds.GitStatus, update.CurrentCommandId);
             AssertEx.Equal(executionId, update.CurrentCommandExecutionId);

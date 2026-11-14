@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Endpoints.Knowledge;
 
+using System.Data;
 using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
@@ -102,7 +103,11 @@ public sealed class ListKnowledgeDocumentsEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         var listed = body.GetProperty("items").EnumerateArray().Select(static item => item.GetProperty("documentId").GetGuid()).Order().ToArray();
-        AssertEx.True(listed.SequenceEqual(new[] { documentIds[0], documentIds[2] }.Order()),
+        AssertEx.True(listed.SequenceEqual(new[]
+            {
+                documentIds[0],
+                documentIds[2]
+            }.Order()),
             $"both repeated ids bind and nothing else comes back; listed: {string.Join(", ", listed)}.");
         AssertEx.Equal(expected: 2, body.GetProperty("totalCount").GetInt32());
     }
@@ -110,7 +115,7 @@ public sealed class ListKnowledgeDocumentsEndpointTests
     private static async Task SeedDocumentAsync(NodeChatDbContext context, Guid documentId)
     {
         var connection = context.Database.GetDbConnection();
-        if (connection.State != System.Data.ConnectionState.Open)
+        if (connection.State != ConnectionState.Open)
         {
             await connection.OpenAsync();
         }

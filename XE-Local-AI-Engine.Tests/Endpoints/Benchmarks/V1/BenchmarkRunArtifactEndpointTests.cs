@@ -332,20 +332,20 @@ public sealed class BenchmarkRunArtifactEndpointTests
         {
             var hash = await Blobs.WriteAsync(RunId, ArtifactId, Content);
             Stores.Judging.GetRunArtifactsAsync(RunId, Arg.Any<CancellationToken>())
-                 .Returns([
-                     new BenchmarkRunArtifactRecord
-                     {
-                         Id = ArtifactId,
-                         RunId = RunId,
-                         JudgeAttemptId = Guid.NewGuid(),
-                         CriterionId = "tests",
-                         Kind = BenchmarkRunArtifactKinds.PythonTestsStdout,
-                         MediaType = "text/plain; charset=utf-8",
-                         ByteCount = Content.Length,
-                         ContentHash = hash,
-                         CreatedAtUtc = 30
-                     }
-                 ]);
+                  .Returns([
+                      new BenchmarkRunArtifactRecord
+                      {
+                          Id = ArtifactId,
+                          RunId = RunId,
+                          JudgeAttemptId = Guid.NewGuid(),
+                          CriterionId = "tests",
+                          Kind = BenchmarkRunArtifactKinds.PythonTestsStdout,
+                          MediaType = "text/plain; charset=utf-8",
+                          ByteCount = Content.Length,
+                          ContentHash = hash,
+                          CreatedAtUtc = 30
+                      }
+                  ]);
         }
 
         public string BlobPath(Guid runId, Guid artifactId) =>

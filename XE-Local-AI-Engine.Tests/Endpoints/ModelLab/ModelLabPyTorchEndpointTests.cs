@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.ModelLab;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>The three PyTorch source routes: operator only, and a malformed request is a 400 before the service sees it.</summary>
@@ -56,7 +57,7 @@ public sealed class ModelLabPyTorchEndpointTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, IndexRoute)
         {
-            Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json")
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
         };
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");

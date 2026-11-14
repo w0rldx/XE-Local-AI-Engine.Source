@@ -241,6 +241,7 @@ public sealed class DevelopmentAttemptLiveBroker : IDevelopmentAttemptLiveBroker
 
         /// <summary>The attempt's running, stoppable commands by sandbox execution id.</summary>
         public Dictionary<string, Func<CancellationToken, Task>> Commands { get; } = new(StringComparer.Ordinal);
+
         public bool IsCompleted { get; set; }
     }
 }

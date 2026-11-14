@@ -474,7 +474,11 @@ internal sealed class LocalModelProxyForwarder
             case null:
                 return true;
             case JsonValueKind.String:
-                target.Add(new JsonObject { ["type"] = "text", ["text"] = content.GetValue<string>() });
+                target.Add(new JsonObject
+                {
+                    ["type"] = "text",
+                    ["text"] = content.GetValue<string>()
+                });
                 return true;
             case JsonValueKind.Array:
                 foreach (var block in content.AsArray())
@@ -499,7 +503,10 @@ internal sealed class LocalModelProxyForwarder
         model = null;
         try
         {
-            if (JsonNode.Parse(body, documentOptions: new JsonDocumentOptions { AllowDuplicateProperties = false }) is JsonObject parsed
+            if (JsonNode.Parse(body, documentOptions: new JsonDocumentOptions
+                {
+                    AllowDuplicateProperties = false
+                }) is JsonObject parsed
                 && parsed["model"]?.GetValueKind() == JsonValueKind.String
                 && parsed["model"]!.GetValue<string>() is { } value
                 && !string.IsNullOrWhiteSpace(value))
@@ -563,19 +570,20 @@ internal sealed class LocalModelProxyForwarder
     }
 
     // The Messages API's error type for a status (its documented table); 503 is how the proxy says "busy, retry".
-    private static string AnthropicErrorType(int statusCode) => statusCode switch
-    {
-        StatusCodes.Status400BadRequest => "invalid_request_error",
-        StatusCodes.Status401Unauthorized => "authentication_error",
-        StatusCodes.Status403Forbidden => "permission_error",
-        StatusCodes.Status404NotFound => "not_found_error",
-        StatusCodes.Status413PayloadTooLarge => "request_too_large",
-        StatusCodes.Status429TooManyRequests => "rate_limit_error",
-        StatusCodes.Status503ServiceUnavailable or 529 => "overloaded_error",
-        StatusCodes.Status504GatewayTimeout => "timeout_error",
-        >= StatusCodes.Status500InternalServerError => "api_error",
-        _ => "invalid_request_error"
-    };
+    private static string AnthropicErrorType(int statusCode) =>
+        statusCode switch
+        {
+            StatusCodes.Status400BadRequest => "invalid_request_error",
+            StatusCodes.Status401Unauthorized => "authentication_error",
+            StatusCodes.Status403Forbidden => "permission_error",
+            StatusCodes.Status404NotFound => "not_found_error",
+            StatusCodes.Status413PayloadTooLarge => "request_too_large",
+            StatusCodes.Status429TooManyRequests => "rate_limit_error",
+            StatusCodes.Status503ServiceUnavailable or 529 => "overloaded_error",
+            StatusCodes.Status504GatewayTimeout => "timeout_error",
+            >= StatusCodes.Status500InternalServerError => "api_error",
+            _ => "invalid_request_error"
+        };
 
     private static Task WriteBusyAsync(HttpContext context, WireFormat format, string message, CancellationToken ct)
     {

@@ -73,7 +73,8 @@ public sealed class BenchmarkExportQueryTests
     {
         BenchmarkRunRecord[] summaries = [Run(9), Run(2), Run(7)];
         var store = Store(Project(), summaries);
-        var query = new BenchmarkExportQuery(store.Projects, store.TaskItems, store.Runs, store.Judging, store.Pairwise, Substitute.For<IBenchmarkExportFactsResolver>(), NullLogger<BenchmarkExportQuery>.Instance);
+        var query = new BenchmarkExportQuery(store.Projects, store.TaskItems, store.Runs, store.Judging, store.Pairwise, Substitute.For<IBenchmarkExportFactsResolver>(),
+            NullLogger<BenchmarkExportQuery>.Instance);
 
         var result = AssertEx.NotNull(await query.GetJsonAsync(ProjectId, CancellationToken.None));
 
@@ -109,7 +110,8 @@ public sealed class BenchmarkExportQueryTests
         var cancellation = new CancellationToken(canceled: true);
         var store = new BenchmarkStoreSubstitutes();
         store.Projects.GetProjectAsync(ProjectId, cancellation).Returns(Task.FromCanceled<BenchmarkProjectRecord?>(cancellation));
-        var query = new BenchmarkExportQuery(store.Projects, store.TaskItems, store.Runs, store.Judging, store.Pairwise, Substitute.For<IBenchmarkExportFactsResolver>(), NullLogger<BenchmarkExportQuery>.Instance);
+        var query = new BenchmarkExportQuery(store.Projects, store.TaskItems, store.Runs, store.Judging, store.Pairwise, Substitute.For<IBenchmarkExportFactsResolver>(),
+            NullLogger<BenchmarkExportQuery>.Instance);
 
         _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => query.GetJsonAsync(ProjectId, cancellation));
 

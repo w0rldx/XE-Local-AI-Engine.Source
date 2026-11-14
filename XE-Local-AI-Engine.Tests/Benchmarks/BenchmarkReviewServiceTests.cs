@@ -202,19 +202,19 @@ public sealed class BenchmarkReviewServiceTests
             var run = Run(withPolicy, judgeState, judgeRevisionId ?? RevisionId);
             Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(run);
             Stores.Judging.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
-                 .Returns(withPolicy
-                     ? new BenchmarkJudgePolicyRevisionRecord
-                     {
-                         Id = RevisionId,
-                         ProjectId = ProjectId,
-                         Revision = 1,
-                         PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(BenchmarkJudgeExecutorTests.Policy(rubric: rubric ?? Rubric)),
-                         PolicyHash = new string('a', count: 64),
-                         ReferenceExecutionKey = null,
-                         CohortGeneration = 1,
-                         CreatedAtUtc = 1
-                     }
-                     : null);
+                  .Returns(withPolicy
+                      ? new BenchmarkJudgePolicyRevisionRecord
+                      {
+                          Id = RevisionId,
+                          ProjectId = ProjectId,
+                          Revision = 1,
+                          PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(BenchmarkJudgeExecutorTests.Policy(rubric: rubric ?? Rubric)),
+                          PolicyHash = new string('a', count: 64),
+                          ReferenceExecutionKey = null,
+                          CohortGeneration = 1,
+                          CreatedAtUtc = 1
+                      }
+                      : null);
             Stores.Judging.GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).Returns(Attempt());
             Stores.Reviews.SubmitReviewAsync(Arg.Do<BenchmarkReviewCommand>(command => Submitted = command), Arg.Any<CancellationToken>()).Returns(run);
             Service = new BenchmarkReviewService(Stores.Reviews, Stores.Runs, Stores.Judging);

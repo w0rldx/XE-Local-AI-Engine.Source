@@ -174,7 +174,11 @@ public sealed class TrainingRunStoreTests : IDisposable
         AssertEx.Equal(expected: 2, byId.Count, "Only the two active runs.");
         AssertEx.Equal(TrainingRunStatus.Training, byId[runs[0].Id]);
         AssertEx.Equal(TrainingRunStatus.Queued, byId[runs[1].Id]);
-        AssertEx.Equal(expected: 30, (await store.ListAsync(new TrainingRunQuery { Page = 1, PageSize = 25 })).TotalCount);
+        AssertEx.Equal(expected: 30, (await store.ListAsync(new TrainingRunQuery
+        {
+            Page = 1,
+            PageSize = 25
+        })).TotalCount);
     }
 
     [Test]

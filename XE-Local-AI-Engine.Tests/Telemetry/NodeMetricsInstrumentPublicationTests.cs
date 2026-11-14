@@ -146,16 +146,17 @@ public sealed class NodeMetricsInstrumentPublicationTests
 
     // Captures increments/records of the node meter's instruments for the duration of a test, retaining the tag set of
     // each measurement so both value and dimension can be asserted. Filters to "XE.Node" so unrelated meters are ignored.
-    private static ConversationSearchDocument SearchDocument(string? title, string content) => new()
-    {
-        Title = title,
-        Content = content,
-        CreatedAtUtc = 0,
-        LastSeenUtc = 0,
-        Origin = NodeChatOriginValues.Local,
-        IsPinned = false,
-        Archived = false
-    };
+    private static ConversationSearchDocument SearchDocument(string? title, string content) =>
+        new()
+        {
+            Title = title,
+            Content = content,
+            CreatedAtUtc = 0,
+            LastSeenUtc = 0,
+            Origin = NodeChatOriginValues.Local,
+            IsPinned = false,
+            Archived = false
+        };
 
     private sealed class NodeMeterCapture : IDisposable
     {

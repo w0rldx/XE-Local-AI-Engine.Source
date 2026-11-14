@@ -54,7 +54,14 @@ internal static class ModelLabQwen35Architecture
     // differ: the V rows of in_proj_qkv, in_proj_z/a/b, A_log, dt_bias, the V channels of conv1d, out_proj's columns.
     private static readonly FrozenSet<string> ValueHeadReordered = new[]
     {
-        "attn_qkv.weight", "attn_gate.weight", "ssm_alpha.weight", "ssm_beta.weight", "ssm_a", "ssm_dt.bias", "ssm_conv1d.weight", "ssm_out.weight"
+        "attn_qkv.weight",
+        "attn_gate.weight",
+        "ssm_alpha.weight",
+        "ssm_beta.weight",
+        "ssm_a",
+        "ssm_dt.bias",
+        "ssm_conv1d.weight",
+        "ssm_out.weight"
     }.ToFrozenSet(StringComparer.Ordinal);
 
     // A tied checkpoint (the 0.8B) has no output.weight; lm_head.weight is the head name the converter keeps.
@@ -86,19 +93,37 @@ internal static class ModelLabQwen35Architecture
             relation = valueHeadsDiffer == true ? Reordered : null;
         }
 
-        return new HfTensor { Name = string.Create(CultureInfo.InvariantCulture, $"{LayerPrefix}{blockIndex}.{entry.Name}"), Relation = relation };
+        return new HfTensor
+        {
+            Name = string.Create(CultureInfo.InvariantCulture, $"{LayerPrefix}{blockIndex}.{entry.Name}"),
+            Relation = relation
+        };
     }
 
-    public static HfTensor? NonBlockHfName(string ggufName) => NonBlockTensors.GetValueOrDefault(ggufName);
+    public static HfTensor? NonBlockHfName(string ggufName) =>
+        NonBlockTensors.GetValueOrDefault(ggufName);
 
     /// <summary>One template per distinct block kind present, in the order linear attention, full attention, MTP.</summary>
     public static IReadOnlyList<ModelLabArchitectureTemplate> TemplatesFor(IEnumerable<string> blockKinds)
     {
         var present = blockKinds.ToHashSet(StringComparer.Ordinal);
-        return [.. new[] { LinearAttentionTemplate, FullAttentionTemplate, MtpTemplate }.Where(template => present.Contains(template.Kind))];
+        return
+        [
+            .. new[]
+            {
+                LinearAttentionTemplate,
+                FullAttentionTemplate,
+                MtpTemplate
+            }.Where(template => present.Contains(template.Kind))
+        ];
     }
 
-    private static HfTensor Hf(string name, string relation) => new() { Name = name, Relation = relation };
+    private static HfTensor Hf(string name, string relation) =>
+        new()
+        {
+            Name = name,
+            Relation = relation
+        };
 
     // graph::build_layer_attn_linear: projections, causal conv, L2-normed Q and K into the gated delta rule, gated norm.
     private static ModelLabArchitectureTemplate BuildLinearAttention()
@@ -208,9 +233,19 @@ internal static class ModelLabQwen35Architecture
     }
 
     private static void Node(List<ModelLabArchitectureTemplateNode> nodes, string id, string label, string? component) =>
-        nodes.Add(new ModelLabArchitectureTemplateNode { Id = id, Label = label, Component = component });
+        nodes.Add(new ModelLabArchitectureTemplateNode
+        {
+            Id = id,
+            Label = label,
+            Component = component
+        });
 
-    private static ModelLabArchitectureTemplateEdge E(string from, string to) => new() { From = from, To = to };
+    private static ModelLabArchitectureTemplateEdge E(string from, string to) =>
+        new()
+        {
+            From = from,
+            To = to
+        };
 
     private static ModelLabArchitectureTemplate Template(string kind, List<ModelLabArchitectureTemplateNode> nodes, List<ModelLabArchitectureTemplateEdge> edges) =>
         new()

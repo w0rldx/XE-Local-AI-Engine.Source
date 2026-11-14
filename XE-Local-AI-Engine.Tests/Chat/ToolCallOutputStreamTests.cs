@@ -32,15 +32,15 @@ public sealed class ToolCallOutputStreamTests
     {
         await using var turn = await TurnHarness.StartAsync();
         using (turn.OpenScope())
-        using (AmbientToolCall.Enter(CallId, "run_python"))
-        using (ToolCommandOutputScope.BindCurrentCall())
-        {
-            using var output = turn.StartCommand($"python {WorkspaceRoot}/job.py --password=hunter2");
-            output.Observer.OnLine(SandboxOutputSource.StandardOutput, $"\u001b[32mreading {WorkspaceRoot}/data.csv\u001b[0m");
-            output.Observer.OnLine(SandboxOutputSource.StandardError, "api_key=sk-123 rejected");
-            turn.Clock.Advance(Interval);
-            output.Complete(Result(exitCode: 3));
-        }
+            using (AmbientToolCall.Enter(CallId, "run_python"))
+                using (ToolCommandOutputScope.BindCurrentCall())
+                {
+                    using var output = turn.StartCommand($"python {WorkspaceRoot}/job.py --password=hunter2");
+                    output.Observer.OnLine(SandboxOutputSource.StandardOutput, $"\u001b[32mreading {WorkspaceRoot}/data.csv\u001b[0m");
+                    output.Observer.OnLine(SandboxOutputSource.StandardError, "api_key=sk-123 rejected");
+                    turn.Clock.Advance(Interval);
+                    output.Complete(Result(exitCode: 3));
+                }
 
         var events = await turn.DrainAsync();
 
@@ -77,12 +77,12 @@ public sealed class ToolCallOutputStreamTests
     {
         await using var turn = await TurnHarness.StartAsync();
         using (turn.OpenScope())
-        using (AmbientToolCall.Enter(CallId, "run_in_agent_home"))
-        using (ToolCommandOutputScope.BindCurrentCall())
-        {
-            using var output = turn.StartCommand("curl -H \"Authorization: Bearer abc123\" https://api.example/v1");
-            output.Complete(Result(exitCode: 0));
-        }
+            using (AmbientToolCall.Enter(CallId, "run_in_agent_home"))
+                using (ToolCommandOutputScope.BindCurrentCall())
+                {
+                    using var output = turn.StartCommand("curl -H \"Authorization: Bearer abc123\" https://api.example/v1");
+                    output.Complete(Result(exitCode: 0));
+                }
 
         var labels = (await turn.DrainAsync()).Where(static streamEvent => streamEvent.Type == ChatStreamEventTypes.ToolCallOutput)
                                               .Select(static streamEvent => streamEvent.CommandLabel)
@@ -121,21 +121,21 @@ public sealed class ToolCallOutputStreamTests
     {
         await using var turn = await TurnHarness.StartAsync();
         using (turn.OpenScope())
-        using (AmbientToolCall.Enter(CallId, "run_python"))
-        using (ToolCommandOutputScope.BindCurrentCall())
-        {
-            using var output = turn.StartCommand(label: null);
-            for (var index = 0; index < 100_000; index++)
-            {
-                output.Observer.OnLine(SandboxOutputSource.StandardOutput, string.Create(CultureInfo.InvariantCulture, $"line {index} ") + new string('x', 80));
-                if (index % 500 == 499)
+            using (AmbientToolCall.Enter(CallId, "run_python"))
+                using (ToolCommandOutputScope.BindCurrentCall())
                 {
-                    turn.Clock.Advance(Interval);
-                }
-            }
+                    using var output = turn.StartCommand(label: null);
+                    for (var index = 0; index < 100_000; index++)
+                    {
+                        output.Observer.OnLine(SandboxOutputSource.StandardOutput, string.Create(CultureInfo.InvariantCulture, $"line {index} ") + new string('x', 80));
+                        if (index % 500 == 499)
+                        {
+                            turn.Clock.Advance(Interval);
+                        }
+                    }
 
-            output.Complete(Result(exitCode: 0));
-        }
+                    output.Complete(Result(exitCode: 0));
+                }
 
         // The sink is drained only now, so everything the flood produced sat in its queue at once: still under budget.
         var events = await turn.DrainAsync();
@@ -160,17 +160,17 @@ public sealed class ToolCallOutputStreamTests
         var handle = await CreateHandleAsync(provider);
 
         using (AmbientToolCall.Enter(CallId, "run_python"))
-        using (ToolCommandOutputScope.BindCurrentCall())
-        {
-            AssertEx.Null(ToolCommandOutputScope.StartCommand(provider, handle, "exec-1", WorkspaceRoot, "ls"), "no turn scope: unobserved");
-        }
+            using (ToolCommandOutputScope.BindCurrentCall())
+            {
+                AssertEx.Null(ToolCommandOutputScope.StartCommand(provider, handle, "exec-1", WorkspaceRoot, "ls"), "no turn scope: unobserved");
+            }
 
         using (ToolCommandOutputScope.Open(Guid.NewGuid(), Guid.NewGuid(), dispatcher, new ToolCommandStopRegistry(), TimeProvider.System, NullLogger.Instance))
-        using (AmbientToolCall.Enter(string.Empty, "run_python"))
-        using (ToolCommandOutputScope.BindCurrentCall())
-        {
-            AssertEx.Null(ToolCommandOutputScope.StartCommand(provider, handle, "exec-1", WorkspaceRoot, "ls"), "an id-less call has no card to stream into");
-        }
+            using (AmbientToolCall.Enter(string.Empty, "run_python"))
+                using (ToolCommandOutputScope.BindCurrentCall())
+                {
+                    AssertEx.Null(ToolCommandOutputScope.StartCommand(provider, handle, "exec-1", WorkspaceRoot, "ls"), "an id-less call has no card to stream into");
+                }
 
         dispatcher.DidNotReceiveWithAnyArgs().ReportToolCallOutput(default!);
     }
@@ -181,18 +181,18 @@ public sealed class ToolCallOutputStreamTests
         await using var turn = await TurnHarness.StartAsync();
         using var scope = turn.OpenScope();
         using (AmbientToolCall.Enter(CallId, "run_in_agent_home"))
-        using (ToolCommandOutputScope.BindCurrentCall())
-        {
-            using (var first = turn.StartCommand("git status"))
+            using (ToolCommandOutputScope.BindCurrentCall())
             {
-                first.Observer.OnLine(SandboxOutputSource.StandardOutput, "clean");
-                first.Complete(Result(exitCode: 0));
-            }
+                using (var first = turn.StartCommand("git status"))
+                {
+                    first.Observer.OnLine(SandboxOutputSource.StandardOutput, "clean");
+                    first.Complete(Result(exitCode: 0));
+                }
 
-            using var second = turn.StartCommand("dotnet test");
-            second.Observer.OnLine(SandboxOutputSource.StandardError, "1 failed");
-            second.Complete(Result(exitCode: 1));
-        }
+                using var second = turn.StartCommand("dotnet test");
+                second.Observer.OnLine(SandboxOutputSource.StandardError, "1 failed");
+                second.Complete(Result(exitCode: 1));
+            }
 
         var completed = ToolCommandOutputScope.WithCommandTail(Lifecycle(turn.InvocationId, ToolCallLifecyclePhase.Completed));
         await turn.Dispatcher.ReportToolCallLifecycleAsync(completed);

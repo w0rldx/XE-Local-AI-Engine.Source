@@ -186,11 +186,11 @@ public sealed class DevelopmentSandboxToolchainTests : IDisposable
             AssertEx.False(toolchain.SearchPath.Split(':').Contains(baseBin), toolchain.SearchPath);
 
             var verdict = DevelopmentValidationVerdict.Evaluate(DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.PythonPytest, buildTarget: null),
-            [
-                new DevelopmentCommandEvidence(DevelopmentCommandIds.GitDiffCheck, 0, Completed: true, OutputTruncated: false, 1, string.Empty, string.Empty),
-                new DevelopmentCommandEvidence(DevelopmentCommandIds.PythonPytest, 127, Completed: true, OutputTruncated: false, 1, string.Empty, SandboxCommandResult.LaunchFailurePrefix + ".")
-            ],
-            toolchain.SkippedTrees);
+                [
+                    new DevelopmentCommandEvidence(DevelopmentCommandIds.GitDiffCheck, 0, Completed: true, OutputTruncated: false, 1, string.Empty, string.Empty),
+                    new DevelopmentCommandEvidence(DevelopmentCommandIds.PythonPytest, 127, Completed: true, OutputTruncated: false, 1, string.Empty, SandboxCommandResult.LaunchFailurePrefix + ".")
+                ],
+                toolchain.SkippedTrees);
             var detail = AssertEx.NotNull(verdict.FailureDetail);
             AssertEx.Contains(detail, "could not reach its runner behind the filesystem boundary");
             AssertEx.Contains(detail, "it lies under a mount point the sandbox owns");

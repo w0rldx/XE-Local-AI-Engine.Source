@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
+using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -40,7 +41,8 @@ public sealed class DevelopmentAttemptExecutionSupervisorTests
         var broker = new DevelopmentAttemptLiveBroker(Options.Create(new DevelopmentOptions()), TimeProvider.System);
         var store = Substitute.For<IDevelopmentStore>();
         store.GetTaskAsync(taskId, Arg.Any<CancellationToken>()).Returns(DevelopmentEndpointTests.TaskAggregate(projectId, taskId, []).Task);
-        store.ListAttemptsAsync(taskId, Arg.Any<CancellationToken>()).Returns([Attempt(Guid.NewGuid(), PersistenceDevelopmentAttemptStatus.Failed), Attempt(coderAttemptId, PersistenceDevelopmentAttemptStatus.Succeeded)]);
+        store.ListAttemptsAsync(taskId, Arg.Any<CancellationToken>())
+             .Returns([Attempt(Guid.NewGuid(), PersistenceDevelopmentAttemptStatus.Failed), Attempt(coderAttemptId, PersistenceDevelopmentAttemptStatus.Succeeded)]);
         var publisher = Substitute.For<IDevelopmentAttemptLiveEventPublisher>();
         var delivered = new List<DevelopmentAttemptLiveUpdate>();
         var terminal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -90,7 +92,7 @@ public sealed class DevelopmentAttemptExecutionSupervisorTests
         // Already committed Succeeded while the run is still held below.
         store.ListAttemptsAsync(taskId, Arg.Any<CancellationToken>()).Returns([Attempt(coderAttemptId, PersistenceDevelopmentAttemptStatus.Succeeded)]);
         var publisher = Substitute.For<IDevelopmentAttemptLiveEventPublisher>();
-        var delivered = new System.Collections.Concurrent.ConcurrentQueue<DevelopmentAttemptLiveUpdate>();
+        var delivered = new ConcurrentQueue<DevelopmentAttemptLiveUpdate>();
         var validationEnded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         publisher.PublishAsync(Arg.Do<DevelopmentAttemptLiveUpdate>(update =>
                  {

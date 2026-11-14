@@ -686,7 +686,11 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     {
         foreach (var owner in await _graphWorkflows.ListDevelopmentTaskRunsAsync([taskId], cancellationToken))
         {
-            var reference = new DevelopmentWorkflowRunReference { Engine = DevelopmentWorkflowEngine.GraphWorkflow, RunId = owner.RunId };
+            var reference = new DevelopmentWorkflowRunReference
+            {
+                Engine = DevelopmentWorkflowEngine.GraphWorkflow,
+                RunId = owner.RunId
+            };
             if (!GraphWorkflowStateMachine.IsTerminal(owner.RunStatus) && onBehalfOf != reference)
             {
                 return reference;

@@ -114,10 +114,10 @@ public sealed class ComputeSandboxLiveTests : IDisposable
         // Started inside the scopes, so the call carries them; disposing them here does not reach the running call's context.
         Task<string> run;
         using (ToolCommandOutputScope.Open(Guid.NewGuid(), messageId, dispatcher, stops, TimeProvider.System, NullLogger.Instance))
-        using (AmbientToolCall.Enter("call-live", "run_python"))
-        {
-            run = handler.ExecuteAsync(arguments);
-        }
+            using (AmbientToolCall.Enter("call-live", "run_python"))
+            {
+                run = handler.ExecuteAsync(arguments);
+            }
 
         await AssertEx.EventuallyAsync(() => lines.Contains("first line"), TimeSpan.FromSeconds(80), "an unflushed print must reach the live view while the script sleeps");
         AssertEx.False(run.IsCompleted, "the line arrived before the command completed");

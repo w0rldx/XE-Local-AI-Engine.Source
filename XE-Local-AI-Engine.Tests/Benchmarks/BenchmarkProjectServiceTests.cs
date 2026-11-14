@@ -499,7 +499,8 @@ public sealed class BenchmarkProjectServiceTests
 
         _ = missing.Stores.Projects.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(),
             Arg.Any<CancellationToken>());
-        _ = incomplete.Stores.Projects.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(),
+        _ = incomplete.Stores.Projects.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(),
+            Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -1225,51 +1226,51 @@ public sealed class BenchmarkProjectServiceTests
         {
             AgentId = Guid.NewGuid();
             Stores.Projects.CreateProjectAsync(Arg.Do<BenchmarkProjectInput>(input => CreatedInput = input),
-                     Arg.Do<BenchmarkJudgePolicyChangeInput?>(change => CreatedPolicy = change),
-                     Arg.Do<IReadOnlyList<BenchmarkTaskItemInput>?>(items => CreatedItems = items),
-                     Arg.Any<CancellationToken>())
-                 .Returns(call => Project(call.Arg<BenchmarkProjectInput>()));
+                      Arg.Do<BenchmarkJudgePolicyChangeInput?>(change => CreatedPolicy = change),
+                      Arg.Do<IReadOnlyList<BenchmarkTaskItemInput>?>(items => CreatedItems = items),
+                      Arg.Any<CancellationToken>())
+                  .Returns(call => Project(call.Arg<BenchmarkProjectInput>()));
             Stores.Projects.UpdateProjectAsync(ProjectId,
-                     Arg.Any<long>(),
-                     Arg.Any<BenchmarkProjectInput>(),
-                     Arg.Do<BenchmarkJudgePolicyChangeInput?>(change => UpdatedPolicy = change),
-                     Arg.Any<CancellationToken>())
-                 .Returns(call => Project(call.Arg<BenchmarkProjectInput>()));
+                      Arg.Any<long>(),
+                      Arg.Any<BenchmarkProjectInput>(),
+                      Arg.Do<BenchmarkJudgePolicyChangeInput?>(change => UpdatedPolicy = change),
+                      Arg.Any<CancellationToken>())
+                  .Returns(call => Project(call.Arg<BenchmarkProjectInput>()));
             Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(_ => CurrentProject());
             Stores.Runs.CountRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(runCount);
             Stores.Judging.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(_ => _currentRevision);
             Stores.Runs.GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(call => Run(call.Arg<Guid>()));
             Stores.Judging.ActivateJudgePolicyAsync(ProjectId,
-                     Arg.Any<long>(),
-                     Arg.Any<ReadOnlyMemory<byte>>(),
-                     Arg.Any<string>(),
-                     Arg.Any<BenchmarkJudgeAttemptSeed?>(),
-                     Arg.Any<CancellationToken>())
-                 .Returns(call =>
-                 {
-                     ActivatedPolicyJson = call.ArgAt<ReadOnlyMemory<byte>>(2);
-                     ActivatedHash = call.ArgAt<string>(3);
-                     ActivatedSeed = call.ArgAt<BenchmarkJudgeAttemptSeed?>(4);
-                     return new BenchmarkJudgePolicyActivation
-                     {
-                         Revision = Revision(ActivatedHash),
-                         WasCreated = true,
-                         SucceededRunIds = succeededRunIds ?? []
-                     };
-                 });
+                      Arg.Any<long>(),
+                      Arg.Any<ReadOnlyMemory<byte>>(),
+                      Arg.Any<string>(),
+                      Arg.Any<BenchmarkJudgeAttemptSeed?>(),
+                      Arg.Any<CancellationToken>())
+                  .Returns(call =>
+                  {
+                      ActivatedPolicyJson = call.ArgAt<ReadOnlyMemory<byte>>(2);
+                      ActivatedHash = call.ArgAt<string>(3);
+                      ActivatedSeed = call.ArgAt<BenchmarkJudgeAttemptSeed?>(4);
+                      return new BenchmarkJudgePolicyActivation
+                      {
+                          Revision = Revision(ActivatedHash),
+                          WasCreated = true,
+                          SucceededRunIds = succeededRunIds ?? []
+                      };
+                  });
             Stores.Judging.BeginProjectRejudgeAsync(ProjectId, Arg.Any<long>(), Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>())
-                 .Returns(call =>
-                 {
-                     RejudgeSeed = call.ArgAt<BenchmarkJudgeAttemptSeed?>(2);
-                     return new BenchmarkJudgePolicyActivation
-                     {
-                         Revision = Revision(_currentRevision?.PolicyHash),
-                         WasCreated = false,
-                         SucceededRunIds = succeededRunIds ?? []
-                     };
-                 });
+                  .Returns(call =>
+                  {
+                      RejudgeSeed = call.ArgAt<BenchmarkJudgeAttemptSeed?>(2);
+                      return new BenchmarkJudgePolicyActivation
+                      {
+                          Revision = Revision(_currentRevision?.PolicyHash),
+                          WasCreated = false,
+                          SucceededRunIds = succeededRunIds ?? []
+                      };
+                  });
             Stores.Judging.EnqueueJudgeAttemptAsync(Arg.Do<BenchmarkEnqueueJudgeAttemptCommand>(command => Enqueued.Add(command)), Arg.Any<CancellationToken>())
-                 .Returns(call => Attempt(call.Arg<BenchmarkEnqueueJudgeAttemptCommand>()));
+                  .Returns(call => Attempt(call.Arg<BenchmarkEnqueueJudgeAttemptCommand>()));
 
             var agents = Substitute.For<IAgentDefinitionStore>();
             agents.GetByIdAsync(AgentId, Arg.Any<CancellationToken>()).Returns(Definition(AgentId, agentKind));
@@ -1312,7 +1313,7 @@ public sealed class BenchmarkProjectServiceTests
                    ]);
 
             Stores.Fidelity.ListMissingFidelityModelNamesAsync(ProjectId, Arg.Any<CancellationToken>())
-                 .Returns(_ => MissingFidelityModelNames);
+                  .Returns(_ => MissingFidelityModelNames);
 
             Service = new BenchmarkProjectService(Stores.Projects,
                 Stores.TaskItems,

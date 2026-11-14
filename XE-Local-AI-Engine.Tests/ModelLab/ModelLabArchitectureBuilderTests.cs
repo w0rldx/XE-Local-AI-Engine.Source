@@ -57,7 +57,11 @@ public sealed class ModelLabArchitectureBuilderTests
     {
         var descriptor = ModelLabArchitectureBuilder.Build(ModelName, Qwen35TensorFixture.Qwen35_27BLike());
 
-        foreach (var index in new[] { 0, 3 })
+        foreach (var index in new[]
+                 {
+                     0,
+                     3
+                 })
         {
             var rows = Qwen35TensorFixture.IsFull(index) ? Qwen35TensorFixture.FullBlock : Qwen35TensorFixture.LinearBlock;
             var byName = descriptor.Blocks[index].Groups.SelectMany(static group => group.Tensors).ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
@@ -182,7 +186,10 @@ public sealed class ModelLabArchitectureBuilderTests
             Qwen35TensorFixture.Tensor("token_embd.weight", [64, 100], "Q4_K"),
             Qwen35TensorFixture.Tensor("blk.0.attn_norm.weight", [64], "F32"),
             Qwen35TensorFixture.Tensor("blk.0.attn_q.weight", [64, 64], "Q4_K"),
-            Qwen35TensorFixture.Tensor("blk.0.attn_k.weight", [64, 16], "Q4_K") with { ByteSize = null },
+            Qwen35TensorFixture.Tensor("blk.0.attn_k.weight", [64, 16], "Q4_K") with
+            {
+                ByteSize = null
+            },
             Qwen35TensorFixture.Tensor("blk.0.ffn_norm.weight", [64], "F32"),
             Qwen35TensorFixture.Tensor("blk.0.ffn_up.weight", [64, 128], "Q4_K"),
             Qwen35TensorFixture.Tensor("rope_freqs.weight", [32], "F32")

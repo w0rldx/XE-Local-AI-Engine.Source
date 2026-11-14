@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
+using System.Globalization;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.LiveOutput;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -67,7 +68,7 @@ public sealed class LiveCommandOutputTests
         // Ten 9-character lines cost 10 each; only four fit one 40-character batch.
         for (var index = 0; index < 10; index++)
         {
-            output.OnLine(SandboxOutputSource.StandardOutput, "line-" + index.ToString("D4", System.Globalization.CultureInfo.InvariantCulture));
+            output.OnLine(SandboxOutputSource.StandardOutput, "line-" + index.ToString("D4", CultureInfo.InvariantCulture));
         }
 
         clock.Advance(Interval);
@@ -81,7 +82,7 @@ public sealed class LiveCommandOutputTests
         clock.Advance(TimeSpan.FromMilliseconds(50));
         for (var index = 0; index < 4; index++)
         {
-            output.OnLine(SandboxOutputSource.StandardOutput, "fill-" + index.ToString("D4", System.Globalization.CultureInfo.InvariantCulture));
+            output.OnLine(SandboxOutputSource.StandardOutput, "fill-" + index.ToString("D4", CultureInfo.InvariantCulture));
         }
 
         clock.Advance(TimeSpan.FromMilliseconds(60));
@@ -108,7 +109,7 @@ public sealed class LiveCommandOutputTests
 
         for (var index = 0; index < 8; index++)
         {
-            output.OnLine(SandboxOutputSource.StandardOutput, "abcd" + index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            output.OnLine(SandboxOutputSource.StandardOutput, "abcd" + index.ToString(CultureInfo.InvariantCulture));
             clock.Advance(Interval);
         }
 
@@ -138,7 +139,7 @@ public sealed class LiveCommandOutputTests
         for (var index = 0; index < 100; index++)
         {
             output.OnLine(index % 2 == 0 ? SandboxOutputSource.StandardOutput : SandboxOutputSource.StandardError,
-                "t" + index.ToString("D3", System.Globalization.CultureInfo.InvariantCulture));
+                "t" + index.ToString("D3", CultureInfo.InvariantCulture));
         }
 
         var tail = output.GetTail();

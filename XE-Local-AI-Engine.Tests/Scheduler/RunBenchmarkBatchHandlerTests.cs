@@ -306,20 +306,20 @@ public sealed class RunBenchmarkBatchHandlerTests
         public Harness(TimeProvider? timeProvider = null)
         {
             ProjectStore.GetProjectAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                 .Returns(new BenchmarkProjectRecord
-                 {
-                     Id = ProjectId,
-                     Name = "Quant matrix",
-                     CoreTaskJson = ReadOnlyMemory<byte>.Empty,
-                     ContextTokens = 4096,
-                     AgentDefinitionId = Guid.NewGuid(),
-                     JudgeEnabled = false,
-                     CurrentJudgePolicyRevisionId = null,
-                     IsFrozen = false,
-                     Version = 5,
-                     CreatedAtUtc = 0,
-                     UpdatedAtUtc = 0
-                 });
+                        .Returns(new BenchmarkProjectRecord
+                        {
+                            Id = ProjectId,
+                            Name = "Quant matrix",
+                            CoreTaskJson = ReadOnlyMemory<byte>.Empty,
+                            ContextTokens = 4096,
+                            AgentDefinitionId = Guid.NewGuid(),
+                            JudgeEnabled = false,
+                            CurrentJudgePolicyRevisionId = null,
+                            IsFrozen = false,
+                            Version = 5,
+                            CreatedAtUtc = 0,
+                            UpdatedAtUtc = 0
+                        });
             SetActiveWork();
 
             Freeze.StartAsync(Arg.Any<BenchmarkRunStartRequest>(), Arg.Any<BenchmarkFreezeScope?>(), Arg.Any<CancellationToken>())
@@ -364,7 +364,7 @@ public sealed class RunBenchmarkBatchHandlerTests
         public void SetActiveWork(params (BenchmarkWorkKind Kind, int Count)[] work)
         {
             QueueStore.CountActiveWorkAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                 .Returns<IReadOnlyDictionary<BenchmarkWorkKind, int>>(work.ToDictionary(static entry => entry.Kind, static entry => entry.Count));
+                      .Returns<IReadOnlyDictionary<BenchmarkWorkKind, int>>(work.ToDictionary(static entry => entry.Kind, static entry => entry.Count));
         }
 
         public void FailModel(string modelName, Exception exception) =>

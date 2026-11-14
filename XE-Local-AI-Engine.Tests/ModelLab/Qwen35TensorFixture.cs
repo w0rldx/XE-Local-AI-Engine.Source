@@ -49,7 +49,8 @@ internal static class Qwen35TensorFixture
     public static readonly string[] NextnTensors =
         ["nextn.eh_proj.weight", "nextn.enorm.weight", "nextn.hnorm.weight", "nextn.shared_head_norm.weight"];
 
-    public static bool IsFull(int block) => (block + 1) % 4 == 0;
+    public static bool IsFull(int block) =>
+        (block + 1) % 4 == 0;
 
     // The linear-attention tensors the converter permutes when the key and value head counts differ.
     public static readonly string[] ValueHeadReordered =
@@ -120,14 +121,25 @@ internal static class Qwen35TensorFixture
     }
 
     private static IEnumerable<GgufTensorInfo> Trunk(int blocks) =>
-        new[] { NonBlock("token_embd.weight", [1024, 248_320], "Q6_K") }
+        new[]
+            {
+                NonBlock("token_embd.weight", [1024, 248_320], "Q6_K")
+            }
             .Concat(Enumerable.Range(0, blocks).SelectMany(block =>
                 (IsFull(block) ? FullBlock : LinearBlock).Select(row => Tensor($"blk.{block}.{row.GgufSuffix}", row.Shape, row.GgmlType))));
 
-    private static GgufTensorInfo NonBlock(string name, long[] shape, string ggmlType) => Tensor(name, shape, ggmlType);
+    private static GgufTensorInfo NonBlock(string name, long[] shape, string ggmlType) =>
+        Tensor(name, shape, ggmlType);
 
     private static Row R(string ggufSuffix, string hfSuffix, long[] shape, string ggmlType, string relation) =>
-        new() { GgufSuffix = ggufSuffix, HfSuffix = hfSuffix, Shape = shape, GgmlType = ggmlType, Relation = relation };
+        new()
+        {
+            GgufSuffix = ggufSuffix,
+            HfSuffix = hfSuffix,
+            Shape = shape,
+            GgmlType = ggmlType,
+            Relation = relation
+        };
 
     /// <summary>One recorded tensor: the name after <c>blk.N.</c> on both sides, the GGUF shape and type, and the value relation.</summary>
     public sealed record Row

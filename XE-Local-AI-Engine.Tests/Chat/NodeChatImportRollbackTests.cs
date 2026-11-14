@@ -73,7 +73,10 @@ public sealed class NodeChatImportRollbackTests
         AssertEx.Contains(await response.Content.ReadAsStringAsync(), FailingImportPersistence.FailureMarker.ToString());
         var failure = await failed.Task.WaitAsync(TestBudgets.Contended);
         AssertEx.Equal("2/3", $"{failure.ImportedChats}/{failure.TotalChats}", "The progress ends as failed, after the two chats written before the third failed.");
-        var remaining = (await factory.Services.GetRequiredService<INodeChatPersistenceService>().ListConversationsAsync(new NodeChatListConversationsRequest { IncludeArchived = true }))
+        var remaining = (await factory.Services.GetRequiredService<INodeChatPersistenceService>().ListConversationsAsync(new NodeChatListConversationsRequest
+                        {
+                            IncludeArchived = true
+                        }))
                         .Where(conversation => conversation.Title?.EndsWith(suffix, StringComparison.Ordinal) == true)
                         .Select(static conversation => conversation.Title)
                         .ToList();
@@ -81,12 +84,21 @@ public sealed class NodeChatImportRollbackTests
             "Every chat the import created is purged, except one whose own purge failed, which must not stop the others.");
     }
 
-    private static NodeChatExportConversation Chat(string title, string content) => new()
-    {
-        Title = title,
-        CreatedAtUtc = 10,
-        Messages = [new NodeChatExportMessage { Role = "user", Content = content, CreatedAtUtc = 11 }]
-    };
+    private static NodeChatExportConversation Chat(string title, string content) =>
+        new()
+        {
+            Title = title,
+            CreatedAtUtc = 10,
+            Messages =
+            [
+                new NodeChatExportMessage
+                {
+                    Role = "user",
+                    Content = content,
+                    CreatedAtUtc = 11
+                }
+            ]
+        };
 
     private static HttpRequestMessage Request(TestServerWebAppFactory factory, HttpMethod method, string uri)
     {

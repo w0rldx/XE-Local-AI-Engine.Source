@@ -23,7 +23,9 @@ public sealed class GraphWorkflowDevelopmentSampleTests
     private const string ClassifyFragment = "What kind of development request";
     private const string PlanFragment = "Plan the change the operator's request asks for";
     private const string AnswerFragment = "Answer the operator's question about this repository";
+
     private const string Request = "Add a CONTRIBUTING.md naming the build and test commands.";
+
     // Plain words only: the bound data is JSON, where a quote reads \", so a substring check would miss one.
     private const string PlanText = "Feature. Add CONTRIBUTING.md at the root listing the make build and make test commands.";
 

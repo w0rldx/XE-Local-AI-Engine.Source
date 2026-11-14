@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using System.Globalization;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
@@ -23,10 +24,10 @@ public sealed class NodeChatPartAccumulatorTests
                              .ToList();
         for (var index = 0; index < Calls; index++)
         {
-            var callId = "call-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var callId = "call-" + index.ToString(CultureInfo.InvariantCulture);
             acc.AppendToolRequested(callId, "run_python", "{}", requiresApproval: false, sequence: index * 2);
             acc.CompleteToolCall(callId, "run_python", "ok", isError: false, sequence: (index * 2) + 1);
-            acc.AttachCommandOutput(callId, tail, skippedLines: 0, commandLabel: "label-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            acc.AttachCommandOutput(callId, tail, skippedLines: 0, commandLabel: "label-" + index.ToString(CultureInfo.InvariantCulture));
         }
 
         var parts = acc.Snapshot();
@@ -34,7 +35,7 @@ public sealed class NodeChatPartAccumulatorTests
 
         AssertEx.True(kept.Sum(static part => part.OutputTail!.Sum(static line => line.Text.Length + 1)) <= NodeChatPartAccumulator.MaxPersistedOutputChars);
         AssertEx.Equal(NodeChatPartAccumulator.MaxPersistedOutputChars / (16 * 1024), kept.Count);
-        AssertEx.Equal("call-" + (Calls - 1).ToString(System.Globalization.CultureInfo.InvariantCulture), kept[^1].ToolCallId, "the newest tail survives");
+        AssertEx.Equal("call-" + (Calls - 1).ToString(CultureInfo.InvariantCulture), kept[^1].ToolCallId, "the newest tail survives");
         AssertEx.Null(parts[0].OutputTail, "the oldest tail is the first to go");
         AssertEx.Null(parts[0].OutputSkippedLines);
         AssertEx.Equal("label-0", parts[0].LastCommandLabel);

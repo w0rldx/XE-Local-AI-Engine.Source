@@ -324,8 +324,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
         var baseAddress = existing.Endpoint.BaseAddress;
         var responsive = await ProcessLivenessProbe.CheckResponsiveWithinAsync(token => _readinessProbe.CheckResponsiveAsync(baseAddress, token),
-                                                                               _options.ReuseLivenessProbeTimeout,
-                                                                               ct)
+                                                       _options.ReuseLivenessProbeTimeout,
+                                                       ct)
                                                    .ConfigureAwait(false);
         if (responsive)
         {
@@ -891,13 +891,17 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
         public DateTimeOffset LastUsedUtc => _liveness.LastUsedUtc;
 
-        public void MarkUsed(DateTimeOffset now) => _liveness.MarkUsed(now);
+        public void MarkUsed(DateTimeOffset now) =>
+            _liveness.MarkUsed(now);
 
-        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval) => _liveness.TryClaimLivenessProbe(now, interval);
+        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval) =>
+            _liveness.TryClaimLivenessProbe(now, interval);
 
-        public void ResetLivenessFailures() => _liveness.ResetLivenessFailures();
+        public void ResetLivenessFailures() =>
+            _liveness.ResetLivenessFailures();
 
-        public int RecordLivenessFailure() => _liveness.RecordLivenessFailure();
+        public int RecordLivenessFailure() =>
+            _liveness.RecordLivenessFailure();
 
         /// <summary>
         ///     Atomically registers an in-flight generation against this daemon, unless it is already latched for

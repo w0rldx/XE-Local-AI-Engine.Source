@@ -106,8 +106,11 @@ public sealed class ProcessSandboxOutputObserverTests
 
         // Only a stop keeps the partial output; the timeout result stays the shape it always had.
         var result = await provider.ExecuteAsync(handle,
-                                        Shell("observe-timeout", "printf 'line-1\\n'; sleep 30", observer: null) with { Timeout = TimeSpan.FromSeconds(1) })
-                                    .WaitAsync(TimeSpan.FromSeconds(20));
+                                       Shell("observe-timeout", "printf 'line-1\\n'; sleep 30", observer: null) with
+                                       {
+                                           Timeout = TimeSpan.FromSeconds(1)
+                                       })
+                                   .WaitAsync(TimeSpan.FromSeconds(20));
 
         AssertEx.False(result.Completed);
         AssertEx.Equal(expected: -1, result.ExitCode);

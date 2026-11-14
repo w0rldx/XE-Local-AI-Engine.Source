@@ -394,12 +394,21 @@ public sealed class ServerPushHubTests
         AssertEx.Equal("running:0/3 running:1/3 running:2/3 finished:3/3", observed, "A start, one push per written chat, and the end.");
     }
 
-    private static NodeChatExportConversation ImportedChat(string title) => new()
-    {
-        Title = title,
-        CreatedAtUtc = 10,
-        Messages = [new NodeChatExportMessage { Role = "user", Content = title, CreatedAtUtc = 11 }]
-    };
+    private static NodeChatExportConversation ImportedChat(string title) =>
+        new()
+        {
+            Title = title,
+            CreatedAtUtc = 10,
+            Messages =
+            [
+                new NodeChatExportMessage
+                {
+                    Role = "user",
+                    Content = title,
+                    CreatedAtUtc = 11
+                }
+            ]
+        };
 
     private HubConnection Connect(string hubPath)
     {

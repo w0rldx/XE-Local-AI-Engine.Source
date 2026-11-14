@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using System.Globalization;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -112,7 +113,7 @@ public sealed class ConversationKindTests : IDisposable
             await using var command = dbContext.Database.GetDbConnection().CreateCommand();
             command.CommandText = "SELECT content FROM messages;";
             var stored = AssertEx.NotNull(await command.ExecuteScalarAsync() as byte[], "The message content column holds a blob.");
-            AssertEx.False(stored.AsSpan().IndexOf(System.Text.Encoding.UTF8.GetBytes("disk warnings")) >= 0, "The answer must be encrypted at rest like any chat message.");
+            AssertEx.False(stored.AsSpan().IndexOf(Encoding.UTF8.GetBytes("disk warnings")) >= 0, "The answer must be encrypted at rest like any chat message.");
         }
 
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(runId), "The run detail opens the answer by id.");

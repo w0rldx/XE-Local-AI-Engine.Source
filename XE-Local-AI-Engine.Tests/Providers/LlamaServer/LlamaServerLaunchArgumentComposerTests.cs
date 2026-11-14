@@ -133,7 +133,16 @@ public sealed class LlamaServerLaunchArgumentComposerTests
     public void ManagedFlags_ReserveTheChatSlotPoolFlags()
     {
         // An operator override could split the pool in half, uncap a slot or bring back the idle-slot clear.
-        foreach (var flag in new[] { "--kv-unified", "-kvu", "--no-kv-unified", "-no-kvu", "--kv-unified-per-slot", "--cache-idle-slots", "--no-cache-idle-slots" })
+        foreach (var flag in new[]
+                 {
+                     "--kv-unified",
+                     "-kvu",
+                     "--no-kv-unified",
+                     "-no-kvu",
+                     "--kv-unified-per-slot",
+                     "--cache-idle-slots",
+                     "--no-cache-idle-slots"
+                 })
         {
             AssertEx.Contains(LlamaServerManagedFlags.All, flag);
         }

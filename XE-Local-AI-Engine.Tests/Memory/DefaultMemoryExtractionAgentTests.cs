@@ -211,7 +211,13 @@ public sealed class DefaultMemoryExtractionAgentTests
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
         var run = Run() with
         {
-            UserTurns = [new MemoryExtractionTurn { Content = new string('中', 6_000) }],
+            UserTurns =
+            [
+                new MemoryExtractionTurn
+                {
+                    Content = new string('中', 6_000)
+                }
+            ],
             AssistantResponse = new string('文', 6_000)
         };
 
@@ -232,7 +238,13 @@ public sealed class DefaultMemoryExtractionAgentTests
         // 20 turns of 1,000 characters and a 20,000-character answer: far over the budget the background slot's headroom allows.
         var run = Run(failed: true) with
         {
-            UserTurns = [.. Enumerable.Range(0, 20).Select(static index => new MemoryExtractionTurn { Content = $"turn-{index:D2}" + new string('u', 993) })],
+            UserTurns =
+            [
+                .. Enumerable.Range(0, 20).Select(static index => new MemoryExtractionTurn
+                {
+                    Content = $"turn-{index:D2}" + new string('u', 993)
+                })
+            ],
             AssistantResponse = "START" + new string('a', 19_990) + "END",
             Error = new string('e', 5_000)
         };

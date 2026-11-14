@@ -516,11 +516,11 @@ public sealed class AgentHomeGoalExecutorTests : IDisposable
         // run_command, so only this OUTER binding names the card the live output belongs to.
         AgentHomeGoalOutcome outcome;
         using (ToolCommandOutputScope.Open(Guid.NewGuid(), Guid.NewGuid(), dispatcher, new ToolCommandStopRegistry(), TimeProvider.System, NullLogger.Instance))
-        using (AmbientToolCall.Enter("outer-call", "run_in_agent_home"))
-        using (ToolCommandOutputScope.BindCurrentCall())
-        {
-            outcome = await ExecuteAsync(provider, handle, client, AllActions);
-        }
+            using (AmbientToolCall.Enter("outer-call", "run_in_agent_home"))
+                using (ToolCommandOutputScope.BindCurrentCall())
+                {
+                    outcome = await ExecuteAsync(provider, handle, client, AllActions);
+                }
 
         AssertEx.Equal(expected: 0, outcome.Commands[0].ExitCode);
 

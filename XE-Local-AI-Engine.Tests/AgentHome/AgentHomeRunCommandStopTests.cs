@@ -64,16 +64,16 @@ public sealed class AgentHomeRunCommandStopTests : IDisposable
 
         AgentHomeGoalOutcome outcome;
         using (ToolCommandOutputScope.Open(Guid.NewGuid(), messageId, Substitute.For<IWorkerEventDispatcher>(), stops, TimeProvider.System, NullLogger.Instance))
-        using (AmbientToolCall.Enter(OuterCallId, "run_in_agent_home"))
-        using (ToolCommandOutputScope.BindCurrentCall())
-        using (SpawnContext.BeginRoot(fanOutCap: 1, cloudSpawnCap: 0, Model))
-        {
-            var run = CreateExecutor(provider, client).ExecuteAsync(GoalRequest(handle));
-            await AssertEx.EventuallyAsync(() => stops.TryStopAsync(messageId, OuterCallId, CancellationToken.None),
-                TimeSpan.FromSeconds(30),
-                "the inner command registers for stop on the outer call once it starts");
-            outcome = await run.WaitAsync(TimeSpan.FromSeconds(60));
-        }
+            using (AmbientToolCall.Enter(OuterCallId, "run_in_agent_home"))
+                using (ToolCommandOutputScope.BindCurrentCall())
+                    using (SpawnContext.BeginRoot(fanOutCap: 1, cloudSpawnCap: 0, Model))
+                    {
+                        var run = CreateExecutor(provider, client).ExecuteAsync(GoalRequest(handle));
+                        await AssertEx.EventuallyAsync(() => stops.TryStopAsync(messageId, OuterCallId, CancellationToken.None),
+                            TimeSpan.FromSeconds(30),
+                            "the inner command registers for stop on the outer call once it starts");
+                        outcome = await run.WaitAsync(TimeSpan.FromSeconds(60));
+                    }
 
         AssertEx.False(outcome.Commands.Single().Completed);
         var result = AssertEx.NotNull(client.Result);
@@ -164,7 +164,10 @@ public sealed class AgentHomeRunCommandStopTests : IDisposable
                 var result = await runCommand.InvokeAsync(new AIFunctionArguments(StringComparer.Ordinal)
                     {
                         ["executable"] = "/bin/sleep",
-                        ["arguments"] = new[] { "300" }
+                        ["arguments"] = new[]
+                        {
+                            "300"
+                        }
                     },
                     cancellationToken);
                 Result = result?.ToString();
@@ -184,7 +187,8 @@ public sealed class AgentHomeRunCommandStopTests : IDisposable
             }
         }
 
-        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            null;
 
         public void Dispose()
         {

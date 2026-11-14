@@ -15,7 +15,6 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Workspace;
-using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -128,18 +127,60 @@ public sealed class GraphWorkflowDevTaskLaneTests
             schemaVersion = 1,
             nodes = new object[]
             {
-                new { key = "start", kind = "Start" },
+                new
+                {
+                    key = "start",
+                    kind = "Start"
+                },
                 new
                 {
                     key = "impl",
                     kind = "DevTask",
-                    config = new { action = "implement", requirements = written, acceptanceCriteria = new[] { written }, inputBindings = new { plan = "run.input.plan" } }
+                    config = new
+                    {
+                        action = "implement",
+                        requirements = written,
+                        acceptanceCriteria = new[]
+                        {
+                            written
+                        },
+                        inputBindings = new
+                        {
+                            plan = "run.input.plan"
+                        }
+                    }
                 },
-                new { key = "done", kind = "End", config = new { outcome = "completed" } }
+                new
+                {
+                    key = "done",
+                    kind = "End",
+                    config = new
+                    {
+                        outcome = "completed"
+                    }
+                }
             },
-            edges = new[] { new { key = "e1", from = "start", to = "impl" }, new { key = "e2", from = "impl", to = "done" } }
+            edges = new[]
+            {
+                new
+                {
+                    key = "e1",
+                    from = "start",
+                    to = "impl"
+                },
+                new
+                {
+                    key = "e2",
+                    from = "impl",
+                    to = "done"
+                }
+            }
         });
-        var runId = await harness.StartRunAsync(graph, JsonSerializer.Serialize(new { developmentProjectId = projectId, plan = written }));
+        var runId = await harness.StartRunAsync(graph, JsonSerializer.Serialize(new
+        {
+            developmentProjectId = projectId,
+            plan = written
+        }));
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId, maxTicks: 40);
 
@@ -757,7 +798,7 @@ public sealed class GraphWorkflowDevTaskLaneTests
         var implement = await harness.ReadNodeRunAsync(runId, "impl");
         await using var scope = harness.Services.CreateAsyncScope();
         AssertEx.True(await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().SetNodeRunDevelopmentTaskAsync(runId, implement.Id, taskId)
-                          is GraphWorkflowConditionalWriteResult.Written);
+            is GraphWorkflowConditionalWriteResult.Written);
         var development = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         if ((await development.GetTaskAsync(taskId)).Status != DevelopmentTaskStatus.Planned)
         {
@@ -765,7 +806,14 @@ public sealed class GraphWorkflowDevTaskLaneTests
             return runId;
         }
 
-        foreach (var target in new[] { DevelopmentTaskStatus.Ready, DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.Validation, DevelopmentTaskStatus.InReview, DevelopmentTaskStatus.AwaitingApply })
+        foreach (var target in new[]
+                 {
+                     DevelopmentTaskStatus.Ready,
+                     DevelopmentTaskStatus.InProgress,
+                     DevelopmentTaskStatus.Validation,
+                     DevelopmentTaskStatus.InReview,
+                     DevelopmentTaskStatus.AwaitingApply
+                 })
         {
             var task = await development.GetTaskAsync(taskId);
             _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
@@ -848,9 +896,12 @@ public sealed class GraphWorkflowDevTaskLaneTests
     private static async Task<IReadOnlyList<string?>> PolicyOutcomesAsync(GraphWorkflowHarness harness, Guid projectId, Guid taskId)
     {
         await using var scope = harness.Services.CreateAsyncScope();
-        return [.. (await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListEventsAsync(projectId))
-                   .Where(entry => entry.TaskId == taskId && entry.EventType == "WorkflowPolicyApplied")
-                   .Select(static entry => entry.Outcome)];
+        return
+        [
+            .. (await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListEventsAsync(projectId))
+               .Where(entry => entry.TaskId == taskId && entry.EventType == "WorkflowPolicyApplied")
+               .Select(static entry => entry.Outcome)
+        ];
     }
 
     private static async Task<IReadOnlyList<DevelopmentAttemptSnapshot>> ListAttemptsAsync(GraphWorkflowHarness harness, Guid taskId)

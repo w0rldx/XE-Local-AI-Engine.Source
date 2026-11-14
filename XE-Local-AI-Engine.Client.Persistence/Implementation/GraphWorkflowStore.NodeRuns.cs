@@ -106,15 +106,15 @@ public sealed partial class GraphWorkflowStore
         }
 
         return await (from nodeRun in _dbContext.GraphWorkflowNodeRuns.AsNoTracking()
-                          join run in _dbContext.GraphWorkflowRuns.AsNoTracking() on nodeRun.RunId equals run.Id
-                          where nodeRun.DevelopmentTaskId != null && developmentTaskIds.Contains(nodeRun.DevelopmentTaskId.Value)
-                          orderby run.CreatedAtUtc descending, run.Id descending
-                          select new GraphWorkflowDevelopmentTaskRun
-                          {
-                              DevelopmentTaskId = nodeRun.DevelopmentTaskId!.Value,
-                              RunId = run.Id,
-                              RunStatus = run.Status
-                          }).ToListAsync(cancellationToken);
+            join run in _dbContext.GraphWorkflowRuns.AsNoTracking() on nodeRun.RunId equals run.Id
+            where nodeRun.DevelopmentTaskId != null && developmentTaskIds.Contains(nodeRun.DevelopmentTaskId.Value)
+            orderby run.CreatedAtUtc descending, run.Id descending
+            select new GraphWorkflowDevelopmentTaskRun
+            {
+                DevelopmentTaskId = nodeRun.DevelopmentTaskId!.Value,
+                RunId = run.Id,
+                RunStatus = run.Status
+            }).ToListAsync(cancellationToken);
     }
 
     public Task<GraphWorkflowConditionalWriteResult> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default)

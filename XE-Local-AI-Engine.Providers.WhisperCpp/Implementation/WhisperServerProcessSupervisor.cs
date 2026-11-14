@@ -425,8 +425,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
         var baseAddress = existing.Endpoint.BaseAddress;
         var responsive = await ProcessLivenessProbe.CheckResponsiveWithinAsync(token => _readinessProbe.CheckResponsiveAsync(baseAddress, token),
-                                                                               _options.ReuseLivenessProbeTimeout,
-                                                                               ct)
+                                                       _options.ReuseLivenessProbeTimeout,
+                                                       ct)
                                                    .ConfigureAwait(false);
         if (responsive)
         {
@@ -962,13 +962,17 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             }
         }
 
-        public void MarkUsed(DateTimeOffset now) => _liveness.MarkUsed(now);
+        public void MarkUsed(DateTimeOffset now) =>
+            _liveness.MarkUsed(now);
 
-        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval) => _liveness.TryClaimLivenessProbe(now, interval);
+        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval) =>
+            _liveness.TryClaimLivenessProbe(now, interval);
 
-        public void ResetLivenessFailures() => _liveness.ResetLivenessFailures();
+        public void ResetLivenessFailures() =>
+            _liveness.ResetLivenessFailures();
 
-        public int RecordLivenessFailure() => _liveness.RecordLivenessFailure();
+        public int RecordLivenessFailure() =>
+            _liveness.RecordLivenessFailure();
 
         /// <summary>Registers an in-flight transcription unless the daemon is latched for teardown or a switch.</summary>
         public bool TryAcquireTranscription()

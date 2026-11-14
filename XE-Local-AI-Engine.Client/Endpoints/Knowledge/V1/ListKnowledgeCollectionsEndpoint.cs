@@ -30,11 +30,14 @@ public sealed class ListKnowledgeCollectionsEndpoint : EndpointWithoutRequest<Li
         var collections = await _catalogService.ListCollectionsAsync(ct);
         await Send.OkAsync(new ListKnowledgeCollectionsResponse
             {
-                Items = [.. collections.Select(static collection => new KnowledgeCollectionResponse
-                {
-                    CollectionId = collection.CollectionId,
-                    DocumentCount = collection.DocumentCount
-                })]
+                Items =
+                [
+                    .. collections.Select(static collection => new KnowledgeCollectionResponse
+                    {
+                        CollectionId = collection.CollectionId,
+                        DocumentCount = collection.DocumentCount
+                    })
+                ]
             },
             ct);
     }

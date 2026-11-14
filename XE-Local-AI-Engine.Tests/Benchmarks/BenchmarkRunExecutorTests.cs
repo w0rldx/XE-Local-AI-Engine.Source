@@ -37,18 +37,18 @@ public sealed class BenchmarkRunExecutorTests
         runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         BenchmarkRunRecord? failed = null;
         runStore.MarkPrimaryFailedAsync(run.Id,
-                 run.Version,
-                 Arg.Do<string>(message => AssertEx.Contains(message, "installed model changed")),
-                 Arg.Do<long>(sequence => AssertEx.True(sequence > 0)),
-                 Arg.Any<string?>(),
-                 Arg.Any<CancellationToken>())
-             .Returns(call => failed = run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
-                 PrimaryErrorMessage = call.ArgAt<string>(2),
-                 LastStreamSequence = call.ArgAt<long>(3),
-                 Version = run.Version + 1
-             });
+                    run.Version,
+                    Arg.Do<string>(message => AssertEx.Contains(message, "installed model changed")),
+                    Arg.Do<long>(sequence => AssertEx.True(sequence > 0)),
+                    Arg.Any<string?>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(call => failed = run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                    PrimaryErrorMessage = call.ArgAt<string>(2),
+                    LastStreamSequence = call.ArgAt<long>(3),
+                    Version = run.Version + 1
+                });
         var snapshot = Snapshot(expected);
         var capacity = new RecordingCapacityService();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -110,13 +110,13 @@ public sealed class BenchmarkRunExecutorTests
         runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? failureMessage = null;
         runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(),
-                 Arg.Any<string?>(), Arg.Any<CancellationToken>())
-             .Returns(call => run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
-                 PrimaryErrorMessage = call.ArgAt<string>(2),
-                 Version = run.Version + 1
-             });
+                    Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(call => run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                    PrimaryErrorMessage = call.ArgAt<string>(2),
+                    Version = run.Version + 1
+                });
         var capacity = new RecordingCapacityService();
         var runner = Substitute.For<IInvocationRunner>();
         await using var lease = new FakeLease(installed);
@@ -159,13 +159,13 @@ public sealed class BenchmarkRunExecutorTests
             runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
             string? failureMessage = null;
             runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(),
-                     Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                 .Returns(call => run with
-                 {
-                     PrimaryStatus = BenchmarkPrimaryStatus.Failed,
-                     PrimaryErrorMessage = call.ArgAt<string>(2),
-                     Version = run.Version + 1
-                 });
+                        Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                    .Returns(call => run with
+                    {
+                        PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                        PrimaryErrorMessage = call.ArgAt<string>(2),
+                        Version = run.Version + 1
+                    });
             await using var lease = new FakeLease(Installed("model.gguf", 'b'));
             var executor = Executor(runStore, judgeStore, Snapshot(Installed("model.gguf", 'a')), lease, new RecordingCapacityService(),
                 Substitute.For<IWorkerEventDispatcher>(), Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry());
@@ -195,12 +195,12 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
         runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
-             .Returns(call => run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
-                 LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
-                 Version = 3
-             });
+                .Returns(call => run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
+                    Version = 3
+                });
         var capacity = new RecordingCapacityService();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         RuntimePackage? assignedPackage = null;
@@ -285,12 +285,12 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
         runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
-             .Returns(call => run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
-                 LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
-                 Version = 3
-             });
+                .Returns(call => run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
+                    Version = 3
+                });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
@@ -363,12 +363,12 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
         runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
-             .Returns(call => run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
-                 LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
-                 Version = 3
-             });
+                .Returns(call => run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
+                    Version = 3
+                });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
@@ -422,12 +422,12 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
         runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
-             .Returns(call => run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
-                 LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
-                 Version = 3
-             });
+                .Returns(call => run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
+                    Version = 3
+                });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
@@ -473,12 +473,12 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
         runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
-             .Returns(call => run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
-                 LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
-                 Version = 3
-             });
+                .Returns(call => run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
+                    Version = 3
+                });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
@@ -590,12 +590,12 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
         runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
-             .Returns(call => run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
-                 LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
-                 Version = 3
-             });
+                .Returns(call => run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
+                    Version = 3
+                });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
@@ -640,16 +640,16 @@ public sealed class BenchmarkRunExecutorTests
         runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? stopReason = null;
         runStore.MarkPrimaryFailedAsync(run.Id,
-                 run.Version,
-                 Arg.Any<string>(),
-                 Arg.Any<long>(),
-                 Arg.Do<string?>(reason => stopReason = reason),
-                 Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
-                 Version = 3
-             });
+                    run.Version,
+                    Arg.Any<string>(),
+                    Arg.Any<long>(),
+                    Arg.Do<string?>(reason => stopReason = reason),
+                    Arg.Any<CancellationToken>())
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                    Version = 3
+                });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         RuntimePackage? assignedPackage = null;
         await using var assignment = new TrackingAsyncDisposable();
@@ -698,16 +698,16 @@ public sealed class BenchmarkRunExecutorTests
         string? message = null;
         var stopReasons = new List<string?>();
         runStore.MarkPrimaryFailedAsync(run.Id,
-                 run.Version,
-                 Arg.Do<string>(value => message = value),
-                 Arg.Any<long>(),
-                 Arg.Do<string?>(stopReasons.Add),
-                 Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
-                 Version = 3
-             });
+                    run.Version,
+                    Arg.Do<string>(value => message = value),
+                    Arg.Any<long>(),
+                    Arg.Do<string?>(stopReasons.Add),
+                    Arg.Any<CancellationToken>())
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                    Version = 3
+                });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         RuntimePackage? assignedPackage = null;
         await using var assignment = new TrackingAsyncDisposable();
@@ -762,11 +762,11 @@ public sealed class BenchmarkRunExecutorTests
         var runStore = Substitute.For<IBenchmarkRunStore>();
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         runStore.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
-                 Version = 3
-             });
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    Version = 3
+                });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         RuntimePackage? assignedPackage = null;
         await using var assignment = new TrackingAsyncDisposable();
@@ -819,11 +819,11 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkPrimarySuccessCommand? command = null;
         runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
-                 Version = 3
-             });
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    Version = 3
+                });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
@@ -868,16 +868,16 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         runStore.MarkPrimaryFailedAsync(run.Id,
-                 run.Version,
-                 Arg.Any<string>(),
-                 Arg.Any<long>(),
-                 Arg.Any<string?>(),
-                 Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
-                 Version = 3
-             });
+                    run.Version,
+                    Arg.Any<string>(),
+                    Arg.Any<long>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                    Version = 3
+                });
         var capacity = new SequencedCapacityService(CapacityVerdict.RejectInsufficient,
             CapacityVerdict.RejectInsufficient,
             CapacityVerdict.Allow);
@@ -922,12 +922,12 @@ public sealed class BenchmarkRunExecutorTests
         runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         BenchmarkRunRecord? cancelled = null;
         runStore.MarkPrimaryCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>())
-             .Returns(call => cancelled = run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Cancelled,
-                 LastStreamSequence = call.ArgAt<long>(2),
-                 Version = 3
-             });
+                .Returns(call => cancelled = run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Cancelled,
+                    LastStreamSequence = call.ArgAt<long>(2),
+                    Version = 3
+                });
         var capacity = new RecordingCapacityService();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
@@ -981,17 +981,17 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         runStore.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
-                 Version = 3
-             });
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    Version = 3
+                });
         runStore.MarkPrimaryCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Cancelled,
-                 Version = 3
-             });
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Cancelled,
+                    Version = 3
+                });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
@@ -1116,13 +1116,13 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         BenchmarkLaunchReceiptCommand? checkpoint = null;
         runStore.MarkPrimaryLaunchReadyAsync(run.Id, 1, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint ??= command), Arg.Any<CancellationToken>())
-             .Returns(true);
+                .Returns(true);
         runStore.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
-             .Returns(call => run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
-                 Version = 3
-             });
+                .Returns(call => run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    Version = 3
+                });
         var environmentFacts = new RecordingEnvironmentFacts();
         var capacity = new RecordingCapacityService(environmentFacts);
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -1185,14 +1185,14 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         runStore.MarkPrimaryLaunchReadyAsync(run.Id, 1, 2, Arg.Any<BenchmarkLaunchReceiptCommand>(), Arg.Any<CancellationToken>())
-             .Returns<bool>(_ => throw new BenchmarkConflictException("VersionConflict"));
+                .Returns<bool>(_ => throw new BenchmarkConflictException("VersionConflict"));
         BenchmarkPrimarySuccessCommand? succeeded = null;
         runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(command => succeeded = command), Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
-                 Version = 3
-             });
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    Version = 3
+                });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
@@ -1240,11 +1240,11 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
-                 Version = 3
-             });
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                    Version = 3
+                });
         var capacity = new RecordingCapacityService();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
@@ -1278,11 +1278,11 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
-                 Version = 3
-             });
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                    Version = 3
+                });
         var capacity = new RecordingCapacityService();
         var logger = new RecordingLogger<BenchmarkRunExecutor>();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -1335,11 +1335,11 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
-                 Version = 3
-             });
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                    Version = 3
+                });
         var capacity = new RecordingCapacityService();
         var logger = new RecordingLogger<BenchmarkRunExecutor>();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -1374,15 +1374,15 @@ public sealed class BenchmarkRunExecutorTests
         runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         BenchmarkLaunchReceiptCommand? checkpoint = null;
         runStore.MarkPrimaryLaunchReadyAsync(run.Id, 1, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint = command), Arg.Any<CancellationToken>())
-             .Returns(true);
+                .Returns(true);
         string? failure = null;
         runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failure = message), Arg.Any<long>(), Arg.Any<string?>(),
-                 Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
-                 Version = 3
-             });
+                    Arg.Any<CancellationToken>())
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                    Version = 3
+                });
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.RunExclusiveBenchmarkAsync(Arg.Any<string>(),
                       Arg.Any<ModelRole>(),
@@ -1430,12 +1430,12 @@ public sealed class BenchmarkRunExecutorTests
         var runStore = Substitute.For<IBenchmarkRunStore>();
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         runStore.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
-             .Returns(call => run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
-                 LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
-                 Version = 3
-             });
+                .Returns(call => run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
+                    Version = 3
+                });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
@@ -1480,12 +1480,12 @@ public sealed class BenchmarkRunExecutorTests
         runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         string? failure = null;
         runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failure = message), Arg.Any<long>(), Arg.Any<string?>(),
-                 Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
-                 Version = 3
-             });
+                    Arg.Any<CancellationToken>())
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                    Version = 3
+                });
         await using var lease = new FakeLease(installed);
         var supervisor = RefusingSupervisor(refusals: int.MaxValue);
         var executor = Executor(runStore, judgeStore, Snapshot(installed), lease, new RecordingCapacityService(), Substitute.For<IWorkerEventDispatcher>(),
@@ -1529,11 +1529,11 @@ public sealed class BenchmarkRunExecutorTests
         var judgeStore = Substitute.For<IBenchmarkJudgeStore>();
         runStore.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         runStore.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-             .Returns(run with
-             {
-                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
-                 Version = 3
-             });
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                    Version = 3
+                });
         var capacity = new SequencedCapacityService(CapacityVerdict.RejectInsufficient,
             CapacityVerdict.RejectInsufficient,
             CapacityVerdict.Allow);

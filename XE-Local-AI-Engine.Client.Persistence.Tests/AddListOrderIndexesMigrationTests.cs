@@ -161,5 +161,6 @@ public sealed class AddListOrderIndexesMigrationTests
         AssertEx.True(plan.Any(step => step.Contains(indexName, StringComparison.Ordinal)),
             $"The planner must drive {what} off {indexName}. Plan was: {Render(plan)}");
 
-    private static string Render(IReadOnlyList<string> plan) => string.Join(" | ", plan);
+    private static string Render(IReadOnlyList<string> plan) =>
+        string.Join(" | ", plan);
 }

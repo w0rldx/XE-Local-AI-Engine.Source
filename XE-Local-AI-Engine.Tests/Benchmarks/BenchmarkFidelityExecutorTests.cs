@@ -308,51 +308,51 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
             File.WriteAllText(Path.Combine(_withoutTool, "llama-server"), "server");
 
             _ = Stores.Fidelity.GetFidelityAttemptAsync(AttemptId, Arg.Any<CancellationToken>())
-                     .Returns(new BenchmarkFidelityAttemptRecord
-                     {
-                         Id = AttemptId,
-                         RunId = RunId,
-                         Sequence = 1,
-                         Kind = kind,
-                         Status = BenchmarkJudgeAttemptStatus.Running,
-                         PerplexityMean = null,
-                         PerplexityStdErr = null,
-                         PerplexityChunks = null,
-                         PerplexityContextTokens = null,
-                         CorpusId = null,
-                         KldMean = null,
-                         KldP99 = null,
-                         TopTokenAgreement = null,
-                         BaseModelName = null,
-                         BaseModelContentFingerprint = null,
-                         BaseLogitsDigest = null,
-                         ErrorMessage = null,
-                         EnqueuedAtUtc = 1,
-                         StartedAtUtc = null,
-                         CompletedAtUtc = null
-                     });
+                      .Returns(new BenchmarkFidelityAttemptRecord
+                      {
+                          Id = AttemptId,
+                          RunId = RunId,
+                          Sequence = 1,
+                          Kind = kind,
+                          Status = BenchmarkJudgeAttemptStatus.Running,
+                          PerplexityMean = null,
+                          PerplexityStdErr = null,
+                          PerplexityChunks = null,
+                          PerplexityContextTokens = null,
+                          CorpusId = null,
+                          KldMean = null,
+                          KldP99 = null,
+                          TopTokenAgreement = null,
+                          BaseModelName = null,
+                          BaseModelContentFingerprint = null,
+                          BaseLogitsDigest = null,
+                          ErrorMessage = null,
+                          EnqueuedAtUtc = 1,
+                          StartedAtUtc = null,
+                          CompletedAtUtc = null
+                      });
             _ = Stores.Projects.GetProjectAsync(_run.ProjectId, Arg.Any<CancellationToken>())
-                     .Returns(new BenchmarkProjectRecord
-                     {
-                         Id = _run.ProjectId,
-                         Name = "p",
-                         CoreTaskJson = new byte[]
-                         {
-                             1
-                         },
-                         ContextTokens = 4096,
-                         AgentDefinitionId = Guid.NewGuid(),
-                         JudgeEnabled = false,
-                         CurrentJudgePolicyRevisionId = null,
-                         IsFrozen = true,
-                         Version = 1,
-                         CreatedAtUtc = 1,
-                         UpdatedAtUtc = 1,
-                         FidelityEnabled = true,
-                         FidelityKldEnabled = kind == "kld",
-                         FidelityKldBaseModelName = BaseModelName,
-                         FidelityKldBaseFingerprint = BaseFingerprint
-                     });
+                      .Returns(new BenchmarkProjectRecord
+                      {
+                          Id = _run.ProjectId,
+                          Name = "p",
+                          CoreTaskJson = new byte[]
+                          {
+                              1
+                          },
+                          ContextTokens = 4096,
+                          AgentDefinitionId = Guid.NewGuid(),
+                          JudgeEnabled = false,
+                          CurrentJudgePolicyRevisionId = null,
+                          IsFrozen = true,
+                          Version = 1,
+                          CreatedAtUtc = 1,
+                          UpdatedAtUtc = 1,
+                          FidelityEnabled = true,
+                          FidelityKldEnabled = kind == "kld",
+                          FidelityKldBaseModelName = BaseModelName,
+                          FidelityKldBaseFingerprint = BaseFingerprint
+                      });
             _ = Stores.Fidelity.ListLiveFidelityDigestsAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlySet<string>>(_ => new HashSet<string>(StringComparer.Ordinal));
             _leases = new Dictionary<string, IBenchmarkInstalledModelLease>(StringComparer.Ordinal)
             {
