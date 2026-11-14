@@ -4,9 +4,12 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Text.Json;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
+using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -42,13 +45,34 @@ public sealed class NodeChatImportRollbackTests
             Conversations = [Chat($"First {suffix}", "fine"), Chat($"Second {suffix}", "fine"), Chat($"Third {suffix}", FailingImportPersistence.FailingContent)]
         };
         using var client = factory.CreateClient();
+        var importId = Guid.NewGuid();
+        await using var connection = new HubConnectionBuilder()
+                                     .WithUrl("http://localhost" + LocalApiRoutes.LocalChat.Hub, options =>
+                                     {
+                                         options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                                         options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
+                                         options.Headers.Add("Origin", "http://localhost");
+                                     })
+                                     .WithNodeJsonProtocol()
+                                     .Build();
+        var failed = new TaskCompletionSource<ImportProgressHubEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = connection.On<ImportProgressHubEvent>(LocalChatHubEvents.ImportProgress, evt =>
+        {
+            if (evt.ImportId == importId && evt.State == ImportProgressStates.Failed)
+            {
+                failed.TrySetResult(evt);
+            }
+        });
+        await connection.StartAndAwaitRegistrationAsync();
 
-        using var request = Request(factory, HttpMethod.Post, "/api/local/v1/chat/import");
+        using var request = Request(factory, HttpMethod.Post, $"/api/local/v1/chat/import?importId={importId}");
         request.Content = JsonContent.Create(document, options: JsonOptions);
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, "The insert's own error must answer the request, not a purge failure (a 500).");
         AssertEx.Contains(await response.Content.ReadAsStringAsync(), FailingImportPersistence.FailureMarker.ToString());
+        var failure = await failed.Task.WaitAsync(TestBudgets.Contended);
+        AssertEx.Equal("2/3", $"{failure.ImportedChats}/{failure.TotalChats}", "The progress ends as failed, after the two chats written before the third failed.");
         var remaining = (await factory.Services.GetRequiredService<INodeChatPersistenceService>().ListConversationsAsync(new NodeChatListConversationsRequest { IncludeArchived = true }))
                         .Where(conversation => conversation.Title?.EndsWith(suffix, StringComparison.Ordinal) == true)
                         .Select(static conversation => conversation.Title)

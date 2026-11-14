@@ -123,7 +123,13 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
         }
         catch (OperationCanceledException) when (generationToken.IsCancellationRequested)
         {
+            // Committed, then published like every other outcome: CancelAsync returns once the cancel is signalled, so without
+            // this push a client re-reading right away still sees Running and nothing tells it later. It names the work status.
             _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Cancelled, errorMessage: null, CancellationToken.None);
+            _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload
+            {
+                State = nameof(DatasetGenerationWorkStatus.Cancelled)
+            });
 
             // An operator cancel is an ordinary outcome, already recorded: rethrowing it would make the queue log a
             // "queue failed" error for work that ended exactly as asked. Only a host stop propagates — the loop's own signal.
@@ -136,13 +142,21 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
         {
             _logger.LogError(exception, "Dataset generation failed for dataset {DatasetId}.", work.DatasetId);
             var reason = exception is TrainingStoreException ? exception.Message : "Dataset generation failed.";
-            _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State,
-                new DatasetGenerationPayload
-                {
-                    State = nameof(TrainingDatasetStatus.Failed),
-                    Reason = reason
-                });
-            _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Failed, reason, CancellationToken.None);
+            try
+            {
+                // Committed first: the feed re-reads the list on this event and must not still read Running.
+                _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Failed, reason, CancellationToken.None);
+            }
+            finally
+            {
+                // Appended even when the commit throws, so the failure's log line is never lost.
+                _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State,
+                    new DatasetGenerationPayload
+                    {
+                        State = nameof(TrainingDatasetStatus.Failed),
+                        Reason = reason
+                    });
+            }
         }
         finally
         {

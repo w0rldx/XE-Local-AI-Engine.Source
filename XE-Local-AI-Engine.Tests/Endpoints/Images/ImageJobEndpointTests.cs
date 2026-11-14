@@ -692,7 +692,7 @@ public sealed class ImageJobEndpointTests
         public Task<ImageJobView> GetAsync(Guid jobId, CancellationToken cancellationToken) =>
             Task.FromResult(_jobs.TryGetValue(jobId, out var view) ? view : throw JobNotFound());
 
-        public Task<ImageJobPage> ListAsync(int limit, int offset, CancellationToken cancellationToken)
+        public Task<ImageJobPage> ListAsync(int limit, int offset, bool activeOnly, CancellationToken cancellationToken)
         {
             var page = _jobs.Values
                             .OrderByDescending(view => view.CreatedAtUtc)

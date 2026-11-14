@@ -32,12 +32,16 @@ public sealed class PureRequestCheckRefusalContractTests
 
     private const string OversizedProvenanceMessage = "Generation metadata model must be at most 200 characters.";
 
+    /// <summary>One default host for every test that is refused before any state is read or written.</summary>
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     [Test]
     [Arguments("POST", ApiPrefix + "/skills")]
     [Arguments("POST", ApiPrefix + "/agents")]
     public async Task CreateWithAnOversizedProvenanceBlock_AnswersOneGeneralError(string method, string route)
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, new HttpMethod(method), route, ProvenanceBody());
@@ -56,7 +60,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Arguments("PUT", ApiPrefix + "/agents/")]
     public async Task UpdateWithAnOversizedProvenanceBlock_AnswersTheShapeErrorAndNotTheUnknownId(string method, string routePrefix)
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, new HttpMethod(method), routePrefix + Guid.NewGuid(), ProvenanceBody());
@@ -72,7 +76,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Arguments(ApiPrefix + "/images/prompts/draft")]
     public async Task Draft_WhenModelAndBriefAreBothMissing_ReportsOnlyTheModel(string route)
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, route, new
@@ -90,7 +94,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Arguments(ApiPrefix + "/images/prompts/draft")]
     public async Task Draft_WhenOnlyTheBriefIsMissing_ReportsTheBrief(string route)
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, route, new
@@ -107,7 +111,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     public async Task CreateImageJob_WhenEveryCheckWouldFail_ReportsOnlyTheModelName()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/images/jobs", new
@@ -124,7 +128,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     public async Task CreateImageJob_WhenOnlyTheSeedIsUnparseable_ReportsTheSeed()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/images/jobs", new
@@ -141,7 +145,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     public async Task DeleteImageModel_WhenTheRouteNameIsBlank_AnswersOneGeneralError()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Delete, $"{ApiPrefix}/images/models/%20%20");
@@ -162,6 +166,8 @@ public sealed class PureRequestCheckRefusalContractTests
     public async Task DeleteImageModel_WhenTheRouteNameIsPadded_PassesAndReachesTheStoreTrimmed()
     {
         var store = Substitute.For<IImageModelStore>();
+
+        // Own host: it swaps the store and asserts the substitute's call count.
         await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
@@ -182,7 +188,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     public async Task InspectImageRepository_WhenTheRepoIdIsBlank_AnswersOneGeneralError()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Get, $"{ApiPrefix}/images/models/inspect?repoId=%20");
@@ -195,7 +201,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     public async Task StartImageModelDownload_WhenTheNameAndTheFileSetAreBothWrong_ReportsOnlyTheName()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/images/models/downloads", new
@@ -213,7 +219,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     public async Task StartImageModelDownload_WhenTheFileSetHasNoDiffusionPart_ReportsTheFileSet()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/images/models/downloads", new
@@ -245,7 +251,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     public async Task ListBenchmarkRuns_WhenThePageIsOutOfBounds_AnswersTheShapeErrorAndNotTheUnknownProject()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory,
@@ -262,7 +268,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     public async Task StartBenchmarkRun_WhenTheModelAndTheKvCacheTypeAreBothWrong_ReportsOnlyTheModel()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory,
@@ -282,7 +288,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     public async Task ListEligibleBenchmarkAgents_WhenTheModelNameIsBlank_AnswersOneGeneralError()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Get, $"{ApiPrefix}/benchmarks/eligible-agents?modelName=%20");
@@ -295,7 +301,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     public async Task SearchKnowledge_WhenTheQueryAndTheCollectionAreBothWrong_ReportsOnlyTheQuery()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/knowledge-base/search", new
@@ -311,7 +317,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     public async Task SearchKnowledge_WhenTheQueryIsOverTheContentBound_ReportsTheLength()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/knowledge-base/search", new
@@ -327,7 +333,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Test]
     public async Task SearchKnowledge_WhenOnlyTheCollectionIsUnusable_ReportsTheCollection()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/knowledge-base/search", new
@@ -387,7 +393,7 @@ public sealed class PureRequestCheckRefusalContractTests
     [Arguments("DELETE", "/training/comparisons/{0}", "expectedVersion")]
     public async Task VersionedWrite_WithoutTheVersionField_AnswersA400NamingIt(string method, string route, string field)
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory,

@@ -24,7 +24,7 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 			invoke: vi.fn(),
 		},
 		whenStarted: Promise.resolve(),
-		onReconnected: vi.fn(),
+		onReconnected: vi.fn(() => () => undefined),
 		onReconnecting: vi.fn(),
 		onClosed: vi.fn(),
 		release: vi.fn(),

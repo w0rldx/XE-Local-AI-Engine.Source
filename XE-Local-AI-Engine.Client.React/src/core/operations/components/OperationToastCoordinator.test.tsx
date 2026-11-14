@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GgufAcquisitionStatus } from "@/core/model-downloads/models/GgufAcquisitionModels";
 import { OperationToastCoordinator } from "@/core/operations/components/OperationToastCoordinator";
+import { useJobNotificationStore } from "@/core/operations/stores/JobNotificationStore";
 import type { RuntimeAcquisitionStatus } from "@/core/runtime-acquisition/queries/useRuntimeAcquisitionStatus";
 import { toast } from "@/core/ui/notifications/Toast";
 import { createProvidersWrapper, createTestQueryClient, renderWithProviders } from "@/test/RenderWithProviders";
@@ -170,6 +171,101 @@ describe("OperationToastCoordinator", () => {
 
 		expect(runtimeStatusReads(invalidate)).toBe(1);
 		expect(success).not.toHaveBeenCalled();
+	});
+
+	describe("alerts for a user who is elsewhere", () => {
+		let visibility: DocumentVisibilityState;
+		const shown: { title: string; options?: NotificationOptions }[] = [];
+		class FakeNotification {
+			static permission: NotificationPermission = "granted";
+			onclick: (() => void) | null = null;
+			constructor(title: string, options?: NotificationOptions) {
+				shown.push({ title, options });
+			}
+			close = vi.fn();
+		}
+
+		beforeEach(() => {
+			visibility = "visible";
+			vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
+			document.title = "XE Local AI Engine";
+			shown.length = 0;
+			FakeNotification.permission = "granted";
+			vi.stubGlobal("Notification", FakeNotification);
+			useJobNotificationStore.getState().actions.setSystemNotifications(false);
+		});
+
+		afterEach(() => {
+			vi.unstubAllGlobals();
+			window.history.replaceState(null, "", "/");
+		});
+
+		function finishDownload(): ReturnType<typeof renderCoordinator> {
+			download("Downloading");
+			const rendered = renderCoordinator();
+			download("Completed");
+			rendered.update();
+			return rendered;
+		}
+
+		it("stays silent on the operation's own page while the tab is visible", () => {
+			window.history.replaceState(null, "", "/models");
+
+			finishDownload();
+
+			expect(success).not.toHaveBeenCalled();
+			expect(document.title).toBe("XE Local AI Engine");
+		});
+
+		it("toasts on another page without touching the title while the tab is visible", () => {
+			finishDownload();
+
+			expect(success).toHaveBeenCalledOnce();
+			expect(document.title).toBe("XE Local AI Engine");
+		});
+
+		it("in a hidden tab toasts even on the own page, counts into the title and clears it once the tab is seen", () => {
+			window.history.replaceState(null, "", "/models");
+			visibility = "hidden";
+
+			finishDownload();
+
+			expect(success).toHaveBeenCalledOnce();
+			expect(document.title).toBe("(1) XE Local AI Engine");
+
+			visibility = "visible";
+			document.dispatchEvent(new Event("visibilitychange"));
+			expect(document.title).toBe("XE Local AI Engine");
+		});
+
+		it("shows no OS notification until the user turned them on", () => {
+			visibility = "hidden";
+
+			finishDownload();
+
+			expect(shown).toEqual([]);
+		});
+
+		it("shows an OS notification for a hidden-tab finish once turned on and permitted", () => {
+			useJobNotificationStore.getState().actions.setSystemNotifications(true);
+			visibility = "hidden";
+
+			finishDownload();
+
+			expect(shown).toEqual([{ title: "qwen3-8b is downloaded", options: { body: undefined, tag: "gguf-download:op-1" } }]);
+		});
+
+		it("shows no OS notification when the browser denied the permission, or while the tab is visible", () => {
+			useJobNotificationStore.getState().actions.setSystemNotifications(true);
+			finishDownload();
+			cleanup();
+			FakeNotification.permission = "denied";
+			visibility = "hidden";
+			finishDownload();
+
+			expect(shown).toEqual([]);
+			expect(success).toHaveBeenCalledTimes(2);
+		});
 	});
 
 	it("does not re-read the runtime status again while the acquisition stays completed", () => {

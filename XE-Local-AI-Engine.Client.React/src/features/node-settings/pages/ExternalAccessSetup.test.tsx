@@ -143,8 +143,8 @@ describe("ExternalAccessSetup", () => {
 		await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/" }));
 
 		// The real layout guard, against the very client the page just wrote to. With `setQueryData` removed it reads the
-		// stale "pending" entry and throws a redirect straight back to THIS page; with it, the fresh install moves on to
-		// the second first-run step instead (its uiMode is still null), which is the whole sequencing contract.
+		// stale "pending" entry and throws a redirect straight back to THIS page; with it, the fresh install reaches the app:
+		// external access is the last first-run step.
 		const beforeLoad = LayoutRoute.options.beforeLoad;
 		if (beforeLoad === undefined) {
 			throw new Error("the layout route declares no beforeLoad");
@@ -156,9 +156,14 @@ describe("ExternalAccessSetup", () => {
 				(thrown: unknown) => thrown,
 			);
 
-		expect(isRedirect(guardResult) ? (guardResult as { options?: { to?: string } }).options?.to : undefined).toBe(
-			"/ui-mode-setup",
-		);
+		expect(isRedirect(guardResult)).toBe(false);
+		expect(guardResult).toBeUndefined();
+	});
+
+	it("shows the last first-run step", () => {
+		renderWithProviders(<ExternalAccessSetup />);
+
+		expect(screen.getByTestId("first-run-stepper").textContent).toContain("Step 3 of 3: Internet access");
 	});
 
 	it("keeps both choices enabled and shows an error when the save fails", async () => {

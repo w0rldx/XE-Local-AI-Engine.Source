@@ -91,6 +91,12 @@ public static class NodeMetrics
             unit: "chars",
             description: "Number of decrypted title and message characters held in the in-memory conversation search index.");
 
+    /// <summary>1 while <see cref="ChatSearchIndexedChars" /> is at or past the index's warning threshold, else 0.</summary>
+    /// <remarks>The threshold is <c>ConversationSearchIndex.IndexedCharsWarningThreshold</c> (about 500 MB); each upward crossing also logs one warning.</remarks>
+    public static readonly UpDownCounter<long> ChatSearchIndexedCharsOverThreshold =
+        Meter.CreateUpDownCounter<long>("chat_search_indexed_chars_over_threshold",
+            description: "1 while the in-memory conversation search index holds at least its warning threshold of characters (about 500 MB), else 0.");
+
     /// <summary>
     ///     Incremented when an invocation fails before producing output.
     ///     Labels: source (failure category, e.g. timeout | agent_runtime | provider_unreachable | unexpected).

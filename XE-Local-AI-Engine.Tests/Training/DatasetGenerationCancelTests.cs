@@ -59,8 +59,9 @@ public sealed class DatasetGenerationCancelTests
                       throw new OperationCanceledException(call.Arg<CancellationToken>());
                   });
 
+        var events = Substitute.For<IDatasetGenerationEventBuffer>();
         using var signal = new DatasetGenerationQueueSignal();
-        using var queue = new DatasetGenerationHostedService(ScopeFactory(store, runner, cancellations),
+        using var queue = new DatasetGenerationHostedService(ScopeFactory(store, runner, cancellations, events),
             signal,
             Substitute.For<IDatasetGenerationEventBuffer>(),
             new GpuWorkGate(),
@@ -79,11 +80,17 @@ public sealed class DatasetGenerationCancelTests
 
         _ = await store.Received(1)
                        .CompleteGenerationAsync(datasetId, DatasetGenerationWorkStatus.Cancelled, Arg.Any<string>(), Arg.Any<CancellationToken>());
+        // The cancel API returns once the cancel is signalled, so only this push tells a watching client it ended.
+        _ = events.Received(1)
+                  .Append(datasetId,
+                      DatasetGenerationEventKind.State,
+                      Arg.Is<DatasetGenerationPayload>(static payload => payload.State == nameof(DatasetGenerationWorkStatus.Cancelled) && payload.Reason == null));
     }
 
     private static IServiceScopeFactory ScopeFactory(ITrainingDatasetStore store,
         IStructuredAgentRunner runner,
-        TrainingRunCancellationRegistry cancellations)
+        TrainingRunCancellationRegistry cancellations,
+        IDatasetGenerationEventBuffer events)
     {
         var provider = Substitute.For<ILocalModelProvider>();
         _ = provider.ProviderName.Returns("llamacpp");
@@ -98,7 +105,7 @@ public sealed class DatasetGenerationCancelTests
         _ = services.AddScoped(_ => runner);
         _ = services.AddScoped(_ => resolver);
         _ = services.AddScoped(_ => Substitute.For<ISampleValidationPipeline>());
-        _ = services.AddScoped(_ => Substitute.For<IDatasetGenerationEventBuffer>());
+        _ = services.AddScoped(_ => events);
         _ = services.AddScoped<IDatasetGenerationExecutor, DatasetGenerationExecutor>();
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }

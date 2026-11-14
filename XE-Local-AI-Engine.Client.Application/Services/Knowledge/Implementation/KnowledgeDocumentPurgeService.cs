@@ -21,11 +21,15 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
     private readonly NodeChatDbContext _dbContext;
     private readonly IKnowledgeDocumentBlobStore _blobStore;
     private readonly ILogger<KnowledgeDocumentPurgeService> _logger;
+    private readonly IKnowledgeIndexingNotifier _notifier;
 
     public KnowledgeDocumentPurgeService(NodeChatDbContext dbContext,
         IKnowledgeDocumentBlobStore blobStore,
+        IKnowledgeIndexingNotifier notifier,
         ILogger<KnowledgeDocumentPurgeService> logger)
     {
+        ArgumentNullException.ThrowIfNull(notifier);
+        _notifier = notifier;
         ArgumentNullException.ThrowIfNull(dbContext);
         _dbContext = dbContext;
         ArgumentNullException.ThrowIfNull(blobStore);
@@ -85,6 +89,8 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
         }
 
         await transaction.CommitAsync(cancellationToken);
+        // A document deleted while queued or indexing pushes no terminal status; this lets the indexing feed drop it.
+        await _notifier.NotifyDocumentRemovedAsync(documentId, cancellationToken);
 
         // Remove the bytes only once the rows are gone, so a failure here can never leave a live row without its content.
         // The delete is already done for the caller: a failed file delete is logged as success and swept on the next start.

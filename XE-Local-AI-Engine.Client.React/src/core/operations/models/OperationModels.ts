@@ -5,10 +5,20 @@ import type { GgufAcquisitionStatus } from "@/core/model-downloads/models/GgufAc
 import type { RuntimeAcquisitionStatus } from "@/core/runtime-acquisition/queries/useRuntimeAcquisitionStatus";
 
 // One normalized view over the long-running operations the node already reports on their own feeds (GGUF downloads
-// and imports, the llama.cpp runtime acquisition). The feeds stay the source of truth; these rows are derived from
-// them on every render and never stored.
+// and imports, the llama.cpp runtime acquisition, and the job sources in JobOperationModels). The feeds stay the
+// source of truth; these rows are derived from them on every render and never stored.
 
-export type OperationKind = "gguf-download" | "gguf-import" | "runtime-acquisition";
+export type OperationKind =
+	| "gguf-download"
+	| "gguf-import"
+	| "runtime-acquisition"
+	| "knowledge-indexing"
+	| "training-run"
+	| "dataset-build"
+	| "image-job"
+	| "scheduler-run"
+	| "image-model-download"
+	| "transcription-model-download";
 
 /** `succeeded` rows exist only so the toast coordinator can see the transition; the Activity views drop them. */
 export type OperationState = "running" | "succeeded" | "failed";
@@ -18,7 +28,16 @@ export type OperationProgress = { readonly kind: "known"; readonly pct: number }
 
 /** Where the user acts on the operation, as router link options. */
 export type OperationLink =
-	| { readonly to: "/models" }
+	| {
+			readonly to:
+				| "/models"
+				| "/knowledge-base"
+				| "/training"
+				| "/training/datasets"
+				| "/images"
+				| "/scheduler"
+				| "/transcription";
+	  }
 	| { readonly to: "/node-settings"; readonly search: { readonly section: "runtimes" } };
 
 export interface Operation {
@@ -38,17 +57,17 @@ export interface ActiveOperation extends Operation {
 	readonly state: "running" | "failed";
 }
 
-const INDETERMINATE: OperationProgress = { kind: "indeterminate" };
+export const INDETERMINATE: OperationProgress = { kind: "indeterminate" };
 const MODELS_LINK: OperationLink = { to: "/models" };
 const RUNTIMES_LINK: OperationLink = { to: "/node-settings", search: { section: "runtimes" } };
 
 const RUNTIME_ACQUISITION_OPERATION_ID = "runtime-acquisition:llamacpp";
 
-function knownProgress(pct: number): OperationProgress {
+export function knownProgress(pct: number): OperationProgress {
 	return { kind: "known", pct: Math.min(100, Math.max(0, Math.round(pct))) };
 }
 
-function byteLine(completedBytes: number | null | undefined, totalBytes: number | null | undefined, t: TFunction) {
+export function byteLine(completedBytes: number | null | undefined, totalBytes: number | null | undefined, t: TFunction) {
 	if (completedBytes == null) {
 		return undefined;
 	}
@@ -180,8 +199,16 @@ export function fromRuntimeAcquisition(
 	};
 }
 
+// A failed download or runtime install blocks what comes next, so it stays a row until its source moves on. A failed
+// job is history: its alert and its own page report it, and an Activity row would never go away.
+const FAILURE_STAYS_ACTIVE: ReadonlySet<OperationKind> = new Set<OperationKind>([
+	"gguf-download",
+	"gguf-import",
+	"runtime-acquisition",
+]);
+
 export function isActiveOperation(operation: Operation): operation is ActiveOperation {
-	return operation.state !== "succeeded";
+	return operation.state === "running" || (operation.state === "failed" && FAILURE_STAYS_ACTIVE.has(operation.kind));
 }
 
 export interface OperationTransitions {

@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.Images;
 
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
+using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -37,9 +39,14 @@ public sealed class ImageModelDownloadCoordinatorTests
         };
     }
 
-    private static ImageModelDownloadCoordinator Coordinator(IImageModelStore store)
+    private static ImageModelDownloadCoordinator Coordinator(IImageModelStore store,
+        IImageJobEventPublisher? publisher = null,
+        TimeProvider? timeProvider = null)
     {
-        return new ImageModelDownloadCoordinator(store, NullLogger<ImageModelDownloadCoordinator>.Instance);
+        return new ImageModelDownloadCoordinator(store,
+            publisher ?? new NullImageJobEventPublisher(),
+            NullLogger<ImageModelDownloadCoordinator>.Instance,
+            timeProvider ?? TimeProvider.System);
     }
 
     private static async Task<ImageModelDownloadStatus> WaitForTerminalAsync(IImageModelDownloadCoordinator coordinator, string modelName)
@@ -204,6 +211,126 @@ public sealed class ImageModelDownloadCoordinatorTests
 
         store.Release();
         _ = await WaitForTerminalAsync(coordinator, ticket.ModelName);
+    }
+
+    [Test]
+    public async Task Start_PushesTheStartAndTheTerminalPhase_AndHoldsBackAProgressTickInsideTheInterval()
+    {
+        // The app-wide operations feed has no list to poll: the start and the end must always reach the hub, while a
+        // byte callback firing many times a second must not flood it.
+        var publisher = new RecordingDownloadPublisher();
+        var store = new SteppedImageModelStore();
+        var coordinator = Coordinator(store, publisher, new AdvanceableTimeProvider());
+
+        var ticket = coordinator.Start(Request("sd-1.5-fp16"));
+        await store.Started.Task.WaitAsync(Timeout);
+        store.Report(completedBytes: 100);
+        await AssertEx.EventuallyAsync(() => coordinator.GetStatus(ticket.ModelName)?.CompletedBytes == 100, Timeout, "The tick never reached the registry.");
+        store.Release();
+
+        await AssertEx.EventuallyAsync(() => publisher.Phases().Contains(ImageModelDownloadPhase.Completed), Timeout, "The terminal phase was never pushed.");
+        AssertEx.Equal("Running,Completed", string.Join(',', publisher.Phases()), "The held-back tick must not have been pushed.");
+        AssertEx.Null(publisher.Pushed.First().CompletedBytes, "The start push goes out before any byte arrived.");
+    }
+
+    [Test]
+    public async Task Start_PushesAProgressTickOnceTheIntervalHasPassed()
+    {
+        var publisher = new RecordingDownloadPublisher();
+        var store = new SteppedImageModelStore();
+        var time = new AdvanceableTimeProvider();
+        var coordinator = Coordinator(store, publisher, time);
+
+        _ = coordinator.Start(Request("sd-1.5-fp16"));
+        await store.Started.Task.WaitAsync(Timeout);
+        time.Advance(TimeSpan.FromSeconds(2));
+        store.Report(completedBytes: 150);
+
+        await AssertEx.EventuallyAsync(() => publisher.Pushed.Any(static status => status.CompletedBytes == 150), Timeout, "A tick past the interval must be pushed.");
+        store.Release();
+        await AssertEx.EventuallyAsync(() => publisher.Phases().Contains(ImageModelDownloadPhase.Completed), Timeout, "The terminal phase was never pushed.");
+    }
+
+    [Test]
+    public async Task Pushes_AreSequencedInWriteOrder_SoAStaleRunningPushLosesToTheTerminalAndANewStartWins()
+    {
+        // The pushes are fire-and-forget, so a Running push can land after Completed; the client keeps the higher sequence.
+        var publisher = new RecordingDownloadPublisher();
+        var store = new SteppedImageModelStore();
+        var time = new AdvanceableTimeProvider();
+        var coordinator = Coordinator(store, publisher, time);
+
+        _ = coordinator.Start(Request("sd-1.5-fp16"));
+        await store.Started.Task.WaitAsync(Timeout);
+        time.Advance(TimeSpan.FromSeconds(2));
+        store.Report(completedBytes: 150);
+        await AssertEx.EventuallyAsync(() => publisher.Pushed.Any(static status => status.CompletedBytes == 150), Timeout, "The progress tick was never pushed.");
+        store.Release();
+        await AssertEx.EventuallyAsync(() => publisher.Phases().Contains(ImageModelDownloadPhase.Completed), Timeout, "The terminal phase was never pushed.");
+
+        var completed = publisher.Pushed.Single(static status => status.Phase == ImageModelDownloadPhase.Completed);
+        AssertEx.True(publisher.Pushed.Where(static status => status.Phase == ImageModelDownloadPhase.Running).All(running => running.Sequence < completed.Sequence),
+            "Every Running push must be sequenced before the terminal one.");
+        AssertEx.Equal(completed.Sequence, AssertEx.NotNull(coordinator.GetStatus("sd-1.5-fp16")).Sequence, "The registry holds the stamped terminal status.");
+
+        // A Start that still finds the finished run in flight only rejoins it (no write), so retry until it is a new download.
+        await AssertEx.EventuallyAsync(() => !coordinator.Start(Request("sd-1.5-fp16")).AlreadyInFlight, Timeout, "A new download never started.");
+        var restartPush = publisher.Pushed.Last(static status => status.Phase == ImageModelDownloadPhase.Running);
+        AssertEx.True(restartPush.Sequence > completed.Sequence, "A new start must outrank the terminal state it replaces.");
+    }
+
+    private sealed class RecordingDownloadPublisher : IImageJobEventPublisher
+    {
+        public ConcurrentQueue<ImageModelDownloadStatus> Pushed { get; } = new();
+
+        public ImageModelDownloadPhase[] Phases()
+        {
+            return Pushed.Select(static status => status.Phase).ToArray();
+        }
+
+        public Task PublishStatusAsync(ImageJobStatusEvent statusEvent, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task PublishModelDownloadAsync(ImageModelDownloadStatus status, CancellationToken cancellationToken = default)
+        {
+            Pushed.Enqueue(status);
+            return Task.CompletedTask;
+        }
+    }
+
+    // Hands the test the progress sink, so each tick is reported at a moment the test chose, then blocks until released.
+    private sealed class SteppedImageModelStore : StubImageModelStore
+    {
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private IProgress<PullProgress>? _progress;
+
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void Report(long completedBytes)
+        {
+            _progress?.Report(new PullProgress
+            {
+                ModelName = "sd-1.5-fp16",
+                Status = "downloading",
+                TotalBytes = 300,
+                CompletedBytes = completedBytes
+            });
+        }
+
+        public void Release()
+        {
+            _ = _release.TrySetResult();
+        }
+
+        public override async Task<ImageModelHandle> EnsureModelAsync(ImageModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct)
+        {
+            _progress = progress;
+            _ = Started.TrySetResult();
+            await _release.Task;
+            return Handle(request);
+        }
     }
 
     /// <summary>Base store double: every member throws unless the test needs it; only EnsureModelAsync is exercised.</summary>

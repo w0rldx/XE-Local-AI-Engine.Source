@@ -3561,6 +3561,10 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackR
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsLocalChatV1ImportNodeChatConversationsRequest = {
+	document: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportDocument;
+};
+
 export type XeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsRequest = {
 	[key: string]: never;
 };
@@ -5458,6 +5462,7 @@ export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse = {
 	errorMessage?: string | null;
 	cancellationRequestedAtUtc?: number | null;
 	createdAtUtc: number;
+	answerConversationId?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunRouteRequest = {
@@ -11356,7 +11361,9 @@ export type ExportNodeChatConversationsResponse =
 export type ImportNodeChatConversationsData = {
 	body: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportDocument;
 	path?: never;
-	query?: never;
+	query?: {
+		importId?: string | null;
+	};
 	url: "/api/local/v1/chat/import";
 };
 
@@ -14636,6 +14643,7 @@ export type ListImageJobsData = {
 	query?: {
 		limit?: number | null;
 		offset?: number | null;
+		activeOnly?: boolean | null;
 	};
 	url: "/api/local/v1/images/jobs";
 };
@@ -20952,6 +20960,7 @@ export type ListTrainingRunsData = {
 		page: number;
 		pageSize: number;
 		datasetId?: string | null;
+		activeOnly?: boolean | null;
 	};
 	url: "/api/local/v1/training/runs";
 };

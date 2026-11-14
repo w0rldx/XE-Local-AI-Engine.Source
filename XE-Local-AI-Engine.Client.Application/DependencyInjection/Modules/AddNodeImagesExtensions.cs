@@ -1,7 +1,10 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Common;
+using XE_Local_AI_Engine.Client.Services.Common.Implementation;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Catalog;
 using XE_Local_AI_Engine.Client.Services.Images.Catalog.Implementation;
@@ -71,6 +74,7 @@ internal static class AddNodeImagesExtensions
 
         // No-op default image-job event publisher; the Client host supersedes it with the hub-backed publisher.
         builder.Services.AddSingleton<IImageJobEventPublisher, NullImageJobEventPublisher>();
+        builder.Services.TryAddSingleton<IJobCreatedPublisher, NullJobCreatedPublisher>();
 
         // Weight-download coordinator. Singleton for the same reason as the job coordinator: the download outlives the
         // request that started it, and its status registry is what makes a failed download observable at all.

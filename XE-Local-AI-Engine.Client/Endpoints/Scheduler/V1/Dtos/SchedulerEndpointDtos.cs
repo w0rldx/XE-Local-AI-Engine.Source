@@ -301,6 +301,12 @@ public sealed class ScheduledJobRunResponse
     public long? CancellationRequestedAtUtc { get; init; }
 
     public required long CreatedAtUtc { get; init; }
+
+    /// <summary>
+    ///     The conversation holding a successful agent run's prompt and answer, read through <c>chat/conversations/{id}</c>.
+    ///     Set only by <c>GET scheduler/runs/{runId}</c>; null in the list and when no answer is stored.
+    /// </summary>
+    public Guid? AnswerConversationId { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET scheduler/runs</c>.</summary>

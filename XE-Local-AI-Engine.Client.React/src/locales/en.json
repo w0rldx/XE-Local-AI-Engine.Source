@@ -106,6 +106,12 @@
 			"passwordRuleLowercase": "At least one lowercase letter (a–z)",
 			"passwordRuleSymbol": "At least one symbol (e.g. !@#$%)",
 			"passwordRuleUppercase": "At least one uppercase letter (A–Z)",
+			"stepper": {
+				"account": "Account",
+				"externalAccess": "Internet access",
+				"progress": "Step {{current}} of {{total}}: {{name}}",
+				"vault": "Protect your data"
+			},
 			"subtitle": "Create the one-time admin account for this node.",
 			"title": "Set up local admin",
 			"validationEmail": "Enter a valid email address.",
@@ -165,6 +171,7 @@
 			"exportMarkdown": "Export as Markdown",
 			"import": "Import chats (JSON)",
 			"importFailed": "Could not import the file.",
+			"importProgress": "Importing chats: {{done}} of {{total}} written",
 			"imported_one": "Imported {{count}} chat. Attachments and tool calls are not part of an export.",
 			"imported_other": "Imported {{count}} chats. Attachments and tool calls are not part of an export.",
 			"importing_one": "Importing {{count}} chat. A large import can take several minutes.",
@@ -337,6 +344,14 @@
 		},
 		"words_one": "word",
 		"words_other": "words"
+	},
+	"commandPalette": {
+		"inputLabel": "Page name",
+		"listLabel": "Pages",
+		"noMatches": "No page matches.",
+		"placeholder": "Type a page name",
+		"shortcut": "Go to a page",
+		"title": "Go to page"
 	},
 	"common": {
 		"actions": "Actions",
@@ -702,6 +717,15 @@
 		"errors": {
 			"saveState": "Could not save the tutorial status. Please try again."
 		},
+		"firstRunChoices": {
+			"body": "The engine started in Simple mode with the Low sandbox profile. Change either now, or later in Node settings.",
+			"bodyAdvanced": "The engine runs in Advanced mode with the Low sandbox profile. Change either now, or later in Node settings.",
+			"highNote": "High refuses a workload this computer cannot fully isolate instead of running it with less. Node settings lists which ones.",
+			"lowNote": "Low runs every workload with the isolation this computer can give it.",
+			"save": "Save",
+			"saveError": "Could not save your choices. Try again.",
+			"title": "Two settings you can change"
+		},
 		"restart": "Restart tutorial",
 		"status": {
 			"completed": "Completed",
@@ -803,6 +827,11 @@
 		}
 	},
 	"operations": {
+		"datasetBuild": {
+			"failed": "Dataset {{name}} could not be built",
+			"running": "Building dataset {{name}}",
+			"succeeded": "Dataset {{name}} is ready"
+		},
 		"ggufDownload": {
 			"failed": "{{model}} could not be downloaded",
 			"running": "Downloading {{model}}",
@@ -813,11 +842,34 @@
 			"running": "Importing {{model}}",
 			"succeeded": "{{model}} is imported"
 		},
+		"imageJob": {
+			"failed": "The image could not be generated",
+			"running": "Generating an image",
+			"succeeded": "Your image is ready"
+		},
+		"imageModelDownload": {
+			"failed": "The image model {{model}} could not be downloaded",
+			"running": "Downloading the image model {{model}}",
+			"succeeded": "The image model {{model}} is downloaded"
+		},
 		"indicator": {
 			"actionRequired": "Action required",
 			"runningPercent": "1 running · {{pct}}%",
 			"running_one": "{{count}} running",
 			"running_other": "{{count}} running"
+		},
+		"knowledgeIndexing": {
+			"failed": "Some documents could not be indexed",
+			"failedDetail": "{{failed}} of {{count}} failed",
+			"progress": "{{done}} of {{count}} done",
+			"running": "Indexing documents for the knowledge base",
+			"succeeded": "The knowledge base is up to date"
+		},
+		"notifications": {
+			"blocked": "This browser blocks notifications from this app. Allow them in the browser's site settings, then turn this on.",
+			"description": "When a download, indexing, training, image or scheduled job finishes while this tab is in the background, also show a system notification. Stored in this browser only.",
+			"label": "Notify me when long jobs finish (OS notification)",
+			"unsupported": "This browser cannot show system notifications."
 		},
 		"progress": "{{completed}} of {{total}}",
 		"progressUnknownTotal": "{{completed}} downloaded",
@@ -832,6 +884,21 @@
 			"step": "Step {{index}} of {{count}}",
 			"succeeded": "The local AI runtime is installed",
 			"verifying": "Verifying the downloaded runtime…"
+		},
+		"schedulerRun": {
+			"failed": "A scheduled task failed",
+			"running": "Running a scheduled task",
+			"succeeded": "A scheduled task finished"
+		},
+		"trainingRun": {
+			"failed": "Training failed",
+			"running": "Training a model",
+			"succeeded": "Training finished"
+		},
+		"transcriptionModelDownload": {
+			"failed": "The transcription model {{model}} could not be downloaded",
+			"running": "Downloading the transcription model {{model}}",
+			"succeeded": "The transcription model {{model}} is downloaded"
 		}
 	},
 	"pages": {
@@ -7436,6 +7503,14 @@
 			},
 			"saved": "Node settings saved.",
 			"savedRestartRequired": "Node settings saved. Some changes wait for a node restart; the banner at the top lists them.",
+			"search": {
+				"label": "Search settings",
+				"matches_one": "{{count}} matching card",
+				"matches_other": "{{count}} matching cards",
+				"noMatches": "No settings match “{{query}}”.",
+				"placeholder": "Search settings",
+				"searchAdvanced": "Search the advanced sections too"
+			},
 			"sections": {
 				"chat": "Chat & agents",
 				"general": "General",
@@ -7558,7 +7633,6 @@
 			"subtitleSecret": "You have found a secret place."
 		},
 		"sandboxProfile": {
-			"continue": "Continue",
 			"high": {
 				"body": "Every boundary a workload asks for becomes a requirement: filesystem isolation, resource limits and denied network access. A workload this host cannot isolate that way refuses to start instead of running with less. Resource limits add a little start-up overhead, and some workloads may not run on this host.",
 				"title": "High"
@@ -7568,7 +7642,6 @@
 				"title": "Low"
 			},
 			"previewsNote": "Execution previews stay a separate setting: neither profile turns them on.",
-			"recommended": "Recommended for this host",
 			"refusalsTitle": "These workloads will refuse on this host:",
 			"roles": {
 				"agent-home": "AgentHome",
@@ -7577,8 +7650,6 @@
 				"run_python": "Python compute tool",
 				"work-session": "Work sessions"
 			},
-			"saveError": "Could not save your choice. Try again.",
-			"setupSubtitle": "This decides what happens when this host cannot isolate a workload the way it asks to be isolated. You can change it later in Node settings.",
 			"setupTitle": "How strict should the sandbox be?"
 		},
 		"scheduler": {
@@ -7705,6 +7776,18 @@
 					"trigger": "Trigger"
 				},
 				"detail": {
+					"answer": {
+						"delete": "Delete answer",
+						"deleteDescription": "The saved prompt and answer of this run are removed for good. The run stays in the history.",
+						"deleteFailed": "Could not delete the answer.",
+						"deleteTitle": "Delete this answer?",
+						"error": "Could not load the answer.",
+						"hide": "Hide answer",
+						"loading": "Loading answer…",
+						"open": "Open answer",
+						"prompt": "Prompt",
+						"response": "Answer"
+					},
 					"completed": "Completed",
 					"duration": "Duration",
 					"empty": "Select a run to view its details.",
@@ -7740,15 +7823,7 @@
 				"viewAria": "View run"
 			},
 			"subtitle": "Schedule recurring and one-off jobs on this node. New jobs are enabled immediately (disable one to pause it), and parameters are stored encrypted.",
-			"title": "Scheduler",
-			"toasts": {
-				"cancelled": "A scheduled task was cancelled.",
-				"cancelledTitle": "Scheduled task cancelled",
-				"completed": "A scheduled task finished successfully.",
-				"completedTitle": "Scheduled task completed",
-				"failedFallback": "A scheduled task did not complete successfully.",
-				"failedTitle": "Scheduled task failed"
-			}
+			"title": "Scheduler"
 		},
 		"skills": {
 			"createButton": "New skill",
@@ -8204,12 +8279,7 @@
 				"body": "Everything, including tool and skill authoring, scheduling, workflows, integrations, benchmarks and training.",
 				"title": "Advanced"
 			},
-			"continue": "Continue",
-			"saveError": "Could not save your choice. Try again.",
-			"setupSubtitle": "Nothing is deleted either way, and you can change this later in Node settings.",
-			"setupTitle": "How much of the engine do you want to see?",
 			"simple": {
-				"badge": "Recommended for most people",
 				"body": "Chat, agents, models, knowledge, images and transcription. The building and monitoring tools stay out of the way.",
 				"title": "Simple"
 			}

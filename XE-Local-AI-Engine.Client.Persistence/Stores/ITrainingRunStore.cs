@@ -254,6 +254,9 @@ public sealed class TrainingRunQuery
     public Guid? DatasetId { get; init; }
 
     public TrainingRunStatus? Status { get; init; }
+
+    /// <summary>Only runs that are not yet Succeeded, Failed or Cancelled.</summary>
+    public bool ActiveOnly { get; init; }
 }
 
 public sealed class TrainingRunPage

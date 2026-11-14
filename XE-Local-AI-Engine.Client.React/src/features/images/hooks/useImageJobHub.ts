@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
+import { joinHubGroup } from "@/core/api/signalr/SharedHubGroups";
 import {
 	IMAGE_JOB_STATUS_CHANGED,
 	type ImageJobProgressView,
@@ -123,68 +124,47 @@ export function useImageJobHub(activeJobIds: readonly string[]): void {
 
 		connection.on(IMAGE_JOB_STATUS_CHANGED, onStatus);
 
-		// The jobIds this connection has joined a group for. Diffed against the desired set so each id is Subscribe'd /
-		// Unsubscribe'd exactly once. Lives across reconnects so a reconnect can re-join every active job.
-		const subscribedJobIds = new Set<string>();
+		// The job groups this view holds, each with its leave function. joinHubGroup subscribes once the connection is up
+		// and again after every reconnect, and leaves a group only when its last holder on the shared connection does, so
+		// the operations feed watching the same job keeps its membership when this page closes.
+		const heldJobGroups = new Map<string, () => void>();
 
 		const joinJobGroup = (jobId: string): void => {
+			if (connection.state !== HubConnectionState.Connected) {
+				return;
+			}
 			connection.invoke("Subscribe", jobId).catch((error: unknown) => {
 				console.warn("image job hub failed to subscribe to job", jobId, error);
 			});
 		};
 
-		const leaveJobGroup = (jobId: string): void => {
-			connection.invoke("Unsubscribe", jobId).catch((error: unknown) => {
-				console.warn("image job hub failed to unsubscribe from job", jobId, error);
-			});
-		};
-
-		// Reconcile the connection's group membership to the desired active-job set. No-op unless Connected (a desired
-		// set computed while disconnected is applied wholesale by onreconnected / the post-start reconcile).
+		// Hold exactly the desired active-job set.
 		const reconcileSubscriptions = (target: ReadonlySet<string>): void => {
-			if (connection.state !== HubConnectionState.Connected) {
-				return;
-			}
 			for (const jobId of target) {
-				if (!subscribedJobIds.has(jobId)) {
-					subscribedJobIds.add(jobId);
-					joinJobGroup(jobId);
+				if (!heldJobGroups.has(jobId)) {
+					heldJobGroups.set(
+						jobId,
+						joinHubGroup(hub, ["Unsubscribe", jobId], () => joinJobGroup(jobId)),
+					);
 				}
 			}
-			for (const jobId of [...subscribedJobIds]) {
+			for (const [jobId, leave] of [...heldJobGroups]) {
 				if (!target.has(jobId)) {
-					subscribedJobIds.delete(jobId);
-					leaveJobGroup(jobId);
+					heldJobGroups.delete(jobId);
+					leave();
 				}
 			}
 		};
 
 		reconcileRef.current = reconcileSubscriptions;
-
-		let disposed = false;
-		// Reconcile group membership once the shared connection is up. whenStarted resolves when the initial start settles,
-		// or on the next microtask for a late subscriber that acquires while the connection is already connected; guarded
-		// on Connected because whenStarted also resolves after a failed initial start.
-		hub.whenStarted.then(() => {
-			if (disposed || connection.state !== HubConnectionState.Connected) {
-				return;
-			}
-			// On (re)connect the server-side group membership is empty — forget what we thought we'd joined and re-apply
-			// the current desired set so a job active before/at connect is subscribed.
-			subscribedJobIds.clear();
-			reconcileSubscriptions(desiredJobIdsRef.current);
-		});
-
-		// After a transient drop + automatic reconnect the server has dropped all group memberships, so re-join every
-		// currently-active job. Scoped to this handle and dropped by hub.release() below.
-		hub.onReconnected(() => {
-			subscribedJobIds.clear();
-			reconcileSubscriptions(desiredJobIdsRef.current);
-		});
+		reconcileSubscriptions(desiredJobIdsRef.current);
 
 		return () => {
-			disposed = true;
 			reconcileRef.current = undefined;
+			for (const leave of heldJobGroups.values()) {
+				leave();
+			}
+			heldJobGroups.clear();
 			connection.off(IMAGE_JOB_STATUS_CHANGED, onStatus);
 			// Release the shared lease: drops this handle's reconnected callback and, once the last subscriber releases,
 			// stops the connection after the start promise settles (so cleanup never aborts an in-flight negotiation).

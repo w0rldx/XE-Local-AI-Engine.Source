@@ -176,8 +176,8 @@ export interface HardwareProfile {
 
 // Reserved scheduler template id the refresh-now action fires. The refresh endpoint triggers an EXISTING
 // model-recommendation-check job (it does not create one), so the page filters the scheduler job list by this
-// template id to decide whether "Refresh now" is enabled.
-export const modelRecommendationCheckTemplateId = "model-recommendation-check";
+// template id to decide whether "Refresh now" is enabled. Defined in core, whose scheduler alerts skip it.
+export { modelRecommendationCheckTemplateId } from "@/core/operations/models/JobOperationModels";
 
 // Known catalog-source values the backend reports for the curated model catalog snapshot the advisor is ranking
 // against: "bundled" ships with the app, "remote" was fetched live, "remoteLastGood" is a stale cached fetch served

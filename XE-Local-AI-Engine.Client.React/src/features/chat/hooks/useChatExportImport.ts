@@ -7,6 +7,7 @@ import { exportNodeChatConversations, importNodeChatConversations } from "@/core
 import { saveBlob } from "@/core/api/utils/DownloadBlob";
 import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { toast } from "@/core/ui/notifications/Toast";
+import { nodeChatConnection } from "@/features/chat/api/NodeChatConnection";
 import {
 	CHAT_IMPORT_READ_LIMIT_BYTES,
 	type ChatExportFormat,
@@ -16,6 +17,16 @@ import {
 } from "@/features/chat/models/ChatExportFile";
 
 const importToastId = "chat-import";
+
+// The method name LocalChatHubEvents.ImportProgress pushes while an import that named an import id runs.
+export const CHAT_IMPORT_PROGRESS = "chat.importProgress";
+
+interface ChatImportProgressEvent {
+	importId: string;
+	importedChats: number;
+	totalChats: number;
+	state: "running" | "finished" | "failed";
+}
 
 function saveJson(value: unknown, fileName: string): void {
 	saveBlob(new Blob([`${JSON.stringify(value, null, 2)}\n`], { type: "application/json" }), fileName);
@@ -87,7 +98,33 @@ export function useChatExportImport() {
 						id: importToastId,
 						message: t("chat.exportImport.importing", { count: parsed.document.conversations.length }),
 					});
-					const { data } = await importNodeChatConversations({ body: parsed.document });
+					// The node pushes progress for the id this request names; without the hub the notice above just stays.
+					const importId = crypto.randomUUID();
+					const onProgress = (event: ChatImportProgressEvent): void => {
+						if (event.importId === importId && event.state === "running" && event.totalChats > 0) {
+							toast.progress({
+								id: importToastId,
+								message: t("chat.exportImport.importProgress", { done: event.importedChats, total: event.totalChats }),
+								percent: (event.importedChats / event.totalChats) * 100,
+							});
+						}
+					};
+					// The POST never waits for the hub (a reconnect can take many seconds); the listener joins when it is there.
+					let answered = false;
+					const connecting = nodeChatConnection.ensureConnection().then(
+						(connection) => {
+							if (!answered) {
+								connection.on(CHAT_IMPORT_PROGRESS, onProgress);
+							}
+							return connection;
+						},
+						() => undefined,
+					);
+					// Off before the result toast, so a late push cannot turn it back into a progress notice.
+					const { data } = await importNodeChatConversations({ body: parsed.document, query: { importId } }).finally(() => {
+						answered = true;
+						connecting.then((connection) => connection?.off(CHAT_IMPORT_PROGRESS, onProgress)).catch(() => undefined);
+					});
 					await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversationLists() });
 					toast.success(t("chat.exportImport.imported", { count: data.conversations.length }), { id: importToastId });
 				})

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
+import { joinHubGroup } from "@/core/api/signalr/SharedHubGroups";
 import { isExternalAppBusy, toExternalAppStatus } from "@/features/externalApps/models/ExternalAppModels";
 import { externalAppInvalidationKey, externalAppQueryIds } from "@/features/externalApps/queries/useExternalApps";
 
@@ -195,14 +196,14 @@ export function useExternalAppHub(instanceId: string | undefined): ExternalAppLi
 		connection.on(CHANGED_EVENT, onChanged);
 		connection.on(PULL_PROGRESS_EVENT, onPullProgress);
 		const removeReconnecting = hub.onReconnecting(() => degrade("reconnecting"));
-		const removeReconnect = hub.onReconnected(() => {
-			subscribe(true).catch(() => undefined);
-		});
 		// The retry policy gave up. Nothing will re-announce this, so the poll stays on for the page's lifetime.
 		const removeClosed = hub.onClosed(() => degrade("unavailable"));
-		// `whenStarted` settles on success AND on failure, and the manager swallows the start error — so the state is
-		// re-checked inside `subscribe`, and a rejection here degrades rather than being dropped on the floor.
-		hub.whenStarted.then(() => subscribe(false)).catch(() => degrade("unavailable"));
+		// Joined after the start settles (success OR failure; `subscribe` re-checks the state and degrades) and again on
+		// every reconnect; another view on the same connection keeps the group until it leaves too.
+		const leave = joinHubGroup(hub, ["Unsubscribe", instanceId], (reconnecting) => {
+			subscribe(reconnecting).catch(() => undefined);
+		});
+		hub.whenStarted.catch(() => degrade("unavailable"));
 
 		return () => {
 			disposed = true;
@@ -210,10 +211,7 @@ export function useExternalAppHub(instanceId: string | undefined): ExternalAppLi
 			connection.off(PULL_PROGRESS_EVENT, onPullProgress);
 			removeReconnecting();
 			removeClosed();
-			removeReconnect();
-			if (connection.state === HubConnectionState.Connected) {
-				connection.invoke("Unsubscribe", instanceId).catch(() => undefined);
-			}
+			leave();
 			hub.release();
 		};
 	}, [queryClient, instanceId]);

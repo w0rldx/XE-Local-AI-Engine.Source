@@ -60,27 +60,34 @@ public sealed class ImageJobStore : IImageJobStore
         return entity is null ? null : ToView(entity);
     }
 
-    public async Task<IReadOnlyList<ImageJobView>> ListAsync(int limit, int offset, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ImageJobView>> ListAsync(int limit, int offset, bool activeOnly, CancellationToken cancellationToken)
     {
         // Floor both bounds: a negative limit reaches SQLite as LIMIT -1, which is "no limit" — the whole table, every
         // prompt decrypted, for a caller that asked for a page.
         var take = Math.Max(val1: 0, limit);
         var skip = Math.Max(val1: 0, offset);
 
-        var entities = await _dbContext.ImageJobs
-                                       .AsNoTracking()
-                                       .OrderByDescending(job => job.CreatedAtUtc)
-                                       .ThenByDescending(job => job.Id)
-                                       .Skip(skip)
-                                       .Take(take)
-                                       .ToListAsync(cancellationToken);
+        var entities = await Filtered(activeOnly).OrderByDescending(job => job.CreatedAtUtc)
+                                                 .ThenByDescending(job => job.Id)
+                                                 .Skip(skip)
+                                                 .Take(take)
+                                                 .ToListAsync(cancellationToken);
 
         return entities.Select(ToView).ToArray();
     }
 
-    public Task<int> CountAsync(CancellationToken cancellationToken)
+    public Task<int> CountAsync(bool activeOnly, CancellationToken cancellationToken)
     {
-        return _dbContext.ImageJobs.CountAsync(cancellationToken);
+        return Filtered(activeOnly).CountAsync(cancellationToken);
+    }
+
+    // A WHERE on status in SQL, so an active-only read never loads (or decrypts) the finished history.
+    private IQueryable<ImageJob> Filtered(bool activeOnly)
+    {
+        var jobs = _dbContext.ImageJobs.AsNoTracking();
+        return activeOnly
+            ? jobs.Where(job => job.Status == ImageJobStatus.Queued || job.Status == ImageJobStatus.Generating)
+            : jobs;
     }
 
     public async Task<IReadOnlyList<string>?> DeleteAsync(Guid jobId, CancellationToken cancellationToken)

@@ -12,4 +12,9 @@ internal sealed class NullKnowledgeIndexingNotifier : IKnowledgeIndexingNotifier
     {
         return Task.CompletedTask;
     }
+
+    public Task NotifyDocumentRemovedAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
 }

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
+import { joinHubGroup } from "@/core/api/signalr/SharedHubGroups";
 import type { GraphWorkflowRunEventResponse } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { graphWorkflowInvalidationKey, graphWorkflowQueryIds } from "@/features/graphWorkflows/queries/useGraphWorkflows";
 
@@ -242,24 +243,20 @@ export function useGraphWorkflowRunHub(runId: string | undefined): GraphWorkflow
 
 		connection.on(EVENT_NAME, onChanged);
 		const removeReconnecting = hub.onReconnecting(() => degrade("reconnecting"));
-		const removeReconnect = hub.onReconnected(() => {
-			// Re-subscribe with the CURRENT watermark, so everything the run did while the transport was down arrives as
-			// replay instead of being skipped. `subscribe` clears the poll interval once the snapshot lands.
-			subscribe(true).catch(() => undefined);
-		});
 		// The retry policy gave up. Nothing will re-announce this, so the poll stays on for the page's lifetime.
 		const removeClosed = hub.onClosed(() => degrade("unavailable"));
-		hub.whenStarted.then(() => subscribe(false)).catch(() => undefined);
+		// A reconnect re-subscribes with the CURRENT watermark, so what the run did while the transport was down arrives as
+		// replay. The command page may hold the same run's group on this connection; only the last holder leaves it.
+		const leave = joinHubGroup(hub, ["UnsubscribeRun", runId], (reconnecting) => {
+			subscribe(reconnecting).catch(() => undefined);
+		});
 
 		return () => {
 			disposed = true;
 			connection.off(EVENT_NAME, onChanged);
 			removeReconnecting();
 			removeClosed();
-			removeReconnect();
-			if (connection.state === HubConnectionState.Connected) {
-				connection.invoke("UnsubscribeRun", runId).catch(() => undefined);
-			}
+			leave();
 			hub.release();
 		};
 	}, [queryClient, runId]);

@@ -1405,4 +1405,102 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			}),
 		);
 	});
+
+	describe("settings search", () => {
+		const isShown = (element: Element): boolean => element.closest('[style*="display: none"]') === null;
+		const search = (query: string): void => {
+			fireEvent.change(screen.getByTestId("node-settings-search"), { target: { value: query } });
+		};
+		const searchStatus = (): string => screen.getByTestId("node-settings-search-status").textContent ?? "";
+
+		it("filters the cards of every section by the text they render and says when nothing matches", async () => {
+			renderPage("general");
+			await screen.findByTestId("node-settings-section-content-general");
+
+			search("worker limits");
+
+			// The Usage card matched from another section; a card without the words is hidden, not unmounted.
+			const workerCard = await screen.findByTestId("node-settings-worker-card");
+			await waitFor(() => expect(searchStatus()).toBe("1 matching cards"));
+			expect(isShown(workerCard)).toBe(true);
+			expect(isShown(screen.getByTestId("node-settings-local-chat-card"))).toBe(false);
+			expect(screen.queryByTestId("node-settings-section-content-general")).toBeNull();
+
+			search("no such setting");
+
+			await waitFor(() => expect(searchStatus()).toBe("No settings match “no such setting”."));
+			expect(isShown(workerCard)).toBe(false);
+		});
+
+		it("matches a section's name and keeps all of its cards", async () => {
+			renderPage("general");
+			await screen.findByTestId("node-settings-section-content-general");
+
+			search("Usage & limits");
+
+			const workerCard = await screen.findByTestId("node-settings-worker-card");
+			await waitFor(() => expect(isShown(screen.getByTestId("node-settings-usage-rates-card"))).toBe(true));
+			expect(isShown(workerCard)).toBe(true);
+			expect(isShown(screen.getByTestId("node-settings-local-chat-card"))).toBe(false);
+		});
+
+		it("leaves the advanced sections out in Simple mode until the operator asks to search them", async () => {
+			generatedMock.getNodeSettingsOptions.mockReturnValue({
+				queryKey: ["getNodeSettings"],
+				queryFn: async () => ({ ...settingsResponse, uiMode: "simple" }),
+			});
+			renderPage("general");
+			await screen.findByTestId("node-settings-advanced-sections-toggle");
+
+			search("worker limits");
+
+			await waitFor(() => expect(searchStatus()).toBe("No settings match “worker limits”."));
+			expect(screen.queryByTestId("node-settings-worker-card")).toBeNull();
+
+			fireEvent.click(screen.getByTestId("node-settings-search-show-advanced"));
+
+			expect(isShown(await screen.findByTestId("node-settings-worker-card"))).toBe(true);
+			await waitFor(() => expect(searchStatus()).toBe("1 matching cards"));
+		});
+
+		it("keeps a card's unsaved input, and the same field, when a search starts and ends", async () => {
+			renderPage("general");
+			const typed = (await screen.findByTestId("node-change-password-current")) as HTMLInputElement;
+			fireEvent.change(typed, { target: { value: "typed-but-unsaved" } });
+
+			search("worker limits");
+			await waitFor(() => expect(searchStatus()).toBe("1 matching cards"));
+			expect(isShown(typed)).toBe(false);
+			search("");
+
+			await screen.findByTestId("node-settings-section-content-general");
+			const after = screen.getByTestId("node-change-password-current") as HTMLInputElement;
+			expect(after).toBe(typed);
+			expect(after.value).toBe("typed-but-unsaved");
+			await waitFor(() => expect(isShown(after)).toBe(true));
+			expect(isShown(screen.getByTestId("node-settings-worker-card"))).toBe(false);
+		});
+
+		it("clears on Escape, focuses the first match on Enter and gives way to a picked section", async () => {
+			renderPage("general");
+			await screen.findByTestId("node-settings-section-content-general");
+			const input = screen.getByTestId("node-settings-search");
+
+			search("worker limits");
+			await waitFor(() => expect(searchStatus()).toBe("1 matching cards"));
+			fireEvent.keyDown(input, { key: "Enter" });
+			expect(document.activeElement).toBe(screen.getByTestId("node-settings-max-response-size"));
+
+			fireEvent.keyDown(input, { key: "Escape" });
+			expect((input as HTMLInputElement).value).toBe("");
+			expect(await screen.findByTestId("node-settings-section-content-general")).toBeTruthy();
+
+			search("worker limits");
+			await screen.findByTestId("node-settings-search-results");
+			openSection("knowledge");
+
+			expect(await screen.findByTestId("node-settings-section-content-knowledge")).toBeTruthy();
+			expect((screen.getByTestId("node-settings-search") as HTMLInputElement).value).toBe("");
+		});
+	});
 });

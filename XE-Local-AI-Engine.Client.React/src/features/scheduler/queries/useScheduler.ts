@@ -4,9 +4,11 @@ import type { CancelScheduledJobRunResponse, CreateScheduledJobResponse, UpdateS
 import {
 	cancelScheduledJobRunMutation,
 	createScheduledJobMutation,
+	deleteNodeChatConversationMutation,
 	deleteScheduledJobMutation,
 	disableScheduledJobMutation,
 	enableScheduledJobMutation,
+	getNodeChatConversationOptions,
 	getScheduledJobRunOptions,
 	listScheduledJobRunsOptions,
 	listScheduledJobsOptions,
@@ -100,6 +102,24 @@ export function useScheduledJobRun(runId: string | null) {
 		...getScheduledJobRunOptions({ path: { runId: runId ?? "" } }),
 		enabled: runId !== null,
 		select: toScheduledJobRun,
+	});
+}
+
+// A successful agent run's saved prompt and answer, read only while the operator has it open from the run detail.
+export function useScheduledRunAnswer(conversationId: string | null) {
+	return useQuery({
+		...getNodeChatConversationOptions({ path: { conversationId: conversationId ?? "" } }),
+		enabled: conversationId !== null,
+	});
+}
+
+// Deleting the answer purges it at once; the run detail refetches and drops its link.
+export function useDeleteScheduledRunAnswer() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		...deleteNodeChatConversationMutation(),
+		onSuccess: () => invalidateRuns(queryClient),
 	});
 }
 

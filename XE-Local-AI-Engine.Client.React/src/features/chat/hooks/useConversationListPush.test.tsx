@@ -44,7 +44,7 @@ function renderPush(statusAtMount: NodeChatConnectionStatus) {
 	const { wrapper } = createProvidersWrapper({ queryClient });
 	const { unmount } = renderHook(() => useConversationListPush(), { wrapper });
 	const emit = (status: NodeChatConnectionStatus): void => listeners.at(-1)?.onStatusChange?.(status);
-	return { invalidate, unmount, emit };
+	return { invalidate, unmount, emit, queryClient };
 }
 
 describe("useConversationListPush", () => {
@@ -70,6 +70,41 @@ describe("useConversationListPush", () => {
 
 		unmount();
 		expect(hub.off).toHaveBeenCalledWith(CONVERSATIONS_CHANGED, handler);
+	});
+
+	it("re-reads the changed conversation's own detail too, which the open chat's sidebar row shows over the list", async () => {
+		const { invalidate } = renderPush("connected");
+		await waitFor(() => expect(hub.on).toHaveBeenCalledWith(CONVERSATIONS_CHANGED, expect.any(Function)));
+		const handler = hub.on.mock.calls[0]?.[1] as (event: { conversationId: string | null }) => void;
+
+		handler({ conversationId: "open-chat" });
+		expect(invalidate).toHaveBeenCalledTimes(2);
+		expect(invalidate).toHaveBeenCalledWith(listKey);
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: nodeChatQueryKeys.conversation("open-chat"), exact: true });
+
+		invalidate.mockClear();
+		handler({ conversationId: null });
+		expect(invalidate).toHaveBeenCalledTimes(1);
+		expect(invalidate).toHaveBeenCalledWith(listKey);
+	});
+
+	it("leaves a detail holding a live turn alone, so the next send's optimistic entry is not replaced by a refetch", async () => {
+		const { invalidate, queryClient } = renderPush("connected");
+		await waitFor(() => expect(hub.on).toHaveBeenCalledWith(CONVERSATIONS_CHANGED, expect.any(Function)));
+		const handler = hub.on.mock.calls[0]?.[1] as (event: { conversationId: string | null }) => void;
+		// The previous turn's push arrives after this tab already sent the next message (pending reply).
+		queryClient.setQueryData(nodeChatQueryKeys.conversation("open-chat"), {
+			id: "open-chat",
+			messages: [
+				{ id: "u2", role: "user", status: "completed" },
+				{ id: "a2", role: "assistant", status: "pending" },
+			],
+		});
+
+		handler({ conversationId: "open-chat" });
+
+		expect(invalidate).toHaveBeenCalledTimes(1);
+		expect(invalidate).toHaveBeenCalledWith(listKey);
 	});
 
 	it("attaches once to a connection a later send starts after the first connect failed, and refreshes the list once", async () => {

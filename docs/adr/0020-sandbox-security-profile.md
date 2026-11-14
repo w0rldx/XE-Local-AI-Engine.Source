@@ -87,6 +87,9 @@ interface-mode step is now asked it at the next sign-in, and a null sandbox prof
    `pending`. The route guard redirects to `/sandbox-profile-setup` when the profile is `pending`, after the
    external-access check and before the interface-mode check. The chooser offers `low` and `high`, preselects neither,
    has no skip control, and recommends `high` only when `HighProfileRefusals` is empty, otherwise `low`.
+   (Amended 2026-11-13: the chooser screen is gone so the first chat comes sooner. Setup still stamps `pending`, which
+   reads as `low`; after the first answer the SPA offers `low` or `high` once, while the profile is still `pending`, and
+   the choice stays in Node settings. The interface-mode screen went with it: setup stamps `simple`.)
 8. **Upgrade.** A null profile reads as `low`. A fresh install never holds null: setup stamps both profiles `pending`
    in one write, so a restart between the two answers keeps the sandbox profile `pending` and the operator is still
    asked. Only a data directory whose setup ran on a build before this decision holds null; it is not asked and runs

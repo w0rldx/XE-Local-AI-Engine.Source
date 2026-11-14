@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Thrown when a mutation targets a read-only (<c>Origin=Remote</c>) conversation.
+///     Thrown when a mutation targets a read-only conversation: an <c>Origin=Remote</c> mirror or a scheduled run's answer.
 /// </summary>
 /// <remarks>
 ///     On the REST path the global <c>ConflictExceptionHandler</c> turns it into a 409 with
@@ -10,7 +10,13 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 /// </remarks>
 public sealed class NodeChatReadOnlyConversationException : InvalidOperationException
 {
-    public NodeChatReadOnlyConversationException(Guid conversationId) : base($"Conversation {conversationId} is read-only because it has remote origin.")
+    public NodeChatReadOnlyConversationException(Guid conversationId) : this(conversationId, "it has remote origin")
+    {
+    }
+
+    /// <param name="conversationId">The refused conversation.</param>
+    /// <param name="reason">Why it is read-only, completing "is read-only because …".</param>
+    public NodeChatReadOnlyConversationException(Guid conversationId, string reason) : base($"Conversation {conversationId} is read-only because {reason}.")
     {
         ConversationId = conversationId;
     }

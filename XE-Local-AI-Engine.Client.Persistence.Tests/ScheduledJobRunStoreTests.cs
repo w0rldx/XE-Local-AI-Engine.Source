@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -501,6 +502,54 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
     }
 
     [Test]
+    public async Task SweepOlderThanAsync_DeletesAnExpiredRunsSavedAnswer_KeepsANewerRunsAndEveryChat()
+    {
+        // A saved answer is reachable only from its run, so a sweep that kept it would orphan readable content (ADR 0024).
+        var databasePath = GetDatabasePath("run-sweep-answers.sqlite");
+        using var keyHolder = CreateKeyHolder();
+        var clock = new MutableTimeProvider(1_000);
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var runStore = new ScheduledJobRunStore(context, clock);
+        var oldRun = await runStore.AddAsync(CreateRunInput(Guid.NewGuid(), ScheduledRunStatus.Succeeded));
+        clock.Advance(1_000);
+        var newRun = await runStore.AddAsync(CreateRunInput(Guid.NewGuid(), ScheduledRunStatus.Succeeded));
+        var chatId = Guid.NewGuid();
+        context.AddRange(Conversation(oldRun.Id, NodeConversationKind.Scheduled),
+            Conversation(newRun.Id, NodeConversationKind.Scheduled),
+            Conversation(chatId, NodeConversationKind.Chat));
+        // A saved answer is its messages: the sweep must take those rows too, not just the conversation row.
+        context.AddRange(Message(oldRun.Id), Message(newRun.Id), Message(chatId));
+        _ = await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        _ = await runStore.SweepOlderThanAsync(1_500);
+
+        var remaining = await context.Conversations.Select(static conversation => conversation.ConversationId).ToListAsync();
+        AssertEx.False(remaining.Contains(oldRun.Id), "The expired run's answer must go with the run.");
+        AssertEx.True(remaining.Contains(newRun.Id), "A run still in history keeps its answer.");
+        AssertEx.True(remaining.Contains(chatId), "The run sweep never touches a chat.");
+        var messageOwners = await context.Messages.Select(static message => message.ConversationId).ToListAsync();
+        AssertEx.False(messageOwners.Contains(oldRun.Id), "No message of the expired run's answer may remain.");
+        AssertEx.True(messageOwners.Contains(newRun.Id), "A run still in history keeps its answer's messages.");
+        AssertEx.True(messageOwners.Contains(chatId), "The run sweep never touches a chat's messages.");
+    }
+
+    private static NodeMessage Message(Guid conversationId) => new()
+    {
+        MessageId = Guid.NewGuid(),
+        ConversationId = conversationId,
+        Sequence = 1,
+        Role = "assistant",
+        Content = [1, 2, 3],
+        CreatedAtUtc = 1,
+        UpdatedAtUtc = 1
+    };
+
+    [Test]
     public async Task SweepOlderThanAsync_WhenNoneExpired_ReturnsZero()
     {
         var databasePath = GetDatabasePath("run-sweep-none.sqlite");
@@ -788,6 +837,14 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
             ActualFireTimeUtc = null
         };
     }
+
+    private static NodeConversation Conversation(Guid id, string kind) => new()
+    {
+        ConversationId = id,
+        CreatedAtUtc = 1,
+        LastSeenUtc = 1,
+        Kind = kind
+    };
 
     private sealed class MutableTimeProvider : TimeProvider
     {

@@ -30,7 +30,7 @@ export function NodeSettingsSandboxProfileCard({ form, errors, onChange, effecti
 	const profileLabel = (profile: string | undefined): string =>
 		profile === "high"
 			? t("pages.sandboxProfile.high.title", "High")
-			: profile === "low"
+			: profile === "low" || profile === "pending"
 				? t("pages.sandboxProfile.low.title", "Low")
 				: t("pages.nodeSettings.sandboxProfile.notChosen", "Not chosen");
 
@@ -56,7 +56,6 @@ export function NodeSettingsSandboxProfileCard({ form, errors, onChange, effecti
 			<SandboxProfileRadioCards
 				value={draft}
 				onChange={(value) => onChange("sandboxSecurityProfile", value)}
-				recommended={null}
 				highRefusals={draft === "high" ? highRefusals : undefined}
 				testIdPrefix="node-settings-sandbox-profile"
 			/>

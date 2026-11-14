@@ -89,12 +89,18 @@ After creating your profile, choose **Recommended** or **Offline / Manual**:
 You can change this choice later in **Node Settings**. Automatic provisioning waits for this decision;
 waiting at the account-setup screen will not download a model for you.
 
-### Choose Simple or Advanced
+Each setup screen shows how far along you are, for example **Step 3 of 3**.
 
-Next, choose how much of the application you want to see and click **Continue**. **Simple** shows the
-everyday tools, including chat, agents, models, knowledge, images and transcription. **Advanced** also
-shows tools such as scheduling, workflows, integrations, benchmarks and training. This choice does not
-delete anything, and you can change it later in **Node Settings**.
+### Simple mode and the Low sandbox profile
+
+The app starts in **Simple** mode with the **Low** sandbox profile. **Simple** shows the everyday tools,
+including chat, agents, models, knowledge, images and transcription. **Advanced** also shows tools such as
+scheduling, workflows, integrations, benchmarks and training. **Low** runs tools with the isolation this
+computer can give them; **High** refuses a tool this computer cannot fully isolate.
+
+After your first answer in chat, a card offers both choices once. Pick **Save** to keep what you chose, or
+**Not now** to keep the defaults. You can change both later in **Node Settings**; switching the mode
+deletes nothing.
 
 ---
 

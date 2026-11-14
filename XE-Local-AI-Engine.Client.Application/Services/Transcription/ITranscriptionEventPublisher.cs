@@ -66,4 +66,7 @@ public interface ITranscriptionEventPublisher
     ///     never after <see cref="PublishStatusAsync" />.
     /// </remarks>
     Task PublishSourceQuietAsync(Guid sessionId, TranscriptChannel channel, long quietMs, CancellationToken cancellationToken);
+
+    /// <summary>Announces one Whisper weight download's sanitized status to every connected client, not a session group.</summary>
+    Task PublishModelDownloadAsync(WhisperModelDownloadStatus status, CancellationToken cancellationToken);
 }

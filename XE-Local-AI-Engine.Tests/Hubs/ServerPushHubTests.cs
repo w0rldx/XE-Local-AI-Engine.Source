@@ -8,7 +8,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 using XE_Local_AI_Engine.Client.Hubs;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -186,7 +188,14 @@ public sealed class ServerPushHubTests
         });
         await using var connection = Connect(LocalApiRoutes.LocalChat.Hub);
         var received = new TaskCompletionSource<ConversationsChangedHubEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _ = connection.On<ConversationsChangedHubEvent>(LocalChatHubEvents.ConversationsChanged, evt => received.TrySetResult(evt));
+        _ = connection.On<ConversationsChangedHubEvent>(LocalChatHubEvents.ConversationsChanged, evt =>
+        {
+            // Turns finishing in parallel tests on this shared host push too.
+            if (evt.ConversationId == conversationId)
+            {
+                received.TrySetResult(evt);
+            }
+        });
         await connection.StartAndAwaitRegistrationAsync();
 
         using var client = Factory.CreateClient();
@@ -206,6 +215,191 @@ public sealed class ServerPushHubTests
         AssertEx.Equal(LocalChatHubEvents.ConversationsChanged, evt.EventType);
         AssertEx.Equal<Guid?>(conversationId, evt.ConversationId);
     }
+
+    [Test]
+    public async Task AFinishedTurn_PushesOneConversationChange_AndItsStreamedWritesPushNone()
+    {
+        // A turn another client writes re-sorts and re-previews an open sidebar once, at its end, not per flushed token.
+        var service = Factory.Services.GetRequiredService<INodeChatPersistenceService>();
+        var conversationId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversationId,
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        await using var connection = Connect(LocalApiRoutes.LocalChat.Hub);
+        var pushes = 0;
+        var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = connection.On<ConversationsChangedHubEvent>(LocalChatHubEvents.ConversationsChanged, evt =>
+        {
+            if (evt.ConversationId == conversationId)
+            {
+                _ = Interlocked.Increment(ref pushes);
+                received.TrySetResult();
+            }
+        });
+        await connection.StartAndAwaitRegistrationAsync();
+
+        _ = await service.EnsureConversationAsync(new NodeChatEnsureConversationRequest
+        {
+            ConversationId = conversationId,
+            Title = "Turn push",
+            UserId = "operator",
+            CreatedAtUtc = 10,
+            Origin = NodeChatOriginValues.Local
+        });
+        _ = await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversationId,
+            MessageId = correlation.MessageId,
+            RequestId = correlation.RequestId,
+            CreatedAtUtc = 12
+        });
+        _ = await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 13);
+        _ = await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest
+        {
+            Correlation = correlation,
+            Content = "partial",
+            Reasoning = null,
+            UpdatedAtUtc = 14
+        });
+        _ = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 15,
+            Content = "answer"
+        });
+
+        await received.Task.WaitAsync(TestBudgets.Contended);
+        // One connection delivers in send order, so a push from an earlier write would have arrived before this one.
+        AssertEx.Equal(expected: 1, Volatile.Read(ref pushes), "Only the terminal write pushes; the placeholder, streaming mark and flush do not.");
+    }
+
+    [Test]
+    public async Task AFinishedTurnInAWorkSessionTranscript_PushesNothing()
+    {
+        // Only chats are listed: a work-session, integration or graph turn must not make every open tab re-read the list.
+        var service = Factory.Services.GetRequiredService<INodeChatPersistenceService>();
+        var workSession = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Work session turn",
+            UserId = "operator",
+            CreatedAtUtc = 10,
+            Kind = NodeConversationKind.WorkSession
+        });
+        var marker = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Marker chat turn",
+            UserId = "operator",
+            CreatedAtUtc = 11
+        });
+        await using var connection = Connect(LocalApiRoutes.LocalChat.Hub);
+        var workSessionPushes = 0;
+        var markerReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = connection.On<ConversationsChangedHubEvent>(LocalChatHubEvents.ConversationsChanged, evt =>
+        {
+            if (evt.ConversationId == workSession.ConversationId)
+            {
+                _ = Interlocked.Increment(ref workSessionPushes);
+            }
+            else if (evt.ConversationId == marker.ConversationId)
+            {
+                markerReceived.TrySetResult();
+            }
+        });
+        await connection.StartAndAwaitRegistrationAsync();
+
+        await FinishTurnAsync(service, workSession.ConversationId);
+        await FinishTurnAsync(service, marker.ConversationId);
+
+        await markerReceived.Task.WaitAsync(TestBudgets.Contended);
+        // One connection delivers in send order: a push for the earlier work-session turn would have arrived first.
+        AssertEx.Equal(expected: 0, Volatile.Read(ref workSessionPushes), "A work-session turn must not push a chat-list change.");
+    }
+
+    private static async Task FinishTurnAsync(INodeChatPersistenceService service, Guid conversationId)
+    {
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversationId,
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        _ = await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversationId,
+            MessageId = correlation.MessageId,
+            RequestId = correlation.RequestId,
+            CreatedAtUtc = 12
+        });
+        _ = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 15,
+            Content = "answer"
+        });
+    }
+
+    [Test]
+    public async Task ImportWithAnImportId_PushesItsProgress_ThenFinished()
+    {
+        var importId = Guid.NewGuid();
+        await using var connection = Connect(LocalApiRoutes.LocalChat.Hub);
+        var events = new List<ImportProgressHubEvent>();
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = connection.On<ImportProgressHubEvent>(LocalChatHubEvents.ImportProgress, evt =>
+        {
+            if (evt.ImportId != importId)
+            {
+                return;
+            }
+
+            lock (events)
+            {
+                events.Add(evt);
+            }
+
+            if (evt.State == ImportProgressStates.Finished)
+            {
+                finished.TrySetResult();
+            }
+        });
+        await connection.StartAndAwaitRegistrationAsync();
+
+        using var client = Factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/local/v1/chat/import?importId={importId}")
+        {
+            Content = JsonContent.Create(new NodeChatExportDocument
+            {
+                Format = NodeChatExportFile.Format,
+                FormatVersion = NodeChatExportFile.FormatVersion,
+                Conversations = [ImportedChat("one"), ImportedChat("two"), ImportedChat("three")]
+            })
+        };
+        Factory.AddNodeBearerToken(request);
+        request.Headers.Add("Origin", "http://localhost");
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+        await finished.Task.WaitAsync(TestBudgets.Contended);
+        string observed;
+        lock (events)
+        {
+            observed = string.Join(' ', events.Select(static evt => $"{evt.State}:{evt.ImportedChats}/{evt.TotalChats}"));
+        }
+
+        AssertEx.Equal("running:0/3 running:1/3 running:2/3 finished:3/3", observed, "A start, one push per written chat, and the end.");
+    }
+
+    private static NodeChatExportConversation ImportedChat(string title) => new()
+    {
+        Title = title,
+        CreatedAtUtc = 10,
+        Messages = [new NodeChatExportMessage { Role = "user", Content = title, CreatedAtUtc = 11 }]
+    };
 
     private HubConnection Connect(string hubPath)
     {

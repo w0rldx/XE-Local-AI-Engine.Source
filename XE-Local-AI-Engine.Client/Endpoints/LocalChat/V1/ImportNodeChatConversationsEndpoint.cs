@@ -13,8 +13,9 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 ///     Every conversation and message gets a fresh id, so the content is encrypted under its new AAD and nothing in the
 ///     file can collide with a stored row. The validator refuses the whole file before anything is written; a write
 ///     that still fails purges every chat this import created (a purge that fails too is logged) and surfaces the error.
+///     With an <c>importId</c> it pushes progress on the chat hub; the response still comes once, at the end.
 /// </remarks>
-public sealed class ImportNodeChatConversationsEndpoint : Endpoint<NodeChatExportDocument, NodeChatImportResponse>
+public sealed class ImportNodeChatConversationsEndpoint : Endpoint<ImportNodeChatConversationsRequest, NodeChatImportResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence;
     private readonly LocalChatConversationChangePublisher _changePublisher;
@@ -47,17 +48,25 @@ public sealed class ImportNodeChatConversationsEndpoint : Endpoint<NodeChatExpor
                                              .ProducesProblem(StatusCodes.Status413PayloadTooLarge));
     }
 
-    public override async Task HandleAsync(NodeChatExportDocument req, CancellationToken ct)
+    public override async Task HandleAsync(ImportNodeChatConversationsRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var createdIds = new List<Guid>(req.Conversations.Count);
-        var imported = new List<NodeChatImportedConversationResponse>(req.Conversations.Count);
+        var conversations = req.Document.Conversations;
+        var total = conversations.Count;
+        var createdIds = new List<Guid>(total);
+        var imported = new List<NodeChatImportedConversationResponse>(total);
         try
         {
-            foreach (var conversation in req.Conversations)
+            await PublishProgressAsync(req.ImportId, 0, total, ImportProgressStates.Running, ct);
+            foreach (var conversation in conversations)
             {
                 imported.Add(await ImportAsync(conversation, createdIds, ct));
+                // At most one push per percent, so a file of thousands of small chats does not flood the hub.
+                if (imported.Count < total && imported.Count * 100 / total != (imported.Count - 1) * 100 / total)
+                {
+                    await PublishProgressAsync(req.ImportId, imported.Count, total, ImportProgressStates.Running, ct);
+                }
             }
         }
         catch
@@ -82,16 +91,26 @@ public sealed class ImportNodeChatConversationsEndpoint : Endpoint<NodeChatExpor
                 }
             }
 
+            await PublishProgressAsync(req.ImportId, imported.Count, total, ImportProgressStates.Failed, CancellationToken.None);
             throw;
         }
 
-        // One push for the whole file, not one per chat.
+        await PublishProgressAsync(req.ImportId, total, total, ImportProgressStates.Finished, ct);
+        // One list push for the whole file, not one per chat.
         await _changePublisher.PublishAsync(conversationId: null, ct);
         await Send.OkAsync(new NodeChatImportResponse
             {
                 Conversations = imported
             },
             ct);
+    }
+
+    // Without an import id nobody can tell the pushes apart, so none are sent.
+    private Task PublishProgressAsync(Guid? importId, int importedChats, int totalChats, string state, CancellationToken ct)
+    {
+        return importId is { } id
+            ? _changePublisher.PublishImportProgressAsync(id, importedChats, totalChats, state, ct)
+            : Task.CompletedTask;
     }
 
     private async Task<NodeChatImportedConversationResponse> ImportAsync(NodeChatExportConversation conversation, List<Guid> createdIds, CancellationToken ct)

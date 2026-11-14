@@ -19,6 +19,12 @@ vi.mock("@/core/api/generated", () => ({
 	importNodeChatConversations: importMock,
 }));
 
+const { hub } = vi.hoisted(() => ({ hub: { on: vi.fn(), off: vi.fn() } }));
+
+vi.mock("@/features/chat/api/NodeChatConnection", () => ({
+	nodeChatConnection: { ensureConnection: vi.fn(async () => hub) },
+}));
+
 vi.mock("@/core/api/utils/DownloadBlob", () => ({ saveBlob: saveBlobMock }));
 
 vi.mock("@/core/ui/notifications/Toast", () => ({
@@ -32,7 +38,8 @@ vi.mock("@/core/ui/notifications/Toast", () => ({
 	},
 }));
 
-import { useChatExportImport } from "@/features/chat/hooks/useChatExportImport";
+import { nodeChatConnection } from "@/features/chat/api/NodeChatConnection";
+import { CHAT_IMPORT_PROGRESS, useChatExportImport } from "@/features/chat/hooks/useChatExportImport";
 import { CHAT_IMPORT_READ_LIMIT_BYTES } from "@/features/chat/models/ChatExportFile";
 import en from "@/locales/en.json";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
@@ -148,7 +155,63 @@ describe("useChatExportImport", () => {
 				id: "chat-import",
 			}),
 		);
-		expect(importMock).toHaveBeenCalledWith({ body: exportDocument });
+		expect(importMock).toHaveBeenCalledWith({ body: exportDocument, query: { importId: expect.any(String) } });
+	});
+
+	it("shows the node's progress for its own import id only, and stops listening once the node answers", async () => {
+		let answer: (value: unknown) => void = () => undefined;
+		importMock.mockReturnValue(
+			new Promise((resolve) => {
+				answer = resolve;
+			}),
+		);
+		const result = renderExportImport();
+
+		act(() =>
+			result.current.importFile(new File([JSON.stringify(exportDocument)], "chats.chat.json", { type: "application/json" })),
+		);
+
+		await waitFor(() => expect(importMock).toHaveBeenCalled());
+		const [request] = importMock.mock.calls[0] as [{ query: { importId: string } }];
+		const importId = request.query.importId;
+		await waitFor(() => expect(hub.on).toHaveBeenCalledWith(CHAT_IMPORT_PROGRESS, expect.any(Function)));
+		const push = hub.on.mock.calls[0]?.[1] as (event: unknown) => void;
+		toastProgressMock.mockClear();
+
+		push({ importId: "another-import", importedChats: 5, totalChats: 10, state: "running" });
+		push({ importId, importedChats: 300, totalChats: 1500, state: "running" });
+		expect(toastProgressMock).toHaveBeenCalledTimes(1);
+		expect(toastProgressMock).toHaveBeenCalledWith({
+			id: "chat-import",
+			message: en.chat.exportImport.importProgress.replace("{{done}}", "300").replace("{{total}}", "1500"),
+			percent: 20,
+		});
+
+		await act(async () =>
+			answer({ data: { conversations: [{ conversationId: "new-1", title: "Trip plan", messageCount: 1 }] } }),
+		);
+		await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith(expect.any(String), { id: "chat-import" }));
+		expect(hub.off).toHaveBeenCalledWith(CHAT_IMPORT_PROGRESS, push);
+	});
+
+	it("sends the import without waiting for the chat hub, and never listens once the node has answered", async () => {
+		// A hub that is down reconnects for many seconds; the import must not wait on it.
+		let connect: (value: typeof hub) => void = () => undefined;
+		vi.mocked(nodeChatConnection.ensureConnection).mockReturnValueOnce(
+			new Promise((resolve) => {
+				connect = resolve;
+			}) as never,
+		);
+		importMock.mockResolvedValue({ data: { conversations: [{ conversationId: "new-1", title: "Trip plan", messageCount: 1 }] } });
+		const result = renderExportImport();
+
+		act(() =>
+			result.current.importFile(new File([JSON.stringify(exportDocument)], "chats.chat.json", { type: "application/json" })),
+		);
+
+		await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith(expect.any(String), { id: "chat-import" }));
+		await act(async () => connect(hub));
+		expect(hub.on).not.toHaveBeenCalled();
 	});
 
 	it("stays busy with a sticky notice until the node answers, then replaces the notice with the result", async () => {

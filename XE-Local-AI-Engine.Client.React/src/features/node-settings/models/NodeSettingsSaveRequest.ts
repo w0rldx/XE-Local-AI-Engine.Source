@@ -103,7 +103,7 @@ export function turnsOnExecutionPreviews(body: SaveNodeSettingsRequest): boolean
 }
 
 // The save lowers the sandbox security profile. The body carries changed fields only, so "low" here is always the
-// high-to-low transition (a pending node never reaches this page: the first-run chooser owns that write).
+// high-to-low transition (a pending profile is seeded as low, so leaving it Low sends nothing).
 export function lowersSandboxSecurityProfile(body: SaveNodeSettingsRequest): boolean {
 	return body.sandboxSecurityProfile === "low";
 }

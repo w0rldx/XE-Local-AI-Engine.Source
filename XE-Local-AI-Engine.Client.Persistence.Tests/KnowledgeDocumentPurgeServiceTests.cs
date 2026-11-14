@@ -46,12 +46,17 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
         await SeedDocumentGraphAsync(databasePath, documentId);
         await SeedDocumentGraphAsync(databasePath, controlDocumentId, ControlToken);
 
+        var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>(), NullLogger<KnowledgeDocumentPurgeService>.Instance);
+            var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>(), notifier, NullLogger<KnowledgeDocumentPurgeService>.Instance);
             var purged = await purge.PurgeAsync(documentId, CancellationToken.None);
             AssertEx.True(purged, "Purge should report success for an existing document.");
         }
+
+        // A document deleted while queued pushes no terminal status, so the removal is what lets the indexing feed drop it.
+        await notifier.Received(1).NotifyDocumentRemovedAsync(documentId, Arg.Any<CancellationToken>());
+        await notifier.DidNotReceive().NotifyDocumentRemovedAsync(controlDocumentId, Arg.Any<CancellationToken>());
 
         await using var connection = await OpenConnectionAsync(databasePath);
         AssertEx.Equal(expected: 0L,
@@ -82,7 +87,7 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>(), NullLogger<KnowledgeDocumentPurgeService>.Instance);
+            var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>(), Substitute.For<IKnowledgeIndexingNotifier>(), NullLogger<KnowledgeDocumentPurgeService>.Instance);
             _ = await purge.PurgeAsync(documentId, CancellationToken.None);
         }
 
@@ -131,11 +136,13 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
         await MigrateAsync(databasePath);
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>(), NullLogger<KnowledgeDocumentPurgeService>.Instance);
+        var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
+        var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>(), notifier, NullLogger<KnowledgeDocumentPurgeService>.Instance);
 
         var purged = await purge.PurgeAsync(Guid.NewGuid(), CancellationToken.None);
 
         AssertEx.False(purged, "Purging a non-existent document should return false so the endpoint maps it to a 404.");
+        await notifier.DidNotReceiveWithAnyArgs().NotifyDocumentRemovedAsync(Guid.Empty, default);
     }
 
     [Test]
@@ -159,7 +166,7 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
         bool purged;
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            var purge = new KnowledgeDocumentPurgeService(context, blobStore, NullLogger<KnowledgeDocumentPurgeService>.Instance);
+            var purge = new KnowledgeDocumentPurgeService(context, blobStore, Substitute.For<IKnowledgeIndexingNotifier>(), NullLogger<KnowledgeDocumentPurgeService>.Instance);
             purged = await purge.PurgeAsync(documentId, CancellationToken.None);
         }
 
@@ -194,7 +201,7 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            var purge = new KnowledgeDocumentPurgeService(context, blobStore, NullLogger<KnowledgeDocumentPurgeService>.Instance);
+            var purge = new KnowledgeDocumentPurgeService(context, blobStore, Substitute.For<IKnowledgeIndexingNotifier>(), NullLogger<KnowledgeDocumentPurgeService>.Instance);
             _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => purge.PurgeAsync(documentId, CancellationToken.None));
         }
 

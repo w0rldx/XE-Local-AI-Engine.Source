@@ -2,3 +2,12 @@ body {
 	margin: 0;
 	height: 100dvh;
 }
+
+::highlight(node-settings-search) {
+	/* The Node settings search marks its matches through the CSS Custom Highlight API, in Mantine's Mark colours. */
+	background-color: var(--mantine-color-yellow-2);
+}
+
+[data-mantine-color-scheme="dark"] ::highlight(node-settings-search) {
+	background-color: rgb(from var(--mantine-color-yellow-5) r g b / 35%);
+}

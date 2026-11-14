@@ -19,7 +19,7 @@ const hubMock = vi.hoisted(() => {
 		connection,
 		whenStarted: Promise.resolve(),
 		onReconnecting: vi.fn(),
-		onReconnected: vi.fn(),
+		onReconnected: vi.fn(() => () => undefined),
 		onClosed: vi.fn(),
 		release: vi.fn(),
 	};

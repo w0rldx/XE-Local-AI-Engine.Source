@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { z } from "zod";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
+import { joinHubGroup } from "@/core/api/signalr/SharedHubGroups";
 
 export const runStreamEventSchema = z.object({
 	runId: z.string(),
@@ -108,18 +109,17 @@ export function useRunStreamSubscription(runId: string | null, handlers: RunStre
 				});
 		};
 		hub.onReconnecting(degrade);
-		hub.onReconnected(subscribe);
 		hub.onClosed(degrade);
-		hub.whenStarted.then(subscribe).catch(degrade);
+		// The operations feed may hold this run's group on the same connection; only the last holder leaves it.
+		const leave = joinHubGroup(hub, ["Unsubscribe", runId], subscribe);
+		hub.whenStarted.catch(degrade);
 
 		return () => {
 			disposed = true;
 			handlersRef.current.onLiveChange?.(false);
 			connection.off("trainingRun.event", eventHandler);
 			connection.off("trainingRun.replayReset", resetHandler);
-			if (connection.state === HubConnectionState.Connected) {
-				connection.invoke("Unsubscribe", runId).catch(() => undefined);
-			}
+			leave();
 			hub.release();
 		};
 	}, [runId]);

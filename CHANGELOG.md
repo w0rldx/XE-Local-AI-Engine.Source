@@ -43,8 +43,9 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 >   renamed to blank, or one whose title the title-encryption migration cleared. Its title is no longer re-derived at
 >   restart.
 > - A node set up before the external-access profile existed is asked to choose it at the next sign-in, and one set up
->   before the interface mode existed is asked for the mode. Until the profile is chosen, the three automatic outbound
->   checks wait: the app-update check, the llama.cpp update check and the desktop first-run model download.
+>   before the interface mode existed keeps the Advanced navigation it had. Until the profile is chosen, the three
+>   automatic outbound checks wait: the app-update check, the llama.cpp update check and the desktop first-run model
+>   download.
 >   Operator-started downloads, web access, cloud chat and llama.cpp runtime acquisition run as before. A null sandbox
 >   profile keeps reading as `low`.
 > - The knowledge-base embedding pin lives in `node-settings.json` and is no longer restored at startup. A corpus
@@ -131,6 +132,13 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **A shorter first run** — a fresh install asks for the account, the recovery code and the external-access choice only,
+  with "Step n of 3" on each screen. It starts in Simple mode with the Low sandbox profile; after the first answer a card
+  offers both choices once, and both stay in Node settings. An install that already chose keeps its choice.
+- **Scheduled agent answers are readable** — a successful "Run a saved agent" job now keeps its prompt and answer,
+  encrypted like a chat, and the run detail opens them with "Open answer" in a read-only view that can delete them. They
+  never appear in the chat list, search or export, run history still holds no prompt or answer text, and an answer is
+  removed with its run by the scheduler history retention. Failed and cancelled runs keep nothing (ADR 0024).
 - **Home is the landing page again** — `/` renders Home instead of redirecting to Chat, and Home is the first navigation
   entry. A greeting card starts a new chat or continues the last one, and on a node with no chat model says so, links to
   Models and shows the first-run model download. Recent chats lists the last five conversations by activity. In Advanced
@@ -286,8 +294,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   and unattended-run refusal that a grant can lift now names the grant on the model's external connection as the
   alternative to the node-wide switch, and an orchestration's shared attachments and knowledge now reach it when every
   cloud participant's connection grants local data.
-- **Sandbox security profile** — the operator chooses `low` (today's behaviour) or `high` once in the first-run chain,
-  after external access, and changes it on the new **Sandbox & isolation** section of Node settings, with a
+- **Sandbox security profile** — the operator chooses `low` (today's behaviour, and the default) or `high` on the card
+  offered after the first answer, and changes it on the new **Sandbox & isolation** section of Node settings, with a
   confirmation when lowering. Under `high`, every containment axis a workload declares it prefers (egress denial, a
   stable filesystem boundary, resource ceilings) becomes a precondition and is refused fail-closed, naming the profile.
   The Development isolation table now shows what is required and whether it is satisfied. The execution-previews switch

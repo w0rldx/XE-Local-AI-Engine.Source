@@ -1,7 +1,7 @@
 import { Badge, Box, Button, NavLink, Select, Stack } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import type { NodeSettingsSectionId } from "@/features/node-settings/models/NodeSettingsSections";
+import { type NodeSettingsSectionId, nodeSettingsSectionLabel } from "@/features/node-settings/models/NodeSettingsSections";
 
 interface Props {
 	readonly sections: readonly NodeSettingsSectionId[];
@@ -14,30 +14,10 @@ interface Props {
 	readonly compact: boolean;
 }
 
-type Translate = ReturnType<typeof useTranslation>["t"];
-
-function sectionLabel(t: Translate, section: NodeSettingsSectionId): string {
-	const labels: Record<NodeSettingsSectionId, string> = {
-		general: t("pages.nodeSettings.sections.general", "General"),
-		chat: t("pages.nodeSettings.sections.chat", "Chat & agents"),
-		runtime: t("pages.nodeSettings.sections.runtime", "Model runtime"),
-		runtimes: t("pages.nodeSettings.sections.runtimes", "Runtimes & builds"),
-		models: t("pages.nodeSettings.sections.models", "Models & downloads"),
-		knowledge: t("pages.nodeSettings.sections.knowledge", "Knowledge & web"),
-		voice: t("pages.nodeSettings.sections.voice", "Voice & transcription"),
-		privacy: t("pages.nodeSettings.sections.privacy", "Privacy & updates"),
-		integrations: t("pages.nodeSettings.sections.integrations", "Integrations & keys"),
-		workspaces: t("pages.nodeSettings.sections.workspaces", "Agent workspaces"),
-		sandbox: t("pages.nodeSettings.sections.sandbox", "Sandbox & isolation"),
-		usage: t("pages.nodeSettings.sections.usage", "Usage & limits"),
-	};
-	return labels[section];
-}
-
 // A navigation landmark: a vertical list, or a select on a compact viewport (phone width, or too short for the list).
 export function NodeSettingsSectionNav({ sections, active, onSelect, dirtyCounts, advancedToggle, compact }: Props) {
 	const { t } = useTranslation();
-	const label = (section: NodeSettingsSectionId): string => sectionLabel(t, section);
+	const label = (section: NodeSettingsSectionId): string => nodeSettingsSectionLabel(t, section);
 	const navLabel = t("pages.nodeSettings.sections.navLabel", "Settings sections");
 
 	return (

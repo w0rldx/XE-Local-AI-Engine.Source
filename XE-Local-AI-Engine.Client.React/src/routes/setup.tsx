@@ -1,31 +1,9 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
-import { retryTransient } from "@/core/api/errors/RetryClassification";
-import { getNodeAuthStatus } from "@/core/auth/api/NodeAuthApi";
 import { Setup } from "@/core/auth/pages/Setup";
-import { restoreNodeAuthSession } from "@/core/auth/utils/SessionRestore";
+import { guardFirstRun } from "@/core/auth/utils/FirstRunGuard";
 
 export const Route = createFileRoute("/setup")({
-	beforeLoad: async () => {
-		const status = await retryTransient(() => getNodeAuthStatus());
-		if (status.vault === "locked") {
-			throw redirect({ to: "/vault" });
-		}
-
-		if (status.setupRequired) {
-			return;
-		}
-
-		const restoreResult = await restoreNodeAuthSession();
-		if (restoreResult === "authenticated") {
-			throw redirect({ to: "/" });
-		}
-
-		if (restoreResult === "vault-setup-required") {
-			throw redirect({ to: "/vault-setup" });
-		}
-
-		throw redirect({ to: "/login" });
-	},
+	beforeLoad: ({ context, location }) => guardFirstRun("/setup", { location, queryClient: context.queryClient }),
 	component: Setup,
 });

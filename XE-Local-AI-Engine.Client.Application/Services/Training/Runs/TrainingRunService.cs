@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
 /// <summary>
@@ -38,6 +39,8 @@ public interface ITrainingRunService
 public sealed class TrainingRunService : ITrainingRunService
 {
     private readonly IInstalledBaseModelLinker _linker;
+    private readonly IJobCreatedPublisher _jobCreated;
+    private readonly ITrainingRunEventBuffer _events;
     private readonly TrainingRunCancellationRegistry _cancellations;
     private readonly ITrainingDatasetStore _datasetStore;
     private readonly ITrainingOptionDefaultsCalculator _defaults;
@@ -55,8 +58,14 @@ public sealed class TrainingRunService : ITrainingRunService
         TrainingRunWorkspace workspace,
         TrainingRunCancellationRegistry cancellations,
         ITrainingRunQueueSignal signal,
-        IInstalledBaseModelLinker linker)
+        IInstalledBaseModelLinker linker,
+        IJobCreatedPublisher jobCreated,
+        ITrainingRunEventBuffer events)
     {
+        ArgumentNullException.ThrowIfNull(events);
+        _events = events;
+        ArgumentNullException.ThrowIfNull(jobCreated);
+        _jobCreated = jobCreated;
         ArgumentNullException.ThrowIfNull(linker);
         ArgumentNullException.ThrowIfNull(cancellations);
         ArgumentNullException.ThrowIfNull(datasetStore);
@@ -131,7 +140,16 @@ public sealed class TrainingRunService : ITrainingRunService
             return;
         }
 
-        _ = await _runStore.CompleteRunAsync(runId, TrainingWorkStatus.Cancelled, "Cancelled before the run started.", cancellationToken);
+        const string message = "Cancelled before the run started.";
+        var cancelled = await _runStore.CompleteRunAsync(runId, TrainingWorkStatus.Cancelled, message, cancellationToken);
+        // Committed, then published as the executor's terminal path does: no executor runs for it, and a tab holding the run's group needs the end.
+        _ = _events.Append(runId, TrainingRunEventKind.State, new TrainingRunPayload
+        {
+            State = cancelled.Status.ToString(),
+            Message = message,
+            RunVersion = cancelled.Version
+        });
+        _events.EvictPlaintext(runId);
         _signal.Wake();
     }
 
@@ -272,6 +290,8 @@ public sealed class TrainingRunService : ITrainingRunService
             },
             cancellationToken);
         _signal.Wake();
+        // The run is committed: announced even if the request was aborted meanwhile.
+        await _jobCreated.PublishCreatedAsync(CreatedJobKind.TrainingRun, run.Id, CancellationToken.None);
         return run;
     }
 }

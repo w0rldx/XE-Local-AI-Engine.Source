@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -37,11 +38,16 @@ public sealed class DatasetGenerationQueueTests
         AssertEx.Succeeded(gate.TryBeginExclusive(GpuWorkKind.TrainingRun, out var run));
         run.Dispose();
         var store = Substitute.For<ITrainingDatasetStore>();
-        _ = store.CreateDatasetAndEnqueueAsync(Arg.Any<TrainingDatasetEnqueueCommand>(), Arg.Any<CancellationToken>()).Returns(Dataset());
+        var dataset = Dataset();
+        _ = store.CreateDatasetAndEnqueueAsync(Arg.Any<TrainingDatasetEnqueueCommand>(), Arg.Any<CancellationToken>()).Returns(dataset);
         using var signal = new DatasetGenerationQueueSignal();
-        var service = Service(store, gate, signal);
+        var jobCreated = Substitute.For<IJobCreatedPublisher>();
+        var service = Service(store, gate, signal, jobCreated: jobCreated);
 
         _ = await service.StartAsync(Guid.NewGuid(), 1, "dataset");
+
+        // Other tabs' operations feeds join no group for a build they never saw; this broadcast is how they learn of it.
+        await jobCreated.Received(1).PublishCreatedAsync(CreatedJobKind.DatasetBuild, dataset.Id, Arg.Any<CancellationToken>());
 
         _ = await store.Received(1).CreateDatasetAndEnqueueAsync(Arg.Any<TrainingDatasetEnqueueCommand>(), Arg.Any<CancellationToken>());
         AssertEx.True(await signal.WaitAsync(TimeSpan.Zero, CancellationToken.None), "Enqueueing must wake the single consumer.");
@@ -54,12 +60,22 @@ public sealed class DatasetGenerationQueueTests
         var store = Substitute.For<ITrainingDatasetStore>();
         var datasetId = Guid.NewGuid();
         _ = store.GetDatasetAsync(datasetId, Arg.Any<CancellationToken>()).Returns(Dataset());
+        var order = new List<string>();
+        _ = store.CompleteGenerationAsync(datasetId, DatasetGenerationWorkStatus.Cancelled, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                 .Returns<TrainingDatasetRecord>(_ =>
+                 {
+                     order.Add("commit Cancelled");
+                     return Dataset();
+                 });
+        var events = new DatasetGenerationEventBuffer(Options.Create(new DatasetGenerationEventBufferOptions()));
+        events.EventPublished += (_, args) => order.Add($"publish {args.Event.Kind} {args.Event.Payload.State} {args.Event.DatasetId == datasetId}");
         using var signal = new DatasetGenerationQueueSignal();
-        var service = Service(store, new GpuWorkGate(), signal);
+        var service = Service(store, new GpuWorkGate(), signal, events: events);
 
         await service.CancelAsync(datasetId);
 
-        _ = await store.Received(1).CompleteGenerationAsync(datasetId, DatasetGenerationWorkStatus.Cancelled, Arg.Any<string>(), Arg.Any<CancellationToken>());
+        // No executor runs for a queued build, so this is the only end a tab holding the build's group will see.
+        AssertEx.Equal("commit Cancelled | publish State Cancelled True", string.Join(" | ", order));
     }
 
     [Test]
@@ -162,8 +178,15 @@ public sealed class DatasetGenerationQueueTests
     private static DatasetGenerationService Service(ITrainingDatasetStore store,
         IGpuWorkGate gate,
         IDatasetGenerationQueueSignal signal,
-        TrainingRunCancellationRegistry? cancellations = null) =>
-        new(store, gate, cancellations ?? new TrainingRunCancellationRegistry(), signal);
+        TrainingRunCancellationRegistry? cancellations = null,
+        IJobCreatedPublisher? jobCreated = null,
+        IDatasetGenerationEventBuffer? events = null) =>
+        new(store,
+            gate,
+            cancellations ?? new TrainingRunCancellationRegistry(),
+            signal,
+            jobCreated ?? Substitute.For<IJobCreatedPublisher>(),
+            events ?? new DatasetGenerationEventBuffer(Options.Create(new DatasetGenerationEventBufferOptions())));
 
     private static TrainingDatasetRecord Dataset() =>
         new()

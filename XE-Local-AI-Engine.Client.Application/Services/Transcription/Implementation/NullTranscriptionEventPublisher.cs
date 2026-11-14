@@ -35,4 +35,7 @@ public sealed class NullTranscriptionEventPublisher : ITranscriptionEventPublish
 
     public Task PublishSourceQuietAsync(Guid sessionId, TranscriptChannel channel, long quietMs, CancellationToken cancellationToken) =>
         Task.CompletedTask;
+
+    public Task PublishModelDownloadAsync(WhisperModelDownloadStatus status, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 }

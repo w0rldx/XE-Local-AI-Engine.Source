@@ -27,10 +27,11 @@ public sealed class NodeChatPersistenceWriter
         ArgumentNullException.ThrowIfNull(scopeFactory);
         _logger = logger;
         _scopeFactory = scopeFactory;
+        SearchIndex = new ConversationSearchIndex(logger);
     }
 
     /// <summary>The conversation search index. Every exclusive or message-update operation marks its conversation stale.</summary>
-    internal ConversationSearchIndex SearchIndex { get; } = new();
+    internal ConversationSearchIndex SearchIndex { get; }
 
     /// <summary>The writer's logger, shared with the read model on this writer; null when none was supplied.</summary>
     internal ILogger? Logger => _logger;

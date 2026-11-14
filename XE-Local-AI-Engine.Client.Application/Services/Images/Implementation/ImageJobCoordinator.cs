@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -44,6 +45,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     private readonly IGeneratedImageStore _imageStore;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IImageJobEventPublisher _eventPublisher;
+    private readonly IJobCreatedPublisher _jobCreated;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ImageJobCoordinator> _logger;
     private readonly IImageRuntimeActivityGate _runtimeActivityGate;
@@ -88,8 +90,11 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         IImageRuntimeActivityGate runtimeActivityGate,
         IGpuWorkGate gpuWorkGate,
         ILlamaServerProcessSupervisor llamaSupervisor,
-        IImageModelRegistry modelRegistry)
+        IImageModelRegistry modelRegistry,
+        IJobCreatedPublisher jobCreated)
     {
+        ArgumentNullException.ThrowIfNull(jobCreated);
+        _jobCreated = jobCreated;
         ArgumentNullException.ThrowIfNull(modelRegistry);
         _modelRegistry = modelRegistry;
         ArgumentNullException.ThrowIfNull(llamaSupervisor);
@@ -166,6 +171,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         PushStatus(jobId, ImageJobStatus.Queued, queuePosition: null, elapsedMs: null, imageId: null, sanitizedError: null, ImageJobProgressDetail.None, isMilestone: true);
 
         EvictExpiredEventLogs();
+        // The job's own pushes reach only its group; this broadcast lets a feed that never saw it re-read the list.
+        await _jobCreated.PublishCreatedAsync(CreatedJobKind.ImageJob, jobId, CancellationToken.None);
 
         // Detached run task owns the CTS lifetime: it captures only the token (a struct) and disposes the CTS via the registry in Cleanup, so no IDisposable
         // instance is passed into an un-awaited task (CA2025), while Cancel can still signal it through the registry until then.
@@ -214,12 +221,12 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         return await store.GetAsync(jobId, cancellationToken) ?? throw JobNotFound();
     }
 
-    public async Task<ImageJobPage> ListAsync(int limit, int offset, CancellationToken cancellationToken)
+    public async Task<ImageJobPage> ListAsync(int limit, int offset, bool activeOnly, CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
-        var items = await store.ListAsync(limit, offset, cancellationToken);
-        var total = await store.CountAsync(cancellationToken);
+        var items = await store.ListAsync(limit, offset, activeOnly, cancellationToken);
+        var total = await store.CountAsync(activeOnly, cancellationToken);
         return new ImageJobPage
         {
             Items = items,

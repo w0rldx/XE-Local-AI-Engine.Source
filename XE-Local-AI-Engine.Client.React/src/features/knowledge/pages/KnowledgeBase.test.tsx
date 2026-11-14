@@ -41,6 +41,10 @@ setupMswServer(
 
 const embeddingMissing = en.pages.knowledgeBase.embeddingMissing;
 
+// The page's first paint of server state waits on five MSW reads and a full page mount. The 1 s findBy default held alone
+// but not under a loaded coverage run, so every wait for that first server-driven state gets this budget.
+const firstServerState = { timeout: 5_000 };
+
 /** The empty document list plus the server's embedding-model verdict, the upload gate's only input. */
 function documentsRoute(embeddingModelAvailable: boolean) {
 	return jsonRoute("get", "knowledge-base/documents", {
@@ -94,7 +98,7 @@ describe("KnowledgeBase embedding-model precondition", () => {
 
 		renderPage();
 
-		const alert = await screen.findByTestId("knowledge-embedding-missing-alert");
+		const alert = await screen.findByTestId("knowledge-embedding-missing-alert", undefined, firstServerState);
 		expect(alert.textContent).toContain(embeddingMissing.title);
 		expect(alert.textContent).toContain(embeddingMissing.body);
 		expect(screen.getByTestId("knowledge-embedding-open-node-settings").getAttribute("href")).toBe(
@@ -117,7 +121,7 @@ describe("KnowledgeBase embedding-model precondition", () => {
 
 		renderPage();
 
-		const alert = await screen.findByTestId("knowledge-embedding-missing-alert");
+		const alert = await screen.findByTestId("knowledge-embedding-missing-alert", undefined, firstServerState);
 		const heading = screen.getByRole("heading", { name: en.pages.knowledgeBase.title });
 		expect(alert.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	});
@@ -127,8 +131,8 @@ describe("KnowledgeBase embedding-model precondition", () => {
 
 		renderPage();
 
-		const dropzone = await screen.findByTestId("knowledge-upload-dropzone");
-		await waitFor(() => expect(dropzone.getAttribute("tabindex")).toBe("0"));
+		const dropzone = await screen.findByTestId("knowledge-upload-dropzone", undefined, firstServerState);
+		await waitFor(() => expect(dropzone.getAttribute("tabindex")).toBe("0"), firstServerState);
 		expect(screen.queryByTestId("knowledge-embedding-missing-alert")).toBeNull();
 		expect(dropzone.getAttribute("aria-disabled")).toBe("false");
 		expect(screen.getByTestId<HTMLInputElement>("knowledge-upload-input").disabled).toBe(false);
@@ -152,7 +156,7 @@ describe("KnowledgeBase embedding-model precondition", () => {
 
 		renderPage();
 
-		fireEvent.click(await screen.findByTestId("knowledge-embedding-download-recommended"));
+		fireEvent.click(await screen.findByTestId("knowledge-embedding-download-recommended", undefined, firstServerState));
 
 		await waitFor(() => expect(requested).toHaveBeenCalledTimes(1));
 	});
@@ -212,7 +216,7 @@ describe("KnowledgeBase known collections", () => {
 
 		renderPage();
 
-		const known = await screen.findByRole("group", { name: en.pages.knowledgeBase.collection.known });
+		const known = await screen.findByRole("group", { name: en.pages.knowledgeBase.collection.known }, firstServerState);
 		// The open collection is the badge, so only the others are offered.
 		expect(within(known).queryByRole("button", { name: "DEFAULT" })).toBeNull();
 		fireEvent.click(within(known).getByRole("button", { name: "RESEARCH" }));

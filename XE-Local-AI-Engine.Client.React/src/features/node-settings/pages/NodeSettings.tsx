@@ -1,7 +1,7 @@
-import { Box, Grid, Group, Loader, Stack, Text } from "@mantine/core";
+import { Box, Grid, Group, Loader, Stack, Text, Title } from "@mantine/core";
 import { IconSettings } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -43,6 +43,7 @@ import { NodeSettingsHfTokenCard } from "@/features/node-settings/components/Nod
 import { confirmRiskySave } from "@/features/node-settings/components/NodeSettingsRiskySaveConfirm";
 import { NodeSettingsSandboxProfileCard } from "@/features/node-settings/components/NodeSettingsSandboxProfileCard";
 import { NodeSettingsSaveBar } from "@/features/node-settings/components/NodeSettingsSaveBar";
+import { NodeSettingsSearch } from "@/features/node-settings/components/NodeSettingsSearch";
 import { NodeSettingsSectionNav } from "@/features/node-settings/components/NodeSettingsSectionNav";
 import { SourceBuildCard } from "@/features/node-settings/components/SourceBuildCard";
 import { WhisperRuntimeSourceBuildCard } from "@/features/node-settings/components/WhisperRuntimeSourceBuildCard";
@@ -71,6 +72,7 @@ import {
 	isAdvancedNodeSettingsSection,
 	type NodeSettingsSectionId,
 	nodeSettingsSectionIds,
+	nodeSettingsSectionLabel,
 	nodeSettingsSectionOf,
 } from "@/features/node-settings/models/NodeSettingsSections";
 import { RestartRequiredFieldsContext } from "@/features/node-settings/models/RestartRequiredFieldsContext";
@@ -116,6 +118,17 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 	const activeSection = section ?? ownSection;
 	const selectSection = onSectionChange ?? setOwnSection;
 	const [showAdvancedSections, setShowAdvancedSections] = useState(false);
+	const [searching, setSearching] = useState(false);
+	// Bumped to clear the search box (it owns its query) when the operator picks a section while searching.
+	const [searchResetKey, setSearchResetKey] = useState(0);
+	const searchResultsRef = useRef<HTMLDivElement>(null);
+	const handleSelectSection = (next: NodeSettingsSectionId): void => {
+		if (searching) {
+			setSearching(false);
+			setSearchResetKey((key) => key + 1);
+		}
+		selectSection(next);
+	};
 
 	// The whole page is ONE draft. `fieldsForm` is the editable draft; `fieldsBaseline` is the last-loaded authoritative
 	// state — only fields that differ from the baseline are sent on save (optional-request semantics).
@@ -302,9 +315,17 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 			!isSimpleMode || showAdvancedSections || candidate === activeSection || !isAdvancedNodeSettingsSection(candidate),
 	);
 
-	const fields = (
+	// Sections are mounted on first show and then kept (hidden), so a card's unsaved input survives a search or a section
+	// switch. Adjusted during render, React's pattern for state derived from changing inputs.
+	const [mountedSections, setMountedSections] = useState<readonly NodeSettingsSectionId[]>([]);
+	const shownSections = searching ? visibleSections : [activeSection];
+	if (shownSections.some((id) => !mountedSections.includes(id))) {
+		setMountedSections([...new Set([...mountedSections, ...shownSections])]);
+	}
+
+	const renderFields = (shown: NodeSettingsSectionId): ReactNode => (
 		<NodeSettingsFieldsCard
-			section={activeSection}
+			section={shown}
 			form={fieldsForm}
 			bounds={fieldBounds}
 			errors={modelOptions.visibleErrors}
@@ -328,8 +349,9 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 		/>
 	);
 
-	const renderSection = (): ReactNode => {
-		switch (activeSection) {
+	const renderSection = (shown: NodeSettingsSectionId): ReactNode => {
+		const fields = renderFields(shown);
+		switch (shown) {
 			case "general":
 				return (
 					<>
@@ -445,11 +467,17 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 							mah={compactNav ? undefined : "calc(100dvh - 17rem)"}
 							style={compactNav ? undefined : { overflowY: "auto" }}
 						>
+							<NodeSettingsSearch
+								key={searchResetKey}
+								resultsRef={searchResultsRef}
+								onSearchingChange={setSearching}
+								onShowAdvanced={isSimpleMode && !showAdvancedSections ? () => setShowAdvancedSections(true) : undefined}
+							/>
 							<NodeSettingsSectionNav
 								compact={compactNav}
 								sections={visibleSections}
 								active={activeSection}
-								onSelect={selectSection}
+								onSelect={handleSelectSection}
 								dirtyCounts={dirtyCounts}
 								advancedToggle={
 									isSimpleMode
@@ -460,8 +488,34 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 						</Box>
 					</Grid.Col>
 					<Grid.Col span={compactNav ? 12 : { base: 12, sm: 8, xl: 9 }}>
-						<Stack gap="lg" data-testid={`node-settings-section-content-${activeSection}`}>
-							{renderSection()}
+						{/* One tree for both views: a section stays mounted once shown and is only hidden, so starting or ending a
+						    search never remounts a card and loses its unsaved input. A search shows every listed section, so the
+						    box can filter what is rendered; Simple mode keeps the advanced ones out until they are shown. */}
+						<Stack gap="xl" ref={searchResultsRef} data-testid={searching ? "node-settings-search-results" : undefined}>
+							{nodeSettingsSectionIds
+								.filter((id) => mountedSections.includes(id))
+								.map((shown) => {
+									const searched = searching && visibleSections.includes(shown);
+									const label = nodeSettingsSectionLabel(t, shown);
+									return (
+										<Box
+											key={shown}
+											display={searched || (!searching && shown === activeSection) ? undefined : "none"}
+											data-testid={!searching && shown === activeSection ? `node-settings-section-content-${shown}` : undefined}
+										>
+											<Stack gap="sm" data-search-section={searched ? label : undefined}>
+												{searched ? (
+													<Title order={2} size="h3">
+														{label}
+													</Title>
+												) : null}
+												<Stack gap="lg" data-search-cards={searched ? true : undefined}>
+													{renderSection(shown)}
+												</Stack>
+											</Stack>
+										</Box>
+									);
+								})}
 						</Stack>
 					</Grid.Col>
 				</Grid>

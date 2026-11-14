@@ -7,6 +7,34 @@ namespace XE_Local_AI_Engine.Client.Hubs;
 public static class ImageJobHubEvents
 {
     public const string StatusChanged = "imageJob.statusChanged";
+
+    /// <summary>Broadcast to every connection: one image-model download's sanitized status.</summary>
+    public const string ModelDownloadStatusChanged = "imageModelDownload.statusChanged";
+}
+
+/// <summary>
+///     Image-model download push payload: the fields of the REST <c>ImageModelDownloadStatusResponse</c>, so the client
+///     folds a push exactly as it would a list item. <see cref="Phase" /> is the <c>ImageModelDownloadPhase</c> name.
+/// </summary>
+/// <remarks>Never a path, URL or token: the coordinator's status is already sanitized.</remarks>
+internal sealed class ImageModelDownloadHubMessage
+{
+    public required string ModelName { get; init; }
+
+    public required string Phase { get; init; }
+
+    public required long? CompletedBytes { get; init; }
+
+    public required long? TotalBytes { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
+    public required int? PartIndex { get; init; }
+
+    public required int? PartCount { get; init; }
+
+    /// <summary>The coordinator's write order; the client drops a push older than the one it applied for the model.</summary>
+    public required long Sequence { get; init; }
 }
 
 /// <summary>

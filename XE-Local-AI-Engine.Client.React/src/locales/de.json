@@ -106,6 +106,12 @@
 			"passwordRuleLowercase": "Mindestens ein Kleinbuchstabe (a–z)",
 			"passwordRuleSymbol": "Mindestens ein Sonderzeichen (z. B. !@#$%)",
 			"passwordRuleUppercase": "Mindestens ein Großbuchstabe (A–Z)",
+			"stepper": {
+				"account": "Konto",
+				"externalAccess": "Internetzugriff",
+				"progress": "Schritt {{current}} von {{total}}: {{name}}",
+				"vault": "Daten schützen"
+			},
 			"subtitle": "Erstellen Sie das einmalige Admin-Konto für diesen Node.",
 			"title": "Lokalen Admin einrichten",
 			"validationEmail": "Bitte eine gültige E-Mail-Adresse eingeben.",
@@ -165,6 +171,7 @@
 			"exportMarkdown": "Als Markdown exportieren",
 			"import": "Chats importieren (JSON)",
 			"importFailed": "Die Datei konnte nicht importiert werden.",
+			"importProgress": "Chats werden importiert: {{done}} von {{total}} geschrieben",
 			"imported_one": "{{count}} Chat importiert. Anhänge und Tool-Aufrufe sind nicht Teil eines Exports.",
 			"imported_other": "{{count}} Chats importiert. Anhänge und Tool-Aufrufe sind nicht Teil eines Exports.",
 			"importing_one": "{{count}} Chat wird importiert. Ein großer Import kann mehrere Minuten dauern.",
@@ -337,6 +344,14 @@
 		},
 		"words_one": "Wort",
 		"words_other": "Wörter"
+	},
+	"commandPalette": {
+		"inputLabel": "Seitenname",
+		"listLabel": "Seiten",
+		"noMatches": "Keine Seite passt.",
+		"placeholder": "Seitennamen eingeben",
+		"shortcut": "Zu einer Seite wechseln",
+		"title": "Zu Seite wechseln"
 	},
 	"common": {
 		"actions": "Aktionen",
@@ -702,6 +717,15 @@
 		"errors": {
 			"saveState": "Der Tutorial-Status konnte nicht gespeichert werden. Bitte versuchen Sie es erneut."
 		},
+		"firstRunChoices": {
+			"body": "Die Engine startet im einfachen Modus mit dem niedrigen Sandbox-Profil. Ändern Sie beides jetzt oder später in den Knoteneinstellungen.",
+			"bodyAdvanced": "Die Engine läuft im erweiterten Modus mit dem niedrigen Sandbox-Profil. Ändern Sie beides jetzt oder später in den Knoteneinstellungen.",
+			"highNote": "Hoch verweigert eine Arbeitslast, die dieser Computer nicht vollständig isolieren kann, statt sie mit weniger Schutz auszuführen. Die Knoteneinstellungen zeigen, welche.",
+			"lowNote": "Niedrig führt jede Arbeitslast mit der Isolation aus, die dieser Computer bieten kann.",
+			"save": "Speichern",
+			"saveError": "Ihre Auswahl konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+			"title": "Zwei Einstellungen, die Sie ändern können"
+		},
 		"restart": "Tutorial neu starten",
 		"status": {
 			"completed": "Abgeschlossen",
@@ -803,6 +827,11 @@
 		}
 	},
 	"operations": {
+		"datasetBuild": {
+			"failed": "Datensatz {{name}} konnte nicht erstellt werden",
+			"running": "Datensatz {{name}} wird erstellt",
+			"succeeded": "Datensatz {{name}} ist bereit"
+		},
 		"ggufDownload": {
 			"failed": "{{model}} konnte nicht heruntergeladen werden",
 			"running": "{{model}} wird heruntergeladen",
@@ -813,11 +842,34 @@
 			"running": "{{model}} wird importiert",
 			"succeeded": "{{model}} ist importiert"
 		},
+		"imageJob": {
+			"failed": "Das Bild konnte nicht erzeugt werden",
+			"running": "Ein Bild wird erzeugt",
+			"succeeded": "Ihr Bild ist fertig"
+		},
+		"imageModelDownload": {
+			"failed": "Das Bildmodell {{model}} konnte nicht heruntergeladen werden",
+			"running": "Das Bildmodell {{model}} wird heruntergeladen",
+			"succeeded": "Das Bildmodell {{model}} ist heruntergeladen"
+		},
 		"indicator": {
 			"actionRequired": "Aktion erforderlich",
 			"runningPercent": "1 läuft · {{pct}} %",
 			"running_one": "{{count}} läuft",
 			"running_other": "{{count}} laufen"
+		},
+		"knowledgeIndexing": {
+			"failed": "Einige Dokumente konnten nicht indiziert werden",
+			"failedDetail": "{{failed}} von {{count}} fehlgeschlagen",
+			"progress": "{{done}} von {{count}} erledigt",
+			"running": "Dokumente für die Wissensdatenbank werden indiziert",
+			"succeeded": "Die Wissensdatenbank ist auf dem neuesten Stand"
+		},
+		"notifications": {
+			"blocked": "Dieser Browser blockiert Benachrichtigungen dieser App. Erlauben Sie sie in den Website-Einstellungen des Browsers und schalten Sie dies dann ein.",
+			"description": "Wenn ein Download, eine Indizierung, ein Training, ein Bild oder eine geplante Aufgabe fertig wird, während dieser Tab im Hintergrund ist, zusätzlich eine Systembenachrichtigung anzeigen. Nur in diesem Browser gespeichert.",
+			"label": "Benachrichtigen, wenn lange Aufgaben fertig sind (Systembenachrichtigung)",
+			"unsupported": "Dieser Browser kann keine Systembenachrichtigungen anzeigen."
 		},
 		"progress": "{{completed}} von {{total}}",
 		"progressUnknownTotal": "{{completed}} heruntergeladen",
@@ -832,6 +884,21 @@
 			"step": "Schritt {{index}} von {{count}}",
 			"succeeded": "Die lokale KI-Laufzeit ist installiert",
 			"verifying": "Heruntergeladene Laufzeit wird überprüft…"
+		},
+		"schedulerRun": {
+			"failed": "Eine geplante Aufgabe ist fehlgeschlagen",
+			"running": "Eine geplante Aufgabe läuft",
+			"succeeded": "Eine geplante Aufgabe ist abgeschlossen"
+		},
+		"trainingRun": {
+			"failed": "Training fehlgeschlagen",
+			"running": "Ein Modell wird trainiert",
+			"succeeded": "Training abgeschlossen"
+		},
+		"transcriptionModelDownload": {
+			"failed": "Das Transkriptionsmodell {{model}} konnte nicht heruntergeladen werden",
+			"running": "Das Transkriptionsmodell {{model}} wird heruntergeladen",
+			"succeeded": "Das Transkriptionsmodell {{model}} ist heruntergeladen"
 		}
 	},
 	"pages": {
@@ -7436,6 +7503,14 @@
 			},
 			"saved": "Node-Einstellungen gespeichert.",
 			"savedRestartRequired": "Node-Einstellungen gespeichert. Einige Änderungen warten auf einen Neustart des Nodes; das Banner oben listet sie auf.",
+			"search": {
+				"label": "Einstellungen durchsuchen",
+				"matches_one": "{{count}} passende Karte",
+				"matches_other": "{{count}} passende Karten",
+				"noMatches": "Keine Einstellung passt zu „{{query}}“.",
+				"placeholder": "Einstellungen durchsuchen",
+				"searchAdvanced": "Auch die erweiterten Bereiche durchsuchen"
+			},
 			"sections": {
 				"chat": "Chat & Agenten",
 				"general": "Allgemein",
@@ -7558,7 +7633,6 @@
 			"subtitleSecret": "Sie haben einen geheimen Bereich gefunden."
 		},
 		"sandboxProfile": {
-			"continue": "Weiter",
 			"high": {
 				"body": "Jede Schutzgrenze, die ein Sandbox-Prozess verlangt, wird zur Pflicht: abgeschottetes Dateisystem, Ressourcenlimits und gesperrter Netzwerkzugang. Kann dieser Host einen Prozess nicht so abschotten, startet der Prozess nicht, statt mit weniger Schutz zu laufen. Ressourcenlimits verlängern den Start ein wenig, und manches läuft auf diesem Host eventuell gar nicht.",
 				"title": "Hoch"
@@ -7568,7 +7642,6 @@
 				"title": "Niedrig"
 			},
 			"previewsNote": "Ausführungs-Vorschauen sind eine eigene Einstellung: Keines der beiden Profile schaltet sie ein.",
-			"recommended": "Für diesen Host empfohlen",
 			"refusalsTitle": "Mit diesem Profil startet auf diesem Host Folgendes nicht:",
 			"roles": {
 				"agent-home": "AgentHome",
@@ -7577,8 +7650,6 @@
 				"run_python": "Python-Rechen-Tool",
 				"work-session": "Arbeitssitzungen"
 			},
-			"saveError": "Ihre Auswahl konnte nicht gespeichert werden. Versuchen Sie es erneut.",
-			"setupSubtitle": "Tools, Agenten und Server laufen in einer Sandbox, die sie vom übrigen System abschottet. Hier legen Sie fest, was passiert, wenn dieser Host einen solchen Sandbox-Prozess nicht so abschotten kann, wie er es verlangt. Sie können das später in den Node-Einstellungen ändern.",
 			"setupTitle": "Wie streng soll die Sandbox sein?"
 		},
 		"scheduler": {
@@ -7705,6 +7776,18 @@
 					"trigger": "Auslöser"
 				},
 				"detail": {
+					"answer": {
+						"delete": "Antwort löschen",
+						"deleteDescription": "Der gespeicherte Prompt und die Antwort dieses Laufs werden endgültig entfernt. Der Lauf bleibt im Verlauf.",
+						"deleteFailed": "Die Antwort konnte nicht gelöscht werden.",
+						"deleteTitle": "Diese Antwort löschen?",
+						"error": "Die Antwort konnte nicht geladen werden.",
+						"hide": "Antwort ausblenden",
+						"loading": "Antwort wird geladen…",
+						"open": "Antwort öffnen",
+						"prompt": "Prompt",
+						"response": "Antwort"
+					},
 					"completed": "Abgeschlossen",
 					"duration": "Dauer",
 					"empty": "Wählen Sie einen Lauf, um seine Details anzuzeigen.",
@@ -7740,15 +7823,7 @@
 				"viewAria": "Lauf ansehen"
 			},
 			"subtitle": "Planen Sie wiederkehrende und einmalige Aufgaben auf diesem Node. Neue Aufgaben sind sofort aktiviert (deaktivieren Sie eine, um sie anzuhalten), und Parameter werden verschlüsselt gespeichert.",
-			"title": "Planer",
-			"toasts": {
-				"cancelled": "Eine geplante Aufgabe wurde abgebrochen.",
-				"cancelledTitle": "Geplante Aufgabe abgebrochen",
-				"completed": "Eine geplante Aufgabe wurde erfolgreich abgeschlossen.",
-				"completedTitle": "Geplante Aufgabe abgeschlossen",
-				"failedFallback": "Eine geplante Aufgabe wurde nicht erfolgreich abgeschlossen.",
-				"failedTitle": "Geplante Aufgabe fehlgeschlagen"
-			}
+			"title": "Planer"
 		},
 		"skills": {
 			"createButton": "Neuer Skill",
@@ -8204,12 +8279,7 @@
 				"body": "Alles, einschließlich Tool- und Skill-Erstellung, Zeitplanung, Workflows, Integrationen, Benchmarks und Training.",
 				"title": "Erweitert"
 			},
-			"continue": "Weiter",
-			"saveError": "Ihre Auswahl konnte nicht gespeichert werden. Versuchen Sie es erneut.",
-			"setupSubtitle": "In beiden Fällen wird nichts gelöscht, und Sie können dies später in den Node-Einstellungen ändern.",
-			"setupTitle": "Wie viel von der Engine möchten Sie sehen?",
 			"simple": {
-				"badge": "Für die meisten empfohlen",
 				"body": "Chat, Agenten, Modelle, Wissen, Bilder und Transkription. Die Tools zum Bauen und Überwachen bleiben im Hintergrund.",
 				"title": "Einfach"
 			}

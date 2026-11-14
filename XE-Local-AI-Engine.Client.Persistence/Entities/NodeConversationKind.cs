@@ -22,4 +22,7 @@ public static class NodeConversationKind
 
     /// <summary>The transcript owned by an <see cref="IntegrationSession" />.</summary>
     public const string Integration = "integration";
+
+    /// <summary>The prompt and answer of one successful scheduled agent run, stored at the run's id (ADR 0024).</summary>
+    public const string Scheduled = "scheduled";
 }

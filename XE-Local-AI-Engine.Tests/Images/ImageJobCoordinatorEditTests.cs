@@ -7,6 +7,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
+using XE_Local_AI_Engine.Client.Services.Common.Implementation;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
@@ -301,7 +302,8 @@ public sealed class ImageJobCoordinatorEditTests
                 new ImageRuntimeActivityGate(),
                 new GpuWorkGate(),
                 supervisor,
-                registry);
+                registry,
+                new NullJobCreatedPublisher());
 #pragma warning restore CA2000
 
             return new Harness
@@ -391,10 +393,10 @@ public sealed class ImageJobCoordinatorEditTests
         public Task<ImageJobView?> GetAsync(Guid jobId, CancellationToken cancellationToken) =>
             Task.FromResult<ImageJobView?>(null);
 
-        public Task<IReadOnlyList<ImageJobView>> ListAsync(int limit, int offset, CancellationToken cancellationToken) =>
+        public Task<IReadOnlyList<ImageJobView>> ListAsync(int limit, int offset, bool activeOnly, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<ImageJobView>>([]);
 
-        public Task<int> CountAsync(CancellationToken cancellationToken) =>
+        public Task<int> CountAsync(bool activeOnly, CancellationToken cancellationToken) =>
             Task.FromResult(Created.Count);
 
         public Task<IReadOnlyList<string>?> DeleteAsync(Guid jobId, CancellationToken cancellationToken) =>

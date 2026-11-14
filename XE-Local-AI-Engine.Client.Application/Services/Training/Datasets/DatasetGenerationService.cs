@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
 public interface IDatasetGenerationService
@@ -31,14 +32,22 @@ public sealed class DatasetGenerationService : IDatasetGenerationService
 {
     private readonly TrainingRunCancellationRegistry _cancellations;
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly IJobCreatedPublisher _jobCreated;
+    private readonly IDatasetGenerationEventBuffer _events;
     private readonly IDatasetGenerationQueueSignal _signal;
     private readonly ITrainingDatasetStore _store;
 
     public DatasetGenerationService(ITrainingDatasetStore store,
         IGpuWorkGate gpuWorkGate,
         TrainingRunCancellationRegistry cancellations,
-        IDatasetGenerationQueueSignal signal)
+        IDatasetGenerationQueueSignal signal,
+        IJobCreatedPublisher jobCreated,
+        IDatasetGenerationEventBuffer events)
     {
+        ArgumentNullException.ThrowIfNull(events);
+        _events = events;
+        ArgumentNullException.ThrowIfNull(jobCreated);
+        _jobCreated = jobCreated;
         ArgumentNullException.ThrowIfNull(cancellations);
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
         ArgumentNullException.ThrowIfNull(signal);
@@ -67,6 +76,8 @@ public sealed class DatasetGenerationService : IDatasetGenerationService
             },
             cancellationToken);
         _signal.Wake();
+        // The dataset is committed: announced even if the request was aborted meanwhile.
+        await _jobCreated.PublishCreatedAsync(CreatedJobKind.DatasetBuild, dataset.Id, CancellationToken.None);
         return dataset;
     }
 
@@ -87,5 +98,11 @@ public sealed class DatasetGenerationService : IDatasetGenerationService
         }
 
         _ = await _store.CompleteGenerationAsync(datasetId, DatasetGenerationWorkStatus.Cancelled, "Cancelled before generation started.", cancellationToken);
+        // Committed, then published like the executor's cancel: no executor runs for it, and a tab holding its group needs the end.
+        _ = _events.Append(datasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload
+        {
+            State = nameof(DatasetGenerationWorkStatus.Cancelled)
+        });
+        _events.EvictPlaintext(datasetId);
     }
 }

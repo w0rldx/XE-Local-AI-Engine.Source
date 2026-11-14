@@ -22,14 +22,29 @@ internal sealed class ConversationSearchIndex
     /// </remarks>
     internal const int MaxIndexedCharsPerConversation = 200_000;
 
+    /// <summary>Indexed chars past which the index logs a warning: 250 million UTF-16 chars, about 500 MB of process memory.</summary>
+    /// <remarks>A warning, never a cap: capping would make search miss text that is stored, against the always-current rule.</remarks>
+    internal const long IndexedCharsWarningThreshold = 250_000_000;
+
     private const int SnippetCharsBefore = 40;
     private const int SnippetCharsAfter = 80;
 
     private readonly ConcurrentDictionary<Guid, ConversationSearchDocument> _documents = new();
     private readonly ConcurrentDictionary<Guid, long> _stale = new();
     private readonly Lock _storeSync = new();
+    private readonly ILogger? _logger;
+    private readonly long _warningThresholdChars;
     private int _backfillComplete;
+    private long _indexedChars;
     private long _writeStamp;
+
+    /// <param name="logger">Receives the threshold warning; null logs nothing.</param>
+    /// <param name="warningThresholdChars">Overrides <see cref="IndexedCharsWarningThreshold" />, for tests.</param>
+    internal ConversationSearchIndex(ILogger? logger = null, long warningThresholdChars = IndexedCharsWarningThreshold)
+    {
+        _logger = logger;
+        _warningThresholdChars = warningThresholdChars;
+    }
 
     /// <summary>Serializes every read-then-store pass (backfill batches and stale refreshes), so an older read never replaces a newer one.</summary>
     internal SemaphoreSlim RefreshGate { get; } = new(initialCount: 1, maxCount: 1);
@@ -98,7 +113,30 @@ internal sealed class ConversationSearchIndex
             if (charDelta != 0)
             {
                 NodeMetrics.ChatSearchIndexedChars.Add(charDelta);
+                var before = _indexedChars;
+                _indexedChars += charDelta;
+                TrackThreshold(before, _indexedChars);
             }
+        }
+    }
+
+    // Under _storeSync. Warns once per upward crossing; dropping back below re-arms it.
+    private void TrackThreshold(long before, long after)
+    {
+        var wasOver = before >= _warningThresholdChars;
+        var isOver = after >= _warningThresholdChars;
+        if (wasOver == isOver)
+        {
+            return;
+        }
+
+        NodeMetrics.ChatSearchIndexedCharsOverThreshold.Add(isOver ? 1 : -1);
+        if (isOver)
+        {
+            _logger?.LogWarning("The conversation search index holds {IndexedChars} chars of decrypted text (about {IndexedMegabytes} MB), past its {ThresholdChars}-char warning threshold. It keeps indexing; the node's memory grows with the chat history.",
+                after,
+                after * 2 / 1_000_000,
+                _warningThresholdChars);
         }
     }
 

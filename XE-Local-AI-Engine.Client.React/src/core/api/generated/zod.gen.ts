@@ -3906,6 +3906,10 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportDocument = 
 	conversations: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportConversation),
 });
 
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ImportNodeChatConversationsRequest = z.object({
+	document: zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportDocument,
+});
+
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatImportedConversationResponse = z.object({
 	conversationId: z.guid(),
 	title: z.string().nullable(),
@@ -4964,6 +4968,7 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse =
 	errorMessage: z.string().nullish(),
 	cancellationRequestedAtUtc: z.int().nullish(),
 	createdAtUtc: z.int(),
+	answerConversationId: z.guid().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse = z.object({
@@ -11066,6 +11071,10 @@ export const zExportNodeChatConversationsResponse = zXeLocalAiEngineClientEndpoi
 
 export const zImportNodeChatConversationsBody = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatExportDocument;
 
+export const zImportNodeChatConversationsQuery = z.object({
+	importId: z.guid().nullish(),
+});
+
 /**
  * Success
  */
@@ -11915,6 +11924,7 @@ export const zListImageJobsQuery = z.object({
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	activeOnly: z.boolean().nullish(),
 });
 
 /**
@@ -13593,6 +13603,7 @@ export const zListTrainingRunsQuery = z.object({
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	datasetId: z.guid().nullish(),
+	activeOnly: z.boolean().nullish(),
 });
 
 /**

@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { getNodeAuthStatus, loginNodeAuth, setupNodeAuth } from "@/core/auth/api/NodeAuthApi";
+import { FirstRunStepper } from "@/core/auth/components/FirstRunStepper";
 import { RecoveryCodeReveal } from "@/core/auth/components/RecoveryCodeReveal";
 import type { NodeAuthErrorResponse } from "@/core/auth/models/NodeAuthModels";
 import { unmetPasswordRules } from "@/core/auth/models/PasswordPolicy";
@@ -202,6 +203,8 @@ export function Setup() {
 			<Container size="xs" py="xl" className="min-h-dvh flex items-center">
 				<Card withBorder={true} radius="lg" p="xl" className="w-full">
 					<Stack gap="lg">
+						{/* The recovery code is the vault step of a fresh install: setup wraps the node key in the same request. */}
+						<FirstRunStepper step={recoveryCode ? "vault" : "account"} />
 						<Stack gap={4} align="center" ta="center">
 							<IconCircleKey size={36} aria-hidden="true" />
 							<Title order={1}>{t("auth.setup.title")}</Title>

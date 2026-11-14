@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Knowledge;
 
 using System.Diagnostics.Metrics;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
@@ -17,7 +18,7 @@ public sealed class KnowledgeIngestionDispatcherTests
     [Test]
     public async Task EnqueueAsync_AdmitsUpToCapacityThenRejects()
     {
-        var dispatcher = new KnowledgeIngestionDispatcher();
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
 
         // Fill the queue exactly to capacity: every one of these must be admitted (nothing drains it — no worker runs).
         for (var i = 0; i < KnowledgeIngestionDispatcher.Capacity; i++)
@@ -35,9 +36,33 @@ public sealed class KnowledgeIngestionDispatcherTests
     }
 
     [Test]
+    public async Task EnqueueAsync_PushesPendingBeforeTheWorkerCanReadTheId_AndAStrandedReadmitOfAQueuedDocumentPushesNothing()
+    {
+        // The operations feed keeps one indexing batch open while any member is unfinished, so it must see every queued
+        // document, and the push must precede the worker's first Extracting push for it.
+        var pushes = new List<string>();
+        KnowledgeIngestionDispatcher? dispatcher = null;
+        var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
+        _ = notifier.NotifyDocumentChangedAsync(Arg.Any<Guid>(), Arg.Any<KnowledgeDocumentStatus>(), Arg.Any<CancellationToken>())
+                    .Returns(call =>
+                    {
+                        pushes.Add($"{call.ArgAt<KnowledgeDocumentStatus>(1)} queued={dispatcher?.PendingCount}");
+                        return Task.CompletedTask;
+                    });
+        dispatcher = new KnowledgeIngestionDispatcher(notifier);
+        var documentId = Guid.NewGuid();
+
+        AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted, await dispatcher.EnqueueAsync(documentId, CancellationToken.None));
+        AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted, await dispatcher.EnqueueStrandedAsync(documentId, CancellationToken.None));
+
+        AssertEx.Equal("Pending queued=0", string.Join(" | ", pushes));
+        await notifier.Received(1).NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Pending, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task EnqueueAsync_SameDocumentTwice_IsIdempotent_AndDoesNotDoubleQueue()
     {
-        var dispatcher = new KnowledgeIngestionDispatcher();
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
         var documentId = Guid.NewGuid();
 
         // A retry (or drain-sweep) of a document already queued must be a no-op accept, not a second queue entry, so the
@@ -53,7 +78,7 @@ public sealed class KnowledgeIngestionDispatcherTests
     [Test]
     public async Task EnqueueAsync_WhileDocumentIsInFlight_DefersExactlyOneFollowUpRun()
     {
-        var dispatcher = new KnowledgeIngestionDispatcher();
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
         var documentId = Guid.NewGuid();
 
         _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None);
@@ -76,7 +101,7 @@ public sealed class KnowledgeIngestionDispatcherTests
     [Test]
     public async Task EnqueueAsync_AfterMarkCompleted_ReAdmitsSameDocument()
     {
-        var dispatcher = new KnowledgeIngestionDispatcher();
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
         var documentId = Guid.NewGuid();
 
         _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None);
@@ -92,7 +117,7 @@ public sealed class KnowledgeIngestionDispatcherTests
     [Test]
     public async Task EnqueueAsync_WhenDrained_AdmitsAgain()
     {
-        var dispatcher = new KnowledgeIngestionDispatcher();
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
         for (var i = 0; i < KnowledgeIngestionDispatcher.Capacity; i++)
         {
             _ = await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None);
@@ -114,7 +139,7 @@ public sealed class KnowledgeIngestionDispatcherTests
         var rejected = 0L;
         long? observedDepth = null;
 
-        var dispatcher = new KnowledgeIngestionDispatcher();
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
 
         using var listener = new MeterListener();
         listener.InstrumentPublished = (instrument, meterListener) =>

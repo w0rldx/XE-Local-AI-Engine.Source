@@ -50,7 +50,7 @@ public sealed class ConversationSearchTests : IDisposable
     }
 
     [Test]
-    public async Task Search_ExcludesWorkSessionAndIntegrationTranscripts()
+    public async Task Search_ExcludesWorkSessionIntegrationAndScheduledTranscripts()
     {
         await using var provider = await BuildProviderAsync("search-kind.sqlite");
         var service = CreateService(provider);
@@ -69,13 +69,21 @@ public sealed class ConversationSearchTests : IDisposable
             CreatedAtUtc = 30,
             Kind = NodeConversationKind.Integration
         });
+        var scheduled = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "kindmarker scheduled answer",
+            UserId = null,
+            CreatedAtUtc = 40,
+            Kind = NodeConversationKind.Scheduled
+        });
         await PersistUserMessageAsync(service, workSession.ConversationId, "kindmarker inside a work session", createdAtUtc: 21);
         await PersistUserMessageAsync(service, integration.ConversationId, "kindmarker inside an integration", createdAtUtc: 31);
+        await PersistUserMessageAsync(service, scheduled.ConversationId, "kindmarker inside a scheduled answer", createdAtUtc: 41);
 
         var found = await SearchAsync(service, "kindmarker", includeArchived: true);
 
         AssertEx.Equal(Expected(chat), Found(found),
-            "A work-session or integration transcript is not a chat the operator started; search must not surface it, exactly like the list.");
+            "A work-session, integration or scheduled-run transcript is not a chat the operator started; search must not surface it, exactly like the list.");
     }
 
     [Test]

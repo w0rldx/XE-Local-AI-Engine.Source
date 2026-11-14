@@ -442,7 +442,7 @@ Routes under `images/*` (`LocalApiRoutes.Images`), one endpoint class per file i
 
 All endpoints are loopback/local-only, operator-authenticated, and secret-redacted — see [Security & Privacy](12-security-and-privacy.md). They are surfaced to React via OpenAPI → hey-api; see [API & Hubs](09-api-and-hubs.md).
 
-> **Download progress is polled, not pushed.** Unlike generation jobs, image-model downloads have no hub: `GET images/models/downloads` is the progress surface, and the React model manager polls it while a download is pending. Byte counts plus part index/count are reported, so a multi-part weight download is legible; cancellation goes through `POST images/models/downloads/cancel`.
+> **The model manager polls download progress; the operations feed gets it pushed.** `GET images/models/downloads` is the page's progress surface, and the React model manager polls it while a download is pending. The coordinator also broadcasts each status as `imageModelDownload.statusChanged` on `images/hub` (start, terminal phases, at most one progress push a second), which the app-wide operations feed folds into its download rows. Byte counts plus part index/count are reported, so a multi-part weight download is legible; cancellation goes through `POST images/models/downloads/cancel`.
 
 ## Restart and recovery
 

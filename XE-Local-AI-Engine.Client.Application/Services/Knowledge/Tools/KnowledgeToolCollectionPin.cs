@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
@@ -17,11 +18,13 @@ internal static class KnowledgeToolCollectionPin
         string.IsNullOrWhiteSpace(requested) ? TurnKnowledgeSourceCollector.PinnedCollectionId ?? requested : requested;
 
     /// <summary>The refusal for a normalised collection other than the fixed one; <see langword="null" /> when the call may run.</summary>
+    /// <remarks>In the <see cref="ToolFailureText" /> shape, so the tool result is recorded as an error, not a successful read.</remarks>
     public static string? Refusal(string toolName, string collectionId)
     {
         var pinned = TurnKnowledgeSourceCollector.PinnedCollectionId;
         return pinned is null || string.Equals(pinned, collectionId, StringComparison.Ordinal)
             ? null
-            : $"{toolName} can only read the knowledge collection '{pinned}': the operator fixed this chat to it. Omit collectionId or pass '{pinned}'.";
+            : ToolFailureText.Format(ToolFailureText.ToolReportedCode,
+                $"{toolName} can only read the knowledge collection '{pinned}': the operator fixed this chat to it. Omit collectionId or pass '{pinned}'.");
     }
 }

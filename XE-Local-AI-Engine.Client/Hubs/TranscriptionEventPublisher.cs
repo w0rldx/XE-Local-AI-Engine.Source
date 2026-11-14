@@ -105,6 +105,26 @@ internal sealed class TranscriptionEventPublisher : ITranscriptionEventPublisher
                        },
                        cancellationToken);
 
+    // Broadcast, not grouped: the app-wide operations feed watches every download. The phase spelling is the REST mapper's.
+    public Task PublishModelDownloadAsync(WhisperModelDownloadStatus status, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        var download = status.ToResponse();
+        return _hubContext.Clients.All.SendAsync(TranscriptionHubEvents.ModelDownloadChanged,
+            new TranscriptionModelDownloadChangedPush
+            {
+                ModelId = status.ModelId,
+                Phase = download.Phase,
+                CompletedBytes = download.CompletedBytes,
+                TotalBytes = download.TotalBytes,
+                PartIndex = download.PartIndex,
+                PartCount = download.PartCount,
+                SanitizedError = download.SanitizedError,
+                Sequence = status.Sequence
+            },
+            cancellationToken);
+    }
+
     /// <summary>
     ///     The status a client sees for an end reason.
     /// </summary>

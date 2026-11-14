@@ -519,7 +519,8 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		autoCheckRuntimeUpdates: response.autoCheckRuntimeUpdates ?? nodeSettingsFieldDefaults.autoCheckRuntimeUpdates,
 		autoProvisionFirstRunModel: response.autoProvisionFirstRunModel ?? nodeSettingsFieldDefaults.autoProvisionFirstRunModel,
 		uiMode: response.uiMode ?? "",
-		sandboxSecurityProfile: response.sandboxSecurityProfile ?? "",
+		// "pending" is a fresh node's default, enforced as low; showing it as low keeps a Low pick from reading as a change.
+		sandboxSecurityProfile: response.sandboxSecurityProfile === "pending" ? "low" : (response.sandboxSecurityProfile ?? ""),
 		voiceFeatureEnabled: response.voiceFeatureEnabled ?? nodeSettingsFieldDefaults.voiceFeatureEnabled,
 		defaultVoiceProfile: response.defaultVoiceProfile ?? "",
 		orchestrationIdleTimeoutSeconds: numberOr(

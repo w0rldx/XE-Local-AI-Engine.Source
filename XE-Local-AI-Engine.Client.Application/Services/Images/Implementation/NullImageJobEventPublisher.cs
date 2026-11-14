@@ -10,4 +10,9 @@ public sealed class NullImageJobEventPublisher : IImageJobEventPublisher
     {
         return Task.CompletedTask;
     }
+
+    public Task PublishModelDownloadAsync(ImageModelDownloadStatus status, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
 }

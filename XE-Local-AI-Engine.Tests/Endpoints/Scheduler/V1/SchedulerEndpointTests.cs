@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -381,6 +382,53 @@ public sealed class SchedulerEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Test]
+    [Arguments(ScheduledRunStatus.Succeeded, NodeConversationKind.Scheduled, true)]
+    [Arguments(ScheduledRunStatus.Failed, NodeConversationKind.Scheduled, false)]
+    [Arguments(ScheduledRunStatus.Succeeded, null, false)]
+    public async Task GetRun_LinksTheSavedAnswerOnlyForASucceededRunThatHasOne(ScheduledRunStatus status, string? answerKind, bool linked)
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        Guid runId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var stored = await scope.ServiceProvider.GetRequiredService<IScheduledJobRunStore>()
+                                    .AddAsync(new ScheduledJobRunInput
+                                    {
+                                        ScheduledJobId = Guid.NewGuid(),
+                                        TemplateId = "run-agent",
+                                        QuartzFireInstanceId = null,
+                                        TriggeredBy = ScheduledRunTrigger.Manual,
+                                        Status = status,
+                                        ScheduledFireTimeUtc = null,
+                                        ActualFireTimeUtc = null
+                                    });
+            runId = stored.Id;
+            if (answerKind is not null)
+            {
+                _ = await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>()
+                               .CreateConversationAsync(new NodeChatCreateConversationRequest
+                               {
+                                   Title = "Nightly summary",
+                                   UserId = null,
+                                   CreatedAtUtc = 10,
+                                   Kind = answerKind,
+                                   ConversationId = runId
+                               });
+            }
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, RunByIdRoute(runId));
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var answer = document.RootElement.TryGetProperty("answerConversationId", out var value) && value.ValueKind == JsonValueKind.String ? value.GetGuid() : (Guid?)null;
+        AssertEx.Equal(linked ? runId : (Guid?)null, answer);
     }
 
     [Test]

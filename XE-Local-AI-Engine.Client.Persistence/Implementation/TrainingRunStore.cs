@@ -126,6 +126,13 @@ public sealed class TrainingRunStore : ITrainingRunStore
             filtered = filtered.Where(item => item.Status == status);
         }
 
+        if (query.ActiveOnly)
+        {
+            filtered = filtered.Where(item => item.Status != TrainingRunStatus.Succeeded &&
+                                              item.Status != TrainingRunStatus.Failed &&
+                                              item.Status != TrainingRunStatus.Cancelled);
+        }
+
         var total = await filtered.CountAsync(cancellationToken);
         var runs = await filtered.OrderByDescending(item => item.CreatedAtUtc)
                                  // Secondary key so two runs created in the same millisecond cannot swap pages.

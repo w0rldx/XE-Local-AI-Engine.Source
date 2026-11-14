@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using XE_Local_AI_Engine.Client.Services.Common;
+using XE_Local_AI_Engine.Client.Services.Common.Implementation;
 using XE_Local_AI_Engine.Client.Services.Training.Comparison;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 using XE_Local_AI_Engine.Client.Services.Training.Export;
@@ -31,6 +33,8 @@ internal static class AddNodeTrainingRunExtensions
         // path/crypto helper with no per-request state. TryAdd on the registry, because the dataset module registers the same one.
         builder.Services.TryAddSingleton<TrainingRunCancellationRegistry>();
         builder.Services.AddSingleton<TrainingRunWorkspace>();
+        // No-op job-created default, TryAdd because the dataset and images modules add the same; the Client host's hub one wins.
+        builder.Services.TryAddSingleton<IJobCreatedPublisher, NullJobCreatedPublisher>();
 
         builder.Services.AddScoped<ITrainingOptionDefaultsCalculator, TrainingOptionDefaultsCalculator>();
         builder.Services.AddScoped<ILicenseGateService, LicenseGateService>();

@@ -17,6 +17,30 @@ public static class TranscriptionHubEvents
     public const string AdmissionClosed = "transcriptionAdmissionClosed";
 
     public const string SourceQuiet = "transcriptionSourceQuiet";
+
+    /// <summary>Broadcast to every connection, not a session group: one Whisper weight download's status.</summary>
+    public const string ModelDownloadChanged = "transcriptionModelDownloadChanged";
+}
+
+/// <summary>One Whisper weight download's sanitized status: the REST download row plus the catalog id it belongs to.</summary>
+public sealed class TranscriptionModelDownloadChangedPush
+{
+    public required string ModelId { get; init; }
+
+    public required TranscriptionModelDownloadPhaseDto Phase { get; init; }
+
+    public required long? CompletedBytes { get; init; }
+
+    public required long? TotalBytes { get; init; }
+
+    public required int? PartIndex { get; init; }
+
+    public required int? PartCount { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
+    /// <summary>The coordinator's write order; the client drops a push older than the one it applied for the model.</summary>
+    public required long Sequence { get; init; }
 }
 
 /// <summary>

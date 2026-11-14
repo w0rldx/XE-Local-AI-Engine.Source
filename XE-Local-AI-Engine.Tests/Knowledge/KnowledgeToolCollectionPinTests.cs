@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Knowledge;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
@@ -29,7 +30,7 @@ public sealed class KnowledgeToolCollectionPinTests
         using var scope = TurnKnowledgeSourceCollector.BeginScope(Pinned);
         var response = await handler.ExecuteAsync(arguments);
 
-        AssertEx.Contains(response, $"can only read the knowledge collection '{Pinned}'");
+        AssertRefusedAsAToolError(response);
         await searchService.DidNotReceiveWithAnyArgs().SearchAsync(default!, default);
     }
 
@@ -108,7 +109,7 @@ public sealed class KnowledgeToolCollectionPinTests
             collectionId = "PROJECT-B"
         }));
 
-        AssertEx.Contains(response, $"can only read the knowledge collection '{Pinned}'");
+        AssertRefusedAsAToolError(response);
         AssertEx.Empty(catalog.ReceivedCalls());
     }
 
@@ -129,8 +130,15 @@ public sealed class KnowledgeToolCollectionPinTests
             chunkIndex = 0
         }));
 
-        AssertEx.Contains(response, $"can only read the knowledge collection '{Pinned}'");
+        AssertRefusedAsAToolError(response);
         AssertEx.Empty(expansion.ReceivedCalls());
+    }
+
+    // The refusal sentence, in the failure shape the invocation loop records as isError, so the model reads it as a failed call.
+    private static void AssertRefusedAsAToolError(string response)
+    {
+        AssertEx.Contains(response, $"can only read the knowledge collection '{Pinned}'");
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.GetCodeOrNull(response), "A refused call must come back as a tool error, not a successful result.");
     }
 
     private static SearchKnowledgeBaseToolHandler CreateSearchHandler(IKnowledgeSearchService searchService)

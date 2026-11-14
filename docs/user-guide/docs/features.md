@@ -429,6 +429,19 @@ Training and Model Lab are **experimental**: no 1.0 stability promise, and they 
 
 ## Advanced
 
+### Find a setting or a page
+
+**Settings → Node Settings** has a search box above its section list. Type part of a setting's name or
+description, or a section's name, and the page shows the matching cards from every section at once, with the
+words marked. **Enter** jumps to the first match, **Esc** clears the search, and picking a section ends it. In
+the Simple interface mode the advanced sections are searched only after you choose **Search the advanced
+sections too**.
+
+**Ctrl+K** (**Cmd+K** on a Mac) opens a page switcher anywhere in the app. Type part of a page's name, move with
+the arrow keys and press **Enter**. It lists the same pages as the navigation, so a feature you switched off or a
+page the Simple mode hides is not offered. Inside a code editor Ctrl+K keeps the editor's own meaning. In the
+chat, **Ctrl+/** lists the chat's own shortcuts.
+
 ### Turn features on or off
 
 **Settings → Node Settings → General → Features** has a switch for each of eight larger features:

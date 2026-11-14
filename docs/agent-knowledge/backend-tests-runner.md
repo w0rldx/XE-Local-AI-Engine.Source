@@ -39,6 +39,10 @@ lock, or the parallelism limits.
 
 **Rule:** `scripts/with-build-lock.sh` waiters retry `flock -w` in bounded attempts, so the waiter that wakes first after a release takes the lock, not the one that waited longest. Read the waiter list from `scripts/build-lock-status.sh` before queueing, and never plan gates on arrival order. **Prevents:** a hand-over or multi-lane schedule that assumes an earlier waiter runs first and a later arrival that overtakes it mid-plan. **Authority:** `scripts/with-build-lock.sh` (waiter loop); `scripts/build-lock-status.sh`.
 
+### A single-process `dotnet test` of XE-Local-AI-Engine.Tests under the build lock blocks every other worktree
+
+**Rule:** never run the whole `XE-Local-AI-Engine.Tests` project as one `dotnet test` under the build lock: it holds the box-wide lock for its whole run (observed about 30 minutes with four waiters). Run that project through `scripts/run-backend-tests.sh` or a `--treenode-filter` scope instead. **Prevents:** one worktree's test run stalling every other worktree's build and gate. **Authority:** `scripts/with-build-lock.sh`, `scripts/run-backend-tests.sh`.
+
 ### a batched-module red keeps only 3 grep'd lines, so capture the failure detail on the FIRST red
 
 **Rule:** when `XE-Local-AI-Engine.Tests` reds inside the gate, only the three printed `[<namespace>] …` lines survive. Before re-running the gate, re-run the failing namespace or class targeted (or set `COVERAGE_DIR`) if the exception detail matters. **Prevents:** promising a reviewer exception text that is already gone. **Authority:** `scripts/run-tests-memory-safe.sh` (`run_ns`, the `RESULTS_DIR` trap). [evidence](../agent-knowledge-evidence.md#a-batched-module-red-keeps-only-3-grepd-lines-so-capture-the-failure-detail-on-the-first-red)
@@ -120,4 +124,12 @@ lock, or the parallelism limits.
 ### Never classify a cancellation from a `CancellationToken.Register` callback
 
 **Rule:** a registration callback may signal or kill, but never classifies or throws the final exception. Classify once, at mapping time, after the awaited operation observes cancellation, in order: deliberate cancellation recorded synchronously, caller/host token, then the invocation timer by elimination; category and metric share that result. Regression tests park the stream on a gate the test controls. **Prevents:** genuine timeouts reported as Cancelled, and host cancellation mislabelled as watchdog. **Authority:** `InvocationLifecycleTracker`. [evidence](../agent-knowledge-evidence.md#never-classify-a-cancellation-from-a-cancellationtokenregister-callback)
+
+## Stale beliefs
+
+Superseded claims; the entries above are the active rules.
+
+| Stale belief | Current correction |
+|---|---|
+| A whole-project `dotnet test` of `XE-Local-AI-Engine.Tests` is a fair way to read per-class timings. | It holds the build lock for its whole run and blocks every other worktree. Run `scripts/test-durations.py` over the gate's per-batch TRX under `.tmp/backend-test-results/XE-Local-AI-Engine.Tests/` instead (§1). |
 

@@ -18,4 +18,7 @@ public interface IKnowledgeIndexingNotifier
     ///     and coarse status — never any document or chunk content.
     /// </summary>
     Task NotifyDocumentChangedAsync(Guid documentId, KnowledgeDocumentStatus status, CancellationToken cancellationToken = default);
+
+    /// <summary>Publishes that one document was deleted, so a feed counting it as queued drops it. Best-effort, id only.</summary>
+    Task NotifyDocumentRemovedAsync(Guid documentId, CancellationToken cancellationToken = default);
 }

@@ -29,7 +29,8 @@ public sealed class ListTrainingRunsEndpoint : Endpoint<ListTrainingRunsRequest,
         {
             Page = req.Page,
             PageSize = req.PageSize,
-            DatasetId = req.DatasetId
+            DatasetId = req.DatasetId,
+            ActiveOnly = req.ActiveOnly == true
         }, ct);
         await Send.OkAsync(new ListTrainingRunsResponse
         {

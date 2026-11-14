@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Telemetry;
 
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
@@ -59,6 +60,32 @@ public sealed class NodeMetricsInstrumentPublicationTests
         index.Store(first, document: null);
         AssertEx.Equal(expected: 1L, capture.CountLong("chat_search_indexed_conversations"), "A drop of an absent conversation changes nothing.");
         AssertEx.Equal(expected: 5L, capture.CountLong("chat_search_indexed_chars"));
+    }
+
+    [Test]
+    public void ConversationSearchIndex_PastItsThreshold_WarnsOncePerCrossing_AndReportsTheState()
+    {
+        using var capture = new NodeMeterCapture();
+        var logger = new RecordingLogger<ConversationSearchIndex>();
+        var index = new ConversationSearchIndex(logger, warningThresholdChars: 10);
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+
+        index.Store(first, SearchDocument(title: null, "123456"));
+        AssertEx.Equal(expected: 0L, capture.CountLong("chat_search_indexed_chars_over_threshold"));
+        AssertEx.Empty(logger.Entries, "Below the threshold nothing is logged.");
+
+        index.Store(second, SearchDocument(title: null, "12345"));
+        index.Store(second, SearchDocument(title: null, "1234567"));
+        AssertEx.Equal(expected: 1L, capture.CountLong("chat_search_indexed_chars_over_threshold"));
+        AssertEx.Equal(expected: 1, logger.Entries.Count, "Staying past the threshold does not warn again.");
+        AssertEx.Equal(LogLevel.Warning, logger.Entries[0].Level);
+        AssertEx.Contains(logger.Entries[0].Message, "11 chars", message: "The warning names what the index held when it crossed.");
+
+        index.Store(second, document: null);
+        index.Store(second, SearchDocument(title: null, "1234"));
+        AssertEx.Equal(expected: 1L, capture.CountLong("chat_search_indexed_chars_over_threshold"), "Down to 0 when it dropped below, back to 1 on the second crossing.");
+        AssertEx.Equal(expected: 2, logger.Entries.Count, "Dropping below re-arms the warning.");
     }
 
     [Test]

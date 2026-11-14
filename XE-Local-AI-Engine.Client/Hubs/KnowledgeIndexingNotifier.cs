@@ -31,19 +31,38 @@ internal sealed class KnowledgeIndexingNotifier : IKnowledgeIndexingNotifier
         _logger = logger;
     }
 
-    public async Task NotifyDocumentChangedAsync(Guid documentId, KnowledgeDocumentStatus status, CancellationToken cancellationToken = default)
+    public Task NotifyDocumentChangedAsync(Guid documentId, KnowledgeDocumentStatus status, CancellationToken cancellationToken = default)
     {
-        var payload = new KnowledgeDocumentChangedHubEvent
-        {
-            EventType = KnowledgeBaseHubEvents.DocumentChanged,
-            DocumentId = documentId,
-            Status = status,
-            OccurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
-        };
+        return BroadcastAsync(KnowledgeBaseHubEvents.DocumentChanged,
+            documentId,
+            new KnowledgeDocumentChangedHubEvent
+            {
+                EventType = KnowledgeBaseHubEvents.DocumentChanged,
+                DocumentId = documentId,
+                Status = status,
+                OccurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+            },
+            cancellationToken);
+    }
 
+    public Task NotifyDocumentRemovedAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        return BroadcastAsync(KnowledgeBaseHubEvents.DocumentRemoved,
+            documentId,
+            new KnowledgeDocumentRemovedHubEvent
+            {
+                EventType = KnowledgeBaseHubEvents.DocumentRemoved,
+                DocumentId = documentId,
+                OccurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+            },
+            cancellationToken);
+    }
+
+    private async Task BroadcastAsync(string method, Guid documentId, object payload, CancellationToken cancellationToken)
+    {
         try
         {
-            await _hubContext.Clients.All.SendAsync(KnowledgeBaseHubEvents.DocumentChanged, payload, cancellationToken);
+            await _hubContext.Clients.All.SendAsync(method, payload, cancellationToken);
         }
         catch (Exception exception)
         {

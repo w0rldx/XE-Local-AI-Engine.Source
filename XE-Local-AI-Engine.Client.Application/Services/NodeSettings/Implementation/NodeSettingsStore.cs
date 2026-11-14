@@ -584,11 +584,11 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     /// <summary>
     ///     The external-access profile's rule, for the external-access profile's reason: blank stays <see langword="null" /> (reads as
     ///     <c>low</c>), an unrecognised non-blank value loads as <see cref="StoredNodeSettings.SandboxSecurityProfilePending" /> so the
-    ///     operator is ASKED AGAIN rather than answered for.
+    ///     SPA offers the choice again rather than answering for the operator.
     /// </summary>
     /// <remarks>
     ///     Folding junk to <c>low</c> would silently lower a node whose operator wrote something; folding it to <c>high</c> would refuse
-    ///     work nobody chose to refuse. <c>pending</c> reads as <c>low</c> until the chooser is answered.
+    ///     work nobody chose to refuse. <c>pending</c> reads as <c>low</c> until the operator chooses.
     ///     Ordinal, so <c>"High"</c> is unrecognised and <c>"  high  "</c> is not.
     /// </remarks>
     private static string? NormalizeSandboxSecurityProfile(string? value)
@@ -610,8 +610,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     /// <remarks>
     ///     The mode is presentation only, so a junk value costs nothing to answer for — the reader re-seeds
     ///     <see cref="StoredNodeSettings.DefaultUiMode" /> and the navigation looks exactly as it did before the setting existed. The
-    ///     comparison is ordinal, so <c>"Simple"</c> is unrecognised and <c>"  simple  "</c> is not. The cost of the null fallback is
-    ///     that a hand-edited junk value makes the node look like one that never answered, so the SPA asks for the mode again.
+    ///     comparison is ordinal, so <c>"Simple"</c> is unrecognised and <c>"  simple  "</c> is not.
     /// </remarks>
     private static string? NormalizeUiMode(string? value)
     {

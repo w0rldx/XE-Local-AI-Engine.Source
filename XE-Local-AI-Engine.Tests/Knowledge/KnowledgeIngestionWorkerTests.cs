@@ -36,7 +36,7 @@ public sealed class KnowledgeIngestionWorkerTests
         catalog.ResetNonTerminalToPendingAsync(Arg.Any<CancellationToken>())
                .Returns((IReadOnlyList<Guid>)[first, second]);
         var ingestion = new FakeIngestionService((_, _) => Task.CompletedTask);
-        var dispatcher = new KnowledgeIngestionDispatcher();
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
         await using var provider = BuildProvider(ingestion, catalog);
         using var worker = CreateWorker(provider, dispatcher);
 
@@ -60,7 +60,7 @@ public sealed class KnowledgeIngestionWorkerTests
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var ingestion = new FakeIngestionService((_, _) => gate.Task);
         var catalog = NoRecovery();
-        var dispatcher = new KnowledgeIngestionDispatcher();
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
         // A generous drain window so the wait is decided by the document finishing, not by the timeout.
         await using var provider = BuildProvider(ingestion, catalog);
         using var worker = CreateWorker(provider, dispatcher, drainTimeoutSeconds: 30);
@@ -90,7 +90,7 @@ public sealed class KnowledgeIngestionWorkerTests
         // driven against, and the assertion below is on the worker's elapsed drain, not on this duration.
         var ingestion = new FakeIngestionService((_, _) => Task.Delay(HungDocumentRuntime, CancellationToken.None));
         var catalog = NoRecovery();
-        var dispatcher = new KnowledgeIngestionDispatcher();
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
         await using var provider = BuildProvider(ingestion, catalog);
         using var worker = CreateWorker(provider, dispatcher, drainTimeoutSeconds: 1);
 
@@ -136,7 +136,7 @@ public sealed class KnowledgeIngestionWorkerTests
             // finally runs after disposal. A gate the test releases would not reproduce "completes after we stopped looking".
             var ingestion = new FakeIngestionService((_, _) => Task.Delay(PostDisposalDocumentRuntime, CancellationToken.None));
             var catalog = NoRecovery();
-            var dispatcher = new KnowledgeIngestionDispatcher();
+            var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
             await using (var provider = BuildProvider(ingestion, catalog))
             {
                 var worker = CreateWorker(provider, dispatcher, drainTimeoutSeconds: 1);
@@ -199,7 +199,7 @@ public sealed class KnowledgeIngestionWorkerTests
                    strandedB
                }.Where(id => !ingestion.Started.Contains(id)).ToList());
 
-        var dispatcher = new KnowledgeIngestionDispatcher();
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
         await using var provider = BuildProvider(ingestion, catalog);
         using var worker = CreateWorker(provider, dispatcher, drainTimeoutSeconds: 30);
 
@@ -276,7 +276,7 @@ public sealed class KnowledgeIngestionWorkerTests
 
                    return pending;
                });
-        var dispatcher = new KnowledgeIngestionDispatcher();
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
         var services = new ServiceCollection();
         services.AddScoped<IKnowledgeIngestionService>(_ => ingestion);
         services.AddScoped(_ => new ScopeEndProbe(() =>

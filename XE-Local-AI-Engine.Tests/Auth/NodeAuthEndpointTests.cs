@@ -516,7 +516,8 @@ public sealed class NodeAuthEndpointTests
         AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, stored.ExternalAccessProfile);
     }
 
-    // The sandbox security profile is stamped in the same write (ADR 0020): "pending" is what routes the operator to the chooser.
+    // The sandbox security profile is stamped in the same write (ADR 0020): "pending" runs as low and is what makes the SPA offer the
+    // choice once after the first answer.
     [Test]
     public async Task Setup_WhenItSucceeds_MarksTheSandboxSecurityProfilePending()
     {
@@ -528,6 +529,41 @@ public sealed class NodeAuthEndpointTests
 
         var stored = await factory.Services.GetRequiredService<INodeSettingsStore>().LoadAsync();
         AssertEx.Equal(StoredNodeSettings.SandboxSecurityProfilePending, stored.SandboxSecurityProfile);
+    }
+
+    // The first run no longer asks for the interface mode: a fresh node starts in Simple.
+    [Test]
+    public async Task Setup_WhenItSucceeds_DefaultsTheUiModeToSimple()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        using var setupResponse = await SetupAsync(client);
+        AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
+
+        var stored = await factory.Services.GetRequiredService<INodeSettingsStore>().LoadAsync();
+        AssertEx.Equal(StoredNodeSettings.UiModeSimple, stored.UiMode);
+    }
+
+    // The defaults fill only what nobody chose: a mode or profile already in the settings file survives setup unchanged.
+    [Test]
+    public async Task Setup_WhenAChoiceIsAlreadyStored_KeepsIt()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        var store = factory.Services.GetRequiredService<INodeSettingsStore>();
+        _ = await store.UpdateAsync(settings => settings with
+        {
+            UiMode = StoredNodeSettings.UiModeAdvanced,
+            SandboxSecurityProfile = StoredNodeSettings.SandboxSecurityProfileHigh
+        });
+        using var client = factory.CreateClient();
+
+        using var setupResponse = await SetupAsync(client);
+        AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
+
+        var stored = await store.LoadAsync();
+        AssertEx.Equal(StoredNodeSettings.UiModeAdvanced, stored.UiMode);
+        AssertEx.Equal(StoredNodeSettings.SandboxSecurityProfileHigh, stored.SandboxSecurityProfile);
     }
 
     // The write-before-commit ordering, from the failure side: the profile write lands, the operation is cancelled, and the identity

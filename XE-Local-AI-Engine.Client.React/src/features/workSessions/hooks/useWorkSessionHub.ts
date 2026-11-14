@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
+import { joinHubGroup } from "@/core/api/signalr/SharedHubGroups";
 import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import type { WorkSessionEventResponse } from "@/features/workSessions/models/WorkSessionModels";
 import { workSessionInvalidationKey, workSessionQueryIds } from "@/features/workSessions/queries/useWorkSessions";
@@ -220,18 +221,14 @@ export function useWorkSessionHub(sessionId: string | undefined, conversationId:
 		};
 
 		connection.on(EVENT_NAME, onChanged);
-		const removeReconnect = hub.onReconnected(() => {
-			subscribe(true).catch(() => undefined);
+		const leave = joinHubGroup(hub, ["UnsubscribeSession", sessionId], (reconnecting) => {
+			subscribe(reconnecting).catch(() => undefined);
 		});
-		hub.whenStarted.then(() => subscribe(false)).catch(() => undefined);
 
 		return () => {
 			disposed = true;
 			connection.off(EVENT_NAME, onChanged);
-			removeReconnect();
-			if (connection.state === HubConnectionState.Connected) {
-				connection.invoke("UnsubscribeSession", sessionId).catch(() => undefined);
-			}
+			leave();
 			hub.release();
 		};
 	}, [conversationId, queryClient, sessionId]);

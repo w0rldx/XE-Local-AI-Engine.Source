@@ -111,7 +111,7 @@ internal static class SchedulerMapper
         };
     }
 
-    public static ScheduledJobRunResponse ToResponse(this ScheduledJobRunRecord record)
+    public static ScheduledJobRunResponse ToResponse(this ScheduledJobRunRecord record, Guid? answerConversationId = null)
     {
         ArgumentNullException.ThrowIfNull(record);
 
@@ -130,7 +130,8 @@ internal static class SchedulerMapper
             // DetailsJson and ErrorDetails are deliberately omitted (redaction).
             ErrorMessage = record.ErrorMessage,
             CancellationRequestedAtUtc = record.CancellationRequestedAtUtc,
-            CreatedAtUtc = record.CreatedAtUtc
+            CreatedAtUtc = record.CreatedAtUtc,
+            AnswerConversationId = answerConversationId
         };
     }
 

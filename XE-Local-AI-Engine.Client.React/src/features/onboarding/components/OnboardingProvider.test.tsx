@@ -14,7 +14,9 @@ const {
 	toastErrorMock,
 	acknowledgementRef,
 	pathnameRef,
+	choicesIdleRef,
 } = vi.hoisted(() => ({
+	choicesIdleRef: { current: undefined as boolean | undefined },
 	pathnameRef: { current: "/chat" },
 	joyrideProps: { current: null as null | { run: boolean; stepIndex: number; steps: { title?: string }[] } },
 	onEventRef: { current: null as null | ((data: Record<string, unknown>) => void) },
@@ -75,6 +77,13 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getAiAcknowledgementOptions: () => ({ queryKey: ["ai-acknowledgement"] }),
 }));
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: { error: toastErrorMock } }));
+// The card is tested on its own; here only the provider's "no other overlay is open" signal matters.
+vi.mock("@/features/onboarding/components/FirstRunChoicesCard", () => ({
+	FirstRunChoicesCard: ({ idle }: { idle: boolean }) => {
+		choicesIdleRef.current = idle;
+		return null;
+	},
+}));
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@tanstack/react-router")>()),
 	useRouterState: ({ select }: { select: (state: { location: { pathname: string } }) => unknown }) =>
@@ -204,6 +213,30 @@ describe("AI acknowledgement first", () => {
 		pathnameRef.current = "/models";
 		renderProvider();
 		expect(screen.queryByTestId("onboarding-welcome-start")).toBeNull();
+	});
+});
+
+// The one-time first-run choices card must never be a third overlay over the acknowledgement, the welcome dialog or a tour.
+describe("first-run choices card", () => {
+	it("waits for the acknowledgement and the welcome dialog", () => {
+		acknowledgementRef.current = { data: { acknowledged: false }, isPending: false };
+		const view = renderProvider();
+		expect(choicesIdleRef.current).toBe(false);
+
+		acknowledgementRef.current = { data: { acknowledged: true }, isPending: false };
+		applyConversations(view, []);
+		expect(screen.getByTestId("onboarding-welcome-start")).toBeTruthy();
+		expect(choicesIdleRef.current).toBe(false);
+
+		fireEvent.click(screen.getByTestId("onboarding-welcome-skip"));
+		expect(choicesIdleRef.current).toBe(true);
+	});
+
+	it("waits while a tour runs", () => {
+		renderProvider();
+		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		expect(joyrideProps.current?.run).toBe(true);
+		expect(choicesIdleRef.current).toBe(false);
 	});
 });
 

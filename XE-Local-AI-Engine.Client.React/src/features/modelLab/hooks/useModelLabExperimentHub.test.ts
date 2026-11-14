@@ -28,7 +28,10 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 		},
 		whenStarted: hub.whenStarted,
 		onReconnecting: (callback: () => void) => hub.reconnecting.push(callback),
-		onReconnected: (callback: () => void) => hub.reconnected.push(callback),
+		onReconnected: (callback: () => void) => {
+			hub.reconnected.push(callback);
+			return () => undefined;
+		},
 		onClosed: (callback: () => void) => hub.closed.push(callback),
 		release: vi.fn(),
 	}),

@@ -22,24 +22,42 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
 {
     private const int TotalParts = 2;
 
+    // At most one Running progress push per model and interval; the start and terminal pushes bypass it.
+    private static readonly TimeSpan ProgressPushInterval = TimeSpan.FromSeconds(1);
+
+    private readonly ITranscriptionEventPublisher _eventPublisher;
+
     // In-flight downloads, each owning the token source that cancels it. The presence of an entry is what makes a
     // double submit rejoin instead of starting a second transfer.
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _inFlight = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, long> _lastProgressPushTicks = new(StringComparer.OrdinalIgnoreCase);
     private readonly ILogger<WhisperModelDownloadCoordinator> _logger;
     private readonly WhisperModelPathResolver _pathResolver;
     private readonly ConcurrentDictionary<string, WhisperModelDownloadStatus> _status = new(StringComparer.OrdinalIgnoreCase);
+
+    // Every status write takes this gate and stamps the next sequence, so the registry and the stamps share one order.
+    // The pushes stay fire-and-forget and may land out of order; the client drops one older than what it already applied.
+    private readonly Lock _statusGate = new();
+    private readonly TimeProvider _timeProvider;
+    private long _sequence;
     private readonly IWhisperWeightFileStore _weightStore;
 
     public WhisperModelDownloadCoordinator(IWhisperWeightFileStore weightStore,
         WhisperModelPathResolver pathResolver,
-        ILogger<WhisperModelDownloadCoordinator> logger)
+        ITranscriptionEventPublisher eventPublisher,
+        ILogger<WhisperModelDownloadCoordinator> logger,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(weightStore);
         _weightStore = weightStore;
         ArgumentNullException.ThrowIfNull(pathResolver);
         _pathResolver = pathResolver;
+        ArgumentNullException.ThrowIfNull(eventPublisher);
+        _eventPublisher = eventPublisher;
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     /// <inheritdoc />
@@ -64,14 +82,14 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
 
         // Publish Running before the transfer starts, so a poll landing between the accept and the first byte callback
         // sees the download rather than an empty registry.
-        _status[entry.Id] = new WhisperModelDownloadStatus
+        SetStatus(new WhisperModelDownloadStatus
         {
             ModelId = entry.Id,
             Phase = WhisperModelDownloadPhase.Running,
             CompletedBytes = null,
             TotalBytes = null,
             SanitizedError = null
-        };
+        });
 
         // The detached run gets the TOKEN, not the source: the source stays owned by the _inFlight entry, which keeps a
         // disposable out of an unawaited task's arguments.
@@ -150,14 +168,14 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
                 ct);
 
             var last = _status.TryGetValue(entry.Id, out var snapshot) ? snapshot : null;
-            _status[entry.Id] = new WhisperModelDownloadStatus
+            SetStatus(new WhisperModelDownloadStatus
             {
                 ModelId = entry.Id,
                 Phase = WhisperModelDownloadPhase.Completed,
                 CompletedBytes = last?.CompletedBytes ?? entry.SizeBytes,
                 TotalBytes = last?.TotalBytes ?? entry.SizeBytes,
                 SanitizedError = null
-            };
+            });
             _logger.LogInformation("Transcription model download completed for {ModelId}.", entry.Id);
         }
         catch (OperationCanceledException)
@@ -208,37 +226,87 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
     // completion can be delivered after the terminal write; publishing it unguarded would flip a finished download back to Running and hang the UI on it.
     private void ReportRunningProgress(string modelId, PullProgress update, int partIndex)
     {
-        _ = _status.AddOrUpdate(modelId,
-            key => new WhisperModelDownloadStatus
+        WhisperModelDownloadStatus status;
+        lock (_statusGate)
+        {
+            // A terminal entry stays as it is: nothing to record or push.
+            if (_status.TryGetValue(modelId, out var existing) && existing.Phase != WhisperModelDownloadPhase.Running)
             {
-                ModelId = key,
+                return;
+            }
+
+            status = new WhisperModelDownloadStatus
+            {
+                ModelId = modelId,
                 Phase = WhisperModelDownloadPhase.Running,
                 CompletedBytes = update.CompletedBytes,
                 TotalBytes = update.TotalBytes,
                 SanitizedError = null,
                 PartIndex = partIndex,
-                PartCount = TotalParts
-            },
-            (_, existing) => existing.Phase != WhisperModelDownloadPhase.Running
-                ? existing
-                : existing with
-                {
-                    CompletedBytes = update.CompletedBytes,
-                    TotalBytes = update.TotalBytes,
-                    PartIndex = partIndex,
-                    PartCount = TotalParts
-                });
+                PartCount = TotalParts,
+                Sequence = ++_sequence
+            };
+            _status[modelId] = status;
+
+            var now = _timeProvider.GetUtcNow().UtcTicks;
+            if (_lastProgressPushTicks.TryGetValue(modelId, out var last) && now - last < ProgressPushInterval.Ticks)
+            {
+                return;
+            }
+
+            _lastProgressPushTicks[modelId] = now;
+        }
+
+        _ = PushAsync(status);
     }
 
     private void SetTerminal(string modelId, WhisperModelDownloadPhase phase, string? sanitizedError)
     {
-        _status[modelId] = new WhisperModelDownloadStatus
+        SetStatus(new WhisperModelDownloadStatus
         {
             ModelId = modelId,
             Phase = phase,
             CompletedBytes = null,
             TotalBytes = null,
             SanitizedError = sanitizedError
-        };
+        });
+    }
+
+    // The start and every terminal phase always push; the start primes the progress throttle, a terminal phase drops it.
+    private void SetStatus(WhisperModelDownloadStatus status)
+    {
+        WhisperModelDownloadStatus stamped;
+        lock (_statusGate)
+        {
+            stamped = status with
+            {
+                Sequence = ++_sequence
+            };
+            _status[status.ModelId] = stamped;
+            if (status.Phase == WhisperModelDownloadPhase.Running)
+            {
+                _lastProgressPushTicks[status.ModelId] = _timeProvider.GetUtcNow().UtcTicks;
+            }
+            else
+            {
+                _ = _lastProgressPushTicks.TryRemove(status.ModelId, out _);
+            }
+        }
+
+        _ = PushAsync(stamped);
+    }
+
+    // Fire-and-forget from a synchronous Progress<T> callback: a failed push is only debug-logged, because the model list
+    // still serves the status. No request token exists here (MA0032/CA2016 opt-out).
+    private async Task PushAsync(WhisperModelDownloadStatus status)
+    {
+        try
+        {
+            await _eventPublisher.PublishModelDownloadAsync(status, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "Could not push the transcription model download status for {ModelId}.", status.ModelId);
+        }
     }
 }

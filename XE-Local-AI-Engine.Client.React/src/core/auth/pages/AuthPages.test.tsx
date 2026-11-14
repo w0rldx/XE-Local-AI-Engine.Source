@@ -29,7 +29,9 @@ function resolveKey(key: string, options?: Record<string, unknown>): string {
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
-		t: (k: string, options?: Record<string, unknown>) => resolveKey(k, options),
+		// Both call shapes: `t(key, options)` and `t(key, defaultValue, options)`.
+		t: (k: string, a?: Record<string, unknown> | string, b?: Record<string, unknown>) =>
+			resolveKey(k, typeof a === "object" ? a : b),
 		i18n: { changeLanguage: vi.fn() },
 	}),
 }));
@@ -188,6 +190,7 @@ describe("node auth pages", () => {
 	it("reveals the recovery code after setup and continues to external access only once it is saved", async () => {
 		authApiMock.setupNodeAuth.mockResolvedValue({ recoveryCode: "AAAAA-BBBBB-CCCCC" });
 		renderWithProviders(<Setup />);
+		expect(screen.getByTestId("first-run-stepper").textContent).toBe("Step 1 of 3: Account");
 
 		const password = "Long-Enough-Password1";
 		fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: "admin@example.test" } });
@@ -196,6 +199,8 @@ describe("node auth pages", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Create admin" }));
 
 		expect(await screen.findByText("AAAAA-BBBBB-CCCCC")).toBeTruthy();
+		// The recovery code is the vault step of a fresh install.
+		expect(screen.getByTestId("first-run-stepper").textContent).toBe("Step 2 of 3: Protect your data");
 		expect(useNodeAuthStore.getState().accessToken).toBe("access-token");
 		// The form is gone while the code is on screen, and nothing navigates until the operator acknowledges it.
 		expect(screen.queryByRole("button", { name: "Create admin" })).toBeNull();

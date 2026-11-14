@@ -140,6 +140,44 @@ public sealed class TrainingRunStoreTests : IDisposable
     }
 
     [Test]
+    public async Task List_ActiveOnly_ReturnsTheQueuedAndRunningRunsBeyondTheFirstPage()
+    {
+        await using var context = await CreateDatabaseAsync("active-only.sqlite");
+        var fixture = await SeedAsync(context);
+        var store = new TrainingRunStore(context, TimeProvider.System);
+        var runs = new List<TrainingRunRecord>();
+        for (var index = 0; index < 30; index++)
+        {
+            runs.Add(await store.CreateAndEnqueueAsync(Command(fixture)));
+        }
+
+        // The two oldest stay active, behind 28 newer finished runs: more than the 25 a first page holds.
+        TrainingWorkStatus[] endings = [TrainingWorkStatus.Succeeded, TrainingWorkStatus.Failed, TrainingWorkStatus.Cancelled];
+        for (var index = 2; index < runs.Count; index++)
+        {
+            _ = await store.CompleteRunAsync(runs[index].Id, endings[index % endings.Length], errorMessage: null);
+        }
+
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
+        var claimed = AssertEx.NotNull(await store.GetAsync(runs[0].Id));
+        _ = await store.TransitionAsync(claimed.Id, claimed.Version, TrainingRunStatus.Training);
+
+        var active = await store.ListAsync(new TrainingRunQuery
+        {
+            Page = 1,
+            PageSize = 25,
+            ActiveOnly = true
+        });
+
+        AssertEx.Equal(expected: 2, active.TotalCount);
+        var byId = active.Items.ToDictionary(item => item.Id, item => item.Status);
+        AssertEx.Equal(expected: 2, byId.Count, "Only the two active runs.");
+        AssertEx.Equal(TrainingRunStatus.Training, byId[runs[0].Id]);
+        AssertEx.Equal(TrainingRunStatus.Queued, byId[runs[1].Id]);
+        AssertEx.Equal(expected: 30, (await store.ListAsync(new TrainingRunQuery { Page = 1, PageSize = 25 })).TotalCount);
+    }
+
+    [Test]
     public async Task LogTail_KeepsOnlyTheLastCharacters()
     {
         await using var context = await CreateDatabaseAsync("logtail.sqlite");

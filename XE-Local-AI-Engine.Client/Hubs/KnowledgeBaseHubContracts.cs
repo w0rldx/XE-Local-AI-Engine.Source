@@ -9,6 +9,18 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 public static class KnowledgeBaseHubEvents
 {
     public const string DocumentChanged = "knowledge.documentChanged";
+
+    public const string DocumentRemoved = "knowledge.documentRemoved";
+}
+
+/// <summary>Sanitized deletion payload: only the deleted document's id and the instant it was removed.</summary>
+public sealed class KnowledgeDocumentRemovedHubEvent
+{
+    public required string EventType { get; init; }
+
+    public required Guid DocumentId { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
 }
 
 /// <summary>

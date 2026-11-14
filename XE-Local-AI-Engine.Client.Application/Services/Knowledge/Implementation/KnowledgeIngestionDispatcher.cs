@@ -37,9 +37,12 @@ public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
     // at most one queued/in-flight run plus one coalesced follow-up request, so updates never execute concurrently.
     private readonly Lock _admissionGate = new();
     private readonly Dictionary<Guid, AdmissionState> _admitted = [];
+    private readonly IKnowledgeIndexingNotifier _notifier;
 
-    public KnowledgeIngestionDispatcher()
+    public KnowledgeIngestionDispatcher(IKnowledgeIndexingNotifier notifier)
     {
+        ArgumentNullException.ThrowIfNull(notifier);
+        _notifier = notifier;
         // The gauge is owned (rooted) by the shared static XE.Node meter for the process lifetime; the singleton dispatcher
         // needs no reference back. Its callback reads this instance's live queue depth.
         _ = NodeMetrics.CreateKnowledgeIngestionQueueDepthGauge(() => PendingCount);
@@ -51,21 +54,32 @@ public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
     /// <summary>Current number of admitted-but-not-yet-drained document ids. Also published as the queue-depth gauge.</summary>
     public long PendingCount => _queue.Reader.Count;
 
-    public ValueTask<KnowledgeIngestionEnqueueResult> EnqueueAsync(Guid documentId, CancellationToken cancellationToken)
+    public async ValueTask<KnowledgeIngestionEnqueueResult> EnqueueAsync(Guid documentId, CancellationToken cancellationToken)
     {
-        return AdmitAsync(documentId, coalesce: true, cancellationToken);
+        ValidateAdmission(documentId, cancellationToken);
+        // Every enqueue path passes here, so the operations feed sees each queued document and keeps its batch open.
+        // Pushed before the id reaches the worker, so this run's first status push cannot overtake it.
+        await _notifier.NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Pending, cancellationToken);
+        return Admit(documentId, coalesce: true);
     }
 
     /// <summary>
     ///     Re-admits a stranded Pending document, skipping one already queued or in flight instead of scheduling a
     ///     follow-up run: the row is Pending only because that run has not started yet, not because it changed.
     /// </summary>
-    internal ValueTask<KnowledgeIngestionEnqueueResult> EnqueueStrandedAsync(Guid documentId, CancellationToken cancellationToken)
+    internal async ValueTask<KnowledgeIngestionEnqueueResult> EnqueueStrandedAsync(Guid documentId, CancellationToken cancellationToken)
     {
-        return AdmitAsync(documentId, coalesce: false, cancellationToken);
+        ValidateAdmission(documentId, cancellationToken);
+        // A queued or running document pushes its own state; a Pending push for it could land after its Indexed.
+        if (!IsAdmitted(documentId))
+        {
+            await _notifier.NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Pending, cancellationToken);
+        }
+
+        return Admit(documentId, coalesce: false);
     }
 
-    private ValueTask<KnowledgeIngestionEnqueueResult> AdmitAsync(Guid documentId, bool coalesce, CancellationToken cancellationToken)
+    private static void ValidateAdmission(Guid documentId, CancellationToken cancellationToken)
     {
         if (documentId == Guid.Empty)
         {
@@ -73,7 +87,18 @@ public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+    }
 
+    private bool IsAdmitted(Guid documentId)
+    {
+        lock (_admissionGate)
+        {
+            return _admitted.ContainsKey(documentId);
+        }
+    }
+
+    private KnowledgeIngestionEnqueueResult Admit(Guid documentId, bool coalesce)
+    {
         lock (_admissionGate)
         {
             // Duplicate admission records one follow-up instead of queuing the same id concurrently. Repository replacement
@@ -81,7 +106,7 @@ public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
             if (_admitted.TryGetValue(documentId, out var existing))
             {
                 existing.RequeueRequested |= coalesce;
-                return ValueTask.FromResult(KnowledgeIngestionEnqueueResult.Accepted);
+                return KnowledgeIngestionEnqueueResult.Accepted;
             }
 
             _admitted.Add(documentId, new AdmissionState());
@@ -91,13 +116,13 @@ public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
             if (_queue.Writer.TryWrite(documentId))
             {
                 NodeMetrics.KnowledgeIngestionAcceptedTotal.Add(1);
-                return ValueTask.FromResult(KnowledgeIngestionEnqueueResult.Accepted);
+                return KnowledgeIngestionEnqueueResult.Accepted;
             }
 
             // Full: undo the reservation so a later attempt (after capacity frees, e.g. the worker's drain-sweep) can admit it.
             _admitted.Remove(documentId);
             NodeMetrics.KnowledgeIngestionRejectedTotal.Add(1);
-            return ValueTask.FromResult(KnowledgeIngestionEnqueueResult.QueueFull);
+            return KnowledgeIngestionEnqueueResult.QueueFull;
         }
     }
 

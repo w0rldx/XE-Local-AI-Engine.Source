@@ -271,6 +271,16 @@ public sealed class ScheduledJobRunStore : IScheduledJobRunStore
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
+        // A run's saved answer lives at the run's id and is reachable only from the run, so it goes with it (ADR 0024).
+        var answerIds = await _dbContext.Conversations
+                                        .Where(conversation => conversation.Kind == NodeConversationKind.Scheduled && expiredRunIds.Contains(conversation.ConversationId))
+                                        .Select(conversation => conversation.ConversationId)
+                                        .ToListAsync(cancellationToken);
+        foreach (var answerId in answerIds)
+        {
+            await ConversationFootprintPurge.DeleteAsync(_dbContext, answerId, cancellationToken);
+        }
+
         _ = await _dbContext.ScheduledJobRunEvents
                             .Where(runEvent => expiredRunIds.Contains(runEvent.RunId))
                             .ExecuteDeleteAsync(cancellationToken);

@@ -179,9 +179,11 @@ where it is read:
   acquisition run as before; `OfflineProfileLlamaCppAcquisitionPolicy` refuses only for `offline`. The SPA layout
   guard sends a signed-in operator whose profile is null to `/external-access`, exactly as for `pending`, because
   behind a signed-in session null can only mean a data directory that predates the profile.
-- **Interface mode.** Null is what the SPA's `/ui-mode-setup` step already keys on, so the operator is asked.
+- **Interface mode.** Null reads as `advanced`, the navigation such a node always had; it is not asked. A fresh setup
+  stamps `simple`.
 - **Sandbox security profile.** Null reads as `low`, the behavior such a node always had, so it is not asked; the
-  operator raises it in "Sandbox & isolation".
+  operator raises it in "Sandbox & isolation". A fresh setup stamps `pending`, also read as `low`, and the SPA offers the
+  choice once after the first answer.
 
 **Old provider-map rows are cleared by a migration, not a backfill.** `RemoveOllamaProviderMapRows` deletes every `model_provider_map` row naming the removed runtime, in any letter case. Those names then route to the `llamacpp` default and fail like any model that is not installed (a chat turn fails with `FailureCategory.ModelNotInstalled`); the runtime's own model files are never touched.
 

@@ -114,7 +114,7 @@ describe("ChatKeyboardShortcuts", () => {
 				(await screen.findByTestId("chat-shortcuts-dialog")).querySelectorAll("kbd"),
 				(kbd) => kbd.textContent,
 			);
-			expect(keys).toEqual(["Eingabe", "Umschalt", "Eingabe", "Esc", "Strg", "Umschalt", "O", "Strg", "/"]);
+			expect(keys).toEqual(["Eingabe", "Umschalt", "Eingabe", "Esc", "Strg", "Umschalt", "O", "Strg", "/", "Strg", "K"]);
 		} finally {
 			await i18next.changeLanguage("en");
 		}

@@ -891,6 +891,18 @@ describe("sandbox security profile", () => {
 		expect(buildNodeSettingsRequest({ ...high, sandboxSecurityProfile: "pending" }, high, bounds, false).body).toEqual({});
 		expect(buildNodeSettingsRequest({ ...pending, sandboxSecurityProfile: "" }, pending, bounds, false).body).toEqual({});
 	});
+
+	// A fresh node's default: shown as the low it enforces, so leaving it Low sends nothing and raising it is a plain change.
+	it("seeds a pending profile as low", () => {
+		const pending = toNodeSettingsFieldsForm({ sandboxSecurityProfile: "pending" } as NodeSettingsResponse);
+		expect(pending.sandboxSecurityProfile).toBe("low");
+		expect(buildNodeSettingsRequest({ ...pending, computeEnabled: true }, pending, bounds, false).body).not.toHaveProperty(
+			"sandboxSecurityProfile",
+		);
+		expect(buildNodeSettingsRequest({ ...pending, sandboxSecurityProfile: "high" }, pending, bounds, false).body).toEqual({
+			sandboxSecurityProfile: "high",
+		});
+	});
 });
 
 describe("unified node fields and the pending-change summary", () => {

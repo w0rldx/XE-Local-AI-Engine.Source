@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Scheduler;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
@@ -42,6 +43,7 @@ public sealed class RunSavedAgentHandlerTests
     private const string AgentIdString = "11111111-1111-1111-1111-111111111111";
     private const string EffectiveLocalModel = "local-default-model";
     private const string Prompt = "Summarize the overnight error logs.";
+    private const string Answer = "Two disk warnings overnight, both on the backup volume.";
 
     private static readonly Guid AgentId = Guid.Parse(AgentIdString);
 
@@ -562,6 +564,171 @@ public sealed class RunSavedAgentHandlerTests
     }
 
     [Test]
+    public async Task ExecuteAsync_OnSuccess_SavesThePromptAndAnswerAsAScheduledConversationAtTheRunId()
+    {
+        using var harness = new Harness
+        {
+            Terminal = InvocationStatus.Completed,
+            AnswerText = Answer
+        };
+        var context = Context(ValidParams());
+
+        await harness.Handler.ExecuteAsync(context, CancellationToken.None);
+
+        _ = await harness.ChatPersistence.Received(1)
+                         .CreateConversationAsync(Arg.Is<NodeChatCreateConversationRequest>(request =>
+                                 request.Kind == NodeConversationKind.Scheduled
+                                 && request.ConversationId == context.RunId
+                                 && request.Title == context.DisplayName
+                                 && request.AgentDefinitionId == AgentId),
+                             Arg.Any<CancellationToken>());
+        _ = await harness.ChatPersistence.Received(1)
+                         .InsertMessageIfAbsentAsync(Arg.Is<NodeChatInsertMessageIfAbsentRequest>(request =>
+                                 request.ConversationId == context.RunId && request.Role == "user" && request.Content == Prompt),
+                             Arg.Any<CancellationToken>());
+        _ = await harness.ChatPersistence.Received(1)
+                         .InsertMessageIfAbsentAsync(Arg.Is<NodeChatInsertMessageIfAbsentRequest>(request =>
+                                 request.ConversationId == context.RunId && request.Role == "assistant" && request.Content == Answer
+                                 && request.Model == EffectiveLocalModel && request.AgentName == "Log Summarizer"),
+                             Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments(InvocationStatus.Failed)]
+    [Arguments(InvocationStatus.Cancelled)]
+    public async Task ExecuteAsync_WhenTheRunDoesNotSucceed_SavesNoConversation(InvocationStatus status)
+    {
+        // Safer default: a failed or interrupted run's partial text is not an answer anyone asked to keep (ADR 0024).
+        using var harness = new Harness
+        {
+            Terminal = status,
+            AnswerText = Answer
+        };
+
+        await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None));
+
+        _ = await harness.ChatPersistence.DidNotReceiveWithAnyArgs().CreateConversationAsync(default!, default);
+        _ = await harness.ChatPersistence.DidNotReceiveWithAnyArgs().InsertMessageIfAbsentAsync(default!, default);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenCancelledWhileReportingTheSummary_SavesNoConversation()
+    {
+        // The summary is the run's last cancellable step; a cancel there ends the run Cancelled, so it must leave no answer.
+        using var harness = new Harness
+        {
+            Terminal = InvocationStatus.Completed,
+            AnswerText = Answer
+        };
+        var context = Context(ValidParams(), static (message, _, _) => message.StartsWith("Agent run completed", StringComparison.Ordinal)
+            ? Task.FromException(new OperationCanceledException())
+            : Task.CompletedTask);
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => harness.Handler.ExecuteAsync(context, CancellationToken.None));
+
+        _ = await harness.ChatPersistence.DidNotReceiveWithAnyArgs().CreateConversationAsync(default!, default);
+        _ = await harness.ChatPersistence.DidNotReceiveWithAnyArgs().InsertMessageIfAbsentAsync(default!, default);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheAgentNarratesThenCallsATool_SavesOnlyTheFinalAnswer()
+    {
+        const string Narration = "Let me read the overnight logs first. ";
+        using var harness = new Harness
+        {
+            Terminal = InvocationStatus.Completed,
+            AnswerText = Narration + Answer,
+            ToolCallOffset = Narration.Length
+        };
+        var context = Context(ValidParams());
+
+        await harness.Handler.ExecuteAsync(context, CancellationToken.None);
+
+        _ = await harness.ChatPersistence.Received(1)
+                         .InsertMessageIfAbsentAsync(Arg.Is<NodeChatInsertMessageIfAbsentRequest>(request =>
+                                 request.Role == "assistant" && request.Content == Answer),
+                             Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheAgentNarratesAndCallsAToolButNeverAnswers_SavesNoConversation()
+    {
+        // The narration before a tool call is not an answer; a run that ends on the call has nothing to keep (ADR 0024).
+        const string Narration = "Let me read the overnight logs first.";
+        using var harness = new Harness
+        {
+            Terminal = InvocationStatus.Completed,
+            AnswerText = Narration + "  ",
+            ToolCallOffset = Narration.Length
+        };
+
+        await harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+
+        _ = await harness.ChatPersistence.DidNotReceiveWithAnyArgs().CreateConversationAsync(default!, default);
+        _ = await harness.ChatPersistence.DidNotReceiveWithAnyArgs().InsertMessageIfAbsentAsync(default!, default);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheRunAnswersNothing_SavesNoConversation()
+    {
+        using var harness = new Harness
+        {
+            Terminal = InvocationStatus.Completed,
+            AnswerText = "   "
+        };
+
+        await harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+
+        _ = await harness.ChatPersistence.DidNotReceiveWithAnyArgs().CreateConversationAsync(default!, default);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_OnSuccess_KeepsTheAnswerOutOfTheRunHistoryAndTheLogs()
+    {
+        using var harness = new Harness
+        {
+            Terminal = InvocationStatus.Completed,
+            AnswerText = Answer
+        };
+        var progress = new List<string>();
+
+        await harness.Handler.ExecuteAsync(Context(ValidParams(), (message, _, _) =>
+        {
+            progress.Add(message);
+            return Task.CompletedTask;
+        }), CancellationToken.None);
+
+        AssertEx.NotEmpty(progress);
+        foreach (var line in progress.Concat(harness.Logger.Lines))
+        {
+            AssertEx.False(line.Contains("disk warnings", StringComparison.Ordinal) || line.Contains(Prompt, StringComparison.Ordinal),
+                $"run history and logs stay content-free: '{line}'");
+        }
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheAnswerCannotBeSaved_FailsSanitizedAndRemovesThePartialConversation()
+    {
+        using var harness = new Harness
+        {
+            Terminal = InvocationStatus.Completed,
+            AnswerText = Answer
+        };
+        harness.ChatPersistence
+               .InsertMessageIfAbsentAsync(Arg.Any<NodeChatInsertMessageIfAbsentRequest>(), Arg.Any<CancellationToken>())
+               .Returns<NodeChatInsertMessageIfAbsentResult>(_ => throw new InvalidOperationException("database is locked"));
+        var context = Context(ValidParams());
+
+        var thrown = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => harness.Handler.ExecuteAsync(context, CancellationToken.None));
+
+        AssertEx.Equal("The agent run completed, but its answer could not be saved. See the node logs for details.", thrown.Message);
+        _ = await harness.ChatPersistence.Received(1)
+                         .DeleteConversationAsync(Arg.Is<NodeChatDeleteConversationRequest>(request => request.ConversationId == context.RunId && request.PurgeImmediately),
+                             Arg.Any<CancellationToken>());
+        AssertEx.False(harness.Logger.Lines.Exists(line => line.Contains("disk warnings", StringComparison.Ordinal)), "the failure log names the run, never the answer");
+    }
+
+    [Test]
     [Arguments("banana", "medium")]
     [Arguments("HIGH", "high")]
     [Arguments("   ", "medium")]
@@ -659,6 +826,32 @@ public sealed class RunSavedAgentHandlerTests
                 {
                     CapturedPackage = callInfo.Arg<InvocationExecutionContext>().Package;
                     RunCount++;
+                    if (ToolCallOffset is { } offset && dispatcher is null)
+                    {
+                        // What the runner reports when the model calls a tool after streaming `offset` characters.
+                        Dispatcher.ToolCallLifecycleChanged += Raise.EventWith(Dispatcher,
+                            new ToolCallLifecycleChangedEventArgs(new ToolCallLifecyclePayload
+                            {
+                                InvocationId = CapturedPackage.InvocationId,
+                                ToolCallId = "call-1",
+                                ToolName = "read_logs",
+                                Phase = ToolCallLifecyclePhase.Requested,
+                                ContentOffset = offset
+                            }));
+                    }
+
+                    if (Terminal is { } status && dispatcher is null)
+                    {
+                        // What the real runner's terminal report does through the slot the handler holds.
+                        Dispatcher.InvocationStateChanged += Raise.EventWith(Dispatcher,
+                            new InvocationStateChangedEventArgs(new InvocationState
+                            {
+                                InvocationId = CapturedPackage.InvocationId,
+                                Status = status,
+                                StreamedContent = AnswerText
+                            }));
+                    }
+
                     return RunCount == 1 ? FirstRunGate.Task : Task.CompletedTask;
                 });
 
@@ -675,10 +868,24 @@ public sealed class RunSavedAgentHandlerTests
             services.AddSingleton(Dispatcher);
             services.AddSingleton(Providers);
             services.AddSingleton(Gguf);
+            services.AddSingleton(ChatPersistence);
             var provider = services.BuildServiceProvider();
 
-            Handler = new RunSavedAgentHandler(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<RunSavedAgentHandler>.Instance);
+            Handler = new RunSavedAgentHandler(provider.GetRequiredService<IServiceScopeFactory>(), Logger);
         }
+
+        /// <summary>The run's reported terminal status; null reports none, as the substituted dispatcher alone does.</summary>
+        public InvocationStatus? Terminal { get; set; }
+
+        /// <summary>The answer text the terminal report carries.</summary>
+        public string AnswerText { get; set; } = string.Empty;
+
+        /// <summary>When set, one tool call is reported as requested at this content offset before the terminal report.</summary>
+        public int? ToolCallOffset { get; set; }
+
+        public INodeChatPersistenceService ChatPersistence { get; } = Substitute.For<INodeChatPersistenceService>();
+
+        public CapturingLogger Logger { get; } = new();
 
         private readonly TrackingDisposable _reservation = new();
 
@@ -794,6 +1001,22 @@ public sealed class RunSavedAgentHandlerTests
         public void Dispose()
         {
             _release();
+        }
+    }
+
+    /// <summary>Keeps every rendered log line and exception message, to prove none carries run content.</summary>
+    private sealed class CapturingLogger : ILogger<RunSavedAgentHandler>
+    {
+        public List<string> Lines { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Lines.Add($"{formatter(state, exception)} {exception?.Message}");
         }
     }
 

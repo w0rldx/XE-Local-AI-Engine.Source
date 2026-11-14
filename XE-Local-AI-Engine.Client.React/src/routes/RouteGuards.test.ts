@@ -45,10 +45,6 @@ vi.mock("@/AppLayout", () => ({ AppLayout: () => null }));
 
 vi.mock("@/features/node-settings/pages/ExternalAccessSetup", () => ({ ExternalAccessSetup: () => null }));
 
-vi.mock("@/features/node-settings/pages/UiModeSetup", () => ({ UiModeSetup: () => null }));
-
-vi.mock("@/features/node-settings/pages/SandboxProfileSetup", () => ({ SandboxProfileSetup: () => null }));
-
 import { Route as LayoutRoute } from "@/routes/_layout";
 import { Route as ExternalAccessRoute } from "@/routes/external-access";
 import { Route as LoginRoute } from "@/routes/login";
@@ -87,15 +83,6 @@ async function runLayoutGuard(queryClient: QueryClient): Promise<unknown> {
 		throw new Error("the layout route declares no beforeLoad");
 	}
 	// biome-ignore lint/suspicious/noExplicitAny: the guard reads only `context` and `location` off the router's argument.
-	return await (beforeLoad as any)({ context: { queryClient }, location });
-}
-
-async function runUiModeGuard(queryClient: QueryClient): Promise<unknown> {
-	const beforeLoad = UiModeSetupRoute.options.beforeLoad;
-	if (beforeLoad === undefined) {
-		throw new Error("the ui-mode-setup route declares no beforeLoad");
-	}
-	// biome-ignore lint/suspicious/noExplicitAny: same hand-built context as the layout guard.
 	return await (beforeLoad as any)({ context: { queryClient }, location });
 }
 
@@ -145,7 +132,7 @@ function redirectTarget(error: unknown): string | undefined {
 	return (error as { options?: { to?: string } }).options?.to;
 }
 
-describe("route guards for the first-run external-access and interface-mode choices", () => {
+describe("route guards for the first-run external-access choice", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		restoreMock.mockResolvedValue("authenticated");
@@ -210,105 +197,72 @@ describe("route guards for the first-run external-access and interface-mode choi
 		expect(redirectTarget(error)).toBe("/login");
 	});
 
-	it("redirects an authenticated operator whose interface mode is unanswered to the ui-mode route", async () => {
-		const error = await runLayoutGuard(clientWith("recommended", null)).then(
-			() => undefined,
-			(thrown: unknown) => thrown,
+	// The sandbox profile and the interface mode default (pending runs as low, setup stamps simple) and are offered
+	// once after the first answer, so neither an unanswered mode nor a pending profile may stop the app any more.
+	it("lets a node with a pending sandbox profile and no interface mode into the app", async () => {
+		await expect(guardOutcome(runLayoutGuard(clientWith("recommended", null, "pending")))).resolves.toBe("stay");
+	});
+
+	it("redirects away from the external-access route once the profile is decided, even with the later defaults unset", async () => {
+		await expect(guardOutcome(runExternalAccessGuard(clientWith("recommended", null, "pending")))).resolves.toBe("/");
+	});
+
+	// The order lives in FirstRunGuard alone: each first-run route names itself and nothing else, so no route can reorder
+	// the chain or re-ask a step by reading settings on its own.
+	it("routes every first-run guard through the one shared guard", async () => {
+		const routesDir = dirname(fileURLToPath(import.meta.url));
+		const owners = [
+			["_layout.tsx", '"/"'],
+			["command.tsx", '"/"'],
+			["setup.tsx", '"/setup"'],
+			["vault-setup.tsx", '"/vault-setup"'],
+			["external-access.tsx", '"/external-access"'],
+		] as const;
+		const sources = await Promise.all(owners.map(([file]) => readFile(join(routesDir, file), "utf8")));
+		owners.forEach(([file, here], index) => {
+			expect(sources[index], file).toContain(`guardFirstRun(${here}`);
+			expect(sources[index], file).not.toMatch(/externalAccessProfile|restoreNodeAuthSession|getPendingVaultStep|redirect\(/);
+		});
+	});
+
+	// The removed sandbox-profile and interface-mode choosers: an old bookmark must not land on the not-found page.
+	it("sends a retired first-run screen on to the owed step, or the app", async () => {
+		const outcomes = await Promise.all(
+			[SandboxProfileSetupRoute, UiModeSetupRoute].flatMap((route) => [
+				guardOutcome(runGuard(route, clientWith("pending"))),
+				guardOutcome(runGuard(route, clientWith("offline", null, "pending"))),
+				guardOutcome(runGuard(route, failingClient())),
+			]),
 		);
+		expect(outcomes).toEqual(["/external-access", "/", "/", "/external-access", "/", "/"]);
 
-		expect(redirectTarget(error)).toBe("/ui-mode-setup");
-	});
-
-	// Order, not just presence: the two first-run steps must be answered in sequence, or an operator could bounce
-	// between them. A node with BOTH unanswered goes to the external-access step first.
-	it("answers the external-access question before the interface-mode one", async () => {
-		const error = await runLayoutGuard(clientWith("pending", null)).then(
-			() => undefined,
-			(thrown: unknown) => thrown,
-		);
-
-		expect(redirectTarget(error)).toBe("/external-access");
-	});
-
-	it("redirects an authenticated operator with a pending sandbox profile to the sandbox-profile route", async () => {
-		await expect(guardOutcome(runLayoutGuard(clientWith("recommended", "advanced", "pending")))).resolves.toBe(
-			"/sandbox-profile-setup",
-		);
-	});
-
-	// The sandbox profile is the middle question: after external access, before the interface mode.
-	it("asks the sandbox profile after external access and before the interface mode", async () => {
-		await expect(guardOutcome(runLayoutGuard(clientWith("pending", null, "pending")))).resolves.toBe("/external-access");
-		await expect(guardOutcome(runLayoutGuard(clientWith("recommended", null, "pending")))).resolves.toBe(
-			"/sandbox-profile-setup",
-		);
-		await expect(guardOutcome(runLayoutGuard(clientWith("recommended", null, "low")))).resolves.toBe("/ui-mode-setup");
-	});
-
-	it("keeps the sandbox-profile chooser open while the profile is pending", async () => {
-		await expect(guardOutcome(runGuard(SandboxProfileSetupRoute, clientWith("recommended", null, "pending")))).resolves.toBe(
-			"stay",
-		);
-	});
-
-	it("redirects away from the sandbox-profile route once the profile is decided", async () => {
-		await expect(guardOutcome(runGuard(SandboxProfileSetupRoute, clientWith("recommended", null, "low")))).resolves.toBe("/");
-		await expect(guardOutcome(runGuard(SandboxProfileSetupRoute, clientWith("recommended", null, "high")))).resolves.toBe("/");
-	});
-
-	it("sends a visitor of the sandbox-profile route back to external access while that is still pending", async () => {
-		await expect(guardOutcome(runGuard(SandboxProfileSetupRoute, clientWith("pending", null, "pending")))).resolves.toBe(
-			"/external-access",
-		);
-	});
-
-	it("renders the sandbox-profile chooser when its settings read fails", async () => {
-		await expect(guardOutcome(runGuard(SandboxProfileSetupRoute, failingClient()))).resolves.toBe("stay");
-	});
-
-	it("sends an unauthenticated visitor of the sandbox-profile route to login", async () => {
 		useNodeAuthStore.getState().actions.clear();
 		restoreMock.mockResolvedValue("unauthenticated");
-
-		await expect(guardOutcome(runGuard(SandboxProfileSetupRoute, clientWith("recommended", null, "pending")))).resolves.toBe(
-			"/login",
-		);
+		await expect(guardOutcome(runGuard(UiModeSetupRoute))).resolves.toBe("/login");
 	});
 
-	it("lets an authenticated operator with a decided interface mode through the layout", async () => {
-		await expect(runLayoutGuard(clientWith("recommended", "simple"))).resolves.toBeUndefined();
-		await expect(runLayoutGuard(clientWith("recommended", "advanced"))).resolves.toBeUndefined();
+	// Behind a signed-in session the account and vault are done, so a failed settings read must not leave a visitor on
+	// their forms; only the app (fail-open) and the external-access chooser stay.
+	it("sends a signed-in visitor of setup or vault setup on to the app when the settings read fails", async () => {
+		await expect(guardOutcome(runGuard(SetupRoute, failingClient()))).resolves.toBe("/");
+		await expect(guardOutcome(runGuard(VaultSetupRoute, failingClient()))).resolves.toBe("/");
+		await expect(guardOutcome(runGuard(LayoutRoute, failingClient()))).resolves.toBe("stay");
+		await expect(guardOutcome(runGuard(ExternalAccessRoute, failingClient()))).resolves.toBe("stay");
 	});
 
-	it("keeps the ui-mode chooser open while the mode is still unanswered", async () => {
-		await expect(runUiModeGuard(clientWith("recommended", null))).resolves.toBeUndefined();
-	});
+	// One state, every entry route: all of them agree on the single stop the node owes.
+	it("sends every first-run route to the same owed step", async () => {
+		const owedExternalAccess = clientWith("pending", null, "pending");
+		await expect(guardOutcome(runGuard(LayoutRoute, owedExternalAccess))).resolves.toBe("/external-access");
+		await expect(guardOutcome(runGuard(SetupRoute, owedExternalAccess))).resolves.toBe("/external-access");
+		await expect(guardOutcome(runGuard(VaultSetupRoute, owedExternalAccess))).resolves.toBe("/external-access");
+		await expect(guardOutcome(runGuard(ExternalAccessRoute, owedExternalAccess))).resolves.toBe("stay");
 
-	it("redirects away from the ui-mode route once the mode is decided", async () => {
-		const error = await runUiModeGuard(clientWith("recommended", "simple")).then(
-			() => undefined,
-			(thrown: unknown) => thrown,
-		);
-
-		expect(redirectTarget(error)).toBe("/");
-	});
-
-	it("renders the chooser when the ui-mode route's settings read fails", async () => {
-		// The same fail-TOWARD-the-chooser as the external-access route: this screen has no skip control, so an error
-		// boundary here would be a dead end.
-		await expect(runUiModeGuard(failingClient())).resolves.toBeUndefined();
-	});
-
-	it("sends an unauthenticated visitor of the ui-mode route to login", async () => {
-		useNodeAuthStore.getState().actions.clear();
-		restoreMock.mockResolvedValue("unauthenticated");
-
-		const error = await runUiModeGuard(clientWith("recommended", null)).then(
-			() => undefined,
-			(thrown: unknown) => thrown,
-		);
-
-		expect(redirectTarget(error)).toBe("/login");
+		const done = clientWith("offline", null, "pending");
+		await expect(guardOutcome(runGuard(LayoutRoute, done))).resolves.toBe("stay");
+		await expect(guardOutcome(runGuard(SetupRoute, done))).resolves.toBe("/");
+		await expect(guardOutcome(runGuard(VaultSetupRoute, done))).resolves.toBe("/");
+		await expect(guardOutcome(runGuard(ExternalAccessRoute, done))).resolves.toBe("/");
 	});
 
 	// Above the router the tour provider is alive on /setup, /login and /external-access, and opened its welcome dialog the
@@ -353,7 +307,6 @@ describe("route guards for the vault states", () => {
 			await expect(guardOutcome(runGuard(LoginRoute))).resolves.toBe("/vault");
 			await expect(guardOutcome(runGuard(SetupRoute))).resolves.toBe("/vault");
 			await expect(guardOutcome(runGuard(ExternalAccessRoute, clientWith("pending")))).resolves.toBe("/vault");
-			await expect(guardOutcome(runGuard(UiModeSetupRoute, clientWith("recommended", null)))).resolves.toBe("/vault");
 			await expect(guardOutcome(runGuard(VaultSetupRoute))).resolves.toBe("/vault");
 		});
 
@@ -385,7 +338,7 @@ describe("route guards for the vault states", () => {
 			statusMock.mockResolvedValue(statusWith("pending"));
 		});
 
-		// Order, not just presence: the vault step comes before the external-access and ui-mode choices.
+		// Order, not just presence: the vault step comes before the external-access choice.
 		it("sends the layout to vault setup before the first-run choices", async () => {
 			await expect(guardOutcome(runGuard(LayoutRoute, clientWith("pending", null)))).resolves.toBe("/vault-setup");
 		});
@@ -402,7 +355,6 @@ describe("route guards for the vault states", () => {
 			await expect(guardOutcome(runGuard(LoginRoute))).resolves.toBe("/vault-setup");
 			await expect(guardOutcome(runGuard(SetupRoute))).resolves.toBe("/vault-setup");
 			await expect(guardOutcome(runGuard(ExternalAccessRoute, clientWith("pending")))).resolves.toBe("/vault-setup");
-			await expect(guardOutcome(runGuard(UiModeSetupRoute, clientWith("recommended", null)))).resolves.toBe("/vault-setup");
 		});
 
 		it("opens vault setup and keeps the unlock page closed", async () => {

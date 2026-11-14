@@ -36,8 +36,11 @@ public interface IImageJobCoordinator
     /// <exception cref="ImageNotFoundException">No job has that id.</exception>
     Task<ImageJobView> GetAsync(Guid jobId, CancellationToken cancellationToken);
 
-    /// <summary>Lists one page of persisted jobs (newest first) plus the unpaged total.</summary>
-    Task<ImageJobPage> ListAsync(int limit, int offset, CancellationToken cancellationToken);
+    /// <summary>
+    ///     Lists one page of persisted jobs (newest first) plus the unpaged total; <paramref name="activeOnly" /> keeps
+    ///     only queued and generating jobs, so the page is not capped by finished history.
+    /// </summary>
+    Task<ImageJobPage> ListAsync(int limit, int offset, bool activeOnly, CancellationToken cancellationToken);
 
     /// <summary>
     ///     Deletes a terminal job with its generated image(s) — the rows first, then the encrypted blobs on disk.

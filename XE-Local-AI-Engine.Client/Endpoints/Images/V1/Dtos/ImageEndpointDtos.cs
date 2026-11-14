@@ -137,6 +137,9 @@ public sealed class ListImageJobsRequest
     public int? Limit { get; init; }
 
     public int? Offset { get; init; }
+
+    /// <summary>Only queued and generating jobs (the app-wide job feed); absent or false lists every job.</summary>
+    public bool? ActiveOnly { get; init; }
 }
 
 /// <summary>

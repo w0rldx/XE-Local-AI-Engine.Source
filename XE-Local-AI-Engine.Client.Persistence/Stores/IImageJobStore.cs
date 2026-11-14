@@ -21,11 +21,14 @@ public interface IImageJobStore
     /// <summary>Reads one job's decrypted view, or <see langword="null" /> when it does not exist.</summary>
     Task<ImageJobView?> GetAsync(Guid jobId, CancellationToken cancellationToken);
 
-    /// <summary>Lists one page of jobs (newest first) as a decrypted view.</summary>
-    Task<IReadOnlyList<ImageJobView>> ListAsync(int limit, int offset, CancellationToken cancellationToken);
+    /// <summary>
+    ///     Lists one page of jobs (newest first) as a decrypted view; <paramref name="activeOnly" /> keeps only
+    ///     <see cref="ImageJobStatus.Queued" /> and <see cref="ImageJobStatus.Generating" /> ones.
+    /// </summary>
+    Task<IReadOnlyList<ImageJobView>> ListAsync(int limit, int offset, bool activeOnly, CancellationToken cancellationToken);
 
-    /// <summary>How many jobs exist in total, ignoring paging — what lets the client show a real pager.</summary>
-    Task<int> CountAsync(CancellationToken cancellationToken);
+    /// <summary>How many jobs exist in total (only active ones with <paramref name="activeOnly" />), ignoring paging.</summary>
+    Task<int> CountAsync(bool activeOnly, CancellationToken cancellationToken);
 
     /// <summary>
     ///     Deletes one job together with its <c>generated_images</c> rows in a single transaction and returns the

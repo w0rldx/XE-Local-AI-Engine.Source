@@ -11,6 +11,8 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
+using XE_Local_AI_Engine.Client.Services.Common;
+using XE_Local_AI_Engine.Client.Services.Common.Implementation;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -45,6 +47,8 @@ public sealed class ImageJobCoordinatorTests
         AssertEx.Equal(ImageJobStatus.Queued.ToString(), first.Phase);
         AssertEx.Equal(expected: 0L, first.Seq);
         AssertEx.Equal(jobId, first.JobId);
+        // The job's own pushes reach only its group, so this one broadcast is how a feed that never saw it learns of it.
+        await harness.JobCreated.Received(1).PublishCreatedAsync(CreatedJobKind.ImageJob, jobId, Arg.Any<CancellationToken>());
 
         harness.Runtime.Release();
     }
@@ -165,8 +169,9 @@ public sealed class ImageJobCoordinatorTests
 
         _ = await AssertEx.ThrowsAsync<ImageRuntimeBusyException>(() => harness.Coordinator.EnqueueAsync(NewInput("blocked-by-runtime-mutation"), CancellationToken.None));
 
-        AssertEx.Empty((await harness.Coordinator.ListAsync(limit: 50, offset: 0, CancellationToken.None)).Items);
+        AssertEx.Empty((await harness.Coordinator.ListAsync(limit: 50, offset: 0, activeOnly: false, CancellationToken.None)).Items);
         AssertEx.Equal(expected: 0, harness.ActivityGate.ActiveLeaseCount);
+        await harness.JobCreated.DidNotReceiveWithAnyArgs().PublishCreatedAsync(default, Guid.Empty, default);
     }
 
     [Test]
@@ -381,11 +386,11 @@ public sealed class ImageJobCoordinatorTests
             ids.Add(jobId);
         }
 
-        var firstPage = await harness.Coordinator.ListAsync(limit: 2, offset: 0, CancellationToken.None);
+        var firstPage = await harness.Coordinator.ListAsync(limit: 2, offset: 0, activeOnly: false, CancellationToken.None);
         AssertEx.Equal(expected: 2, firstPage.Items.Count);
         AssertEx.Equal(expected: 3, firstPage.TotalCount, "TotalCount counts every job, not the page.");
 
-        var secondPage = await harness.Coordinator.ListAsync(limit: 2, offset: 2, CancellationToken.None);
+        var secondPage = await harness.Coordinator.ListAsync(limit: 2, offset: 2, activeOnly: false, CancellationToken.None);
         AssertEx.Equal(expected: 1, secondPage.Items.Count);
         AssertEx.Equal(expected: 3, secondPage.TotalCount);
 
@@ -434,7 +439,8 @@ public sealed class ImageJobCoordinatorTests
             new FakeImageRuntimeActivityGate(),
             new GpuWorkGate(),
             NoLlamaServerResidents(),
-            InstalledModels());
+            InstalledModels(),
+            new NullJobCreatedPublisher());
         AssertEx.NotNull(timeProvider.EvictionCallback, "The coordinator must arm a periodic eviction timer at construction.");
 
         var jobId = await coordinator.EnqueueAsync(NewInput("idle-eviction"), CancellationToken.None);
@@ -632,6 +638,8 @@ public sealed class ImageJobCoordinatorTests
 
         public required FakeImageRuntimeActivityGate ActivityGate { get; init; }
 
+        public required IJobCreatedPublisher JobCreated { get; init; }
+
         public void Dispose()
         {
             Coordinator.Dispose();
@@ -649,6 +657,7 @@ public sealed class ImageJobCoordinatorTests
             var store = new FakeImageJobStore();
             var images = new FakeGeneratedImageStore();
             var activityGate = new FakeImageRuntimeActivityGate(admitJobs);
+            var jobCreated = Substitute.For<IJobCreatedPublisher>();
 
             var services = new ServiceCollection();
             services.AddScoped<IImageJobStore>(_ => store);
@@ -665,7 +674,8 @@ public sealed class ImageJobCoordinatorTests
                 activityGate,
                 gpuWorkGate ?? new GpuWorkGate(),
                 llamaSupervisor ?? NoLlamaServerResidents(),
-                InstalledModels());
+                InstalledModels(),
+                jobCreated);
 #pragma warning restore CA2000
 
             return new Harness
@@ -674,7 +684,8 @@ public sealed class ImageJobCoordinatorTests
                 Runtime = runtime,
                 Store = store,
                 Images = images,
-                ActivityGate = activityGate
+                ActivityGate = activityGate,
+                JobCreated = jobCreated
             };
         }
     }
@@ -883,9 +894,10 @@ public sealed class ImageJobCoordinatorTests
             return Task.FromResult(_jobs.TryGetValue(jobId, out var view) ? view : null);
         }
 
-        public Task<IReadOnlyList<ImageJobView>> ListAsync(int limit, int offset, CancellationToken cancellationToken)
+        public Task<IReadOnlyList<ImageJobView>> ListAsync(int limit, int offset, bool activeOnly, CancellationToken cancellationToken)
         {
             var page = _jobs.Values
+                            .Where(view => !activeOnly || view.Status is ImageJobStatus.Queued or ImageJobStatus.Generating)
                             .OrderByDescending(view => view.CreatedAtUtc)
                             .ThenByDescending(view => view.Id)
                             .Skip(Math.Max(val1: 0, offset))
@@ -894,9 +906,9 @@ public sealed class ImageJobCoordinatorTests
             return Task.FromResult<IReadOnlyList<ImageJobView>>(page);
         }
 
-        public Task<int> CountAsync(CancellationToken cancellationToken)
+        public Task<int> CountAsync(bool activeOnly, CancellationToken cancellationToken)
         {
-            return Task.FromResult(_jobs.Count);
+            return Task.FromResult(_jobs.Values.Count(view => !activeOnly || view.Status is ImageJobStatus.Queued or ImageJobStatus.Generating));
         }
 
         public Task<IReadOnlyList<string>?> DeleteAsync(Guid jobId, CancellationToken cancellationToken)

@@ -111,12 +111,25 @@ Security and runtime invariants:
 - **Tool-capable when the agent needs tools.** An agent that lists tools, or orchestrates, on a model that cannot call
   them is refused right after the locality gate with one operator-safe sentence naming the agent, the model and the
   remedy, instead of "succeeding" having called nothing ([Agent Mode](04-agent-mode.md), `AgentModelRequirements`).
-- **Same runtime, no chat transcript.** It resolves the complete saved-agent runtime and uses the same
-  `IInvocationRunner` as chat, but without a conversation or chat-persistence pump.
+- **Same runtime; the answer, not a transcript, is kept.** It resolves the complete saved-agent runtime and uses the
+  same `IInvocationRunner` as chat, without a chat-persistence pump. Only after a **successful** run does it write the
+  prompt and the final answer text, through the chat persistence service and so encrypted like any chat, into a
+  conversation of kind `scheduled` at the run's id ([ADR 0024](../adr/0024-scheduled-agent-answers-are-stored-conversations.md)).
+  The answer is the text after the last requested tool call (the narration before each call is dropped, as for a
+  graph-workflow agent node), and a run whose text ends on a tool call saves nothing. Reasoning and tool parts are not
+  kept. A failed, cancelled, timed-out or empty run writes nothing; a save that fails
+  removes what it began and fails the run with a fixed reason.
+- **The answer opens only from its run.** The chat list, search and export filter `kind = 'chat'`, so a `scheduled`
+  conversation never reaches them. `GET scheduler/runs/{runId}` returns `answerConversationId` for a succeeded run
+  that has one; the run detail opens it read-only and can delete it. The server enforces the read-only part:
+  `NodeChatMutationGuard` refuses every chat write to a `scheduled` conversation with 409 `ReadOnlyConversation`,
+  delete excepted ([Chat](05-chat.md), "Read-only conversations"). The summary is reported before the answer is
+  saved, so a cancel during the summary leaves no answer for a run that did not succeed.
 - **No unattended approval wait.** Approval-required tools are removed before execution because no
   human approval round trip exists. The remaining offer keeps the resolved agent's normal tool policy.
 - **Content-safe history.** Progress/history records status, model, token counts, and duration—not the
-  fixed prompt, model output, tool arguments, or tool results. Missing agents and failures surface
+  fixed prompt, model output, tool arguments, or tool results, and neither do the hub events or the handler's log
+  lines. The saved answer is linked by the run's id, never copied into history. Missing agents and failures surface
   operator-safe reasons.
 - **Shared admission and cancellation.** The run takes the node-wide invocation slot first and decides
   capacity while holding it, so a second fire for a model the first is still warming queues instead of
@@ -214,6 +227,7 @@ Run history is owned by `IScheduledJobRunStore` (`XE-Local-AI-Engine.Client.Pers
 - **`DetailsJson` is encrypted at rest** by the node encryption interceptors; reads return it decrypted. See [Data & Persistence](08-data-and-persistence.md).
 - Runs have **no enforced FK to their definition** so history outlives the definition; their *events* cascade-delete.
 - The store owns: id/timestamp stamping, `UpsertByFireInstanceAsync` (idempotent fire-instance open), `UpdateLifecycleAsync` (terminal transitions), `RequestCancellationAsync` (stamp `CancellationRequestedAtUtc` without changing status), `MarkStaleActiveRunsAsync` (startup reconciliation of orphaned `Queued`/`Running` runs to a terminal state), and `SweepOlderThanAsync` (retention deletes by `CreatedAtUtc`, cascade removes events).
+- **A run's saved answer goes with the run.** `SweepOlderThanAsync` purges the `scheduled` conversation at each expired run's id, with its whole conversation footprint, in the same transaction, so an answer never outlives the only path that reaches it. The chat retention sweep is not filtered by kind and may remove it sooner ([ADR 0024](../adr/0024-scheduled-agent-answers-are-stored-conversations.md)).
 
 `SchedulerHistoryRetentionService` (`XE-Local-AI-Engine.Client.Application/Services/Scheduler/Implementation/SchedulerHistoryRetentionService.cs`) is a `BackgroundService` that periodically calls the sweep using `SchedulerOptions.HistoryRetentionDays` (default 30) on a `RetentionSweepIntervalMinutes` cadence (default 60).
 
@@ -322,7 +336,7 @@ All under the FastEndpoints local prefix; route constants in `LocalApiRoutes.Sch
 | `jobs/{scheduledJobId}/trigger` | `TriggerScheduledJobEndpoint` |
 | `upcoming` (GET, `?limit=` 1–20, default 5) | `ListUpcomingScheduledJobsEndpoint` |
 | `runs` (GET, query-filtered, paged by `?limit=` 1–200, default 50, and `?offset=`; carries `totalCount`) | `ListScheduledJobRunsEndpoint` |
-| `runs/{runId}` (GET) | `GetScheduledJobRunEndpoint` |
+| `runs/{runId}` (GET) | `GetScheduledJobRunEndpoint` (adds `answerConversationId` for a succeeded `run-agent` run with a saved answer) |
 | `runs/{runId}/cancel` | `CancelScheduledJobRunEndpoint` |
 
 `upcoming` is the only read that asks Quartz rather than the store: `IScheduledJobManagementService.ListUpcomingAsync` takes, for each enabled live definition, the earliest future `NextFireTimeUtc` across the triggers of its Quartz job, sorts soonest first and returns the definition's id, display name and schedule kind with that time (unix-ms). A Manual job has no trigger, a disabled or deleted one no Quartz job, and a Quartz job whose definition is no longer enabled is skipped, so none of them is listed; neither is a trigger whose next fire is already past.
@@ -340,7 +354,7 @@ These endpoints are local/loopback, operator-authenticated, and strict on Host/O
 | Area | Files |
 |---|---|
 | Page | `pages/SchedulerPage.tsx`, `pages/SchedulerPageFormMappers.ts` |
-| Components | `components/ScheduledJobList.tsx`, `ScheduledJobForm.tsx`, `ScheduledJobRunHistoryPanel.tsx`, `ScheduledJobRunDetail.tsx`, `components/SchedulerRunFormatters.ts` |
+| Components | `components/ScheduledJobList.tsx`, `ScheduledJobForm.tsx`, `ScheduledJobRunHistoryPanel.tsx`, `ScheduledJobRunDetail.tsx`, `ScheduledRunAnswer.tsx` (read-only saved answer, with delete), `components/SchedulerRunFormatters.ts` |
 | Data hooks | `queries/useScheduler.ts` (hey-api TanStack Query), `hooks/useSchedulerHub.ts` (SignalR) |
 | Models / mappers | `models/SchedulerModels.ts`, `models/SchedulerMappers.ts` |
 | Store | `stores/SchedulerManagementStore.ts` (UI/dialog state via Zustand) |
@@ -351,7 +365,7 @@ These endpoints are local/loopback, operator-authenticated, and strict on Host/O
 
 - `scheduler.jobDefinitionChanged` → invalidate the jobs list query.
 - any of the five `scheduler.run*` events → invalidate the run-history list **and** the per-run detail query.
-- a **terminal** run outcome (`runCompleted`/`runFailed`/`runCancelled`) additionally raises a localized **completion toast** via `notifySchedulerRunEvent` (`features/scheduler/notifications/SchedulerRunNotifications.ts`) so the operator sees the result without watching the run-history panel. `t` is read through a ref so a mid-session language switch re-localizes future toasts without re-subscribing the hub.
+- the page raises no completion toast itself. Finished and failed runs are alerted on every page by the app-wide operations feed (`useSchedulerRunOperations` in `core/operations/hooks/useJobOperations.ts`, see [React client](10-react-client.md)), which holds its own scheduler-hub lease while the node's `schedulerEnabled` switch reads on, skips the reserved `model-recommendation-check` template (its page toasts it), and treats a cancelled run as the user's own decision.
 
 It connects to `buildLocalApiUrl("scheduler/hub")` with an `accessTokenFactory` from the node auth store, uses `withAutomaticReconnect()`, and tolerates connection failures silently (logged to `console.warn`) so a flaky hub never breaks the page — queries still serve last-good data.
 
@@ -363,7 +377,7 @@ It connects to `buildLocalApiUrl("scheduler/hub")` with an `accessTokenFactory` 
 
 - Adding a template = register one more `IScheduledJobHandler` in `AddNodeScheduler`; **`TemplateId` must be globally unique** or the registry throws at startup.
 - Never widen the UI-visible error surface except via `ScheduledJobExecutionException` with proven-safe text.
-- Keep `run-agent` node-local unless `AllowCloudModelUnattendedRuns` is on, strip approval-required tools, and keep prompts/output/tool payloads out of scheduler history.
+- Keep `run-agent` node-local unless `AllowCloudModelUnattendedRuns` is on, strip approval-required tools, and keep prompts/output/tool payloads out of scheduler history; the answer goes only to its `scheduled` conversation.
 - Keep dispatch jobs thin — logic belongs in `ISchedulerDispatchExecutor`.
 - Reference `node-sqlite` by *name* in Quartz config; never inline the connection string.
 - A Quartz minor bump may need a new EF migration for the `QRTZ_` schema (`UpgradeQuartzSchemaTo46` brought it to 4.6; 4.7 is documented to add a mandatory column): `SchemaProvisioning.Validate` refuses to start on a schema that lacks a column, so diff the upstream `tables_sqlite.sql` on every Quartz bump.

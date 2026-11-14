@@ -12,6 +12,9 @@ public interface IImageJobEventPublisher
 {
     /// <summary>Pushes one coarse status transition for a job to the subscribed operator clients.</summary>
     Task PublishStatusAsync(ImageJobStatusEvent statusEvent, CancellationToken cancellationToken = default);
+
+    /// <summary>Pushes one image-model download status to every connected operator client (the app-wide operations feed).</summary>
+    Task PublishModelDownloadAsync(ImageModelDownloadStatus status, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

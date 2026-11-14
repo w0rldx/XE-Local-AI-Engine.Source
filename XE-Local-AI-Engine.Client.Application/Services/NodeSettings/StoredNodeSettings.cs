@@ -928,8 +928,8 @@ public sealed record StoredNodeSettings
     ///     Which navigation mode the operator chose: <see cref="UiModeSimple" /> or <see cref="UiModeAdvanced" />.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" /> means the question has not been answered, which is what the SPA's first-run step keys on,
-    ///     including on a data directory that predates the setting. PRESENTATION ONLY, and never a security boundary: it
+    ///     First-run setup stamps <see cref="UiModeSimple" /> where nothing is set; <see langword="null" /> (a data directory whose setup
+    ///     ran before that) reads as <see cref="DefaultUiMode" />. PRESENTATION ONLY, and never a security boundary: it
     ///     decides which navigation entries are rendered and nothing else. Every route stays reachable by URL, no server gate
     ///     reads it, and the compile-time capability flags still decide what exists at all.
     /// </remarks>
@@ -1388,9 +1388,8 @@ public sealed record StoredNodeSettings
     /// <remarks>
     ///     A TIGHTENING switch stored as a node setting by ADR 0020, an exception to the configuration-only rule for this one field: it is
     ///     writable only through the Operator settings endpoint and is deliberately absent from <c>NodeSettingsAgenticPatch</c> and
-    ///     <c>NodeSettingsAgenticView</c>, so no MCP tool or model can lower it. No configuration seed: a fresh node is asked at first run, an
-    ///     older data directory keeps null and so <c>low</c>. Stored as a string for
-    ///     <see cref="ContainerRuntimeSelection" />'s reason.
+    ///     <c>NodeSettingsAgenticView</c>, so no MCP tool or model can lower it. No configuration seed: a fresh node runs pending as
+    ///     <c>low</c> until chosen, an older one null. Stored as a string for <see cref="ContainerRuntimeSelection" />'s reason.
     /// </remarks>
     public string? SandboxSecurityProfile { get; init; }
 

@@ -40,6 +40,8 @@ using XE_Local_AI_Engine.Client.Security;
 using XE_Local_AI_Engine.Client.Security.DataProtection;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Diagnostics;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
@@ -191,8 +193,14 @@ public static class ConfigureServices
         // push live on KnowledgeBaseHub. IHubContext is singleton-safe, so the scoped ingestion service can resolve this singleton.
         builder.Services.AddSingleton<IKnowledgeIndexingNotifier, KnowledgeIndexingNotifier>();
 
-        // Pushes a conversation-list change on LocalChatHub after the chat metadata endpoints succeed, so other open clients refresh.
+        // Hub-backed job-created broadcast, superseding the no-op the training and images modules TryAdd, so the operations feed of
+        // every open tab learns of a training run, dataset build or image job another client started.
+        builder.Services.AddSingleton<IJobCreatedPublisher, JobCreatedPublisher>();
+
+        // Pushes a conversation-list change on LocalChatHub after the chat metadata endpoints succeed or a turn ends, so other open
+        // clients refresh. The persistence facade resolves the same instance through its Application-side seam.
         builder.Services.AddSingleton<LocalChatConversationChangePublisher>();
+        builder.Services.AddSingleton<INodeChatConversationChangeNotifier>(static services => services.GetRequiredService<LocalChatConversationChangePublisher>());
 
         // Hub-backed image-job event publisher, superseding the no-op AddNodeImages registers so coarse status transitions push live on
         // ImageJobHub. IHubContext is singleton-safe, so the singleton image-job coordinator can resolve it.

@@ -139,18 +139,22 @@ public sealed class NodeChatExportImportEndpointTests
         });
         var workSession = await CreateAsync(persistence, $"Work session {suffix}", NodeConversationKind.WorkSession);
         await CreateAsync(persistence, $"Integration {suffix}", NodeConversationKind.Integration);
+        var scheduled = await CreateAsync(persistence, $"Scheduled {suffix}", NodeConversationKind.Scheduled);
         using var client = Factory.CreateClient();
 
         var exported = (await ExportAsync(client, conversationId: null)).Conversations.Where(conversation => conversation.Title?.EndsWith(suffix, StringComparison.Ordinal) == true)
                                                                              .ToDictionary(static conversation => conversation.Title!);
         using var byIdRequest = Request(HttpMethod.Get, $"/api/local/v1/chat/export?conversationId={workSession}");
         using var byIdResponse = await client.SendAsync(byIdRequest);
+        using var scheduledByIdRequest = Request(HttpMethod.Get, $"/api/local/v1/chat/export?conversationId={scheduled}");
+        using var scheduledByIdResponse = await client.SendAsync(scheduledByIdRequest);
 
         AssertEx.Equal($"Archived {suffix}|Chat {suffix}", string.Join('|', exported.Keys.Order(StringComparer.Ordinal)),
-            "Work-session and integration transcripts are not chats the operator started, so they are never exported.");
+            "Work-session, integration and scheduled-run transcripts are not chats the operator started, so they are never exported.");
         AssertEx.True(exported[$"Archived {suffix}"].Archived, "An archived chat is exported, flagged.");
         AssertEx.False(exported[$"Chat {suffix}"].Archived);
         AssertEx.Equal(HttpStatusCode.NotFound, byIdResponse.StatusCode, "A by-id export of a non-chat transcript answers like a missing chat.");
+        AssertEx.Equal(HttpStatusCode.NotFound, scheduledByIdResponse.StatusCode, "A scheduled run's answer is not exportable by id either.");
     }
 
     [Test]

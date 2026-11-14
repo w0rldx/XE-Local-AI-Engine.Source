@@ -57,6 +57,14 @@ public sealed class ConversationKindTests : IDisposable
                 CreatedAtUtc = 30,
                 Kind = NodeConversationKind.Integration
             });
+        var scheduled = await service
+            .CreateConversationAsync(new NodeChatCreateConversationRequest
+            {
+                Title = "Scheduled answer",
+                UserId = null,
+                CreatedAtUtc = 40,
+                Kind = NodeConversationKind.Scheduled
+            });
 
         var listed = (await service.ListConversationsAsync(new NodeChatListConversationsRequest
                      {
@@ -69,6 +77,177 @@ public sealed class ConversationKindTests : IDisposable
         AssertEx.False(listed.Contains(workSession.ConversationId),
             "A work session's owned transcript must not appear as a chat the operator did not start — that is the leak the kind column closes.");
         AssertEx.False(listed.Contains(integration.ConversationId), "An integration session's owned transcript must not appear in the chat list either.");
+        AssertEx.False(listed.Contains(scheduled.ConversationId), "A scheduled run's answer opens from its run, never from the chat sidebar (ADR 0024).");
+    }
+
+    [Test]
+    public async Task ScheduledAnswer_IsStoredEncryptedAndStillReadableById()
+    {
+        // The handler writes through this same service; what proves the answer is protected is the stored bytes.
+        await using var provider = await BuildProviderAsync("kind-scheduled-encrypted.sqlite");
+        var service = CreateService(provider);
+        const string Answer = "Two disk warnings overnight, both on the backup volume.";
+        var runId = Guid.NewGuid();
+        _ = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Nightly log summary",
+            UserId = null,
+            CreatedAtUtc = 10,
+            Kind = NodeConversationKind.Scheduled,
+            ConversationId = runId
+        });
+        _ = await service.InsertMessageIfAbsentAsync(new NodeChatInsertMessageIfAbsentRequest
+        {
+            ConversationId = runId,
+            MessageId = Guid.NewGuid(),
+            Role = "assistant",
+            Content = Answer,
+            CreatedAtUtc = 11
+        });
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+            await dbContext.Database.OpenConnectionAsync();
+            await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+            command.CommandText = "SELECT content FROM messages;";
+            var stored = AssertEx.NotNull(await command.ExecuteScalarAsync() as byte[], "The message content column holds a blob.");
+            AssertEx.False(stored.AsSpan().IndexOf(System.Text.Encoding.UTF8.GetBytes("disk warnings")) >= 0, "The answer must be encrypted at rest like any chat message.");
+        }
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(runId), "The run detail opens the answer by id.");
+        AssertEx.Equal(Answer, loaded.Messages.Single().Content);
+    }
+
+    [Test]
+    public async Task OperatorMutations_OnAScheduledAnswer_AreRefusedAsReadOnly_ButDeleteStillRemovesIt()
+    {
+        // ADR 0024: a scheduled answer is a record of what the run said, so nothing may edit it; the run viewer may delete it.
+        await using var provider = await BuildProviderAsync("kind-scheduled-read-only.sqlite");
+        var service = CreateService(provider);
+        var runId = Guid.NewGuid();
+        _ = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Nightly log summary",
+            UserId = null,
+            CreatedAtUtc = 10,
+            Kind = NodeConversationKind.Scheduled,
+            ConversationId = runId
+        });
+        var answerId = Guid.NewGuid();
+        _ = await service.InsertMessageIfAbsentAsync(new NodeChatInsertMessageIfAbsentRequest
+        {
+            ConversationId = runId,
+            MessageId = answerId,
+            Role = "assistant",
+            Content = "All quiet.",
+            CreatedAtUtc = 11
+        });
+
+        var mutations = new Dictionary<string, Func<Task>>(StringComparer.Ordinal)
+        {
+            ["RenameConversation"] = () => service.RenameConversationAsync(new NodeChatRenameConversationRequest
+            {
+                ConversationId = runId,
+                Title = "renamed",
+                UpdatedAtUtc = 20
+            }),
+            ["SetConversationPinned"] = () => service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest
+            {
+                ConversationId = runId,
+                IsPinned = true,
+                UpdatedAtUtc = 20
+            }),
+            ["SetConversationArchived"] = () => service.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest
+            {
+                ConversationId = runId,
+                Archived = true,
+                UpdatedAtUtc = 20
+            }),
+            ["SetConversationMemoryExcluded"] = () => service.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest
+            {
+                ConversationId = runId,
+                MemoryExcluded = true,
+                UpdatedAtUtc = 20
+            }),
+            ["SetConversationPlain"] = () => service.SetConversationPlainAsync(new NodeChatSetConversationPlainRequest
+            {
+                ConversationId = runId,
+                IsPlain = true,
+                PlainSystemPrompt = null,
+                UpdatedAtUtc = 20
+            }),
+            ["SetSelectedPath"] = () => service.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest
+            {
+                ConversationId = runId,
+                SelectedPath = null,
+                UpdatedAtUtc = 20
+            }),
+            ["BranchConversation"] = () => service.BranchConversationAsync(new NodeChatBranchConversationRequest
+            {
+                ConversationId = runId,
+                MessageId = answerId,
+                CreatedAtUtc = 20
+            }),
+            ["CreateMessageVariant"] = () => service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest
+            {
+                ConversationId = runId,
+                OriginalMessageId = answerId,
+                NewMessageId = Guid.NewGuid(),
+                RequestId = Guid.NewGuid(),
+                CreatedAtUtc = 20
+            }),
+            ["SetMessageFeedback"] = () => service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest
+            {
+                ConversationId = runId,
+                MessageId = answerId,
+                Rating = "up",
+                Comment = null,
+                UpdatedAtUtc = 20
+            })
+        };
+
+        foreach (var (name, call) in mutations)
+        {
+            var rejection = await AssertEx.ThrowsAsync<NodeChatReadOnlyConversationException>(call, $"{name} must refuse a scheduled answer.");
+            AssertEx.Equal(runId, rejection.ConversationId);
+        }
+
+        var untouched = AssertEx.NotNull(await service.GetConversationAsync(runId));
+        AssertEx.Equal("Nightly log summary", untouched.Title);
+        AssertEx.False(untouched.IsPinned);
+
+        _ = await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest
+        {
+            ConversationId = runId,
+            DeletedAtUtc = 30,
+            PurgeImmediately = true
+        });
+        AssertEx.Null(await service.GetConversationAsync(runId), "The run viewer's delete must still remove the answer.");
+    }
+
+    [Test]
+    public async Task Rename_OfAWorkSessionTranscript_IsNotRefusedByTheScheduledAnswerGuard()
+    {
+        // The read-only rule is ADR 0024's for scheduled answers only; work-session and integration rows keep their behavior.
+        await using var provider = await BuildProviderAsync("kind-work-session-mutable.sqlite");
+        var service = CreateService(provider);
+        var workSession = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Work session",
+            UserId = "node",
+            CreatedAtUtc = 10,
+            Kind = NodeConversationKind.WorkSession
+        });
+
+        var renamed = await service.RenameConversationAsync(new NodeChatRenameConversationRequest
+        {
+            ConversationId = workSession.ConversationId,
+            Title = "renamed",
+            UpdatedAtUtc = 20
+        });
+
+        AssertEx.Equal("renamed", AssertEx.NotNull(renamed).Title);
     }
 
     [Test]

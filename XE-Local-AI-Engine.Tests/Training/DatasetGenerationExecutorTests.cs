@@ -267,6 +267,48 @@ public sealed class DatasetGenerationExecutorTests
     }
 
     [Test]
+    public async Task AGenerationFailure_IsPublishedOnlyAfterTheStoreCommittedIt()
+    {
+        // The operations feed re-reads the list on the Failed event; published first, that read could still see Running.
+        var order = new List<string>();
+        var store = Substitute.For<ITrainingDatasetStore>();
+        var dataset = Dataset(pinnedBody: null);
+        _ = store.CompleteGenerationAsync(dataset.Id, DatasetGenerationWorkStatus.Failed, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                 .Returns<TrainingDatasetRecord>(_ =>
+                 {
+                     order.Add("commit Failed");
+                     return dataset;
+                 });
+        var events = Events();
+        events.EventPublished += (_, args) => order.Add($"publish {args.Event.Payload.State}");
+        var executor = new DatasetGenerationExecutor(store, Substitute.For<IStructuredAgentRunner>(), Substitute.For<ISampleValidationPipeline>(),
+            Resolver([]), events, new TrainingRunCancellationRegistry(), NullLogger<DatasetGenerationExecutor>.Instance);
+
+        await executor.ExecuteAsync(Work(dataset), CancellationToken.None);
+
+        AssertEx.Equal("commit Failed | publish Failed", string.Join(" | ", order));
+    }
+
+    [Test]
+    public async Task AGenerationFailure_WhoseCommitThrows_StillPublishesItsFailedEvent()
+    {
+        var store = Substitute.For<ITrainingDatasetStore>();
+        var dataset = Dataset(pinnedBody: null);
+        _ = store.CompleteGenerationAsync(dataset.Id, DatasetGenerationWorkStatus.Failed, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                 .Returns<TrainingDatasetRecord>(_ => throw new InvalidOperationException("database is locked"));
+        var events = Events();
+        var published = new List<DatasetGenerationEvent>();
+        events.EventPublished += (_, args) => published.Add(args.Event);
+        var executor = new DatasetGenerationExecutor(store, Substitute.For<IStructuredAgentRunner>(), Substitute.For<ISampleValidationPipeline>(),
+            Resolver([]), events, new TrainingRunCancellationRegistry(), NullLogger<DatasetGenerationExecutor>.Instance);
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(Work(dataset), CancellationToken.None));
+
+        AssertEx.Equal(DatasetDefinitionService.UnpinnedDatasetReason,
+            published.Single(item => item.Payload.State == nameof(TrainingDatasetStatus.Failed)).Payload.Reason);
+    }
+
+    [Test]
     public async Task TheComposedTeacherPrompt_IsWhatTheEchoCheckRecognises()
     {
         // The echo check is derived from the prompt template; this pins that the two cannot drift apart.

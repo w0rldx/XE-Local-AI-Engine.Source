@@ -81,6 +81,8 @@ export interface ScheduledJobRun {
 	readonly errorMessage: string | null;
 	readonly cancellationRequestedAtUtc: number | null;
 	readonly createdAtUtc: number;
+	/** The saved prompt-and-answer conversation of a successful agent run; set only on the single-run read. */
+	readonly answerConversationId: string | null;
 }
 
 // Domain view-model for a job template. The template constrains which schedule kinds a job may use and supplies

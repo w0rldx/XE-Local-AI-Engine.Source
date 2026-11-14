@@ -95,7 +95,10 @@ public sealed class NodeAuthService : INodeAuthService
         };
     }
 
-    /// <summary>Creates the single administrator account and stamps the pending external-access and sandbox security profiles.</summary>
+    /// <summary>
+    ///     Creates the single administrator account, stamps the pending external-access and sandbox security profiles and defaults
+    ///     the UI mode to simple.
+    /// </summary>
     /// <remarks>
     ///     The settings file cannot join the identity transaction, so one of the two writes has to be the orphanable one. Writing the profile
     ///     FIRST makes the orphan "profile pending, no administrator", which is inert: setup fails and is retryable, the gated services keep
@@ -166,12 +169,13 @@ public sealed class NodeAuthService : INodeAuthService
                 };
             }
 
-            // Both profiles (ADR 0020 for the sandbox one), BEFORE the commit and only where nothing was chosen yet: the remarks say why that
-            // order is safe. The token is SetupAsync's own: a cancellation here throws before the commit, so the transaction disposes unconfirmed.
+            // Both profiles (ADR 0020 for the sandbox one) and the UI mode, BEFORE the commit and only where nothing was chosen yet: the remarks
+            // say why that order is safe. A cancellation here throws before the commit, so the transaction disposes unconfirmed.
             await _nodeSettingsStore.UpdateAsync(latest => latest with
                 {
                     ExternalAccessProfile = latest.ExternalAccessProfile ?? StoredNodeSettings.ExternalAccessProfilePending,
-                    SandboxSecurityProfile = latest.SandboxSecurityProfile ?? StoredNodeSettings.SandboxSecurityProfilePending
+                    SandboxSecurityProfile = latest.SandboxSecurityProfile ?? StoredNodeSettings.SandboxSecurityProfilePending,
+                    UiMode = latest.UiMode ?? StoredNodeSettings.UiModeSimple
                 },
                 cancellationToken);
 

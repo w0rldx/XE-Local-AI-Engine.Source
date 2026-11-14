@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Transcription;
 
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.Transcription.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -208,6 +209,32 @@ public sealed class WhisperModelDownloadCoordinatorTests
         AssertEx.Contains(statuses, status => status.ModelId == "small");
     }
 
+    [Test]
+    public async Task Start_PushesTheStartAndTheTerminalPhaseToTheOperationsFeed()
+    {
+        // The app-wide operations feed has no list to poll: without these two pushes a download is invisible off its page.
+        var store = new FakeWhisperWeightFileStore
+        {
+            Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+        using var fixture = new Fixture(store);
+
+        fixture.Coordinator.Start("base");
+        await store.FirstCallReached.Task;
+        _ = fixture.Publisher.Received(1)
+                     .PublishModelDownloadAsync(Arg.Is<WhisperModelDownloadStatus>(static status =>
+                             status.ModelId == "base" && status.Phase == WhisperModelDownloadPhase.Running && status.CompletedBytes == null),
+                         Arg.Any<CancellationToken>());
+
+        store.Gate.SetResult();
+        await AssertEx.EventuallyAsync(() => fixture.Publisher.ReceivedCalls()
+                                                    .Select(static call => call.GetArguments()[0])
+                                                    .OfType<WhisperModelDownloadStatus>()
+                                                    .Any(static status => status.Phase == WhisperModelDownloadPhase.Completed),
+            TestBudgets.Contended,
+            "The terminal phase was never pushed.");
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly string _root;
@@ -217,10 +244,16 @@ public sealed class WhisperModelDownloadCoordinatorTests
             _root = Path.Combine(Path.GetTempPath(), "xe-whisper-dl-test-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_root);
             var resolver = new WhisperModelPathResolver(new FakeNodeDataDirectory(_root));
-            Coordinator = new WhisperModelDownloadCoordinator(store, resolver, NullLogger<WhisperModelDownloadCoordinator>.Instance);
+            Coordinator = new WhisperModelDownloadCoordinator(store,
+                resolver,
+                Publisher,
+                NullLogger<WhisperModelDownloadCoordinator>.Instance,
+                TimeProvider.System);
         }
 
         public WhisperModelDownloadCoordinator Coordinator { get; }
+
+        public ITranscriptionEventPublisher Publisher { get; } = Substitute.For<ITranscriptionEventPublisher>();
 
         public WhisperModelDownloadPhase? Phase(string modelId) =>
             Coordinator.GetStatus(modelId)?.Phase;

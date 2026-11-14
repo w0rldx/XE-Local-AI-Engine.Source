@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 
+using FastEndpoints;
+
 public sealed class ExportNodeChatConversationsRequest
 {
     /// <summary>One chat to export; omitted exports every chat, archived ones included.</summary>
@@ -61,6 +63,17 @@ public sealed class NodeChatExportAttachment
     public string? MimeType { get; init; }
 
     public long SizeBytes { get; init; }
+}
+
+/// <summary>A chat import: the export file as the body, plus an optional id that names the import's progress pushes.</summary>
+public sealed class ImportNodeChatConversationsRequest
+{
+    /// <summary>A client-chosen id; when set, the node pushes <c>chat.importProgress</c> events carrying it on the chat hub.</summary>
+    [QueryParam]
+    public Guid? ImportId { get; init; }
+
+    [FromBody]
+    public required NodeChatExportDocument Document { get; init; }
 }
 
 public sealed class NodeChatImportResponse

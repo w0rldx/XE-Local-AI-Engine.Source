@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -22,20 +23,23 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
     private readonly NodeChatMessageCommands _messages;
 
     // Run first by every operator mutation, so no caller skips it; the turn pipeline's writes are guarded where a turn starts.
-    private readonly INodeChatMutationGuard _mutationGuard;
+    private readonly NodeChatMutationGuard _mutationGuard;
     private readonly NodeChatReadModel _readModel;
     private readonly NodeChatVariantBranchService _variants;
+    private readonly INodeChatConversationChangeNotifier? _changeNotifier;
 
     // The usage-provider resolver attributes a thin run envelope from the row's model. The rest are optional: production injects
-    // the blob stores and the deletion observers (bound work winds down first); a test construction without them skips that work.
+    // the blob stores, the deletion observers (bound work winds down first) and the change notifier; a test construction skips them.
     public NodeChatPersistenceService(NodeChatPersistenceWriter writer,
         Lazy<IUsageProviderResolver> usageProviderResolver,
         IConversationUploadedFileStore? uploadedFileStore = null,
         IWorkSessionArtifactBlobStore? workSessionArtifactBlobStore = null,
-        IEnumerable<IConversationDeletionObserver>? deletionObservers = null)
+        IEnumerable<IConversationDeletionObserver>? deletionObservers = null,
+        INodeChatConversationChangeNotifier? changeNotifier = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
+        _changeNotifier = changeNotifier;
         _conversations = new NodeChatConversationCommands(writer, uploadedFileStore, workSessionArtifactBlobStore, deletionObservers);
         _readModel = new NodeChatReadModel(writer);
         _messages = new NodeChatMessageCommands(writer, usageProviderResolver);
@@ -146,22 +150,42 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         return _messages.FlushAssistantPartialAsync(request, cancellationToken);
     }
 
-    public Task<NodeChatPersistedMessageDto> TerminalizeAssistantMessageAsync(NodeChatTerminalizeMessageRequest request, CancellationToken cancellationToken = default)
+    // A terminal write ends a turn, so other clients' lists re-sort and re-preview once per turn, never per streamed token.
+    public async Task<NodeChatPersistedMessageDto> TerminalizeAssistantMessageAsync(NodeChatTerminalizeMessageRequest request, CancellationToken cancellationToken = default)
     {
-        return _messages.TerminalizeAssistantMessageAsync(request, cancellationToken);
+        ArgumentNullException.ThrowIfNull(request);
+        var message = await _messages.TerminalizeAssistantMessageAsync(request, cancellationToken);
+        await PublishTurnEndedAsync(request.Correlation.ConversationId);
+        return message;
     }
 
     public async Task<NodeChatCancelResultDto> CancelMessageAsync(NodeChatCancelRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         await _mutationGuard.EnsureMutableAsync(request.Correlation.ConversationId, cancellationToken);
-        return await _messages.CancelMessageAsync(request, cancellationToken);
+        var result = await _messages.CancelMessageAsync(request, cancellationToken);
+        await PublishTurnEndedAsync(request.Correlation.ConversationId);
+        return result;
+    }
+
+    // Not the caller's token: the row is committed, and a turn cancelled by its token still changed the list. Only a chat
+    // is listed, so a work-session, integration or graph turn pushes nothing that every tab would refetch and decrypt.
+    private async Task PublishTurnEndedAsync(Guid conversationId)
+    {
+        if (_changeNotifier is null
+            || !string.Equals(await GetConversationKindAsync(conversationId, CancellationToken.None), NodeConversationKind.Chat, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await _changeNotifier.PublishAsync(conversationId, CancellationToken.None);
     }
 
     public async Task<NodeChatDeleteResultDto> DeleteConversationAsync(NodeChatDeleteConversationRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+        // A scheduled answer is read-only but removable: the run viewer's delete and the handler's cleanup come here.
+        await _mutationGuard.EnsureDeletableAsync(request.ConversationId, cancellationToken);
         return await _conversations.DeleteConversationAsync(request, cancellationToken);
     }
 

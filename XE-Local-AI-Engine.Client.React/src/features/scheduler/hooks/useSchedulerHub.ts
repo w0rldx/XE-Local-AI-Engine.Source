@@ -1,10 +1,8 @@
 import { HubConnectionState } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { useEffect, useState } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
-import { notifySchedulerRunEvent } from "@/features/scheduler/notifications/SchedulerRunNotifications";
 import { schedulerInvalidationKey, schedulerQueryIds } from "@/features/scheduler/queries/useScheduler";
 
 /* eslint-disable react-doctor/effect-needs-cleanup -- The cleanup does tear down: it offs every registered handler and releases the shared lease; the rule only recognizes teardown of a connection created inline in the effect. */
@@ -41,17 +39,11 @@ export interface SchedulerHubState {
 // Subscribes to the scheduler SignalR hub for the lifetime of the mounting component. On a job-definition change
 // the jobs list is invalidated; on any run event the run history + per-run detail are invalidated. The hub is a
 // notification channel only — authoritative state is always refetched via TanStack Query. Connection failures never
-// break the page: the hook hands out a fallback poll interval until the hub is connected again.
+// break the page: the hook hands out a fallback poll interval until the hub is connected again. A finished run's
+// alert is not raised here: the app-wide operations feed (core/operations) does that on every page.
 export function useSchedulerHub(): SchedulerHubState {
 	const queryClient = useQueryClient();
 	const [pollIntervalMs, setPollIntervalMs] = useState<number | undefined>(undefined);
-	// `t` is read through a ref so a language switch (which hands back a new `t`) re-localizes future toasts WITHOUT
-	// re-running the effect — re-running would tear down and rebuild the live hub connection. Kept current every render.
-	const { t } = useTranslation();
-	const tRef = useRef(t);
-	useLayoutEffect(() => {
-		tRef.current = t;
-	}, [t]);
 
 	useEffect(() => {
 		// Shared refcounted connection: reused across mounts so navigating back to a scheduler page does not pay a fresh
@@ -69,17 +61,8 @@ export function useSchedulerHub(): SchedulerHubState {
 			queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.getRun) }).catch(() => undefined);
 		};
 
-		// Each run event invalidates the run caches AND (for terminal outcomes) raises a completion toast so the operator
-		// learns when ANY scheduled task finishes. Per-event handler identities are retained so cleanup can `off` them.
-		const runHandlers = new Map<string, (payload: unknown) => void>(
-			RUN_EVENTS.map((eventName) => [
-				eventName,
-				(payload: unknown): void => {
-					invalidateRuns();
-					notifySchedulerRunEvent(eventName, payload, tRef.current);
-				},
-			]),
-		);
+		// Each run event invalidates the run caches. Per-event handler identities are retained so cleanup can `off` them.
+		const runHandlers = new Map<string, () => void>(RUN_EVENTS.map((eventName) => [eventName, invalidateRuns]));
 
 		connection.on(JOB_DEFINITION_CHANGED, invalidateJobs);
 		for (const [eventName, handler] of runHandlers) {

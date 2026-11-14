@@ -339,7 +339,8 @@ reads the picked collection, or every collection for All.
   and the turn's `TurnKnowledgeSourceCollector` scope carries it as `PinnedCollectionId`, so
   `search_knowledge_base`, `read_document` and `read_surrounding_chunks` read only it (`KnowledgeToolCollectionPin`): an
   omitted `collectionId` means the pinned one, and a call naming another is **refused** with a sentence naming the fixed
-  collection rather than silently redirected, so the model never presents one collection's passages as another's.
+  collection rather than silently redirected. The refusal is a tool error (`ToolFailureText`, code `tool_reported`), so
+  the tool part is recorded as failed and the model reads a failed call, not a result, so the model never presents one collection's passages as another's.
   `search_knowledge_base`'s description says so; it stays
   static because the offer is precomputed byte-identical across sends.
 - **Compatibility.** A client that sends no collection now gets All where it used to get `DEFAULT`; All is a superset,
@@ -419,7 +420,7 @@ chat/conversations/{conversationId}/sampling-options` (`SetNodeChatConversationS
 stores the wire shape, and `samplingOptions: null` clears it. Its validator bounds every knob to the dialog's range
 (temperature 0–2, top P and min P 0–1, top K 1–200, repeat penalty 0–2, repeat last N −1–512, presence and frequency
 penalty −2–2, max output tokens 1–131072, num_ctx 512–131072, seed −1–2147483647, at most 16 stop sequences of 1–256
-characters). Only an ordinary chat takes them (a work session or integration transcript is a 400), and a branch copies
+characters). Only an ordinary chat takes them (a work-session or integration conversation is a 400, a scheduled answer the read-only 409), and a branch copies
 them with the plain mode. The conversation read returns them as `samplingOptions`. The node never applies them itself:
 the SPA sends the conversation's settings with each turn and regenerate as above on **every** client, developer mode or
 not (`turnSamplingOptions`). Only when the conversation has none does it fall back to this browser's
@@ -954,9 +955,9 @@ These collaborators hold `NodeChatDbContext` directly, and that is a **permanent
 
 Message lifecycle (from `NodeChatMessageCommands.cs`): `PersistUserMessageAsync` inserts a Completed user row; `CreateAssistantPlaceholderAsync` inserts a Pending assistant row carrying the agent attribution + effort; `MarkAssistantQueued/Streaming`, `FlushAssistantPartialAsync` (append or replace content/reasoning deltas), then `TerminalizeAssistantMessageAsync` writes the final status, token counts, ordered `parts`, and `generationDurationMs`.
 
-### Read-only (Origin=Remote) conversations
+### Read-only conversations (Origin=Remote, kind `scheduled`)
 
-A conversation whose `origin` is `Remote` is a view-only mirror of a platform-served chat; nothing on the node writes one today, but every mutation refuses it. `NodeChatMutationGuard` reads only the `origin` column and throws `NodeChatReadOnlyConversationException`, which the global `ConflictExceptionHandler` answers with 409 `conflictType = ReadOnlyConversation` and `LocalChatHub` forwards with the same token. The guard runs inside the Application services, never in an endpoint, so no caller can skip it: the operator mutations of `NodeChatPersistenceService` (select path, cancel, delete, rename, pin, archive, memory exclusion, branch, revision, feedback), `ConversationCompactionService.CompactAsync`, `ConversationUploadIngestor.IngestAsync` and `ConversationUploadedFileStore.DeleteAsync` for attachments, and the turn starts (send, regenerate, graph-workflow chat send and steer). A missing conversation passes the guard, so the caller's own 404 still wins. Tool-approval and `ask_user` resolutions key on a request id rather than a conversation and are not guarded: every turn start refuses a Remote conversation, so none has a parked turn to release.
+A conversation whose `origin` is `Remote` is a view-only mirror of a platform-served chat; nothing on the node writes one today, but every mutation refuses it. A `scheduled` conversation, a scheduled agent run's stored answer ([ADR 0024](../adr/0024-scheduled-agent-answers-are-stored-conversations.md)), is read-only too, with one difference: it can be deleted, because the run viewer's "Delete answer" and the handler's cleanup of a half-written answer both go through `DeleteConversationAsync` (which calls the guard's Remote-only `EnsureDeletableAsync`). Work-session and integration transcripts are not read-only. `NodeChatMutationGuard` reads only the plaintext `origin` and `kind` columns and throws `NodeChatReadOnlyConversationException`, which the global `ConflictExceptionHandler` answers with 409 `conflictType = ReadOnlyConversation` and `LocalChatHub` forwards with the same token. The guard runs inside the Application services, never in an endpoint, so no caller can skip it: the operator mutations of `NodeChatPersistenceService` (select path, cancel, delete, rename, pin, archive, memory exclusion, branch, revision, feedback), `ConversationCompactionService.CompactAsync`, `ConversationUploadIngestor.IngestAsync` and `ConversationUploadedFileStore.DeleteAsync` for attachments, and the turn starts (send, regenerate, graph-workflow chat send and steer). A missing conversation passes the guard, so the caller's own 404 still wins. Tool-approval and `ask_user` resolutions, and answer-now, key on a request or message id rather than a conversation and are not guarded: every turn start refuses a read-only conversation (and a scheduled answer is written headless, never as a chat turn), so none has a live or parked turn to act on.
 
 ### The persistence lock hierarchy
 
@@ -1004,7 +1005,7 @@ Anchoring by group rather than by each message's own sequence is what makes late
 `GET chat/search?query=…` (`SearchNodeChatConversationsEndpoint`, Operator policy) matches chat conversations whose
 title or user/assistant message text contains every whitespace-separated term, case-insensitively, and returns them
 newest first (capped, default 50, at most 100) with a short snippet around the first content hit, where the hit was
-(`title` or `content`) and an `indexing` flag. Like the list it filters `kind = 'chat'` and `purged = 0`, and archived
+(`title` or `content`) and an `indexing` flag. Like the list it filters `kind = 'chat'` (so no `work-session`, `integration` or `scheduled` conversation) and `purged = 0`, and archived
 chats match only with `includeArchived`. Titles and content are ciphertext at rest, so there is no SQL search:
 `ConversationSearchIndex` holds each chat's decrypted title and message text in process memory and is never persisted.
 
@@ -1026,7 +1027,10 @@ chats match only with `includeArchived`. Titles and content are ciphertext at re
   conversation are indexed, the newest kept; reasoning, tool output and attachments are not. There is no global cap and
   no eviction, since an evicted chat would be unfindable: the index's total memory grows with the chat history, at
   about two bytes per character for every chat's title and text (up to roughly 400 KB per long chat). The
-  `XE.Node` meter reports it as `chat_search_indexed_conversations` and `chat_search_indexed_chars`.
+  `XE.Node` meter reports it as `chat_search_indexed_conversations` and `chat_search_indexed_chars`. Past
+  `ConversationSearchIndex.IndexedCharsWarningThreshold` (250 million characters, about 500 MB) the index logs one
+  warning and `chat_search_indexed_chars_over_threshold` reads 1; it keeps indexing, since a cap would make search miss
+  stored text. Dropping back below sets the metric to 0 and re-arms the warning for the next crossing.
 - **Logs.** The search text travels in the `query` query parameter, so the request log redacts that parameter like
   `access_token` (`SensitiveQueryRedactor`); the ASP.NET Core tracing instrumentation already replaces every query
   value in `url.query` with `Redacted` by default.
@@ -1038,19 +1042,33 @@ Until they arrive, or when the request fails, it filters the loaded page by titl
 **Other clients' changes.** After `chat/conversations/{id}` rename, pin, archive or delete, or an import, succeeds, the
 endpoint pushes `chat.conversationsChanged` on `LocalChatHub` (`LocalChatConversationChangePublisher`, ids only,
 best-effort), and `useConversationListPush` invalidates the conversation lists, so an open sidebar in another browser or
-the desktop app shows the change without a reload. The endpoints push, not the persistence facade, so an import or an
-integration's internal writes never fan out one push per conversation; an import pushes once. Turns written by another
-client are not pushed.
+the desktop app shows the change without a reload. The endpoints push, not the persistence writer, so an import or an
+integration's internal writes never fan out one push per conversation; an import pushes once. A turn pushes once, when
+its assistant message turns terminal: `NodeChatPersistenceService.TerminalizeAssistantMessageAsync` and
+`CancelMessageAsync` call `INodeChatConversationChangeNotifier`, which the host binds to the same publisher, so the
+placeholder, streaming mark and partial flushes push nothing. Only a `chat` conversation's turn pushes (one
+`GetConversationKindAsync` read): integration, work-session and graph-pump turns are never listed, so they push nothing
+for every tab to refetch and decrypt. The client that sent the turn gets the push too and refetches the list a second time after its own refresh; that is
+one extra list read per turn, accepted rather than filtered. A push that names a conversation also invalidates that
+conversation's detail query (`exact`): the open chat's sidebar row is its cached detail merged over the list summary
+(`mergeSelectedConversation`), so refreshing the list alone left an external rename or another client's turn stale
+on that one row. A detail nothing observes is only marked stale, and a detail holding a live assistant turn is left
+alone: a refetch landing after the optimistic write of the next send would replace it, and the stream that owns the
+turn re-reads the detail when it ends. Import progress is broadcast, not sent to the caller's user: SignalR's default
+user id reads `NameIdentifier`, which the node's tokens do not carry; it holds counts only and the client filters by
+its import id.
 
 ### Export and import
 
-`GET chat/export` (`ExportNodeChatConversationsEndpoint`) writes the chat export file: format `xe-chat-export`, `formatVersion` 1 (`NodeChatExportFile`). With `?conversationId=` it holds one chat; without it every chat, archived ones included and flagged `archived`. It reads through the chat list query, so it carries `kind = chat`, unpurged conversations only; a by-id request for a work-session or integration transcript is a 404 like a missing one. The export is **text only**: each chat is flattened to its selected path in anchor order, keeping user and assistant messages that have text (a failed reply with no text is dropped), with each message's role, content, time and model. Attachments are listed by file name, type and size, and each turn carries a `toolCallCount`; neither their bytes nor tool arguments and results are exported, and reasoning is not exported either.
+`GET chat/export` (`ExportNodeChatConversationsEndpoint`) writes the chat export file: format `xe-chat-export`, `formatVersion` 1 (`NodeChatExportFile`). With `?conversationId=` it holds one chat; without it every chat, archived ones included and flagged `archived`. It reads through the chat list query, so it carries `kind = chat`, unpurged conversations only; a by-id request for a work-session or integration transcript, or a scheduled run's saved answer ([ADR 0024](../adr/0024-scheduled-agent-answers-are-stored-conversations.md)), is a 404 like a missing one. The export is **text only**: each chat is flattened to its selected path in anchor order, keeping user and assistant messages that have text (a failed reply with no text is dropped), with each message's role, content, time and model. Attachments are listed by file name, type and size, and each turn carries a `toolCallCount`; neither their bytes nor tool arguments and results are exported, and reasoning is not exported either.
 
-`POST chat/import` (`ImportNodeChatConversationsEndpoint`) takes the same document back and creates **new** chats. `ImportNodeChatConversationsRequestValidator` refuses the whole file before anything is written: wrong format or version, more than 5,000 chats or 100,000 messages, a role other than `user` or `assistant` (`tool` and `system` are refused, since the writer has no path for either), an empty message, a title over 200 characters, a creation time that is negative or more than a day past this node's clock. A body over 64 MiB is a 413 before it is read. The export is **not** capped: an export-all of a history beyond those caps is written in full, and this node's import refuses it whole. Each conversation and message gets a fresh id, never one from the file, and is written through `INodeChatPersistenceService.CreateConversationAsync` and `InsertMessageIfAbsentAsync`, so content is encrypted under its new `conversationId + messageId` AAD and anything observing those writes sees the import. Titles, message order, creation times and the archived flag are kept; attachments and tool events are not restored. A write that fails partway purges every chat that import created; a purge that fails too is logged with the conversation id and the rest still run, and the original error is what the request answers. Like any finished assistant row, an imported one carries a thin run envelope ([The run envelope](#the-run-envelope)): usage views show each imported assistant reply as a zero-token run at its original time.
+`POST chat/import` (`ImportNodeChatConversationsEndpoint`) takes the same document back and creates **new** chats. `ImportNodeChatConversationsRequestValidator` refuses the whole file before anything is written: wrong format or version, more than 5,000 chats or 100,000 messages, a role other than `user` or `assistant` (`tool` and `system` are refused, since the writer has no path for either), an empty message, a title over 200 characters, a creation time that is negative or more than a day past this node's clock. A body over 64 MiB is a 413 before it is read. The export is **not** capped: an export-all of a history beyond those caps is written in full, and this node's import refuses it whole. Each conversation and message gets a fresh id, never one from the file, and is written through `INodeChatPersistenceService.CreateConversationAsync` and `InsertMessageIfAbsentAsync`, so content is encrypted under its new `conversationId + messageId` AAD and anything observing those writes sees the import. Titles, message order, creation times and the archived flag are kept; attachments and tool events are not restored. A write that fails partway purges every chat that import created; a purge that fails too is logged with the conversation id and the rest still run, and the original error is what the request answers. An optional `?importId=` (a client-chosen GUID) turns on progress: the endpoint pushes `chat.importProgress` (`ImportProgressHubEvent`: the id, chats written, total, state `running`, `finished` or `failed`) on `LocalChatHub`, once at the start, at most once per percent and once at the end; a `failed` push follows the rollback. The request itself still answers once, when every chat is written, so the HTTP contract is unchanged for a caller that sends no id. Like any finished assistant row, an imported one carries a thin run envelope ([The run envelope](#the-run-envelope)): usage views show each imported assistant reply as a zero-token run at its original time.
 
 In the SPA, each row's menu in `ConversationList` exports that chat as Markdown or JSON, and the menu beside "New chat" exports every chat or imports a file (`useChatExportImport`: the import node answers only
 once every chat is written, minutes for a large file, so a sticky progress notification naming the chat count stays
-until the result replaces it and the import action is disabled meanwhile; the Markdown is rendered client-side from the JSON by `ChatExportFile.chatExportMarkdown` and names the attachments and tool calls it leaves out).
+until the result replaces it and the import action is disabled meanwhile; the hook sends a fresh import id and turns
+the node's `running` pushes for that id into "N of M written" with a percent, and without a hub connection the
+notification just keeps naming the count; the Markdown is rendered client-side from the JSON by `ChatExportFile.chatExportMarkdown` and names the attachments and tool calls it leaves out).
 
 ### Encryption of titles and content (at-rest)
 

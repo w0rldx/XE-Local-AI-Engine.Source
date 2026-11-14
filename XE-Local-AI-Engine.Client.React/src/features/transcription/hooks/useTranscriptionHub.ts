@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
+import { joinHubGroup } from "@/core/api/signalr/SharedHubGroups";
 import { type CaptureChannel, CaptureError, encodePcmFrame } from "@/core/audio/capture/CaptureSource";
 import {
 	TRANSCRIPTION_ADMISSION_CLOSED,
@@ -395,15 +396,15 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 		connection.on(TRANSCRIPTION_ADMISSION_CLOSED, onAdmissionClosed);
 		connection.on(TRANSCRIPTION_SOURCE_QUIET, onSourceQuiet);
 
-		// A reconnect is a subscription like any other: it re-subscribes from the watermark it has, never from 0, and
-		// goes through the same buffer-then-merge path.
-		const removeReconnected = hub.onReconnected(() => {
-			subscribe().catch(() => undefined);
-		});
 		// While the transport is down nothing renders as complete, so `connected` must not keep saying it is.
 		const removeReconnecting = hub.onReconnecting(() => setConnected(false));
 		const removeClosed = hub.onClosed(() => setConnected(false));
-		hub.whenStarted.then(() => subscribe()).catch(() => undefined);
+		// A reconnect is a subscription like any other: it re-subscribes from the watermark it has, never from 0, and
+		// goes through the same buffer-then-merge path. Only the session's last holder on this connection leaves it, and
+		// that explicit unsubscribe means what a disconnect means: it arms the node's abandonment grace.
+		const leave = joinHubGroup(hub, ["UnsubscribeSession", sessionId], () => {
+			subscribe().catch(() => undefined);
+		});
 
 		return () => {
 			disposed = true;
@@ -413,13 +414,9 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 			connection.off(TRANSCRIPTION_CATCH_UP_PROGRESS, onCatchUpProgress);
 			connection.off(TRANSCRIPTION_ADMISSION_CLOSED, onAdmissionClosed);
 			connection.off(TRANSCRIPTION_SOURCE_QUIET, onSourceQuiet);
-			removeReconnected();
 			removeReconnecting();
 			removeClosed();
-			if (connection.state === HubConnectionState.Connected) {
-				// An explicit unsubscribe means what a disconnect means, and it arms the node's abandonment grace.
-				connection.invoke("UnsubscribeSession", sessionId).catch(() => undefined);
-			}
+			leave();
 			connectionRef.current = null;
 			hub.release();
 		};

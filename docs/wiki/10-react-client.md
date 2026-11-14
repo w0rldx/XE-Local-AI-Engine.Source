@@ -118,7 +118,7 @@ Source: the first-level directories under `XE-Local-AI-Engine.Client.React/src/f
 | `chat` | Streaming chat UI, SignalR adapter, reasoning/tool-call rendering, sampling options, file-upload attachments + pane drag-and-drop (`usePaneFileDrop`, `ChatAttachmentChips`), manual compaction (`CompactButton`) and the read-only distilled-state drawer (`ContextStatePanel`) | [Chat](05-chat.md) |
 | `cloud-providers` | **Cloud Providers** at `/cloud-providers`, the one Settings entry for every cloud or remote provider; `/cloud-settings` and `/external-providers` only redirect here. The page lists the configured providers from their three stores, composed on the client with no summary endpoint: each `ext:` connection, the Azure AI Foundry slot when one is stored, and the Codex session when signed in. "Add provider" offers templates gated by capability: two OpenAI-compatible ones (generic, Azure OpenAI v1 with a key; `externalProviders`) that open the same empty connection form and differ only in the editor's hints, and Azure AI Foundry and ChatGPT (Codex) (`cloudSettings`), each disabled while its single slot is taken. The connection editor (`external/`): display name, base URL, the declared Local/Cloud trust (with the warning shown when Local is declared for a host that is neither loopback nor private), a write-only API key with an explicit "Remove key" action, and the timeout, the per-model registration rows (backing model id, display name, context length, declared tools/vision/reasoning capabilities and a reasoning-effort default), and the connect-time probe with pick-to-add. Its writes are optimistic-concurrency guarded: a 409 carries the whole stored configuration, which the page renders in place of a refetch. The Azure editor with its Entra sign-in cards (`azure/`, `entra/`) and the Codex sign-in card (`codex/`) keep their own credentials node-local. Stores and model ids are unchanged: the page merges the UI, not the stores | [Local Runtime & Providers](03-local-runtime-and-providers.md), [Security & Privacy](12-security-and-privacy.md) |
 | `commands` | Automation-command catalog backed by `automation/commands`; list/detail queries use the generated SDK | [API & Hubs](09-api-and-hubs.md) |
-| `command` | **Command page** at `/command`: a text box, a mic button and Enter. Enter posts the sentence to `graph-workflows/intents/invoke`; a started run is followed over `graph-workflows/hub` with a link to the run view, and an unmatched sentence goes to the default agent as a new conversation over the chat hub's `SendMessage` stream, its reply shown inline with an "Open in chat" link (through `PendingChatConversationStore`). The mic starts an ephemeral dictation session (`transcription/dictation-sessions`), pushes microphone frames over `transcription/hub` and appends committed segments to the box; partials only show. The route sits **outside** `/_layout` (no sidebar or header) because the desktop overlay window loads it at 520×220; it runs the same sign-in chain (`core/auth/utils/EnsureAuthenticated`) and has a home button for a browser tab. Results are memory only | [Graph Workflows §11](21-graph-workflows.md#11-intent-routing) |
+| `command` | **Command page** at `/command`: a text box, a mic button and Enter. Enter posts the sentence to `graph-workflows/intents/invoke`; a started run is followed over `graph-workflows/hub` with a link to the run view, and an unmatched sentence goes to the default agent as a new conversation over the chat hub's `SendMessage` stream, its reply shown inline with an "Open in chat" link (through `PendingChatConversationStore`). The mic starts an ephemeral dictation session (`transcription/dictation-sessions`), pushes microphone frames over `transcription/hub` and appends committed segments to the box; partials only show. The route sits **outside** `/_layout` (no sidebar or header) because the desktop overlay window loads it at 520×220; it runs the same sign-in chain (`guardFirstRun` in `core/auth/utils/FirstRunGuard`, without the external-access step) and has a home button for a browser tab. Results are memory only | [Graph Workflows §11](21-graph-workflows.md#11-intent-routing) |
 | `customTools` | Operator-authored HTTP-fetch and host-program tools: list, create/edit form, danger acknowledgement, enabled state, secret header/env masking, and desktop executable probe | [Security & Privacy](12-security-and-privacy.md#custom-tools-operator-authored-execution-boundary) |
 | `development` | **Development Mode** operator surface at `/development`, surfaced under the "Preview" nav group (alongside Image Generation) because it is an experimental surface: project creation bound to a registered Git repository (`DevelopmentProjectForm`), the task/attempt workflow, and `DevelopmentLivePanel` streaming live attempt output over `DevelopmentAttemptHub` (`hooks/useDevelopmentAttemptHub.ts`). The page resolves the authenticated server capability (`development/capability`) before exposing projects or actions, so a backend kill switch fails closed without a separate frontend build | [Architecture Overview](01-architecture-overview.md#development-mode-registered-source-managed-worktree) |
 | `externalApps` | **External Apps** at `/external-apps/catalog`, `/external-apps/installed` and `/external-apps/instances/{instanceId}` (`/external-apps` redirects to the catalog). The catalog page owns `RuntimeStatusCard` — the one place the container runtime is named, gated on the server's `requiresOperatorConfirmation` and posting the **observed daemon id** it displayed — and `InstallDialog`, a four-step disclosure (permissions → settings → resources → installing) whose acceptance is bound to the `(manifestVersion, manifestSha256)` pair the operator was shown: any later preview carrying a different pair clears it and returns to step 1. `PermissionsPanel` states network access as fact rather than denial (V1 enforces no outbound restriction) and renders the server's four application-level aggregates plus one block per part, never a union computed here. The installed list reads addresses and row actions straight off the widened `ExternalAppInstanceView[]`; the detail page is driven by `instance.manifest` alone, so **no catalog query is mounted on it**. Every lifecycle call echoes the row's `version` as `expectedVersion` (uninstall as a query parameter, it has no body) and Cancel is the only action offered while an instance is busy. `useExternalAppHub` subscribes one instance over `external-apps/hub`, reads only the ping's `sequence` — never its lowerCamelCase `kind` — and keeps pull progress in local state, because a query per layer would turn a multi-gigabyte pull into a request storm | [External Apps](23-external-apps.md) |
@@ -155,21 +155,31 @@ Route paths and their capability flags are declared centrally in `src/capabiliti
 
 ### First-run steps and the Simple / Advanced navigation mode
 
-Three questions are answered once, in order, before an operator reaches the app. `_layout.tsx`'s `beforeLoad` is the
-single place all three are enforced — it authenticates, then `ensureQueryData(getNodeSettingsOptions())` once per session
-and redirects on the first unanswered one: `externalAccessProfile === "pending"` → `/external-access`, then
-`sandboxSecurityProfile === "pending"` → `/sandbox-profile-setup`, then a null `uiMode` → `/ui-mode-setup`. The sandbox
-step sits after external access and before the interface mode because it is a security decision, not a presentation
-one, and the interface mode stays the last, lightest question. Each step's own route redirects home once its question is answered, so a typed URL or a
-back-navigation cannot re-ask it, and each fails *toward* its chooser on a settings read error while the layout guard
-fails *open*. All three chooser pages save through `saveNodeSettingsMutation` and then `queryClient.setQueryData` — seeding,
+A fresh install passes three screens before it reaches the app: the account (`/setup`, whose recovery-code reveal is the
+vault step; a data directory from before the vault confirms it on `/vault-setup`), then the external-access choice
+(`/external-access`), which stays because the desktop first-run model download waits on it (`ExternalAccessGate`).
+`core/auth/utils/FirstRunGuard.ts` holds the order in one place: `guardFirstRun(here, …)` is the `beforeLoad` of
+`/_layout`, `/command`, `/setup`, `/vault-setup` and `/external-access`, works out the one stop the node still owes
+(setup, unlock, vault setup, login, `externalAccessProfile` `pending` or null → `/external-access`, else the app) and
+redirects there unless it is `here`. A settings read failure happens only behind a signed-in session: the layout fails
+open and the chooser (no skip control) renders, while `/setup` and `/vault-setup` go on to the app. The retired
+choosers `/sandbox-profile-setup` and `/ui-mode-setup` are kept as component-less routes whose guard is
+`guardFirstRun("retired", …)`, so an old bookmark lands on the owed step or the app, never the not-found page. `FirstRunStepper` shows "Step n of 3" on each screen, numbered from the guard's
+`firstRunSteps`. The chooser saves through `saveNodeSettingsMutation` and then `queryClient.setQueryData` — seeding,
 never invalidating, because an invalidation would leave the layout guard reading back the value it had already cached.
 
-`uiMode` (`simple` | `advanced`, `null` = not answered) is a presentation setting stored in `node-settings.json`
+The sandbox security profile and the interface mode are not asked. Setup stamps the sandbox profile `pending`, which
+every sandbox create reads as `low`, and `uiMode` `simple`. After the first assistant reply, `FirstRunChoicesCard`
+(mounted by `OnboardingProvider`, only while no acknowledgement, welcome dialog or tour is open) offers both once, and
+only while the profile is still `pending`, so an install that already chose never sees it. Saving or dismissing it is
+recorded per user in the tutorial state (key `first-run-choices-v1`). Both stay in Node settings, which shows a
+`pending` profile as Low.
+
+`uiMode` (`simple` | `advanced`) is a presentation setting stored in `node-settings.json`
 alongside the external-access members. It **hides navigation entries and nothing else**: every route stays reachable by
 its own address, no server gate reads it, and the compile-time capability flags above still decide what exists at all
-(see [Security & Privacy](12-security-and-privacy.md) §3.2). A data directory that predates the setting reads it as
-null and is asked like a fresh install. The chooser preselects Simple; Continue saves it explicitly.
+(see [Security & Privacy](12-security-and-privacy.md) §3.2). A data directory whose setup predates the default reads
+null as `advanced`, the navigation it always had.
 
 The filtering is two composed gates, not one. `NavigationMenuData.ts` still computes `navigationLinks` **once at
 module-eval time** from the compile-time capabilities; `filterNavigationLinksByUiMode(links, uiMode)` is a second pure
@@ -198,6 +208,20 @@ than landing in no section or two. `NodeSettingsSectionNav` renders that list as
 and a `Select` on phone width; the active section is driven by the route's `?section=` search param
 (`nodeSettingsSearchSchema` falls an unrecognized value back to the default section rather than failing the route) so
 every section is a bookmarkable, linkable URL.
+
+**Search** (`components/NodeSettingsSearch.tsx`) filters what the page rendered rather than a list of fields: while a
+query is entered the page renders every listed section at once (Simple mode keeps the advanced sections out until the
+operator asks), and the search hides each card whose text, or whose section's name, lacks the query. A new card is
+therefore searchable with no registration; a mutation observer re-applies the filter when a card's own content loads
+later. Matches are marked through the CSS Custom Highlight API (`::highlight(node-settings-search)` in `global.css`),
+which leaves React's DOM untouched; a browser without it filters without marking. Search and the section view are one
+tree: a section is mounted the first time it is shown (active, or listed during a search) and from then on only hidden,
+and the filter restores every display it changed when the query clears, so starting or ending a search, or switching
+section, never remounts a card and drops its unsaved input (a typed password, say).
+
+The app-wide page switcher (`core/layout/components/CommandPalette/`, mounted once by `Layout`) opens on Ctrl/Cmd+K
+and lists `navigationLinks` through the same feature-switch and UI-mode filters as the nav bars. The key is left to a
+Monaco editor (its chord prefix) and ignored over another open dialog; text fields do not block it.
 
 **General holds the Features card** (`components/NodeSettingsFeaturesCard.tsx`): the feature switches, each
 showing its effective value (the execution-previews switch is not among them: it lives in the **Sandbox & isolation** section below). `developmentEnabled`, `schedulerEnabled` and `externalAppsEnabled` are in the
@@ -229,10 +253,9 @@ takes no cross-feature import; the Development page keeps mounting the same pane
 boundaries the effective profile makes preconditions for a role, Served the part of them this host delivers, and a row
 whose `satisfied` is false is tinted red: that workload refuses to start. The save flow adds
 `lowersSandboxSecurityProfile(body)` beside the previews confirm: the request carries changed fields only, so a body
-that sets `low` is always the `high` to `low` change, and it asks for confirmation before it is sent. A saved profile
-change invalidates the capability query. The first-run chooser (`SandboxProfileSetup`) is the same two cards with
-nothing preselected and no skip control; it recommends `high` only when no role would be refused on this host, and
-`low` otherwise. Semantics: [ADR 0020](../adr/0020-sandbox-security-profile.md).
+that sets `low` is always the `high` to `low` change (a `pending` profile is seeded into the form as `low`), and it asks
+for confirmation before it is sent. A saved profile change invalidates the capability query. Semantics:
+[ADR 0020](../adr/0020-sandbox-security-profile.md).
 
 **The draft is `fieldsForm`; `fieldsBaseline` is the server state it was last seeded from.** `buildNodeSettingsRequest`
 diffs the two and sends only the changed fields, matching the PUT DTO's optional-field-keeps-current-value contract
@@ -331,6 +354,8 @@ Under `core/api/generated/` (regenerated by `pnpm openapi`):
 
 Hubs are not in OpenAPI, so the client half is hand-written — but not per-component. `core/api/signalr/SharedHubConnection.ts` is a **refcounted module-level manager: one `HubConnection` per hub path**, reused across mounts. The first `acquire` builds and starts it, later acquires reuse it, the last `release` stops it — replacing the older pattern where every feature hook built a fresh connection in its mount effect and each page visit paid a full negotiate + WebSocket upgrade.
 
+Server group membership belongs to the connection, so on a shared connection it is shared too: the operations feed and a run page that both `Subscribe(runId)` hold ONE membership, and either one's `Unsubscribe` would drop the other's. `core/api/signalr/SharedHubGroups.ts` `joinHubGroup(hub, leaveCall, join)` refcounts it per connection and leave call (`["Unsubscribe", runId]`, `["UnsubscribeRun", runId]`, `["UnsubscribeSession", sessionId]`): each holder's own `join` (its Subscribe, so it still gets its own replay from its own cursor) runs once the start settles and after every reconnect or restart, and the leave call goes out only when the last holder leaves, while connected. Every hook that subscribes to a group on a shared hub goes through it (run stream, dataset generation, image jobs, benchmarks, external apps, graph-workflow runs and the command page's run status, work sessions, transcription sessions, the operations feed). Command dictation subscribes a session of its own and never unsubscribes, so it stays outside.
+
 Two properties a maintainer must preserve:
 
 - **Handlers stay per-subscriber.** The manager owns only the connection *lifetime*; each hook still calls `connection.on(...)` in its effect and `connection.off(...)` with the **same handler reference** on cleanup. SignalR fans a client method out to every registered handler, so concurrent subscribers to one hub do not steal each other's events.
@@ -347,18 +372,47 @@ starts before the operator has logged in and may finish while the socket is disc
 again" (on its Home Activity row) re-ensures the runtime; the server runs that ensure without the runtime-mutation
 lease, so a loaded model no longer blocks it, and any refusal it still answers (409) is toasted instead of dropped.
 
-**Long-running operations share one feed.** `core/operations/hooks/useActiveOperations.ts` merges the existing
-sources into one normalized row type (`core/operations/models/OperationModels.ts`): GGUF downloads and imports
-(`useActiveGgufAcquisitions`) and the llama.cpp runtime acquisition. It opens no hub or poll of its own; each source
-keeps its hydrate-then-push contract on the shared refcounted connection. Image and transcription model downloads are
-not sources: their hooks are feature-scoped page polls without a hub. Progress is known only from a source percentage
-or byte counts with a total. Three consumers read it: Home's Activity card (running and failed rows with detail, link
-and, for the runtime, retry; not rendered when empty), `ActiveOperationsIndicator` in the header on desktop and mobile
-(the `headerIndicator` slot; "N running" or an error-coloured "Action required" while any row is failed, linking to
-`/`, hidden on `/`), and `OperationToastCoordinator` in the shell overlay, which toasts once per observed
-running-to-terminal transition. A terminal state seen first (page load, reconnect re-hydration, remount) never toasts,
-and a failure stays a row and an error indicator until its source leaves the failed state. The shell's global banners
-are `CpuFallbackBanner`, `LlamaCppUpdateBanner` and `PendingRestartBanner`.
+**Long-running operations share one feed.** `core/operations/hooks/useActiveOperations.ts` merges the sources into
+one normalized row type (`core/operations/models/OperationModels.ts`, job adapters in `JobOperationModels.ts`): GGUF
+downloads and imports (`useActiveGgufAcquisitions`), the llama.cpp runtime acquisition, knowledge-base indexing
+(uploads and repository imports, one batch row), training runs, dataset builds, image jobs, scheduler runs and image and
+Whisper model downloads. The job
+sources live in `core/operations/hooks/useJobOperations.ts` and talk to the generated client and the shared hub manager
+only, so `core` still imports no feature. Reading and watching are split: every consumer reads the shared query cache,
+and only `useOperations({ watch: true })` (the coordinator, one per app) leases hubs. Training runs and image jobs
+hydrate from their list with `activeOnly=true` (queued and running only, a SQL filter, so a queue deeper than a history
+page cannot push a running job off it), and each id that leaves that list is read back once by id
+(`getTrainingRun`/`getImageJob`), which is the terminal row the toast sees; until that read answers, the job's last
+active row stands in (still running), and a failed read drops the row. Dataset builds hydrate from the whole
+datasets list, which is not paged. Each list source leases
+`training/runs/hub`, `training/datasets/hub` or `images/hub` while the feature is on, join each running
+id's group (live only on the training hubs, `afterSeq` past any retained event; the images hub replays a job's
+buffered events) and re-read the list on a state event, a replay reset, a reconnect, the hub's `job.created` broadcast
+(a job another tab or an API caller started) or, on the live-only hubs, once after each tick's successful Subscribes
+(an end between the list GET and the join is pushed to nobody; a refused Subscribe is left to the hub-down poll); an id that stops running is left through the shared group refcount, so a page holding the same group keeps
+it. While that hub is not connected (a failed first start, reconnecting, or closed until the manager's restart) or
+refused a held id's Subscribe, and the list shows running work, the source re-reads its list every 15 s
+(`HUB_DOWN_POLL_MS`), so a job that ends during the outage still leaves "running" and alerts; the poll stops on
+connect, whose reconnect re-read covers the gap, or once nothing runs. Knowledge-base indexing,
+scheduler runs and model downloads come from broadcasts with no cheap list, so `knowledge-base/hub`, `scheduler/hub`,
+`images/hub` (`imageModelDownload.statusChanged`) and `transcription/hub` (`transcriptionModelDownloadChanged`) are
+leased while the feature is on (the scheduler and transcription only on a definite `schedulerEnabled: true` or
+`transcriptionEnabled: true` from the shared node-settings read) and fold their events into no-fetch cache entries,
+emptied on reconnect. A download already running at page load shows with its next progress push (at most a second
+apart). No source polls beside a connected hub; the images and transcription pages still poll their own download lists while one runs. Not a
+source: benchmark runs (their list is per project, so there is no app-wide snapshot of which runs to join). Progress is known only from a source
+percentage, byte counts with a total, or the indexing batch's done count. Three consumers read it: Home's Activity card
+(running rows, and failed downloads and runtime installs, with detail, link and, for the runtime, retry; a failed job is
+history and is not kept; not rendered when empty), `ActiveOperationsIndicator` in the header on desktop and mobile (the
+`headerIndicator` slot; "N running" or an error-coloured "Action required" while any row is failed, linking to `/`,
+hidden on `/`), and `OperationToastCoordinator` in the shell overlay, which alerts once per observed running-to-terminal
+transition. A terminal state seen first (page load, reconnect re-hydration, remount) never alerts. The alert is for a
+user who is elsewhere: no toast while the operation's own page is open and visible; while the tab is hidden the toast
+is joined by a count in front of the tab title (`(2) …`, cleared on `visibilitychange` to visible) and, when the
+per-browser `JobNotificationStore` switch is on and the browser granted it, an OS `Notification`. The switch
+(`JobNotificationsSwitch`, Node settings → General → This browser) asks for the permission only when turned on and
+stays off on a refusal. The shell's global banners are `CpuFallbackBanner`, `LlamaCppUpdateBanner` and
+`PendingRestartBanner`.
 
 **Custom Tools use the generated REST layer end to end.** `features/customTools/queries/useCustomTools.ts` wraps the
 generated list/get/create/update/delete and executable-probe options, maps generated

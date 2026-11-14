@@ -5,11 +5,13 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -21,6 +23,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Integration)]
 public sealed class TrainingRunServiceTests : IDisposable
 {
+    private readonly IJobCreatedPublisher _jobCreated = Substitute.For<IJobCreatedPublisher>();
+    private readonly TrainingRunEventBuffer _events = new(Options.Create(new TrainingRunEventBufferOptions()));
     private readonly FixedNodeSqliteKeyHolder _keyHolder = new(RandomNumberGenerator.GetBytes(32));
     private readonly string _root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
@@ -62,6 +66,7 @@ public sealed class TrainingRunServiceTests : IDisposable
         AssertEx.Null(await runStore.ClaimNextAsync(), "A refused creation must queue nothing for the consumer to pick up.");
         AssertEx.False(Directory.Exists(Path.Combine(_root, "training", "datasets", fixture.DatasetId.ToString(), "frozen")),
             "A refused creation must not leave a frozen copy on disk either.");
+        await _jobCreated.DidNotReceiveWithAnyArgs().PublishCreatedAsync(default, Guid.Empty, default);
     }
 
     [Test]
@@ -146,11 +151,18 @@ public sealed class TrainingRunServiceTests : IDisposable
             LicenseConfirmed = true
         });
 
+        var published = new List<TrainingRunEvent>();
+        _events.EventPublished += (_, args) => published.Add(args.Event);
         await service.CancelAsync(run.Id);
 
         AssertEx.Equal(TrainingRunStatus.Cancelled, (await service.GetAsync(run.Id)).Status);
         var conflict = await AssertEx.ThrowsAsync<TrainingConflictException>(() => service.CancelAsync(run.Id));
         AssertEx.Equal("RunTerminal", conflict.Code);
+        // No executor runs for a queued run, so this is the only end a tab holding the run's group will see.
+        var terminal = published.Single();
+        AssertEx.Equal(run.Id, terminal.RunId);
+        AssertEx.Equal(TrainingRunEventKind.State, terminal.Kind);
+        AssertEx.Equal(nameof(TrainingRunStatus.Cancelled), terminal.Payload.State);
         _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(() => service.CancelAsync(Guid.NewGuid()));
         _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(() => service.GetAsync(Guid.NewGuid()));
     }
@@ -242,6 +254,8 @@ public sealed class TrainingRunServiceTests : IDisposable
         AssertEx.False(confirmation.MetadataPresent, "No license metadata found is what this checkpoint's confirmation records.");
         AssertEx.Null(confirmation.License, "There is no license to name.");
         AssertEx.NotNullOrEmpty(confirmation.ConfirmationTextSha256, "The exact text shown to the operator is hashed onto the run.");
+        // Other tabs' operations feeds join no group for a run they never saw; this broadcast is how they learn of it.
+        await _jobCreated.Received(1).PublishCreatedAsync(CreatedJobKind.TrainingRun, run.Id, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -331,7 +345,9 @@ public sealed class TrainingRunServiceTests : IDisposable
             BuildWorkspace(),
             new TrainingRunCancellationRegistry(),
             Substitute.For<ITrainingRunQueueSignal>(),
-            Substitute.For<IInstalledBaseModelLinker>());
+            Substitute.For<IInstalledBaseModelLinker>(),
+            _jobCreated,
+            _events);
     }
 
     private TrainingRunWorkspace BuildWorkspace() =>

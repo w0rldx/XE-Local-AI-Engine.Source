@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Common;
+using XE_Local_AI_Engine.Client.Services.Common.Implementation;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
@@ -34,6 +36,7 @@ internal static class AddNodeTrainingDatasetExtensions
         builder.Services.AddSingleton<IDatasetGenerationEventBuffer, DatasetGenerationEventBuffer>();
         builder.Services.AddSingleton<DatasetGenerationQueueSignal>();
         builder.Services.AddSingleton<IDatasetGenerationQueueSignal>(provider => provider.GetRequiredService<DatasetGenerationQueueSignal>());
+        builder.Services.TryAddSingleton<IJobCreatedPublisher, NullJobCreatedPublisher>();
         builder.Services.AddHostedService<DatasetGenerationHostedService>();
         return builder;
     }

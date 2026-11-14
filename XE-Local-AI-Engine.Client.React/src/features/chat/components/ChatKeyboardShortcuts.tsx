@@ -83,6 +83,8 @@ export function ChatKeyboardShortcuts({ onStop, onNewChat }: ChatKeyboardShortcu
 		{ keys: [t("chat.shortcuts.keys.esc")], label: t("chat.shortcuts.stop") },
 		{ keys: [mod, shift, "O"], label: t("chat.shortcuts.newChat") },
 		{ keys: [mod, "/"], label: t("chat.shortcuts.showList") },
+		// App-wide (CommandPalette), listed here because this is the one shortcut list.
+		{ keys: [mod, "K"], label: t("commandPalette.shortcut") },
 	];
 
 	return (

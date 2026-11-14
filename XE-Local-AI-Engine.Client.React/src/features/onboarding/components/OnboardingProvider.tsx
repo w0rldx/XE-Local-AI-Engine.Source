@@ -8,6 +8,7 @@ import { ACTIONS, EVENTS, Joyride, STATUS } from "react-joyride";
 import { getAiAcknowledgementOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { router } from "@/core/integrations/tanstack-router/Router";
+import { FirstRunChoicesCard } from "@/features/onboarding/components/FirstRunChoicesCard";
 import { WelcomeTourDialog } from "@/features/onboarding/components/WelcomeTourDialog";
 import { OnboardingContext } from "@/core/onboarding/context/OnboardingContext";
 import { hasChatCapableDefault, hasInstalledChatModel } from "@/features/onboarding/data/TourAdvanceSignals";
@@ -316,6 +317,8 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 				onStart={() => activate("quick-start", quickStartHasProgress ? "resume" : "start")}
 				onSkip={() => dismiss("quick-start")}
 			/>
+			{/* Waits for every modal above and for a running tour, so the first visit never stacks three overlays. */}
+			<FirstRunChoicesCard idle={!awaitingAcknowledgement && !welcomeOpen && active === null} />
 			{children}
 		</OnboardingContext.Provider>
 	);

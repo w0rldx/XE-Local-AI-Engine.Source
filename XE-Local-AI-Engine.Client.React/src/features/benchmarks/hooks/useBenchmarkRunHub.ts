@@ -2,6 +2,7 @@ import { HubConnectionState } from "@microsoft/signalr";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
+import { joinHubGroup } from "@/core/api/signalr/SharedHubGroups";
 import {
 	applyBenchmarkEvent,
 	type BenchmarkOutputPart,
@@ -161,19 +162,15 @@ export function useBenchmarkRunHub({ run, refetch }: UseBenchmarkRunHubOptions):
 				}
 			});
 		};
-		hub.whenStarted.then(subscribe);
-		hub.onReconnected(() => {
-			setReconnecting(true);
-			subscribe();
-		});
+		// Registered before the group, so a reconnect flags "reconnecting" first and the group's re-subscribe clears it.
+		hub.onReconnected(() => setReconnecting(true));
+		const leave = joinHubGroup(hub, ["Unsubscribe", runId], subscribe);
 
 		return () => {
 			disposed = true;
 			connection.off(benchmarkHubEvents.event, eventHandler);
 			connection.off(benchmarkHubEvents.replayReset, resetHandler);
-			if (connection.state === HubConnectionState.Connected) {
-				connection.invoke("Unsubscribe", runId).catch(() => undefined);
-			}
+			leave();
 			hub.release();
 		};
 	}, [run?.id]);

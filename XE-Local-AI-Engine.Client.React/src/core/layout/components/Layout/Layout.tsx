@@ -6,6 +6,7 @@ import { lazy, type ReactNode, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 
 import { RootErrorComponent } from "@/core/integrations/tanstack-router/RootErrorComponent";
+import { CommandPalette } from "@/core/layout/components/CommandPalette/CommandPalette";
 import { DesktopNavigationBar } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar";
 import { HeaderBar, type IHeaderBarProperties } from "@/core/layout/components/HeaderBar/HeaderBar";
 import { isDesktopShell, SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_WIDTH_EXPANDED } from "@/core/layout/constants/LayoutBreakpoints";
@@ -106,6 +107,7 @@ export function Layout({ headerStatus, headerIndicator, headerActions, drawerAct
 			</div>
 
 			{overlay}
+			<CommandPalette />
 
 			{import.meta.env.DEV && DevelopmentUi && (
 				<Suspense fallback={null}>

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { confirmNodeVault } from "@/core/auth/api/NodeAuthApi";
+import { FirstRunStepper } from "@/core/auth/components/FirstRunStepper";
 import { RecoveryCodeReveal } from "@/core/auth/components/RecoveryCodeReveal";
 import type { NodeAuthErrorResponse } from "@/core/auth/models/NodeAuthModels";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -63,6 +64,7 @@ export function VaultSetup() {
 			<Container size="xs" py="xl" className="min-h-dvh flex items-center">
 				<Card withBorder={true} radius="lg" p="xl" className="w-full">
 					<Stack gap="lg">
+						<FirstRunStepper step="vault" />
 						<Stack gap={4} align="center" ta="center">
 							<IconShieldLock size={36} aria-hidden="true" />
 							<Title order={1}>{t("auth.vault.setupTitle")}</Title>

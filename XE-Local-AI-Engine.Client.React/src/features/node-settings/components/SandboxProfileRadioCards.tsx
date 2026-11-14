@@ -1,4 +1,4 @@
-import { Badge, Box, Group, List, Radio, Stack, Text, Title } from "@mantine/core";
+import { Box, Group, List, Radio, Stack, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { sandboxRoleLabel } from "@/core/models/SandboxRoles";
@@ -6,11 +6,9 @@ import { sandboxRoleLabel } from "@/core/models/SandboxRoles";
 export type SandboxSecurityProfile = "low" | "high";
 
 interface Props {
-	// The chosen profile, or null while nothing is chosen (the first-run chooser preselects neither).
+	// The chosen profile, or null while nothing is chosen.
 	readonly value: SandboxSecurityProfile | null;
 	readonly onChange: (value: SandboxSecurityProfile) => void;
-	// Which card carries the "Recommended" badge; null shows no badge (the capability read failed or is still loading).
-	readonly recommended: SandboxSecurityProfile | null;
 	// The workloads `high` would refuse on this host, listed under the High card. Empty or absent lists nothing.
 	readonly highRefusals: readonly string[] | undefined;
 	readonly testIdPrefix: string;
@@ -23,15 +21,9 @@ const titleLineStyle = {
 	height: "calc(var(--mantine-h3-font-size) * var(--mantine-h3-line-height))",
 } as const;
 
-// The two profiles as one radio question: the first-run chooser and the Node settings card both render this, so the
-// trade-off copy an operator decides on is the copy they later review.
-export function SandboxProfileRadioCards({ value, onChange, recommended, highRefusals, testIdPrefix }: Props) {
+// The two profiles as one radio question, with the trade-off copy an operator decides on.
+export function SandboxProfileRadioCards({ value, onChange, highRefusals, testIdPrefix }: Props) {
 	const { t } = useTranslation();
-	const badge = (
-		<Badge variant="light" data-testid={`${testIdPrefix}-recommended`}>
-			{t("pages.sandboxProfile.recommended", "Recommended for this host")}
-		</Badge>
-	);
 
 	return (
 		<Radio.Group
@@ -46,12 +38,9 @@ export function SandboxProfileRadioCards({ value, onChange, recommended, highRef
 							<Radio.Indicator />
 						</Box>
 						<Stack gap="xs">
-							<Group gap="sm" align="center">
-								<Title order={2} size="h3">
-									{t("pages.sandboxProfile.low.title", "Low")}
-								</Title>
-								{recommended === "low" ? badge : null}
-							</Group>
+							<Title order={2} size="h3">
+								{t("pages.sandboxProfile.low.title", "Low")}
+							</Title>
 							<Text>
 								{t(
 									"pages.sandboxProfile.low.body",
@@ -68,12 +57,9 @@ export function SandboxProfileRadioCards({ value, onChange, recommended, highRef
 							<Radio.Indicator />
 						</Box>
 						<Stack gap="xs">
-							<Group gap="sm" align="center">
-								<Title order={2} size="h3">
-									{t("pages.sandboxProfile.high.title", "High")}
-								</Title>
-								{recommended === "high" ? badge : null}
-							</Group>
+							<Title order={2} size="h3">
+								{t("pages.sandboxProfile.high.title", "High")}
+							</Title>
 							<Text>
 								{t(
 									"pages.sandboxProfile.high.body",

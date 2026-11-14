@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getNodeSettingsQueryKey, saveNodeSettingsMutation } from "@/core/api/generated/@tanstack/react-query.gen";
+import { FirstRunStepper } from "@/core/auth/components/FirstRunStepper";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StandaloneScreenControls } from "@/core/ui/components/StandaloneScreenControls/StandaloneScreenControls";
 import type { ExternalAccessPreset } from "@/features/node-settings/models/NodeSettingsFieldsModel";
@@ -43,6 +44,7 @@ export function ExternalAccessSetup() {
 			<StandaloneScreenControls />
 			<Container size="sm" py="xl" className="min-h-dvh flex items-center">
 				<Stack gap="lg" className="w-full">
+					<FirstRunStepper step="externalAccess" />
 					<Stack gap={4} align="center" ta="center">
 						<Title order={1}>{t("pages.externalAccess.setupTitle", "Choose how this engine reaches the internet")}</Title>
 						<Text c="dimmed">

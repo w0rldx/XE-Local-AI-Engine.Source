@@ -47,6 +47,12 @@ public sealed record WhisperModelDownloadStatus
 
     /// <summary>Number of files in this download.</summary>
     public int? PartCount { get; init; }
+
+    /// <summary>
+    ///     The coordinator's write order for this status, ascending across every write; a newer start is always higher. A
+    ///     push client drops a status older than the one it applied, since fire-and-forget pushes can land out of order.
+    /// </summary>
+    public long Sequence { get; init; }
 }
 
 /// <summary>

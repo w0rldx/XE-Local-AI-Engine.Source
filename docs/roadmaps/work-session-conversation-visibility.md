@@ -2,7 +2,7 @@
 
 - **Decision:** none filed — recorded here in place of a standalone issue (operator ruling, External Integrations, 2026-09-03)
 - **Status authority:** this living page
-- **Last verified against the tree:** 2026-10-13
+- **Last verified against the tree:** 2026-11-13
 - **Overall state:** Chat-list leak closed by the `NodeConversation.Kind` discriminator. No other leak surface found; two open questions remain below.
 
 This page carries a live-check item from the External Integrations work (2026-09-03), which was written to
@@ -49,11 +49,13 @@ needed for that part.
   ReadConversationRowAsync`, `TouchConversationAsync`, every by-id command in `NodeChatConversationCommands`),
   retention/purge (deliberately unfiltered, so a closed session's transcript still ages out —
   `NodeRetentionStore.ListExpiredConversationCandidatesAsync`, `ConversationFootprintPurge.DeleteAsync`,
-  `ConversationRetentionPurge`'s by-id eligibility re-check, `RetentionSweeperService`). As of this verification the
-  repository has **no conversation export feature and no conversation search feature** — a grep for `FROM
-  conversations` outside those already-accounted-for files and the two chat-list queries returns nothing else. If
-  either is ever added, it must filter on `Kind` the same way the chat list does, or this leak reopens on that
-  surface.
+  `ConversationRetentionPurge`'s by-id eligibility re-check, `RetentionSweeperService`). Conversation search
+  (`NodeChatReadModel.BackfillSearchIndexAsync`, `ReadSearchDocumentAsync`) and chat export
+  (`ExportNodeChatConversationsEndpoint`, through the list query and a by-id kind check) have since been added, and
+  both filter `kind = 'chat'` (re-checked 2026-11-13). A fourth kind, `scheduled` (a scheduled agent run's saved
+  answer, [ADR 0024](../adr/0024-scheduled-agent-answers-are-stored-conversations.md)), is excluded by the same
+  filters; the scheduler history sweep purges it by run id. Any new reader must filter on `Kind` the same way, or
+  this leak reopens on that surface.
 - **Platform sync.** `EnsureConversationAsync` mirrors a remote-platform conversation into a local row and always
   takes the `'chat'` kind default, on the premise that a platform-mirrored conversation is by definition a chat. It
   is a writer, not a list reader, so it is not itself a leak surface — but nothing enforces that premise, and it

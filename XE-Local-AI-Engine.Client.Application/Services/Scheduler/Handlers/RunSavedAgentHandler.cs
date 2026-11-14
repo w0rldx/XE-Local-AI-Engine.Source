@@ -114,6 +114,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         var eventDispatcher = services.GetRequiredService<IWorkerEventDispatcher>();
         var localModelProviderResolver = services.GetRequiredService<ILocalModelProviderResolver>();
         var ggufModelStore = services.GetRequiredService<IGgufModelStore>();
+        var chatPersistence = services.GetRequiredService<INodeChatPersistenceService>();
 
         // 1. Load the saved agent. A missing (or since-deleted) definition fails with a sanitized reason — there is no
         //    "disabled" flag on an AgentDefinition, so "missing" is the only unavailable state.
@@ -188,7 +189,97 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
 
         // 5. Take the shared invocation slot, THEN decide capacity, then run headless. Deciding before the slot let a second fire for the same
         //    cold model see the first fire's footprint reservation and be refused instead of queueing; the integration path uses this order.
-        await RunAndSummarizeAsync(eventDispatcher, capacityService, invocationRunner, package, context, effectiveModel, missingModelRefusal, cancellationToken);
+        var terminalState = await RunHeadlessAsync(eventDispatcher, capacityService, invocationRunner, package, effectiveModel, missingModelRefusal, cancellationToken);
+
+        // 6. Only a successful run reaches here: the content-safe summary, the run's last cancellable step, then its answer goes to the
+        //    encrypted conversation the run detail links. Saving first let a cancel during the summary leave an answer for a cancelled run.
+        await ReportRunSummaryAsync(context, effectiveModel, terminalState, cancellationToken);
+        await SaveAnswerAsync(chatPersistence, context, definition, parameters.Prompt, effectiveModel, terminalState);
+    }
+
+    /// <summary>
+    ///     Writes the prompt and the final answer as a <c>scheduled</c> conversation at the run's id, through the chat
+    ///     writer, so both are encrypted like any chat. A run with no answer text writes nothing.
+    /// </summary>
+    /// <remarks>
+    ///     Past a completed run the write is no longer the job's to cancel. A failed write deletes what it began and
+    ///     fails the run with a sanitized reason, so a failed run never links a conversation (ADR 0024).
+    /// </remarks>
+    private async Task SaveAnswerAsync(INodeChatPersistenceService chatPersistence,
+        ScheduledJobExecutionContext context,
+        AgentDefinitionRecord definition,
+        string prompt,
+        string effectiveModel,
+        InvocationState? terminalState)
+    {
+        if (terminalState is null || string.IsNullOrWhiteSpace(terminalState.StreamedContent))
+        {
+            return;
+        }
+
+        var answer = terminalState.StreamedContent;
+        var firedAtUtc = context.ActualFireTimeUtc.ToUnixTimeMilliseconds();
+        var answeredAtUtc = terminalState.CompletedAt?.ToUnixTimeMilliseconds() ?? firedAtUtc;
+        try
+        {
+            _ = await chatPersistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+                {
+                    Title = context.DisplayName,
+                    UserId = null,
+                    CreatedAtUtc = firedAtUtc,
+                    AgentDefinitionId = definition.Id,
+                    Kind = NodeConversationKind.Scheduled,
+                    ConversationId = context.RunId
+                },
+                CancellationToken.None);
+            _ = await chatPersistence.InsertMessageIfAbsentAsync(new NodeChatInsertMessageIfAbsentRequest
+                {
+                    ConversationId = context.RunId,
+                    MessageId = Guid.NewGuid(),
+                    Role = "user",
+                    Content = prompt,
+                    CreatedAtUtc = firedAtUtc
+                },
+                CancellationToken.None);
+            _ = await chatPersistence.InsertMessageIfAbsentAsync(new NodeChatInsertMessageIfAbsentRequest
+                {
+                    ConversationId = context.RunId,
+                    MessageId = Guid.NewGuid(),
+                    Role = "assistant",
+                    Content = answer,
+                    CreatedAtUtc = answeredAtUtc,
+                    Model = terminalState.ModelUsed ?? effectiveModel,
+                    AgentDefinitionId = definition.Id,
+                    AgentName = definition.Name
+                },
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            // The exception names no content: the writer's failures are storage errors, never the encrypted text.
+            _logger.LogError(exception, "Scheduled run {RunId} completed but its answer could not be saved.", context.RunId);
+            await DeletePartialAnswerAsync(chatPersistence, context.RunId, answeredAtUtc);
+            throw new ScheduledJobExecutionException("The agent run completed, but its answer could not be saved. See the node logs for details.", exception);
+        }
+    }
+
+    private async Task DeletePartialAnswerAsync(INodeChatPersistenceService chatPersistence, Guid runId, long deletedAtUtc)
+    {
+        try
+        {
+            _ = await chatPersistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest
+                {
+                    ConversationId = runId,
+                    DeletedAtUtc = deletedAtUtc,
+                    PurgeImmediately = true
+                },
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            // What is left is unlinked, since the run fails, and the run's history sweep still removes it.
+            _logger.LogWarning(exception, "Scheduled run {RunId} could not remove its partially saved answer.", runId);
+        }
     }
 
     /// <summary>Whether llama-server would serve <paramref name="model" /> while no GGUF is installed under its name.</summary>
@@ -281,16 +372,15 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
     /// </summary>
     /// <remarks>
     ///     The slot registration also makes the runner's terminal report fire
-    ///     <see cref="IWorkerEventDispatcher.InvocationStateChanged" />, captured here for a content-safe summary. The
+    ///     <see cref="IWorkerEventDispatcher.InvocationStateChanged" />, whose terminal state this returns. The
     ///     runner SWALLOWS <see cref="OperationCanceledException" />, reporting Cancelled and returning, so
     ///     cancellation is re-surfaced explicitly after the run; a terminal failure throws an operator-safe
     ///     <see cref="ScheduledJobExecutionException" /> WITHOUT leaking the raw runner error.
     /// </remarks>
-    private static async Task RunAndSummarizeAsync(IWorkerEventDispatcher eventDispatcher,
+    private static async Task<InvocationState?> RunHeadlessAsync(IWorkerEventDispatcher eventDispatcher,
         ICapacityService capacityService,
         IInvocationRunner invocationRunner,
         RuntimePackage package,
-        ScheduledJobExecutionContext context,
         string effectiveModel,
         string? missingModelRefusal,
         CancellationToken cancellationToken)
@@ -298,6 +388,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         // Captured through a reference holder rather than a plain local: the terminal is assigned only inside the event handler below,
         // which flow analysis cannot see fires synchronously, so a plain local would be wrongly proven always-null.
         var terminalState = new StrongBox<InvocationState?>(null);
+
+        var answerStart = new StrongBox<int>(0);
 
         void OnInvocationStateChanged(object? sender, InvocationStateChangedEventArgs args)
         {
@@ -308,12 +400,22 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             }
         }
 
+        // The narration a model streams before each tool call is not its answer (as in GraphWorkflowInvocationExecutor).
+        void OnToolCallLifecycleChanged(object? sender, ToolCallLifecycleChangedEventArgs args)
+        {
+            if (args.Payload is { Phase: ToolCallLifecyclePhase.Requested, ContentOffset: { } offset } && args.Payload.InvocationId == package.InvocationId)
+            {
+                answerStart.Value = Math.Max(answerStart.Value, offset);
+            }
+        }
+
         // Acquire the shared invocation slot before running. Cancelling while still queued behind another invocation
         // aborts the wait here (OperationCanceledException propagates to the dispatcher as Cancelled/TimedOut).
         var lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken);
         IDisposable? reservation = null;
         var failureCategory = FailureCategory.Unexpected;
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
+        eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
         try
         {
             if (missingModelRefusal is not null)
@@ -347,6 +449,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         }
         finally
         {
+            eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
             eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
             // Reverse acquisition order: the footprint is released before the slot, so the next queued fire decides against the settled ledger.
             reservation?.Dispose();
@@ -367,9 +470,23 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
                 // failure rather than a token-less OperationCanceledException, which the dispatcher would mis-record as TimedOut.
                 throw new ScheduledJobExecutionException("The scheduled agent run was interrupted before it completed.");
             default:
-                await ReportRunSummaryAsync(context, effectiveModel, terminalState.Value, cancellationToken);
-                break;
+                return AnswerOnly(terminalState.Value, answerStart.Value);
         }
+    }
+
+    // The text after the last requested tool call. Unlike NodeChatPartAccumulator.FinalSegment there is no fallback to the
+    // whole text: narration with nothing after the last call is not an answer to keep, so the save sees blank and skips.
+    private static InvocationState? AnswerOnly(InvocationState? terminal, int answerStart)
+    {
+        if (terminal is null || answerStart == 0)
+        {
+            return terminal;
+        }
+
+        var answered = terminal.Clone();
+        var content = terminal.StreamedContent;
+        answered.StreamedContent = content[Math.Min(answerStart, content.Length)..];
+        return answered;
     }
 
     /// <summary>

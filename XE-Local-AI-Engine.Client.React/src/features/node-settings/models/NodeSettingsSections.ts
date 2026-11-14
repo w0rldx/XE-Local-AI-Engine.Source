@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import { z } from "zod";
 
 import type { NodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
@@ -34,6 +35,25 @@ const advancedSections: ReadonlySet<NodeSettingsSectionId> = new Set<NodeSetting
 
 export function isAdvancedNodeSettingsSection(section: NodeSettingsSectionId): boolean {
 	return advancedSections.has(section);
+}
+
+// The section's name in the section list and as the heading of its group in the search results.
+export function nodeSettingsSectionLabel(t: TFunction, section: NodeSettingsSectionId): string {
+	const labels: Record<NodeSettingsSectionId, string> = {
+		general: t("pages.nodeSettings.sections.general", "General"),
+		chat: t("pages.nodeSettings.sections.chat", "Chat & agents"),
+		runtime: t("pages.nodeSettings.sections.runtime", "Model runtime"),
+		runtimes: t("pages.nodeSettings.sections.runtimes", "Runtimes & builds"),
+		models: t("pages.nodeSettings.sections.models", "Models & downloads"),
+		knowledge: t("pages.nodeSettings.sections.knowledge", "Knowledge & web"),
+		voice: t("pages.nodeSettings.sections.voice", "Voice & transcription"),
+		privacy: t("pages.nodeSettings.sections.privacy", "Privacy & updates"),
+		integrations: t("pages.nodeSettings.sections.integrations", "Integrations & keys"),
+		workspaces: t("pages.nodeSettings.sections.workspaces", "Agent workspaces"),
+		sandbox: t("pages.nodeSettings.sections.sandbox", "Sandbox & isolation"),
+		usage: t("pages.nodeSettings.sections.usage", "Usage & limits"),
+	};
+	return labels[section];
 }
 
 // `?section=` on the node-settings route. An unknown value falls back to the default section instead of failing the

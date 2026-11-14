@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -41,6 +42,39 @@ public sealed class NodeChatReadOnlyEndpointTests
         using var response = await client.SendAsync(request);
 
         await AssertReadOnlyConflictAsync(response);
+    }
+
+    [Test]
+    public async Task RenameScheduledAnswer_Returns409ReadOnly_AndDeleteStillRemovesIt()
+    {
+        // ADR 0024: a scheduled run's answer is read-only, but the run viewer's "Delete answer" must keep working.
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
+        var runId = Guid.NewGuid();
+        _ = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Nightly log summary",
+            UserId = null,
+            CreatedAtUtc = 10,
+            Kind = NodeConversationKind.Scheduled,
+            ConversationId = runId
+        });
+
+        using var renameRequest = CreateJsonRequest(factory,
+            HttpMethod.Patch,
+            $"/api/local/v1/chat/conversations/{runId}/rename",
+            new
+            {
+                Title = "renamed by operator"
+            });
+        using var renameResponse = await client.SendAsync(renameRequest);
+        await AssertReadOnlyConflictAsync(renameResponse);
+
+        using var deleteRequest = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/chat/conversations/{runId}?purgeImmediately=true");
+        using var deleteResponse = await client.SendAsync(deleteRequest);
+        AssertEx.True(deleteResponse.IsSuccessStatusCode, $"Deleting a scheduled answer must succeed, got {(int)deleteResponse.StatusCode}.");
+        AssertEx.Null(await persistence.GetConversationKindAsync(runId), "The answer must be gone after the delete.");
     }
 
     [Test]

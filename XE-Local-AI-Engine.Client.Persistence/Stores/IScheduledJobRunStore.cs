@@ -89,7 +89,7 @@ public interface IScheduledJobRunStore
 
     /// <summary>
     ///     Retention sweep: deletes every run created before <paramref name="cutoffUtc" /> (matched on CreatedAtUtc) in a
-    ///     transaction; the cascade FK removes their events. Returns the number of runs deleted.
+    ///     transaction with their events and each run's saved <c>scheduled</c> answer conversation. Returns the runs deleted.
     /// </summary>
     Task<int> SweepOlderThanAsync(long cutoffUtc, CancellationToken cancellationToken = default);
 }

@@ -50,6 +50,9 @@ public sealed class ListTrainingRunsRequest
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 25;
     public Guid? DatasetId { get; init; }
+
+    /// <summary>Only runs not yet finished (the app-wide job feed); absent or false lists every run.</summary>
+    public bool? ActiveOnly { get; init; }
 }
 
 public sealed class TrainingRunDefaultsRequest

@@ -225,5 +225,10 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
             Published.Enqueue(statusEvent);
             return Task.CompletedTask;
         }
+
+        public Task PublishModelDownloadAsync(ImageModelDownloadStatus status, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 }

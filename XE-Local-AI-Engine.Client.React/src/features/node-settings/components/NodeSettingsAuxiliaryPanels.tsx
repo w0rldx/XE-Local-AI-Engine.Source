@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 
 import { languageData } from "@/core/locales/models/LanguageMenuData";
 import { useUserLanguageStore } from "@/core/locales/stores/UserLanguageStore";
+import { JobNotificationsSwitch } from "@/core/operations/components/JobNotificationsSwitch";
 import { useThemeStore } from "@/core/theme/stores/ThemeStore";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { LocalModelProxyKeyPanel } from "@/features/node-settings/components/LocalModelProxyKeyPanel";
@@ -180,6 +181,7 @@ export function NodeSettingsBrowserPreferencesCard(props: NodeSettingsBrowserPre
 				onChange={props.onToggleDeveloperMode}
 				data-testid="developer-mode-switch"
 			/>
+			<JobNotificationsSwitch />
 		</SectionCard>
 	);
 }

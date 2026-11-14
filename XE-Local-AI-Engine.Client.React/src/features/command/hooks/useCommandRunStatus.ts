@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse as GraphWorkflowRunResponse } from "@/core/api/generated";
 import { getGraphWorkflowNodeRunOptions, getGraphWorkflowRunOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
+import { joinHubGroup } from "@/core/api/signalr/SharedHubGroups";
 
 const HUB_PATH = "graph-workflows/hub";
 const terminalRunStatuses = new Set(["Completed", "Failed", "Cancelled"]);
@@ -84,16 +85,14 @@ export function useCommandRunStatus(initial: GraphWorkflowRunResponse): CommandR
 				.catch(() => setHubDown(true));
 		};
 		connection.on("graphWorkflowChanged", onChanged);
-		const removeReconnected = hub.onReconnected(subscribe);
 		const removeClosed = hub.onClosed(() => setHubDown(true));
-		hub.whenStarted.then(subscribe).catch(() => setHubDown(true));
+		// The run view may hold the same run's group on this connection; only the last holder leaves it.
+		const leave = joinHubGroup(hub, ["UnsubscribeRun", runId], subscribe);
+		hub.whenStarted.catch(() => setHubDown(true));
 		return () => {
 			connection.off("graphWorkflowChanged", onChanged);
-			removeReconnected();
 			removeClosed();
-			if (connection.state === HubConnectionState.Connected) {
-				connection.invoke("UnsubscribeRun", runId).catch(() => undefined);
-			}
+			leave();
 			hub.release();
 		};
 	}, [queryClient, runId]);

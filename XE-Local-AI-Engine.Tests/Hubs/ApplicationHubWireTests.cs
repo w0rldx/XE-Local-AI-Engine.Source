@@ -9,6 +9,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
@@ -21,7 +22,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins the exact frame text the knowledge-base, image source-build, GGUF download, image-job and scheduler
+///     Pins the exact frame text the knowledge-base, image source-build, GGUF download, image-job, job-created and scheduler
 ///     publishers put on the wire: client-method name, property names and casing, value representation and explicit
 ///     nulls.
 /// </summary>
@@ -51,6 +52,40 @@ public sealed class ApplicationHubWireTests
                        + "\"documentId\":\"11111111-1111-4111-8111-111111111111\",\"status\":\"Indexed\",\"occurredAtUtc\":1758000000000}]}"
                        + RecordSeparator,
             WriteFrame(sent.Single().Message));
+    }
+
+    [Test]
+    public async Task KnowledgeDocumentRemovedPush_KeepsItsWireFrame()
+    {
+        var (hubContext, sent) = CapturingHubContext<KnowledgeBaseHub>();
+        var time = new ManualTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(1758000000000));
+        var notifier = new KnowledgeIndexingNotifier(hubContext, time, new RecordingLogger<KnowledgeIndexingNotifier>());
+
+        await notifier.NotifyDocumentRemovedAsync(FirstId);
+
+        AssertEx.Equal("{\"type\":1,\"target\":\"knowledge.documentRemoved\",\"arguments\":[{\"eventType\":\"knowledge.documentRemoved\","
+                       + "\"documentId\":\"11111111-1111-4111-8111-111111111111\",\"occurredAtUtc\":1758000000000}]}"
+                       + RecordSeparator,
+            WriteFrame(sent.Single().Message));
+    }
+
+    [Test]
+    public async Task JobCreatedPush_GoesToEveryConnectionOfTheJobsOwnHub()
+    {
+        var (runs, runFrames) = CapturingHubContext<TrainingRunHub>();
+        var (datasets, datasetFrames) = CapturingHubContext<DatasetGenerationHub>();
+        var (images, imageFrames) = CapturingHubContext<ImageJobHub>();
+        var publisher = new JobCreatedPublisher(runs, datasets, images, new RecordingLogger<JobCreatedPublisher>());
+
+        await publisher.PublishCreatedAsync(CreatedJobKind.TrainingRun, FirstId);
+        await publisher.PublishCreatedAsync(CreatedJobKind.DatasetBuild, SecondId);
+        await publisher.PublishCreatedAsync(CreatedJobKind.ImageJob, FirstId);
+
+        AssertEx.Equal("{\"type\":1,\"target\":\"job.created\",\"arguments\":[{\"id\":\"11111111-1111-4111-8111-111111111111\",\"kind\":\"TrainingRun\"}]}"
+                       + RecordSeparator,
+            WriteFrame(runFrames.Single().Message));
+        AssertEx.Contains(WriteFrame(datasetFrames.Single().Message), "\"kind\":\"DatasetBuild\"");
+        AssertEx.Contains(WriteFrame(imageFrames.Single().Message), "\"kind\":\"ImageJob\"");
     }
 
     [Test]

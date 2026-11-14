@@ -2,6 +2,7 @@ import { HubConnectionState } from "@microsoft/signalr";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
+import { joinHubGroup } from "@/core/api/signalr/SharedHubGroups";
 import type { DatasetGenerationProgress } from "@/features/training/models/TrainingModels";
 import {
 	applyGenerationEvent,
@@ -76,16 +77,14 @@ export function useDatasetGenerationHub(datasetId: string | null, onResync: () =
 			}
 			connection.invoke("Subscribe", datasetId, cursorRef.current).catch(() => resyncRef.current());
 		};
-		hub.whenStarted.then(subscribe);
-		hub.onReconnected(subscribe);
+		// The operations feed may hold this dataset's group on the same connection; only the last holder leaves it.
+		const leave = joinHubGroup(hub, ["Unsubscribe", datasetId], subscribe);
 
 		return () => {
 			disposed = true;
 			connection.off(datasetGenerationHubEvents.event, eventHandler);
 			connection.off(datasetGenerationHubEvents.replayReset, resetHandler);
-			if (connection.state === HubConnectionState.Connected) {
-				connection.invoke("Unsubscribe", datasetId).catch(() => undefined);
-			}
+			leave();
 			hub.release();
 		};
 	}, [datasetId]);

@@ -90,6 +90,7 @@ export function toScheduledJobRun(dto: XeLocalAiEngineClientEndpointsSchedulerV1
 		errorMessage: dto.errorMessage ?? null,
 		cancellationRequestedAtUtc: dto.cancellationRequestedAtUtc ?? null,
 		createdAtUtc: dto.createdAtUtc ?? 0,
+		answerConversationId: dto.answerConversationId ?? null,
 	};
 }
 
