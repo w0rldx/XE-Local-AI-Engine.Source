@@ -21,6 +21,8 @@ interface ArchitectureTemplateGraphProps {
 	groupComponents: ReadonlySet<string>;
 	selectedComponent: string | null;
 	onSelectComponent: (component: string) => void;
+	// Every node, dashed ones too: opens that operation's explanation.
+	onSelectNode: (nodeId: string) => void;
 }
 
 const nodeStyle = {
@@ -31,18 +33,19 @@ const nodeStyle = {
 };
 
 // The block kind's operation order, strictly read-only: nothing here moves, connects or deletes. A pointer surface only;
-// the tensor groups beside it are the keyboard path to the same selection.
+// the operation list below it is the keyboard path to the same explanations, the tensor groups to the same groups.
 export function ArchitectureTemplateGraph({
 	template,
 	groupComponents,
 	selectedComponent,
 	onSelectComponent,
+	onSelectNode,
 }: ArchitectureTemplateGraphProps) {
 	const { t } = useTranslation();
 	// React Flow's own screen-reader text offers moving and deleting nodes, which this graph does not allow.
 	const readOnlyDescription = t(
 		"pages.modelLab.architecture.templateReadOnly",
-		"Read-only graph. Select an operation with a pointer, or use the tensor groups to select by keyboard.",
+		"Read-only graph. Select an operation with a pointer, or use the operation list below to select by keyboard.",
 	);
 	const ariaLabelConfig = {
 		"node.a11yDescription.default": readOnlyDescription,
@@ -66,7 +69,7 @@ export function ArchitectureTemplateGraph({
 			selected: linked && node.component === selectedComponent,
 			style: {
 				...nodeStyle,
-				cursor: linked ? "pointer" : "default",
+				cursor: "pointer",
 				borderStyle: linked ? "solid" : "dashed",
 				outline: linked && node.component === selectedComponent ? "2px solid var(--mantine-primary-color-filled)" : undefined,
 			},
@@ -104,6 +107,7 @@ export function ArchitectureTemplateGraph({
 					ariaLabelConfig={ariaLabelConfig}
 					aria-label={t("pages.modelLab.architecture.templateLabel", "Operation graph of this block kind")}
 					onNodeClick={(_event, node) => {
+						onSelectNode(node.id);
 						const component = template.nodes.find((candidate) => candidate.id === node.id)?.component;
 						if (component && groupComponents.has(component)) {
 							onSelectComponent(component);
@@ -117,7 +121,7 @@ export function ArchitectureTemplateGraph({
 			<Text size="xs" c="dimmed">
 				{t(
 					"pages.modelLab.architecture.templateHint",
-					"A solid node uses a tensor group of this block; selecting it selects that group. A dashed node holds no tensors.",
+					"Selecting a node opens its explanation in the operation list. A solid node uses a tensor group of this block and also selects that group; a dashed node holds no tensors.",
 				)}
 			</Text>
 		</Stack>

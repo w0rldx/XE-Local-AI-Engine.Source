@@ -1,9 +1,15 @@
 import { Badge, Group, Paper, Stack, Text } from "@mantine/core";
-import { useState } from "react";
+import { useReducedMotion } from "@mantine/hooks";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { blockKindLabels } from "@/core/models/inspect/GgufInspectInsights";
 import { ArchitectureBlockTrace } from "@/features/modelLab/components/ArchitectureBlockTrace";
+import {
+	ExplanationEntry,
+	ExplanationLevelSwitch,
+	ExplanationList,
+} from "@/features/modelLab/components/ArchitectureExplanation";
 import { ArchitecturePyTorchPanel } from "@/features/modelLab/components/ArchitecturePyTorchPanel";
 import { ArchitectureTemplateGraph } from "@/features/modelLab/components/ArchitectureTemplateGraph";
 import { ArchitectureTensorDetails } from "@/features/modelLab/components/ArchitectureTensorDetails";
@@ -17,6 +23,7 @@ import {
 	componentIdFor,
 	componentLabel,
 } from "@/features/modelLab/models/ModelLabArchitecture";
+import { type ExplanationLevel, inferredBadgeStyles } from "@/features/modelLab/models/ModelLabExplanation";
 import type { PyTorchCodeTarget } from "@/features/modelLab/models/ModelLabPyTorch";
 
 interface ArchitectureBlockDetailProps {
@@ -29,12 +36,10 @@ interface ArchitectureBlockDetailProps {
 	// Undefined when this support level or block kind has none: no graph is ever drawn without one.
 	template: ArchitectureTemplate | undefined;
 	traceSummaries: ReadonlyMap<number, BlockTraceSummary> | undefined;
+	// Owned above this panel, so the chosen level stays while the operator moves between blocks.
+	explanationLevel: ExplanationLevel;
+	onExplanationLevel: (level: ExplanationLevel) => void;
 }
-
-const inferredBadgeStyles = {
-	root: { height: "auto" },
-	label: { whiteSpace: "normal", overflow: "visible", overflowWrap: "anywhere" },
-} as const;
 
 // One block: what the file holds (read) and, apart from it, the operation order llama.cpp runs over it (inferred).
 export function ArchitectureBlockDetail({
@@ -45,11 +50,25 @@ export function ArchitectureBlockDetail({
 	groups,
 	template,
 	traceSummaries,
+	explanationLevel,
+	onExplanationLevel,
 }: ArchitectureBlockDetailProps) {
 	const { t } = useTranslation();
 	const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
 	const [selectedTensorName, setSelectedTensorName] = useState<string | null>(null);
 	const [codeTarget, setCodeTarget] = useState<PyTorchCodeTarget | null>(null);
+	const [openNodeId, setOpenNodeId] = useState<string | null>(null);
+	const operationsRef = useRef<HTMLDivElement>(null);
+	const reduceMotion = useReducedMotion();
+	// The list sits below the graph, often below the fold: without the scroll a node click looks like it did nothing.
+	// Centred, not "nearest": nearest leaves the item's header on the bottom edge and its opening panel still out of view.
+	const openFromGraph = (nodeId: string): void => {
+		setOpenNodeId(nodeId);
+		const items = operationsRef.current?.querySelectorAll<HTMLElement>("[data-item-id]") ?? [];
+		[...items]
+			.find((item) => item.dataset["itemId"] === nodeId)
+			?.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+	};
 	const selectedTensor = groups.flatMap((group) => group.tensors).find((tensor) => tensor.ggufName === selectedTensorName);
 	const selectedGroup = groups.find((group) => group.componentId === selectedComponentId);
 	const selectGroup = (componentId: string): void => {
@@ -69,8 +88,20 @@ export function ArchitectureBlockDetail({
 								kind: blockKindLabels(t)[architectureBlockKind(block.kind)],
 							})}
 				</Text>
+				<ExplanationLevelSwitch value={explanationLevel} onChange={onExplanationLevel} />
+				{/* A block's kind text describes the graph llama.cpp builds, so it is inferred wherever that graph is shown. */}
+				<ExplanationEntry
+					candidates={[block === undefined ? `component.${outside}` : `block.${architectureBlockKind(block.kind)}`]}
+					level={explanationLevel}
+					basis={block && template ? { inferredFrom: template.source } : "background"}
+				/>
 				{block && (
-					<ArchitectureBlockTrace untraceable={block.kind === "mtp"} summaries={traceSummaries} blockIndex={block.index} />
+					<ArchitectureBlockTrace
+						untraceable={block.kind === "mtp"}
+						summaries={traceSummaries}
+						blockIndex={block.index}
+						level={explanationLevel}
+					/>
 				)}
 				<Group gap="xs">
 					<Text size="sm" fw={600}>
@@ -93,6 +124,14 @@ export function ArchitectureBlockDetail({
 					}}
 				/>
 				{selectedTensor && <ArchitectureTensorDetails tensor={selectedTensor} />}
+				{selectedGroup && (
+					<ExplanationEntry
+						title={componentLabel(t, selectedGroup.component)}
+						candidates={[`component.${selectedGroup.component}`]}
+						level={explanationLevel}
+						basis="background"
+					/>
+				)}
 				{block && template && (
 					<>
 						<Group gap="xs">
@@ -117,6 +156,21 @@ export function ArchitectureBlockDetail({
 							groupComponents={new Set(groups.map((group) => group.component))}
 							selectedComponent={selectedGroup?.component ?? null}
 							onSelectComponent={(component) => selectGroup(componentIdFor(block.index, component))}
+							onSelectNode={openFromGraph}
+						/>
+						<ExplanationList
+							items={template.nodes.map((node) => ({
+								id: node.id,
+								label: node.label,
+								// A per-kind text first, where one id means different operations in different templates.
+								candidates: [`opByKind.${template.kind}.${node.id}`, `op.${node.id}`],
+							}))}
+							level={explanationLevel}
+							basis={{ inferredFrom: template.source }}
+							open={openNodeId}
+							onOpen={setOpenNodeId}
+							data-testid="model-lab-explain-operations"
+							ref={operationsRef}
 						/>
 					</>
 				)}

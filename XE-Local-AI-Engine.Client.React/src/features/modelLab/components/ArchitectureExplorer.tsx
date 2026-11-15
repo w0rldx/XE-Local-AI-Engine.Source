@@ -22,6 +22,7 @@ import {
 	promptExcerpt,
 	summarizeTraceByBlock,
 } from "@/features/modelLab/models/ModelLabArchitecture";
+import type { ExplanationLevel } from "@/features/modelLab/models/ModelLabExplanation";
 
 // One installed model's structure from its GGUF header, with an optional saved trace of that model laid over its blocks.
 export function ArchitectureExplorer() {
@@ -33,6 +34,7 @@ export function ArchitectureExplorer() {
 	const [modelName, setModelName] = useState<string | null>(null);
 	const [selection, setSelection] = useState<ArchitectureSelection | null>(null);
 	const [traceId, setTraceId] = useState<string | null>(null);
+	const [explanationLevel, setExplanationLevel] = useState<ExplanationLevel>("overview");
 
 	const descriptor = useQuery({
 		...getModelLabArchitectureOptions({ path: { modelName: modelName ?? "" } }),
@@ -159,6 +161,8 @@ export function ArchitectureExplorer() {
 							groups={block?.groups ?? outsideGroups(data.nonBlock, selection === "output" ? "output" : "embedding")}
 							template={template}
 							traceSummaries={traceSummaries}
+							explanationLevel={explanationLevel}
+							onExplanationLevel={setExplanationLevel}
 						/>
 					)}
 				</>

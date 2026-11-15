@@ -27,12 +27,13 @@ describe("ArchitectureTemplateGraph", () => {
 				groupComponents={new Set(["attention"])}
 				selectedComponent={null}
 				onSelectComponent={() => undefined}
+				onSelectNode={() => undefined}
 			/>,
 		);
 
 		const text = container.textContent ?? "";
 		expect(text).toContain(
-			"Read-only graph. Select an operation with a pointer, or use the tensor groups to select by keyboard.",
+			"Read-only graph. Select an operation with a pointer, or use the operation list below to select by keyboard.",
 		);
 		expect(text).not.toMatch(/delete|arrow keys|move the node/i);
 	});

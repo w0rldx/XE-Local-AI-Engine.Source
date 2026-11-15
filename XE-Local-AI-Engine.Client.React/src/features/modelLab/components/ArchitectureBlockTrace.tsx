@@ -1,18 +1,23 @@
-import { Text } from "@mantine/core";
+import { Stack, Text } from "@mantine/core";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ExplanationList } from "@/features/modelLab/components/ArchitectureExplanation";
 import { type BlockTraceSummary, formatTraceValue } from "@/features/modelLab/models/ModelLabArchitecture";
+import { type ExplanationLevel, traceMetrics } from "@/features/modelLab/models/ModelLabExplanation";
 
 interface ArchitectureBlockTraceProps {
 	untraceable: boolean;
 	// Undefined while no trace is chosen.
 	summaries: ReadonlyMap<number, BlockTraceSummary> | undefined;
 	blockIndex: number;
+	level: ExplanationLevel;
 }
 
 // What the chosen trace measured on this block, or why it has nothing to say.
-export function ArchitectureBlockTrace({ untraceable, summaries, blockIndex }: ArchitectureBlockTraceProps) {
+export function ArchitectureBlockTrace({ untraceable, summaries, blockIndex, level }: ArchitectureBlockTraceProps) {
 	const { t, i18n } = useTranslation();
+	const [openMetric, setOpenMetric] = useState<string | null>(null);
 	const formatValue = (value: number | null): string => formatTraceValue(value, i18n.language);
 	if (untraceable) {
 		return (
@@ -35,17 +40,32 @@ export function ArchitectureBlockTrace({ untraceable, summaries, blockIndex }: A
 			</Text>
 		);
 	}
+	const metricLabels: Record<(typeof traceMetrics)[number], string> = {
+		meanNorm: t("pages.modelLab.explain.ui.trace.meanNorm", "Mean norm"),
+		maxP99: t("pages.modelLab.explain.ui.trace.maxP99", "Highest p99"),
+		topDimensions: t("pages.modelLab.explain.ui.trace.topDimensions", "Most frequent top dimensions"),
+	};
 	return (
-		<Text size="sm" data-testid="model-lab-architecture-trace-summary">
-			{t(
-				"pages.modelLab.architecture.traceSummary",
-				"Mean norm {{mean}}, highest p99 {{p99}}. Most frequent top dimensions: {{dimensions}}.",
-				{
-					mean: formatValue(summary.meanNorm),
-					p99: formatValue(summary.maxP99),
-					dimensions: summary.topDimensions.length > 0 ? summary.topDimensions.join(", ") : "–",
-				},
-			)}
-		</Text>
+		<Stack gap="xs">
+			<Text size="sm" data-testid="model-lab-architecture-trace-summary">
+				{t(
+					"pages.modelLab.architecture.traceSummary",
+					"Mean norm {{mean}}, highest p99 {{p99}}. Most frequent top dimensions: {{dimensions}}.",
+					{
+						mean: formatValue(summary.meanNorm),
+						p99: formatValue(summary.maxP99),
+						dimensions: summary.topDimensions.length > 0 ? summary.topDimensions.join(", ") : "–",
+					},
+				)}
+			</Text>
+			<ExplanationList
+				items={traceMetrics.map((metric) => ({ id: metric, label: metricLabels[metric], candidates: [`trace.${metric}`] }))}
+				level={level}
+				basis="measurement"
+				open={openMetric}
+				onOpen={setOpenMetric}
+				data-testid="model-lab-explain-trace"
+			/>
+		</Stack>
 	);
 }

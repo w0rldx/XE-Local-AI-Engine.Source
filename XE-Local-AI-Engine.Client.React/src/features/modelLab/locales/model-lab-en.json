@@ -39,9 +39,9 @@
 				},
 				"shape": "Shape (GGUF order)",
 				"tab": "Architecture",
-				"templateHint": "A solid node uses a tensor group of this block; selecting it selects that group. A dashed node holds no tensors.",
+				"templateHint": "Selecting a node opens its explanation in the operation list. A solid node uses a tensor group of this block and also selects that group; a dashed node holds no tensors.",
 				"templateLabel": "Operation graph of this block kind",
-				"templateReadOnly": "Read-only graph. Select an operation with a pointer, or use the tensor groups to select by keyboard.",
+				"templateReadOnly": "Read-only graph. Select an operation with a pointer, or use the operation list below to select by keyboard.",
 				"trace": "Trace to lay over the blocks",
 				"traceNote": "Measured on the Hugging Face checkpoint, joined by block index. The checkpoint was paired with this GGUF by shape only.",
 				"traceSummary": "Mean norm {{mean}}, highest p99 {{p99}}. Most frequent top dimensions: {{dimensions}}.",
@@ -61,6 +61,323 @@
 				"seed": "Seed for both runs: {{seed}}",
 				"tab": "Same-prompt A/B",
 				"waiting": "Waiting for the first run to finish."
+			},
+			"explain": {
+				"block": {
+					"fullAttention": {
+						"detail": "Input and output are the residual stream: one vector per token, width `n_embd`. A norm prepares the input, attention reads earlier tokens through the KV cache, and the result is added back. A second norm and the feed-forward network follow, again added back.",
+						"math": "In the common pre-norm layout, which qwen35 uses:\n\n$$h' = h + \\mathrm{Attn}(\\mathrm{Norm}_1(h))$$\n\n$$h_{\\text{out}} = h' + \\mathrm{FFN}(\\mathrm{Norm}_2(h'))$$\n\n- $h$: block input of one token.\n- $h'$: stream after the first residual add.\n- $\\mathrm{Norm}_1$: `attn_norm`; $\\mathrm{Norm}_2$: `post_attention_norm` in qwen35, `ffn_norm` in many others.\n\nSome architectures use other layouts, for example attention and FFN in parallel; this view does not tell them apart.",
+						"overview": "A block that lets each token look back at all earlier tokens and mix in what is relevant, then refines the result with a feed-forward network."
+					},
+					"linearAttention": {
+						"detail": "This view marks a block as linear attention when it holds `ssm_*` tensors, so the kind covers several designs, from Mamba-style state-space layers to qwen35's gated delta net. The mixer updates a recurrent state per token and reads its output from that state; the state does not grow with the context. In qwen35 the norms, residual adds and feed-forward network are the same as in a full-attention block.",
+						"math": "$$S_t = f(S_{t-1}, x_t), \\qquad y_t = g(S_t, x_t)$$\n\n- $x_t$: normed input of token $t$.\n- $S_t$: recurrent state after token $t$, fixed size.\n- $y_t$: mixer output, added to the residual stream.\n\nFor qwen35 the operation view shows $f$ and $g$ (gated delta rule). The block around the mixer is the same as in full attention: $h' = h + \\mathrm{Mixer}(\\mathrm{Norm}_1(h))$, then the FFN step.",
+						"overview": "A block that carries a fixed-size memory from token to token instead of looking back at every earlier token. It is cheaper on long contexts, but keeps a compressed summary, not the exact past tokens."
+					},
+					"mtp": {
+						"detail": "The block takes the trunk's final normed hidden state and the embedding of a token, normalizes both, joins them with `nextn.eh_proj` and runs one full-attention block, then a head norm and the LM head: `nextn.shared_head_norm` and `nextn.shared_head_head` if the file has them, else the trunk's `output_norm` and `output`. llama.cpp runs it as a separate draft graph, never inside the main forward pass.",
+						"math": "$$u = W_{eh}\\,[\\,\\mathrm{Norm}_e(e)\\,;\\,\\mathrm{Norm}_h(h)\\,]$$\n\n$$\\ell^{\\text{draft}} = W_{\\text{head}}\\,\\mathrm{Norm}(\\mathrm{Block}_{\\text{full}}(u))$$\n\n- $h$: trunk hidden state after `output_norm`.\n- $e$: token embedding.\n- $[\\,a\\,;\\,b\\,]$: concatenation, embedding first.\n- $W_{eh}$: `nextn.eh_proj`, from width $2d$ to $d$.\n- $W_{\\text{head}}$: `nextn.shared_head_head`, else `output`.\n- $\\ell^{\\text{draft}}$: logits for the draft token.",
+						"overview": "An extra block that guesses one token further ahead so generation can run faster. Its guesses are drafts: the main model checks them and keeps only those it agrees with."
+					},
+					"other": {
+						"detail": "The kind comes from tensor names: `nextn` means MTP, `ssm_*` means linear attention, `attn_q` or `attn_qkv` means full attention. A block with none of these lands here, for example in an architecture with its own naming.",
+						"math": "No formula: without a template, any formula would be a guess. The tensor shapes give the sizes of the matrices the block uses.",
+						"overview": "A block kind this view has no template for. Its tensors are read from the file, but the view does not show how they are combined."
+					}
+				},
+				"component": {
+					"attention": {
+						"detail": "Projections such as `attn_q`, `attn_k`, `attn_v` (or a fused `attn_qkv`) turn the normed input into queries, keys and values, split into heads. Keys and values of past tokens stay in the KV cache. `attn_output` maps the mixed values back to the residual width. Many models share one key/value head across several query heads (grouped-query attention).",
+						"math": "$$\\mathrm{Attn}(Q,K,V) = \\mathrm{softmax}\\!\\left(\\frac{Q K^{\\top}}{\\sqrt{d_h}} + M\\right) V$$\n\n- $Q$, $K$, $V$: queries, keys and values of one head.\n- $d_h$: head dimension.\n- $M$: causal mask, $-\\infty$ for later positions.\n\nHeads run in parallel; their outputs are concatenated and multiplied by $W_O$ (`attn_output`). Some models use another scale than $1/\\sqrt{d_h}$.",
+						"overview": "Lets each token gather information from earlier tokens. Each token asks a question (query), compares it with every earlier token's label (key) and takes a weighted mix of their contents (values)."
+					},
+					"embedding": {
+						"detail": "`token_embd` holds one row per vocabulary entry. The model looks up the row of each input token; nothing is multiplied. Some models reuse this table as the output head (tied embeddings).",
+						"math": "$$h^{(0)} = E[t]$$\n\n- $t$: token id.\n- $E$: embedding table `token_embd`, one row of width $d$ per token.\n- $h^{(0)}$: residual stream entering block 0.\n\nSome architectures scale $h^{(0)}$, for example by $\\sqrt{d}$; qwen35 does not.",
+						"overview": "Turns each token id into a vector of numbers, the starting point of the residual stream."
+					},
+					"ffn": {
+						"detail": "Most current models use a gated form: `ffn_gate` and `ffn_up` widen the vector, the activated gate multiplies the up branch, and `ffn_down` maps back to the residual width. Older models use a plain two-layer MLP. Mixture-of-experts models route each token to a few of many such networks (router `ffn_gate_inp`).",
+						"math": "Gated form (SwiGLU when $\\sigma$ is SiLU):\n\n$$\\mathrm{FFN}(x) = W_{\\text{down}}\\big(\\sigma(W_{\\text{gate}}\\,x) \\odot W_{\\text{up}}\\,x\\big)$$\n\n- $x$: normed input.\n- $\\sigma$: activation, SiLU in qwen35, GELU in some others.\n- $\\odot$: element-wise product.\n\nPlain form: $W_{\\text{down}}\\,\\sigma(W_{\\text{up}}\\,x)$, often with biases.",
+						"overview": "Processes each token on its own, after attention has mixed in context. It usually holds the largest matrices of a block."
+					},
+					"mtp": {
+						"detail": "Tensors under `nextn.*` (such as `eh_proj`, `enorm`, `hnorm`) plus a regular attention and FFN set. The main forward pass skips them. A runtime that supports them runs them as a draft model; others ignore them.",
+						"math": "A draft step joins the trunk state with a token embedding and predicts the following token:\n\n$$\\ell^{\\text{draft}} = \\mathrm{Head}\\big(\\mathrm{Block}(W_{eh}\\,[\\,\\mathrm{Norm}(e)\\,;\\,\\mathrm{Norm}(h)\\,])\\big)$$\n\n- $h$: trunk hidden state.\n- $e$: token embedding.\n- $W_{eh}$: `nextn.eh_proj`.\n\nA draft is kept only where the main model agrees.",
+						"overview": "Extra layers that predict a token further ahead. They serve as a fast draft for speculative decoding; the main model still decides."
+					},
+					"norm": {
+						"detail": "Most current models use RMSNorm; older ones use LayerNorm, which also subtracts the mean and adds a bias. The stored weight (`*_norm.weight`) has one value per dimension.",
+						"math": "$$\\mathrm{RMSNorm}(x) = \\frac{x}{\\sqrt{\\frac{1}{n}\\sum_i x_i^2 + \\epsilon}} \\odot w$$\n\n$$\\mathrm{LayerNorm}(x) = \\frac{x - \\mu}{\\sqrt{\\sigma^2 + \\epsilon}} \\odot w + b$$\n\n- $n$: vector length; $\\epsilon$: small constant from the file.\n- $\\mu$, $\\sigma^2$: mean and variance of $x$.\n- $w$, $b$: stored weight and bias.\n\nqwen35 files store $w = 1 + w_{\\text{HF}}$ for most norms; the Hugging Face model adds the 1 at run time.",
+						"overview": "Rescales a vector so its overall size stays in a stable range, then applies learned per-dimension weights. It keeps the numbers from drifting from layer to layer."
+					},
+					"other": {
+						"detail": "The component is derived from the tensor name. Names the view does not know land here, for example extra projections or architecture-specific scales.",
+						"math": "No formula: the role does not follow from the name alone.",
+						"overview": "Tensors this view could not assign to a known component. They are read from the file; only their role is unknown here."
+					},
+					"output": {
+						"detail": "`output_norm` normalizes the last block's output, then `output` (the LM head) turns it into one logit per vocabulary entry. A file without `output` reuses `token_embd` (tied weights).",
+						"math": "$$\\ell = W_{\\text{out}}\\,\\mathrm{Norm}(h^{(L)}), \\qquad p = \\mathrm{softmax}(\\ell / T)$$\n\n- $h^{(L)}$: output of the last block.\n- $W_{\\text{out}}$: `output`, or `token_embd` when tied.\n- $\\ell$: logits, one per vocabulary entry.\n- $T$: sampling temperature; $p$: next-token probabilities.",
+						"overview": "Turns the final hidden vector into a score for every token in the vocabulary. The highest scores mark the most likely next tokens."
+					},
+					"ssm": {
+						"detail": "This group holds state-space and linear-attention tensors: `ssm_*`, and in qwen35 also `attn_qkv` and `attn_gate` of linear blocks. A state is carried from token to token instead of a growing KV cache.",
+						"math": "Many variants (Mamba, gated linear attention) share this form:\n\n$$S_t = A_t \\odot S_{t-1} + B_t(x_t), \\qquad y_t = C_t(S_t)$$\n\n- $S_t$: state after token $t$, fixed size.\n- $A_t$: decay between 0 and 1, often input-dependent.\n- $B_t$: what token $t$ writes; $C_t$: how the output reads the state.\n\nqwen35 uses the gated delta rule, which also subtracts what the state already recalls; see the operation `delta`.",
+						"overview": "A mixer that keeps a fixed-size running memory instead of looking back at every token. Each new token updates the memory and reads from it."
+					}
+				},
+				"op": {
+					"alpha": {
+						"detail": "`ssm_alpha` maps the normed input to one number per value head.",
+						"math": "$$a_t = W_\\alpha\\,x_t \\in \\mathbb{R}^{n_v}$$\n\n- $W_\\alpha$: `ssm_alpha`.\n- $x_t$: output of `attn_norm`.",
+						"overview": "Computes, per value head, the raw input for how fast the memory fades at this token."
+					},
+					"attn": {
+						"detail": "Keys and values of all earlier tokens and the current one come from the KV cache, so memory grows with the context. Each key/value head serves a group of query heads. This step has no stored weight, and Model Lab does not record its weights.",
+						"math": "$$a^{(j)}_t = \\sum_{s \\le t} \\mathrm{softmax}_s\\!\\left(\\frac{\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s}{\\sqrt{d_h}}\\right) v^{(m)}_s$$\n\n- $t$: current position; $s$: cached positions.\n- $m$: key/value head shared by query head $j$.\n- $\\tilde q$, $\\tilde k$: queries and keys after norm and RoPE.\n- $1/\\sqrt{d_h}$: default scale; a file can set another.",
+						"overview": "Each query scores every cached key, the scores become weights that sum to 1, and the output is the weighted mix of the values."
+					},
+					"attn_norm": {
+						"detail": "RMSNorm with the stored weight `attn_norm`, one value per dimension. Only the mixer sees the normed vector; the residual add uses the unnormed input. In the MTP block the input is the `nextn.eh_proj` output.",
+						"math": "$$x = \\frac{h}{\\mathrm{rms}(h)} \\odot w$$\n\n- $h$: block input.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ from the file.\n- $w$: `attn_norm`, stored as $1 + w_{\\text{HF}}$.",
+						"overview": "Normalizes the block input before the mixer (attention or linear attention)."
+					},
+					"attn_residual": {
+						"detail": "The unnormed block input plus the mixer's output projection. The sum feeds `post_attention_norm` and is kept for the second residual add.",
+						"math": "$$h' = h + y$$\n\n- $h$: block input.\n- $y$: mixer output (`attn_output` or `ssm_out`).",
+						"overview": "Adds the mixer's result to the block input. The block adds to the stream; it never replaces it."
+					},
+					"beta": {
+						"detail": "`ssm_beta` maps the normed input to one number per value head; a sigmoid squeezes it into the range 0 to 1.",
+						"math": "$$\\beta_t = \\mathrm{sigmoid}(W_\\beta\\,x_t) \\in (0,1)^{n_v}$$\n\n- $W_\\beta$: `ssm_beta`.\n- $n_v$: number of value heads.",
+						"overview": "Computes, per value head, how strongly this token writes into the memory."
+					},
+					"concat": {
+						"detail": "The embedding comes first, then the hidden state. No stored weight.",
+						"math": "$$c = [\\,\\hat e\\,;\\,\\hat h\\,] \\in \\mathbb{R}^{2d}$$",
+						"overview": "Joins the normed embedding and the normed hidden state into one vector of twice the width."
+					},
+					"control_vector": {
+						"detail": "llama.cpp can load a control vector: one direction per layer, already scaled by the chosen strength, added to every token's block output for the layers in its range; block 0 never gets one. It is not part of the model file. Model Lab traces run on the Hugging Face checkpoint, so they never include it.",
+						"math": "$$h_{\\text{out}} = h'' + c_i$$\n\n- $h''$: output of the FFN residual add.\n- $c_i$: control vector for block $i$; $0$ when none is loaded and always for block 0.",
+						"overview": "Adds a fixed steering vector for this layer when one is loaded. Without one, nothing changes."
+					},
+					"conv": {
+						"detail": "`ssm_conv1d` is a depthwise causal convolution over the query, key and value channels: each channel has its own short kernel and sees only the current and earlier tokens. The recent inputs are kept as conv state between tokens. SiLU follows.",
+						"math": "$$c_t[i] = \\mathrm{SiLU}\\Big(\\sum_{j=0}^{K-1} w[i,j]\\; m_{t-K+1+j}[i]\\Big)$$\n\n- $m_t$: output of `attn_qkv` at token $t$.\n- $i$: channel; $K$: kernel size.\n- $w$: `ssm_conv1d`, no bias.\n- $\\mathrm{SiLU}(u) = u \\cdot \\mathrm{sigmoid}(u)$.",
+						"overview": "Mixes each channel with its values from the last few tokens, so the mixer sees a little local context."
+					},
+					"decay": {
+						"detail": "Adds the learned bias `ssm_dt`, applies softplus and multiplies by `ssm_a`, which the converter stores as minus the exponential of `A_log`. The result is negative, so its exponential lies between 0 and 1. A larger α means faster forgetting.",
+						"math": "$$g_t = -\\exp(A_{\\log}) \\cdot \\mathrm{softplus}(a_t + b_{dt}), \\qquad \\gamma_t = e^{g_t}$$\n\n- $a_t$: output of `ssm_alpha`.\n- $b_{dt}$: `ssm_dt`.\n- $-\\exp(A_{\\log})$: `ssm_a` as stored.\n- $\\mathrm{softplus}(u) = \\ln(1 + e^u)$.\n- $\\gamma_t \\in (0,1)$: factor the state is multiplied by.",
+						"overview": "Turns α into a forget factor between 0 and 1: how much of the old memory each value head keeps at this token."
+					},
+					"delta": {
+						"detail": "Each value head keeps a state matrix (key-head size by value-head size) that is carried from token to token and does not grow with the context. The state is not stored in the file; it exists only while text is processed.",
+						"math": "$$S' = \\gamma_t\\,S_{t-1}, \\qquad S_t = S' + \\beta_t\\,\\hat k_t\\big(v_t - S'^{\\top}\\hat k_t\\big)^{\\top}$$\n\n$$o_t = S_t^{\\top}\\,\\hat q_t / \\sqrt{d_k}$$\n\n- $S_t \\in \\mathbb{R}^{d_k \\times d_v}$: state of one value head.\n- $\\gamma_t$, $\\beta_t$: decay factor and write strength of that head.\n- $\\hat q_t$, $\\hat k_t$: L2-normed query and key; $v_t$: value.\n- $o_t$: output of the head.\n\nThis is the per-token form; a prompt is processed in chunks with the same result up to rounding.",
+						"overview": "The memory step. The state first fades by the decay factor, then is corrected toward this token: it replaces what it would recall for this key with the token's value, by the write strength β."
+					},
+					"eh_proj": {
+						"detail": "`nextn.eh_proj` maps twice the model width back to `n_embd`. Its output is the MTP block's residual stream: it feeds `attn_norm` and the first residual add.",
+						"math": "$$u = W_{eh}\\,c$$\n\n- $c$: output of the concatenation.\n- $W_{eh}$: `nextn.eh_proj`, from $2d$ to $d$.",
+						"overview": "Mixes the joined vector back down to the model width."
+					},
+					"enorm": {
+						"detail": "RMSNorm with its own weight `nextn.enorm`.",
+						"math": "$$\\hat e = \\frac{e}{\\mathrm{rms}(e)} \\odot w_e$$\n\n- $e$: token embedding.\n- $w_e$: `nextn.enorm`.",
+						"overview": "Normalizes the token embedding before it is joined with the trunk hidden state."
+					},
+					"ffn_act": {
+						"detail": "SiLU on the gate branch, multiplied element-wise by the up branch (SwiGLU). No stored weight.",
+						"math": "$$m = \\mathrm{SiLU}(g) \\odot u, \\qquad \\mathrm{SiLU}(z) = z \\cdot \\mathrm{sigmoid}(z)$$\n\n- $g$, $u$: outputs of `ffn_gate` and `ffn_up`.",
+						"overview": "Combines the two branches: the activated gate decides how much of each up-branch value passes."
+					},
+					"ffn_down": {
+						"detail": "`ffn_down` maps `n_ff` back to `n_embd`.",
+						"math": "$$f = W_{\\text{down}}\\,m$$\n\n- $m$: output of the SiLU product.\n- $W_{\\text{down}}$: `ffn_down`, from $d_{ff}$ to $d$.",
+						"overview": "Maps the wide vector back to the residual width."
+					},
+					"ffn_gate": {
+						"detail": "`ffn_gate` maps width `n_embd` to the FFN width `n_ff`.",
+						"math": "$$g = W_{\\text{gate}}\\,x'$$\n\n- $x'$: output of `post_attention_norm`.\n- $W_{\\text{gate}}$: `ffn_gate`, from $d$ to $d_{ff}$.",
+						"overview": "Widens the normed vector into the gate branch of the feed-forward network."
+					},
+					"ffn_residual": {
+						"detail": "The unnormed sum from the first residual add plus the `ffn_down` output. In a trunk block this is the block output unless a control vector is loaded; in the MTP block it goes to the head norm.",
+						"math": "$$h'' = h' + f$$\n\n- $h'$: output of the first residual add.\n- $f$: output of `ffn_down`.",
+						"overview": "Adds the feed-forward result to the stream."
+					},
+					"ffn_up": {
+						"detail": "`ffn_up` maps `n_embd` to `n_ff`, in parallel with `ffn_gate` and from the same input.",
+						"math": "$$u = W_{\\text{up}}\\,x'$$\n\n- $W_{\\text{up}}$: `ffn_up`, from $d$ to $d_{ff}$.",
+						"overview": "Widens the normed vector into the value branch of the feed-forward network."
+					},
+					"gate": {
+						"detail": "A sigmoid on the second half of each head's `attn_q` output. One factor per output dimension lets the model damp or pass each part of the attention result for this token.",
+						"math": "$$\\sigma^{(j)} = \\mathrm{sigmoid}(g^{(j)}) \\in (0,1)^{d_h}$$\n\n- $g^{(j)}$: gate half of head $j$ from `attn_q`.",
+						"overview": "Turns the gate half of the query projection into factors between 0 and 1."
+					},
+					"gated": {
+						"detail": "Each head's attention output is scaled by its sigmoid gate before the output projection.",
+						"math": "$$\\bar a^{(j)} = a^{(j)} \\odot \\sigma^{(j)}$$\n\n- $a^{(j)}$: attention output of head $j$.\n- $\\sigma^{(j)}$: its gate.",
+						"overview": "Multiplies the attention output by the gate, element by element."
+					},
+					"gated_norm": {
+						"detail": "RMSNorm per value head with `ssm_norm` (one weight per head dimension, shared by all heads, stored without the +1), then an element-wise product with SiLU of the `attn_gate` output.",
+						"math": "$$y_t = \\frac{o_t}{\\mathrm{rms}(o_t)} \\odot w \\odot \\mathrm{SiLU}(z_t)$$\n\n- $o_t$: delta-rule output of one head, length $d_v$.\n- $w$: `ssm_norm`.\n- $z_t$: that head's slice of the `attn_gate` output.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ from the file.",
+						"overview": "Normalizes each head's memory output and scales it by the output gate z."
+					},
+					"head": {
+						"detail": "Uses `nextn.shared_head_head` when present, else the trunk's LM head `output`, which may itself be tied to `token_embd`.",
+						"math": "$$\\ell^{\\text{draft}} = W_{\\text{head}}\\,z$$\n\n- $z$: output of the head norm.\n- $W_{\\text{head}}$: `nextn.shared_head_head`, else `output`.",
+						"overview": "Turns the normed MTP state into a score per vocabulary entry."
+					},
+					"head_norm": {
+						"detail": "RMSNorm with `nextn.shared_head_norm` when the file has it, else with the trunk's `output_norm`.",
+						"math": "$$z = \\frac{h''}{\\mathrm{rms}(h'')} \\odot w$$\n\n- $h''$: output of the MTP block's FFN residual add.\n- $w$: `nextn.shared_head_norm`, else `output_norm`.",
+						"overview": "Normalizes the MTP block's output before its head."
+					},
+					"hidden": {
+						"detail": "It is the same normed vector the LM head reads.",
+						"math": "$$h = \\frac{h^{(L)}}{\\mathrm{rms}(h^{(L)})} \\odot w_{\\text{out}}$$\n\n- $h^{(L)}$: output of the last trunk block.\n- $w_{\\text{out}}$: `output_norm`.",
+						"overview": "The trunk's final hidden state, after the last block and `output_norm`, handed to the MTP block."
+					},
+					"hnorm": {
+						"detail": "RMSNorm with its own weight `nextn.hnorm`.",
+						"math": "$$\\hat h = \\frac{h}{\\mathrm{rms}(h)} \\odot w_h$$\n\n- $h$: trunk hidden state.\n- $w_h$: `nextn.hnorm`.",
+						"overview": "Normalizes the trunk hidden state before it is joined with the token embedding."
+					},
+					"input": {
+						"detail": "For block 0 it is the token embedding; for any later block it is the previous block's output. It feeds `attn_norm` and, unchanged, the first residual add.",
+						"math": "$$h^{(i)} = h_{\\text{out}}^{(i-1)}, \\qquad h^{(0)} = E[t]$$\n\n- $h^{(i)}$: input of block $i$ for one token.\n- $E[t]$: embedding row of token $t$.",
+						"overview": "The vector this block receives: the running sum of everything the embedding and earlier blocks have added (the residual stream)."
+					},
+					"k": {
+						"detail": "`attn_k` produces one key per key/value head. There can be fewer key/value heads than query heads (grouped-query attention); each serves a group of query heads. Keys go into the KV cache after norm and RoPE.",
+						"math": "$$k = W_K\\,x$$\n\n- $W_K$: `attn_k`, output length $n_{kv} d_h$.\n- $n_{kv}$: number of key/value heads.",
+						"overview": "Projects the normed input into keys, the labels that queries are compared with."
+					},
+					"k_norm": {
+						"detail": "RMSNorm over the head dimension with `attn_k_norm`: one weight per head dimension, shared by all key heads, stored as 1 plus the Hugging Face value.",
+						"math": "$$\\tilde k^{(m)} = \\frac{k^{(m)}}{\\mathrm{rms}(k^{(m)})} \\odot w_k$$\n\n- $k^{(m)}$: key head $m$, length $d_h$.\n- $w_k$: `attn_k_norm`.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ from the file.",
+						"overview": "Normalizes each key head before the position encoding."
+					},
+					"l2_norm": {
+						"detail": "Applied per head to queries and keys, not to values. No stored weight. Unit-length keys keep the delta-rule update well scaled.",
+						"math": "$$\\hat q = \\frac{q}{\\lVert q \\rVert_2}, \\qquad \\hat k = \\frac{k}{\\lVert k \\rVert_2}$$\n\n- $q$, $k$: one query or key head.\n- $\\lVert u \\rVert_2 = \\sqrt{\\sum_i u_i^2}$; a small $\\epsilon$ guards against division by zero.",
+						"overview": "Scales each query and key head to length 1, so only its direction counts."
+					},
+					"logits": {
+						"detail": "These logits only propose. In speculative decoding the main model evaluates the draft in its next pass and keeps it only where it agrees, so a rejected draft costs time but does not change what the main model would produce: exactly so for greedy decoding, in distribution when sampling.",
+						"math": "$$p^{\\text{draft}} = \\mathrm{softmax}(\\ell^{\\text{draft}})$$\n\n- $\\ell^{\\text{draft}}$: draft logits, one per vocabulary entry.\n- $p^{\\text{draft}}$: draft probabilities; the runtime's speculative settings decide how a draft is picked.",
+						"overview": "Scores for the draft token. A draft is picked from them, and the main model then checks it."
+					},
+					"mixer_out": {
+						"detail": "`attn_output` takes the concatenated, gated heads and mixes them into one vector of width `n_embd`.",
+						"math": "$$y = W_O\\,[\\,\\bar a^{(1)};\\dots;\\bar a^{(n_h)}\\,]$$\n\n- $\\bar a^{(j)}$: gated output of query head $j$.\n- $W_O$: `attn_output`, from $n_h d_h$ to $d$.",
+						"overview": "Maps the gated attention output of all heads back to the residual width."
+					},
+					"output": {
+						"detail": "Same width as the input. The next block reads it as its input; after the last block, `output_norm` and the LM head turn it into logits. Model Lab traces measure this vector, without a control vector.",
+						"math": "$$h^{(i+1)} = h_{\\text{out}}^{(i)}$$\n\nAfter the last block: $\\ell = W_{\\text{out}}\\,\\mathrm{Norm}(h^{(L)})$.\n\n- $\\ell$: logits; $W_{\\text{out}}$: `output`, or `token_embd` when tied.",
+						"overview": "What the block passes on: the updated residual stream."
+					},
+					"post_norm": {
+						"detail": "RMSNorm with `post_attention_norm`, stored as 1 plus the Hugging Face value. Despite the name it is a pre-norm for the FFN: the residual add uses the unnormed sum.",
+						"math": "$$x' = \\frac{h'}{\\mathrm{rms}(h')} \\odot w$$\n\n- $h'$: output of the first residual add.\n- $w$: `post_attention_norm`.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ from the file.",
+						"overview": "Normalizes the stream again before the feed-forward network."
+					},
+					"q": {
+						"detail": "`attn_q` outputs twice the usual query size: per head, the first half is the query and the second half the gate input.",
+						"math": "$$[\\,q^{(j)}\\,;\\,g^{(j)}\\,] = (W_Q\\,x)^{(j)}$$\n\n- $W_Q$: `attn_q`, output length $2 n_h d_h$.\n- $j$: query head; $n_h$ heads of size $d_h$.\n- $q^{(j)}$: query; $g^{(j)}$: gate input.",
+						"overview": "Projects the normed input into queries, plus a second half per head that becomes the output gate."
+					},
+					"q_norm": {
+						"detail": "RMSNorm over the head dimension with `attn_q_norm`: one weight per head dimension, shared by all heads, stored as 1 plus the Hugging Face value.",
+						"math": "$$\\tilde q^{(j)} = \\frac{q^{(j)}}{\\mathrm{rms}(q^{(j)})} \\odot w_q$$\n\n- $q^{(j)}$: query head $j$, length $d_h$.\n- $w_q$: `attn_q_norm`.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ from the file.",
+						"overview": "Normalizes each query head before the position encoding."
+					},
+					"qkv": {
+						"detail": "`attn_qkv` produces queries and keys for the key heads and values for the value heads, in one vector. The result passes the causal convolution before it is split.",
+						"math": "$$m_t = W_{qkv}\\,x_t$$\n\n- $x_t$: output of `attn_norm`.\n- $W_{qkv}$: `attn_qkv`, output length $2 n_k d_k + n_v d_v$.\n- $n_k$, $d_k$: key head count and size; $n_v$, $d_v$: value head count and size.",
+						"overview": "Projects the normed input into queries, keys and values for the linear-attention mixer, with one matrix."
+					},
+					"rope": {
+						"detail": "Applied to the normed queries and keys, not to values; no stored weight. qwen35 uses multi-axis RoPE (MRoPE): each rotated pair is assigned to a time, height or width position. For text all three positions are equal, so it acts like ordinary RoPE. The parameters come from the file's metadata.",
+						"math": "$$\\begin{pmatrix} u'_i \\\\ u'_{i+r} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_i \\\\ u_{i+r} \\end{pmatrix}, \\qquad \\theta_i = b^{-i/r}$$\n\n- $u$: one query or key head; $i < r$.\n- $2r$: number of rotated dimensions; the rest pass unchanged.\n- $b$: base frequency; $p$: position.\n\nThe score $\\langle R_p q, R_s k \\rangle$ then depends on $p$ and $s$ only through $p - s$.",
+						"overview": "Encodes each token's position by rotating pairs of query and key values by an angle that grows with the position. The attention score then depends on how far apart two tokens are."
+					},
+					"split": {
+						"detail": "The first part gives the queries, the next the keys, the rest the values, each reshaped into heads. When there are fewer key heads than value heads, each query and key head serves several value heads.",
+						"math": "$$c_t = [\\,q_t\\,;\\,k_t\\,;\\,v_t\\,]$$\n\n- $q_t, k_t \\in \\mathbb{R}^{n_k d_k}$: queries and keys, in heads of size $d_k$.\n- $v_t \\in \\mathbb{R}^{n_v d_v}$: values, in heads of size $d_v$.",
+						"overview": "Cuts the convolved vector into queries, keys and values."
+					},
+					"token": {
+						"detail": "Looked up in `nextn.embed_tokens` when the file has it, else in the shared `token_embd`.",
+						"math": "$$e = E[t]$$\n\n- $t$: token id.\n- $E$: `nextn.embed_tokens`, else `token_embd`.",
+						"overview": "The embedding of a token, the second input of the MTP block: the token the trunk has just produced."
+					},
+					"v": {
+						"detail": "`attn_v` produces one value per key/value head. Values get no norm and no RoPE; they go into the KV cache as they are.",
+						"math": "$$v = W_V\\,x$$\n\n- $W_V$: `attn_v`, output length $n_{kv} d_h$.",
+						"overview": "Projects the normed input into values, the content a token passes on when it is attended to."
+					},
+					"z": {
+						"detail": "`attn_gate` gives one gate value per value-head dimension. It acts at the end, in the gated norm.",
+						"math": "$$z_t = W_z\\,x_t$$\n\n- $x_t$: output of `attn_norm`.\n- $W_z$: `attn_gate`, output length $n_v d_v$.",
+						"overview": "Projects the normed input into an output gate that later scales the mixer's result."
+					}
+				},
+				"opByKind": {
+					"linearAttention": {
+						"mixer_out": {
+							"detail": "`ssm_out` takes the concatenated heads from the gated norm and produces the linear-attention contribution.",
+							"math": "$$y = W_{\\text{out}}\\,[\\,y^{(1)};\\dots;y^{(n_v)}\\,]$$\n\n- $y^{(j)}$: gated-norm output of value head $j$.\n- $W_{\\text{out}}$: `ssm_out`, from $n_v d_v$ to $d$.",
+							"overview": "Maps the gated memory output of all value heads back to the residual width."
+						}
+					},
+					"mtp": {
+						"attn_residual": {
+							"detail": "In the MTP block the residual starts at the `nextn.eh_proj` output, not at a trunk block's output. The sum feeds `post_attention_norm` and is kept for the second residual add.",
+							"math": "$$h' = u + y$$\n\n- $u$: output of `nextn.eh_proj`.\n- $y$: output of `attn_output`.",
+							"overview": "Adds the attention result to the MTP block's own stream, the `nextn.eh_proj` output."
+						}
+					}
+				},
+				"trace": {
+					"maxP99": {
+						"detail": "For each step the tracer computes the 1st, 50th and 99th percentile over the dimensions of the block output at the newest position, on signed values. The summary keeps the largest 99th percentile over all steps. One step is enough to set it, and it says nothing about large negative values.",
+						"math": "$$P = \\max_s Q_{0.99}\\big(h_{s,1}, \\dots, h_{s,d}\\big)$$\n\n- $s$: recorded steps with a finite 99th percentile.\n- $h_{s,i}$: dimension $i$ of the block output at the newest position in step $s$.\n- $Q_{0.99}$: 99th percentile over the $d$ dimensions, linearly interpolated (`torch.quantile`).",
+						"overview": "The highest 99th percentile of the output values seen at this block. It hints at large positive values among the dimensions."
+					},
+					"meanNorm": {
+						"detail": "The trace records one value per forward step: the prompt pass (its last token), then each generated token that is fed back in. Each value is the L2 norm of the block output at the newest position only. The summary averages them. It is measured on the Hugging Face checkpoint and joined to this file by block index. A large norm does not mean the block is important or caused the chosen token.",
+						"math": "$$\\bar n = \\frac{1}{N}\\sum_{s=1}^{N} \\lVert h_s \\rVert_2$$\n\n- $h_s$: block output at the newest position in step $s$.\n- $N$: recorded steps with a finite norm; a byte cap can end a long trace early.\n- $\\lVert h \\rVert_2 = \\sqrt{\\sum_i h_i^2}$.",
+						"overview": "The average length of this block's output vector over the traced steps. It shows how large the residual stream is at this depth, nothing more."
+					},
+					"topDimensions": {
+						"detail": "Per step the tracer records the 8 dimensions with the largest absolute value at the newest position. The summary counts how often each index appears over all steps and lists the 5 most frequent, lower index first on ties. Such recurring large dimensions are common in language models. They do not explain why a token was chosen, and a link to the output is correlation, not cause.",
+						"math": "$$T_s = \\operatorname{top}_8\\big(|h_{s,i}|\\big), \\qquad c_i = \\sum_s [\\,i \\in T_s\\,]$$\n\nThe summary lists the 5 indices with the highest $c_i$.\n\n- $T_s$: the 8 indices with the largest $|h_{s,i}|$ in step $s$.\n- $c_i$: number of steps with index $i$ in their top 8.\n- $[\\cdot]$: 1 when true, else 0.",
+						"overview": "The dimensions that most often had one of the largest absolute values at this block. A dimension that keeps appearing carries unusually large values; that is not the same as being important."
+					}
+				},
+				"ui": {
+					"basisBackground": "General background",
+					"basisMeasurement": "What this measurement means",
+					"heading": "Explanation",
+					"level": {
+						"detail": "Detail",
+						"math": "Math",
+						"overview": "Overview"
+					},
+					"levelLabel": "Explanation level",
+					"trace": {
+						"maxP99": "Highest p99",
+						"meanNorm": "Mean norm",
+						"topDimensions": "Most frequent top dimensions"
+					}
+				}
 			},
 			"inspectModel": "Installed model",
 			"modelsFailed": "The installed models could not be loaded.",

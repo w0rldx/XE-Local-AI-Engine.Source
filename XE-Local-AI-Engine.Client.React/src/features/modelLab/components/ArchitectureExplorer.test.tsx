@@ -8,9 +8,10 @@
 import { QueryClient } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { Node } from "@xyflow/react";
+import i18next from "i18next";
 import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ArchitectureExplorer } from "@/features/modelLab/components/ArchitectureExplorer";
@@ -72,6 +73,32 @@ vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 }));
 
 setupMswServer();
+
+// Fixture explanations, not Model Lab's real text: the shipped text is checked by ModelLabExplanation.test.ts, and these
+// tests pin the panel's behavior. Present for the whole file, so every test sees the same store. Nothing for
+// `block.linearAttention` or `op.ffn`: those are the missing-text cases.
+const explain = {
+	block: {
+		fullAttention: {
+			overview: "Fixture: a full-attention block, briefly.",
+			detail: "Fixture: a full-attention block, in detail.",
+			math: "Fixture: scores are $QK^T$.",
+		},
+	},
+	component: { attention: { overview: "Fixture: what attention is in general." } },
+	op: {
+		input: { overview: "Fixture: the residual stream enters the block." },
+		attn: { overview: "Fixture: attention in any template." },
+	},
+	opByKind: { fullAttention: { attn: { overview: "Fixture: attention in a full-attention block." } } },
+	trace: { meanNorm: { overview: "Fixture: what a mean norm says and does not say." } },
+};
+
+beforeAll(() => {
+	i18next.addResourceBundle("en", "translation", { pages: { modelLab: { explain } } }, true, true);
+	// jsdom does not implement scrollIntoView; a graph click scrolls the opened operation into view.
+	Element.prototype.scrollIntoView = vi.fn();
+});
 
 const gguf = "org/Tiny-GGUF:Q4_K_M";
 const traceId = "11111111-1111-4111-8111-111111111111";
@@ -869,5 +896,141 @@ describe("ArchitectureExplorer PyTorch source", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: /^Embedding embedding/ }));
 		expect((await screen.findByTestId("model-lab-pytorch-code")).dataset["highlight"]).toBe("10-90");
+	});
+});
+
+describe("ArchitectureExplorer explanations", () => {
+	it("switches the block's explanation between overview, detail and math, and keeps the level across blocks", async () => {
+		stubRoutes(detailed);
+		await openModel();
+		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention" }));
+
+		const detail = within(screen.getByTestId("model-lab-architecture-detail"));
+		expect(detail.getByText("Fixture: a full-attention block, briefly.")).toBeTruthy();
+
+		fireEvent.click(screen.getByRole("radio", { name: "Detail" }));
+		expect(detail.getByText("Fixture: a full-attention block, in detail.")).toBeTruthy();
+		expect(detail.queryByText("Fixture: a full-attention block, briefly.")).toBeNull();
+
+		fireEvent.click(screen.getByRole("radio", { name: "Math" }));
+		// Rendered through ChatMarkdown, whose math chunk loads lazily.
+		await waitFor(() => expect(screen.getByTestId("model-lab-architecture-detail").querySelector(".katex")).not.toBeNull());
+
+		fireEvent.click(screen.getByRole("button", { name: "Block 0: Linear attention" }));
+		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention" }));
+		expect((screen.getByRole("radio", { name: "Math" }) as HTMLInputElement).checked).toBe(true);
+	});
+
+	it("labels every entry with its basis: inferred from llama.cpp, general background, or what a measurement means", async () => {
+		stubRoutes(detailed, [
+			{
+				id: traceId,
+				kind: "Trace",
+				status: "Succeeded",
+				installedModelName: gguf,
+				repoId: "Qwen/Qwen3.5-0.8B",
+				revision: "rev",
+				prompt: "Why?",
+				errorMessage: null,
+				traceByteCount: 10,
+				result: null,
+				createdAtUtc: "2026-11-06T00:00:00Z",
+				updatedAtUtc: "2026-11-06T00:00:00Z",
+			},
+		]);
+		server.use(
+			http.get(localApiPath(`model-lab/experiments/${traceId}/trace`), () =>
+				HttpResponse.json({
+					records: [{ step: 0, layer: 1, kind: "F", norm: 2, percentiles: [0, 1, 5], topIndices: [7], topValues: [1] }],
+					truncated: false,
+					droppedRecords: 0,
+					byteCap: 1000,
+				}),
+			),
+		);
+		await openModel();
+		await chooseOption(/Trace to lay over the blocks/, `Why? · Qwen/Qwen3.5-0.8B · ${formatTimestamp("2026-11-06T00:00:00Z")}`);
+		fireEvent.click(await screen.findByRole("button", { name: "Block 1: Full attention, traced" }));
+
+		const basisOf = (text: string): string | null | undefined =>
+			screen
+				.getByText(text)
+				.closest("[data-testid='model-lab-explain-entry']")
+				?.querySelector("[data-testid='model-lab-explain-basis']")?.textContent;
+		// The block's text describes llama.cpp's graph, so it carries the same inferred label as the graph.
+		expect(basisOf("Fixture: a full-attention block, briefly.")).toBe(
+			"Inferred from llama.cpp (llama.cpp src/models/qwen35.cpp @ b12014)",
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /^Attention/ }));
+		expect(basisOf("Fixture: what attention is in general.")).toBe("General background");
+
+		fireEvent.click(within(screen.getByTestId("model-lab-explain-trace")).getByRole("button", { name: "Mean norm" }));
+		expect(basisOf("Fixture: what a mean norm says and does not say.")).toBe("What this measurement means");
+	});
+
+	it("opens a dashed node's explanation from the graph, and a per-kind text before the shared one", async () => {
+		stubRoutes(detailed);
+		await openModel();
+		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention" }));
+		const operations = within(screen.getByTestId("model-lab-explain-operations"));
+		expect(operations.queryByText("Fixture: the residual stream enters the block.")).toBeNull();
+
+		// The model picker's dropdown scrolls its options too; only the graph click is under test.
+		const scroll = vi.mocked(Element.prototype.scrollIntoView);
+		scroll.mockClear();
+
+		// `input` holds no tensors (a dashed node), yet clicking it opens its entry.
+		fireEvent.click(screen.getByTestId("react-flow-node-input"));
+		expect(operations.getByRole("button", { name: "Residual in" }).getAttribute("aria-expanded")).toBe("true");
+		expect(operations.getByText("Fixture: the residual stream enters the block.")).toBeTruthy();
+		expect(operations.getByTestId("model-lab-explain-basis").textContent).toBe(
+			"Inferred from llama.cpp (llama.cpp src/models/qwen35.cpp @ b12014)",
+		);
+
+		// The list sits below the graph: the opened item is brought into view, not left below the fold.
+		expect(scroll.mock.contexts).toEqual([operations.getByRole("button", { name: "Residual in" }).closest("[data-item-id]")]);
+
+		fireEvent.click(screen.getByTestId("react-flow-node-attn"));
+		expect(operations.getByText("Fixture: attention in a full-attention block.")).toBeTruthy();
+		expect(operations.queryByText("Fixture: attention in any template.")).toBeNull();
+		expect(operations.queryByText("Fixture: the residual stream enters the block.")).toBeNull();
+	});
+
+	it("reaches and opens every operation through buttons the keyboard moves between", async () => {
+		stubRoutes(detailed);
+		await openModel();
+		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention" }));
+		const operations = within(screen.getByTestId("model-lab-explain-operations"));
+		const controls = operations.getAllByRole("button");
+		expect(controls.map((control) => control.textContent)).toEqual(["Residual in", "Gated attention", "SwiGLU FFN"]);
+
+		// Native buttons in the tab order: Enter and Space activate them without any handler of ours.
+		const first = controls[0] as HTMLButtonElement;
+		expect(first.tagName).toBe("BUTTON");
+		expect(first.tabIndex).toBe(0);
+		vi.mocked(Element.prototype.scrollIntoView).mockClear();
+		first.focus();
+		fireEvent.keyDown(first, { key: "ArrowDown" });
+		expect(document.activeElement).toBe(controls[1]);
+		fireEvent.click(document.activeElement as HTMLElement);
+		expect(controls[1]?.getAttribute("aria-expanded")).toBe("true");
+		// Opened from the list itself, the item is already where the operator is: nothing scrolls.
+		expect(vi.mocked(Element.prototype.scrollIntoView)).not.toHaveBeenCalled();
+		expect(operations.getByText("Fixture: attention in a full-attention block.")).toBeTruthy();
+	});
+
+	it("shows nothing for an entry no language has text for, never the raw key", async () => {
+		stubRoutes(detailed);
+		await openModel();
+		fireEvent.click(screen.getByRole("button", { name: "Block 0: Linear attention" }));
+		expect(screen.queryByTestId("model-lab-explain-entry")).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention" }));
+		const operations = within(screen.getByTestId("model-lab-explain-operations"));
+		fireEvent.click(operations.getByRole("button", { name: "SwiGLU FFN" }));
+		expect(operations.getByRole("button", { name: "SwiGLU FFN" }).getAttribute("aria-expanded")).toBe("true");
+		expect(operations.queryByTestId("model-lab-explain-entry")).toBeNull();
+		expect(document.body.textContent).not.toContain("pages.modelLab.explain");
 	});
 });
