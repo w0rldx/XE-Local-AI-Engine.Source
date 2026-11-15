@@ -31,4 +31,16 @@ describe("Model Lab's lazy strings", () => {
 		expect(i18next.t("pages.modelLab.steer.armRandom", { lng: "de" })).toBe("Zufallskontrolle");
 		expect(loadModelLabStrings("de-DE")).toBe(loadModelLabStrings("de-DE"));
 	});
+
+	it("say in German what the prompt tokens and the tab links do", async () => {
+		await loadModelLabStrings("de-DE");
+
+		expect(i18next.t("pages.modelLab.nextToken.ui.promptTokens.notLoaded", { lng: "de" })).toBe(
+			"Das Modell wurde entladen oder sein Server beendet, bevor seine Prompt-Tokens gelesen werden konnten. Starten Sie den Lauf erneut, um sie zu sehen.",
+		);
+		expect(i18next.t("pages.modelLab.trace.showInArchitecture", { lng: "de", index: 3 })).toBe(
+			"Block 3 unter Architektur zeigen",
+		);
+		expect(i18next.t("pages.modelLab.architecture.openTrace", { lng: "de" })).toBe("Trace öffnen");
+	});
 });

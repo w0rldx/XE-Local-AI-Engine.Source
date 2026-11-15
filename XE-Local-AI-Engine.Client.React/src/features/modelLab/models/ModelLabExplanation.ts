@@ -19,6 +19,7 @@ export const traceMetrics = ["meanNorm", "maxP99", "topDimensions"] as const;
 // The Next token tab's topics under pages.modelLab.nextToken.explain, each with the basis its badge states: what llama.cpp
 // measured, what the sliders simulate, or general background.
 export const nextTokenTopics = [
+	{ id: "promptTokens", basis: "llamaCpp" },
 	{ id: "logits", basis: "background" },
 	{ id: "softmax", basis: "background" },
 	{ id: "logprob", basis: "llamaCpp" },

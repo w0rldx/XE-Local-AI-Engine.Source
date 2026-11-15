@@ -118,7 +118,8 @@ public enum ModelLabStartRefusal
     ProcessNotConfirmedStopped,
     InvalidLayer,
     InvalidTraceLayers,
-    PinLimitReached
+    PinLimitReached,
+    ModelNotLoaded
 }
 
 public sealed record ModelLabStart

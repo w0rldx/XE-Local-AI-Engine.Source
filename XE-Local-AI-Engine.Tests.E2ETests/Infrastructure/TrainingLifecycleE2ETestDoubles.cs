@@ -363,6 +363,16 @@ public static class TrainingLifecycleE2ETestDoubles
         public Task<LlamaServerTokenizeResponse> TokenizeAsync(Uri baseAddress, string content, CancellationToken ct) =>
             throw new NotSupportedException();
 
+        public Task<string> ApplyTemplateAsync(Uri baseAddress, string? systemPrompt, string userMessage, bool disableThinking, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<LlamaServerTokenPiece>> TokenizeWithPiecesAsync(Uri baseAddress,
+            string content,
+            bool addSpecial,
+            bool parseSpecial,
+            CancellationToken ct) =>
+            throw new NotSupportedException();
+
         public Task<LlamaServerTokenizeResponse> CountPromptTokensAsync(Uri baseAddress,
             string systemPrompt,
             string userMessage,

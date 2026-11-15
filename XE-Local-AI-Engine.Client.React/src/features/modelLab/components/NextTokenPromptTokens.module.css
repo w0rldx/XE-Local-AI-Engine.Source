@@ -1,0 +1,29 @@
+/* A long piece breaks inside its chip, so a phone never scrolls the page sideways. */
+
+.chip {
+	max-width: 100%;
+	padding: 0 4px;
+	border: 1px solid var(--mantine-color-default-border);
+	border-radius: var(--mantine-radius-xs);
+	background: var(--mantine-color-default);
+	color: var(--mantine-color-text);
+	font-family: var(--mantine-font-family-monospace);
+	font-size: var(--mantine-font-size-xs);
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+	cursor: default;
+}
+
+/* llama.cpp control tokens: a filled, dashed chip, so the difference does not rest on colour alone. */
+
+.chip[data-special="true"] {
+	border-style: dashed;
+	border-color: var(--mantine-color-grape-outline);
+	background: var(--mantine-color-grape-light);
+	color: var(--mantine-color-grape-light-color);
+}
+
+.chip:focus-visible {
+	outline: 2px solid var(--mantine-primary-color-filled);
+	outline-offset: 1px;
+}

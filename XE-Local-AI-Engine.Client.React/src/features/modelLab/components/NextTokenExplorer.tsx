@@ -12,15 +12,18 @@ import {
 	Textarea,
 	Title,
 } from "@mantine/core";
-import { type KeyboardEvent, memo, useEffect, useMemo, useRef, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { tokenizeModelLabPromptMutation } from "@/core/api/generated/@tanstack/react-query.gen";
 import { runDirectInference } from "@/core/directInference/DirectInferenceApi";
 import {
 	type DirectInferenceLogprobEntry,
 	type DirectInferenceResult,
 	directInferenceMaxKeptLogprobEntries,
 	directInferenceMaxTopLogprobs,
+	emptyDirectInferenceResult,
 	logprobTextLabel,
 } from "@/core/directInference/DirectInferenceModels";
 import { DirectInferenceErrorAlert, DirectInferenceOutput } from "@/core/directInference/DirectInferenceOutput";
@@ -30,8 +33,11 @@ import { useDirectInferenceModels } from "@/core/directInference/useDirectInfere
 import { type ChatSamplingOptions, toWireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
 import { ExplanationLevelSwitch, ExplanationList } from "@/features/modelLab/components/ArchitectureExplanation";
 import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNotice";
+import { NextTokenPromptTokens } from "@/features/modelLab/components/NextTokenPromptTokens";
 import { NextTokenStepView } from "@/features/modelLab/components/NextTokenStepView";
 import { type ExplanationLevel, nextTokenTopics } from "@/features/modelLab/models/ModelLabExplanation";
+import { moveFocusAmongButtons } from "@/features/modelLab/models/ModelLabFocus";
+import type { ModelLabIntent } from "@/features/modelLab/models/ModelLabNavigation";
 
 interface Step {
 	entry: DirectInferenceLogprobEntry;
@@ -52,23 +58,12 @@ interface StepButtonsProps {
 // Native buttons, so Enter and Space select; the arrow keys move between them instead of tabbing through every step.
 // Memoized: every streamed event re-renders the tab, and up to a thousand buttons only change when an entry was kept.
 const StepButtons = memo(function StepButtons({ label, steps, selected, onSelect, color }: StepButtonsProps) {
-	const moveFocus = (event: KeyboardEvent<HTMLDivElement>): void => {
-		const buttons = [...event.currentTarget.querySelectorAll("button")];
-		const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
-		const next = { ArrowRight: at + 1, ArrowDown: at + 1, ArrowLeft: at - 1, ArrowUp: at - 1, Home: 0, End: buttons.length - 1 }[
-			event.key
-		];
-		if (at !== -1 && next !== undefined && buttons[next]) {
-			event.preventDefault();
-			buttons[next].focus();
-		}
-	};
 	return (
 		<Stack gap={4}>
 			<Text size="xs" fw={600}>
 				{label}
 			</Text>
-			<Group gap={4} role="group" aria-label={label} onKeyDown={moveFocus}>
+			<Group gap={4} role="group" aria-label={label} onKeyDown={moveFocusAmongButtons}>
 				{steps.map(({ entry, index }) => (
 					<Button
 						key={index}
@@ -101,7 +96,8 @@ function splitSteps(logprobs: readonly DirectInferenceLogprobEntry[] | undefined
 }
 
 // One prompt on one installed llama.cpp model with the top candidates of every step. Held in this component only: nothing is saved.
-export function NextTokenExplorer() {
+// An intent from another tab prefills the form once; edits after it are the user's.
+export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextToken"> }) {
 	const { t } = useTranslation();
 	const { modelGroups, llamaCppModels, reasoningLlamaCppModels, status } = useDirectInferenceModels();
 	const modelItems = modelGroups.flatMap((group) => group.items).filter((item) => llamaCppModels.has(item.value));
@@ -117,15 +113,36 @@ export function NextTokenExplorer() {
 	const [selected, setSelected] = useState<number | null>(null);
 	const [level, setLevel] = useState<ExplanationLevel>("overview");
 	const [openTopic, setOpenTopic] = useState<string | null>(null);
+	// Set by Try in Next token on a trace: the form holds that trace's prompt and paired GGUF.
+	const [fromTrace, setFromTrace] = useState(false);
+	const [appliedNonce, setAppliedNonce] = useState<number>();
+	if (intent && intent.nonce !== appliedNonce) {
+		setAppliedNonce(intent.nonce);
+		setModel(intent.modelName);
+		setSystemPrompt("");
+		setPrompt(intent.prompt);
+		setDisableThinking(intent.disableThinking);
+		setFromTrace(true);
+	}
+	// Read once per run, after it ends; never on a render.
+	const promptTokens = useMutation(tokenizeModelLabPromptMutation());
 	const abortRef = useRef<AbortController | undefined>(undefined);
 	// Leaving mid-run cancels it, or it keeps holding the node's invocation slot.
-	useEffect(() => () => abortRef.current?.abort(), []);
+	useEffect(
+		() => () => {
+			abortRef.current?.abort();
+			// A run that ends after this reads no tokens for a page that is gone.
+			abortRef.current = undefined;
+		},
+		[],
+	);
 
 	const isReasoningModel = model !== null && reasoningLlamaCppModels.has(model);
 	// Another model starts from its own default again.
 	const selectModel = (next: string | null): void => {
 		setModel(next);
 		setDisableThinking(false);
+		setFromTrace(false);
 	};
 
 	const run = async (): Promise<void> => {
@@ -136,18 +153,34 @@ export function NextTokenExplorer() {
 		abortRef.current = controller;
 		setSelected(null);
 		setRunning(true);
+		promptTokens.reset();
+		const sentSystemPrompt = systemPrompt.trim().length > 0 ? systemPrompt : undefined;
+		const sentDisableThinking = isReasoningModel && disableThinking;
+		let last = emptyDirectInferenceResult;
 		await runDirectInference(
 			{
 				modelId: model,
 				prompt,
-				systemPrompt: systemPrompt.trim().length > 0 ? systemPrompt : undefined,
+				systemPrompt: sentSystemPrompt,
 				samplingOptions: toWireSamplingOptions(sampling),
 				topLogprobs: directInferenceMaxTopLogprobs,
-				disableThinking: isReasoningModel && disableThinking ? true : undefined,
+				disableThinking: sentDisableThinking ? true : undefined,
 			},
-			setResult,
+			(next) => {
+				last = next;
+				setResult(next);
+			},
 			controller.signal,
 		);
+		// The tokens of exactly what this run sent, once it completed or was stopped with output. Not after a failure, and
+		// not for a run a newer one replaced.
+		const failed = last.errorCode !== undefined || last.errorMessage !== undefined;
+		const hasOutput = last.text !== "" || last.reasoning !== "";
+		if (abortRef.current === controller && !failed && (!controller.signal.aborted || hasOutput)) {
+			promptTokens.mutate({
+				body: { modelName: model, systemPrompt: sentSystemPrompt, prompt, disableThinking: sentDisableThinking },
+			});
+		}
 		// A stopped attempt already went idle, and by now the panel may belong to a newer run.
 		if (!controller.signal.aborted) {
 			setRunning(false);
@@ -167,6 +200,7 @@ export function NextTokenExplorer() {
 	const selectedStep = visibleSteps.find((step) => step.index === selected);
 	const thinkingOnly = !showThinking && answerSteps.length === 0 && thinkingSteps.length > 0;
 	const topicLabels: Record<(typeof nextTokenTopics)[number]["id"], string> = {
+		promptTokens: t("pages.modelLab.nextToken.ui.topic.promptTokens", "Prompt tokens"),
 		logits: t("pages.modelLab.nextToken.ui.topic.logits", "Logits"),
 		softmax: t("pages.modelLab.nextToken.ui.topic.softmax", "Softmax"),
 		logprob: t("pages.modelLab.nextToken.ui.topic.logprob", "Log-probability"),
@@ -205,6 +239,14 @@ export function NextTokenExplorer() {
 			<ModelPickerNotice status={status} modelCount={modelItems.length} />
 			<Paper withBorder={true} p="md">
 				<Stack gap="sm">
+					{fromTrace && (
+						<Text size="sm" c="dimmed" data-testid="model-lab-next-token-from-trace">
+							{t(
+								"pages.modelLab.nextToken.ui.fromTrace",
+								"Prefilled from a trace. Next token runs the paired GGUF with llama.cpp, so its tokens and probabilities can differ from the trace, which ran the Hugging Face checkpoint in PyTorch.",
+							)}
+						</Text>
+					)}
 					<Select
 						label={t("pages.modelLab.nextToken.ui.model", "Model")}
 						placeholder={t("pages.directInference.modelPlaceholder", "Choose a model")}
@@ -248,6 +290,9 @@ export function NextTokenExplorer() {
 					</Group>
 				</Stack>
 			</Paper>
+			{!promptTokens.isIdle && (
+				<NextTokenPromptTokens pending={promptTokens.isPending} data={promptTokens.data} error={promptTokens.error} />
+			)}
 			{result && (
 				<>
 					<DirectInferenceErrorAlert result={result} />

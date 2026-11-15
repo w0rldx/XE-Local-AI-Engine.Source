@@ -264,6 +264,11 @@ Everything lives in one directory (`%LOCALAPPDATA%\XE-Local-AI-Engine`), separat
   matching `q8_0` K/V cache with flash attention, then record and use a safe non-quantized fallback if
   that optimized combination is unsupported. CPU launches keep the non-quantized path. Frozen
   inference profiles may replay explicit KV types.
+- **Model Lab shows the prompt the model actually read.** After a Next token run it lists that run's
+  prompt with the chat template applied, as token ids and pieces with llama.cpp's control tokens marked,
+  read from the llama-server already running the GGUF. A long prompt can take a moment. Reading them
+  never loads a model: if the model was unloaded or its server stopped, run it again. A trace runs the Hugging Face checkpoint in PyTorch, so a trace's tokens
+  and probabilities can differ from the GGUF's for the same prompt.
 
 ---
 

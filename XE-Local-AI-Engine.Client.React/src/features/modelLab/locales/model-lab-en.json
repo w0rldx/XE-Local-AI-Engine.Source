@@ -25,6 +25,7 @@
 				"noTraceChosen": "No trace",
 				"noTraces": "No finished trace of this model yet. A trace started under Trace and steer can be laid over its blocks here.",
 				"notTraced": "Not traced: the chosen trace did not measure this block.",
+				"openTrace": "Open trace",
 				"operations": "Operations",
 				"overviewOnly": "No operation graph is shown for the {{architecture}} architecture: only the tensor groups read from the file.",
 				"readBadge": "Read from the file",
@@ -410,6 +411,11 @@
 						"math": "Keep candidate $i$ when\n\n$$p_i \\ge \\text{min-p} \\cdot \\max_j p_j \\iff \\ell_i \\ge \\max_j \\ell_j + \\ln(\\text{min-p})$$\n\n- $p_i$: softmax over the top-p survivors, at temperature 1.\n- $\\ell_i$: logit; a log-probability works the same, since both differ by one constant.\n- $\\text{min-p} \\le 0$: off. The maximum always stays.\n- Example: with min-p 0.05 and a top entry at 80 %, entries below 4 % go; with the top entry at 20 %, only entries below 1 % go.",
 						"overview": "Min-p drops every entry whose probability is below a share of the top entry's probability. Because the bar is relative to the top candidate, it cuts hard when the model is confident and little when it is unsure. llama-server's default is 0.05."
 					},
+					"promptTokens": {
+						"detail": "After a run, the node sends the run's exact inputs to the loaded llama.cpp server: it applies the model's chat template (with thinking off when the run had it off) and tokenizes the result the way a chat request is tokenized. A token is marked as a control token when llama.cpp parses it as one, as it does for markers such as `<|im_start|>`; other template text, thinking tags included in some model families, can be ordinary tokens. Reading the tokens never loads the model: when it was unloaded or its server stopped, the view says so instead. Each distinct token is checked on its own, so a long prompt can take a moment. These are the GGUF's tokens; a trace on the Hugging Face checkpoint uses that checkpoint's tokenizer and template, which can split the same prompt differently.",
+						"math": "The model reads ids, not text. Token $i$ of the prompt becomes row $\\mathrm{id}_i$ of the embedding matrix $E$:\n\n$$x_i = E[\\mathrm{id}_i]$$\n\nEvery prompt token takes one place in the context window, so for one request $n_{\\text{prompt}} + n_{\\text{generated}} \\le n_{\\text{ctx}}$.",
+						"overview": "A model never sees your text, only numbered pieces of it called tokens. Before your prompt reaches it, a chat template wraps it in role markers, and the tokenizer cuts the result into tokens. This view shows that exact sequence for the last run."
+					},
 					"softmax": {
 						"detail": "Softmax runs over the whole vocabulary. The bars show the up-to-20 most probable results, so they add up to at most 100 %; the rest of the vocabulary shares what is left. Adding the same number to every logit changes nothing, which is why log-probabilities work as well as logits.",
 						"math": "$$p_i = \\frac{e^{\\ell_i}}{\\sum_j e^{\\ell_j}}$$\n\n- $\\ell_i$: logit of entry $i$; the sum runs over the whole vocabulary.\n- $p_i$: probability of entry $i$.\n\nShift invariance: $\\mathrm{softmax}(\\ell + c) = \\mathrm{softmax}(\\ell)$. llama.cpp subtracts the largest logit before exponentiating, for numerical stability only.",
@@ -438,6 +444,7 @@
 					"chosenMissingProcessed": "The chosen token is not among these {{count}} candidates.",
 					"chosenMissingTrace": "The chosen token is not among these {{count}} candidates: generation picked it from the processed scores, where it ranked higher.",
 					"cut": "Cut",
+					"fromTrace": "Prefilled from a trace. Next token runs the paired GGUF with llama.cpp, so its tokens and probabilities can differ from the trace, which ran the Hugging Face checkpoint in PyTorch.",
 					"lastMissing": "The stream leaves out the last step, and with thinking on some newline steps, so the steps can differ from the text.",
 					"measuredTitle": "Measured by llama.cpp",
 					"minP": "Min-p: {{value}}",
@@ -449,6 +456,20 @@
 					"notTokens": "Steps are entries, not tokens: multi-byte text can merge several tokens into one entry, whose values belong to its last token.",
 					"pickStep": "Pick a step to see its candidates.",
 					"preSampling": "The bars show the probabilities llama.cpp computed before sampling: the run's temperature, top-k and top-p do not change them.",
+					"promptTokens": {
+						"chip": "{{piece}}, id {{id}}",
+						"chipSpecial": "{{piece}}, id {{id}}, control token",
+						"count": "The model read {{tokens}} tokens: your prompt with the chat template applied.",
+						"failed": "The prompt tokens could not be read.",
+						"legend": "Tokens llama.cpp parses as control tokens have a dashed outline. · marks a space, ↵ a newline, ⇥ a tab.",
+						"loading": "Reading the prompt's tokens from llama.cpp. A long prompt can take a moment.",
+						"notLoaded": "The model was unloaded, or its server stopped, before its prompt tokens could be read. Run again to see them.",
+						"pick": "Point at a token, or move to it with the arrow keys, to see its id.",
+						"readout": "Token {{position}} of {{total}}: {{piece}}, id {{id}}",
+						"readoutSpecial": "Token {{position}} of {{total}}: {{piece}}, id {{id}}, control token",
+						"title": "Prompt tokens",
+						"truncated": "Only the first {{shown}} tokens are shown."
+					},
 					"rest": "The rest of the vocabulary: {{percent}}",
 					"run": "Run",
 					"serverDefaults": "Sampling values a run leaves empty use llama-server's defaults (top-k 40, top-p 0.95, min-p 0.05, temperature 0.8) unless the model file or its launch arguments set others. Top-k 40 is more than the shown candidates, so the simulation may then differ from the server.",
@@ -478,6 +499,7 @@
 						"logits": "Logits",
 						"logprob": "Log-probability",
 						"minP": "Min-p",
+						"promptTokens": "Prompt tokens",
 						"softmax": "Softmax",
 						"temperature": "Temperature",
 						"topK": "Top-k",
@@ -704,6 +726,7 @@
 				"savedHint": "Already downloaded, so it is checked and traced without contacting Hugging Face.",
 				"scope": "Tracing loads the full-precision checkpoint on the GPU, so it needs the checkpoint's weights plus about 2 GB of the card's memory. A model above that is refused before anything is downloaded, however it was quantized for chat.",
 				"select": "Select {{repo}} from {{date}} for comparison",
+				"showInArchitecture": "Show block {{index}} in Architecture",
 				"spec": "Up to 128 tokens, greedy. The trace is capped in size by the number of blocks and saved encrypted on this node, with the prompt and the output.",
 				"start": "Start trace",
 				"startFailed": "The experiment could not start.",
@@ -718,6 +741,7 @@
 				"token": "Token",
 				"traceFailed": "The trace could not be loaded.",
 				"truncated": "The trace reached its {{cap}} cap: {{dropped}} records were not kept. Generation was not affected.",
+				"tryNextToken": "Try in Next token",
 				"unsupported": "Tracing runs on Linux only for now, because it needs the Python training runtime, which is available on Linux only. The other Model Lab tools work here."
 			}
 		}

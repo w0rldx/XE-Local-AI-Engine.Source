@@ -48,6 +48,20 @@ public sealed partial class LlamaServerProcessSupervisor
                .ToArray();
     }
 
+    /// <inheritdoc />
+    public LlamaServerEndpoint? FindRunningEndpoint(string modelName, ModelRole role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        // The same filter as ListRunningProcesses: a process being torn down or pinned by profiling is not one inference reuses.
+        return _processes.TryGetValue(new ProcessKey(modelName, role), out var running)
+               && !running.Handle.HasExited
+               && !running.IsEvicting
+               && !running.IsProfilingOwned
+            ? running.Endpoint
+            : null;
+    }
+
     /// <summary>Runs one idle-reaper pass now. Test seam, so reaping is asserted without waiting on the reaper's real-time cadence.</summary>
     internal Task ReapIdleOnceAsync() =>
         _reaper.ReapIdleOnceAsync();

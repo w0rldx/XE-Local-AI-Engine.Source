@@ -4,7 +4,7 @@ using Microsoft.Extensions.AI;
 
 /// <summary>
 ///     The llama-server HTTP routes the node calls outside the OpenAI-compatible chat surface: <c>/metrics</c>,
-///     <c>/props</c>, <c>/tokenize</c>, <c>/v1/messages/count_tokens</c>, and the pooled <c>embeddings</c>/<c>rerank</c> roles the benchmark harness
+///     <c>/props</c>, <c>/tokenize</c>, <c>/apply-template</c>, <c>/v1/messages/count_tokens</c>, and the pooled <c>embeddings</c>/<c>rerank</c> roles the benchmark harness
 ///     measures.
 /// </summary>
 /// <remarks>
@@ -31,6 +31,30 @@ public interface ILlamaServerNativeClient
     ///     a malformed body reads as no token count.
     /// </remarks>
     Task<LlamaServerTokenizeResponse> TokenizeAsync(Uri baseAddress, string content, CancellationToken ct);
+
+    /// <summary>
+    ///     POSTs <c>[system?, user]</c> to the server root's <c>/apply-template</c>, which renders it through the model's chat
+    ///     template as a chat completion would, and returns the rendered prompt. Same guarded transport as <see cref="TokenizeAsync" />.
+    /// </summary>
+    /// <param name="disableThinking">Sends <c>chat_template_kwargs {"enable_thinking": false}</c>, as a thinking-off chat request does.</param>
+    /// <exception cref="HttpRequestException">The server answered with a non-success status.</exception>
+    /// <exception cref="InvalidDataException">The body carried no <c>prompt</c> string.</exception>
+    Task<string> ApplyTemplateAsync(Uri baseAddress, string? systemPrompt, string userMessage, bool disableThinking, CancellationToken ct);
+
+    /// <summary>
+    ///     POSTs <paramref name="content" /> to the server root's <c>/tokenize</c> with <c>with_pieces: true</c> and the
+    ///     caller's flags, over the same guarded transport as <see cref="TokenizeAsync" />, and returns every token in order.
+    /// </summary>
+    /// <remarks>
+    ///     A piece llama-server reports as raw bytes (not valid UTF-8 on its own) reads as one <c>&lt;0xNN&gt;</c> per byte.
+    /// </remarks>
+    /// <exception cref="HttpRequestException">The server answered with a non-success status.</exception>
+    /// <exception cref="InvalidDataException">The body carried no well-formed <c>tokens</c> array.</exception>
+    Task<IReadOnlyList<LlamaServerTokenPiece>> TokenizeWithPiecesAsync(Uri baseAddress,
+        string content,
+        bool addSpecial,
+        bool parseSpecial,
+        CancellationToken ct);
 
     /// <summary>
     ///     POSTs a one-turn conversation (<paramref name="systemPrompt" /> + <paramref name="userMessage" />, offering

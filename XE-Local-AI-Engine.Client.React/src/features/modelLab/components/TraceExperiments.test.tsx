@@ -769,4 +769,20 @@ describe("TraceExperiments", () => {
 		expect(compare).toHaveProperty("disabled", true);
 		expect(reason()).toBe("Only finished runs can be compared.");
 	});
+
+	it("opens the experiment another tab asked for", async () => {
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () =>
+				HttpResponse.json({ ...emptyList, experiments: [savedRow(experimentId, "Trace", "Failed")] }),
+			),
+			http.get(localApiPath(`model-lab/experiments/${experimentId}`), () =>
+				HttpResponse.json({ ...savedRow(experimentId, "Trace", "Failed"), prompt: "Opened from Architecture" }),
+			),
+		);
+
+		renderWithProviders(<TraceExperiments intent={{ tab: "trace", nonce: 1, experimentId }} />);
+
+		expect((await screen.findByTestId("model-lab-trace-view")).textContent).toContain("Opened from Architecture");
+	});
 });

@@ -32,5 +32,8 @@ public static partial class LocalApiRoutes
 
         // One source file an index names, from the installed runtime's packages and only while its hash matches the index.
         public const string PyTorchSource = "model-lab/pytorch-source";
+
+        // A Next token run's rendered prompt as the running llama-server tokenizes it. Never loads a model.
+        public const string PromptTokens = "model-lab/prompt-tokens";
     }
 }

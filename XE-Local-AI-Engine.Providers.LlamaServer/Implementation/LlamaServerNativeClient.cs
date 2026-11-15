@@ -71,6 +71,108 @@ internal sealed class LlamaServerNativeClient : ILlamaServerNativeClient
         return new LlamaServerTokenizeResponse(response);
     }
 
+    public async Task<string> ApplyTemplateAsync(Uri baseAddress, string? systemPrompt, string userMessage, bool disableThinking, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(baseAddress);
+        ArgumentNullException.ThrowIfNull(userMessage);
+
+        var messages = new JsonArray();
+        if (systemPrompt is not null)
+        {
+            messages.Add(new JsonObject
+            {
+                ["role"] = "system",
+                ["content"] = systemPrompt
+            });
+        }
+
+        messages.Add(new JsonObject
+        {
+            ["role"] = "user",
+            ["content"] = userMessage
+        });
+        var body = new JsonObject
+        {
+            ["messages"] = messages
+        };
+        if (disableThinking)
+        {
+            body["chat_template_kwargs"] = new JsonObject
+            {
+                ["enable_thinking"] = false
+            };
+        }
+
+        using var response = await _tokenizeClient.PostAsJsonAsync(new Uri($"{baseAddress.Scheme}://{baseAddress.Authority}/apply-template"), body, ct)
+                                                  .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
+        return ReadString(document.RootElement, "prompt") ?? throw new InvalidDataException("The /apply-template response carried no prompt.");
+    }
+
+    public async Task<IReadOnlyList<LlamaServerTokenPiece>> TokenizeWithPiecesAsync(Uri baseAddress,
+        string content,
+        bool addSpecial,
+        bool parseSpecial,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(baseAddress);
+        ArgumentNullException.ThrowIfNull(content);
+
+        using var response = await _tokenizeClient.PostAsJsonAsync(new Uri($"{baseAddress.Scheme}://{baseAddress.Authority}/tokenize"),
+                                                      new
+                                                      {
+                                                          content,
+                                                          add_special = addSpecial,
+                                                          parse_special = parseSpecial,
+                                                          with_pieces = true
+                                                      },
+                                                      ct)
+                                                  .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
+        if (document.RootElement.ValueKind != JsonValueKind.Object
+            || !document.RootElement.TryGetProperty("tokens", out var tokens)
+            || tokens.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidDataException("The /tokenize response carried no tokens array.");
+        }
+
+        var pieces = new List<LlamaServerTokenPiece>(tokens.GetArrayLength());
+        foreach (var token in tokens.EnumerateArray())
+        {
+            if (token.ValueKind != JsonValueKind.Object
+                || !token.TryGetProperty("id", out var id)
+                || !id.TryGetInt32(out var tokenId)
+                || !token.TryGetProperty("piece", out var piece))
+            {
+                throw new InvalidDataException("A /tokenize token carried no id and piece.");
+            }
+
+            pieces.Add(piece.ValueKind switch
+            {
+                JsonValueKind.String => new LlamaServerTokenPiece
+                {
+                    Id = tokenId,
+                    Piece = piece.GetString()!,
+                    IsBytes = false
+                },
+                // llama-server sends a piece that is not valid UTF-8 on its own as its byte values.
+                JsonValueKind.Array => new LlamaServerTokenPiece
+                {
+                    Id = tokenId,
+                    Piece = string.Concat(piece.EnumerateArray().Select(static value => $"<0x{value.GetByte():X2}>")),
+                    IsBytes = true
+                },
+                _ => throw new InvalidDataException("A /tokenize piece was neither text nor bytes.")
+            });
+        }
+
+        return pieces;
+    }
+
     public async Task<LlamaServerTokenizeResponse> CountPromptTokensAsync(Uri baseAddress,
         string systemPrompt,
         string userMessage,

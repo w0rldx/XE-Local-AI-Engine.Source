@@ -211,6 +211,16 @@ public interface ILlamaServerProcessSupervisor
     }
 
     /// <summary>
+    ///     The endpoint of the running <c>(model, role)</c> process normal inference could reuse, or <see langword="null" />
+    ///     when there is none. Never spawns: for a caller that must not load a model.
+    /// </summary>
+    /// <remarks>A synchronous in-memory read of the process table with NO health or HTTP probe.</remarks>
+    LlamaServerEndpoint? FindRunningEndpoint(string modelName, ModelRole role)
+    {
+        return null;
+    }
+
+    /// <summary>
     ///     Live runtime facts for the running <c>(model, role)</c> process — currently the effective context window it
     ///     loaded, read from <c>/props</c> after readiness. A synchronous in-memory read with no HTTP.
     /// </summary>

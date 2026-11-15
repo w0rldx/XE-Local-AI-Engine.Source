@@ -20,18 +20,31 @@ import { TraceCheckpointForm } from "@/features/modelLab/components/TraceCheckpo
 import { TraceExperimentView } from "@/features/modelLab/components/TraceExperimentView";
 import { useModelLabExperimentHub } from "@/features/modelLab/hooks/useModelLabExperimentHub";
 import { compareBlock } from "@/features/modelLab/models/ModelLabComparison";
+import type { ModelLabIntent, ModelLabJump } from "@/features/modelLab/models/ModelLabNavigation";
 import { activeJobPollMs } from "@/features/modelLab/models/ModelLabTrace";
 
 const statusColors: Record<string, string> = { Running: "blue", Succeeded: "green", Failed: "red", Cancelled: "gray" };
 
+interface TraceExperimentsProps {
+	// Another tab asked to open this saved experiment.
+	intent?: ModelLabIntent<"trace">;
+	onJump?: (to: ModelLabJump) => void;
+}
+
 // Start a trace, follow the one running job, and reopen any saved one.
-export function TraceExperiments() {
+export function TraceExperiments({ intent, onJump }: TraceExperimentsProps) {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	// Ticked rows, and the runs the open comparison shows.
 	const [checked, setChecked] = useState<string[]>([]);
 	const [comparedIds, setComparedIds] = useState<string[] | null>(null);
+	const [appliedNonce, setAppliedNonce] = useState<number>();
+	if (intent && intent.nonce !== appliedNonce) {
+		setAppliedNonce(intent.nonce);
+		setSelectedId(intent.experimentId);
+		setComparedIds(null);
+	}
 	const compareReasonId = useId();
 	const refreshList = useCallback(
 		() => queryClient.invalidateQueries({ queryKey: listModelLabExperimentsQueryKey() }),
@@ -297,7 +310,7 @@ export function TraceExperiments() {
 					<SavedExperimentComparison key={comparedIds.join()} experimentIds={comparedIds} />
 				</Stack>
 			)}
-			{selectedId && <TraceExperimentView key={selectedId} experimentId={selectedId} isLive={live.isLive} />}
+			{selectedId && <TraceExperimentView key={selectedId} experimentId={selectedId} isLive={live.isLive} onJump={onJump} />}
 		</Stack>
 	);
 }

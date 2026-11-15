@@ -42,7 +42,7 @@ interface BasisBadgeProps {
 	basis: ExplanationBasis;
 }
 
-function BasisBadge({ basis }: BasisBadgeProps) {
+export function BasisBadge({ basis }: BasisBadgeProps) {
 	const { t } = useTranslation();
 	if (basis === "background") {
 		return (

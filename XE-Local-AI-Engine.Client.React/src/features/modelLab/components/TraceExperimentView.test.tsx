@@ -576,4 +576,26 @@ describe("TraceExperimentView", () => {
 		await waitFor(() => expect(sent).toEqual([{ notes: "Second idea" }, { notes: null }]));
 		expect((notes as HTMLTextAreaElement).value).toBe("");
 	});
+
+	it("opens a traced block in Architecture and the prompt in Next token with thinking off", async () => {
+		stubSucceededTrace(tokensWithCandidates);
+		const onJump = vi.fn();
+		renderWithProviders(<TraceExperimentView experimentId={experimentId} isLive={false} onJump={onJump} />);
+
+		fireEvent.click(await screen.findByRole("button", { name: "Show block 6 in Architecture" }));
+		fireEvent.click(screen.getByRole("button", { name: "Try in Next token" }));
+
+		expect(onJump.mock.calls).toEqual([
+			[{ tab: "architecture", modelName: "org/Tiny-GGUF:Q4_K_M", traceId: experimentId, blockIndex: 6 }],
+			[{ tab: "nextToken", modelName: "org/Tiny-GGUF:Q4_K_M", prompt: "hello", disableThinking: true }],
+		]);
+	});
+
+	it("offers no Next token link for a steering run, whose outputs are not one generation", async () => {
+		stubSteeringRow(steeringResult(["baseline"]), "Succeeded");
+		renderWithProviders(<TraceExperimentView experimentId={experimentId} isLive={false} onJump={vi.fn()} />);
+
+		await screen.findByTestId("model-lab-trace-view");
+		expect(screen.queryByTestId("model-lab-trace-try-next-token")).toBeNull();
+	});
 });

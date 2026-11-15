@@ -4809,6 +4809,32 @@ export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPrefligh
 
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentRouteRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokenResponse = z.object({
+	id: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	piece: z.string(),
+	special: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokensRequest = z.object({
+	modelName: z.string().min(1),
+	systemPrompt: z.string().nullish(),
+	prompt: z.string().optional(),
+	disableThinking: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokensResponse = z.object({
+	renderedPrompt: z.string(),
+	tokens: z.array(zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokenResponse),
+	tokenCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	truncated: z.boolean(),
+});
+
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceRecordResponse = z.object({
 	step: z
 		.int()
@@ -7794,6 +7820,7 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabStartRefusal = z.enum
 	"InvalidLayer",
 	"InvalidTraceLayers",
 	"PinLimitReached",
+	"ModelNotLoaded",
 ]);
 
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabStartBlockedResponse = z.object({
@@ -12890,6 +12917,13 @@ export const zGetModelLabExperimentTracePath = z.object({
  * Success
  */
 export const zGetModelLabExperimentTraceResponse = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceResponse;
+
+export const zTokenizeModelLabPromptBody = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokensRequest;
+
+/**
+ * Success
+ */
+export const zTokenizeModelLabPromptResponse = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokensResponse;
 
 export const zGetModelLabPyTorchSourceQuery = z.object({
 	file: z.string().nullish(),

@@ -6,6 +6,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import i18next from "i18next";
 import { HttpResponse, http } from "msw";
+import { useState } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { DirectInferenceEvent, DirectInferenceRequest } from "@/core/directInference/DirectInferenceModels";
@@ -54,7 +55,32 @@ beforeAll(() => {
 	);
 });
 
+// The bodies the prompt-tokens route received, in order.
+let tokenizeBodies: unknown[] = [];
+
+const promptTokens = {
+	renderedPrompt: "<|im_start|>user\nSay hello there.<|im_end|>\n",
+	tokens: [
+		{ id: 151644, piece: "<|im_start|>", special: true },
+		{ id: 872, piece: "user", special: false },
+		{ id: 198, piece: "\n", special: false },
+		{ id: 1149, piece: " there", special: false },
+	],
+	tokenCount: 4,
+	truncated: false,
+};
+
+function stubPromptTokens(respond: () => Response | Promise<Response> = () => HttpResponse.json(promptTokens)): void {
+	server.use(
+		http.post(localApiPath("model-lab/prompt-tokens"), async ({ request }) => {
+			tokenizeBodies.push(await request.json());
+			return respond();
+		}),
+	);
+}
+
 function stubModels(reasoningModels: readonly string[] = []): void {
+	stubPromptTokens();
 	server.use(
 		http.get(localApiPath("models"), () =>
 			HttpResponse.json({
@@ -138,6 +164,7 @@ function bars(testId: string): string[] {
 
 describe("NextTokenExplorer", () => {
 	afterEach(() => {
+		tokenizeBodies = [];
 		hub.state.requests = [];
 		hub.state.events = [];
 		hub.state.hangs = false;
@@ -405,5 +432,185 @@ describe("NextTokenExplorer", () => {
 
 		await waitFor(() => expect(hub.dispose).toHaveBeenCalledTimes(1));
 		await waitFor(() => expect(hub.handle.release).toHaveBeenCalledTimes(1));
+	});
+});
+
+describe("NextTokenExplorer prompt tokens", () => {
+	afterEach(() => {
+		tokenizeBodies = [];
+		hub.state.requests = [];
+		hub.state.events = [];
+		hub.state.hangs = false;
+	});
+
+	async function chooseAndRun(prompt: string): Promise<void> {
+		fireEvent.click(await (await openDropdown()).findByRole("option", { name: "model-a", hidden: true }));
+		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: prompt } });
+		fireEvent.click(screen.getByRole("button", { name: "Run" }));
+	}
+
+	it("reads them once per run with the exact inputs it sent, and shows each token's piece and id", async () => {
+		stubModels(["model-a"]);
+		hub.state.events = [{ type: "delta", textDelta: "Hello" }, logprobs, { type: "done" }];
+		renderWithProviders(<NextTokenExplorer />);
+		fireEvent.click(await (await openDropdown()).findByRole("option", { name: "model-a", hidden: true }));
+		fireEvent.change(screen.getByLabelText("System prompt (optional)"), { target: { value: "Be brief." } });
+		fireEvent.click(screen.getByTestId("direct-inference-thinking-off"));
+		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Say hello there." } });
+		fireEvent.click(screen.getByRole("button", { name: "Run" }));
+
+		const panel = within(await screen.findByTestId("model-lab-prompt-tokens"));
+		expect((await panel.findByTestId("model-lab-prompt-tokens-count")).textContent).toBe(
+			"The model read 4 tokens: your prompt with the chat template applied.",
+		);
+		expect(tokenizeBodies).toEqual([
+			{ modelName: "model-a", systemPrompt: "Be brief.", prompt: "Say hello there.", disableThinking: true },
+		]);
+		expect(panel.getByTestId("model-lab-explain-basis").textContent).toBe("Measured by llama.cpp");
+		expect(panel.queryByTestId("model-lab-prompt-tokens-truncated")).toBeNull();
+		const chips = panel.getAllByTestId("model-lab-prompt-token");
+		// Whitespace is drawn, and the template's marker is told apart by more than colour.
+		expect(chips.map((chip) => chip.textContent)).toEqual(["<|im_start|>", "user", "↵", "·there"]);
+		expect(chips.map((chip) => chip.dataset["special"])).toEqual(["true", "false", "false", "false"]);
+		expect(chips[0]?.getAttribute("aria-label")).toBe('"<|im_start|>", id 151644, control token');
+		expect(chips[2]?.getAttribute("aria-label")).toBe('"\\n", id 198');
+		expect(chips.map((chip) => chip.tabIndex)).toEqual([0, -1, -1, -1]);
+
+		// Keyboard focus shows the id as pointing does.
+		chips[0]?.focus();
+		fireEvent.keyDown(chips[0] as HTMLElement, { key: "End" });
+		expect(document.activeElement).toBe(chips[3]);
+		const readout = panel.getByTestId("model-lab-prompt-tokens-readout");
+		expect(readout.textContent).toBe('Token 4 of 4: " there", id 1149');
+		fireEvent.mouseEnter(chips[0] as HTMLElement);
+		expect(readout.textContent).toBe('Token 1 of 4: "<|im_start|>", id 151644, control token');
+
+		// A render is not a run.
+		fireEvent.click(screen.getByRole("switch", { name: "Show thinking steps" }));
+		expect(tokenizeBodies).toHaveLength(1);
+		fireEvent.click(screen.getByRole("button", { name: "Run" }));
+		await waitFor(() => expect(tokenizeBodies).toHaveLength(2));
+	});
+
+	it("says to run again when the model is no longer running, and asks only once", async () => {
+		stubModels();
+		stubPromptTokens(() => HttpResponse.json({ reason: "ModelNotLoaded", message: "The model is not loaded." }, { status: 409 }));
+		hub.state.events = [logprobs, { type: "done" }];
+		renderWithProviders(<NextTokenExplorer />);
+
+		await chooseAndRun("Say hello.");
+
+		expect((await screen.findByTestId("model-lab-prompt-tokens-not-loaded")).textContent).toBe(
+			"The model was unloaded, or its server stopped, before its prompt tokens could be read. Run again to see them.",
+		);
+		expect(screen.queryByTestId("model-lab-prompt-tokens-failed")).toBeNull();
+		expect(tokenizeBodies).toEqual([{ modelName: "model-a", prompt: "Say hello.", disableThinking: false }]);
+	});
+
+	it("says it is reading while the request is still out", async () => {
+		stubModels();
+		let answer: (response: Response) => void = () => undefined;
+		const reply = new Promise<Response>((resolve) => {
+			answer = resolve;
+		});
+		stubPromptTokens(() => reply);
+		hub.state.events = [logprobs, { type: "done" }];
+		renderWithProviders(<NextTokenExplorer />);
+
+		await chooseAndRun("Say hello.");
+
+		expect((await screen.findByTestId("model-lab-prompt-tokens-loading")).textContent).toContain(
+			"A long prompt can take a moment.",
+		);
+		answer(HttpResponse.json(promptTokens));
+		await screen.findByTestId("model-lab-prompt-tokens-count");
+		expect(screen.queryByTestId("model-lab-prompt-tokens-loading")).toBeNull();
+	});
+
+	it("shows any other refusal as an error", async () => {
+		stubModels();
+		stubPromptTokens(() => HttpResponse.json({ title: "Broken" }, { status: 500 }));
+		hub.state.events = [logprobs, { type: "done" }];
+		renderWithProviders(<NextTokenExplorer />);
+
+		await chooseAndRun("Say hello.");
+
+		expect(await screen.findByTestId("model-lab-prompt-tokens-failed")).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-prompt-tokens-not-loaded")).toBeNull();
+	});
+
+	it("says when only the first tokens are shown", async () => {
+		stubModels();
+		stubPromptTokens(() => HttpResponse.json({ ...promptTokens, tokenCount: 9000, truncated: true }));
+		hub.state.events = [logprobs, { type: "done" }];
+		renderWithProviders(<NextTokenExplorer />);
+
+		await chooseAndRun("Say hello.");
+
+		expect((await screen.findByTestId("model-lab-prompt-tokens-truncated")).textContent).toBe(
+			"Only the first 4 tokens are shown.",
+		);
+		expect(screen.getByTestId("model-lab-prompt-tokens-count").textContent).toContain("9000 tokens");
+	});
+
+	it("reads none for a failed run or one stopped before any output, and reads them for one stopped with output", async () => {
+		stubModels();
+		hub.state.events = [{ type: "error", errorMessage: "No slot." }];
+		renderWithProviders(<NextTokenExplorer />);
+		await chooseAndRun("Say hello.");
+		await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toHaveProperty("disabled", false));
+
+		// Stopped only once the stream is open, or the stop would send nothing at all.
+		hub.state.hangs = true;
+		hub.state.events = [];
+		fireEvent.click(screen.getByRole("button", { name: "Run" }));
+		await waitFor(() => expect(hub.state.requests).toHaveLength(2));
+		fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+		hub.state.events = [{ type: "delta", textDelta: "Hel" }];
+		fireEvent.click(screen.getByRole("button", { name: "Run" }));
+		await waitFor(() => expect(hub.state.requests).toHaveLength(3));
+		fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+		await screen.findByTestId("model-lab-prompt-tokens-count");
+		expect(tokenizeBodies).toHaveLength(1);
+	});
+});
+
+describe("NextTokenExplorer prefilled from a trace", () => {
+	afterEach(() => {
+		tokenizeBodies = [];
+	});
+
+	// Stands in for the page: Jump again sends the same link once more under a new nonce.
+	function Harness() {
+		const [nonce, setNonce] = useState(1);
+		return (
+			<>
+				<button type="button" onClick={() => setNonce((value) => value + 1)}>
+					Jump again
+				</button>
+				<NextTokenExplorer
+					intent={{ tab: "nextToken", nonce, modelName: "model-a", prompt: "From the trace.", disableThinking: true }}
+				/>
+			</>
+		);
+	}
+
+	it("fills the paired model, the prompt and thinking off once, says it runs the GGUF, and keeps a later edit", async () => {
+		stubModels(["model-a"]);
+		renderWithProviders(<Harness />);
+
+		const prompt = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
+		expect(prompt.value).toBe("From the trace.");
+		expect(screen.getByTestId("model-lab-next-token-from-trace").textContent).toContain("runs the paired GGUF with llama.cpp");
+		expect(((await screen.findByTestId("direct-inference-thinking-off")) as HTMLInputElement).checked).toBe(true);
+		await waitFor(() => expect((screen.getByRole("combobox", { name: "Model" }) as HTMLInputElement).value).toBe("model-a"));
+
+		fireEvent.change(prompt, { target: { value: "My own prompt." } });
+		expect(prompt.value).toBe("My own prompt.");
+
+		fireEvent.click(screen.getByRole("button", { name: "Jump again" }));
+		expect(prompt.value).toBe("From the trace.");
 	});
 });

@@ -1336,6 +1336,9 @@ import type {
 	SuggestComparisonData,
 	SuggestComparisonErrors,
 	SuggestComparisonResponses,
+	TokenizeModelLabPromptData,
+	TokenizeModelLabPromptErrors,
+	TokenizeModelLabPromptResponses,
 	TriggerScheduledJobData,
 	TriggerScheduledJobErrors,
 	TriggerScheduledJobResponses,
@@ -1873,6 +1876,7 @@ import {
 	zStopProcessCaptureResponse,
 	zSubmitBenchmarkRunReviewResponse,
 	zSuggestComparisonResponse,
+	zTokenizeModelLabPromptResponse,
 	zTriggerScheduledJobResponse,
 	zUnhandledExceptionProbeResponse,
 	zUninstallExternalAppResponse,
@@ -9621,6 +9625,32 @@ export const getModelLabExperimentTrace = <ThrowOnError extends boolean = true>(
 		],
 		url: "/api/local/v1/model-lab/experiments/{experimentId}/trace",
 		...options,
+	});
+
+export const tokenizeModelLabPrompt = <ThrowOnError extends boolean = true>(
+	options: Options<TokenizeModelLabPromptData, ThrowOnError>,
+): RequestResult<TokenizeModelLabPromptResponses, TokenizeModelLabPromptErrors, ThrowOnError> =>
+	(options.client ?? client).post<TokenizeModelLabPromptResponses, TokenizeModelLabPromptErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zTokenizeModelLabPromptResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/prompt-tokens",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const getModelLabPyTorchSource = <ThrowOnError extends boolean = true>(

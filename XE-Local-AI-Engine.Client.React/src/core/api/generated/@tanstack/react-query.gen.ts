@@ -454,6 +454,7 @@ import {
 	stopProcessCapture,
 	submitBenchmarkRunReview,
 	suggestComparison,
+	tokenizeModelLabPrompt,
 	triggerScheduledJob,
 	unhandledExceptionProbe,
 	uninstallExternalApp,
@@ -1597,6 +1598,9 @@ import type {
 	SuggestComparisonData,
 	SuggestComparisonError,
 	SuggestComparisonResponse,
+	TokenizeModelLabPromptData,
+	TokenizeModelLabPromptError,
+	TokenizeModelLabPromptResponse,
 	TriggerScheduledJobData,
 	TriggerScheduledJobResponse,
 	UnhandledExceptionProbeData,
@@ -9368,6 +9372,30 @@ export const getModelLabExperimentTraceOptions = (options: Options<GetModelLabEx
 		},
 		queryKey: getModelLabExperimentTraceQueryKey(options),
 	});
+
+export const tokenizeModelLabPromptMutation = (
+	options?: Partial<Options<TokenizeModelLabPromptData>>,
+): UseMutationOptions<
+	TokenizeModelLabPromptResponse,
+	AxiosError<TokenizeModelLabPromptError>,
+	Options<TokenizeModelLabPromptData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		TokenizeModelLabPromptResponse,
+		AxiosError<TokenizeModelLabPromptError>,
+		Options<TokenizeModelLabPromptData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await tokenizeModelLabPrompt({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const getModelLabPyTorchSourceQueryKey = (options?: Options<GetModelLabPyTorchSourceData>) =>
 	createQueryKey("getModelLabPyTorchSource", options, false, ["Model-Lab"]);

@@ -48,4 +48,18 @@ internal static class ModelLabEndpointMapper
             CreatedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(record.CreatedAtUtc),
             UpdatedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(record.UpdatedAtUtc)
         };
+
+    public static ModelLabPromptTokensResponse ToResponse(ModelLabPromptTokens tokens) =>
+        new()
+        {
+            RenderedPrompt = tokens.RenderedPrompt,
+            Tokens = [.. tokens.Tokens.Select(static token => new ModelLabPromptTokenResponse
+            {
+                Id = token.Id,
+                Piece = token.Piece,
+                Special = token.Special
+            })],
+            TokenCount = tokens.TokenCount,
+            Truncated = tokens.Truncated
+        };
 }

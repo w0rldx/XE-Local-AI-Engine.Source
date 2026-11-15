@@ -12,6 +12,7 @@ import { InstalledModelInspector } from "@/features/modelLab/components/Installe
 import { NextTokenExplorer } from "@/features/modelLab/components/NextTokenExplorer";
 import { SamePromptComparison } from "@/features/modelLab/components/SamePromptComparison";
 import { TraceExperiments } from "@/features/modelLab/components/TraceExperiments";
+import type { ModelLabIntent, ModelLabJump } from "@/features/modelLab/models/ModelLabNavigation";
 import { forgetFailedModelLabStrings, loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
 
 export function ModelLabPage() {
@@ -28,6 +29,16 @@ function ModelLabContent() {
 	const { t, i18n } = useTranslation();
 	use(loadModelLabStrings(i18n.language));
 	const tabsRef = useRef<HTMLDivElement>(null);
+	const [tab, setTab] = useState<string | null>("compare");
+	const [intent, setIntent] = useState<ModelLabIntent>();
+	const showTab = (value: string | null): void => {
+		setTab(value);
+		scrollStuckTabsToTop(tabsRef.current);
+	};
+	const jump = (to: ModelLabJump): void => {
+		setIntent((previous) => ({ ...to, nonce: (previous?.nonce ?? 0) + 1 }));
+		showTab(to.tab);
+	};
 	return (
 		<PageShell>
 			<PageHeader
@@ -39,7 +50,7 @@ function ModelLabContent() {
 				)}
 			/>
 			{/* Both panels stay mounted, so switching tabs neither cancels a run nor drops a chosen model. */}
-			<Tabs ref={tabsRef} defaultValue="compare" onChange={() => scrollStuckTabsToTop(tabsRef.current)}>
+			<Tabs ref={tabsRef} value={tab} onChange={showTab}>
 				<StickyBar edge="top" data-testid="model-lab-tabs-bar">
 					<Tabs.List>
 						<Tabs.Tab value="compare">{t("pages.modelLab.compare.tab", "Same-prompt A/B")}</Tabs.Tab>
@@ -53,16 +64,16 @@ function ModelLabContent() {
 					<SamePromptComparison />
 				</Tabs.Panel>
 				<Tabs.Panel value="nextToken" pt="md">
-					<NextTokenExplorer />
+					<NextTokenExplorer intent={intent?.tab === "nextToken" ? intent : undefined} />
 				</Tabs.Panel>
 				<Tabs.Panel value="inspect" pt="md">
 					<InstalledModelInspector />
 				</Tabs.Panel>
 				<Tabs.Panel value="trace" pt="md">
-					<TraceExperiments />
+					<TraceExperiments intent={intent?.tab === "trace" ? intent : undefined} onJump={jump} />
 				</Tabs.Panel>
 				<Tabs.Panel value="architecture" pt="md">
-					<ArchitectureExplorer />
+					<ArchitectureExplorer intent={intent?.tab === "architecture" ? intent : undefined} onJump={jump} />
 				</Tabs.Panel>
 			</Tabs>
 		</PageShell>

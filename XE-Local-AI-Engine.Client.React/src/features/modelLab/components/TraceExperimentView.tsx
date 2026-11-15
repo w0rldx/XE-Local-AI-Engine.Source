@@ -1,4 +1,5 @@
 import {
+	ActionIcon,
 	Alert,
 	Badge,
 	Button,
@@ -11,8 +12,10 @@ import {
 	Table,
 	Text,
 	Textarea,
+	Tooltip,
 	UnstyledButton,
 } from "@mantine/core";
+import { IconArrowRight } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -29,6 +32,7 @@ import { logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
 import { NextTokenStepView } from "@/features/modelLab/components/NextTokenStepView";
 import { SteeringExperimentResult } from "@/features/modelLab/components/SteeringExperimentResult";
+import type { ModelLabJump } from "@/features/modelLab/models/ModelLabNavigation";
 import {
 	activeJobPollMs,
 	type CandidateBasis,
@@ -120,8 +124,14 @@ function ExperimentNotes({ experimentId, notes, running }: { experimentId: strin
 	);
 }
 
+interface TraceExperimentViewProps {
+	experimentId: string;
+	isLive: boolean;
+	onJump?: (to: ModelLabJump) => void;
+}
+
 // A saved experiment: what was asked, what came back, what the hooks measured, and the operator's note.
-export function TraceExperimentView({ experimentId, isLive }: { experimentId: string; isLive: boolean }) {
+export function TraceExperimentView({ experimentId, isLive, onJump }: TraceExperimentViewProps) {
 	const { t } = useTranslation();
 	const [selectedStep, setSelectedStep] = useState<number>();
 	const [basis, setBasis] = useState<CandidateBasis>("raw");
@@ -156,6 +166,8 @@ export function TraceExperimentView({ experimentId, isLive }: { experimentId: st
 	const hasCandidates = tokens.some((token) => token.candidates);
 	const selectedToken = selectedStep === undefined ? undefined : tokens[selectedStep];
 	const selectedEntry = selectedToken && toStepEntry(selectedToken, basis);
+	const showBlockLabel = (index: number): string =>
+		t("pages.modelLab.trace.showInArchitecture", "Show block {{index}} in Architecture", { index });
 	return (
 		<Paper withBorder={true} p="md" data-testid="model-lab-trace-view">
 			<Stack gap="sm">
@@ -175,9 +187,25 @@ export function TraceExperimentView({ experimentId, isLive }: { experimentId: st
 						)}
 					</Text>
 				)}
-				<Text size="sm" fw={600}>
-					{t("pages.modelLab.trace.prompt", "Prompt")}
-				</Text>
+				<Group gap="xs" justify="space-between">
+					<Text size="sm" fw={600}>
+						{t("pages.modelLab.trace.prompt", "Prompt")}
+					</Text>
+					{onJump && !isSteering && (
+						<Button
+							size="compact-xs"
+							variant="light"
+							rightSection={<IconArrowRight size={14} aria-hidden={true} />}
+							// The checkpoint rendered the prompt with thinking off, so Next token starts from the same switch.
+							onClick={() =>
+								onJump({ tab: "nextToken", modelName: data.installedModelName, prompt: data.prompt, disableThinking: true })
+							}
+							data-testid="model-lab-trace-try-next-token"
+						>
+							{t("pages.modelLab.trace.tryNextToken", "Try in Next token")}
+						</Button>
+					)}
+				</Group>
 				<Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
 					{data.prompt}
 				</Text>
@@ -240,10 +268,32 @@ export function TraceExperimentView({ experimentId, isLive }: { experimentId: st
 									<Table.Th>{t("pages.modelLab.trace.token", "Token")}</Table.Th>
 									{table.layers.map((layer) => (
 										<Table.Th key={layer.index} ta="right">
-											{t("pages.modelLab.trace.layerNorm", "Layer {{index}} ({{kind}}) norm", {
-												index: layer.index,
-												kind: layer.kind,
-											})}
+											<Group gap={4} justify="flex-end" wrap="nowrap">
+												{t("pages.modelLab.trace.layerNorm", "Layer {{index}} ({{kind}}) norm", {
+													index: layer.index,
+													kind: layer.kind,
+												})}
+												{onJump && (
+													<Tooltip label={showBlockLabel(layer.index)}>
+														<ActionIcon
+															size="sm"
+															variant="subtle"
+															aria-label={showBlockLabel(layer.index)}
+															onClick={() =>
+																onJump({
+																	tab: "architecture",
+																	modelName: data.installedModelName,
+																	traceId: experimentId,
+																	blockIndex: layer.index,
+																})
+															}
+															data-testid="model-lab-trace-show-block"
+														>
+															<IconArrowRight size={14} />
+														</ActionIcon>
+													</Tooltip>
+												)}
+											</Group>
 										</Table.Th>
 									))}
 								</Table.Tr>

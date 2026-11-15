@@ -473,6 +473,57 @@ describe("ArchitectureExplorer", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Block 2: MTP, not traceable" }));
 		expect(screen.getByTestId("model-lab-architecture-untraceable")).toBeTruthy();
 	});
+
+	it("opens the model, trace and block another tab asked for, keeps a later pick, and links back to the trace", async () => {
+		stubRoutes(detailed, [
+			{
+				id: traceId,
+				kind: "Trace",
+				status: "Succeeded",
+				installedModelName: gguf,
+				repoId: "Qwen/Qwen3.5-0.8B",
+				revision: "rev",
+				prompt: "hello",
+				errorMessage: null,
+				traceByteCount: 10,
+				result: null,
+				createdAtUtc: "2026-11-06T00:00:00Z",
+				updatedAtUtc: "2026-11-06T00:00:00Z",
+				isPinned: false,
+				appVersion: null,
+				notes: null,
+			},
+		]);
+		server.use(
+			http.get(localApiPath(`model-lab/experiments/${traceId}/trace`), () =>
+				HttpResponse.json({
+					records: [{ step: 0, layer: 1, kind: "F", norm: 2, percentiles: [0, 1, 5], topIndices: [7], topValues: [1] }],
+					truncated: false,
+					droppedRecords: 0,
+					byteCap: 1000,
+				}),
+			),
+		);
+		const onJump = vi.fn();
+
+		renderWithProviders(
+			<ArchitectureExplorer
+				intent={{ tab: "architecture", nonce: 1, modelName: gguf, traceId, blockIndex: 1 }}
+				onJump={onJump}
+			/>,
+		);
+
+		const traced = await screen.findByRole("button", { name: "Block 1: Full attention, traced" });
+		expect(traced.getAttribute("aria-pressed")).toBe("true");
+		expect((await screen.findByTestId("model-lab-architecture-trace-summary")).textContent).toContain("Mean norm 2");
+
+		fireEvent.click(screen.getByRole("button", { name: "Block 0: Linear attention" }));
+		expect(screen.getByRole("button", { name: "Block 0: Linear attention" }).getAttribute("aria-pressed")).toBe("true");
+		expect(traced.getAttribute("aria-pressed")).toBe("false");
+
+		fireEvent.click(screen.getByRole("button", { name: "Open trace" }));
+		expect(onJump).toHaveBeenCalledExactlyOnceWith({ tab: "trace", experimentId: traceId });
+	});
 });
 
 const modeling = "models/qwen3_5/modeling_qwen3_5.py";

@@ -25,6 +25,7 @@
 				"noTraceChosen": "Kein Trace",
 				"noTraces": "Für dieses Modell gibt es noch keinen fertigen Trace. Einen unter „Trace und Steering“ gestarteten Trace können Sie hier über die Blöcke legen.",
 				"notTraced": "Nicht getraced: Der gewählte Trace hat diesen Block nicht gemessen.",
+				"openTrace": "Trace öffnen",
 				"operations": "Operationen",
 				"overviewOnly": "Für die Architektur {{architecture}} wird kein Operationsgraph angezeigt, nur die aus der Datei gelesenen Tensorgruppen.",
 				"readBadge": "Aus der Datei gelesen",
@@ -410,6 +411,11 @@
 						"math": "Kandidat $i$ bleibt, wenn\n\n$$p_i \\ge \\text{Min-p} \\cdot \\max_j p_j \\iff \\ell_i \\ge \\max_j \\ell_j + \\ln(\\text{Min-p})$$\n\n- $p_i$: Softmax über die Top-p-Überlebenden, bei Temperatur 1.\n- $\\ell_i$: Logit; eine Log-Wahrscheinlichkeit funktioniert genauso, da sich beide nur um eine Konstante unterscheiden.\n- $\\text{Min-p} \\le 0$: aus. Das Maximum bleibt immer.\n- Beispiel: Bei Min-p 0,05 und einem obersten Eintrag mit 80 % fallen Einträge unter 4 % weg; liegt der oberste bei 20 %, nur Einträge unter 1 %.",
 						"overview": "Min-p verwirft jeden Eintrag, dessen Wahrscheinlichkeit unter einem Anteil der Wahrscheinlichkeit des obersten Eintrags liegt. Weil die Schwelle relativ zum obersten Kandidaten ist, schneidet es stark, wenn das Modell sicher ist, und wenig, wenn es unsicher ist. Der Standardwert von llama-server ist 0,05."
 					},
+					"promptTokens": {
+						"detail": "Nach einem Lauf schickt der Node genau dessen Eingaben an den geladenen llama.cpp-Server: Er wendet die Chat-Vorlage des Modells an (mit ausgeschaltetem Denken, wenn der Lauf es ausgeschaltet hatte) und zerlegt das Ergebnis so in Tokens wie bei einer Chat-Anfrage. Ein Token gilt als Steuer-Token, wenn llama.cpp es als solches erkennt, wie bei Markierungen wie `<|im_start|>`; anderer Vorlagentext, in manchen Modellfamilien auch Denk-Tags, kann aus gewöhnlichen Tokens bestehen. Das Lesen der Tokens lädt das Modell nie: Wurde es entladen oder wurde sein Server beendet, sagt die Ansicht das stattdessen. Jedes unterschiedliche Token wird einzeln geprüft, daher kann ein langer Prompt einen Moment dauern. Es sind die Tokens des GGUF; ein Trace am Hugging-Face-Checkpoint nutzt dessen Tokenizer und Vorlage, die denselben Prompt anders zerlegen können.",
+						"math": "Das Modell liest IDs, keinen Text. Token $i$ des Prompts wird zur Zeile $\\mathrm{id}_i$ der Embedding-Matrix $E$:\n\n$$x_i = E[\\mathrm{id}_i]$$\n\nJedes Prompt-Token belegt einen Platz im Kontextfenster, für eine Anfrage gilt also $n_{\\text{prompt}} + n_{\\text{generated}} \\le n_{\\text{ctx}}$.",
+						"overview": "Ein Modell sieht nie Ihren Text, nur nummerierte Stücke davon, die Tokens. Bevor Ihr Prompt das Modell erreicht, umschließt eine Chat-Vorlage ihn mit Rollenmarkierungen, und der Tokenizer zerlegt das Ergebnis in Tokens. Diese Ansicht zeigt genau diese Folge für den letzten Lauf."
+					},
 					"softmax": {
 						"detail": "Softmax läuft über das ganze Vokabular. Die Balken zeigen die bis zu 20 wahrscheinlichsten Ergebnisse, ihre Summe beträgt daher höchstens 100 %; den Rest teilt sich das übrige Vokabular. Dieselbe Zahl zu jedem Logit zu addieren ändert nichts, deshalb funktionieren Log-Wahrscheinlichkeiten genauso gut wie Logits.",
 						"math": "$$p_i = \\frac{e^{\\ell_i}}{\\sum_j e^{\\ell_j}}$$\n\n- $\\ell_i$: Logit des Eintrags $i$; die Summe läuft über das ganze Vokabular.\n- $p_i$: Wahrscheinlichkeit des Eintrags $i$.\n\nVerschiebungsinvarianz: $\\mathrm{softmax}(\\ell + c) = \\mathrm{softmax}(\\ell)$. llama.cpp zieht vor dem Exponenzieren den größten Logit ab, nur für die numerische Stabilität.",
@@ -438,6 +444,7 @@
 					"chosenMissingProcessed": "Das gewählte Token ist nicht unter diesen {{count}} Kandidaten.",
 					"chosenMissingTrace": "Das gewählte Token ist nicht unter diesen {{count}} Kandidaten: Die Generierung hat es aus den verarbeiteten Scores gewählt, wo es höher stand.",
 					"cut": "Entfernt",
+					"fromTrace": "Aus einem Trace übernommen. „Nächstes Token“ führt das gepaarte GGUF mit llama.cpp aus, daher können Tokens und Wahrscheinlichkeiten vom Trace abweichen, der den Hugging-Face-Checkpoint in PyTorch ausgeführt hat.",
 					"lastMissing": "Der Stream lässt den letzten Schritt aus und bei aktivem Denken einige Zeilenumbruch-Schritte, daher können die Schritte vom Text abweichen.",
 					"measuredTitle": "Von llama.cpp gemessen",
 					"minP": "Min-p: {{value}}",
@@ -449,6 +456,20 @@
 					"notTokens": "Schritte sind Einträge, keine Tokens: Mehrbyte-Text kann mehrere Tokens zu einem Eintrag zusammenfassen, dessen Werte zu seinem letzten Token gehören.",
 					"pickStep": "Wählen Sie einen Schritt, um seine Kandidaten zu sehen.",
 					"preSampling": "Die Balken zeigen die Wahrscheinlichkeiten, die llama.cpp vor dem Sampling berechnet hat: Temperatur, Top-k und Top-p des Laufs ändern sie nicht.",
+					"promptTokens": {
+						"chip": "{{piece}}, ID {{id}}",
+						"chipSpecial": "{{piece}}, ID {{id}}, Steuer-Token",
+						"count": "Das Modell hat {{tokens}} Tokens gelesen: Ihren Prompt mit angewandter Chat-Vorlage.",
+						"failed": "Die Prompt-Tokens konnten nicht gelesen werden.",
+						"legend": "Tokens, die llama.cpp als Steuer-Tokens erkennt, sind gestrichelt umrandet. · steht für ein Leerzeichen, ↵ für einen Zeilenumbruch, ⇥ für einen Tabulator.",
+						"loading": "Die Tokens des Prompts werden von llama.cpp gelesen. Bei einem langen Prompt kann das einen Moment dauern.",
+						"notLoaded": "Das Modell wurde entladen oder sein Server beendet, bevor seine Prompt-Tokens gelesen werden konnten. Starten Sie den Lauf erneut, um sie zu sehen.",
+						"pick": "Zeigen Sie auf ein Token oder wechseln Sie mit den Pfeiltasten dorthin, um seine ID zu sehen.",
+						"readout": "Token {{position}} von {{total}}: {{piece}}, ID {{id}}",
+						"readoutSpecial": "Token {{position}} von {{total}}: {{piece}}, ID {{id}}, Steuer-Token",
+						"title": "Prompt-Tokens",
+						"truncated": "Angezeigt werden nur die ersten {{shown}} Tokens."
+					},
 					"rest": "Der Rest des Vokabulars: {{percent}}",
 					"run": "Ausführen",
 					"serverDefaults": "Sampling-Werte, die ein Lauf leer lässt, nutzen die Standardwerte von llama-server (Top-k 40, Top-p 0,95, Min-p 0,05, Temperatur 0,8), sofern Modelldatei oder Startargumente keine anderen setzen. Top-k 40 ist mehr als die gezeigten Kandidaten, die Simulation kann dann vom Server abweichen.",
@@ -478,6 +499,7 @@
 						"logits": "Logits",
 						"logprob": "Log-Wahrscheinlichkeit",
 						"minP": "Min-p",
+						"promptTokens": "Prompt-Tokens",
 						"softmax": "Softmax",
 						"temperature": "Temperatur",
 						"topK": "Top-k",
@@ -704,6 +726,7 @@
 				"savedHint": "Bereits heruntergeladen, wird daher ohne Verbindung zu Hugging Face geprüft und getraced.",
 				"scope": "Der Trace lädt den Checkpoint in voller Präzision auf die GPU und braucht daher dessen Gewichte plus etwa 2 GB Kartenspeicher. Ein größeres Modell wird abgelehnt, bevor etwas heruntergeladen wird, egal wie es für den Chat quantisiert ist.",
 				"select": "{{repo}} vom {{date}} zum Vergleichen auswählen",
+				"showInArchitecture": "Block {{index}} unter Architektur zeigen",
 				"spec": "Bis zu 128 Tokens, greedy. Der Trace ist je nach Anzahl der Blöcke in der Größe begrenzt und wird mit Prompt und Ausgabe verschlüsselt auf diesem Node gespeichert.",
 				"start": "Trace starten",
 				"startFailed": "Das Experiment konnte nicht starten.",
@@ -718,6 +741,7 @@
 				"token": "Token",
 				"traceFailed": "Der Trace konnte nicht geladen werden.",
 				"truncated": "Der Trace hat seine Grenze von {{cap}} erreicht: {{dropped}} Einträge wurden nicht behalten. Die Generierung war nicht betroffen.",
+				"tryNextToken": "Unter „Nächstes Token“ ausprobieren",
 				"unsupported": "Der Trace läuft vorerst nur unter Linux, weil er die Python-Trainings-Runtime braucht, die es nur unter Linux gibt. Die anderen Werkzeuge im Model Lab funktionieren hier."
 			}
 		}

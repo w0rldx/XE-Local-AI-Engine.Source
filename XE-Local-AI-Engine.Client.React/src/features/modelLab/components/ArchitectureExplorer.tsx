@@ -1,4 +1,5 @@
-import { Alert, Loader, Select, Stack, Text } from "@mantine/core";
+import { Alert, Button, Group, Loader, Select, Stack, Text } from "@mantine/core";
+import { IconArrowRight } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,9 +24,16 @@ import {
 	summarizeTraceByBlock,
 } from "@/features/modelLab/models/ModelLabArchitecture";
 import type { ExplanationLevel } from "@/features/modelLab/models/ModelLabExplanation";
+import type { ModelLabIntent, ModelLabJump } from "@/features/modelLab/models/ModelLabNavigation";
+
+interface ArchitectureExplorerProps {
+	// Another tab asked to show this model with a trace laid over it and one block open.
+	intent?: ModelLabIntent<"architecture">;
+	onJump?: (to: ModelLabJump) => void;
+}
 
 // One installed model's structure from its GGUF header, with an optional saved trace of that model laid over its blocks.
-export function ArchitectureExplorer() {
+export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerProps) {
 	const { t } = useTranslation();
 	const models = useQuery({ ...listLocalModelsOptions(), staleTime: 30_000 });
 	const modelNames = (models.data?.items ?? []).flatMap((item) =>
@@ -35,6 +43,13 @@ export function ArchitectureExplorer() {
 	const [selection, setSelection] = useState<ArchitectureSelection | null>(null);
 	const [traceId, setTraceId] = useState<string | null>(null);
 	const [explanationLevel, setExplanationLevel] = useState<ExplanationLevel>("overview");
+	const [appliedNonce, setAppliedNonce] = useState<number>();
+	if (intent && intent.nonce !== appliedNonce) {
+		setAppliedNonce(intent.nonce);
+		setModelName(intent.modelName);
+		setTraceId(intent.traceId);
+		setSelection(intent.blockIndex);
+	}
 
 	const descriptor = useQuery({
 		...getModelLabArchitectureOptions({ path: { modelName: modelName ?? "" } }),
@@ -90,6 +105,19 @@ export function ArchitectureExplorer() {
 					onChange={setTraceId}
 					clearable={true}
 				/>
+			)}
+			{onJump && traceId !== null && (
+				<Group>
+					<Button
+						size="compact-sm"
+						variant="light"
+						rightSection={<IconArrowRight size={14} aria-hidden={true} />}
+						onClick={() => onJump({ tab: "trace", experimentId: traceId })}
+						data-testid="model-lab-architecture-open-trace"
+					>
+						{t("pages.modelLab.architecture.openTrace", "Open trace")}
+					</Button>
+				</Group>
 			)}
 			{modelName !== null && experiments.isSuccess && traceOptions.length === 0 && (
 				<Text size="sm" c="dimmed" data-testid="model-lab-architecture-no-traces">

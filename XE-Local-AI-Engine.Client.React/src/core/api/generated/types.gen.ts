@@ -4830,6 +4830,26 @@ export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentRouteReque
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokenResponse = {
+	id: number;
+	piece: string;
+	special: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokensRequest = {
+	modelName: string;
+	systemPrompt?: string | null;
+	prompt?: string;
+	disableThinking?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokensResponse = {
+	renderedPrompt: string;
+	tokens: Array<XeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokenResponse>;
+	tokenCount: number;
+	truncated: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPyTorchBlockedResponse = {
 	reason: XeLocalAiEngineClientServicesModelLabModelLabPyTorchRefusal;
 	message: string;
@@ -7286,7 +7306,8 @@ export type XeLocalAiEngineClientServicesModelLabModelLabStartRefusal =
 	| "ProcessNotConfirmedStopped"
 	| "InvalidLayer"
 	| "InvalidTraceLayers"
-	| "PinLimitReached";
+	| "PinLimitReached"
+	| "ModelNotLoaded";
 
 export type XeLocalAiEngineClientServicesModelLabModelLabSteeringArm = {
 	name: string;
@@ -18194,6 +18215,40 @@ export type GetModelLabExperimentTraceResponses = {
 };
 
 export type GetModelLabExperimentTraceResponse = GetModelLabExperimentTraceResponses[keyof GetModelLabExperimentTraceResponses];
+
+export type TokenizeModelLabPromptData = {
+	body: XeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokensRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-lab/prompt-tokens";
+};
+
+export type TokenizeModelLabPromptErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsModelLabV1ModelLabStartBlockedResponse;
+};
+
+export type TokenizeModelLabPromptError = TokenizeModelLabPromptErrors[keyof TokenizeModelLabPromptErrors];
+
+export type TokenizeModelLabPromptResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokensResponse;
+};
+
+export type TokenizeModelLabPromptResponse = TokenizeModelLabPromptResponses[keyof TokenizeModelLabPromptResponses];
 
 export type GetModelLabPyTorchSourceData = {
 	body?: never;
