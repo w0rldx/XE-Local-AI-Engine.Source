@@ -70,7 +70,7 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 
 setupMswServer();
 
-function stubModels(): void {
+function stubModels(reasoningModels: readonly string[] = []): void {
 	server.use(
 		http.get(localApiPath("models"), () =>
 			HttpResponse.json({
@@ -86,7 +86,7 @@ function stubModels(): void {
 					kind: "Chat",
 					detectedKind: "Chat",
 					capabilities: [],
-					isReasoningCapable: false,
+					isReasoningCapable: modelName !== undefined && reasoningModels.includes(modelName),
 					isToolCapable: true,
 					isOverridden: false,
 					provider,
@@ -145,8 +145,33 @@ describe("DirectInferencePage", () => {
 		await fillAndSend();
 
 		await waitFor(() => expect(screen.getByTestId("direct-inference-output").textContent).toBe("hi"));
-		expect(hub.state.requests[0]).toMatchObject({ modelId: "qwen3", topLogprobs: undefined });
+		expect(hub.state.requests[0]).toMatchObject({ modelId: "qwen3", topLogprobs: undefined, disableThinking: undefined });
 		expect(screen.queryByTestId("direct-inference-logprobs")).toBeNull();
+		expect(screen.queryByTestId("direct-inference-thinking-off")).toBeNull();
+	});
+
+	it("offers Thinking off for a reasoning llama.cpp model only, starts each model from its default, and sends it", async () => {
+		stubModels(["qwen3", "gpt-6"]);
+		renderWithProviders(<DirectInferencePage />);
+		const pick = async (name: string): Promise<void> => {
+			fireEvent.click(screen.getByTestId("direct-inference-model"));
+			fireEvent.click(await screen.findByRole("option", { name, hidden: true }));
+		};
+
+		await pick("qwen3");
+		const thinkingOff = (): HTMLInputElement => screen.getByTestId("direct-inference-thinking-off") as HTMLInputElement;
+		expect(thinkingOff().checked).toBe(false);
+		fireEvent.click(thinkingOff());
+		await pick("gpt-6");
+		expect(screen.queryByTestId("direct-inference-thinking-off")).toBeNull();
+		await pick("qwen3");
+		expect(thinkingOff().checked).toBe(false);
+		fireEvent.click(thinkingOff());
+		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Hi" } });
+		fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+		await waitFor(() => expect(hub.state.requests).toHaveLength(1));
+		expect(hub.state.requests[0]).toMatchObject({ modelId: "qwen3", disableThinking: true });
 	});
 
 	it("offers token probabilities for a llama.cpp model only, and does not send a value kept from one", async () => {

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using OpenAI.Chat;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Capacity;
@@ -542,6 +543,81 @@ public sealed class DirectInferenceServiceTests
         }, CancellationToken.None).ToListAsync();
 
         AssertEx.Equal(DirectInferenceErrorCodes.LogprobsLocalOnly, events.Single().ErrorCode);
+    }
+
+    [Test]
+    public async Task StreamAsync_DisableThinkingForAnInstalledLlamaModel_TurnsThinkingOffOnTheWire()
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()));
+
+        _ = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi",
+            TopLogprobs = 3,
+            DisableThinking = true
+        }, CancellationToken.None).ToListAsync();
+
+        // The deferred client's own switch turns the marker into the request fields, as it does on the real path.
+        var sent = AssertEx.NotNull(DeferredLlamaServerChatClient.ApplyThinkingSwitch(AssertEx.NotNull(harness.SentOptions)));
+        using var body = JsonDocument.Parse(await LlamaGrammarToolOffer.CaptureWireBodyAsync(sent, CancellationToken.None));
+        AssertEx.False(body.RootElement.GetProperty("chat_template_kwargs").GetProperty("enable_thinking").GetBoolean());
+        AssertEx.Equal(0, body.RootElement.GetProperty("reasoning_budget_tokens").GetInt32());
+        AssertEx.Equal(3, body.RootElement.GetProperty("top_logprobs").GetInt32(), "the switch composes with the probability request");
+    }
+
+    [Test]
+    [Arguments(null)]
+    [Arguments(false)]
+    public async Task StreamAsync_ThinkingNotTurnedOff_SendsNoMarker(bool? disableThinking)
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()));
+
+        _ = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi",
+            DisableThinking = disableThinking
+        }, CancellationToken.None).ToListAsync();
+
+        AssertEx.False(AssertEx.NotNull(AssertEx.NotNull(harness.SentOptions).AdditionalProperties).ContainsKey(InvocationAgentFactory.LlamaDisableThinkingMarkerKey));
+    }
+
+    [Test]
+    [Arguments(CodexModelId)]
+    [Arguments(AzureDeploymentName)]
+    [Arguments(LocalExternalModelId)]
+    [Arguments(CloudExternalModelId)]
+    [Arguments(UnknownModelId)]
+    public async Task StreamAsync_DisableThinkingForAModelNotServedByLlamaCpp_IsIgnored(string modelId)
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()));
+
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = modelId,
+            Prompt = "Hi",
+            DisableThinking = true
+        }, CancellationToken.None).ToListAsync();
+
+        AssertEx.False(AssertEx.NotNull(AssertEx.NotNull(harness.SentOptions).AdditionalProperties).ContainsKey(InvocationAgentFactory.LlamaDisableThinkingMarkerKey));
+        AssertEx.Equal(DirectInferenceEventTypes.Done, events[^1].Type, "ignored, not refused");
+    }
+
+    [Test]
+    public async Task StreamAsync_DisableThinkingForAnInstalledModelMappedToAnotherProvider_IsIgnored()
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()));
+        harness.Providers.ResolveProviderNameForModelAsync(ModelId, Arg.Any<CancellationToken>()).Returns("another-runtime");
+
+        _ = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi",
+            DisableThinking = true
+        }, CancellationToken.None).ToListAsync();
+
+        AssertEx.False(AssertEx.NotNull(AssertEx.NotNull(harness.SentOptions).AdditionalProperties).ContainsKey(InvocationAgentFactory.LlamaDisableThinkingMarkerKey));
     }
 
     [Test]

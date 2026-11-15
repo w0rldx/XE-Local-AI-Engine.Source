@@ -7749,6 +7749,16 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchIndexResponse 
 	join: zXeLocalAiEngineClientServicesModelLabModelLabPyTorchJoin,
 });
 
+export const zXeLocalAiEngineClientServicesModelLabModelLabResultCandidate = z.object({
+	id: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	text: z.string().optional(),
+	logprob: z.number().optional(),
+});
+
 export const zXeLocalAiEngineClientServicesModelLabModelLabResultToken = z.object({
 	id: z
 		.int()
@@ -7756,6 +7766,10 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabResultToken = z.objec
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 	text: z.string().optional(),
+	logprob: z.number().nullish(),
+	candidates: z.array(zXeLocalAiEngineClientServicesModelLabModelLabResultCandidate).nullish(),
+	processedLogprob: z.number().nullish(),
+	processedCandidates: z.array(zXeLocalAiEngineClientServicesModelLabModelLabResultCandidate).nullish(),
 });
 
 export const zXeLocalAiEngineClientServicesModelLabModelLabStartRefusal = z.enum([

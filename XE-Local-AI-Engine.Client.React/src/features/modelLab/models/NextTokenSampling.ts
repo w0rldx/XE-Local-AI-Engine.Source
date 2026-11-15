@@ -1,4 +1,13 @@
-import type { DirectInferenceLogprobAlternative } from "@/core/directInference/DirectInferenceModels";
+import type {
+	DirectInferenceLogprobAlternative,
+	DirectInferenceLogprobEntry,
+} from "@/core/directInference/DirectInferenceModels";
+
+/** A shown candidate. A Model Lab trace knows its token id; llama.cpp's entries carry only their text. */
+export type NextTokenCandidate = DirectInferenceLogprobAlternative & { id?: number };
+
+/** A step as the step view reads it; `id` set when the chosen token's id is known. */
+export type NextTokenStepEntry = DirectInferenceLogprobEntry & { id?: number; alternatives: NextTokenCandidate[] };
 
 export interface SamplerSettings {
 	temperature: number;
@@ -14,6 +23,7 @@ export interface SamplerSettings {
 export const neutralSamplerSettings: SamplerSettings = { temperature: 1, topK: 0, topP: 1, minP: 0 };
 
 export interface SimulatedCandidate {
+	id?: number;
 	text?: string | null;
 	/** The server's value, untouched. */
 	logprob: number;
@@ -45,10 +55,7 @@ function softmax(logprobs: readonly number[], temperature = 1): number[] {
 // raw logits, before any sampler.
 // A logprob is the logit minus one shared constant, so a softmax over the shown logprobs is the softmax over their logits.
 /** Applies top-k, top-p, min-p and temperature to the shown candidates only, sorted by probability, highest first. */
-export function simulateSampling(
-	candidates: readonly DirectInferenceLogprobAlternative[],
-	settings: SamplerSettings,
-): SimulatedCandidate[] {
+export function simulateSampling(candidates: readonly NextTokenCandidate[], settings: SamplerSettings): SimulatedCandidate[] {
 	// Ties keep the server's list order; the server's own tie order is unspecified (std::partial_sort), so an exact tie
 	// may pick differently there.
 	const sorted = [...candidates].sort((left, right) => right.logprob - left.logprob);
@@ -78,6 +85,7 @@ export function simulateSampling(
 					settings.temperature,
 				);
 	return sorted.map((candidate, index) => ({
+		id: candidate.id,
 		text: candidate.text,
 		logprob: candidate.logprob,
 		probability: index < kept ? (probabilities[index] ?? 0) : 0,

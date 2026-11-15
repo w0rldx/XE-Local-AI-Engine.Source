@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import i18next from "i18next";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
 	applyDirectInferenceEvent,
@@ -62,10 +63,25 @@ describe("applyDirectInferenceEvent logprobs", () => {
 });
 
 describe("logprob labels", () => {
-	it("reads a logprob as a percentage, and one that rounds away as a bound", () => {
+	const suiteLanguage = i18next.language;
+	afterEach(async () => {
+		await i18next.changeLanguage(suiteLanguage);
+	});
+
+	it("reads a logprob as a percentage, and one that rounds away as a bound", async () => {
+		await i18next.changeLanguage("en");
+
 		expect(logprobPercentLabel(0)).toBe("100.00%");
 		expect(logprobPercentLabel(-1.69)).toBe("18.45%");
 		expect(logprobPercentLabel(-3.4028235e38)).toBe("<0.01%");
+	});
+
+	it("formats the percentage and the bound in the app language", async () => {
+		await i18next.changeLanguage("de");
+
+		// German puts a no-break space before the sign.
+		expect(logprobPercentLabel(-1.69)).toBe("18,45\u00a0%");
+		expect(logprobPercentLabel(-3.4028235e38)).toBe("<0,01\u00a0%");
 	});
 
 	it("keeps whitespace visible and survives a missing text", () => {

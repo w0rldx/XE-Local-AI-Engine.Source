@@ -193,6 +193,28 @@ public sealed record ModelLabResultToken
     public int Id { get; init; }
 
     public string Text { get; init; } = string.Empty;
+
+    /// <summary>The token's natural-log probability from the model's raw logits over the whole vocabulary; null in a trace made before candidates were recorded, or where it was not finite.</summary>
+    public double? Logprob { get; init; }
+
+    /// <summary>The top candidates from the raw logits, most probable first; null in a trace made before they were recorded.</summary>
+    public IReadOnlyList<ModelLabResultCandidate>? Candidates { get; init; }
+
+    /// <summary>As <see cref="Logprob" />, after the checkpoint's generation-config processors (for example a repetition penalty).</summary>
+    public double? ProcessedLogprob { get; init; }
+
+    /// <summary>As <see cref="Candidates" />, after the checkpoint's generation-config processors. A candidate they masked is left out.</summary>
+    public IReadOnlyList<ModelLabResultCandidate>? ProcessedCandidates { get; init; }
+}
+
+/// <summary>One next-token candidate at a generated step. The logprob is rounded down to four decimals.</summary>
+public sealed record ModelLabResultCandidate
+{
+    public int Id { get; init; }
+
+    public string Text { get; init; } = string.Empty;
+
+    public double Logprob { get; init; }
 }
 
 /// <summary>What <c>modellab.py</c> measured, from <c>result.json</c>.</summary>

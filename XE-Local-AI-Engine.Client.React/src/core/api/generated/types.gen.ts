@@ -7246,9 +7246,19 @@ export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchTensorLink = {
 	modulePath: string;
 };
 
+export type XeLocalAiEngineClientServicesModelLabModelLabResultCandidate = {
+	id?: number;
+	text?: string;
+	logprob?: number;
+};
+
 export type XeLocalAiEngineClientServicesModelLabModelLabResultToken = {
 	id?: number;
 	text?: string;
+	logprob?: number | null;
+	candidates?: Array<XeLocalAiEngineClientServicesModelLabModelLabResultCandidate> | null;
+	processedLogprob?: number | null;
+	processedCandidates?: Array<XeLocalAiEngineClientServicesModelLabModelLabResultCandidate> | null;
 };
 
 export type XeLocalAiEngineClientServicesModelLabModelLabStartRefusal =

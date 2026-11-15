@@ -1,6 +1,8 @@
 // Hand-written mirror of the chat hub's `StreamDirectInference` contract (DirectInferenceContracts.cs). Hub payloads are not
 // in the OpenAPI document, so nothing generates these; keep the member names in step with the C# records.
 
+import i18next from "i18next";
+
 import type { WireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
 
 /**
@@ -22,6 +24,8 @@ export interface DirectInferenceRequest {
 	prompt: string;
 	samplingOptions?: WireSamplingOptions;
 	topLogprobs?: number;
+	/** True turns a reasoning llama.cpp model's thinking off; absent keeps the model's default. */
+	disableThinking?: boolean;
 }
 
 export interface DirectInferenceUsage {
@@ -138,10 +142,29 @@ export function tokensPerSecond(tokens: number | null | undefined, ms: number | 
 	return tokens != null && ms != null && tokens > 0 && ms > 0 ? (tokens * 1000) / ms : undefined;
 }
 
-/** A logprob as a percentage; a value that rounds to nothing, like llama-server's stand-in for zero, reads as a bound rather than 0. */
+// One formatter per requested language: a step view renders up to twenty labels per re-render.
+const percentFormats = new Map<string | undefined, Intl.NumberFormat>();
+
+function percentFormat(): Intl.NumberFormat {
+	// The requested language, not `resolvedLanguage`, for the reason `formatTimestamp` gives.
+	const language = i18next.language;
+	let format = percentFormats.get(language);
+	if (!format) {
+		try {
+			format = new Intl.NumberFormat(language, { style: "percent", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+		} catch {
+			// A malformed stored tag is a RangeError; the environment's default still renders a percentage.
+			format = new Intl.NumberFormat(undefined, { style: "percent", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+		}
+		percentFormats.set(language, format);
+	}
+	return format;
+}
+
+/** A logprob as a percentage in the app language; a value that rounds to nothing, like llama-server's stand-in for zero, reads as a bound rather than 0. */
 export function logprobPercentLabel(logprob: number): string {
-	const percent = Math.exp(logprob) * 100;
-	return percent < 0.01 ? "<0.01%" : `${percent.toFixed(2)}%`;
+	const probability = Math.exp(logprob);
+	return probability < 0.0001 ? `<${percentFormat().format(0.0001)}` : percentFormat().format(probability);
 }
 
 /** Entry text with its whitespace visible and quoted, because " the" and "the" are different alternatives. */

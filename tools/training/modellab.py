@@ -59,6 +59,7 @@ from modellablib import (
     representatives,
     sanitized_export_error,
     scaled_to_norm,
+    scored_token,
     serialized_result,
     source_file_path,
     steering_vector,
@@ -71,6 +72,7 @@ from trainlib import CANCELLED_EXIT_CODE
 HEARTBEAT_SECONDS = 20
 TOP_DIMENSIONS = 8
 PERCENTILES = (0.01, 0.5, 0.99)
+TOP_CANDIDATES = 20
 
 
 def emit(event, **fields):
@@ -226,6 +228,14 @@ def write_result(job, result):
         json.dump(result, handle, ensure_ascii=False)
 
 
+def _exact_candidates(tokenizer, logits, chosen):
+    """A step's float32 log-softmax over the whole vocabulary, on the GPU; only the chosen token and top k leave it."""
+    logprobs = torch.log_softmax(logits[0].float(), dim=-1)
+    top = torch.topk(logprobs, TOP_CANDIDATES)
+    ids = top.indices.tolist()
+    return logprobs[chosen].item(), ids, [tokenizer.decode([token]) for token in ids], top.values.tolist()
+
+
 def trace(job, run):
     tokenizer, model = load_model(job, run)
     blocks = blocks_of(model)
@@ -249,7 +259,12 @@ def trace(job, run):
                 ids,
                 attention_mask=torch.ones_like(ids),
                 do_sample=False,
+                num_beams=1,  # a checkpoint's beam setting would break the step alignment below
                 max_new_tokens=total,
+                # Step i of logits (raw) and scores (after generation-config processors) chose sequences[prompt + i].
+                return_dict_in_generate=True,
+                output_logits=True,
+                output_scores=True,
                 use_cache=True,
                 eos_token_id=stop_tokens(tokenizer, model.generation_config.eos_token_id),
                 pad_token_id=tokenizer.eos_token_id,
@@ -264,12 +279,22 @@ def trace(job, run):
 
     run.enter("saving")
     writer.close()
-    generated = output[0, prompt_tokens:].tolist()
+    generated = output.sequences[0, prompt_tokens:].tolist()
+    tokens = [
+        scored_token(
+            token,
+            tokenizer.decode([token]),
+            _exact_candidates(tokenizer, logits, token),
+            _exact_candidates(tokenizer, scores, token),
+        )
+        for token, logits, scores in zip(generated, output.logits, output.scores, strict=True)
+    ]
+    del output  # the per-step full-vocabulary tensors
     write_result(
         job,
         {
             "promptTokens": prompt_tokens,
-            "tokens": [{"id": token, "text": tokenizer.decode([token])} for token in generated],
+            "tokens": tokens,
             "text": tokenizer.decode(generated),
             "seconds": round(seconds, 3),
             **measured_facts(model, blocks),

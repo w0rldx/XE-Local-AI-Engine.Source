@@ -2,6 +2,7 @@ import type {
 	XeLocalAiEngineClientServicesModelLabModelLabResultToken as ResultToken,
 	XeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceRecordResponse as TraceRecord,
 } from "@/core/api/generated/types.gen";
+import type { NextTokenStepEntry } from "@/features/modelLab/models/NextTokenSampling";
 
 const activeJobFallbackMs = 5_000;
 
@@ -28,12 +29,13 @@ export interface TraceRow {
 }
 
 // Pivots the file's one record per token per layer into one row per token, so a token reads across its layers.
+// Every generated token gets a row: one past the trace's byte cap has no records, and its candidates stay selectable.
 export function toTraceTable(
 	records: Pick<TraceRecord, "step" | "layer" | "kind" | "norm">[],
 	tokens: ResultToken[],
 ): { layers: TraceLayer[]; rows: TraceRow[] } {
 	const layers = new Map<number, string>();
-	const steps = new Map<number, Map<number, number | null>>();
+	const steps = new Map<number, Map<number, number | null>>(tokens.map((_, step) => [step, new Map()]));
 	for (const record of records) {
 		const step = record.step ?? 0;
 		const layer = record.layer ?? 0;
@@ -52,4 +54,39 @@ export function toTraceTable(
 			norms: orderedLayers.map((layer) => norms.get(layer.index) ?? null),
 		}));
 	return { layers: orderedLayers, rows };
+}
+
+// Raw: the model's own logits. Processed: after the checkpoint's generation-config processors, which chose the token.
+export type CandidateBasis = "raw" | "processed";
+
+// A step's exact candidates in the shape the next-token step view reads; undefined in a trace made before they were recorded.
+export function toStepEntry(token: ResultToken, basis: CandidateBasis): NextTokenStepEntry | undefined {
+	const candidates = basis === "raw" ? token.candidates : token.processedCandidates;
+	if (!candidates) {
+		return undefined;
+	}
+	// Null where the value was not finite: a token a processor masked, so probability 0.
+	const logprob = (basis === "raw" ? token.logprob : token.processedLogprob) ?? Number.NEGATIVE_INFINITY;
+	return {
+		id: token.id,
+		text: token.text,
+		logprob,
+		isReasoning: false,
+		alternatives: candidates.map((candidate) => ({
+			id: candidate.id,
+			text: candidate.text,
+			logprob: candidate.logprob ?? Number.NEGATIVE_INFINITY,
+		})),
+	};
+}
+
+// True when the processors changed nothing among the recorded candidates of this step.
+export function sameCandidates(token: ResultToken): boolean {
+	const raw = token.candidates ?? [];
+	const processed = token.processedCandidates ?? [];
+	return (
+		token.logprob === token.processedLogprob &&
+		raw.length === processed.length &&
+		raw.every((candidate, index) => candidate.id === processed[index]?.id && candidate.logprob === processed[index]?.logprob)
+	);
 }

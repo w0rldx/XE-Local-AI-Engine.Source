@@ -27,8 +27,8 @@ using ChatTokenLogProbabilityDetails = OpenAI.Chat.ChatTokenLogProbabilityDetail
 ///     The singleton client is the cloud/local router, so model routing and its egress checks are the chat path's own.
 ///     The request takes the node's invocation slot like a chat turn, but writes no conversation and no run row; the
 ///     terminal state it reports only closes the slot's live entry. Generation runs under the node's message deadline and,
-///     for an installed llama.cpp model whose request sets no limit of its own, a default output cap. Token probabilities
-///     are requested and read only when the request asks, and refused for any other model.
+///     for an installed llama.cpp model with no limit of its own, a default output cap. Token probabilities are refused,
+///     and a thinking-off request ignored, for any model but an installed llama.cpp one.
 /// </remarks>
 public sealed class DirectInferenceService : IDirectInferenceService
 {
@@ -100,7 +100,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
             AdditionalProperties = additionalProperties
         };
         InvocationSamplingRules.Apply(options, additionalProperties, sampling);
-        return StreamCoreAsync(modelId, messages, options, additionalProperties, request.TopLogprobs, cancellationToken);
+        return StreamCoreAsync(modelId, messages, options, additionalProperties, request.TopLogprobs, request.DisableThinking == true, cancellationToken);
     }
 
     private static InvocationSamplingOptions? ValidateAndMapSampling(DirectInferenceRequest request)
@@ -140,6 +140,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
         ChatOptions options,
         AdditionalPropertiesDictionary additionalProperties,
         int? topLogprobs,
+        bool disableThinking,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var invocationId = Guid.NewGuid();
@@ -158,6 +159,11 @@ public sealed class DirectInferenceService : IDirectInferenceService
         if (await NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync(modelId, _ggufModelStore, _modelTrustResolver, _localModelProviderResolver, cancellationToken))
         {
             ReasoningOptionsResolver.ApplyDefaultOutputCap(options, additionalProperties, DefaultMaxOutputTokens);
+            if (disableThinking)
+            {
+                additionalProperties[InvocationAgentFactory.LlamaDisableThinkingMarkerKey] = true;
+            }
+
             if (topLogprobs is { } count)
             {
                 options = LlamaServerLogprobs.Request(options, count);

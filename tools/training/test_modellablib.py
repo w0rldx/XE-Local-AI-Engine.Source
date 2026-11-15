@@ -13,7 +13,9 @@ import threading
 from unittest import mock
 
 from modellablib import (
+    CANDIDATE_TEXT_BYTES,
     CONTRACT_VERSION,
+    CUT_MARK,
     FOOTER_RESERVE_BYTES,
     MAX_CONFIG_BYTES,
     SOURCE_KIND,
@@ -24,6 +26,7 @@ from modellablib import (
     SourceRefusalError,
     block_index_of,
     control_vector_bytes,
+    cut_text,
     discover_block_path,
     heartbeat_counts,
     in_block_path,
@@ -39,9 +42,11 @@ from modellablib import (
     representatives,
     sanitized_export_error,
     scaled_to_norm,
+    scored_token,
     serialized_result,
     source_file_path,
     steering_vector,
+    step_candidates,
     trace_record,
     validate_job,
     vector_norm,
@@ -147,6 +152,57 @@ def test_a_record_is_rounded_and_names_its_layer():
         "ti": [1, 2],
         "tv": [0.556, -0.444],
     }
+
+
+def test_a_scored_token_carries_raw_and_processed_candidates_rounded_down():
+    raw = (-0.123456, [7, 3], ["a", "b"], [-0.123456, -2.5])
+    processed = (-0.000001, [7, 5], ["a", "c"], [-0.000001, -14.0])
+    assert scored_token(7, "a", raw, processed) == {
+        "id": 7,
+        "text": "a",
+        "logprob": -0.1235,
+        "candidates": [{"id": 7, "text": "a", "logprob": -0.1235}, {"id": 3, "text": "b", "logprob": -2.5}],
+        "processedLogprob": -0.0001,
+        "processedCandidates": [{"id": 7, "text": "a", "logprob": -0.0001}, {"id": 5, "text": "c", "logprob": -14.0}],
+    }
+
+
+def test_rounded_down_probabilities_never_sum_past_one():
+    logprobs = [math.log(p) for p in (0.99999, 0.000004, 0.000003, 0.000002, 0.000001)]
+    shown = step_candidates(range(5), ["t"] * 5, logprobs)
+    assert sum(math.exp(candidate["logprob"]) for candidate in shown) <= 1
+
+
+def test_a_masked_candidate_is_left_out_and_a_masked_choice_is_null():
+    inf, nan = float("inf"), float("nan")
+    assert step_candidates([1, 2, 3], ["x", "y", "z"], [-0.5, -inf, nan]) == [{"id": 1, "text": "x", "logprob": -0.5}]
+    token = scored_token(2, "y", (-inf, [], [], []), (nan, [], [], []))
+    assert token["logprob"] is None
+    assert token["processedLogprob"] is None
+    json.dumps(token, allow_nan=False)
+
+
+def test_a_long_text_is_cut_by_its_escaped_bytes_and_says_so():
+    assert cut_text("short") == "short"
+    for text in ("a" * 200, "\u00e4" * 200, "\x01" * 200, "\U0001f600" * 200):
+        cut = cut_text(text)
+        assert cut.endswith(CUT_MARK)
+        assert text.startswith(cut[: -len(CUT_MARK)])
+        assert len(json.dumps(cut, ensure_ascii=False).encode()) - 2 <= CANDIDATE_TEXT_BYTES
+    cut_candidate = step_candidates([9], ["\x01" * 99], [-1.0])[0]
+    assert cut_candidate["id"] == 9
+    assert cut_candidate["text"].endswith(CUT_MARK)
+
+
+def test_the_worst_result_fits_the_hosts_result_cap():
+    # ModelLabTraceSpec.MaxNewTokens steps under ModelLabTraceSpec.MaxResultBytes, written as write_result writes it:
+    # every token and candidate text a control character run (the costliest escape), ids and logprobs at full width.
+    # About 0.58 MiB; the full decoded "text" field beside it is the generation itself and is not cut.
+    max_new_tokens, max_result_bytes, text = 128, 1024 * 1024, "\x01" * 200
+    step = (-12.345678, [151_000 + i for i in range(20)], [text] * 20, [-12.345678 - i for i in range(20)])
+    tokens = [scored_token(151_643, text, step, step) for _ in range(max_new_tokens)]
+    size = len(json.dumps({"promptTokens": 4096, "tokens": tokens, "seconds": 12.345}, ensure_ascii=False).encode())
+    assert size < max_result_bytes * 0.75, size
 
 
 def test_a_non_finite_value_is_null_and_the_file_stays_strict_json():

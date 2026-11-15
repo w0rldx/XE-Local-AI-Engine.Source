@@ -2,12 +2,13 @@ import { Alert, Badge, Group, Paper, Progress, SimpleGrid, Slider, Stack, Text, 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { logprobPercentLabel, logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
 import {
-	type DirectInferenceLogprobEntry,
-	logprobPercentLabel,
-	logprobTextLabel,
-} from "@/core/directInference/DirectInferenceModels";
-import { neutralSamplerSettings, type SamplerSettings, simulateSampling } from "@/features/modelLab/models/NextTokenSampling";
+	neutralSamplerSettings,
+	type NextTokenStepEntry,
+	type SamplerSettings,
+	simulateSampling,
+} from "@/features/modelLab/models/NextTokenSampling";
 
 interface CandidateBarProps {
 	text?: string | null;
@@ -43,20 +44,26 @@ function CandidateBar({ text, chosen, probability, color }: CandidateBarProps) {
 }
 
 interface NextTokenStepViewProps {
-	entry: DirectInferenceLogprobEntry;
+	entry: NextTokenStepEntry;
 	// 1-based among the kept entries of the same kind, thinking or answer.
 	stepNumber: number;
+	// Set for a PyTorch trace's exact candidates: `basis` titles the measured column, and the llama-server wording gives
+	// way to the trace's. `processed` when the list is the processed scores, from which generation picked.
+	trace?: { basis: string; processed: boolean };
 }
 
 // One step's candidates as the server measured them, and beside them a sampler simulation over the same candidates.
-export function NextTokenStepView({ entry, stepNumber }: NextTokenStepViewProps) {
+export function NextTokenStepView({ entry, stepNumber, trace }: NextTokenStepViewProps) {
 	const { t } = useTranslation();
 	const [settings, setSettings] = useState<SamplerSettings>(neutralSamplerSettings);
 	const simulated = simulateSampling(entry.alternatives, settings);
 	const shownProbability = entry.alternatives.reduce((sum, alternative) => sum + Math.exp(alternative.logprob), 0);
-	// Only the first candidate with the chosen text is marked: entry texts can repeat.
-	const chosenIndex = simulated.findIndex((candidate) => candidate.text === entry.text);
+	// By id when known; else only the first candidate with the chosen text is marked, since entry texts can repeat.
+	const chosenIndex = simulated.findIndex((candidate) =>
+		entry.id === undefined ? candidate.text === entry.text : candidate.id === entry.id,
+	);
 	const count = entry.alternatives.length;
+	const fromTrace = trace !== undefined;
 	const titleValues = {
 		step: stepNumber,
 		text: logprobTextLabel(entry.text),
@@ -72,22 +79,38 @@ export function NextTokenStepView({ entry, stepNumber }: NextTokenStepViewProps)
 			</Title>
 			{chosenIndex === -1 && (
 				<Alert color="yellow" data-testid="model-lab-next-token-chosen-missing">
-					{t(
-						"pages.modelLab.nextToken.ui.chosenMissing",
-						"The chosen entry's text matches none of the {{count}} candidates: the model drew something outside them, or this entry merges several tokens (see “Why steps are not tokens”).",
-						{ count },
-					)}
+					{trace?.processed
+						? t(
+								"pages.modelLab.nextToken.ui.chosenMissingProcessed",
+								"The chosen token is not among these {{count}} candidates.",
+								{
+									count,
+								},
+							)
+						: trace
+							? t(
+									"pages.modelLab.nextToken.ui.chosenMissingTrace",
+									"The chosen token is not among these {{count}} candidates: generation picked it from the processed scores, where it ranked higher.",
+									{ count },
+								)
+							: t(
+									"pages.modelLab.nextToken.ui.chosenMissing",
+									"The chosen entry's text matches none of the {{count}} candidates: the model drew something outside them, or this entry merges several tokens (see “Why steps are not tokens”).",
+									{ count },
+								)}
 				</Alert>
 			)}
 			<SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
 				<Paper withBorder={true} p="md">
 					<Stack gap="xs" data-testid="model-lab-next-token-measured">
 						<Text size="sm" fw={600}>
-							{t("pages.modelLab.nextToken.ui.measuredTitle", "Measured by llama.cpp")}
+							{trace?.basis ?? t("pages.modelLab.nextToken.ui.measuredTitle", "Measured by llama.cpp")}
 						</Text>
 						{entry.alternatives.length === 0 && (
 							<Text size="sm" c="dimmed">
-								{t("pages.modelLab.nextToken.ui.noCandidates", "The server returned no candidates for this step.")}
+								{fromTrace
+									? t("pages.modelLab.nextToken.ui.noCandidatesTrace", "This trace recorded no candidates for this step.")
+									: t("pages.modelLab.nextToken.ui.noCandidates", "The server returned no candidates for this step.")}
 							</Text>
 						)}
 						{simulated.map((candidate, index) => (
@@ -115,11 +138,17 @@ export function NextTokenStepView({ entry, stepNumber }: NextTokenStepViewProps)
 						</Text>
 						<Alert color="grape" p="xs" data-testid="model-lab-next-token-sim-label">
 							<Text size="xs">
-								{t(
-									"pages.modelLab.nextToken.ui.simulatedLabel",
-									"Simulated over the {{count}} shown candidates, renormalized; not what the server sampled.",
-									{ count },
-								)}
+								{fromTrace
+									? t(
+											"pages.modelLab.nextToken.ui.simulatedLabelTrace",
+											"Simulated over the {{count}} shown candidates, renormalized; not what generation picked.",
+											{ count },
+										)
+									: t(
+											"pages.modelLab.nextToken.ui.simulatedLabel",
+											"Simulated over the {{count}} shown candidates, renormalized; not what the server sampled.",
+											{ count },
+										)}
 							</Text>
 							<Text size="xs">
 								{t(
@@ -127,12 +156,14 @@ export function NextTokenStepView({ entry, stepNumber }: NextTokenStepViewProps)
 									"Applied in llama.cpp's default order: top-k, then top-p, then min-p, then temperature. Penalties and llama.cpp's other samplers are not simulated.",
 								)}
 							</Text>
-							<Text size="xs" data-testid="model-lab-next-token-server-defaults">
-								{t(
-									"pages.modelLab.nextToken.ui.serverDefaults",
-									"Sampling values a run leaves empty use llama-server's defaults (top-k 40, top-p 0.95, min-p 0.05, temperature 0.8) unless the model file or its launch arguments set others. Top-k 40 is more than the shown candidates, so the simulation may then differ from the server.",
-								)}
-							</Text>
+							{!fromTrace && (
+								<Text size="xs" data-testid="model-lab-next-token-server-defaults">
+									{t(
+										"pages.modelLab.nextToken.ui.serverDefaults",
+										"Sampling values a run leaves empty use llama-server's defaults (top-k 40, top-p 0.95, min-p 0.05, temperature 0.8) unless the model file or its launch arguments set others. Top-k 40 is more than the shown candidates, so the simulation may then differ from the server.",
+									)}
+								</Text>
+							)}
 						</Alert>
 						<Stack gap={4}>
 							<Text size="xs">

@@ -29,6 +29,10 @@ FOOTER_RESERVE_BYTES = 160
 
 MAX_NEW_TOKENS_LIMIT = 4096
 
+# A token or candidate text in result.json: its JSON-escaped UTF-8 form at most this long, cut ones ending in CUT_MARK.
+CANDIDATE_TEXT_BYTES = 64
+CUT_MARK = "\u2026"
+
 # A vector this long against the residual norm: the spike's choice from six scales.
 STEERING_NORM_FACTOR = 0.5
 
@@ -186,6 +190,52 @@ def describe_failure(error):
 def _rounded(value):
     # NaN and infinity have no JSON form. Null keeps the file parseable and says the value was not a finite number.
     return round(value, 3) if math.isfinite(value) else None
+
+
+def _floored(value):
+    # Rounded down, so the probabilities shown never sum past 1.
+    return math.floor(value * 10_000) / 10_000
+
+
+def _floored_logprob(value):
+    # A masked (-inf) or NaN value has no JSON form: null.
+    return _floored(value) if math.isfinite(value) else None
+
+
+def _json_bytes(text):
+    return len(json.dumps(text, ensure_ascii=False).encode()) - 2
+
+
+def cut_text(text):
+    """A token text whose JSON form takes at most CANDIDATE_TEXT_BYTES, a cut one ending in an ellipsis; the id stays
+    exact. Bytes, not characters: 64 control characters escape to 384 bytes, and 41 texts a step must fit the cap."""
+    if _json_bytes(text) <= CANDIDATE_TEXT_BYTES:
+        return text
+    while _json_bytes(text + CUT_MARK) > CANDIDATE_TEXT_BYTES:
+        text = text[:-1]
+    return text + CUT_MARK
+
+
+def step_candidates(ids, texts, logprobs):
+    """One step's top candidates, best first. One a generation processor masked has no probability and is left out."""
+    return [
+        {"id": token, "text": cut_text(text), "logprob": _floored(logprob)}
+        for token, text, logprob in zip(ids, texts, logprobs, strict=True)
+        if math.isfinite(logprob)
+    ]
+
+
+def scored_token(token_id, text, raw, processed):
+    """A generated token with its exact log-probabilities over the whole vocabulary: raw from the model's logits, and
+    processed after the checkpoint's generation-config processors. Each is (chosen logprob, ids, texts, logprobs)."""
+    return {
+        "id": token_id,
+        "text": cut_text(text),
+        "logprob": _floored_logprob(raw[0]),
+        "candidates": step_candidates(*raw[1:]),
+        "processedLogprob": _floored_logprob(processed[0]),
+        "processedCandidates": step_candidates(*processed[1:]),
+    }
 
 
 def trace_record(step, layer, kind, norm, percentiles, top_indices, top_values):

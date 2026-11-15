@@ -54,12 +54,13 @@ beforeAll(() => {
 	);
 });
 
-function stubModels(): void {
+function stubModels(reasoningModels: readonly string[] = []): void {
 	server.use(
 		http.get(localApiPath("models"), () =>
 			HttpResponse.json({
 				items: [
 					["model-a", "llamacpp"],
+					["model-b", "llamacpp"],
 					["gpt-6", "CodexOAuth"],
 					["ext:lan/qwen3", "external"],
 				].map(([modelName, provider]) => ({
@@ -69,7 +70,7 @@ function stubModels(): void {
 					kind: "Chat",
 					detectedKind: "Chat",
 					capabilities: [],
-					isReasoningCapable: false,
+					isReasoningCapable: modelName !== undefined && reasoningModels.includes(modelName),
 					isToolCapable: true,
 					isOverridden: false,
 					provider,
@@ -163,6 +164,34 @@ describe("NextTokenExplorer", () => {
 		await dropdown.findByRole("option", { name: "model-a", hidden: true });
 		expect(dropdown.queryByRole("option", { name: "gpt-6", hidden: true })).toBeNull();
 		expect(dropdown.queryByRole("option", { name: "ext:lan/qwen3", hidden: true })).toBeNull();
+	});
+
+	it("offers Thinking off for a reasoning model only, starts each model from its default, and sends it", async () => {
+		stubModels(["model-a"]);
+		hub.state.events = [logprobs, { type: "done" }];
+		renderWithProviders(<NextTokenExplorer />);
+		const pick = async (name: string): Promise<void> => {
+			fireEvent.click(await (await openDropdown()).findByRole("option", { name, hidden: true }));
+		};
+
+		await pick("model-b");
+		expect(screen.queryByTestId("direct-inference-thinking-off")).toBeNull();
+		await pick("model-a");
+		fireEvent.click(screen.getByTestId("direct-inference-thinking-off"));
+		await pick("model-b");
+		await pick("model-a");
+		expect((screen.getByTestId("direct-inference-thinking-off") as HTMLInputElement).checked).toBe(false);
+
+		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Say hello." } });
+		fireEvent.click(screen.getByRole("button", { name: "Run" }));
+		await waitFor(() => expect(hub.state.requests).toHaveLength(1));
+		expect(hub.state.requests[0]?.disableThinking).toBeUndefined();
+		await waitFor(() => expect((screen.getByTestId("direct-inference-thinking-off") as HTMLInputElement).disabled).toBe(false));
+		fireEvent.click(screen.getByTestId("direct-inference-thinking-off"));
+		fireEvent.click(screen.getByRole("button", { name: "Run" }));
+
+		await waitFor(() => expect(hub.state.requests).toHaveLength(2));
+		expect(hub.state.requests[1]?.disableThinking).toBe(true);
 	});
 
 	it("asks for the most candidates the server allows and lists answer steps, thinking steps only on request", async () => {

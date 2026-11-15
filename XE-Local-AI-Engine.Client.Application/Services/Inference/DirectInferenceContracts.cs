@@ -49,6 +49,9 @@ public sealed class DirectInferenceRequest
 
     /// <summary>Alternatives per probability entry, 1 to 20; null requests none. For an installed llama.cpp model only.</summary>
     public int? TopLogprobs { get; init; }
+
+    /// <summary>True turns a reasoning model's thinking off; null or false keeps the model's default. For an installed llama.cpp model only, ignored otherwise.</summary>
+    public bool? DisableThinking { get; init; }
 }
 
 /// <summary>One frame of a Direct Inference stream; <see cref="Type" /> says which members are set.</summary>

@@ -16,6 +16,7 @@ public static class ModelLabTraceSpec
     /// <summary>A request may trace every block of the deepest checkpoint the lab loads; each layer costs about as much generation time as the rest.</summary>
     public const int MaxTraceLayers = 64;
 
+    /// <summary>With 20 raw and 20 processed candidates per step, at most about 0.6 MiB: each text is cut to 64 escaped bytes (<c>modellablib.cut_text</c>; <c>test_modellablib.py</c> pins it).</summary>
     public const int MaxResultBytes = 1024 * 1024;
 
     public const int MaxPromptCharacters = 8000;

@@ -17,6 +17,8 @@ interface ModelGroup {
 export function useDirectInferenceModels(): {
 	modelGroups: ModelGroup[];
 	llamaCppModels: Set<string>;
+	/** The llama.cpp models that think by default, so turning thinking off means something. */
+	reasoningLlamaCppModels: Set<string>;
 	status: "pending" | "error" | "success";
 } {
 	const { t } = useTranslation();
@@ -40,12 +42,12 @@ export function useDirectInferenceModels(): {
 					.map((item) => ({ value: item.modelName ?? "", label: item.displayLabel ?? item.modelName ?? "" })),
 			},
 		];
+		const llamaCppOptions = localOptions.filter((option) => option.provider === LLAMACPP_PROVIDER);
 		return {
 			status,
 			modelGroups: groups.filter((group) => group.items.length > 0),
-			llamaCppModels: new Set(
-				localOptions.filter((option) => option.provider === LLAMACPP_PROVIDER).map((option) => option.value),
-			),
+			llamaCppModels: new Set(llamaCppOptions.map((option) => option.value)),
+			reasoningLlamaCppModels: new Set(llamaCppOptions.filter((option) => option.isReasoningModel).map((option) => option.value)),
 		};
 	}, [data, status, t]);
 }

@@ -69,7 +69,7 @@ public sealed class LocalChatHubDirectInferenceTests
     }
 
     [Test]
-    public async Task StreamDirectInference_ALogprobsEvent_CrossesTheWireIntact()
+    public async Task StreamDirectInference_TheRequestOptionsAndALogprobsEvent_CrossTheWireIntact()
     {
         // The fake chat client is no llama.cpp model, so the service is the seam: this test is about the hub's JSON protocol.
         var service = Substitute.For<IDirectInferenceService>();
@@ -109,7 +109,8 @@ public sealed class LocalChatHubDirectInferenceTests
         {
             ModelId = "m",
             Prompt = "hello",
-            TopLogprobs = 1
+            TopLogprobs = 1,
+            DisableThinking = true
         }).ToListAsync();
 
         var entry = AssertEx.NotNull(received.Single().Logprobs).Single();
@@ -117,7 +118,9 @@ public sealed class LocalChatHubDirectInferenceTests
         AssertEx.Equal(-0.5f, entry.Logprob);
         AssertEx.True(entry.IsReasoning);
         AssertEx.Equal(-float.MaxValue, entry.Alternatives.Single().Logprob, "llama-server's stand-in for a zero probability survives the protocol");
-        AssertEx.Equal(1, service.ReceivedCalls().Single().GetArguments().OfType<DirectInferenceRequest>().Single().TopLogprobs);
+        var request = service.ReceivedCalls().Single().GetArguments().OfType<DirectInferenceRequest>().Single();
+        AssertEx.Equal(1, request.TopLogprobs);
+        AssertEx.Equal(true, request.DisableThinking, "the browser's thinking switch crosses the wire too");
     }
 
     [Test]

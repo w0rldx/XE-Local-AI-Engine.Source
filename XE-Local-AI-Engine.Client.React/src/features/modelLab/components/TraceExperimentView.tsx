@@ -1,16 +1,39 @@
-import { Alert, Badge, Group, Loader, Paper, ScrollArea, Stack, Table, Text } from "@mantine/core";
+import {
+	Alert,
+	Badge,
+	Group,
+	Loader,
+	Paper,
+	ScrollArea,
+	SegmentedControl,
+	Stack,
+	Table,
+	Text,
+	UnstyledButton,
+} from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getModelLabExperimentOptions, getModelLabExperimentTraceOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
+import { NextTokenStepView } from "@/features/modelLab/components/NextTokenStepView";
 import { SteeringExperimentResult } from "@/features/modelLab/components/SteeringExperimentResult";
-import { activeJobPollMs, toTraceTable } from "@/features/modelLab/models/ModelLabTrace";
+import {
+	activeJobPollMs,
+	type CandidateBasis,
+	sameCandidates,
+	toStepEntry,
+	toTraceTable,
+} from "@/features/modelLab/models/ModelLabTrace";
 
 // A saved experiment, read-only: what was asked, what came back, and what the hooks measured.
 export function TraceExperimentView({ experimentId, isLive }: { experimentId: string; isLive: boolean }) {
 	const { t } = useTranslation();
+	const [selectedStep, setSelectedStep] = useState<number>();
+	const [basis, setBasis] = useState<CandidateBasis>("raw");
 	const path = { path: { experimentId } };
 	const experiment = useQuery({
 		...getModelLabExperimentOptions(path),
@@ -36,7 +59,12 @@ export function TraceExperimentView({ experimentId, isLive }: { experimentId: st
 
 	const { data } = experiment;
 	const result = data.result;
-	const table = trace.data ? toTraceTable(trace.data.records ?? [], result?.tokens ?? []) : undefined;
+	const tokens = result?.tokens ?? [];
+	const table = trace.data ? toTraceTable(trace.data.records ?? [], tokens) : undefined;
+	// A trace made before this version recorded no candidates: its rows are not selectable.
+	const hasCandidates = tokens.some((token) => token.candidates);
+	const selectedToken = selectedStep === undefined ? undefined : tokens[selectedStep];
+	const selectedEntry = selectedToken && toStepEntry(selectedToken, basis);
 	return (
 		<Paper withBorder={true} p="md" data-testid="model-lab-trace-view">
 			<Stack gap="sm">
@@ -131,8 +159,27 @@ export function TraceExperimentView({ experimentId, isLive }: { experimentId: st
 							</Table.Thead>
 							<Table.Tbody>
 								{table.rows.map((row) => (
-									<Table.Tr key={row.step}>
-										<Table.Td style={{ fontFamily: "monospace", whiteSpace: "pre" }}>{row.token ?? `#${row.step}`}</Table.Td>
+									<Table.Tr key={row.step} bg={row.step === selectedStep ? "var(--mantine-primary-color-light)" : undefined}>
+										<Table.Td style={{ fontFamily: "monospace", whiteSpace: "pre" }}>
+											{hasCandidates ? (
+												<UnstyledButton
+													ff="monospace"
+													style={{ whiteSpace: "pre" }}
+													aria-pressed={row.step === selectedStep}
+													aria-label={t("pages.modelLab.trace.stepButton", "Step {{step}}: {{text}}", {
+														step: row.step + 1,
+														text: logprobTextLabel(row.token),
+													})}
+													onClick={() => setSelectedStep(row.step)}
+													data-testid="model-lab-trace-step"
+												>
+													{/* Quoted with its whitespace escaped, as the step view shows it: a "\n" token is not blank. */}
+													{logprobTextLabel(row.token)}
+												</UnstyledButton>
+											) : (
+												(row.token ?? `#${row.step}`)
+											)}
+										</Table.Td>
 										{row.norms.map((norm, index) => (
 											<Table.Td key={table.layers[index]?.index} ta="right">
 												{norm ?? "–"}
@@ -143,6 +190,55 @@ export function TraceExperimentView({ experimentId, isLive }: { experimentId: st
 							</Table.Tbody>
 						</Table>
 					</ScrollArea.Autosize>
+				)}
+				{table && result && !hasCandidates && (
+					<Text size="sm" c="dimmed" data-testid="model-lab-trace-no-candidates">
+						{t("pages.modelLab.trace.noCandidates", "This trace recorded no candidates (made before this version).")}
+					</Text>
+				)}
+				{table && hasCandidates && !selectedEntry && (
+					<Text size="sm" c="dimmed">
+						{t("pages.modelLab.trace.pickStep", "Pick a token to see its next-token candidates.")}
+					</Text>
+				)}
+				{selectedToken && selectedEntry && selectedStep !== undefined && (
+					<Stack gap="xs" data-testid="model-lab-trace-candidates">
+						<SegmentedControl
+							value={basis}
+							onChange={(value) => setBasis(value === "processed" ? "processed" : "raw")}
+							aria-label={t("pages.modelLab.trace.basisLabel", "Candidates from")}
+							data={[
+								{ value: "raw", label: t("pages.modelLab.trace.basisRaw", "Raw logits") },
+								{ value: "processed", label: t("pages.modelLab.trace.basisProcessed", "Processed scores") },
+							]}
+							data-testid="model-lab-trace-basis"
+						/>
+						{sameCandidates(selectedToken) && (
+							<Text size="xs" c="dimmed" data-testid="model-lab-trace-same-candidates">
+								{t(
+									"pages.modelLab.trace.sameCandidates",
+									"Raw and processed candidates are identical for this step: the generation config's processors changed nothing among these candidates.",
+								)}
+							</Text>
+						)}
+						<NextTokenStepView
+							entry={selectedEntry}
+							stepNumber={selectedStep + 1}
+							trace={{
+								processed: basis === "processed",
+								basis:
+									basis === "raw"
+										? t(
+												"pages.modelLab.trace.basisRawNote",
+												"Computed by PyTorch from the model's raw logits over the whole vocabulary",
+											)
+										: t(
+												"pages.modelLab.trace.basisProcessedNote",
+												"Computed by PyTorch from the processed scores, after the checkpoint's generation config processors",
+											),
+							}}
+						/>
+					</Stack>
 				)}
 			</Stack>
 		</Paper>

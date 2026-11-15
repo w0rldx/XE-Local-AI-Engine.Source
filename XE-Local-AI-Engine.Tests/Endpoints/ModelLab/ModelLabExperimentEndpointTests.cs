@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.ModelLab;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
@@ -196,29 +197,7 @@ public sealed class ModelLabExperimentEndpointTests
     {
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
-        var id = Guid.NewGuid();
-        await using (var scope = factory.Services.CreateAsyncScope())
-        {
-            var store = scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>();
-            await store.CreateRunningAsync(new ModelLabExperimentCreate
-            {
-                Id = id,
-                RepoId = "Qwen/Qwen3.5-0.8B",
-                Revision = "rev",
-                BaseArtifactId = Guid.NewGuid(),
-                InstalledModelName = "org/Some-GGUF:Q4_K_M",
-                Prompt = "hello",
-                LicenseConfirmationJson = new byte[]
-                {
-                    1
-                }
-            });
-            await store.CompleteAsync(id, new ModelLabExperimentCompletion
-            {
-                Status = ModelLabExperimentStatus.Succeeded,
-                ResultJson = """{"promptTokens":3,"tokens":[{"id":9,"text":"hi"}],"text":"hi","seconds":0.5,"peakVramBytes":10,"blockCount":24}"""u8.ToArray()
-            });
-        }
+        var id = await SaveSucceededAsync(factory, """{"promptTokens":3,"tokens":[{"id":9,"text":"hi"}],"text":"hi","seconds":0.5,"peakVramBytes":10,"blockCount":24}""");
 
         using (var request = Authorized(factory, HttpMethod.Get, $"{Experiments}/{id}"))
             using (var response = await client.SendAsync(request))
@@ -230,6 +209,7 @@ public sealed class ModelLabExperimentEndpointTests
                 var result = body.RootElement.GetProperty("result");
                 AssertEx.Equal(expected: 3, result.GetProperty("promptTokens").GetInt32());
                 AssertEx.Equal("hi", result.GetProperty("tokens")[0].GetProperty("text").GetString());
+                AssertEx.Equal(JsonValueKind.Null, result.GetProperty("tokens")[0].GetProperty("candidates").ValueKind, "A trace made before candidates still reads.");
             }
 
         using (var request = Authorized(factory, HttpMethod.Get, Experiments))
@@ -244,6 +224,32 @@ public sealed class ModelLabExperimentEndpointTests
             {
                 AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
             }
+    }
+
+    [Test]
+    public async Task ASavedTrace_ReadsBackItsRawAndProcessedCandidates()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+        var id = await SaveSucceededAsync(
+            factory,
+            """
+            {"promptTokens":3,"text":"hi","tokens":[{"id":9,"text":"hi","logprob":-0.1,
+              "candidates":[{"id":9,"text":"hi","logprob":-0.1},{"id":4,"text":"yo","logprob":-2.5}],
+              "processedLogprob":null,"processedCandidates":[{"id":4,"text":"yo","logprob":-0.7}]}]}
+            """);
+
+        using var request = Authorized(factory, HttpMethod.Get, $"{Experiments}/{id}");
+        using var response = await client.SendAsync(request);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var token = body.RootElement.GetProperty("result").GetProperty("tokens")[0];
+
+        AssertEx.Equal(expected: -0.1, token.GetProperty("logprob").GetDouble());
+        AssertEx.Equal(expected: 2, token.GetProperty("candidates").GetArrayLength());
+        AssertEx.Equal("yo", token.GetProperty("candidates")[1].GetProperty("text").GetString());
+        AssertEx.Equal(expected: -2.5, token.GetProperty("candidates")[1].GetProperty("logprob").GetDouble());
+        AssertEx.Equal(JsonValueKind.Null, token.GetProperty("processedLogprob").ValueKind);
+        AssertEx.Equal(expected: 4, token.GetProperty("processedCandidates")[0].GetProperty("id").GetInt32());
     }
 
     [Test]
@@ -358,6 +364,32 @@ public sealed class ModelLabExperimentEndpointTests
                 services.AddSingleton(runtime);
             }
         };
+
+    private static async Task<Guid> SaveSucceededAsync(TestServerWebAppFactory factory, string resultJson)
+    {
+        var id = Guid.NewGuid();
+        await using var scope = factory.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>();
+        await store.CreateRunningAsync(new ModelLabExperimentCreate
+        {
+            Id = id,
+            RepoId = "Qwen/Qwen3.5-0.8B",
+            Revision = "rev",
+            BaseArtifactId = Guid.NewGuid(),
+            InstalledModelName = "org/Some-GGUF:Q4_K_M",
+            Prompt = "hello",
+            LicenseConfirmationJson = new byte[]
+            {
+                1
+            }
+        });
+        await store.CompleteAsync(id, new ModelLabExperimentCompletion
+        {
+            Status = ModelLabExperimentStatus.Succeeded,
+            ResultJson = Encoding.UTF8.GetBytes(resultJson)
+        });
+        return id;
+    }
 
     private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, HttpMethod method, string path, object? content = null)
     {

@@ -3593,6 +3593,8 @@
 			"stop": "Stop",
 			"subtitle": "Send one prompt straight to a model: no agent, tools, history, memory or knowledge base. Nothing is saved.",
 			"systemPrompt": "System prompt (optional)",
+			"thinkingOff": "Thinking off",
+			"thinkingOffDescription": "The model answers without thinking first, so the output limit goes to the answer. Unchecked, the model's default applies.",
 			"title": "Direct inference"
 		},
 		"externalAccess": {

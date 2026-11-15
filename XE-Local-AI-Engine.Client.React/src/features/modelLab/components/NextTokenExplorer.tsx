@@ -25,6 +25,7 @@ import {
 } from "@/core/directInference/DirectInferenceModels";
 import { DirectInferenceErrorAlert, DirectInferenceOutput } from "@/core/directInference/DirectInferenceOutput";
 import { DirectInferenceSamplingFields } from "@/core/directInference/DirectInferenceSamplingFields";
+import { DirectInferenceThinkingSwitch } from "@/core/directInference/DirectInferenceThinkingSwitch";
 import { useDirectInferenceModels } from "@/core/directInference/useDirectInferenceModels";
 import { type ChatSamplingOptions, toWireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
 import { ExplanationLevelSwitch, ExplanationList } from "@/features/modelLab/components/ArchitectureExplanation";
@@ -102,12 +103,13 @@ function splitSteps(logprobs: readonly DirectInferenceLogprobEntry[] | undefined
 // One prompt on one installed llama.cpp model with the top candidates of every step. Held in this component only: nothing is saved.
 export function NextTokenExplorer() {
 	const { t } = useTranslation();
-	const { modelGroups, llamaCppModels, status } = useDirectInferenceModels();
+	const { modelGroups, llamaCppModels, reasoningLlamaCppModels, status } = useDirectInferenceModels();
 	const modelItems = modelGroups.flatMap((group) => group.items).filter((item) => llamaCppModels.has(item.value));
 	const [model, setModel] = useState<string | null>(null);
 	const [systemPrompt, setSystemPrompt] = useState("");
 	const [prompt, setPrompt] = useState("");
 	const [sampling, setSampling] = useState<ChatSamplingOptions>({});
+	const [disableThinking, setDisableThinking] = useState(false);
 	const [result, setResult] = useState<DirectInferenceResult | undefined>();
 	const [running, setRunning] = useState(false);
 	const [showThinking, setShowThinking] = useState(false);
@@ -118,6 +120,13 @@ export function NextTokenExplorer() {
 	const abortRef = useRef<AbortController | undefined>(undefined);
 	// Leaving mid-run cancels it, or it keeps holding the node's invocation slot.
 	useEffect(() => () => abortRef.current?.abort(), []);
+
+	const isReasoningModel = model !== null && reasoningLlamaCppModels.has(model);
+	// Another model starts from its own default again.
+	const selectModel = (next: string | null): void => {
+		setModel(next);
+		setDisableThinking(false);
+	};
 
 	const run = async (): Promise<void> => {
 		if (model === null || prompt.trim().length === 0) {
@@ -134,6 +143,7 @@ export function NextTokenExplorer() {
 				systemPrompt: systemPrompt.trim().length > 0 ? systemPrompt : undefined,
 				samplingOptions: toWireSamplingOptions(sampling),
 				topLogprobs: directInferenceMaxTopLogprobs,
+				disableThinking: isReasoningModel && disableThinking ? true : undefined,
 			},
 			setResult,
 			controller.signal,
@@ -200,7 +210,7 @@ export function NextTokenExplorer() {
 						placeholder={t("pages.directInference.modelPlaceholder", "Choose a model")}
 						data={modelItems}
 						value={model}
-						onChange={setModel}
+						onChange={selectModel}
 						searchable={true}
 						disabled={running}
 					/>
@@ -222,6 +232,9 @@ export function NextTokenExplorer() {
 						onChange={(event) => setPrompt(event.currentTarget.value)}
 						disabled={running}
 					/>
+					{isReasoningModel && (
+						<DirectInferenceThinkingSwitch checked={disableThinking} onChange={setDisableThinking} disabled={running} />
+					)}
 					<DirectInferenceSamplingFields value={sampling} onChange={setSampling} disabled={running} />
 					<Group>
 						<Button onClick={run} loading={running} disabled={model === null || prompt.trim().length === 0}>

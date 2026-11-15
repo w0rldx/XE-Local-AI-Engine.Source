@@ -10,6 +10,7 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { runDirectInference } from "@/core/directInference/DirectInferenceApi";
 import { DirectInferenceErrorAlert, DirectInferenceOutput } from "@/core/directInference/DirectInferenceOutput";
 import { DirectInferenceSamplingFields } from "@/core/directInference/DirectInferenceSamplingFields";
+import { DirectInferenceThinkingSwitch } from "@/core/directInference/DirectInferenceThinkingSwitch";
 import { useDirectInferenceModels } from "@/core/directInference/useDirectInferenceModels";
 import {
 	type DirectInferenceRequest,
@@ -23,12 +24,13 @@ import { DirectInferenceLogprobs } from "@/features/directInference/components/D
 /** One explicit prompt to one model: no agent, tools, history, persona, memory or knowledge base, and nothing saved. */
 export function DirectInferencePage() {
 	const { t } = useTranslation();
-	const { modelGroups, llamaCppModels } = useDirectInferenceModels();
+	const { modelGroups, llamaCppModels, reasoningLlamaCppModels } = useDirectInferenceModels();
 	const [modelId, setModelId] = useState<string | null>(null);
 	const [systemPrompt, setSystemPrompt] = useState("");
 	const [prompt, setPrompt] = useState("");
 	const [sampling, setSampling] = useState<ChatSamplingOptions>({});
 	const [topLogprobs, setTopLogprobs] = useState<number | undefined>();
+	const [disableThinking, setDisableThinking] = useState(false);
 	const [result, setResult] = useState<DirectInferenceResult>(emptyDirectInferenceResult);
 	const [lastRequest, setLastRequest] = useState<DirectInferenceRequest | undefined>();
 	const [running, setRunning] = useState(false);
@@ -38,6 +40,12 @@ export function DirectInferencePage() {
 	useEffect(() => () => abortRef.current?.abort(), []);
 
 	const isLlamaCppModel = modelId !== null && llamaCppModels.has(modelId);
+	const isReasoningLlamaCppModel = modelId !== null && reasoningLlamaCppModels.has(modelId);
+	// Another model starts from its own default again.
+	const selectModel = (next: string | null): void => {
+		setModelId(next);
+		setDisableThinking(false);
+	};
 
 	const run = async (): Promise<void> => {
 		if (modelId === null || prompt.trim().length === 0) {
@@ -49,6 +57,7 @@ export function DirectInferencePage() {
 			systemPrompt: systemPrompt.trim().length > 0 ? systemPrompt : undefined,
 			samplingOptions: toWireSamplingOptions(sampling),
 			topLogprobs: isLlamaCppModel ? topLogprobs : undefined,
+			disableThinking: isReasoningLlamaCppModel && disableThinking ? true : undefined,
 		};
 		const controller = new AbortController();
 		abortRef.current = controller;
@@ -85,7 +94,7 @@ export function DirectInferencePage() {
 						placeholder={t("pages.directInference.modelPlaceholder", "Choose a model")}
 						data={modelGroups}
 						value={modelId}
-						onChange={setModelId}
+						onChange={selectModel}
 						searchable={true}
 						disabled={running}
 						data-testid="direct-inference-model"
@@ -108,6 +117,9 @@ export function DirectInferencePage() {
 						onChange={(event) => setPrompt(event.currentTarget.value)}
 						disabled={running}
 					/>
+					{isReasoningLlamaCppModel && (
+						<DirectInferenceThinkingSwitch checked={disableThinking} onChange={setDisableThinking} disabled={running} />
+					)}
 					<DirectInferenceSamplingFields
 						value={sampling}
 						onChange={setSampling}

@@ -3593,6 +3593,8 @@
 			"stop": "Stoppen",
 			"subtitle": "Senden Sie einen Prompt direkt an ein Modell: ohne Agent, Tools, Verlauf, Gedächtnis oder Wissensdatenbank. Es wird nichts gespeichert.",
 			"systemPrompt": "Systemprompt (optional)",
+			"thinkingOff": "Denken aus",
+			"thinkingOffDescription": "Das Modell antwortet ohne vorheriges Nachdenken, sodass das Ausgabelimit der Antwort zugutekommt. Ohne Häkchen gilt die Standardeinstellung des Modells.",
 			"title": "Direkte Inferenz"
 		},
 		"externalAccess": {
