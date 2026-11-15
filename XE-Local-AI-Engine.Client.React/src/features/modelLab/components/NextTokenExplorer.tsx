@@ -262,7 +262,10 @@ export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextTok
 						minRows={2}
 						maxRows={10}
 						value={systemPrompt}
-						onChange={(event) => setSystemPrompt(event.currentTarget.value)}
+						onChange={(event) => {
+							setSystemPrompt(event.currentTarget.value);
+							setFromTrace(false);
+						}}
 						disabled={running}
 					/>
 					<Textarea
@@ -271,7 +274,11 @@ export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextTok
 						minRows={4}
 						maxRows={20}
 						value={prompt}
-						onChange={(event) => setPrompt(event.currentTarget.value)}
+						onChange={(event) => {
+							setPrompt(event.currentTarget.value);
+							// The form no longer holds the trace's input, so the note about it no longer applies.
+							setFromTrace(false);
+						}}
 						disabled={running}
 					/>
 					{isReasoningModel && (

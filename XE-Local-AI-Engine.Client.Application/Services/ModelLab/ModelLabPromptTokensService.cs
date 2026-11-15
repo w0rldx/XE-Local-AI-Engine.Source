@@ -75,7 +75,8 @@ public sealed class ModelLabPromptTokensService : IModelLabPromptTokensService
         var systemPrompt = string.IsNullOrWhiteSpace(query.SystemPrompt) ? null : query.SystemPrompt;
         var rendered = await _nativeClient.ApplyTemplateAsync(baseAddress, systemPrompt, query.Prompt, query.DisableThinking, cancellationToken);
 
-        // The flags a chat completion tokenizes its templated prompt with: BOS added, control-token text parsed.
+        // The flags a chat completion tokenizes its templated prompt with: BOS added, control-token text parsed. A server
+        // with a vision projector tokenizes a text-only prompt with the same flags (process_mtmd_prompt), so counts match.
         var tokens = await _nativeClient.TokenizeWithPiecesAsync(baseAddress, rendered, addSpecial: true, parseSpecial: true, cancellationToken);
         var listed = tokens.Count > MaxListedTokens ? tokens.Take(MaxListedTokens).ToArray() : tokens;
         var special = await FindControlTokensAsync(baseAddress, listed, cancellationToken);

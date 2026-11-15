@@ -609,8 +609,20 @@ describe("NextTokenExplorer prefilled from a trace", () => {
 
 		fireEvent.change(prompt, { target: { value: "My own prompt." } });
 		expect(prompt.value).toBe("My own prompt.");
+		expect(screen.queryByTestId("model-lab-next-token-from-trace")).toBeNull();
 
 		fireEvent.click(screen.getByRole("button", { name: "Jump again" }));
 		expect(prompt.value).toBe("From the trace.");
+		expect(screen.getByTestId("model-lab-next-token-from-trace")).not.toBeNull();
+	});
+
+	it("drops the trace note when the system prompt is edited", async () => {
+		stubModels(["model-a"]);
+		renderWithProviders(<Harness />);
+		expect(screen.getByTestId("model-lab-next-token-from-trace")).not.toBeNull();
+
+		fireEvent.change(screen.getByLabelText("System prompt (optional)"), { target: { value: "Be brief." } });
+
+		expect(screen.queryByTestId("model-lab-next-token-from-trace")).toBeNull();
 	});
 });
