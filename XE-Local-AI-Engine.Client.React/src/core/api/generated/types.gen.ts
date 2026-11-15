@@ -4804,6 +4804,7 @@ export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentListRespon
 	unsupportedMessage: string | null;
 	activeExperimentId: string | null;
 	maxRetainedExperiments: number;
+	maxPinnedExperiments: number;
 	experiments: Array<XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse>;
 };
 
@@ -4818,6 +4819,9 @@ export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse =
 	errorMessage: string | null;
 	traceByteCount: number | null;
 	result: XeLocalAiEngineClientServicesModelLabModelLabTraceResult | null;
+	notes: string | null;
+	isPinned: boolean;
+	appVersion: string | null;
 	createdAtUtc: string;
 	updatedAtUtc: string;
 };
@@ -4851,6 +4855,14 @@ export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceResponse = {
 	truncated: boolean;
 	droppedRecords: number;
 	byteCap: number;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1SetModelLabExperimentNotesRequest = {
+	notes?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1SetModelLabExperimentPinRequest = {
+	pinned: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentRequest = {
@@ -7273,7 +7285,8 @@ export type XeLocalAiEngineClientServicesModelLabModelLabStartRefusal =
 	| "InsufficientMemory"
 	| "ProcessNotConfirmedStopped"
 	| "InvalidLayer"
-	| "InvalidTraceLayers";
+	| "InvalidTraceLayers"
+	| "PinLimitReached";
 
 export type XeLocalAiEngineClientServicesModelLabModelLabSteeringArm = {
 	name: string;
@@ -7304,6 +7317,7 @@ export type XeLocalAiEngineClientServicesModelLabModelLabSteeringResult = {
 	differenceNorm?: number | null;
 	vectorNorm?: number | null;
 	randomSeed?: number;
+	seed?: number | null;
 	loadSeconds?: number;
 	vectorSha256?: string | null;
 	randomVectorSha256?: string | null;
@@ -7325,6 +7339,10 @@ export type XeLocalAiEngineClientServicesModelLabModelLabTraceResult = {
 	torch?: string | null;
 	transformers?: string | null;
 	python?: string | null;
+	cuda?: string | null;
+	layers?: Array<number> | null;
+	seed?: number | null;
+	maxNewTokens?: number | null;
 	steering?: XeLocalAiEngineClientServicesModelLabModelLabSteeringResult | null;
 };
 
@@ -18060,6 +18078,86 @@ export type CancelModelLabExperimentResponses = {
 	 */
 	202: unknown;
 };
+
+export type SetModelLabExperimentNotesData = {
+	body: XeLocalAiEngineClientEndpointsModelLabV1SetModelLabExperimentNotesRequest;
+	path: {
+		experimentId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/model-lab/experiments/{experimentId}/notes";
+};
+
+export type SetModelLabExperimentNotesErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientEndpointsModelLabV1ModelLabStartBlockedResponse;
+};
+
+export type SetModelLabExperimentNotesError = SetModelLabExperimentNotesErrors[keyof SetModelLabExperimentNotesErrors];
+
+export type SetModelLabExperimentNotesResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type SetModelLabExperimentNotesResponse = SetModelLabExperimentNotesResponses[keyof SetModelLabExperimentNotesResponses];
+
+export type SetModelLabExperimentPinData = {
+	body: XeLocalAiEngineClientEndpointsModelLabV1SetModelLabExperimentPinRequest;
+	path: {
+		experimentId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/model-lab/experiments/{experimentId}/pin";
+};
+
+export type SetModelLabExperimentPinErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientEndpointsModelLabV1ModelLabStartBlockedResponse;
+};
+
+export type SetModelLabExperimentPinError = SetModelLabExperimentPinErrors[keyof SetModelLabExperimentPinErrors];
+
+export type SetModelLabExperimentPinResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type SetModelLabExperimentPinResponse = SetModelLabExperimentPinResponses[keyof SetModelLabExperimentPinResponses];
 
 export type GetModelLabExperimentTraceData = {
 	body?: never;

@@ -235,6 +235,7 @@ function stubRoutes(descriptor: Record<string, unknown>, experiments: unknown[] 
 				unsupportedMessage: null,
 				activeExperimentId: null,
 				maxRetainedExperiments: 20,
+				maxPinnedExperiments: 20,
 				experiments,
 			}),
 		),
@@ -423,6 +424,9 @@ describe("ArchitectureExplorer", () => {
 			result: null,
 			createdAtUtc: "2026-11-06T00:00:00Z",
 			updatedAtUtc: "2026-11-06T00:00:00Z",
+			isPinned: false,
+			appVersion: null,
+			notes: null,
 		};
 		stubRoutes(detailed, [
 			{ ...row, id: traceId, kind: "Trace", status: "Succeeded", installedModelName: gguf },
@@ -936,6 +940,9 @@ describe("ArchitectureExplorer explanations", () => {
 				result: null,
 				createdAtUtc: "2026-11-06T00:00:00Z",
 				updatedAtUtc: "2026-11-06T00:00:00Z",
+				isPinned: false,
+				appVersion: null,
+				notes: null,
 			},
 		]);
 		server.use(

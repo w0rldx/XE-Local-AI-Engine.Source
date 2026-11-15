@@ -25,6 +25,9 @@ internal sealed class ModelLabExperimentConfiguration : IEntityTypeConfiguration
         builder.Property(entity => entity.TraceBlobId).HasColumnName("trace_blob_id");
         builder.Property(entity => entity.TraceSha256).HasColumnName("trace_sha256").HasMaxLength(64);
         builder.Property(entity => entity.TraceByteCount).HasColumnName("trace_byte_count");
+        builder.Property(entity => entity.Notes).HasColumnName("notes");
+        builder.Property(entity => entity.IsPinned).HasColumnName("is_pinned");
+        builder.Property(entity => entity.AppVersion).HasColumnName("app_version").HasMaxLength(64);
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");
         builder.HasIndex(entity => entity.Status).HasDatabaseName("ix_model_lab_experiments_status");

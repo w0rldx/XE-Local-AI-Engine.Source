@@ -31,6 +31,12 @@ public sealed class ModelLabExperimentRecord
 
     public required long? TraceByteCount { get; init; }
 
+    public required string? Notes { get; init; }
+
+    public required bool IsPinned { get; init; }
+
+    public required string? AppVersion { get; init; }
+
     public required long CreatedAtUtc { get; init; }
 
     public required long UpdatedAtUtc { get; init; }
@@ -53,6 +59,8 @@ public sealed class ModelLabExperimentCreate
     public required string Prompt { get; init; }
 
     public required ReadOnlyMemory<byte> LicenseConfirmationJson { get; init; }
+
+    public string? AppVersion { get; init; }
 }
 
 /// <summary>How a job ended. The blob fields are set together, and only when its blob has been written. What is left null keeps what the row already holds.</summary>
@@ -93,6 +101,19 @@ public enum ModelLabExperimentDeleteOutcome
     ProcessNotConfirmedStopped
 }
 
+/// <summary>What a note or pin change did.</summary>
+public enum ModelLabExperimentUpdateOutcome
+{
+    Updated,
+    NotFound,
+
+    /// <summary>The row says <c>Running</c>: its job may still write it.</summary>
+    Running,
+
+    /// <summary>A pin beyond the cap was refused.</summary>
+    PinLimitReached
+}
+
 /// <summary>One recorded process, for the startup reaper.</summary>
 public sealed class ModelLabLaunchReceipt
 {
@@ -122,7 +143,13 @@ public interface IModelLabExperimentStore
 
     Task<ModelLabExperimentDeleteOutcome> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
-    /// <summary>Deletes finished rows beyond the newest <paramref name="keep" /> and returns their ids. A <c>Running</c> row or one holding a receipt stays.</summary>
+    /// <summary>Null or blank clears the note.</summary>
+    Task<ModelLabExperimentUpdateOutcome> SetNotesAsync(Guid id, string? notes, CancellationToken cancellationToken = default);
+
+    /// <summary>Refuses a pin that would make more than <paramref name="maxPinned" /> pinned rows. Re-pinning a pinned row is an update.</summary>
+    Task<ModelLabExperimentUpdateOutcome> SetPinnedAsync(Guid id, bool pinned, int maxPinned, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes finished unpinned rows beyond the newest <paramref name="keep" /> unpinned ones and returns their ids. A pinned or <c>Running</c> row, or one holding a receipt, stays.</summary>
     Task<IReadOnlyList<Guid>> TrimToNewestAsync(int keep, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<ModelLabLaunchReceipt>> ListLaunchReceiptsAsync(CancellationToken cancellationToken = default);

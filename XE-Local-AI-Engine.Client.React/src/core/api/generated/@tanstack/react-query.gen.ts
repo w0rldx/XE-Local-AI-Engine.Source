@@ -419,6 +419,8 @@ import {
 	setHfToken,
 	setLogLevel,
 	setMcpServerEnabled,
+	setModelLabExperimentNotes,
+	setModelLabExperimentPin,
 	setNodeChatConversationMemoryExcluded,
 	setNodeChatConversationPlain,
 	setNodeChatConversationSamplingOptions,
@@ -1495,6 +1497,12 @@ import type {
 	SetLogLevelResponse,
 	SetMcpServerEnabledData,
 	SetMcpServerEnabledResponse,
+	SetModelLabExperimentNotesData,
+	SetModelLabExperimentNotesError,
+	SetModelLabExperimentNotesResponse,
+	SetModelLabExperimentPinData,
+	SetModelLabExperimentPinError,
+	SetModelLabExperimentPinResponse,
 	SetNodeChatConversationMemoryExcludedData,
 	SetNodeChatConversationMemoryExcludedError,
 	SetNodeChatConversationMemoryExcludedResponse,
@@ -9281,6 +9289,54 @@ export const cancelModelLabExperimentMutation = (
 	const mutationOptions: UseMutationOptions<unknown, AxiosError<DefaultError>, Options<CancelModelLabExperimentData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await cancelModelLabExperiment({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const setModelLabExperimentNotesMutation = (
+	options?: Partial<Options<SetModelLabExperimentNotesData>>,
+): UseMutationOptions<
+	SetModelLabExperimentNotesResponse,
+	AxiosError<SetModelLabExperimentNotesError>,
+	Options<SetModelLabExperimentNotesData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		SetModelLabExperimentNotesResponse,
+		AxiosError<SetModelLabExperimentNotesError>,
+		Options<SetModelLabExperimentNotesData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await setModelLabExperimentNotes({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const setModelLabExperimentPinMutation = (
+	options?: Partial<Options<SetModelLabExperimentPinData>>,
+): UseMutationOptions<
+	SetModelLabExperimentPinResponse,
+	AxiosError<SetModelLabExperimentPinError>,
+	Options<SetModelLabExperimentPinData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		SetModelLabExperimentPinResponse,
+		AxiosError<SetModelLabExperimentPinError>,
+		Options<SetModelLabExperimentPinData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await setModelLabExperimentPin({
 				...options,
 				...fnOptions,
 				throwOnError: true,

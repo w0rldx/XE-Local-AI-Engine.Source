@@ -34,6 +34,7 @@ public sealed class ModelLabExperimentStore : IModelLabExperimentStore
             InstalledModelName = command.InstalledModelName,
             Prompt = Encoding.UTF8.GetBytes(command.Prompt),
             LicenseConfirmationJson = command.LicenseConfirmationJson.ToArray(),
+            AppVersion = command.AppVersion,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         });
@@ -129,22 +130,78 @@ public sealed class ModelLabExperimentStore : IModelLabExperimentStore
         return ModelLabExperimentDeleteOutcome.Deleted;
     }
 
-    public async Task<IReadOnlyList<Guid>> TrimToNewestAsync(int keep, CancellationToken cancellationToken = default)
+    public async Task<ModelLabExperimentUpdateOutcome> SetNotesAsync(Guid id, string? notes, CancellationToken cancellationToken = default)
     {
-        var excess = await _dbContext.ModelLabExperiments
-                                     .OrderByDescending(item => item.CreatedAtUtc)
-                                     .ThenByDescending(item => item.Id)
-                                     .Skip(keep)
-                                     .Where(item => item.Status != ModelLabExperimentStatus.Running && item.LaunchReceiptJson == null)
-                                     .ToListAsync(cancellationToken);
-        if (excess.Count == 0)
+        var row = await _dbContext.ModelLabExperiments.FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (row is not { Status: not ModelLabExperimentStatus.Running })
         {
-            return [];
+            return row is null ? ModelLabExperimentUpdateOutcome.NotFound : ModelLabExperimentUpdateOutcome.Running;
         }
 
-        _dbContext.ModelLabExperiments.RemoveRange(excess);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken);
-        return [.. excess.Select(static item => item.Id)];
+        row.Notes = string.IsNullOrWhiteSpace(notes) ? null : Encoding.UTF8.GetBytes(notes);
+        return await SaveUpdateAsync(cancellationToken);
+    }
+
+    public async Task<ModelLabExperimentUpdateOutcome> SetPinnedAsync(Guid id, bool pinned, int maxPinned, CancellationToken cancellationToken = default)
+    {
+        var row = await _dbContext.ModelLabExperiments.FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (row is not { Status: not ModelLabExperimentStatus.Running })
+        {
+            return row is null ? ModelLabExperimentUpdateOutcome.NotFound : ModelLabExperimentUpdateOutcome.Running;
+        }
+
+        // Count then write is not atomic, so two pins racing at the cap can both land; the page sends one at a time.
+        if (pinned && !row.IsPinned && await _dbContext.ModelLabExperiments.CountAsync(item => item.IsPinned, cancellationToken) >= maxPinned)
+        {
+            return ModelLabExperimentUpdateOutcome.PinLimitReached;
+        }
+
+        row.IsPinned = pinned;
+        return await SaveUpdateAsync(cancellationToken);
+    }
+
+    /// <summary>A row deleted between the load and the save (a trim or a manual delete) is gone, not a server error.</summary>
+    private async Task<ModelLabExperimentUpdateOutcome> SaveUpdateAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            return ModelLabExperimentUpdateOutcome.Updated;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            _dbContext.ChangeTracker.Clear();
+            return ModelLabExperimentUpdateOutcome.NotFound;
+        }
+    }
+
+    public async Task<IReadOnlyList<Guid>> TrimToNewestAsync(int keep, CancellationToken cancellationToken = default)
+    {
+        var candidates = await _dbContext.ModelLabExperiments
+                                         .Where(item => !item.IsPinned)
+                                         .OrderByDescending(item => item.CreatedAtUtc)
+                                         .ThenByDescending(item => item.Id)
+                                         .Skip(keep)
+                                         .Where(item => item.Status != ModelLabExperimentStatus.Running && item.LaunchReceiptJson == null)
+                                         .Select(item => item.Id)
+                                         .ToListAsync(cancellationToken);
+        // One transaction: a delete that fails rolls back the ones before it, whose ids would never reach the blob cleanup.
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var removed = new List<Guid>();
+        foreach (var id in candidates)
+        {
+            // Re-checked at delete time: a pin or a receipt that landed after the select keeps the row, and its blobs with it.
+            var deleted = await _dbContext.ModelLabExperiments
+                                          .Where(item => item.Id == id && !item.IsPinned && item.Status != ModelLabExperimentStatus.Running && item.LaunchReceiptJson == null)
+                                          .ExecuteDeleteAsync(cancellationToken);
+            if (deleted == 1)
+            {
+                removed.Add(id);
+            }
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return removed;
     }
 
     public async Task<IReadOnlyList<ModelLabLaunchReceipt>> ListLaunchReceiptsAsync(CancellationToken cancellationToken = default)
@@ -182,7 +239,6 @@ public sealed class ModelLabExperimentStore : IModelLabExperimentStore
 
     private long Now() =>
         _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-
     private static ModelLabExperimentRecord ToRecord(ModelLabExperiment row) =>
         new()
         {
@@ -200,6 +256,9 @@ public sealed class ModelLabExperimentStore : IModelLabExperimentStore
             TraceBlobId = row.TraceBlobId,
             TraceSha256 = row.TraceSha256,
             TraceByteCount = row.TraceByteCount,
+            Notes = row.Notes is { } notes ? Encoding.UTF8.GetString(notes) : null,
+            IsPinned = row.IsPinned,
+            AppVersion = row.AppVersion,
             CreatedAtUtc = row.CreatedAtUtc,
             UpdatedAtUtc = row.UpdatedAtUtc
         };

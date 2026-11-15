@@ -18214,6 +18214,154 @@
         ]
       }
     },
+    "/api/local/v1/model-lab/experiments/{experimentId}/notes": {
+      "put": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "setModelLabExperimentNotes",
+        "parameters": [
+          {
+            "name": "experimentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "SetModelLabExperimentNotesRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1SetModelLabExperimentNotesRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabStartBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-lab/experiments/{experimentId}/pin": {
+      "put": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "setModelLabExperimentPin",
+        "parameters": [
+          {
+            "name": "experimentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "SetModelLabExperimentPinRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1SetModelLabExperimentPinRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabStartBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-lab/experiments/{experimentId}/trace": {
       "get": {
         "tags": [
@@ -43488,6 +43636,7 @@
           "unsupportedMessage",
           "activeExperimentId",
           "maxRetainedExperiments",
+          "maxPinnedExperiments",
           "experiments"
         ],
         "properties": {
@@ -43504,6 +43653,10 @@
             "nullable": true
           },
           "maxRetainedExperiments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxPinnedExperiments": {
             "type": "integer",
             "format": "int32"
           },
@@ -43529,6 +43682,9 @@
           "errorMessage",
           "traceByteCount",
           "result",
+          "notes",
+          "isPinned",
+          "appVersion",
           "createdAtUtc",
           "updatedAtUtc"
         ],
@@ -43570,6 +43726,17 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabTraceResult"
               }
             ]
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "isPinned": {
+            "type": "boolean"
+          },
+          "appVersion": {
+            "type": "string",
+            "nullable": true
           },
           "createdAtUtc": {
             "type": "string",
@@ -43696,6 +43863,30 @@
           },
           "byteCap": {
             "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1SetModelLabExperimentNotesRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "notes": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 0,
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1SetModelLabExperimentPinRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pinned"
+        ],
+        "properties": {
+          "pinned": {
+            "type": "boolean"
           }
         }
       },
@@ -52647,7 +52838,8 @@
           "InsufficientMemory",
           "ProcessNotConfirmedStopped",
           "InvalidLayer",
-          "InvalidTraceLayers"
+          "InvalidTraceLayers",
+          "PinLimitReached"
         ],
         "enum": [
           "UnsupportedPlatform",
@@ -52661,7 +52853,8 @@
           "InsufficientMemory",
           "ProcessNotConfirmedStopped",
           "InvalidLayer",
-          "InvalidTraceLayers"
+          "InvalidTraceLayers",
+          "PinLimitReached"
         ]
       },
       "XE_Local_AI_EngineClientServicesModelLabModelLabSteeringArm": {
@@ -52787,6 +52980,11 @@
             "type": "integer",
             "format": "int32"
           },
+          "seed": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "loadSeconds": {
             "type": "number",
             "format": "double"
@@ -52868,6 +53066,28 @@
           },
           "python": {
             "type": "string",
+            "nullable": true
+          },
+          "cuda": {
+            "type": "string",
+            "nullable": true
+          },
+          "layers": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "seed": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "maxNewTokens": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           },
           "steering": {

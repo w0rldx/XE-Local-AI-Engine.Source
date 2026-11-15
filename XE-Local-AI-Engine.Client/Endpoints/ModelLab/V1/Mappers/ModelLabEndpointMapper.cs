@@ -28,7 +28,8 @@ internal static class ModelLabEndpointMapper
             RefusalMessage = result.RefusalMessage
         };
 
-    public static ModelLabExperimentResponse ToResponse(ModelLabExperimentRecord record, bool includeResult) =>
+    /// <summary><paramref name="detail" /> adds the result and the note, which the list leaves out.</summary>
+    public static ModelLabExperimentResponse ToResponse(ModelLabExperimentRecord record, bool detail) =>
         new()
         {
             Id = record.Id,
@@ -40,7 +41,10 @@ internal static class ModelLabEndpointMapper
             Prompt = record.Prompt,
             ErrorMessage = record.ErrorMessage,
             TraceByteCount = record.Kind == ModelLabExperimentKind.Trace ? record.TraceByteCount : null,
-            Result = includeResult && record.ResultJson is { } json ? ModelLabTraceSpec.ReadResultOrNull(json) : null,
+            Result = detail && record.ResultJson is { } json ? ModelLabTraceSpec.ReadResultOrNull(json) : null,
+            Notes = detail ? record.Notes : null,
+            IsPinned = record.IsPinned,
+            AppVersion = record.AppVersion,
             CreatedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(record.CreatedAtUtc),
             UpdatedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(record.UpdatedAtUtc)
         };

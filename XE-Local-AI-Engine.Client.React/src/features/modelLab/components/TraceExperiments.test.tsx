@@ -41,6 +41,7 @@ const emptyList = {
 	unsupportedMessage: null,
 	activeExperimentId: null,
 	maxRetainedExperiments: 20,
+	maxPinnedExperiments: 20,
 	experiments: [],
 };
 
@@ -327,6 +328,9 @@ describe("TraceExperiments", () => {
 			status: "Succeeded",
 			createdAtUtc: "2026-11-03T00:00:00Z",
 			updatedAtUtc: "2026-11-03T00:00:00Z",
+			isPinned: false,
+			appVersion: null,
+			notes: null,
 		};
 		stubModels();
 		server.use(
@@ -545,6 +549,9 @@ describe("TraceExperiments", () => {
 			result: null,
 			createdAtUtc: "2026-11-03T00:00:00Z",
 			updatedAtUtc: "2026-11-03T00:00:00Z",
+			isPinned: false,
+			appVersion: null,
+			notes: null,
 		});
 		stubModels();
 		server.use(
@@ -590,6 +597,9 @@ describe("TraceExperiments", () => {
 							result: null,
 							createdAtUtc: "2026-11-03T00:00:00Z",
 							updatedAtUtc: "2026-11-03T00:00:00Z",
+							isPinned: false,
+							appVersion: null,
+							notes: null,
 						},
 					],
 				}),
@@ -623,6 +633,9 @@ describe("TraceExperiments", () => {
 			result: null,
 			createdAtUtc: "2026-11-03T00:00:00Z",
 			updatedAtUtc: "2026-11-03T00:00:00Z",
+			isPinned: false,
+			appVersion: null,
+			notes: null,
 		};
 		server.use(
 			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json({ ...emptyList, experiments: [saved] })),
@@ -660,5 +673,100 @@ describe("TraceExperiments", () => {
 		expect((await screen.findByTestId("model-lab-trace-measured")).textContent).toContain("Measured");
 		expect((await screen.findByTestId("model-lab-trace-table")).textContent).toContain("3.25");
 		expect(screen.getByTestId("model-lab-trace-truncated").textContent).toContain("7 records");
+	});
+
+	const savedRow = (id: string, kind: string, status: string, isPinned = false) => ({
+		id,
+		status,
+		kind,
+		repoId: "Qwen/Qwen3.5-0.8B",
+		revision: "rev",
+		installedModelName: gguf,
+		prompt: "hello",
+		errorMessage: null,
+		traceByteCount: null,
+		result: null,
+		notes: null,
+		isPinned,
+		appVersion: "1.0.0",
+		createdAtUtc: "2026-11-03T00:00:00Z",
+		updatedAtUtc: "2026-11-03T00:00:00Z",
+	});
+
+	it("marks and counts pinned rows, sends the toggle, and shows the cap refusal inline", async () => {
+		stubModels();
+		const pins: unknown[] = [];
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () =>
+				HttpResponse.json({
+					...emptyList,
+					experiments: [savedRow(experimentId, "Trace", "Succeeded", true), savedRow(artifactId, "Trace", "Succeeded")],
+				}),
+			),
+			http.put(localApiPath(`model-lab/experiments/${artifactId}/pin`), async ({ request }) => {
+				pins.push(await request.json());
+				return HttpResponse.json(
+					{ reason: "PinLimitReached", message: "At most 20 experiments can be pinned. Unpin one first." },
+					{ status: 409 },
+				);
+			}),
+		);
+
+		renderWithProviders(<TraceExperiments />);
+
+		expect((await screen.findByTestId("model-lab-retention")).textContent).toContain("1 of 20 pinned");
+		expect(screen.getAllByTestId("model-lab-pinned-badge")).toHaveLength(1);
+		const [pinned, unpinned] = screen.getAllByRole("button", { name: "Pin" });
+		expect(pinned?.getAttribute("aria-pressed")).toBe("true");
+		expect(unpinned?.getAttribute("aria-pressed")).toBe("false");
+		fireEvent.click(unpinned as HTMLElement);
+
+		expect((await screen.findByTestId("model-lab-pin-refused")).textContent).toContain("At most 20 experiments");
+		expect(pins).toEqual([{ pinned: true }]);
+	});
+
+	it("offers Compare only for 2 to 4 finished runs of one kind, and says why not", async () => {
+		stubModels();
+		const ids = [
+			"33333333-3333-4333-8333-333333333333",
+			"44444444-4444-4444-8444-444444444444",
+			"55555555-5555-4555-8555-555555555555",
+			"66666666-6666-4666-8666-666666666666",
+		];
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () =>
+				HttpResponse.json({
+					...emptyList,
+					experiments: [
+						savedRow(ids[0] as string, "Trace", "Succeeded"),
+						savedRow(ids[1] as string, "Trace", "Succeeded"),
+						savedRow(ids[2] as string, "Steering", "Succeeded"),
+						savedRow(ids[3] as string, "Trace", "Failed"),
+					],
+				}),
+			),
+		);
+
+		renderWithProviders(<TraceExperiments />);
+		const compare = await screen.findByTestId("model-lab-compare-button");
+		const boxes = screen.getAllByRole("checkbox");
+		const reason = () => screen.queryByTestId("model-lab-compare-reason")?.textContent;
+
+		expect(compare).toHaveProperty("disabled", true);
+		expect(reason()).toBe("Select 2 to 4 runs to compare.");
+
+		fireEvent.click(boxes[0] as HTMLElement);
+		fireEvent.click(boxes[1] as HTMLElement);
+		expect(compare).toHaveProperty("disabled", false);
+		expect(reason()).toBeUndefined();
+
+		fireEvent.click(boxes[2] as HTMLElement);
+		expect(compare).toHaveProperty("disabled", true);
+		expect(reason()).toBe("Compare traces only with traces, and steering runs only with steering runs.");
+
+		fireEvent.click(boxes[2] as HTMLElement);
+		fireEvent.click(boxes[3] as HTMLElement);
+		expect(compare).toHaveProperty("disabled", true);
+		expect(reason()).toBe("Only finished runs can be compared.");
 	});
 });

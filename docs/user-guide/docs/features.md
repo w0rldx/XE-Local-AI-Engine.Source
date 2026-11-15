@@ -426,7 +426,9 @@ driver before it starts.
 installed llama.cpp model and shows, for any step of the answer, the candidates the model weighed with their
 probabilities, the chosen one marked. Sliders for temperature, top-k, top-p and min-p show how a sampler would re-weight those
 candidates; that part is a simulation over the shown candidates, not what the model sampled. For a model that thinks before it
-answers, **Thinking off** skips the thinking, so the output limit goes to the answer's steps.
+answers, **Thinking off** skips the thinking, so the output limit goes to the answer's steps. Saved traces and steering
+runs can be **compared** side by side (2 to 4 of one kind), with every setting that differs listed first, carry your own
+**note**, and be **pinned** so cleanup keeps them.
 
 Training and Model Lab are **experimental**: no 1.0 stability promise, and they may change or be cut.
 [Feature tiers](for-experienced-users.md#feature-tiers)

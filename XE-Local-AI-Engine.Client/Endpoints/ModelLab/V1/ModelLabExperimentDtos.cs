@@ -79,6 +79,14 @@ public sealed class ModelLabExperimentResponse
     /// <summary>Set on the single-experiment read: a finished trace, or as much as a steering job has done. A list leaves it out.</summary>
     public required ModelLabTraceResult? Result { get; init; }
 
+    /// <summary>The operator's note, on the single-experiment read only.</summary>
+    public required string? Notes { get; init; }
+
+    public required bool IsPinned { get; init; }
+
+    /// <summary>The node's version when the run started; null on a run saved before it was recorded.</summary>
+    public required string? AppVersion { get; init; }
+
     public required DateTimeOffset CreatedAtUtc { get; init; }
 
     public required DateTimeOffset UpdatedAtUtc { get; init; }
@@ -93,7 +101,10 @@ public sealed class ModelLabExperimentListResponse
 
     public required Guid? ActiveExperimentId { get; init; }
 
+    /// <summary>How many unpinned runs retention keeps; pinned runs are kept on top of these.</summary>
     public required int MaxRetainedExperiments { get; init; }
+
+    public required int MaxPinnedExperiments { get; init; }
 
     public required IReadOnlyList<ModelLabExperimentResponse> Experiments { get; init; }
 }
@@ -101,6 +112,21 @@ public sealed class ModelLabExperimentListResponse
 public sealed class ModelLabExperimentRouteRequest
 {
     public Guid ExperimentId { get; init; }
+}
+
+public sealed class SetModelLabExperimentNotesRequest
+{
+    public Guid ExperimentId { get; init; }
+
+    /// <summary>Null, empty or blank clears the note.</summary>
+    public string? Notes { get; init; }
+}
+
+public sealed class SetModelLabExperimentPinRequest
+{
+    public Guid ExperimentId { get; init; }
+
+    public required bool Pinned { get; init; }
 }
 
 /// <summary>One token at one layer, as measured.</summary>

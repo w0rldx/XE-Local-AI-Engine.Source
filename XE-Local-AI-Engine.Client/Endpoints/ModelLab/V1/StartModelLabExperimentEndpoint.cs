@@ -46,10 +46,6 @@ public sealed class StartModelLabExperimentEndpoint : Endpoint<StartModelLabExpe
             return;
         }
 
-        await Send.ResultAsync(TypedResults.Conflict(new ModelLabStartBlockedResponse
-        {
-            Reason = start.Refusal ?? ModelLabStartRefusal.Busy,
-            Message = start.RefusalMessage ?? "The experiment cannot start right now."
-        }));
+        await Send.ResultAsync(ModelLabBlockedEndpointSupport.Blocked(start.Refusal ?? ModelLabStartRefusal.Busy, start.RefusalMessage ?? "The experiment cannot start right now."));
     }
 }

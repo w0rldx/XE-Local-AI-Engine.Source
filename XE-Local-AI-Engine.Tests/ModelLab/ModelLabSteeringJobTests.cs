@@ -67,6 +67,7 @@ public sealed class ModelLabSteeringJobTests
         AssertEx.Equal(expected: 15, steering.Layer);
         AssertEx.Equal("F", steering.LayerKind);
         AssertEx.Equal(expected: 2.0, steering.Scale);
+        AssertEx.Equal(ModelLabTraceSpec.Seed, steering.Seed!.Value, "The arms' seed is recorded by the host.");
         AssertEx.Equal("kind good", steering.PositivePrompts[0]);
         AssertEx.Equal("baseline,vector,random", string.Join(',', steering.Arms.Select(static arm => arm.Name)));
         AssertEx.Equal("first prompt|second prompt", string.Join('|', steering.Arms[1].Outputs.Select(static output => output.Prompt)));

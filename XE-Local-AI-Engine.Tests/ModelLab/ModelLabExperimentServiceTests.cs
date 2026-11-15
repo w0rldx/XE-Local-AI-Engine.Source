@@ -708,6 +708,39 @@ public sealed class ModelLabExperimentServiceTests
     }
 
     [Test]
+    public async Task Retention_NeverTrimsAPinnedRun_ButAManualDeleteStillRemovesIt()
+    {
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process);
+        var pinned = Guid.NewGuid();
+        await host.SeedFinishedAsync(pinned);
+        AssertEx.Equal(ModelLabExperimentUpdateOutcome.Updated, await host.Service.SetPinnedAsync(pinned, pinned: true, CancellationToken.None));
+        var pinnedScope = SeedBlobScope(host, pinned);
+        var oldestUnpinned = Guid.NewGuid();
+        await host.SeedFinishedAsync(oldestUnpinned);
+        var oldestUnpinnedScope = SeedBlobScope(host, oldestUnpinned);
+        for (var i = 0; i < ModelLabExperimentService.MaxRetainedExperiments - 1; i++)
+        {
+            await host.SeedFinishedAsync(Guid.NewGuid());
+        }
+
+        var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+
+        var rows = await host.Service.ListAsync(CancellationToken.None);
+        AssertEx.Equal(ModelLabExperimentService.MaxRetainedExperiments + 1, rows.Count, "Twenty unpinned runs plus the pinned one.");
+        AssertEx.True(rows.Single(row => row.Id == pinned).IsPinned, "The oldest run is pinned, so it stays.");
+        AssertEx.True(Directory.Exists(pinnedScope), "And so do its blobs.");
+        AssertEx.False(rows.Any(row => row.Id == oldestUnpinned), "The oldest unpinned run went.");
+        AssertEx.False(Directory.Exists(oldestUnpinnedScope), "Its blobs went with it.");
+        AssertEx.Equal(AssertEx.NotNull(ModelLabExperimentService.AppVersion), rows.Single(row => row.Id == start.ExperimentId).AppVersion, "A new run records the node's version.");
+
+        AssertEx.Equal(ModelLabExperimentDeleteOutcome.Deleted, await host.Service.DeleteAsync(pinned, CancellationToken.None));
+        AssertEx.False(Directory.Exists(pinnedScope), "A manual delete takes a pinned run's blobs too.");
+    }
+
+    [Test]
     public async Task ManualDelete_RemovesTheRowAndItsBlobs_AndRefusesARunningJob()
     {
         using var process = new ScriptedProcess();
@@ -1227,6 +1260,14 @@ public sealed class ModelLabExperimentServiceTests
             ]
         };
 
+    private static string SeedBlobScope(LabHost host, Guid id)
+    {
+        var scope = Path.Combine(host.DataRoot, "model-lab", "artifacts", id.ToString("N"));
+        Directory.CreateDirectory(scope);
+        File.WriteAllText(Path.Combine(scope, "x.blob"), "ciphertext");
+        return scope;
+    }
+
     internal static void WrapStore(IServiceCollection services, Func<IModelLabExperimentStore, IModelLabExperimentStore> wrap)
     {
         services.RemoveAll<IModelLabExperimentStore>();
@@ -1278,6 +1319,12 @@ public sealed class ModelLabExperimentServiceTests
 
         public Task<ModelLabExperimentRecord?> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
             _inner.GetAsync(id, cancellationToken);
+
+        public Task<ModelLabExperimentUpdateOutcome> SetNotesAsync(Guid id, string? notes, CancellationToken cancellationToken = default) =>
+            _inner.SetNotesAsync(id, notes, cancellationToken);
+
+        public Task<ModelLabExperimentUpdateOutcome> SetPinnedAsync(Guid id, bool pinned, int maxPinned, CancellationToken cancellationToken = default) =>
+            _inner.SetPinnedAsync(id, pinned, maxPinned, cancellationToken);
 
         public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default) =>
             _inner.ExistsAsync(id, cancellationToken);

@@ -117,7 +117,8 @@ public enum ModelLabStartRefusal
     InsufficientMemory,
     ProcessNotConfirmedStopped,
     InvalidLayer,
-    InvalidTraceLayers
+    InvalidTraceLayers,
+    PinLimitReached
 }
 
 public sealed record ModelLabStart
@@ -242,6 +243,16 @@ public sealed record ModelLabTraceResult
 
     public string? Python { get; init; }
 
+    /// <summary>The CUDA version torch was built with. Null, like the three below, on a result saved before it was recorded.</summary>
+    public string? Cuda { get; init; }
+
+    /// <summary>The traced blocks, ascending; a steering job leaves it null.</summary>
+    public IReadOnlyList<int>? Layers { get; init; }
+
+    public int? Seed { get; init; }
+
+    public int? MaxNewTokens { get; init; }
+
     /// <summary>Set on a steering job. The fields above then describe its derive pass, and the tokens stay empty.</summary>
     public ModelLabSteeringResult? Steering { get; init; }
 }
@@ -264,6 +275,9 @@ public sealed record ModelLabSteeringResult
     public double? VectorNorm { get; init; }
 
     public int RandomSeed { get; init; }
+
+    /// <summary>The seed every arm's server runs with. Null on a result saved before it was recorded.</summary>
+    public int? Seed { get; init; }
 
     public double LoadSeconds { get; init; }
 

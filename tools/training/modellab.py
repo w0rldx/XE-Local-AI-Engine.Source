@@ -229,6 +229,7 @@ def measured_facts(model, blocks):
         "torch": torch.__version__,
         "transformers": transformers.__version__,
         "python": platform.python_version(),
+        "cuda": torch.version.cuda,
     }
 
 
@@ -349,6 +350,9 @@ def trace(job, run):
         "text": tokenizer.decode(generated),
         "seconds": round(seconds, 3),
         **measured_facts(model, blocks),
+        "layers": job["layers"],
+        "seed": job["seed"],
+        "maxNewTokens": total,
     }
     with open(job["resultPath"], "wb") as handle:
         handle.write(fitted_trace_result(result))

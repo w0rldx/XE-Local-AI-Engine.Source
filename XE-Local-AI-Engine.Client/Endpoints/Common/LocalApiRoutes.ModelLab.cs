@@ -19,6 +19,11 @@ public static partial class LocalApiRoutes
 
         public const string ExperimentTrace = "model-lab/experiments/{experimentId:guid}/trace";
 
+        public const string ExperimentNotes = "model-lab/experiments/{experimentId:guid}/notes";
+
+        // A pinned experiment is exempt from retention's trim.
+        public const string ExperimentPin = "model-lab/experiments/{experimentId:guid}/pin";
+
         // An installed GGUF's blocks and tensors by component, from the header alone: no model load.
         public const string Architecture = "model-lab/architecture/{modelName}";
 

@@ -32,6 +32,9 @@ const starterTestPrompts = [
 	"How was the trip? Answer as a traveller, in two sentences.",
 ];
 
+// A saved steering run's arms, in the order they are shown.
+export const steeringArmOrder = ["baseline", "vector", "random"];
+
 export type LayerKind = "full" | "linear" | "unknown";
 
 export function layerKindLabel(t: TFunction, kind: LayerKind): string {

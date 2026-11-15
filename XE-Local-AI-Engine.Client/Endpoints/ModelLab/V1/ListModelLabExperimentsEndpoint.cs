@@ -33,7 +33,8 @@ public sealed class ListModelLabExperimentsEndpoint : EndpointWithoutRequest<Mod
             UnsupportedMessage = supported ? null : ModelLabExperimentService.UnsupportedPlatformMessage,
             ActiveExperimentId = _experiments.ActiveExperimentId,
             MaxRetainedExperiments = ModelLabExperimentService.MaxRetainedExperiments,
-            Experiments = [.. records.Select(static record => ModelLabEndpointMapper.ToResponse(record, includeResult: false))]
+            MaxPinnedExperiments = ModelLabExperimentService.MaxPinnedExperiments,
+            Experiments = [.. records.Select(static record => ModelLabEndpointMapper.ToResponse(record, detail: false))]
         }, ct);
     }
 }

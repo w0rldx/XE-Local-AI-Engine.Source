@@ -6,9 +6,7 @@ import type {
 	XeLocalAiEngineClientServicesModelLabModelLabSteeringArm as SteeringArm,
 } from "@/core/api/generated/types.gen";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
-import { layerKindLabel, savedLayerKind } from "@/features/modelLab/models/ModelLabSteering";
-
-const armOrder = ["baseline", "vector", "random"];
+import { layerKindLabel, savedLayerKind, steeringArmOrder as armOrder } from "@/features/modelLab/models/ModelLabSteering";
 
 // A saved steering run: what the numbers do not say, what was derived, and each prompt's three outputs side by side.
 export function SteeringExperimentResult({ result, running }: { result: ModelLabResult | null | undefined; running: boolean }) {

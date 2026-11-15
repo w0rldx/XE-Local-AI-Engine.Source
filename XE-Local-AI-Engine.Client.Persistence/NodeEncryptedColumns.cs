@@ -260,7 +260,8 @@ internal static class NodeEncryptedColumns
             .Required(entity => entity.LicenseConfirmationJson, "model_lab_license_confirmation_json")
             .Optional(entity => entity.ResultJson, "model_lab_result_json")
             .Optional(entity => entity.ErrorMessage, "model_lab_error_message")
-            .Optional(entity => entity.LaunchReceiptJson, "model_lab_launch_receipt_json"),
+            .Optional(entity => entity.LaunchReceiptJson, "model_lab_launch_receipt_json")
+            .Optional(entity => entity.Notes, "model_lab_notes"),
 
         // Evaluations and comparison reports are node-scoped, same flat layout as runs. Membership and verdicts carry distinct AAD column names: membership is what
         // makes a comparison's two sides comparable, and the verdicts are what the deltas are computed from.

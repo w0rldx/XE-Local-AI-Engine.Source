@@ -1,6 +1,7 @@
 import {
 	Alert,
 	Badge,
+	Button,
 	Group,
 	Loader,
 	Paper,
@@ -9,14 +10,21 @@ import {
 	Stack,
 	Table,
 	Text,
+	Textarea,
 	UnstyledButton,
 } from "@mantine/core";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { getModelLabExperimentOptions, getModelLabExperimentTraceOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import {
+	getModelLabExperimentOptions,
+	getModelLabExperimentQueryKey,
+	getModelLabExperimentTraceOptions,
+	listModelLabExperimentsQueryKey,
+	setModelLabExperimentNotesMutation,
+} from "@/core/api/generated/@tanstack/react-query.gen";
 import { logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
 import { NextTokenStepView } from "@/features/modelLab/components/NextTokenStepView";
@@ -29,7 +37,90 @@ import {
 	toTraceTable,
 } from "@/features/modelLab/models/ModelLabTrace";
 
-// A saved experiment, read-only: what was asked, what came back, and what the hooks measured.
+// The server's own bound (SetModelLabExperimentNotesRequestValidator).
+const maxNotesLength = 8000;
+
+// The operator's one note on a run. Saving it replaces the stored note; an empty one clears it.
+function ExperimentNotes({ experimentId, notes, running }: { experimentId: string; notes: string; running: boolean }) {
+	const { t } = useTranslation();
+	const queryClient = useQueryClient();
+	const [draft, setDraft] = useState(notes);
+	// The server note the draft was last aligned with. A newer one replaces an untouched draft, never an edited one,
+	// so a stale draft cannot be saved over it.
+	const [seen, setSeen] = useState(notes);
+	if (notes !== seen) {
+		setSeen(notes);
+		if (draft === seen) {
+			setDraft(notes);
+		}
+	}
+	const save = useMutation({
+		...setModelLabExperimentNotesMutation(),
+		onSuccess: () =>
+			Promise.all([
+				queryClient.invalidateQueries({ queryKey: getModelLabExperimentQueryKey({ path: { experimentId } }) }),
+				queryClient.invalidateQueries({ queryKey: listModelLabExperimentsQueryKey() }),
+			]),
+	});
+	// The server stores a blank note as none, so a blank draft is no change from none.
+	const blank = draft.trim() === "";
+	const unchanged = draft === notes || (blank && notes === "");
+	const write = (value: string) => save.mutate({ path: { experimentId }, body: { notes: value.trim() === "" ? null : value } });
+	return (
+		<Stack gap={4}>
+			<Textarea
+				label={t("pages.modelLab.trace.notes.label", "Your note")}
+				description={t("pages.modelLab.trace.notes.description", "Saved encrypted on this node with the run.")}
+				value={draft}
+				onChange={(event) => setDraft(event.currentTarget.value)}
+				maxLength={maxNotesLength}
+				autosize={true}
+				minRows={2}
+				maxRows={10}
+				disabled={running}
+				data-testid="model-lab-notes"
+			/>
+			<Group justify="space-between" gap="xs">
+				<Text size="xs" c="dimmed" data-testid="model-lab-notes-count">
+					{t("pages.modelLab.trace.notes.count", "{{count}} of {{max}} characters", {
+						count: draft.length,
+						max: maxNotesLength,
+					})}
+				</Text>
+				<Group gap="xs">
+					<Button
+						size="xs"
+						variant="subtle"
+						disabled={running || save.isPending || (blank && notes === "")}
+						onClick={() => {
+							setDraft("");
+							write("");
+						}}
+						data-testid="model-lab-notes-clear"
+					>
+						{t("pages.modelLab.trace.notes.clear", "Clear note")}
+					</Button>
+					<Button
+						size="xs"
+						disabled={running || unchanged}
+						loading={save.isPending}
+						onClick={() => write(draft)}
+						data-testid="model-lab-notes-save"
+					>
+						{t("pages.modelLab.trace.notes.save", "Save note")}
+					</Button>
+				</Group>
+			</Group>
+			{save.isError && (
+				<Alert color="red" data-testid="model-lab-notes-failed">
+					{apiErrorMessage(save.error, t("pages.modelLab.trace.notes.saveFailed", "The note could not be saved."))}
+				</Alert>
+			)}
+		</Stack>
+	);
+}
+
+// A saved experiment: what was asked, what came back, what the hooks measured, and the operator's note.
 export function TraceExperimentView({ experimentId, isLive }: { experimentId: string; isLive: boolean }) {
 	const { t } = useTranslation();
 	const [selectedStep, setSelectedStep] = useState<number>();
@@ -240,6 +331,7 @@ export function TraceExperimentView({ experimentId, isLive }: { experimentId: st
 						/>
 					</Stack>
 				)}
+				<ExperimentNotes experimentId={experimentId} notes={data.notes ?? ""} running={data.status === "Running"} />
 			</Stack>
 		</Paper>
 	);

@@ -5287,6 +5287,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<string>("AppVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("app_version");
+
                     b.Property<Guid>("BaseArtifactId")
                         .HasColumnType("TEXT")
                         .HasColumnName("base_artifact_id");
@@ -5305,6 +5310,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("installed_model_name");
 
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_pinned");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -5321,6 +5330,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsRequired()
                         .HasColumnType("BLOB")
                         .HasColumnName("license_confirmation_json");
+
+                    b.Property<byte[]>("Notes")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("notes");
 
                     b.Property<byte[]>("Prompt")
                         .IsRequired()

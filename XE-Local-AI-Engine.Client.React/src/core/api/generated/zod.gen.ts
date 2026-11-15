@@ -4840,6 +4840,14 @@ export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceResponse = z.
 	byteCap: z.int(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelLabV1SetModelLabExperimentNotesRequest = z.object({
+	notes: z.string().min(0).max(8000).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1SetModelLabExperimentPinRequest = z.object({
+	pinned: z.boolean(),
+});
+
 export const zXeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentResponse = z.object({
 	experimentId: z.guid(),
 });
@@ -7785,6 +7793,7 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabStartRefusal = z.enum
 	"ProcessNotConfirmedStopped",
 	"InvalidLayer",
 	"InvalidTraceLayers",
+	"PinLimitReached",
 ]);
 
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabStartBlockedResponse = z.object({
@@ -7849,6 +7858,11 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabSteeringResult = z.ob
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
+	seed: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 	loadSeconds: z.number().optional(),
 	vectorSha256: z.string().nullish(),
 	randomVectorSha256: z.string().nullish(),
@@ -7878,6 +7892,25 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabTraceResult = z.objec
 	torch: z.string().nullish(),
 	transformers: z.string().nullish(),
 	python: z.string().nullish(),
+	cuda: z.string().nullish(),
+	layers: z
+		.array(
+			z
+				.int()
+				.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+				.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+		)
+		.nullish(),
+	seed: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	maxNewTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 	steering: zXeLocalAiEngineClientServicesModelLabModelLabSteeringResult.nullish(),
 });
 
@@ -7892,6 +7925,9 @@ export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse
 	errorMessage: z.string().nullable(),
 	traceByteCount: z.int().nullable(),
 	result: zXeLocalAiEngineClientServicesModelLabModelLabTraceResult.nullable(),
+	notes: z.string().nullable(),
+	isPinned: z.boolean(),
+	appVersion: z.string().nullable(),
 	createdAtUtc: z.iso.datetime({ offset: true }),
 	updatedAtUtc: z.iso.datetime({ offset: true }),
 });
@@ -7901,6 +7937,10 @@ export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentListResp
 	unsupportedMessage: z.string().nullable(),
 	activeExperimentId: z.guid().nullable(),
 	maxRetainedExperiments: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	maxPinnedExperiments: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
@@ -12819,6 +12859,28 @@ export const zGetModelLabExperimentResponse = zXeLocalAiEngineClientEndpointsMod
 export const zCancelModelLabExperimentPath = z.object({
 	experimentId: z.guid(),
 });
+
+export const zSetModelLabExperimentNotesBody = zXeLocalAiEngineClientEndpointsModelLabV1SetModelLabExperimentNotesRequest;
+
+export const zSetModelLabExperimentNotesPath = z.object({
+	experimentId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zSetModelLabExperimentNotesResponse = z.void();
+
+export const zSetModelLabExperimentPinBody = zXeLocalAiEngineClientEndpointsModelLabV1SetModelLabExperimentPinRequest;
+
+export const zSetModelLabExperimentPinPath = z.object({
+	experimentId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zSetModelLabExperimentPinResponse = z.void();
 
 export const zGetModelLabExperimentTracePath = z.object({
 	experimentId: z.guid(),

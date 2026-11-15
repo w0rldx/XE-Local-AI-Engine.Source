@@ -33,6 +33,8 @@ public sealed class ModelLabExperimentEndpointTests
     [Arguments("DELETE", "/00000000-0000-0000-0000-000000000001")]
     [Arguments("GET", "/00000000-0000-0000-0000-000000000001/trace")]
     [Arguments("POST", "/00000000-0000-0000-0000-000000000001/cancel")]
+    [Arguments("PUT", "/00000000-0000-0000-0000-000000000001/notes")]
+    [Arguments("PUT", "/00000000-0000-0000-0000-000000000001/pin")]
     public async Task Anonymous_Is401(string method, string suffix)
     {
         await using var factory = new TestServerWebAppFactory();
@@ -52,6 +54,8 @@ public sealed class ModelLabExperimentEndpointTests
     [Arguments("DELETE", "/00000000-0000-0000-0000-000000000001")]
     [Arguments("GET", "/00000000-0000-0000-0000-000000000001/trace")]
     [Arguments("POST", "/00000000-0000-0000-0000-000000000001/cancel")]
+    [Arguments("PUT", "/00000000-0000-0000-0000-000000000001/notes")]
+    [Arguments("PUT", "/00000000-0000-0000-0000-000000000001/pin")]
     public async Task ANonOperator_Is403(string method, string suffix)
     {
         await using var factory = new TestServerWebAppFactory();
@@ -210,6 +214,13 @@ public sealed class ModelLabExperimentEndpointTests
                 AssertEx.Equal(expected: 3, result.GetProperty("promptTokens").GetInt32());
                 AssertEx.Equal("hi", result.GetProperty("tokens")[0].GetProperty("text").GetString());
                 AssertEx.Equal(JsonValueKind.Null, result.GetProperty("tokens")[0].GetProperty("candidates").ValueKind, "A trace made before candidates still reads.");
+                foreach (var recordedLater in new[] { "layers", "seed", "maxNewTokens", "cuda" })
+                {
+                    AssertEx.Equal(JsonValueKind.Null, result.GetProperty(recordedLater).ValueKind, $"A trace made before {recordedLater} was recorded still reads.");
+                }
+
+                AssertEx.Equal(JsonValueKind.Null, body.RootElement.GetProperty("appVersion").ValueKind);
+                AssertEx.False(body.RootElement.GetProperty("isPinned").GetBoolean());
             }
 
         using (var request = Authorized(factory, HttpMethod.Get, Experiments))
@@ -250,6 +261,137 @@ public sealed class ModelLabExperimentEndpointTests
         AssertEx.Equal(expected: -2.5, token.GetProperty("candidates")[1].GetProperty("logprob").GetDouble());
         AssertEx.Equal(JsonValueKind.Null, token.GetProperty("processedLogprob").ValueKind);
         AssertEx.Equal(expected: 4, token.GetProperty("processedCandidates")[0].GetProperty("id").GetInt32());
+    }
+
+    [Test]
+    public async Task ASavedTrace_ReadsBackItsReproducibilityFacts()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+        var id = await SaveSucceededAsync(factory, """{"promptTokens":3,"text":"hi","tokens":[],"cuda":"12.8","layers":[3,12,20],"seed":1234,"maxNewTokens":128}""");
+
+        using var request = Authorized(factory, HttpMethod.Get, $"{Experiments}/{id}");
+        using var response = await client.SendAsync(request);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var result = body.RootElement.GetProperty("result");
+
+        AssertEx.Equal("12.8", result.GetProperty("cuda").GetString());
+        AssertEx.Equal("3,12,20", string.Join(',', result.GetProperty("layers").EnumerateArray().Select(static layer => layer.GetInt32())));
+        AssertEx.Equal(expected: 1234, result.GetProperty("seed").GetInt32());
+        AssertEx.Equal(expected: 128, result.GetProperty("maxNewTokens").GetInt32());
+    }
+
+    [Test]
+    public async Task ANote_IsSavedReadBackOnTheDetailOnly_AndNullOrBlankClearsIt()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+        var id = await SaveSucceededAsync(factory, """{"promptTokens":3,"tokens":[],"text":"hi"}""");
+
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/notes", new { notes = "layer 12 looks odd" }));
+        AssertEx.Equal("layer 12 looks odd", (await GetJsonAsync(factory, client, $"{Experiments}/{id}")).GetProperty("notes").GetString());
+        var listed = (await GetJsonAsync(factory, client, Experiments)).GetProperty("experiments")[0];
+        AssertEx.Equal(JsonValueKind.Null, listed.GetProperty("notes").ValueKind, "A list leaves the note out.");
+
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/notes", new { notes = "   " }));
+        AssertEx.Equal(JsonValueKind.Null, (await GetJsonAsync(factory, client, $"{Experiments}/{id}")).GetProperty("notes").ValueKind, "Blank clears.");
+
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/notes", new { notes = "again" }));
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/notes", new { notes = (string?)null }));
+        AssertEx.Equal(JsonValueKind.Null, (await GetJsonAsync(factory, client, $"{Experiments}/{id}")).GetProperty("notes").ValueKind, "Null clears.");
+    }
+
+    [Test]
+    public async Task ANoteOverTheLimit_Is400()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+        var id = await SaveSucceededAsync(factory, """{"promptTokens":3,"tokens":[],"text":"hi"}""");
+
+        AssertEx.Equal(HttpStatusCode.NoContent,
+            await PutAsync(factory, client, $"{Experiments}/{id}/notes", new { notes = new string('x', ModelLabExperimentService.MaxNotesCharacters) }));
+        AssertEx.Equal(HttpStatusCode.BadRequest,
+            await PutAsync(factory, client, $"{Experiments}/{id}/notes", new { notes = new string('x', ModelLabExperimentService.MaxNotesCharacters + 1) }));
+    }
+
+    [Test]
+    public async Task APinWithNoPinnedMember_Is400()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+        var id = await SaveSucceededAsync(factory, """{"promptTokens":3,"tokens":[],"text":"hi"}""");
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, await PutAsync(factory, client, $"{Experiments}/{id}/pin", new { }));
+    }
+
+    [Test]
+    public async Task APin_ShowsOnTheList_AndThePinPastTheCap_Is409WithItsCode()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+        var ids = new List<Guid>();
+        for (var i = 0; i <= ModelLabExperimentService.MaxPinnedExperiments; i++)
+        {
+            ids.Add(await SaveSucceededAsync(factory, """{"promptTokens":3,"tokens":[],"text":"hi"}"""));
+        }
+
+        foreach (var id in ids.Take(ModelLabExperimentService.MaxPinnedExperiments))
+        {
+            AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/pin", new { pinned = true }));
+        }
+
+        using (var request = Authorized(factory, HttpMethod.Put, $"{Experiments}/{ids[^1]}/pin", new { pinned = true }))
+            using (var response = await client.SendAsync(request))
+            {
+                AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+                using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                AssertEx.Equal(nameof(ModelLabStartRefusal.PinLimitReached), body.RootElement.GetProperty("reason").GetString());
+            }
+
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{ids[0]}/pin", new { pinned = true }), "Re-pinning a pinned run is not a new pin.");
+        var list = await GetJsonAsync(factory, client, Experiments);
+        AssertEx.Equal(ModelLabExperimentService.MaxPinnedExperiments, list.GetProperty("maxPinnedExperiments").GetInt32());
+        AssertEx.Equal(ModelLabExperimentService.MaxPinnedExperiments, list.GetProperty("experiments").EnumerateArray().Count(static row => row.GetProperty("isPinned").GetBoolean()));
+
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{ids[0]}/pin", new { pinned = false }));
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{ids[^1]}/pin", new { pinned = true }), "Unpinning one frees a place.");
+    }
+
+    [Test]
+    [Arguments("notes")]
+    [Arguments("pin")]
+    public async Task ANoteOrPin_OnARunningExperiment_Is409_AndOnAnUnknownOne_Is404(string route)
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+        var running = Guid.NewGuid();
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().CreateRunningAsync(new ModelLabExperimentCreate
+            {
+                Id = running,
+                RepoId = "Qwen/Qwen3.5-0.8B",
+                Revision = "rev",
+                BaseArtifactId = Guid.NewGuid(),
+                InstalledModelName = "org/Some-GGUF:Q4_K_M",
+                Prompt = "hello",
+                LicenseConfirmationJson = new byte[]
+                {
+                    1
+                }
+            });
+        }
+
+        object content = route == "pin" ? new { pinned = true } : new { notes = "a note" };
+        using (var request = Authorized(factory, HttpMethod.Put, $"{Experiments}/{running}/{route}", content))
+            using (var response = await client.SendAsync(request))
+            {
+                AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+                using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                AssertEx.Equal(nameof(ModelLabStartRefusal.Busy), body.RootElement.GetProperty("reason").GetString());
+            }
+
+        AssertEx.Equal(HttpStatusCode.NotFound, await PutAsync(factory, client, $"{Experiments}/{Guid.NewGuid()}/{route}", content));
     }
 
     [Test]
@@ -389,6 +531,22 @@ public sealed class ModelLabExperimentEndpointTests
             ResultJson = Encoding.UTF8.GetBytes(resultJson)
         });
         return id;
+    }
+
+    private static async Task<HttpStatusCode> PutAsync(TestServerWebAppFactory factory, HttpClient client, string path, object content)
+    {
+        using var request = Authorized(factory, HttpMethod.Put, path, content);
+        using var response = await client.SendAsync(request);
+        return response.StatusCode;
+    }
+
+    private static async Task<JsonElement> GetJsonAsync(TestServerWebAppFactory factory, HttpClient client, string path)
+    {
+        using var request = Authorized(factory, HttpMethod.Get, path);
+        using var response = await client.SendAsync(request);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return body.RootElement.Clone();
     }
 
     private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, HttpMethod method, string path, object? content = null)

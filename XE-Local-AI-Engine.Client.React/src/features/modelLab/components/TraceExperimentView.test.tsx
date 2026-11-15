@@ -2,7 +2,7 @@
 
 // A row opened while it ran, with no hub at all: the view reads its saved row until it ends.
 
-import { fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -60,6 +60,9 @@ function stubSteeringRow(result: unknown, status: string, errorMessage: string |
 				result,
 				createdAtUtc: "2026-11-03T00:00:00Z",
 				updatedAtUtc: "2026-11-03T00:00:00Z",
+				isPinned: false,
+				appVersion: null,
+				notes: null,
 			}),
 		),
 	);
@@ -121,6 +124,9 @@ function stubSucceededTrace(tokens: unknown[]): void {
 				result: { promptTokens: 3, tokens, text: "Hi!", seconds: 1, peakVramBytes: 10 },
 				createdAtUtc: "2026-11-03T00:00:00Z",
 				updatedAtUtc: "2026-11-03T00:00:00Z",
+				isPinned: false,
+				appVersion: null,
+				notes: null,
 			}),
 		),
 		http.get(localApiPath(`model-lab/experiments/${experimentId}/trace`), () =>
@@ -282,6 +288,9 @@ describe("TraceExperimentView", () => {
 					result: null,
 					createdAtUtc: "2026-11-03T00:00:00Z",
 					updatedAtUtc: "2026-11-03T00:00:00Z",
+					isPinned: false,
+					appVersion: null,
+					notes: null,
 				});
 			}),
 		);
@@ -307,6 +316,9 @@ describe("TraceExperimentView", () => {
 					result: null,
 					createdAtUtc: "2026-11-03T00:00:00Z",
 					updatedAtUtc: "2026-11-03T00:00:00Z",
+					isPinned: false,
+					appVersion: null,
+					notes: null,
 				}),
 			),
 		);
@@ -333,6 +345,9 @@ describe("TraceExperimentView", () => {
 					result: null,
 					createdAtUtc: "2026-11-03T00:00:00Z",
 					updatedAtUtc: "2026-11-03T00:00:00Z",
+					isPinned: false,
+					appVersion: null,
+					notes: null,
 				}),
 			),
 			http.get(localApiPath(`model-lab/experiments/${experimentId}/trace`), () =>
@@ -446,6 +461,9 @@ describe("TraceExperimentView", () => {
 					result: null,
 					createdAtUtc: "2026-11-03T00:00:00Z",
 					updatedAtUtc: "2026-11-03T00:00:00Z",
+					isPinned: false,
+					appVersion: null,
+					notes: null,
 				}),
 			),
 		);
@@ -456,5 +474,106 @@ describe("TraceExperimentView", () => {
 		await screen.findByTestId("model-lab-trace-view");
 		expect(pollMs).toHaveBeenCalledWith(true);
 		expect(pollMs).not.toHaveBeenCalledWith(false);
+	});
+
+	it("takes a newer server note into an untouched draft, and keeps an edited one", async () => {
+		let stored = "First idea";
+		// Changed with the note, so the test can see that a refetch has rendered.
+		let errorMessage = "The script failed.";
+		server.use(
+			http.get(localApiPath(`model-lab/experiments/${experimentId}`), () =>
+				HttpResponse.json({
+					id: experimentId,
+					status: "Failed",
+					kind: "Trace",
+					repoId: "Qwen/Qwen3.5-0.8B",
+					revision: "rev",
+					installedModelName: "org/Tiny-GGUF:Q4_K_M",
+					prompt: "hello",
+					errorMessage,
+					traceByteCount: null,
+					result: null,
+					notes: stored,
+					isPinned: false,
+					appVersion: null,
+					createdAtUtc: "2026-11-03T00:00:00Z",
+					updatedAtUtc: "2026-11-03T00:00:00Z",
+				}),
+			),
+		);
+
+		const { queryClient } = renderWithProviders(<TraceExperimentView experimentId={experimentId} isLive={false} />);
+		const notes = (await screen.findByRole("textbox", { name: /Your note/ })) as HTMLTextAreaElement;
+		const save = screen.getByTestId("model-lab-notes-save");
+		expect(notes.value).toBe("First idea");
+
+		// Saved elsewhere, then refetched: the untouched draft follows, with nothing to save.
+		stored = "Saved in another tab";
+		await act(() => queryClient.invalidateQueries());
+		await waitFor(() => expect(notes.value).toBe("Saved in another tab"));
+		expect(save).toHaveProperty("disabled", true);
+
+		// An edit in progress survives the next refetch.
+		fireEvent.change(notes, { target: { value: "My edit" } });
+		stored = "Saved again elsewhere";
+		errorMessage = "The second attempt failed.";
+		await act(() => queryClient.invalidateQueries());
+		await screen.findByText("The second attempt failed.");
+		expect(notes.value).toBe("My edit");
+		expect(save).toHaveProperty("disabled", false);
+	});
+
+	it("saves an edited note, offers no save while unchanged, and clears it", async () => {
+		let stored: string | null = "First idea";
+		const sent: unknown[] = [];
+		server.use(
+			http.get(localApiPath(`model-lab/experiments/${experimentId}`), () =>
+				HttpResponse.json({
+					id: experimentId,
+					status: "Failed",
+					kind: "Trace",
+					repoId: "Qwen/Qwen3.5-0.8B",
+					revision: "rev",
+					installedModelName: "org/Tiny-GGUF:Q4_K_M",
+					prompt: "hello",
+					errorMessage: "The script failed.",
+					traceByteCount: null,
+					result: null,
+					notes: stored,
+					isPinned: false,
+					appVersion: null,
+					createdAtUtc: "2026-11-03T00:00:00Z",
+					updatedAtUtc: "2026-11-03T00:00:00Z",
+				}),
+			),
+			http.put(localApiPath(`model-lab/experiments/${experimentId}/notes`), async ({ request }) => {
+				const body = (await request.json()) as { notes: string | null };
+				sent.push(body);
+				stored = body.notes;
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+
+		renderWithProviders(<TraceExperimentView experimentId={experimentId} isLive={false} />);
+
+		const notes = await screen.findByRole("textbox", { name: /Your note/ });
+		const save = screen.getByTestId("model-lab-notes-save");
+		expect((notes as HTMLTextAreaElement).value).toBe("First idea");
+		expect(save).toHaveProperty("disabled", true);
+
+		fireEvent.change(notes, { target: { value: "Second idea" } });
+		expect(screen.getByTestId("model-lab-notes-count").textContent).toBe("11 of 8000 characters");
+		expect(save).toHaveProperty("disabled", false);
+		fireEvent.click(save);
+
+		// Save also reads disabled while its request is pending, so wait for Clear, which is disabled until the save ends.
+		await waitFor(() => expect(sent).toEqual([{ notes: "Second idea" }]));
+		const clear = screen.getByTestId("model-lab-notes-clear");
+		await waitFor(() => expect(clear).toHaveProperty("disabled", false));
+		expect(save).toHaveProperty("disabled", true);
+		fireEvent.click(clear);
+
+		await waitFor(() => expect(sent).toEqual([{ notes: "Second idea" }, { notes: null }]));
+		expect((notes as HTMLTextAreaElement).value).toBe("");
 	});
 });

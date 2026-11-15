@@ -1231,6 +1231,12 @@ import type {
 	SetMcpServerEnabledData,
 	SetMcpServerEnabledErrors,
 	SetMcpServerEnabledResponses,
+	SetModelLabExperimentNotesData,
+	SetModelLabExperimentNotesErrors,
+	SetModelLabExperimentNotesResponses,
+	SetModelLabExperimentPinData,
+	SetModelLabExperimentPinErrors,
+	SetModelLabExperimentPinResponses,
 	SetNodeChatConversationMemoryExcludedData,
 	SetNodeChatConversationMemoryExcludedErrors,
 	SetNodeChatConversationMemoryExcludedResponses,
@@ -1834,6 +1840,8 @@ import {
 	zSetHfTokenResponse,
 	zSetLogLevelResponse,
 	zSetMcpServerEnabledResponse,
+	zSetModelLabExperimentNotesResponse,
+	zSetModelLabExperimentPinResponse,
 	zSetNodeChatConversationMemoryExcludedResponse,
 	zSetNodeChatConversationPlainResponse,
 	zSetNodeChatConversationSamplingOptionsResponse,
@@ -9541,6 +9549,56 @@ export const cancelModelLabExperiment = <ThrowOnError extends boolean = true>(
 		],
 		url: "/api/local/v1/model-lab/experiments/{experimentId}/cancel",
 		...options,
+	});
+
+export const setModelLabExperimentNotes = <ThrowOnError extends boolean = true>(
+	options: Options<SetModelLabExperimentNotesData, ThrowOnError>,
+): RequestResult<SetModelLabExperimentNotesResponses, SetModelLabExperimentNotesErrors, ThrowOnError> =>
+	(options.client ?? client).put<SetModelLabExperimentNotesResponses, SetModelLabExperimentNotesErrors, ThrowOnError>({
+		responseValidator: async (data) => await zSetModelLabExperimentNotesResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/experiments/{experimentId}/notes",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const setModelLabExperimentPin = <ThrowOnError extends boolean = true>(
+	options: Options<SetModelLabExperimentPinData, ThrowOnError>,
+): RequestResult<SetModelLabExperimentPinResponses, SetModelLabExperimentPinErrors, ThrowOnError> =>
+	(options.client ?? client).put<SetModelLabExperimentPinResponses, SetModelLabExperimentPinErrors, ThrowOnError>({
+		responseValidator: async (data) => await zSetModelLabExperimentPinResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/experiments/{experimentId}/pin",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const getModelLabExperimentTrace = <ThrowOnError extends boolean = true>(

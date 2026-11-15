@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelLab;
 
 using System.Globalization;
+using System.Reflection;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -29,6 +30,12 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJob
 {
     public const int MaxRetainedExperiments = 20;
+
+    public const int MaxPinnedExperiments = 20;
+
+    public const int MaxNotesCharacters = 8000;
+
+    private const int MaxAppVersionCharacters = 64;
 
     private const string TraceFileName = "trace.jsonl";
     private const string ResultFileName = "result.json";
@@ -130,6 +137,12 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             }
         }
     }
+
+    /// <summary>The node's informational version, recorded on each run so a comparison can show it.</summary>
+    internal static string? AppVersion { get; } =
+        typeof(ModelLabExperimentService).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion is { } version
+            ? version[..Math.Min(version.Length, MaxAppVersionCharacters)]
+            : null;
 
     public static string WorkRoot(INodeDataDirectory dataDirectory)
     {
@@ -342,6 +355,18 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
 
         return outcome;
+    }
+
+    public async Task<ModelLabExperimentUpdateOutcome> SetNotesAsync(Guid id, string? notes, CancellationToken ct)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().SetNotesAsync(id, notes, ct);
+    }
+
+    public async Task<ModelLabExperimentUpdateOutcome> SetPinnedAsync(Guid id, bool pinned, CancellationToken ct)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().SetPinnedAsync(id, pinned, MaxPinnedExperiments, ct);
     }
 
     public async Task<ModelLabTrace> ReadTraceAsync(Guid id, CancellationToken ct)
@@ -578,7 +603,8 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             BaseArtifactId = artifact.Id,
             InstalledModelName = request.InstalledModelName,
             Prompt = request.Prompt,
-            LicenseConfirmationJson = JsonSerializer.SerializeToUtf8Bytes(confirmation, TrainingJson.Options)
+            LicenseConfirmationJson = JsonSerializer.SerializeToUtf8Bytes(confirmation, TrainingJson.Options),
+            AppVersion = AppVersion
         }, ct);
 
         await TrimRetainedAsync(store, id);
@@ -813,6 +839,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             {
                 Steering = read.Steering with
                 {
+                    Seed = ModelLabTraceSpec.Seed,
                     Scale = steering.Scale,
                     VectorSha256 = vectorFile.Sha256,
                     RandomVectorSha256 = randomFile.Sha256,

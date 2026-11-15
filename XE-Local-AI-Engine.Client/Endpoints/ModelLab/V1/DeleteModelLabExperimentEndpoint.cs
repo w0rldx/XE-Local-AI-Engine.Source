@@ -37,19 +37,11 @@ public sealed class DeleteModelLabExperimentEndpoint : Endpoint<ModelLabExperime
                 await Send.NotFoundAsync(ct);
                 break;
             case ModelLabExperimentDeleteOutcome.ProcessNotConfirmedStopped:
-                await Send.ResultAsync(TypedResults.Conflict(new ModelLabStartBlockedResponse
-                {
-                    Reason = ModelLabStartRefusal.ProcessNotConfirmedStopped,
-                    Message =
-                        "This experiment's process has not been confirmed stopped, and its record is what lets the node find it. The next start of the node checks it again; delete it after that."
-                }));
+                await Send.ResultAsync(ModelLabBlockedEndpointSupport.Blocked(ModelLabStartRefusal.ProcessNotConfirmedStopped,
+                    "This experiment's process has not been confirmed stopped, and its record is what lets the node find it. The next start of the node checks it again; delete it after that."));
                 break;
             default:
-                await Send.ResultAsync(TypedResults.Conflict(new ModelLabStartBlockedResponse
-                {
-                    Reason = ModelLabStartRefusal.Busy,
-                    Message = "The experiment is still running. Cancel it first."
-                }));
+                await Send.ResultAsync(ModelLabBlockedEndpointSupport.StillRunning());
                 break;
         }
     }

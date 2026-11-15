@@ -33,6 +33,6 @@ public sealed class GetModelLabExperimentEndpoint : Endpoint<ModelLabExperimentR
             return;
         }
 
-        await Send.OkAsync(ModelLabEndpointMapper.ToResponse(record, includeResult: true), ct);
+        await Send.OkAsync(ModelLabEndpointMapper.ToResponse(record, detail: true), ct);
     }
 }

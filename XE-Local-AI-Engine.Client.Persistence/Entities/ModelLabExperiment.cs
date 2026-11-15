@@ -56,6 +56,15 @@ internal sealed record class ModelLabExperiment
 
     public long? TraceByteCount { get; set; }
 
+    /// <summary>Encrypted UTF-8: the operator's own note on the run.</summary>
+    public byte[]? Notes { get; set; }
+
+    /// <summary>A pinned run is never trimmed by retention; a manual delete still removes it.</summary>
+    public bool IsPinned { get; set; }
+
+    /// <summary>The node's informational version when the run started. Null on rows saved before it was recorded.</summary>
+    public string? AppVersion { get; set; }
+
     public long CreatedAtUtc { get; set; }
 
     public long UpdatedAtUtc { get; set; }
