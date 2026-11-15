@@ -51,6 +51,20 @@ function BasisBadge({ basis }: BasisBadgeProps) {
 			</Badge>
 		);
 	}
+	if (basis === "llamaCpp") {
+		return (
+			<Badge variant="light" color="blue" data-testid="model-lab-explain-basis">
+				{t("pages.modelLab.explain.ui.basisLlamaCpp", "Measured by llama.cpp")}
+			</Badge>
+		);
+	}
+	if (basis === "simulated") {
+		return (
+			<Badge variant="light" color="grape" data-testid="model-lab-explain-basis">
+				{t("pages.modelLab.explain.ui.basisSimulated", "Simulated on this page")}
+			</Badge>
+		);
+	}
 	if (basis === "measurement") {
 		return (
 			<Badge variant="light" color="blue" data-testid="model-lab-explain-basis">
@@ -69,17 +83,19 @@ function BasisBadge({ basis }: BasisBadgeProps) {
 }
 
 interface ExplanationEntryProps {
-	// Entry paths under pages.modelLab.explain, most specific first.
+	// Entry paths under root, most specific first.
 	candidates: readonly string[];
 	level: ExplanationLevel;
 	basis: ExplanationBasis;
 	title?: string;
+	// The key path the candidates sit under; pages.modelLab.explain when unset.
+	root?: string;
 }
 
 // One explanation at the chosen level with its basis, or nothing at all when no language has text for it.
-export function ExplanationEntry({ candidates, level, basis, title }: ExplanationEntryProps) {
+export function ExplanationEntry({ candidates, level, basis, title, root }: ExplanationEntryProps) {
 	const { t, i18n } = useTranslation();
-	const key = explanationKey(i18n, candidates, level);
+	const key = explanationKey(i18n, candidates, level, root);
 	if (key === null) {
 		return null;
 	}
@@ -102,12 +118,15 @@ interface ExplanationListItem {
 	id: string;
 	label: string;
 	candidates: readonly string[];
+	// Overrides the list's basis for this item.
+	basis?: ExplanationBasis;
 }
 
 interface ExplanationListProps {
 	items: readonly ExplanationListItem[];
 	level: ExplanationLevel;
 	basis: ExplanationBasis;
+	root?: string;
 	open: string | null;
 	onOpen: (id: string | null) => void;
 	"data-testid": string;
@@ -115,7 +134,7 @@ interface ExplanationListProps {
 }
 
 // A keyboard path through a set of explanations: each item is a button, its panel the explanation at the chosen level.
-export function ExplanationList({ items, level, basis, open, onOpen, "data-testid": testId, ref }: ExplanationListProps) {
+export function ExplanationList({ items, level, basis, root, open, onOpen, "data-testid": testId, ref }: ExplanationListProps) {
 	return (
 		<Accordion ref={ref} value={open} onChange={onOpen} variant="contained" chevronPosition="left" data-testid={testId}>
 			{items.map((item) => (
@@ -125,7 +144,9 @@ export function ExplanationList({ items, level, basis, open, onOpen, "data-testi
 					</Accordion.Control>
 					<Accordion.Panel>
 						{/* Only the open item renders its Markdown; a closed panel stays mounted and would parse it for nothing. */}
-						{open === item.id && <ExplanationEntry candidates={item.candidates} level={level} basis={basis} />}
+						{open === item.id && (
+							<ExplanationEntry candidates={item.candidates} level={level} basis={item.basis ?? basis} root={root} />
+						)}
 					</Accordion.Panel>
 				</Accordion.Item>
 			))}

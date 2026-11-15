@@ -364,7 +364,9 @@
 				},
 				"ui": {
 					"basisBackground": "Allgemeiner Hintergrund",
+					"basisLlamaCpp": "Von llama.cpp gemessen",
 					"basisMeasurement": "Was diese Messung bedeutet",
+					"basisSimulated": "Auf dieser Seite simuliert",
 					"heading": "Erklärung",
 					"level": {
 						"detail": "Details",
@@ -381,6 +383,104 @@
 			},
 			"inspectModel": "Installiertes Modell",
 			"modelsFailed": "Die installierten Modelle konnten nicht geladen werden.",
+			"nextToken": {
+				"explain": {
+					"entries": {
+						"detail": "Erstreckt sich ein Zeichen über mehrere Tokens (UTF-8), fasst llama.cpp sie zu einem Eintrag zusammen, dessen Werte zum letzten dieser Tokens gehören. Der Stream lässt den letzten Eintrag weg und, bei aktivem Denken, einige Zeilenumbruch-Einträge, und Text kann ganz ohne Eintrag ankommen. Die Werte sind vor dem Sampling gemessen, eine andere Temperatur für den Lauf ändert sie also nicht. Die Simulation gewichtet nur die bis zu 20 gezeigten Kandidaten neu und normiert über diese Menge. Ist das Top-k des Servers nicht größer als die Zahl der gezeigten Kandidaten, stimmt sie, mit den Reglern auf den Werten des Laufs, mit Top-k, Top-p, Min-p und Temperatur des Servers überein; bei einem größeren Top-k, etwa dem Standardwert 40, kann sie Kandidaten entfernen, die der Server behält, und jedem behaltenen Kandidaten mindestens den Anteil des Servers geben. Strafen werden nicht simuliert.",
+						"math": "Die Simulation nutzt nur die gezeigte Menge $C$ ($|C| \\le 20$):\n\n$$\\hat p_i = \\frac{p_i^{1/T}}{\\sum_{j \\in C'} p_j^{1/T}}, \\qquad i \\in C'$$\n\n- $C' \\subseteq C$: Kandidaten nach Top-k, Top-p und Min-p, berechnet über $C$.\n- $p_i = e^{\\lambda_i}$: gemessene Wahrscheinlichkeit.\n\nDie echte Verteilung umfasst auch das übrige Vokabular, $1 - \\sum_{j \\in C} p_j$. Ist das Top-k des Servers $k \\le |C|$ und stehen seine übrigen Sampler auf ihren Standardwerten, stimmt die Simulation, mit den Reglern auf den Werten des Laufs, mit Top-k, Top-p, Min-p und Temperatur des Servers über $C$ überein. Bei $k > |C|$ hört Top-p über $C$ nicht später auf als beim Server, die Simulation kann also Kandidaten entfernen, die der Server behält ($\\hat p_i = 0$), und gibt jedem behaltenen Kandidaten mindestens den Anteil des Servers. Strafen werden nicht simuliert.",
+						"overview": "Jede Zeile ist ein Eintrag des Ausgabestroms, nicht immer ein Token. Die Werte sind die Wahrscheinlichkeiten des Modells vor dem Sampling, und die Regler simulieren nur, wie ein Sampler die gezeigten Kandidaten neu gewichten würde."
+					},
+					"greedy": {
+						"detail": "Bei Temperatur 0 behält llama.cpp nur den höchsten Logit, die Ziehung hat dann nur eine Option. Sonst zieht es aus den Wahrscheinlichkeiten, die nach seiner Filterkette übrig sind. Die Standardkette hat mehr Schritte als Top-k, Top-p und Temperatur, etwa Min-p, das standardmäßig aktiv ist, und Wiederholungsstrafen, die nur aktiv sind, wenn sie gesetzt werden; diese Ansicht simuliert Min-p, aber nicht die Strafen. Ein gewählter Eintrag mit niedriger Wahrscheinlichkeit heißt nur, dass die Ziehung dort gelandet ist; die Wahrscheinlichkeit sagt, wie wahrscheinlich ein Eintrag war, nicht, warum er gewählt wurde.",
+						"math": "Greedy:\n\n$$x_t = \\arg\\max_i \\ell_i$$\n\nSampling:\n\n$$x_t \\sim \\tilde p, \\qquad \\Pr(x_t = i) = \\tilde p_i$$\n\n- $\\tilde p$: Wahrscheinlichkeiten nach Top-k, Top-p, Min-p und Temperatur, neu normiert.\n- Die Ziehung hängt vom Seed ab; ein fester Seed wiederholt sie, solange die Wahrscheinlichkeiten identisch sind.",
+						"overview": "Greedy Decoding nimmt immer den wahrscheinlichsten Eintrag. Sampling zieht zufällig, gewichtet nach den Wahrscheinlichkeiten, und wählt deshalb manchmal einen weniger wahrscheinlichen Eintrag. Darum ist der gewählte Eintrag nicht immer der längste Balken."
+					},
+					"logits": {
+						"detail": "Der LM-Head macht aus dem letzten Hidden-Vektor einen Logit pro Vokabeleintrag, oft Zehntausende oder mehr. llama.cpp liefert keine Logits, sondern Log-Wahrscheinlichkeiten: die Logits, verschoben um eine gemeinsame Konstante. Die Differenz zwischen zwei Kandidaten ist deshalb in beiden gleich, und mehr brauchen Softmax und Simulation nicht.",
+						"math": "$$\\ell = W_{\\text{out}}\\,h, \\qquad \\log p_i = \\ell_i - \\log \\sum_j e^{\\ell_j}$$\n\n- $h$: letzter normierter Hidden-State der aktuellen Position.\n- $\\ell_i$: Logit des Vokabeleintrags $i$.\n- $\\log p_i$: was llama.cpp liefert, $\\ell_i$ minus eine Konstante, die für alle Einträge gleich ist.\n\nDaher gilt $\\ell_a - \\ell_b = \\log p_a - \\log p_b$ für zwei beliebige Kandidaten.",
+						"overview": "Vor jedem Schritt gibt das Modell jedem Eintrag seines Vokabulars einen Rohwert. Je höher der Wert, desto wahrscheinlicher hält das Modell diese Fortsetzung. Die Werte sind noch keine Wahrscheinlichkeiten und haben keinen festen Bereich."
+					},
+					"logprob": {
+						"detail": "llama.cpp liefert den natürlichen Logarithmus der Wahrscheinlichkeit für den gewählten Eintrag und seine wahrscheinlichsten Alternativen (hier bis zu 20). Die Werte sind vor dem Sampling gemessen: Sie stammen aus Softmax über die rohen Logits, Temperatur, Top-k und Top-p ändern sie also nicht. Eine Wahrscheinlichkeit von genau 0 kommt als kleinste darstellbare Gleitkommazahl statt als $-\\infty$.",
+						"math": "$$\\lambda_i = \\ln p_i, \\qquad p_i = e^{\\lambda_i}$$\n\n- $\\lambda_i \\le 0$; $\\lambda = 0$ heißt $p = 100\\,\\%$.\n- $\\lambda = -0{,}69$ heißt $p \\approx 50\\,\\%$; $\\lambda = -2{,}30$ heißt $p \\approx 10\\,\\%$.\n\nDie Wahrscheinlichkeit einer ganzen Folge ist das Produkt ihrer Schritte, ihre Log-Wahrscheinlichkeit also die Summe: $\\ln P = \\sum_t \\lambda_t$ (über alle Tokens; diese Ansicht lässt einige aus).",
+						"overview": "Eine Log-Wahrscheinlichkeit ist eine Wahrscheinlichkeit auf logarithmischer Skala. 0 heißt sicher, und je negativer der Wert, desto unwahrscheinlicher der Eintrag. Diese Ansicht rechnet ihn in Prozent zurück."
+					},
+					"minP": {
+						"detail": "In der Standardkette von llama.cpp läuft Min-p nach Top-p und vor der Temperatur, auf den Kandidaten, die Top-p behalten hat. Es behält jeden Eintrag mit mindestens dem Min-p-Fachen der höchsten Wahrscheinlichkeit; der höchste bleibt also immer, ebenso Einträge, die gleichauf liegen. $\\text{Min-p} \\le 0$ schaltet den Filter ab. Es vergleicht Logits mit dem höchsten Logit plus $\\ln(\\text{Min-p})$, was derselbe Test auf Wahrscheinlichkeiten ist. Die Temperatur kommt erst danach und ändert daher nicht, welche Einträge Min-p behält.",
+						"math": "Kandidat $i$ bleibt, wenn\n\n$$p_i \\ge \\text{Min-p} \\cdot \\max_j p_j \\iff \\ell_i \\ge \\max_j \\ell_j + \\ln(\\text{Min-p})$$\n\n- $p_i$: Softmax über die Top-p-Überlebenden, bei Temperatur 1.\n- $\\ell_i$: Logit; eine Log-Wahrscheinlichkeit funktioniert genauso, da sich beide nur um eine Konstante unterscheiden.\n- $\\text{Min-p} \\le 0$: aus. Das Maximum bleibt immer.\n- Beispiel: Bei Min-p 0,05 und einem obersten Eintrag mit 80 % fallen Einträge unter 4 % weg; liegt der oberste bei 20 %, nur Einträge unter 1 %.",
+						"overview": "Min-p verwirft jeden Eintrag, dessen Wahrscheinlichkeit unter einem Anteil der Wahrscheinlichkeit des obersten Eintrags liegt. Weil die Schwelle relativ zum obersten Kandidaten ist, schneidet es stark, wenn das Modell sicher ist, und wenig, wenn es unsicher ist. Der Standardwert von llama-server ist 0,05."
+					},
+					"softmax": {
+						"detail": "Softmax läuft über das ganze Vokabular. Die Balken zeigen die bis zu 20 wahrscheinlichsten Ergebnisse, ihre Summe beträgt daher höchstens 100 %; den Rest teilt sich das übrige Vokabular. Dieselbe Zahl zu jedem Logit zu addieren ändert nichts, deshalb funktionieren Log-Wahrscheinlichkeiten genauso gut wie Logits.",
+						"math": "$$p_i = \\frac{e^{\\ell_i}}{\\sum_j e^{\\ell_j}}$$\n\n- $\\ell_i$: Logit des Eintrags $i$; die Summe läuft über das ganze Vokabular.\n- $p_i$: Wahrscheinlichkeit des Eintrags $i$.\n\nVerschiebungsinvarianz: $\\mathrm{softmax}(\\ell + c) = \\mathrm{softmax}(\\ell)$. llama.cpp zieht vor dem Exponenzieren den größten Logit ab, nur für die numerische Stabilität.",
+						"overview": "Softmax macht aus den Rohwerten Wahrscheinlichkeiten: Jeder Wert liegt zwischen 0 und 1, und zusammen ergeben sie 1. Ein höherer Rohwert bekommt immer die höhere Wahrscheinlichkeit."
+					},
+					"temperature": {
+						"detail": "Die Temperatur teilt jeden Logit vor der letzten Softmax. In der Standardreihenfolge von llama.cpp kommt sie nach Top-k, Top-p und Min-p, gewichtet also nur die Kandidaten neu, die diese übrig lassen. Die gemessenen Werte dieser Ansicht ändert sie nicht, denn sie stammen von vor dem Sampling. Nur die simulierten Balken bewegen sich.",
+						"math": "$$p_i(T) = \\frac{e^{\\ell_i / T}}{\\sum_j e^{\\ell_j / T}} = \\frac{p_i^{1/T}}{\\sum_j p_j^{1/T}}$$\n\n- $T$: Temperatur; $T = 1$ lässt die Verteilung unverändert.\n- $T < 1$ schärft, $T > 1$ glättet.\n- $T \\le 0$: llama.cpp behält nur den höchsten Logit (greedy).\n\nDie Summen laufen über die Kandidaten, die nach Top-k, Top-p und Min-p übrig sind.",
+						"overview": "Die Temperatur steuert, wie mutig gesampelt wird. Eine niedrige Temperatur macht die wahrscheinlichsten Einträge noch wahrscheinlicher; eine hohe gleicht die Unterschiede an, sodass auch unwahrscheinliche Einträge öfter gezogen werden. Bei 0 gewinnt immer der wahrscheinlichste Eintrag."
+					},
+					"topK": {
+						"detail": "llama.cpp behält die k Kandidaten mit den höchsten Logits; $k \\le 0$ schaltet den Filter ab. In der Standardkette läuft Top-k vor Top-p, Min-p und Temperatur. Der Regler endet bei 20, weil diese Ansicht höchstens 20 Kandidaten zeigt; das Standard-Top-k des Servers ist 40, er behält also Kandidaten, die diese Ansicht nicht zeigen kann.",
+						"math": "$$S_k = \\text{die } k \\text{ Einträge mit den größten } \\ell_i$$\n\n$$\\tilde p_i = \\begin{cases} \\dfrac{p_i}{\\sum_{j \\in S_k} p_j} & i \\in S_k \\\\ 0 & \\text{sonst} \\end{cases}$$\n\n- $k \\le 0$: keine Filterung.\n- $k = 1$: nur der wahrscheinlichste Eintrag bleibt (greedy).",
+						"overview": "Top-k behält nur die k wahrscheinlichsten Einträge und verwirft den Rest, bevor einer gezogen wird. Ein kleines k hält den Text vorhersehbar, ein großes erlaubt mehr Abwechslung."
+					},
+					"topP": {
+						"detail": "llama.cpp berechnet die Wahrscheinlichkeiten über die Kandidaten, die nach Top-k übrig sind, sortiert sie und addiert sie von oben. Es hält beim ersten Eintrag an, bei dem die laufende Summe p erreicht, und behält diesen Eintrag mit, sodass immer mindestens ein Kandidat bleibt. $p \\ge 1$ schaltet den Filter ab. Die Temperatur kommt erst danach und ändert daher nicht, welche Einträge Top-p behält.",
+						"math": "Die Kandidaten werden so sortiert, dass $p_{(1)} \\ge p_{(2)} \\ge \\dots$, und die ersten $m$ bleiben:\n\n$$m = \\min \\Big\\{ n : \\sum_{r=1}^{n} p_{(r)} \\ge P \\Big\\}$$\n\n- $P$: der Top-p-Wert.\n- $p_{(r)}$: Softmax über die Top-k-Überlebenden, bei Temperatur 1.\n- Immer $m \\ge 1$; $P = 0$ behält nur den ersten.\n- Erreicht die Summe $P$ nie, bleiben alle Kandidaten.",
+						"overview": "Top-p, auch Nucleus Sampling genannt, behält die wahrscheinlichsten Einträge, bis sie zusammen einen Anteil p der Wahrscheinlichkeit abdecken, und verwirft den Rest. Ist das Modell sicher, bleiben wenige Einträge übrig; ist es unsicher, viele."
+					}
+				},
+				"ui": {
+					"answer": "Antwort",
+					"chosen": "Gewählt",
+					"chosenMissing": "Der Text des gewählten Eintrags passt zu keinem der {{count}} Kandidaten: Das Modell hat etwas außerhalb davon gezogen, oder dieser Eintrag fasst mehrere Tokens zusammen (siehe „Warum Schritte keine Tokens sind“).",
+					"cut": "Entfernt",
+					"lastMissing": "Der Stream lässt den letzten Schritt aus und bei aktivem Denken einige Zeilenumbruch-Schritte, daher können die Schritte vom Text abweichen.",
+					"measuredTitle": "Von llama.cpp gemessen",
+					"minP": "Min-p: {{value}}",
+					"minPLabel": "Simuliertes Min-p",
+					"minPOff": "Min-p: aus",
+					"model": "Modell",
+					"noCandidates": "Der Server hat für diesen Schritt keine Kandidaten geliefert.",
+					"notTokens": "Schritte sind Einträge, keine Tokens: Mehrbyte-Text kann mehrere Tokens zu einem Eintrag zusammenfassen, dessen Werte zu seinem letzten Token gehören.",
+					"pickStep": "Wählen Sie einen Schritt, um seine Kandidaten zu sehen.",
+					"preSampling": "Die Balken zeigen die Wahrscheinlichkeiten, die llama.cpp vor dem Sampling berechnet hat: Temperatur, Top-k und Top-p des Laufs ändern sie nicht.",
+					"rest": "Der Rest des Vokabulars: {{percent}}",
+					"run": "Ausführen",
+					"serverDefaults": "Sampling-Werte, die ein Lauf leer lässt, nutzen die Standardwerte von llama-server (Top-k 40, Top-p 0,95, Min-p 0,05, Temperatur 0,8), sofern Modelldatei oder Startargumente keine anderen setzen. Top-k 40 ist mehr als die gezeigten Kandidaten, die Simulation kann dann vom Server abweichen.",
+					"showThinking": "Denkschritte anzeigen",
+					"simulatedLabel": "Simuliert über die {{count}} gezeigten Kandidaten, neu normiert; nicht das, was der Server gezogen hat.",
+					"simulatedOrder": "In der Standardreihenfolge von llama.cpp angewendet: Top-k, dann Top-p, dann Min-p, dann Temperatur. Strafen und die übrigen Sampler von llama.cpp werden nicht simuliert.",
+					"simulatedTitle": "Simulierter Sampler",
+					"stepTitleAnswer": "Antwortschritt {{step}}: {{text}} ({{percent}})",
+					"stepTitleThinking": "Denkschritt {{step}}: {{text}} ({{percent}})",
+					"stepsTitle": "Schritte",
+					"tab": "Nächstes Token",
+					"temperature": "Temperatur: {{value}}",
+					"temperatureLabel": "Simulierte Temperatur",
+					"thinkingOnly": "Bisher sind nur Denkschritte eingetroffen. Blenden Sie sie mit dem Schalter oben ein.",
+					"thinkingOnlyFinished": "Dieser Lauf hat nur Denkschritte erzeugt; die Antwort hatte noch nicht begonnen, als das Ausgabelimit erreicht war. Blenden Sie sie mit dem Schalter oben ein, oder erhöhen Sie die maximalen Ausgabe-Tokens.",
+					"thinkingOnlyNoAnswer": "Dieser Lauf hat nur Denkschritte erzeugt; eine Antwort war, falls vorhanden, zu kurz für einen Schritt, weil der Stream den letzten Eintrag auslässt. Blenden Sie die Denkschritte mit dem Schalter oben ein.",
+					"topK": "Top-k: {{value}}",
+					"topKLabel": "Simuliertes Top-k",
+					"topKOff": "Top-k: aus",
+					"topP": "Top-p: {{value}}",
+					"topPLabel": "Simuliertes Top-p",
+					"topPOff": "Top-p: aus",
+					"topic": {
+						"entries": "Warum Schritte keine Tokens sind",
+						"greedy": "Greedy oder gezogen",
+						"logits": "Logits",
+						"logprob": "Log-Wahrscheinlichkeit",
+						"minP": "Min-p",
+						"softmax": "Softmax",
+						"temperature": "Temperatur",
+						"topK": "Top-k",
+						"topP": "Top-p"
+					}
+				}
+			},
 			"noModels": "Es ist kein installiertes llama.cpp-Modell verfügbar. Bitte installieren Sie zuerst eines unter Modelle.",
 			"pytorch": {
 				"blockRoot": "(Block)",
@@ -473,7 +573,7 @@
 				"start": "Steering-Lauf starten",
 				"tests": "Test-Prompts"
 			},
-			"subtitle": "Vergleichen Sie zwei lokale Modelle mit einem Prompt, untersuchen Sie die Datei oder die Architektur eines Modells, oder tracen und steuern Sie einen Checkpoint. Nur Traces und Steering-Läufe werden gespeichert.",
+			"subtitle": "Vergleichen Sie zwei lokale Modelle mit einem Prompt, sehen Sie die Kandidaten hinter jedem nächsten Token, untersuchen Sie die Datei oder die Architektur eines Modells, oder tracen und steuern Sie einen Checkpoint. Nur Traces und Steering-Läufe werden gespeichert.",
 			"title": "Model Lab",
 			"trace": {
 				"artifact": {

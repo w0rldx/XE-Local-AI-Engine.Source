@@ -422,6 +422,11 @@ driver before it starts.
 
 → [The full pipeline, with the actual limits](for-experienced-users.md#fine-tuning-training)
 
+**Model Lab** (Advanced mode) is for looking inside a local model. Its **Next token** tab runs one prompt on an
+installed llama.cpp model and shows, for any step of the answer, the candidates the model weighed with their
+probabilities, the chosen one marked. Sliders for temperature, top-k, top-p and min-p show how a sampler would re-weight those
+candidates; that part is a simulation over the shown candidates, not what the model sampled.
+
 Training and Model Lab are **experimental**: no 1.0 stability promise, and they may change or be cut.
 [Feature tiers](for-experienced-users.md#feature-tiers)
 

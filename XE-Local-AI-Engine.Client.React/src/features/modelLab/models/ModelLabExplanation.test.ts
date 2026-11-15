@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { blockKindColors } from "@/core/models/inspect/GgufInspectInsights";
 import de from "@/features/modelLab/locales/model-lab-de.json";
 import en from "@/features/modelLab/locales/model-lab-en.json";
-import { traceMetrics } from "@/features/modelLab/models/ModelLabExplanation";
+import { nextTokenTopics, traceMetrics } from "@/features/modelLab/models/ModelLabExplanation";
 
 // Every component the descriptor can name: the backend's ModelLabArchitectureBuilder constants, as componentLabel lists them.
 const components = ["attention", "embedding", "ffn", "mtp", "norm", "other", "output", "ssm"];
@@ -94,8 +94,21 @@ describe.each([
 		expect(missing).toEqual([]);
 	});
 
+	it("cover every Next token topic at every level", () => {
+		const missing = nextTokenTopics.flatMap(({ id }) =>
+			levels.flatMap((level) => {
+				const text = valueAt(bundle, `pages.modelLab.nextToken.explain.${id}.${level}`);
+				return typeof text === "string" && text.trim() !== "" ? [] : [`${id}.${level}`];
+			}),
+		);
+		expect(missing).toEqual([]);
+	});
+
 	it("never hold i18next interpolation, which would eat the text between the braces", () => {
-		const texts = explanationStrings(valueAt(bundle, "pages.modelLab.explain"));
+		const texts = [
+			...explanationStrings(valueAt(bundle, "pages.modelLab.explain")),
+			...explanationStrings(valueAt(bundle, "pages.modelLab.nextToken.explain")),
+		];
 		expect(texts.filter((text) => text.includes("{{"))).toEqual([]);
 	});
 });

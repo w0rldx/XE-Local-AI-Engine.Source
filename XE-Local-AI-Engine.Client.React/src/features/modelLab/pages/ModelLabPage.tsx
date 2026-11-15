@@ -7,6 +7,7 @@ import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { ArchitectureExplorer } from "@/features/modelLab/components/ArchitectureExplorer";
 import { InstalledModelInspector } from "@/features/modelLab/components/InstalledModelInspector";
+import { NextTokenExplorer } from "@/features/modelLab/components/NextTokenExplorer";
 import { SamePromptComparison } from "@/features/modelLab/components/SamePromptComparison";
 import { TraceExperiments } from "@/features/modelLab/components/TraceExperiments";
 import { forgetFailedModelLabStrings, loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
@@ -31,19 +32,23 @@ function ModelLabContent() {
 				title={t("pages.modelLab.title", "Model Lab")}
 				subtitle={t(
 					"pages.modelLab.subtitle",
-					"Compare two local models on one prompt, inspect a model's file or its architecture, or trace and steer a checkpoint. Only traces and steering runs are saved.",
+					"Compare two local models on one prompt, see the candidates behind each next token, inspect a model's file or its architecture, or trace and steer a checkpoint. Only traces and steering runs are saved.",
 				)}
 			/>
 			{/* Both panels stay mounted, so switching tabs neither cancels a run nor drops a chosen model. */}
 			<Tabs defaultValue="compare">
 				<Tabs.List>
 					<Tabs.Tab value="compare">{t("pages.modelLab.compare.tab", "Same-prompt A/B")}</Tabs.Tab>
+					<Tabs.Tab value="nextToken">{t("pages.modelLab.nextToken.ui.tab", "Next token")}</Tabs.Tab>
 					<Tabs.Tab value="inspect">{t("pages.models.inspect.tab", "Inspect")}</Tabs.Tab>
 					<Tabs.Tab value="trace">{t("pages.modelLab.trace.tab", "Trace and steer")}</Tabs.Tab>
 					<Tabs.Tab value="architecture">{t("pages.modelLab.architecture.tab", "Architecture")}</Tabs.Tab>
 				</Tabs.List>
 				<Tabs.Panel value="compare" pt="md">
 					<SamePromptComparison />
+				</Tabs.Panel>
+				<Tabs.Panel value="nextToken" pt="md">
+					<NextTokenExplorer />
 				</Tabs.Panel>
 				<Tabs.Panel value="inspect" pt="md">
 					<InstalledModelInspector />
