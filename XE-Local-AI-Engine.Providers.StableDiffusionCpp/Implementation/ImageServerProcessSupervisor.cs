@@ -671,7 +671,10 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
     private static StableDiffusionRuntimeException CapReached()
     {
-        return new StableDiffusionRuntimeException("The maximum number of local image models are already loaded. Unload a model or raise the limit, then try again.");
+        return new StableDiffusionRuntimeException("The maximum number of local image models are already loaded. Unload a model or raise the limit, then try again.")
+        {
+            LoadedModelCapReached = true
+        };
     }
 
     private void PruneExitedProcesses(List<RunningServer> detached)

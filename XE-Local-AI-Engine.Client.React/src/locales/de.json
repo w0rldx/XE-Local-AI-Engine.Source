@@ -6777,7 +6777,7 @@
 					"label": "Leerlaufzeit des Bildservers"
 				},
 				"imageMaxLoadedProcesses": {
-					"description": "Wie viele Bildmodelle gleichzeitig geladen bleiben; ein weiteres entlädt das am längsten ungenutzte.",
+					"description": "Wie viele Bildmodelle gleichzeitig geladen bleiben; ein weiteres entlädt das am längsten ungenutzte. Ein Modell, das noch generiert, wird nie entladen; sind alle beschäftigt, schlägt ein neuer Auftrag fehl, bis eines fertig ist.",
 					"info": "Jedes geladene Bildmodell ist ein eigener sd-server-Prozess, der seine Gewichte im VRAM hält, meist neben einem Chat-Modell. Der Standard 1 hält diesen Speicherbedarf klein; erhöhen Sie ihn nur, wenn Sie oft zwischen Bildmodellen wechseln und VRAM übrig haben. Ein Modell, das noch generiert, wird nie entladen; sind alle beschäftigt, schlägt das Laden fehl. Wirkt nach einem Neustart des Nodes.",
 					"label": "Max. geladene Bildserver"
 				},
@@ -7057,7 +7057,7 @@
 					"placeholder": "Entwurfsmodell auswählen"
 				},
 				"speculativeMode": {
-					"description": "Draft-and-Verify-Decoding erhöht den Durchsatz für einzelne Nutzer. n-Gramm-Modi brauchen kein zusätzliches Modell; Entwurfsmodelle belegen zusätzlichen VRAM, der von den Kapazitätsprüfungen noch nicht berücksichtigt wird. DFlash und DSpark benötigen ein eigenes Entwurfsmodell und sind auf größere Entwurfsblöcke ausgelegt als die voreingestellten 3 Entwurfstoken pro Schritt (upstream verwendet 15 bzw. 7); der Server begrenzt diesen Wert nur nach unten, er muss also manuell erhöht werden.",
+					"description": "Draft-and-Verify-Decoding erhöht den Durchsatz für einzelne Nutzer. n-Gramm-Modi brauchen kein zusätzliches Modell; ein Entwurfsmodell belegt zusätzlichen VRAM, den die Passungsprüfung nicht vorab schätzt, und lässt sich freier VRAM nicht messen, wird ein Chat-Modell mit Entwurfsmodell abgelehnt. DFlash und DSpark benötigen ein eigenes Entwurfsmodell und sind auf größere Entwurfsblöcke ausgelegt als die voreingestellten 3 Entwurfstoken pro Schritt (upstream verwendet 15 bzw. 7); der Server begrenzt diesen Wert nur nach unten, er muss also manuell erhöht werden.",
 					"info": "Wird Chat-Modellen als --spec-type von llama-server übergeben. „MTP\" erzeugt Entwürfe aus zusätzlichen Köpfen im Hauptmodell, braucht also keine zweite Datei, aber etwas zusätzlichen VRAM; die Modi Simple, EAGLE-3, DFlash und DSpark laden das unten gewählte Entwurfsmodell. Ein Modus, der ein Entwurfsmodell braucht, aber keines hat, lässt das Laden scheitern. Standardmäßig aus; eingefrorene Profile bleiben unberührt. Wirkt nach einem Neustart des Nodes.",
 					"label": "Spekulatives Decoding",
 					"options": {

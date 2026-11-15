@@ -93,8 +93,8 @@ public sealed class StableDiffusionRuntimeOptions
     public TimeSpan MaxReadinessTimeout { get; set; } = TimeSpan.FromMinutes(30);
 
     /// <summary>
-    ///     Places the text encoder on the GPU (<c>te=cuda0</c> / <c>te=vulkan0</c>) instead of the CPU. A measurement
-    ///     and operator knob, default off; config only, never surfaced in node settings or the SPA.
+    ///     Places the text encoder on the GPU (<c>te=cuda0</c> / <c>te=vulkan0</c>) instead of the CPU. Default off; set by
+    ///     the stored node setting <c>imageTextEncoderOnGpu</c> (applied on restart), with this config section as fallback.
     /// </summary>
     /// <remarks>
     ///     Applies to the managed GPU backends only; the CPU floor ignores it and the VAE stays on the CPU either way.

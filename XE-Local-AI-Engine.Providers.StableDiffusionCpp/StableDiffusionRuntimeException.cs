@@ -35,4 +35,10 @@ public sealed class StableDiffusionRuntimeException : Exception
     ///     display-safe statement of that.
     /// </summary>
     public bool FeatureUnsupported { get; init; }
+
+    /// <summary>
+    ///     Whether the loaded image-model cap is full and every loaded daemon is busy. The message is then a fixed,
+    ///     display-safe instruction.
+    /// </summary>
+    public bool LoadedModelCapReached { get; init; }
 }

@@ -451,11 +451,12 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         catch (Exception exception)
         {
             // Sanitized: never surface a raw message (it may carry internal/model detail) and never log the prompt. A daemon
-            // death and a GPU out-of-memory are the runtime texts passed through: fixed, display-safe and telling the operator what happened.
+            // death, a GPU out-of-memory and a full loaded-model cap are the runtime texts passed through: fixed, display-safe and telling the operator what happened.
             var sanitizedError = exception switch
             {
                 StableDiffusionRuntimeException { FeatureUnsupported: true } => EditModeUnsupportedByRuntime,
-                StableDiffusionRuntimeException { ProcessExited: true } or StableDiffusionRuntimeException { OutOfMemory: true } => exception.Message,
+                StableDiffusionRuntimeException { ProcessExited: true } or StableDiffusionRuntimeException { OutOfMemory: true }
+                    or StableDiffusionRuntimeException { LoadedModelCapReached: true } => exception.Message,
                 _ => "Image generation failed."
             };
             await RunStoreAsync(store => store.MarkFailedAsync(jobId, sanitizedError, NowUnixMs(), CancellationToken.None), jobId, "mark failed");

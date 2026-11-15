@@ -140,6 +140,21 @@ public sealed class ImageJobCoordinatorTests
     }
 
     [Test]
+    public async Task RunJob_LoadedModelCapReached_FailsWithTheRuntimesInstruction()
+    {
+        const string instruction = "The maximum number of local image models are already loaded. Unload a model or raise the limit, then try again.";
+        using var harness = Harness.Create(blockRuntime: false, runtimeFailure: new StableDiffusionRuntimeException(instruction)
+        {
+            LoadedModelCapReached = true
+        });
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("cap"), CancellationToken.None);
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
+
+        AssertEx.Equal(instruction, AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None)).SanitizedError);
+    }
+
+    [Test]
     public async Task EnqueueAsync_WhenAJobIsRunning_HoldsTheSecondQueued()
     {
         using var harness = Harness.Create(blockRuntime: true);

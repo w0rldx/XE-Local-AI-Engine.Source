@@ -6777,7 +6777,7 @@
 					"label": "Image server idle time-to-live"
 				},
 				"imageMaxLoadedProcesses": {
-					"description": "How many image models stay loaded at once; loading one more unloads the least recently used.",
+					"description": "How many image models stay loaded at once; loading one more unloads the least recently used. A model still generating is never unloaded; if all are busy, a new job fails until one finishes.",
 					"info": "Each loaded image model is a separate sd-server process that holds its weights in VRAM, usually next to a chat model. The default of 1 keeps that memory small; raise it only if you switch between image models often and have VRAM to spare. A model that is still generating is never unloaded; if all are busy, the new load fails. Takes effect after a node restart.",
 					"label": "Max loaded image servers"
 				},
@@ -7057,7 +7057,7 @@
 					"placeholder": "Select a draft model"
 				},
 				"speculativeMode": {
-					"description": "Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks. DFlash and DSpark need their own draft model and are trained for larger draft blocks than the default 3 draft tokens per step (upstream uses 15 and 7); the server only clamps that value downwards, so raise it yourself.",
+					"description": "Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; a draft model adds VRAM that the model-fit check does not estimate, and where free VRAM cannot be measured a chat model with a draft model is refused. DFlash and DSpark need their own draft model and are trained for larger draft blocks than the default 3 draft tokens per step (upstream uses 15 and 7); the server only clamps that value downwards, so raise it yourself.",
 					"info": "Passed to chat models as llama-server's --spec-type. \"MTP\" drafts from extra heads inside the main model, so it needs no second file but still some extra VRAM; the simple, EAGLE-3, DFlash and DSpark modes load the draft model chosen below. A mode that needs a draft model but has none fails to load. Off by default; frozen profiles are unaffected. Takes effect after a node restart.",
 					"label": "Speculative decoding",
 					"options": {

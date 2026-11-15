@@ -133,7 +133,7 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						label={t("pages.nodeSettings.fields.imageMaxLoadedProcesses.label", "Max loaded image servers")}
 						description={t(
 							"pages.nodeSettings.fields.imageMaxLoadedProcesses.description",
-							"How many image models stay loaded at once; loading one more unloads the least recently used.",
+							"How many image models stay loaded at once; loading one more unloads the least recently used. A model still generating is never unloaded; if all are busy, a new job fails until one finishes.",
 						)}
 						bounds={bounds.tunables.imageMaxLoadedProcesses}
 						testId="node-settings-image-max-processes"
@@ -357,7 +357,7 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 							)}
 							description={t(
 								"pages.nodeSettings.fields.speculativeMode.description",
-								"Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks. DFlash and DSpark need their own draft model and are trained for larger draft blocks than the default 3 draft tokens per step (upstream uses 15 and 7); the server only clamps that value downwards, so raise it yourself.",
+								"Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; a draft model adds VRAM that the model-fit check does not estimate, and where free VRAM cannot be measured a chat model with a draft model is refused. DFlash and DSpark need their own draft model and are trained for larger draft blocks than the default 3 draft tokens per step (upstream uses 15 and 7); the server only clamps that value downwards, so raise it yourself.",
 							)}
 							data={speculativeModeOptions}
 							value={form.speculativeMode}

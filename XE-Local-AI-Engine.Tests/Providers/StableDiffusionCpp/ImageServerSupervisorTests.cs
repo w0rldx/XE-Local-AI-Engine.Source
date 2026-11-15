@@ -275,6 +275,7 @@ public sealed class ImageServerSupervisorTests
         var ex = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() =>
             supervisor.EnsureRunningAsync("flux", CancellationToken.None));
         AssertEx.Contains(ex.Message, "maximum number of local image models", StringComparison.OrdinalIgnoreCase);
+        AssertEx.True(ex.LoadedModelCapReached, "the cap refusal must be flagged so the image job surfaces its message.");
         AssertEx.False(firstHandle.WasTreeKilled, "a leased daemon must never be evicted mid-generation, even past the TTL.");
         AssertEx.Equal(expected: 1, launcher.LaunchCount);
 
