@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { type ChatSamplingOptions, samplingFieldGroups } from "@/core/runtime/ChatSamplingOptions";
+import { FieldWithInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
 
 interface DirectInferenceSamplingFieldsProps {
 	value: ChatSamplingOptions;
@@ -34,50 +35,56 @@ export function DirectInferenceSamplingFields({
 					</Text>
 					<SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="sm">
 						{group.fields.map((meta) => (
-							<NumberInput
-								key={meta.key}
-								label={t(meta.labelKey)}
-								min={meta.min}
-								max={meta.max}
-								step={meta.step}
-								decimalScale={meta.decimalScale}
-								allowDecimal={meta.allowDecimal}
-								clampBehavior="strict"
-								disabled={disabled}
-								placeholder={
-									meta.key === "maxOutputTokens" && defaultMaxOutputTokens !== undefined
-										? t("pages.directInference.maxOutputTokensDefault", "Default: {{tokens}}", {
-												tokens: defaultMaxOutputTokens.toLocaleString(),
-											})
-										: t("pages.chat.samplingOptions.modelDefault", "Model default")
-								}
-								description={
-									meta.key === "maxOutputTokens" && defaultMaxOutputTokens !== undefined
-										? t("pages.directInference.maxOutputTokensThinking", "Thinking counts toward this limit.")
-										: undefined
-								}
-								inputWrapperOrder={["label", "input", "description", "error"]}
-								value={(value[meta.key] as number | undefined) ?? ""}
-								onChange={(next) => onChange({ ...value, [meta.key]: typeof next === "number" ? next : undefined })}
-							/>
+							<FieldWithInfo key={meta.key} label={t(meta.labelKey)} text={t(meta.infoKey)}>
+								<NumberInput
+									label={t(meta.labelKey)}
+									min={meta.min}
+									max={meta.max}
+									step={meta.step}
+									decimalScale={meta.decimalScale}
+									allowDecimal={meta.allowDecimal}
+									clampBehavior="strict"
+									disabled={disabled}
+									placeholder={
+										meta.key === "maxOutputTokens" && defaultMaxOutputTokens !== undefined
+											? t("pages.directInference.maxOutputTokensDefault", "Default: {{tokens}}", {
+													tokens: defaultMaxOutputTokens.toLocaleString(),
+												})
+											: t("pages.chat.samplingOptions.modelDefault", "Model default")
+									}
+									description={
+										meta.key === "maxOutputTokens" && defaultMaxOutputTokens !== undefined
+											? t("pages.directInference.maxOutputTokensThinking", "Thinking counts toward this limit.")
+											: undefined
+									}
+									inputWrapperOrder={["label", "input", "description", "error"]}
+									value={(value[meta.key] as number | undefined) ?? ""}
+									onChange={(next) => onChange({ ...value, [meta.key]: typeof next === "number" ? next : undefined })}
+								/>
+							</FieldWithInfo>
 						))}
 					</SimpleGrid>
 				</Stack>
 			))}
-			<Textarea
+			<FieldWithInfo
 				label={t("pages.chat.samplingOptions.stop", "Stop sequences")}
-				autosize={true}
-				minRows={1}
-				disabled={disabled}
-				placeholder={t("pages.chat.samplingOptions.modelDefault", "Model default")}
-				value={stopText}
-				onChange={(event) => {
-					const raw = event.currentTarget.value;
-					setStopText(raw);
-					const stop = raw.split("\n").filter((line) => line.length > 0);
-					onChange({ ...value, stop: stop.length > 0 ? stop : undefined });
-				}}
-			/>
+				text={t("pages.chat.samplingOptions.stopInfo")}
+			>
+				<Textarea
+					label={t("pages.chat.samplingOptions.stop", "Stop sequences")}
+					autosize={true}
+					minRows={1}
+					disabled={disabled}
+					placeholder={t("pages.chat.samplingOptions.modelDefault", "Model default")}
+					value={stopText}
+					onChange={(event) => {
+						const raw = event.currentTarget.value;
+						setStopText(raw);
+						const stop = raw.split("\n").filter((line) => line.length > 0);
+						onChange({ ...value, stop: stop.length > 0 ? stop : undefined });
+					}}
+				/>
+			</FieldWithInfo>
 		</Stack>
 	);
 }

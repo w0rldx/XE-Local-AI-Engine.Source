@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { logprobPercentLabel, logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
+import { FieldInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
 import {
 	neutralSamplerSettings,
 	type NextTokenStepEntry,
@@ -166,11 +167,18 @@ export function NextTokenStepView({ entry, stepNumber, trace }: NextTokenStepVie
 							)}
 						</Alert>
 						<Stack gap={4}>
-							<Text size="xs">
-								{t("pages.modelLab.nextToken.ui.temperature", "Temperature: {{value}}", {
-									value: settings.temperature.toFixed(2),
-								})}
-							</Text>
+							<Group justify="space-between" wrap="nowrap" gap="xs">
+								<Text size="xs">
+									{t("pages.modelLab.nextToken.ui.temperature", "Temperature: {{value}}", {
+										value: settings.temperature.toFixed(2),
+									})}
+								</Text>
+								<FieldInfo
+									label={t("pages.modelLab.nextToken.ui.temperatureLabel", "Simulated temperature")}
+									text={t("pages.modelLab.nextToken.explain.temperature.overview")}
+									testId="model-lab-next-token-info-temperature"
+								/>
+							</Group>
 							<Slider
 								min={0}
 								max={2}
@@ -183,11 +191,18 @@ export function NextTokenStepView({ entry, stepNumber, trace }: NextTokenStepVie
 							/>
 						</Stack>
 						<Stack gap={4}>
-							<Text size="xs">
-								{settings.topK > 0
-									? t("pages.modelLab.nextToken.ui.topK", "Top-k: {{value}}", { value: settings.topK })
-									: t("pages.modelLab.nextToken.ui.topKOff", "Top-k: off")}
-							</Text>
+							<Group justify="space-between" wrap="nowrap" gap="xs">
+								<Text size="xs">
+									{settings.topK > 0
+										? t("pages.modelLab.nextToken.ui.topK", "Top-k: {{value}}", { value: settings.topK })
+										: t("pages.modelLab.nextToken.ui.topKOff", "Top-k: off")}
+								</Text>
+								<FieldInfo
+									label={t("pages.modelLab.nextToken.ui.topKLabel", "Simulated top-k")}
+									text={t("pages.modelLab.nextToken.explain.topK.overview")}
+									testId="model-lab-next-token-info-top-k"
+								/>
+							</Group>
 							<Slider
 								min={0}
 								max={20}
@@ -200,11 +215,18 @@ export function NextTokenStepView({ entry, stepNumber, trace }: NextTokenStepVie
 							/>
 						</Stack>
 						<Stack gap={4}>
-							<Text size="xs">
-								{settings.topP < 1
-									? t("pages.modelLab.nextToken.ui.topP", "Top-p: {{value}}", { value: settings.topP.toFixed(2) })
-									: t("pages.modelLab.nextToken.ui.topPOff", "Top-p: off")}
-							</Text>
+							<Group justify="space-between" wrap="nowrap" gap="xs">
+								<Text size="xs">
+									{settings.topP < 1
+										? t("pages.modelLab.nextToken.ui.topP", "Top-p: {{value}}", { value: settings.topP.toFixed(2) })
+										: t("pages.modelLab.nextToken.ui.topPOff", "Top-p: off")}
+								</Text>
+								<FieldInfo
+									label={t("pages.modelLab.nextToken.ui.topPLabel", "Simulated top-p")}
+									text={t("pages.modelLab.nextToken.explain.topP.overview")}
+									testId="model-lab-next-token-info-top-p"
+								/>
+							</Group>
 							<Slider
 								min={0}
 								max={1}
@@ -217,11 +239,18 @@ export function NextTokenStepView({ entry, stepNumber, trace }: NextTokenStepVie
 							/>
 						</Stack>
 						<Stack gap={4}>
-							<Text size="xs">
-								{settings.minP > 0
-									? t("pages.modelLab.nextToken.ui.minP", "Min-p: {{value}}", { value: settings.minP.toFixed(2) })
-									: t("pages.modelLab.nextToken.ui.minPOff", "Min-p: off")}
-							</Text>
+							<Group justify="space-between" wrap="nowrap" gap="xs">
+								<Text size="xs">
+									{settings.minP > 0
+										? t("pages.modelLab.nextToken.ui.minP", "Min-p: {{value}}", { value: settings.minP.toFixed(2) })
+										: t("pages.modelLab.nextToken.ui.minPOff", "Min-p: off")}
+								</Text>
+								<FieldInfo
+									label={t("pages.modelLab.nextToken.ui.minPLabel", "Simulated min-p")}
+									text={t("pages.modelLab.nextToken.explain.minP.overview")}
+									testId="model-lab-next-token-info-min-p"
+								/>
+							</Group>
 							<Slider
 								min={0}
 								max={1}

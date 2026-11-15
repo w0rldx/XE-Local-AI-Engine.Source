@@ -8,13 +8,14 @@ import {
 	nodeSettingsFieldError,
 	nodeSettingsFieldLabel,
 } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
+import { NodeSettingsFieldWithInfo } from "@/features/node-settings/components/NodeSettingsFieldWithInfo";
 import { NodeSettingsNumberField } from "@/features/node-settings/components/NodeSettingsNumberField";
 import { type NodeSettingsFieldBounds, toDisplayBounds } from "@/features/node-settings/models/NodeSettingsFieldBounds";
 import {
 	type ChatCacheRamMode,
-	nodeSettingsDisplayScale,
 	type NodeSettingsFieldsForm,
 	type NodeSettingsModelOption,
+	nodeSettingsDisplayScale,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 import {
 	KV_CACHE_TYPE_DEFAULT,
@@ -74,45 +75,49 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						</Title>
 						<IconCpu size={20} />
 					</Group>
-					<NumberInput
-						label={nodeSettingsFieldLabel(
-							t,
-							"llamaMaxLoadedProcesses",
-							t("pages.nodeSettings.fields.llamaMaxLoadedProcesses.label", "Max loaded chat models"),
-						)}
-						description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.llamaMaxLoadedProcesses.min}–${bounds.llamaMaxLoadedProcesses.max}.`}
-						min={bounds.llamaMaxLoadedProcesses.min}
-						max={bounds.llamaMaxLoadedProcesses.max}
-						clampBehavior="none"
-						allowDecimal={false}
-						value={form.llamaMaxLoadedProcesses}
-						onChange={(value) => onChange("llamaMaxLoadedProcesses", value)}
-						error={nodeSettingsFieldError(t, errors, "llamaMaxLoadedProcesses")}
-						data-testid="node-settings-llama-max-processes"
-					/>
-					<NumberInput
-						label={nodeSettingsFieldLabel(
-							t,
-							"llamaIdleTimeToLiveSeconds",
-							t("pages.nodeSettings.fields.llamaIdleTimeToLiveSeconds.label", "Idle process time-to-live"),
-						)}
-						description={nodeSettingsAllowedRange(
-							t,
-							bounds.llamaIdleTimeToLiveSeconds,
-							minutes,
-							nodeSettingsDisplayScale.llamaIdleTimeToLiveSeconds,
-							t("pages.nodeSettings.fields.secondsShort", "s"),
-						)}
-						suffix={` ${minutes}`}
-						min={idleTtlBounds.min}
-						max={idleTtlBounds.max}
-						clampBehavior="none"
-						decimalScale={2}
-						value={form.llamaIdleTimeToLiveSeconds}
-						onChange={(value) => onChange("llamaIdleTimeToLiveSeconds", value)}
-						error={nodeSettingsFieldError(t, errors, "llamaIdleTimeToLiveSeconds")}
-						data-testid="node-settings-llama-idle-ttl"
-					/>
+					<NodeSettingsFieldWithInfo field="llamaMaxLoadedProcesses">
+						<NumberInput
+							label={nodeSettingsFieldLabel(
+								t,
+								"llamaMaxLoadedProcesses",
+								t("pages.nodeSettings.fields.llamaMaxLoadedProcesses.label", "Max loaded chat models"),
+							)}
+							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.llamaMaxLoadedProcesses.min}–${bounds.llamaMaxLoadedProcesses.max}.`}
+							min={bounds.llamaMaxLoadedProcesses.min}
+							max={bounds.llamaMaxLoadedProcesses.max}
+							clampBehavior="none"
+							allowDecimal={false}
+							value={form.llamaMaxLoadedProcesses}
+							onChange={(value) => onChange("llamaMaxLoadedProcesses", value)}
+							error={nodeSettingsFieldError(t, errors, "llamaMaxLoadedProcesses")}
+							data-testid="node-settings-llama-max-processes"
+						/>
+					</NodeSettingsFieldWithInfo>
+					<NodeSettingsFieldWithInfo field="llamaIdleTimeToLiveSeconds">
+						<NumberInput
+							label={nodeSettingsFieldLabel(
+								t,
+								"llamaIdleTimeToLiveSeconds",
+								t("pages.nodeSettings.fields.llamaIdleTimeToLiveSeconds.label", "Idle process time-to-live"),
+							)}
+							description={nodeSettingsAllowedRange(
+								t,
+								bounds.llamaIdleTimeToLiveSeconds,
+								minutes,
+								nodeSettingsDisplayScale.llamaIdleTimeToLiveSeconds,
+								t("pages.nodeSettings.fields.secondsShort", "s"),
+							)}
+							suffix={` ${minutes}`}
+							min={idleTtlBounds.min}
+							max={idleTtlBounds.max}
+							clampBehavior="none"
+							decimalScale={2}
+							value={form.llamaIdleTimeToLiveSeconds}
+							onChange={(value) => onChange("llamaIdleTimeToLiveSeconds", value)}
+							error={nodeSettingsFieldError(t, errors, "llamaIdleTimeToLiveSeconds")}
+							data-testid="node-settings-llama-idle-ttl"
+						/>
+					</NodeSettingsFieldWithInfo>
 					<NodeSettingsNumberField
 						{...field}
 						field="imageIdleTimeToLiveSeconds"
@@ -133,20 +138,22 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						bounds={bounds.tunables.imageMaxLoadedProcesses}
 						testId="node-settings-image-max-processes"
 					/>
-					<Switch
-						label={nodeSettingsFieldLabel(
-							t,
-							"imageTextEncoderOnGpu",
-							t("pages.nodeSettings.fields.imageTextEncoderOnGpu.label", "Image text encoder on the GPU"),
-						)}
-						description={t(
-							"pages.nodeSettings.fields.imageTextEncoderOnGpu.description",
-							"Faster prompts at the cost of video memory; off keeps the text encoder on the CPU.",
-						)}
-						checked={form.imageTextEncoderOnGpu}
-						onChange={(event) => onChange("imageTextEncoderOnGpu", event.currentTarget.checked)}
-						data-testid="node-settings-image-text-encoder-gpu"
-					/>
+					<NodeSettingsFieldWithInfo field="imageTextEncoderOnGpu">
+						<Switch
+							label={nodeSettingsFieldLabel(
+								t,
+								"imageTextEncoderOnGpu",
+								t("pages.nodeSettings.fields.imageTextEncoderOnGpu.label", "Image text encoder on the GPU"),
+							)}
+							description={t(
+								"pages.nodeSettings.fields.imageTextEncoderOnGpu.description",
+								"Faster prompts at the cost of video memory; off keeps the text encoder on the CPU.",
+							)}
+							checked={form.imageTextEncoderOnGpu}
+							onChange={(event) => onChange("imageTextEncoderOnGpu", event.currentTarget.checked)}
+							data-testid="node-settings-image-text-encoder-gpu"
+						/>
+					</NodeSettingsFieldWithInfo>
 				</Stack>
 			</Card>
 			<Card withBorder={true} radius="md" p="lg" data-testid="node-settings-server-timeouts-card">
@@ -326,56 +333,62 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 							"The recommended llama.cpp version is managed in the llama.cpp runtime card under Runtimes & builds.",
 						)}
 					</Text>
-					<Select
-						label={nodeSettingsFieldLabel(t, "kvCacheType", t("pages.nodeSettings.fields.kvCacheType.label", "KV cache type"))}
-						description={t(
-							"pages.nodeSettings.fields.kvCacheType.description",
-							"Changing this invalidates every frozen inference profile on this node. Each model re-explores with the new KV cache type the next time it loads, and must be benchmarked and frozen again. q4_0 trades answer quality for VRAM.",
-						)}
-						data={kvCacheTypeOptions}
-						value={form.kvCacheType}
-						onChange={(value) => onChange("kvCacheType", value ?? KV_CACHE_TYPE_DEFAULT)}
-						allowDeselect={false}
-						error={nodeSettingsFieldError(t, errors, "kvCacheType")}
-						data-testid="node-settings-kv-cache-type"
-					/>
-					<Select
-						label={nodeSettingsFieldLabel(
-							t,
-							"speculativeMode",
-							t("pages.nodeSettings.fields.speculativeMode.label", "Speculative decoding"),
-						)}
-						description={t(
-							"pages.nodeSettings.fields.speculativeMode.description",
-							"Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks. DFlash and DSpark need their own draft model and are trained for larger draft blocks than the default 3 draft tokens per step (upstream uses 15 and 7); the server only clamps that value downwards, so raise it yourself.",
-						)}
-						data={speculativeModeOptions}
-						value={form.speculativeMode}
-						onChange={(value) => onChange("speculativeMode", value ?? SPECULATIVE_DISABLED_MODE)}
-						allowDeselect={false}
-						error={nodeSettingsFieldError(t, errors, "speculativeMode")}
-						data-testid="node-settings-speculative-mode"
-					/>
-					{needsDraftModel ? (
+					<NodeSettingsFieldWithInfo field="kvCacheType">
+						<Select
+							label={nodeSettingsFieldLabel(t, "kvCacheType", t("pages.nodeSettings.fields.kvCacheType.label", "KV cache type"))}
+							description={t(
+								"pages.nodeSettings.fields.kvCacheType.description",
+								"Changing this invalidates every frozen inference profile on this node. Each model re-explores with the new KV cache type the next time it loads, and must be benchmarked and frozen again. q4_0 trades answer quality for VRAM.",
+							)}
+							data={kvCacheTypeOptions}
+							value={form.kvCacheType}
+							onChange={(value) => onChange("kvCacheType", value ?? KV_CACHE_TYPE_DEFAULT)}
+							allowDeselect={false}
+							error={nodeSettingsFieldError(t, errors, "kvCacheType")}
+							data-testid="node-settings-kv-cache-type"
+						/>
+					</NodeSettingsFieldWithInfo>
+					<NodeSettingsFieldWithInfo field="speculativeMode">
 						<Select
 							label={nodeSettingsFieldLabel(
 								t,
-								"speculativeDraftModelName",
-								t("pages.nodeSettings.fields.speculativeDraftModel.label", "Draft model"),
+								"speculativeMode",
+								t("pages.nodeSettings.fields.speculativeMode.label", "Speculative decoding"),
 							)}
 							description={t(
-								"pages.nodeSettings.fields.speculativeDraftModel.description",
-								"An installed chat-capable model used as the drafter. Must share the target model's tokenizer family.",
+								"pages.nodeSettings.fields.speculativeMode.description",
+								"Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks. DFlash and DSpark need their own draft model and are trained for larger draft blocks than the default 3 draft tokens per step (upstream uses 15 and 7); the server only clamps that value downwards, so raise it yourself.",
 							)}
-							placeholder={t("pages.nodeSettings.fields.speculativeDraftModel.placeholder", "Select a draft model")}
-							data={[...draftModelOptions]}
-							value={form.speculativeDraftModelName === "" ? null : form.speculativeDraftModelName}
-							onChange={(value) => onChange("speculativeDraftModelName", value ?? "")}
-							searchable={true}
-							nothingFoundMessage={t("pages.nodeSettings.fields.speculativeDraftModel.empty", "No installed chat models")}
-							error={nodeSettingsFieldError(t, errors, "speculativeDraftModelName")}
-							data-testid="node-settings-speculative-draft-model"
+							data={speculativeModeOptions}
+							value={form.speculativeMode}
+							onChange={(value) => onChange("speculativeMode", value ?? SPECULATIVE_DISABLED_MODE)}
+							allowDeselect={false}
+							error={nodeSettingsFieldError(t, errors, "speculativeMode")}
+							data-testid="node-settings-speculative-mode"
 						/>
+					</NodeSettingsFieldWithInfo>
+					{needsDraftModel ? (
+						<NodeSettingsFieldWithInfo field="speculativeDraftModelName">
+							<Select
+								label={nodeSettingsFieldLabel(
+									t,
+									"speculativeDraftModelName",
+									t("pages.nodeSettings.fields.speculativeDraftModel.label", "Draft model"),
+								)}
+								description={t(
+									"pages.nodeSettings.fields.speculativeDraftModel.description",
+									"An installed chat-capable model used as the drafter. Must share the target model's tokenizer family.",
+								)}
+								placeholder={t("pages.nodeSettings.fields.speculativeDraftModel.placeholder", "Select a draft model")}
+								data={[...draftModelOptions]}
+								value={form.speculativeDraftModelName === "" ? null : form.speculativeDraftModelName}
+								onChange={(value) => onChange("speculativeDraftModelName", value ?? "")}
+								searchable={true}
+								nothingFoundMessage={t("pages.nodeSettings.fields.speculativeDraftModel.empty", "No installed chat models")}
+								error={nodeSettingsFieldError(t, errors, "speculativeDraftModelName")}
+								data-testid="node-settings-speculative-draft-model"
+							/>
+						</NodeSettingsFieldWithInfo>
 					) : null}
 					{needsDraftModel ? (
 						<NodeSettingsNumberField
@@ -391,50 +404,56 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						/>
 					) : null}
 					{showsDraftTokensPerStep ? (
+						<NodeSettingsFieldWithInfo field="speculativeDraftMaxTokens">
+							<NumberInput
+								label={nodeSettingsFieldLabel(
+									t,
+									"speculativeDraftMaxTokens",
+									t("pages.nodeSettings.fields.speculativeDraftMaxTokens.label", "Draft tokens per step"),
+								)}
+								description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.speculativeDraftMaxTokens.min}–${bounds.speculativeDraftMaxTokens.max}.`}
+								min={bounds.speculativeDraftMaxTokens.min}
+								max={bounds.speculativeDraftMaxTokens.max}
+								clampBehavior="none"
+								allowDecimal={false}
+								value={form.speculativeDraftMaxTokens}
+								onChange={(value) => onChange("speculativeDraftMaxTokens", value)}
+								error={nodeSettingsFieldError(t, errors, "speculativeDraftMaxTokens")}
+								data-testid="node-settings-speculative-draft-max-tokens"
+							/>
+						</NodeSettingsFieldWithInfo>
+					) : null}
+					<NodeSettingsFieldWithInfo field="chatCacheReuse">
 						<NumberInput
 							label={nodeSettingsFieldLabel(
 								t,
-								"speculativeDraftMaxTokens",
-								t("pages.nodeSettings.fields.speculativeDraftMaxTokens.label", "Draft tokens per step"),
+								"chatCacheReuse",
+								t("pages.nodeSettings.fields.chatCacheReuse.label", "Prompt cache reuse"),
 							)}
-							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.speculativeDraftMaxTokens.min}–${bounds.speculativeDraftMaxTokens.max}.`}
-							min={bounds.speculativeDraftMaxTokens.min}
-							max={bounds.speculativeDraftMaxTokens.max}
+							description={t(
+								"pages.nodeSettings.fields.chatCacheReuse.description",
+								"Reuse an unchanged prompt prefix across turns (tokens). 0 disables.",
+							)}
+							min={bounds.chatCacheReuse.min}
+							max={bounds.chatCacheReuse.max}
 							clampBehavior="none"
 							allowDecimal={false}
-							value={form.speculativeDraftMaxTokens}
-							onChange={(value) => onChange("speculativeDraftMaxTokens", value)}
-							error={nodeSettingsFieldError(t, errors, "speculativeDraftMaxTokens")}
-							data-testid="node-settings-speculative-draft-max-tokens"
+							value={form.chatCacheReuse}
+							onChange={(value) => onChange("chatCacheReuse", value)}
+							error={nodeSettingsFieldError(t, errors, "chatCacheReuse")}
+							data-testid="node-settings-chat-cache-reuse"
 						/>
-					) : null}
-					<NumberInput
-						label={nodeSettingsFieldLabel(
-							t,
-							"chatCacheReuse",
-							t("pages.nodeSettings.fields.chatCacheReuse.label", "Prompt cache reuse"),
-						)}
-						description={t(
-							"pages.nodeSettings.fields.chatCacheReuse.description",
-							"Reuse an unchanged prompt prefix across turns (tokens). 0 disables.",
-						)}
-						min={bounds.chatCacheReuse.min}
-						max={bounds.chatCacheReuse.max}
-						clampBehavior="none"
-						allowDecimal={false}
-						value={form.chatCacheReuse}
-						onChange={(value) => onChange("chatCacheReuse", value)}
-						error={nodeSettingsFieldError(t, errors, "chatCacheReuse")}
-						data-testid="node-settings-chat-cache-reuse"
-					/>
+					</NodeSettingsFieldWithInfo>
 					<Stack gap={4}>
-						<Text size="sm" fw={500} component="div" id="node-settings-chat-cache-ram-label">
-							{nodeSettingsFieldLabel(
-								t,
-								"llamaChatCacheRamMiB",
-								t("pages.nodeSettings.fields.llamaChatCacheRam.label", "Prompt cache memory"),
-							)}
-						</Text>
+						<NodeSettingsFieldWithInfo field="llamaChatCacheRamMiB">
+							<Text size="sm" fw={500} component="div" id="node-settings-chat-cache-ram-label">
+								{nodeSettingsFieldLabel(
+									t,
+									"llamaChatCacheRamMiB",
+									t("pages.nodeSettings.fields.llamaChatCacheRam.label", "Prompt cache memory"),
+								)}
+							</Text>
+						</NodeSettingsFieldWithInfo>
 						<Text size="xs" c="dimmed">
 							{t(
 								"pages.nodeSettings.fields.llamaChatCacheRam.description",

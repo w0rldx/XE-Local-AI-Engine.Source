@@ -18,8 +18,13 @@ const labelKeyAliases: Readonly<Record<string, string>> = {
 	llamaChatCacheRamMiB: "llamaChatCacheRam",
 };
 
+// The i18n key prefix of a wire field name.
+export function nodeSettingsFieldKey(field: string): string {
+	return `pages.nodeSettings.fields.${labelKeyAliases[field] ?? field}`;
+}
+
 export function nodeSettingsFieldLabelText(t: Translate, field: string): string {
-	return t(`pages.nodeSettings.fields.${labelKeyAliases[field] ?? field}.label`, field);
+	return t(`${nodeSettingsFieldKey(field)}.label`, field);
 }
 
 export function nodeSettingsFieldError(

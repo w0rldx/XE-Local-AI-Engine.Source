@@ -6,6 +6,7 @@ import {
 	nodeSettingsFieldError,
 	nodeSettingsFieldLabel,
 } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
+import { NodeSettingsFieldWithInfo } from "@/features/node-settings/components/NodeSettingsFieldWithInfo";
 import type { NumericBounds } from "@/features/node-settings/models/NodeSettingsFieldBounds";
 import { type NodeSettingsFieldsForm, nodeSettingsScaleOf } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
@@ -55,51 +56,53 @@ export function NodeSettingsNumberField({
 	const isSet = String(form[field]).trim() !== "";
 
 	return (
-		<NumberInput
-			placeholder={
-				shippedDefault === undefined
-					? undefined
-					: t("pages.nodeSettings.fields.defaultValue", "Default: {{value}}", {
-							value: unit === "" ? shippedDefault : `${shippedDefault} ${unit}`,
-						})
-			}
-			// The wrapper stays mounted whether or not the field is set: swapping it in on the first keystroke would
-			// remount the input and drop focus mid-typing.
-			inputContainer={
-				shippedDefault === undefined
-					? undefined
-					: (children) => (
-							<Group gap="xs" wrap="nowrap">
-								<Box flex={1}>{children}</Box>
-								{isSet && (
-									<Button
-										variant="subtle"
-										size="compact-sm"
-										disabled={disabled}
-										onClick={() => onChange(field, "")}
-										data-testid={`${testId}-use-default`}
-									>
-										{t("pages.nodeSettings.fields.useDefault", "Use default")}
-									</Button>
-								)}
-							</Group>
-						)
-			}
-			label={nodeSettingsFieldLabel(t, field, label)}
-			description={description === undefined ? range : [range, description].filter((part) => part !== "").join(" ")}
-			suffix={unit === "" ? undefined : unit === "%" ? " %" : ` ${unit}`}
-			min={bounds.min / scale}
-			max={bounds.max / scale}
-			// Never clamp: Mantine's default clamps on blur, silently replacing an out-of-range entry before the save-time
-			// range check can name it.
-			clampBehavior="none"
-			allowDecimal={scale !== 1}
-			decimalScale={scale === 1 ? undefined : 2}
-			disabled={disabled}
-			value={form[field]}
-			onChange={(value) => onChange(field, value)}
-			error={nodeSettingsFieldError(t, errors, field)}
-			data-testid={testId}
-		/>
+		<NodeSettingsFieldWithInfo field={field}>
+			<NumberInput
+				placeholder={
+					shippedDefault === undefined
+						? undefined
+						: t("pages.nodeSettings.fields.defaultValue", "Default: {{value}}", {
+								value: unit === "" ? shippedDefault : `${shippedDefault} ${unit}`,
+							})
+				}
+				// The wrapper stays mounted whether or not the field is set: swapping it in on the first keystroke would
+				// remount the input and drop focus mid-typing.
+				inputContainer={
+					shippedDefault === undefined
+						? undefined
+						: (children) => (
+								<Group gap="xs" wrap="nowrap">
+									<Box flex={1}>{children}</Box>
+									{isSet && (
+										<Button
+											variant="subtle"
+											size="compact-sm"
+											disabled={disabled}
+											onClick={() => onChange(field, "")}
+											data-testid={`${testId}-use-default`}
+										>
+											{t("pages.nodeSettings.fields.useDefault", "Use default")}
+										</Button>
+									)}
+								</Group>
+							)
+				}
+				label={nodeSettingsFieldLabel(t, field, label)}
+				description={description === undefined ? range : [range, description].filter((part) => part !== "").join(" ")}
+				suffix={unit === "" ? undefined : unit === "%" ? " %" : ` ${unit}`}
+				min={bounds.min / scale}
+				max={bounds.max / scale}
+				// Never clamp: Mantine's default clamps on blur, silently replacing an out-of-range entry before the save-time
+				// range check can name it.
+				clampBehavior="none"
+				allowDecimal={scale !== 1}
+				decimalScale={scale === 1 ? undefined : 2}
+				disabled={disabled}
+				value={form[field]}
+				onChange={(value) => onChange(field, value)}
+				error={nodeSettingsFieldError(t, errors, field)}
+				data-testid={testId}
+			/>
+		</NodeSettingsFieldWithInfo>
 	);
 }

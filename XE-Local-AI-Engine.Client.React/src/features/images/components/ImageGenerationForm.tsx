@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 
 import { AssistActions } from "@/core/assist/components/AssistActions/AssistActions";
 import type { AssistDraft } from "@/core/assist/models/AssistModels";
+import { FieldInfo, FieldWithInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StickyBar } from "@/core/ui/components/StickyBar/StickyBar";
 import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
@@ -265,9 +266,16 @@ export function ImageGenerationForm({
 
 					{values.editMode === "img2img" ? (
 						<Stack gap={4} data-testid="image-form-strength">
-							<Text size="sm" fw={500}>
-								{t("pages.images.edit.strength.label", "Strength")}
-							</Text>
+							<Group justify="space-between" wrap="nowrap" gap="xs">
+								<Text size="sm" fw={500}>
+									{t("pages.images.edit.strength.label", "Strength")}
+								</Text>
+								<FieldInfo
+									label={t("pages.images.edit.strength.label", "Strength")}
+									text={t("pages.images.edit.strength.info")}
+									testId="image-form-info-strength"
+								/>
+							</Group>
 							<Slider
 								min={0.1}
 								max={1}
@@ -317,79 +325,117 @@ export function ImageGenerationForm({
 			/>
 
 			<Group grow={true} align="flex-start">
-				<NumberInput
+				<FieldWithInfo
 					label={t("pages.images.form.width.label", "Width")}
-					value={values.width}
-					min={64}
-					max={2048}
-					step={64}
-					allowDecimal={false}
-					error={fieldError(errors, "width")}
-					onChange={(value) => setValues((current) => ({ ...current, width: typeof value === "number" ? value : current.width }))}
-					data-testid="image-form-width"
-				/>
-				<NumberInput
+					text={t("pages.images.form.width.info")}
+					testId="image-form-info-width"
+				>
+					<NumberInput
+						label={t("pages.images.form.width.label", "Width")}
+						value={values.width}
+						min={64}
+						max={2048}
+						step={64}
+						allowDecimal={false}
+						error={fieldError(errors, "width")}
+						onChange={(value) =>
+							setValues((current) => ({ ...current, width: typeof value === "number" ? value : current.width }))
+						}
+						data-testid="image-form-width"
+					/>
+				</FieldWithInfo>
+				<FieldWithInfo
 					label={t("pages.images.form.height.label", "Height")}
-					value={values.height}
-					min={64}
-					max={2048}
-					step={64}
-					allowDecimal={false}
-					error={fieldError(errors, "height")}
-					onChange={(value) =>
-						setValues((current) => ({ ...current, height: typeof value === "number" ? value : current.height }))
-					}
-					data-testid="image-form-height"
-				/>
+					text={t("pages.images.form.height.info")}
+					testId="image-form-info-height"
+				>
+					<NumberInput
+						label={t("pages.images.form.height.label", "Height")}
+						value={values.height}
+						min={64}
+						max={2048}
+						step={64}
+						allowDecimal={false}
+						error={fieldError(errors, "height")}
+						onChange={(value) =>
+							setValues((current) => ({ ...current, height: typeof value === "number" ? value : current.height }))
+						}
+						data-testid="image-form-height"
+					/>
+				</FieldWithInfo>
 			</Group>
 
 			<Group grow={true} align="flex-start">
-				<NumberInput
+				<FieldWithInfo
 					label={t("pages.images.form.steps.label", "Steps")}
-					value={values.steps}
-					min={1}
-					max={150}
-					allowDecimal={false}
-					error={fieldError(errors, "steps")}
-					onChange={(value) => typeof value === "number" && updateSampling({ steps: value })}
-					data-testid="image-form-steps"
-				/>
-				<NumberInput
+					text={t("pages.images.form.steps.info")}
+					testId="image-form-info-steps"
+				>
+					<NumberInput
+						label={t("pages.images.form.steps.label", "Steps")}
+						value={values.steps}
+						min={1}
+						max={150}
+						allowDecimal={false}
+						error={fieldError(errors, "steps")}
+						onChange={(value) => typeof value === "number" && updateSampling({ steps: value })}
+						data-testid="image-form-steps"
+					/>
+				</FieldWithInfo>
+				<FieldWithInfo
 					label={t("pages.images.form.cfgScale.label", "CFG scale")}
-					value={values.cfgScale}
-					min={1}
-					max={30}
-					step={0.5}
-					decimalScale={1}
-					error={fieldError(errors, "cfgScale")}
-					onChange={(value) => typeof value === "number" && updateSampling({ cfgScale: value })}
-					data-testid="image-form-cfg-scale"
-				/>
+					text={t("pages.images.form.cfgScale.info")}
+					testId="image-form-info-cfg-scale"
+				>
+					<NumberInput
+						label={t("pages.images.form.cfgScale.label", "CFG scale")}
+						value={values.cfgScale}
+						min={1}
+						max={30}
+						step={0.5}
+						decimalScale={1}
+						error={fieldError(errors, "cfgScale")}
+						onChange={(value) => typeof value === "number" && updateSampling({ cfgScale: value })}
+						data-testid="image-form-cfg-scale"
+					/>
+				</FieldWithInfo>
 			</Group>
 
 			{/* Sampler/seed go two-up only from `lg`. This app overrides Mantine's breakpoints (theme.json: md = 768,
 			 lg = 1024), and 768 is exactly the width where a half-width column left the sampler Select too narrow for its
 			 longest option — "Euler a" rendered as "Eule". Numbers survive a half-width column; a name does not. */}
 			<SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md" verticalSpacing="xs" data-testid="image-form-sampler-row">
-				<Select
+				<FieldWithInfo
 					label={t("pages.images.form.sampler.label", "Sampler")}
-					data={samplerData}
-					value={values.sampler}
-					allowDeselect={false}
-					error={fieldError(errors, "sampler")}
-					onChange={(value) => value && updateSampling({ sampler: value as ImageGenerationFormValues["sampler"] })}
-					data-testid="image-form-sampler"
-				/>
-				<NumberInput
+					text={t("pages.images.form.sampler.info")}
+					testId="image-form-info-sampler"
+				>
+					<Select
+						label={t("pages.images.form.sampler.label", "Sampler")}
+						data={samplerData}
+						value={values.sampler}
+						allowDeselect={false}
+						error={fieldError(errors, "sampler")}
+						onChange={(value) => value && updateSampling({ sampler: value as ImageGenerationFormValues["sampler"] })}
+						data-testid="image-form-sampler"
+					/>
+				</FieldWithInfo>
+				<FieldWithInfo
 					label={t("pages.images.form.seed.label", "Seed")}
-					description={t("pages.images.form.seed.description", "-1 for a random seed")}
-					value={values.seed}
-					min={-1}
-					allowDecimal={false}
-					error={fieldError(errors, "seed")}
-					onChange={(value) => setValues((current) => ({ ...current, seed: typeof value === "number" ? value : current.seed }))}
-					data-testid="image-form-seed"
-				/>
+					text={t("pages.images.form.seed.info")}
+					testId="image-form-info-seed"
+				>
+					<NumberInput
+						label={t("pages.images.form.seed.label", "Seed")}
+						description={t("pages.images.form.seed.description", "-1 for a random seed")}
+						value={values.seed}
+						min={-1}
+						allowDecimal={false}
+						error={fieldError(errors, "seed")}
+						onChange={(value) => setValues((current) => ({ ...current, seed: typeof value === "number" ? value : current.seed }))}
+						data-testid="image-form-seed"
+					/>
+				</FieldWithInfo>
 			</SimpleGrid>
 
 			{hasOverride ? (

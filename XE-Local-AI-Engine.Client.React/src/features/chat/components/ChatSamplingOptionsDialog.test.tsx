@@ -4,6 +4,8 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { samplingFieldGroups } from "@/core/runtime/ChatSamplingOptions";
+import en from "@/locales/en.json";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
@@ -149,6 +151,21 @@ describe("ChatSamplingOptionsDialog", () => {
 		expect(screen.queryByTestId("chat-sampling-slider-seed")).toBeNull();
 		// The number input for seed is still present
 		expect(screen.getByTestId("chat-sampling-field-seed")).toBeDefined();
+	});
+
+	it("puts an info card beside every field without changing the inputs' names", async () => {
+		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
+
+		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+
+		for (const meta of samplingFieldGroups.flatMap((group) => group.fields)) {
+			expect(screen.getByTestId(`chat-sampling-info-${meta.key}`)).toBeDefined();
+		}
+		expect(screen.getByRole("textbox", { name: en.pages.chat.samplingOptions.seed })).toBeDefined();
+		expect(screen.getByRole("textbox", { name: en.pages.chat.samplingOptions.stop })).toBeDefined();
+		fireEvent.mouseEnter(screen.getByRole("button", { name: `About ${en.pages.chat.samplingOptions.topP}` }));
+		const card = await screen.findByRole("tooltip");
+		expect(card.textContent).toContain(en.pages.chat.samplingOptions.topPInfo);
 	});
 
 	it("per-field reset clears only that field and leaves others untouched", async () => {

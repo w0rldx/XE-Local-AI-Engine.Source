@@ -349,7 +349,8 @@ describe("DirectInferencePage", () => {
 	it("copies the JSON only when asked, with the result as of that click", async () => {
 		stubModels();
 		const writeText = vi.fn(() => Promise.resolve());
-		vi.stubGlobal("navigator", { ...window.navigator, clipboard: { writeText } });
+		// Only the clipboard: a spread copy of navigator drops its prototype getters (userAgent), which the tooltips read.
+		Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
 		hub.state.events = [
 			{ type: "delta", textDelta: "hi" },
 			{ type: "done", elapsedMs: 5 },

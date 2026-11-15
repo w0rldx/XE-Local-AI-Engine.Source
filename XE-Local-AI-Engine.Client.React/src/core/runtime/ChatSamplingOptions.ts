@@ -27,6 +27,8 @@ export interface SamplingFieldMeta {
 	key: keyof ChatSamplingOptions;
 	labelKey: string;
 	descriptionKey: string;
+	// The FieldInfo card text: what the knob does, its typical value and when to change it.
+	infoKey: string;
 	min: number;
 	max: number;
 	step: number;
@@ -47,6 +49,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				key: "temperature",
 				labelKey: "pages.chat.samplingOptions.temperature",
 				descriptionKey: "pages.chat.samplingOptions.temperatureDescription",
+				infoKey: "pages.chat.samplingOptions.temperatureInfo",
 				min: 0,
 				max: 2,
 				step: 0.05,
@@ -58,6 +61,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				key: "topP",
 				labelKey: "pages.chat.samplingOptions.topP",
 				descriptionKey: "pages.chat.samplingOptions.topPDescription",
+				infoKey: "pages.chat.samplingOptions.topPInfo",
 				min: 0,
 				max: 1,
 				step: 0.05,
@@ -69,6 +73,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				key: "topK",
 				labelKey: "pages.chat.samplingOptions.topK",
 				descriptionKey: "pages.chat.samplingOptions.topKDescription",
+				infoKey: "pages.chat.samplingOptions.topKInfo",
 				min: 1,
 				max: 200,
 				step: 1,
@@ -80,6 +85,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				key: "minP",
 				labelKey: "pages.chat.samplingOptions.minP",
 				descriptionKey: "pages.chat.samplingOptions.minPDescription",
+				infoKey: "pages.chat.samplingOptions.minPInfo",
 				min: 0,
 				max: 1,
 				step: 0.05,
@@ -97,6 +103,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				key: "repeatPenalty",
 				labelKey: "pages.chat.samplingOptions.repeatPenalty",
 				descriptionKey: "pages.chat.samplingOptions.repeatPenaltyDescription",
+				infoKey: "pages.chat.samplingOptions.repeatPenaltyInfo",
 				min: 0,
 				max: 2,
 				step: 0.05,
@@ -109,6 +116,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				key: "repeatLastN",
 				labelKey: "pages.chat.samplingOptions.repeatLastN",
 				descriptionKey: "pages.chat.samplingOptions.repeatLastNDescription",
+				infoKey: "pages.chat.samplingOptions.repeatLastNInfo",
 				min: -1,
 				max: 512,
 				step: 1,
@@ -120,6 +128,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				key: "presencePenalty",
 				labelKey: "pages.chat.samplingOptions.presencePenalty",
 				descriptionKey: "pages.chat.samplingOptions.presencePenaltyDescription",
+				infoKey: "pages.chat.samplingOptions.presencePenaltyInfo",
 				min: -2,
 				max: 2,
 				step: 0.05,
@@ -131,6 +140,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				key: "frequencyPenalty",
 				labelKey: "pages.chat.samplingOptions.frequencyPenalty",
 				descriptionKey: "pages.chat.samplingOptions.frequencyPenaltyDescription",
+				infoKey: "pages.chat.samplingOptions.frequencyPenaltyInfo",
 				min: -2,
 				max: 2,
 				step: 0.05,
@@ -147,6 +157,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				key: "maxOutputTokens",
 				labelKey: "pages.chat.samplingOptions.maxOutputTokens",
 				descriptionKey: "pages.chat.samplingOptions.maxOutputTokensDescription",
+				infoKey: "pages.chat.samplingOptions.maxOutputTokensInfo",
 				min: 1,
 				max: 131072,
 				step: 128,
@@ -157,6 +168,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				key: "seed",
 				labelKey: "pages.chat.samplingOptions.seed",
 				descriptionKey: "pages.chat.samplingOptions.seedDescription",
+				infoKey: "pages.chat.samplingOptions.seedInfo",
 				min: -1,
 				max: 2147483647,
 				step: 1,
@@ -167,6 +179,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				key: "numCtx",
 				labelKey: "pages.chat.samplingOptions.numCtx",
 				descriptionKey: "pages.chat.samplingOptions.numCtxDescription",
+				infoKey: "pages.chat.samplingOptions.numCtxInfo",
 				min: 512,
 				max: 131072,
 				step: 512,

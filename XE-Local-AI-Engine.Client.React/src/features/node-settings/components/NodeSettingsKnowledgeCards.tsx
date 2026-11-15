@@ -3,6 +3,7 @@ import { IconSearch, IconSparkles } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { nodeSettingsFieldLabel } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
+import { NodeSettingsFieldWithInfo } from "@/features/node-settings/components/NodeSettingsFieldWithInfo";
 import { NodeSettingsNumberField } from "@/features/node-settings/components/NodeSettingsNumberField";
 import { type NodeSettingsTunableCardProps, TunableCard } from "@/features/node-settings/components/NodeSettingsTunableCards";
 
@@ -56,16 +57,18 @@ export function NodeSettingsKnowledgeRetrievalCard({ bounds, ...field }: NodeSet
 				onChange={(event) => onChange("knowledgeAgentToolsEnabled", event.currentTarget.checked)}
 				data-testid="node-settings-knowledge-agent-tools-enabled"
 			/>
-			<Switch
-				label={t("pages.nodeSettings.fields.knowledgeAdaptiveRerankingEnabled.label", "Rerank only when results are unclear")}
-				description={t(
-					"pages.nodeSettings.fields.knowledgeAdaptiveRerankingEnabled.description",
-					"Skip the reranker when keyword and meaning search agree, or when the latency budget is nearly spent.",
-				)}
-				checked={form.knowledgeAdaptiveRerankingEnabled}
-				onChange={(event) => onChange("knowledgeAdaptiveRerankingEnabled", event.currentTarget.checked)}
-				data-testid="node-settings-knowledge-adaptive-reranking"
-			/>
+			<NodeSettingsFieldWithInfo field="knowledgeAdaptiveRerankingEnabled">
+				<Switch
+					label={t("pages.nodeSettings.fields.knowledgeAdaptiveRerankingEnabled.label", "Rerank only when results are unclear")}
+					description={t(
+						"pages.nodeSettings.fields.knowledgeAdaptiveRerankingEnabled.description",
+						"Skip the reranker when keyword and meaning search agree, or when the latency budget is nearly spent.",
+					)}
+					checked={form.knowledgeAdaptiveRerankingEnabled}
+					onChange={(event) => onChange("knowledgeAdaptiveRerankingEnabled", event.currentTarget.checked)}
+					data-testid="node-settings-knowledge-adaptive-reranking"
+				/>
+			</NodeSettingsFieldWithInfo>
 			<NodeSettingsNumberField
 				{...field}
 				field="knowledgeRetrievalLatencyBudgetMs"

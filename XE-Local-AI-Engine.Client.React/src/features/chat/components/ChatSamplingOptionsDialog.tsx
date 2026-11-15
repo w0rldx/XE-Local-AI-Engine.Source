@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { FieldInfo, FieldWithInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
 import { chatErrorMessage } from "@/features/chat/models/ChatErrorMessage";
 import type { ChatSamplingOptions, SamplingFieldMeta } from "@/features/chat/models/ChatSamplingOptions";
 import { clampFieldMax, samplingFieldGroups, toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
@@ -47,14 +48,16 @@ interface SamplingFieldRowProps {
 function SamplingFieldRow({ meta, numValue, cappedMax, unsupported, onCommit, onReset }: SamplingFieldRowProps) {
 	const { t } = useTranslation();
 
-	const resetLabel = t("pages.chat.samplingOptions.resetField", { field: t(meta.labelKey) });
+	const label = t(meta.labelKey);
+	const info = t(meta.infoKey);
+	const resetLabel = t("pages.chat.samplingOptions.resetField", { field: label });
 	const unsupportedHint = t("pages.chat.samplingOptions.cloudUnsupported", "Not supported by cloud providers");
 
 	const numberInput = (
 		<NumberInput
 			style={{ width: meta.slider ? 110 : undefined }}
 			hideControls={meta.slider}
-			label={meta.slider ? undefined : t(meta.labelKey)}
+			label={meta.slider ? undefined : label}
 			description={meta.slider ? undefined : t(meta.descriptionKey)}
 			disabled={unsupported}
 			min={meta.min}
@@ -92,9 +95,12 @@ function SamplingFieldRow({ meta, numValue, cappedMax, unsupported, onCommit, on
 			<Stack gap={4}>
 				<Group justify="space-between" wrap="nowrap">
 					<Text size="sm" fw={500}>
-						{t(meta.labelKey)}
+						{label}
 					</Text>
-					{resetButton}
+					<Group gap={4} wrap="nowrap">
+						<FieldInfo label={label} text={info} testId={`chat-sampling-info-${meta.key}`} />
+						{resetButton}
+					</Group>
 				</Group>
 				<Text size="xs" c="dimmed">
 					{t(meta.descriptionKey)}
@@ -129,7 +135,11 @@ function SamplingFieldRow({ meta, numValue, cappedMax, unsupported, onCommit, on
 	// Non-slider field (seed): label+description inside NumberInput, reset beside it.
 	return (
 		<Group wrap="nowrap" align="flex-end" gap="xs">
-			<div style={{ flex: 1 }}>{numberInput}</div>
+			<div style={{ flex: 1 }}>
+				<FieldWithInfo label={label} text={info} testId={`chat-sampling-info-${meta.key}`}>
+					{numberInput}
+				</FieldWithInfo>
+			</div>
 			{resetButton}
 		</Group>
 	);
@@ -303,37 +313,47 @@ export function ChatSamplingOptionsDialog({
 				))}
 
 				{/* Stop sequences: one entry per line */}
-				<Textarea
+				<FieldWithInfo
 					label={t("pages.chat.samplingOptions.stop", "Stop sequences")}
-					description={t(
-						"pages.chat.samplingOptions.stopDescription",
-						"One stop sequence per line. The model halts when it emits any of these strings.",
-					)}
-					placeholder={t("pages.chat.samplingOptions.modelDefault", "Model default")}
-					value={stop.join("\n")}
-					error={
-						stopOverLimit
-							? t("pages.chat.samplingOptions.stopLimit", "At most {{count}} stop sequences, each up to {{length}} characters.", {
-									count: MAX_STOP_SEQUENCES,
-									length: MAX_STOP_SEQUENCE_LENGTH,
-								})
-							: undefined
-					}
-					onChange={(e) => {
-						const sequences: string[] = [];
-						for (const l of e.currentTarget.value.split("\n")) {
-							const trimmed = l.trimEnd();
-							if (trimmed.length > 0) {
-								sequences.push(trimmed);
-							}
+					text={t("pages.chat.samplingOptions.stopInfo")}
+					testId="chat-sampling-info-stop"
+				>
+					<Textarea
+						label={t("pages.chat.samplingOptions.stop", "Stop sequences")}
+						description={t(
+							"pages.chat.samplingOptions.stopDescription",
+							"One stop sequence per line. The model halts when it emits any of these strings.",
+						)}
+						placeholder={t("pages.chat.samplingOptions.modelDefault", "Model default")}
+						value={stop.join("\n")}
+						error={
+							stopOverLimit
+								? t(
+										"pages.chat.samplingOptions.stopLimit",
+										"At most {{count}} stop sequences, each up to {{length}} characters.",
+										{
+											count: MAX_STOP_SEQUENCES,
+											length: MAX_STOP_SEQUENCE_LENGTH,
+										},
+									)
+								: undefined
 						}
-						setField("stop", sequences.length > 0 ? sequences : undefined);
-					}}
-					autosize={true}
-					minRows={2}
-					maxRows={6}
-					data-testid="chat-sampling-field-stop"
-				/>
+						onChange={(e) => {
+							const sequences: string[] = [];
+							for (const l of e.currentTarget.value.split("\n")) {
+								const trimmed = l.trimEnd();
+								if (trimmed.length > 0) {
+									sequences.push(trimmed);
+								}
+							}
+							setField("stop", sequences.length > 0 ? sequences : undefined);
+						}}
+						autosize={true}
+						minRows={2}
+						maxRows={6}
+						data-testid="chat-sampling-field-stop"
+					/>
+				</FieldWithInfo>
 			</Stack>
 		</DialogShell>
 	);

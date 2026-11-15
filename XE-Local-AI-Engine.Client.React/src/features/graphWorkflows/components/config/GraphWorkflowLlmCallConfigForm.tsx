@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { samplingFieldGroups } from "@/core/runtime/ChatSamplingOptions";
+import { FieldWithInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
 import { GraphWorkflowInputBindingsField } from "@/features/graphWorkflows/components/config/GraphWorkflowInputBindingsField";
 import { GraphWorkflowJsonField } from "@/features/graphWorkflows/components/config/GraphWorkflowJsonField";
 import {
@@ -111,68 +112,92 @@ export function GraphWorkflowLlmCallConfigForm({
 					<Accordion.Control>{t("pages.graphWorkflows.config.advanced", "Advanced")}</Accordion.Control>
 					<Accordion.Panel>
 						<Stack gap="sm">
-							{samplingFields.map((meta) => (
-								<NumberInput
-									key={meta.key}
-									label={
-										meta.key === "numCtx" ? t("pages.graphWorkflows.config.numCtx", "Prompt budget (tokens)") : t(meta.labelKey)
-									}
-									description={
-										meta.key === "numCtx"
-											? t(
-													"pages.graphWorkflows.config.numCtxHelp",
-													"Limits this request's prompt budget; it does not resize the server context window.",
-												)
-											: t(meta.descriptionKey)
-									}
-									value={(node.samplingOptions[meta.key] as number | undefined) ?? ""}
-									min={meta.min}
-									max={meta.max}
-									step={meta.step}
-									decimalScale={meta.decimalScale}
-									allowDecimal={meta.allowDecimal}
-									clampBehavior="none"
+							{samplingFields.map((meta) => {
+								const label =
+									meta.key === "numCtx" ? t("pages.graphWorkflows.config.numCtx", "Prompt budget (tokens)") : t(meta.labelKey);
+								return (
+									<FieldWithInfo
+										key={meta.key}
+										label={label}
+										// numCtx is a prompt budget here, so the chat text about conversation history would mislead.
+										text={meta.key === "numCtx" ? t("pages.graphWorkflows.config.numCtxInfo") : t(meta.infoKey)}
+										testId={`gw-node-config-sampling-info-${meta.key}`}
+									>
+										<NumberInput
+											label={label}
+											description={
+												meta.key === "numCtx"
+													? t(
+															"pages.graphWorkflows.config.numCtxHelp",
+															"Limits this request's prompt budget; it does not resize the server context window.",
+														)
+													: t(meta.descriptionKey)
+											}
+											value={(node.samplingOptions[meta.key] as number | undefined) ?? ""}
+											min={meta.min}
+											max={meta.max}
+											step={meta.step}
+											decimalScale={meta.decimalScale}
+											allowDecimal={meta.allowDecimal}
+											clampBehavior="none"
+											disabled={readOnly}
+											onChange={(value) => {
+												if (ready.current) {
+													onChange({
+														samplingOptions: {
+															...node.samplingOptions,
+															[meta.key]: typeof value === "number" ? value : undefined,
+														},
+													});
+												}
+											}}
+											data-testid={`gw-node-config-sampling-${meta.key}`}
+										/>
+									</FieldWithInfo>
+								);
+							})}
+							<FieldWithInfo
+								label={t("pages.chat.samplingOptions.seed", "Seed")}
+								text={t("pages.chat.samplingOptions.seedInfo")}
+								testId="gw-node-config-sampling-info-seed"
+							>
+								<TextInput
+									label={t("pages.chat.samplingOptions.seed", "Seed")}
+									description={t(
+										"pages.chat.samplingOptions.seedDescription",
+										"Random seed for reproducibility. -1 uses a random seed.",
+									)}
+									value={node.samplingOptions.seed ?? ""}
 									disabled={readOnly}
-									onChange={(value) => {
+									onChange={(event) => {
 										if (ready.current) {
-											onChange({
-												samplingOptions: { ...node.samplingOptions, [meta.key]: typeof value === "number" ? value : undefined },
-											});
+											onChange({ samplingOptions: { ...node.samplingOptions, seed: event.currentTarget.value || undefined } });
 										}
 									}}
-									data-testid={`gw-node-config-sampling-${meta.key}`}
+									data-testid="gw-node-config-sampling-seed"
 								/>
-							))}
-							<TextInput
-								label={t("pages.chat.samplingOptions.seed", "Seed")}
-								description={t(
-									"pages.chat.samplingOptions.seedDescription",
-									"Random seed for reproducibility. -1 uses a random seed.",
-								)}
-								value={node.samplingOptions.seed ?? ""}
-								disabled={readOnly}
-								onChange={(event) => {
-									if (ready.current) {
-										onChange({ samplingOptions: { ...node.samplingOptions, seed: event.currentTarget.value || undefined } });
-									}
-								}}
-								data-testid="gw-node-config-sampling-seed"
-							/>
-							<Textarea
+							</FieldWithInfo>
+							<FieldWithInfo
 								label={t("pages.chat.samplingOptions.stop", "Stop sequences")}
-								value={(node.samplingOptions.stop ?? []).join("\n")}
-								disabled={readOnly}
-								onChange={(event) => {
-									const next = event.currentTarget.value;
-									onChange({
-										samplingOptions: {
-											...node.samplingOptions,
-											stop: next.split("\n"),
-										},
-									});
-								}}
-								data-testid="gw-node-config-sampling-stop"
-							/>
+								text={t("pages.chat.samplingOptions.stopInfo")}
+								testId="gw-node-config-sampling-info-stop"
+							>
+								<Textarea
+									label={t("pages.chat.samplingOptions.stop", "Stop sequences")}
+									value={(node.samplingOptions.stop ?? []).join("\n")}
+									disabled={readOnly}
+									onChange={(event) => {
+										const next = event.currentTarget.value;
+										onChange({
+											samplingOptions: {
+												...node.samplingOptions,
+												stop: next.split("\n"),
+											},
+										});
+									}}
+									data-testid="gw-node-config-sampling-stop"
+								/>
+							</FieldWithInfo>
 						</Stack>
 					</Accordion.Panel>
 				</Accordion.Item>

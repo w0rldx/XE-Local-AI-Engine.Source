@@ -209,6 +209,22 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 		expect(screen.getByText("Limits this request's prompt budget; it does not resize the server context window.")).toBeTruthy();
 	});
 
+	it("explains the prompt budget with its own card, not the chat history one, and keeps the input's name", async () => {
+		renderPanel(defaultNodeData("LlmCall", "llm-call-1"));
+		fireEvent.click(screen.getByText("Advanced"));
+
+		const budget = en.pages.graphWorkflows.config.numCtx;
+		// The accordion panel counts as hidden until its open transition ends in the test environment.
+		expect(screen.getByRole("textbox", { name: budget, hidden: true })).toBeTruthy();
+		expect(screen.getByTestId("gw-node-config-sampling-info-seed")).toBeTruthy();
+		expect(screen.getByTestId("gw-node-config-sampling-info-stop")).toBeTruthy();
+		// Keyboard focus: the panel above counts as hidden here, which keeps the hover path from opening it.
+		fireEvent.focus(screen.getByTestId("gw-node-config-sampling-info-numCtx"));
+		const card = await screen.findByRole("tooltip");
+		expect(card.textContent).toContain(en.pages.graphWorkflows.config.numCtxInfo);
+		expect(card.textContent).not.toContain(en.pages.chat.samplingOptions.numCtxInfo);
+	});
+
 	it("keeps a trailing newline while entering stop sequences and publishes multiple lines", () => {
 		renderWithProviders(<StatefulLlmPanel />);
 		fireEvent.click(screen.getByText("Advanced"));

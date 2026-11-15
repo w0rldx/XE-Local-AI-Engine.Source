@@ -1,0 +1,19 @@
+.root {
+	position: relative;
+}
+
+.info {
+	position: absolute;
+	inset-block-start: 0;
+	inset-inline-end: 0;
+}
+
+.root > * > label {
+	/* Keeps a long label from running under the (i): the label is the input wrapper's direct child. */
+	padding-inline-end: 1.75rem;
+}
+
+.root:not(:has(> * > label)) {
+	/* A Switch's label sits beside its track, deeper in the tree; the whole row leaves the room instead. */
+	padding-inline-end: 1.75rem;
+}

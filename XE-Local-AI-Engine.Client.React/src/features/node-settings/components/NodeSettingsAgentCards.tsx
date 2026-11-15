@@ -4,6 +4,7 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
 import { nodeSettingsFieldLabel } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
+import { NodeSettingsFieldWithInfo } from "@/features/node-settings/components/NodeSettingsFieldWithInfo";
 import { NodeSettingsNumberField } from "@/features/node-settings/components/NodeSettingsNumberField";
 import { type NodeSettingsTunableCardProps, TunableCard } from "@/features/node-settings/components/NodeSettingsTunableCards";
 import {
@@ -78,29 +79,31 @@ export function NodeSettingsReasoningBudgetsCard({ bounds, ...field }: NodeSetti
 				field.onChange("reasoningBudgetHighTokens", "");
 			}}
 		>
-			<Select
-				label={nodeSettingsFieldLabel(
-					t,
-					"defaultReasoningEffort",
-					t("pages.nodeSettings.fields.defaultReasoningEffort.label", "Budget when no effort is chosen"),
-				)}
-				description={t(
-					"pages.nodeSettings.fields.defaultReasoningEffort.description",
-					"Which budget a local thinking model gets when a turn names no reasoning effort.",
-				)}
-				data={withDefaultOption(
-					t,
-					defaultReasoningEffortSelectValues.map((value) => ({
-						value,
-						label: t(`pages.nodeSettings.fields.defaultReasoningEffort.options.${value}`, value),
-					})),
-					shippedDefaults.defaultReasoningEffort,
-				)}
-				value={field.form.defaultReasoningEffort}
-				onChange={(value) => field.onChange("defaultReasoningEffort", value ?? field.form.defaultReasoningEffort)}
-				allowDeselect={false}
-				data-testid="node-settings-default-reasoning-effort"
-			/>
+			<NodeSettingsFieldWithInfo field="defaultReasoningEffort">
+				<Select
+					label={nodeSettingsFieldLabel(
+						t,
+						"defaultReasoningEffort",
+						t("pages.nodeSettings.fields.defaultReasoningEffort.label", "Budget when no effort is chosen"),
+					)}
+					description={t(
+						"pages.nodeSettings.fields.defaultReasoningEffort.description",
+						"Which budget a local thinking model gets when a turn names no reasoning effort.",
+					)}
+					data={withDefaultOption(
+						t,
+						defaultReasoningEffortSelectValues.map((value) => ({
+							value,
+							label: t(`pages.nodeSettings.fields.defaultReasoningEffort.options.${value}`, value),
+						})),
+						shippedDefaults.defaultReasoningEffort,
+					)}
+					value={field.form.defaultReasoningEffort}
+					onChange={(value) => field.onChange("defaultReasoningEffort", value ?? field.form.defaultReasoningEffort)}
+					allowDeselect={false}
+					data-testid="node-settings-default-reasoning-effort"
+				/>
+			</NodeSettingsFieldWithInfo>
 			<NodeSettingsNumberField
 				{...field}
 				field="reasoningBudgetMinimalTokens"
@@ -157,29 +160,31 @@ export function NodeSettingsOutputCapCard({ bounds, ...field }: NodeSettingsTuna
 				field.onChange("chatOutputCapMaxTokens", "");
 			}}
 		>
-			<Select
-				label={nodeSettingsFieldLabel(
-					t,
-					"chatOutputCapMode",
-					t("pages.nodeSettings.fields.chatOutputCapMode.label", "Answer length limit"),
-				)}
-				description={t(
-					"pages.nodeSettings.fields.chatOutputCapMode.description",
-					"Stops a local model that keeps repeating itself. A limit a request sets itself always wins.",
-				)}
-				data={withDefaultOption(
-					t,
-					chatOutputCapModeSelectValues.map((value) => ({
-						value,
-						label: t(`pages.nodeSettings.fields.chatOutputCapMode.options.${value}`, value),
-					})),
-					shippedDefaults.chatOutputCapMode,
-				)}
-				value={field.form.chatOutputCapMode}
-				onChange={(value) => field.onChange("chatOutputCapMode", value ?? field.form.chatOutputCapMode)}
-				allowDeselect={false}
-				data-testid="node-settings-chat-output-cap-mode"
-			/>
+			<NodeSettingsFieldWithInfo field="chatOutputCapMode">
+				<Select
+					label={nodeSettingsFieldLabel(
+						t,
+						"chatOutputCapMode",
+						t("pages.nodeSettings.fields.chatOutputCapMode.label", "Answer length limit"),
+					)}
+					description={t(
+						"pages.nodeSettings.fields.chatOutputCapMode.description",
+						"Stops a local model that keeps repeating itself. A limit a request sets itself always wins.",
+					)}
+					data={withDefaultOption(
+						t,
+						chatOutputCapModeSelectValues.map((value) => ({
+							value,
+							label: t(`pages.nodeSettings.fields.chatOutputCapMode.options.${value}`, value),
+						})),
+						shippedDefaults.chatOutputCapMode,
+					)}
+					value={field.form.chatOutputCapMode}
+					onChange={(value) => field.onChange("chatOutputCapMode", value ?? field.form.chatOutputCapMode)}
+					allowDeselect={false}
+					data-testid="node-settings-chat-output-cap-mode"
+				/>
+			</NodeSettingsFieldWithInfo>
 			<NodeSettingsNumberField
 				{...field}
 				field="chatOutputCapMaxTokens"
@@ -256,16 +261,18 @@ export function NodeSettingsAgentRunLimitsCard({ bounds, ...field }: NodeSetting
 				unit={t("pages.nodeSettings.fields.tokens", "tokens")}
 				testId="node-settings-cumulative-input-tokens"
 			/>
-			<Switch
-				label={t("pages.nodeSettings.fields.providerRetryEnabled.label", "Retry failed model requests")}
-				description={t(
-					"pages.nodeSettings.fields.providerRetryEnabled.description",
-					"Retry a model request that fails before its first token arrives.",
-				)}
-				checked={form.providerRetryEnabled}
-				onChange={(event) => onChange("providerRetryEnabled", event.currentTarget.checked)}
-				data-testid="node-settings-provider-retry-enabled"
-			/>
+			<NodeSettingsFieldWithInfo field="providerRetryEnabled">
+				<Switch
+					label={t("pages.nodeSettings.fields.providerRetryEnabled.label", "Retry failed model requests")}
+					description={t(
+						"pages.nodeSettings.fields.providerRetryEnabled.description",
+						"Retry a model request that fails before its first token arrives.",
+					)}
+					checked={form.providerRetryEnabled}
+					onChange={(event) => onChange("providerRetryEnabled", event.currentTarget.checked)}
+					data-testid="node-settings-provider-retry-enabled"
+				/>
+			</NodeSettingsFieldWithInfo>
 			<NodeSettingsNumberField
 				{...field}
 				field="providerMaxRetries"
@@ -359,16 +366,18 @@ export function NodeSettingsContextCompactionCard({ bounds, ...field }: NodeSett
 				bounds={bounds.tunables.contextBudgetRecentTurnKeepCount}
 				testId="node-settings-recent-turn-keep-count"
 			/>
-			<Switch
-				label={t("pages.nodeSettings.fields.compactionAutoEnabled.label", "Compact long chats automatically")}
-				description={t(
-					"pages.nodeSettings.fields.compactionAutoEnabled.description",
-					"Summarise the older part of a chat once it fills most of the context window.",
-				)}
-				checked={form.compactionAutoEnabled}
-				onChange={(event) => onChange("compactionAutoEnabled", event.currentTarget.checked)}
-				data-testid="node-settings-compaction-auto-enabled"
-			/>
+			<NodeSettingsFieldWithInfo field="compactionAutoEnabled">
+				<Switch
+					label={t("pages.nodeSettings.fields.compactionAutoEnabled.label", "Compact long chats automatically")}
+					description={t(
+						"pages.nodeSettings.fields.compactionAutoEnabled.description",
+						"Summarise the older part of a chat once it fills most of the context window.",
+					)}
+					checked={form.compactionAutoEnabled}
+					onChange={(event) => onChange("compactionAutoEnabled", event.currentTarget.checked)}
+					data-testid="node-settings-compaction-auto-enabled"
+				/>
+			</NodeSettingsFieldWithInfo>
 			<NodeSettingsNumberField
 				{...field}
 				field="compactionAutoCompactPercent"
@@ -392,16 +401,18 @@ export function NodeSettingsContextCompactionCard({ bounds, ...field }: NodeSett
 				bounds={bounds.tunables.compactionRecentMessagesVerbatim}
 				testId="node-settings-compaction-recent-messages"
 			/>
-			<Switch
-				label={t("pages.nodeSettings.fields.compactionDistillEnabled.label", "Keep a running chat summary")}
-				description={t(
-					"pages.nodeSettings.fields.compactionDistillEnabled.description",
-					"Distil facts and decisions from a chat in the background.",
-				)}
-				checked={form.compactionDistillEnabled}
-				onChange={(event) => onChange("compactionDistillEnabled", event.currentTarget.checked)}
-				data-testid="node-settings-compaction-distill-enabled"
-			/>
+			<NodeSettingsFieldWithInfo field="compactionDistillEnabled">
+				<Switch
+					label={t("pages.nodeSettings.fields.compactionDistillEnabled.label", "Keep a running chat summary")}
+					description={t(
+						"pages.nodeSettings.fields.compactionDistillEnabled.description",
+						"Distil facts and decisions from a chat in the background.",
+					)}
+					checked={form.compactionDistillEnabled}
+					onChange={(event) => onChange("compactionDistillEnabled", event.currentTarget.checked)}
+					data-testid="node-settings-compaction-distill-enabled"
+				/>
+			</NodeSettingsFieldWithInfo>
 			<NodeSettingsNumberField
 				{...field}
 				field="maxInlinedAttachmentChars"

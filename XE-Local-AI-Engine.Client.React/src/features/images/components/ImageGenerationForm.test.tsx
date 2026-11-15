@@ -96,6 +96,26 @@ describe("ImageGenerationForm", () => {
 		expect(row.contains(screen.getByTestId("image-form-seed"))).toBe(true);
 	});
 
+	it("explains each tunable field in a card beside its label, keeping the inputs' names", async () => {
+		renderForm();
+
+		const form = en.pages.images.form;
+		for (const [testId, label] of [
+			["width", form.width.label],
+			["height", form.height.label],
+			["steps", form.steps.label],
+			["cfg-scale", form.cfgScale.label],
+			["seed", form.seed.label],
+		]) {
+			expect(screen.getByRole("textbox", { name: label })).toBeDefined();
+			expect(screen.getByTestId(`image-form-info-${testId}`)).toBeDefined();
+		}
+		expect(screen.getByRole("combobox", { name: form.sampler.label })).toBeDefined();
+		fireEvent.mouseEnter(screen.getByTestId("image-form-info-sampler"));
+		const card = await screen.findByRole("tooltip");
+		expect(card.textContent).toContain(form.sampler.info);
+	});
+
 	it("keeps the sampler and the seed stacked in a single column by default", () => {
 		renderForm();
 
@@ -309,6 +329,7 @@ describe("ImageGenerationForm edit mode", () => {
 
 		expect(screen.queryByTestId("image-form-edit-mode")).toBeNull();
 		expect(screen.getByText(en.pages.images.edit.strength.label)).toBeTruthy();
+		expect(screen.getByRole("button", { name: `About ${en.pages.images.edit.strength.label}` })).toBeDefined();
 		expect(screen.getByRole("slider").getAttribute("aria-valuenow")).toBe("0.75");
 	});
 

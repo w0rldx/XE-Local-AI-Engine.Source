@@ -373,6 +373,9 @@
 		"entries": "entries",
 		"error": "Error",
 		"fetchError": "There was a problem loading table data.",
+		"fieldInfo": {
+			"open": "About {{field}}"
+		},
 		"filterReset": "Reset Filters",
 		"filters": "Filters",
 		"hide": "Hide",
@@ -2581,36 +2584,48 @@
 				"description": "While developer mode is on, these defaults override the model defaults for new conversations and for conversations without their own settings. They are stored in this browser only.",
 				"frequencyPenalty": "Frequency penalty",
 				"frequencyPenaltyDescription": "Penalizes tokens proportionally to how often they have already appeared in the output.",
+				"frequencyPenaltyInfo": "A penalty that grows with every repetition, so a token used five times is pushed down more than one used once. A small positive value (0.1 to 0.5) helps against a model that keeps reusing the same words; negative values encourage repetition. 0 turns it off and is the usual default.",
 				"groupLimits": "Limits",
 				"groupPenalties": "Penalties",
 				"groupSampling": "Sampling",
 				"maxOutputTokens": "Max output tokens",
 				"maxOutputTokensDescription": "Maximum number of tokens to generate. Clamped to the model context length when set.",
+				"maxOutputTokensInfo": "Caps the length of one answer; generation stops when the cap is reached, even mid-sentence. The tokens are reserved from the context window up front, so a high value leaves less room for the conversation. On thinking models the reasoning counts toward the cap. Raise it for long code or documents.",
 				"minP": "Min P",
 				"minPDescription": "Minimum probability for a token to be considered relative to the most probable token.",
+				"minPInfo": "Drops every candidate far less likely than the top one: the bar is this share of the top candidate's probability. Because the bar follows the model's confidence, it works well as the only filter at higher temperatures. llama.cpp's default is 0.05; 0 turns it off. Only the local runtime uses it; cloud models do not support it.",
 				"modelDefault": "Model default",
 				"numCtx": "Context length (num_ctx)",
 				"numCtxDescription": "Size of the context window in tokens used to generate the next token. On the local llama.cpp runtime the server window is fixed when the model is loaded, so this only limits how much conversation history is sent.",
+				"numCtxInfo": "The token budget of one request: the prompt, the conversation history and the reserved answer must fit into it. A lower value keeps requests short and fast, but less of the earlier conversation fits. Empty uses the node's default context size; a value above the model's loaded window has no effect, the smaller of the two applies.",
 				"presencePenalty": "Presence penalty",
 				"presencePenaltyDescription": "Penalizes tokens that have already appeared in the output, regardless of frequency.",
+				"presencePenaltyInfo": "A flat penalty on every token that has appeared at least once, however often. Positive values push the model toward new words and topics; negative values make it stay with what it already said. 0 turns it off and is the usual default; 0.1 to 0.5 is a gentle nudge.",
 				"repeatLastN": "Repeat last N",
 				"repeatLastNDescription": "Number of tokens to look back when applying the repeat penalty. -1 uses the full context.",
+				"repeatLastNInfo": "How many recent tokens the repeat, presence and frequency penalties look at on the local runtime. A small window only stops immediate loops; a large one also discourages repeating anything said earlier. llama.cpp's default is 64; 0 turns the penalties off. Cloud models do not support it.",
 				"repeatPenalty": "Repeat penalty",
 				"repeatPenaltyDescription": "Penalizes repetition. Values above 1 discourage the model from repeating itself.",
+				"repeatPenaltyInfo": "Makes tokens that already appeared in the recent text less likely. Raise it slightly (1.05 to 1.15) when a model loops or repeats phrases; too high a value makes it avoid words it needs, such as names or code keywords. 1 turns it off, which is llama.cpp's default. Only the local runtime uses it; cloud models do not support it.",
 				"reset": "Reset to defaults",
 				"resetField": "Reset {{field}}",
 				"seed": "Seed",
 				"seedDescription": "Random seed for reproducibility. -1 uses a random seed.",
+				"seedInfo": "The starting value for the random choices while sampling. With a fixed seed, the same prompt, model and settings usually produce the same answer again, which helps when you compare settings one at a time. At temperature 0 the seed has no effect, because every choice is already fixed.",
 				"stop": "Stop sequences",
 				"stopDescription": "One stop sequence per line. The model halts when it emits any of these strings.",
+				"stopInfo": "Use them to end an answer at a fixed marker, for example a closing tag or a label that starts the next part. The marker itself is not included in the reply. Leave the field empty to let the model decide where its answer ends.",
 				"stopLimit": "At most {{count}} stop sequences, each up to {{length}} characters.",
 				"temperature": "Temperature",
 				"temperatureDescription": "Controls randomness. Lower values are more deterministic; higher values are more creative.",
+				"temperatureInfo": "How freely the model picks among the likely next tokens. Lower values (0.2 to 0.5) give steadier, more repeatable answers for code, facts and extraction; higher values (0.9 to 1.2) give more varied wording for brainstorming and stories, with more risk of drifting off topic. At 0 the most likely token always wins. llama.cpp's default is 0.8.",
 				"title": "Advanced sampling options",
 				"topK": "Top K",
 				"topKDescription": "Limits sampling to the top K most likely tokens.",
+				"topKInfo": "A hard cap on how many of the most likely candidates stay in the draw. Smaller values keep the text predictable; larger values allow more variety. llama.cpp's default is 40. Only the local runtime uses it; cloud models do not support it.",
 				"topP": "Top P",
 				"topPDescription": "Nucleus sampling threshold. Only tokens whose cumulative probability reaches this value are considered.",
+				"topPInfo": "Cuts off the unlikely tail: candidates are kept from the most likely down until their probabilities add up to this share. Lower values make answers safer and more predictable; 1 turns the filter off. llama.cpp's default is 0.95. Adjust the temperature first and change this only when that is not enough.",
 				"useDefaults": "Use defaults"
 			},
 			"send": "Send",
@@ -4176,6 +4191,7 @@
 				"noBindings": "None. The arguments above are sent as they are.",
 				"numCtx": "Prompt budget (tokens)",
 				"numCtxHelp": "Limits this request's prompt budget; it does not resize the server context window.",
+				"numCtxInfo": "The token budget of this step's request: the prompt with its inputs and the reserved answer together. Set it lower to keep a step small and fast. Empty uses the node's default context size, and the model's loaded window always caps it. Max output tokens must not be larger than this budget.",
 				"outcome": "Outcome",
 				"parallelHelp": "A Parallel node hands its input to every outgoing edge.",
 				"path": "Path",
@@ -4841,16 +4857,19 @@
 				"sourceRemoved": "source removed",
 				"strength": {
 					"description": "Lower keeps more of the source; higher changes more.",
+					"info": "How far a variation may move away from the source image. Around 0.3 it keeps composition and colors and changes details; at the default 0.75 it keeps the rough layout; near 1 little of the source remains. Higher values also run more of the steps, so they take longer.",
 					"label": "Strength"
 				},
 				"unsupported": "The selected model cannot edit images. Pick another model."
 			},
 			"form": {
 				"cfgScale": {
+					"info": "How strictly the image follows the prompt (classifier-free guidance). Higher values follow it more literally but look harsh or burnt beyond the model's range; lower values look more natural but drift from the prompt. Start from the value preset for the model: 7 for SD 1.5 and SDXL, 4.5 for SD3, 6 for Qwen-Image and 1 for FLUX schnell, which is made to run without guidance.",
 					"label": "CFG scale"
 				},
 				"error": "Could not start generation.",
 				"height": {
+					"info": "The image height in pixels. Keep width × height close to the model's native size and change their ratio for portrait or landscape images. Generation time and video memory grow with the pixel count.",
 					"label": "Height"
 				},
 				"model": {
@@ -4868,6 +4887,7 @@
 				},
 				"resetSampling": "Reset to model defaults",
 				"sampler": {
+					"info": "The method that turns noise into the image step by step. Euler and Euler a are fast, reliable choices; the \"a\" (ancestral) variants add fresh noise at every step, so the image keeps changing with the step count. DPM++ 2M often gives sharp results in fewer steps. Use LCM only with LCM-distilled models. The model's preset is a safe choice.",
 					"label": "Sampler"
 				},
 				"samplers": {
@@ -4881,13 +4901,16 @@
 				},
 				"seed": {
 					"description": "-1 for a random seed",
+					"info": "The starting noise of the image. The same seed with the same prompt, model and settings usually reproduces the same image, so keep it fixed when you compare the effect of one change, such as the steps or the CFG scale.",
 					"label": "Seed"
 				},
 				"steps": {
+					"info": "How many denoising passes the sampler makes. More steps add detail up to a point and then only cost time, which grows with every step. Each model family has its own sweet spot, preset when you pick a model: 20 for SD 1.5, 25 for SDXL, 28 for SD3, 4 for FLUX schnell and 40 for Qwen-Image.",
 					"label": "Steps"
 				},
 				"submit": "Generate",
 				"width": {
+					"info": "The image width in pixels. Models draw best near the size they were trained at: 512 × 512 for SD 1.5, about 1024 × 1024 for SDXL, SD3, FLUX and Qwen-Image. Much larger sizes take far longer, need more video memory and can repeat subjects; much smaller ones lose detail. For an edit, the size is fitted to the source image.",
 					"label": "Width"
 				}
 			},
@@ -6545,6 +6568,7 @@
 				"characters": "characters",
 				"chatCacheReuse": {
 					"description": "Reuse an unchanged prompt prefix across turns (tokens). 0 disables.",
+					"info": "The node resends the whole chat history every turn. With this on, llama-server (--cache-reuse) reuses the already processed part instead of reading it again, so answers in long chats and agent runs start much sooner. The value is the smallest matching chunk, in tokens, worth reusing. Default 256; 0 turns it off. Chat models only; takes effect after a node restart.",
 					"label": "Prompt cache reuse"
 				},
 				"chatOutputCap": {
@@ -6552,11 +6576,13 @@
 				},
 				"chatOutputCapMaxTokens": {
 					"description": "The answer may use half the model's context window, but never more than this. A thinking model's thinking budget comes on top, so this is not the total.",
+					"info": "Only used when \"Answer length limit\" is set to \"Limit and tell me…\". Default 16384 tokens. Raise it for long documents or code in one answer; lower it if a small model tends to loop and you want it stopped sooner. For a local model that is not loaded yet, the node cannot halve an unknown window and uses this value alone.",
 					"label": "Longest answer",
 					"timeoutHint": "On slow hardware a long answer can reach the message request timeout (Local chat runtime) before this limit. If answers end in a timeout, raise that timeout."
 				},
 				"chatOutputCapMode": {
 					"description": "Stops a local model that keeps repeating itself. A limit a request sets itself always wins.",
+					"info": "With \"Limit and tell me…\", an answer is stopped at half the model's context window or at \"Longest answer\", whichever is smaller, and you are told it was cut off. \"No limit, but tell me…\" only shows that notice when an answer ends at the window. Thinking time is not counted against the limit. Keep the limit unless you need very long single answers.",
 					"label": "Answer length limit",
 					"options": {
 						"cap": "Limit and tell me when an answer is cut off",
@@ -6576,18 +6602,22 @@
 				},
 				"compactionAutoCompactPercent": {
 					"description": "Compact once the history fills this share of the usable context window.",
+					"info": "\"Usable\" means the window minus the room kept for the answer. A lower value compacts earlier, which keeps turns fast and leaves more room, but sooner replaces older details with a summary. A higher value keeps the full text longer and risks trimming before the fold runs. Default 75 %, allowed 30 to 95.",
 					"label": "Compaction threshold"
 				},
 				"compactionAutoEnabled": {
 					"description": "Summarise the older part of a chat once it fills most of the context window.",
+					"info": "In the background, the node checks whether the chat's history has grown past the compaction threshold. If so, the node's default local model folds the older messages into a summary, and later turns send that summary instead of the full text. Turned off, long chats are only trimmed per request, and older turns drop out of what the model sees. Manual compaction still works.",
 					"label": "Compact long chats automatically"
 				},
 				"compactionDistillEnabled": {
 					"description": "Distil facts and decisions from a chat in the background.",
+					"info": "Every 6 new messages or about 3000 new tokens, a local model records the chat's goals, decisions, corrections and open questions. Later turns receive this state next to the compaction summary, so key points survive even when the old text is gone. Turn it off to save background model work on a busy or slow machine.",
 					"label": "Keep a running chat summary"
 				},
 				"compactionRecentMessagesVerbatim": {
 					"description": "The most recent messages a compaction leaves unchanged.",
+					"info": "Everything older than these messages is folded into the summary. More messages keep recent detail exact, fewer leave more room for new turns. An automatic compaction also keeps them within a quarter of the usable window, so with long messages fewer may stay. Default 8, at least 2.",
 					"label": "Messages kept word for word"
 				},
 				"computeEnabled": {
@@ -6607,6 +6637,7 @@
 				},
 				"contextBudgetRecentTurnKeepCount": {
 					"description": "The most recent turns that are never trimmed from a long chat.",
+					"info": "When a request's history does not fit the window, the node first shortens old tool results, then drops the oldest turns; these newest turns are always kept. Trimming only affects what is sent, the chat itself stays complete. More turns keep more recent context but can push a long agent turn over the window. Default 4, at least 2.",
 					"label": "Turns kept when trimming"
 				},
 				"contextCompaction": {
@@ -6623,6 +6654,7 @@
 				"days": "days",
 				"defaultContextTokens": {
 					"description": "The context size assumed when neither the chat nor the model sets one.",
+					"info": "The node uses this window to budget a chat's history whenever a request names no window of its own: how much history fits, when old turns are trimmed and what the context meter shows. It does not change the window a local model is loaded with. Default 8192 tokens. Raise it if your usual models handle more and history is trimmed too early; applies to the next turn.",
 					"label": "Default context window"
 				},
 				"defaultModelName": {
@@ -6632,6 +6664,7 @@
 				"defaultOption": "Default ({{value}})",
 				"defaultReasoningEffort": {
 					"description": "Which budget a local thinking model gets when a turn names no reasoning effort.",
+					"info": "Most chats send no effort level, so this decides how long a local thinking model usually thinks. The default, Low, keeps small models from reasoning for minutes over a short greeting. Choose Medium or High if your models are fast and you want more careful everyday answers. Frozen benchmark runs keep their own fixed setting.",
 					"label": "Budget when no effort is chosen",
 					"options": {
 						"high": "High",
@@ -6740,14 +6773,17 @@
 					"label": "Parallel download connections"
 				},
 				"imageIdleTimeToLiveSeconds": {
+					"info": "How long, in seconds, an image model may sit unused before its sd-server process is stopped to free VRAM. Shorter returns memory to chat models sooner; longer avoids waiting for a reload between images. Default 900 (15 minutes), allowed 30 to 86400. Takes effect after a node restart.",
 					"label": "Image server idle time-to-live"
 				},
 				"imageMaxLoadedProcesses": {
 					"description": "How many image models stay loaded at once; loading one more unloads the least recently used.",
+					"info": "Each loaded image model is a separate sd-server process that holds its weights in VRAM, usually next to a chat model. The default of 1 keeps that memory small; raise it only if you switch between image models often and have VRAM to spare. A model that is still generating is never unloaded; if all are busy, the new load fails. Takes effect after a node restart.",
 					"label": "Max loaded image servers"
 				},
 				"imageTextEncoderOnGpu": {
 					"description": "Faster prompts at the cost of video memory; off keeps the text encoder on the CPU.",
+					"info": "Moves the image model's text encoder to the GPU when the node runs sd-server on a GPU backend; the CPU backend ignores it, and the VAE stays on the CPU either way. The model-fit check does not count the encoder's VRAM, so with this on a model can be judged to fit when it does not. Off by default. Takes effect after a node restart.",
 					"label": "Image text encoder on the GPU"
 				},
 				"intentMaxUtteranceAgeSeconds": {
@@ -6773,6 +6809,7 @@
 				},
 				"knowledgeAdaptiveRerankingEnabled": {
 					"description": "Skip the reranker when keyword and meaning search agree, or when the latency budget is nearly spent.",
+					"info": "Only matters when a reranker model is configured. On, searches with a clear winner skip the reranker and return faster; the reranker is still kept warm for the next unclear query. Off, every search with more than one candidate is reranked, which can improve the order but adds the reranker's time to each search. Default on.",
 					"label": "Rerank only when results are unclear"
 				},
 				"knowledgeAgentToolsEnabled": {
@@ -6781,6 +6818,7 @@
 				},
 				"knowledgeChatTopK": {
 					"description": "How many knowledge-base passages ground one chat turn.",
+					"info": "When a plain chat on a local model uses the knowledge base, the node searches it with your message and adds this many top passages to the turn. More passages give the model more to draw on but use more of the context window and slow the answer; fewer keep turns lean. Default 5, allowed 1 to 20.",
 					"label": "Knowledge passages per turn"
 				},
 				"knowledgeModels": {
@@ -6791,6 +6829,7 @@
 				},
 				"knowledgeRetrievalLatencyBudgetMs": {
 					"description": "A rerank still running after this long is dropped and the search returns its first order.",
+					"info": "Counted from the start of a search, in milliseconds, and only relevant with a reranker configured. A short budget keeps chat turns snappy but drops more reranks on slow hardware; a longer one lets a slow reranker finish. With \"Rerank only when results are unclear\" on, the rerank is skipped once 80 % of the budget is gone. Default 500.",
 					"label": "Retrieval latency budget"
 				},
 				"knowledgeScheduledReindexEnabled": {
@@ -6805,6 +6844,7 @@
 				},
 				"knowledgeSearchDefaultResults": {
 					"description": "Results for the model's knowledge searches when it does not ask for a number. At most the maximum below.",
+					"info": "Applies to the search_knowledge_base tool an agent calls itself, not to the automatic chat grounding. Each extra result adds text the model has to read, so higher values cost context and time but help when answers are spread over many documents. Default 5.",
 					"label": "Default results"
 				},
 				"knowledgeSearchMaxResults": {
@@ -6812,6 +6852,7 @@
 				},
 				"kvCacheType": {
 					"description": "Changing this invalidates every frozen inference profile on this node. Each model re-explores with the new KV cache type the next time it loads, and must be benchmarked and frozen again. q4_0 trades answer quality for VRAM.",
+					"info": "The number format llama-server stores a chat's attention memory (KV cache) in on the GPU, passed as --cache-type-k and --cache-type-v with flash attention on. q8_0 (the default) halves that memory against f16, so a longer context fits in the same VRAM; f16 keeps full precision. Models on the CPU runtime ignore it. Takes effect after a node restart.",
 					"label": "KV cache type",
 					"options": {
 						"f16": "f16 (unquantized)",
@@ -6827,6 +6868,7 @@
 					"auto": "Automatic",
 					"custom": "Custom",
 					"description": "Host memory llama-server keeps for cached prompts. Automatic uses one eighth of RAM (512–8192 MiB). It speeds up returning to long conversations, costs about a second on each new conversation and never helps conversations that use tools; choose Off for tool-only use. Applies after a node restart.",
+					"info": "Passed to chat models as llama-server's --cache-ram. The node always sets it explicitly, because the runtime's own default of 8192 MiB is not reliably enforced on Linux and can let the system kill the server for lack of memory. Embedding and reranker models always run with 0. A custom size can go up to 131072 MiB.",
 					"label": "Prompt cache memory",
 					"off": "Off",
 					"sizeLabel": "Prompt cache size"
@@ -6837,21 +6879,26 @@
 				},
 				"llamaCpuThreadReserve": {
 					"description": "Only applies when a model runs on the CPU runtime. On a GPU runtime, llama.cpp picks its own thread count.",
+					"info": "On the CPU runtime the node sets llama-server's generation threads (-t) to the estimated physical cores minus this number, never below 1; prompt processing still uses all of them. Default 1, which keeps the app and system responsive while a model generates. Raise it if the machine stutters during generation, lower it to 0 for the most speed on a dedicated machine. Takes effect after a node restart.",
 					"label": "Reserved CPU threads"
 				},
 				"llamaEmbeddingHttpTimeoutSeconds": {
 					"label": "Embedding request timeout"
 				},
 				"llamaGpuReservePercent": {
+					"info": "The share of GPU memory the node keeps free when it decides how large a context window a model gets and how much of it goes on the GPU; never less than 512 MiB. A higher value leaves room for other programs but can mean smaller windows. Default 5 %. Takes effect after a node restart, and every frozen inference profile is explored again.",
 					"label": "Reserved GPU memory"
 				},
 				"llamaIdleTimeToLiveSeconds": {
+					"info": "How long, in seconds, a llama-server model may sit unused before the node unloads it to free memory. A model that is still answering is never unloaded. Shorter frees VRAM sooner; longer avoids reload waits when you return to a model. Default 900 (15 minutes), allowed 30 to 86400. Takes effect after a node restart.",
 					"label": "Idle process time-to-live"
 				},
 				"llamaMaxLoadedProcesses": {
+					"info": "How many chat models llama-server keeps loaded at the same time. Embedding and reranker models have their own slots and do not count. When the limit is reached, the least recently used idle chat model is unloaded to make room; if none is idle, the new load fails. Default 3. \"Keep a model warm\" needs at least 2. Takes effect after a node restart.",
 					"label": "Max loaded chat models"
 				},
 				"llamaRamReservePercent": {
+					"info": "The share of system memory the node keeps free when it sizes a model's context window and decides what may live in RAM; never less than 2 GiB. A higher value protects other programs and the operating system, a lower one lets larger models or windows fit, especially on the CPU runtime. Default 15 %. Takes effect after a node restart, and every frozen inference profile is explored again.",
 					"label": "Reserved system memory"
 				},
 				"llamaReadinessTimeoutCapSeconds": {
@@ -6884,6 +6931,7 @@
 				"minutes": "minutes",
 				"modelFitSafetyMarginPercent": {
 					"description": "Headroom the model-fit check adds on top of a model's estimated memory. Applies to the next check.",
+					"info": "The model-fit estimate adds this share of a model's weights and KV cache on top, to cover memory the formula misses. It feeds model recommendations, the context window a model gets when it loads and the capacity check for extra agents. Raise it if models that \"fit\" still run out of memory; lower it to allow larger models or windows. Default 12 %.",
 					"label": "Model fit safety margin"
 				},
 				"nodeDbBackupRetainCount": {
@@ -6904,31 +6952,39 @@
 				},
 				"providerBudgetMaxCumulativeInputTokens": {
 					"description": "Stops an agent run once it has sent this many input tokens in total.",
+					"info": "A safety stop for runaway agent loops. Every model call in one run resends the conversation, so the input adds up quickly across tool rounds and agent participants. When the estimated total reaches this number, the run ends with an error instead of continuing. Default 4,000,000. Lower it to cap spending on paid cloud models; raise it only for very long, legitimate agent runs.",
 					"label": "Input tokens per agent run"
 				},
 				"providerBudgetRecentMessagesToKeep": {
 					"description": "The most recent messages a model call always keeps when history is trimmed.",
+					"info": "Inside one turn, an agent may call the model many times while it uses tools. Before each call the node fits the messages to the window: oversized tool results are shortened first, then older messages are dropped, but these newest ones always stay so the model sees its current tool call and result. Default 6, at least 2.",
 					"label": "Messages kept per model call"
 				},
 				"providerMaxRetries": {
 					"description": "How often a failed model request is retried.",
+					"info": "Only used while \"Retry failed model requests\" is on. The default 2 means up to three attempts in total. More retries ride out longer outages but make a real failure take longer to show; 0 behaves like retry off.",
 					"label": "Retries per model request"
 				},
 				"providerRetryEnabled": {
 					"description": "Retry a model request that fails before its first token arrives.",
+					"info": "Covers brief failures such as a model server that is still starting or a cloud provider that is momentarily overloaded. Once text has started to arrive, a failure is not retried, because that would repeat output. Errors that cannot succeed on a retry, and your own cancellations, fail at once. Leave it on unless you want every failure reported immediately.",
 					"label": "Retry failed model requests"
 				},
 				"reasoningBudgetHighTokens": {
 					"description": "How long a local model may think before it must answer. The model's window can lower it further.",
+					"info": "The thinking budget for high effort, which the extra-high effort uses too. The node passes it to llama-server per request; without a budget a thinking model can reason until the window is full and never answer. Default 24576 tokens. Lower it if high-effort turns take too long on your hardware. Cloud models use their provider's own settings.",
 					"label": "High effort"
 				},
 				"reasoningBudgetLowTokens": {
+					"info": "How many tokens a local thinking model may think when a turn asks for low effort, and also when it names no effort while \"Budget when no effort is chosen\" is Low (the default). Capped at half the model's window. Default 2048. Raise it if everyday answers feel rushed; lower it to make small models reply faster.",
 					"label": "Low effort"
 				},
 				"reasoningBudgetMediumTokens": {
+					"info": "How many tokens a local thinking model may think when a turn asks for medium effort. The node sends it with each request, at most half the model's window. Default 8192. A larger budget gives the model room for harder problems but makes the answer arrive later.",
 					"label": "Medium effort"
 				},
 				"reasoningBudgetMinimalTokens": {
+					"info": "How many tokens a local thinking model may think when a turn asks for minimal effort. The node sends it to llama-server with each request, at most half the model's window. Default 1024, allowed 128 to 131072. Raise it if minimal answers stop thinking too early; lower it for quicker replies.",
 					"label": "Minimal effort"
 				},
 				"reasoningBudgets": {
@@ -6986,19 +7042,23 @@
 				},
 				"speculativeDraftGpuLayers": {
 					"description": "How many draft-model layers are offloaded to the GPU. Leave empty for the runtime default.",
+					"info": "Passed as llama-server's --spec-draft-ngl, and only for modes that load a separate draft model. More layers on the GPU make drafting faster but use more VRAM; 0 keeps the whole draft model on the CPU. Lower it if the main model no longer fits beside the drafter. Takes effect after a node restart.",
 					"label": "Draft model GPU layers"
 				},
 				"speculativeDraftMaxTokens": {
+					"info": "The most tokens the drafter may propose per step, passed as --spec-draft-n-max (not used by the n-gram modes). Longer drafts pay off when the main model accepts most of them and waste work when it does not. Default 3; 0 leaves the runtime's own default. The server lowers a value above what the draft model was trained for, but never raises it. Takes effect after a node restart.",
 					"label": "Draft tokens per step"
 				},
 				"speculativeDraftModel": {
 					"description": "An installed chat-capable model used as the drafter. Must share the target model's tokenizer family.",
 					"empty": "No installed chat models",
+					"info": "The small model that proposes tokens for the main chat model to check, passed as --spec-draft-model. It loads inside the same llama-server process, so it adds its own VRAM to every chat model. A good drafter is much smaller than the main model and from the same family; a poor match is rejected often and gives little speed-up. Takes effect after a node restart.",
 					"label": "Draft model",
 					"placeholder": "Select a draft model"
 				},
 				"speculativeMode": {
 					"description": "Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks. DFlash and DSpark need their own draft model and are trained for larger draft blocks than the default 3 draft tokens per step (upstream uses 15 and 7); the server only clamps that value downwards, so raise it yourself.",
+					"info": "Passed to chat models as llama-server's --spec-type. \"MTP\" drafts from extra heads inside the main model, so it needs no second file but still some extra VRAM; the simple, EAGLE-3, DFlash and DSpark modes load the draft model chosen below. A mode that needs a draft model but has none fails to load. Off by default; frozen profiles are unaffected. Takes effect after a node restart.",
 					"label": "Speculative decoding",
 					"options": {
 						"draft-dflash": "Draft model (DFlash)",
@@ -7025,10 +7085,12 @@
 				},
 				"toolPipelineMaxIterationsPerRequest": {
 					"description": "How many times the model may call tools before it must answer.",
+					"info": "Each round is one model reply that calls tools, followed by running them. The limit stops an agent that keeps calling tools without finishing. Default 40. Raise it for long coding or research tasks that legitimately need many steps; lower it to stop loops sooner. Separate limits on total model calls and input tokens still apply. Takes effect after a node restart.",
 					"label": "Tool rounds per request"
 				},
 				"toolPipelineMaxToolResultChars": {
 					"description": "The most characters one tool result may hand the model.",
+					"info": "A safety cut for tools without a size limit of their own; the built-in knowledge-base and document tools already trim their output. A tool result stays in the chat history and is sent again on every later turn, so large values use up the context window quickly. Default 65,536 characters. Raise it only if a tool's important output gets cut. Takes effect after a node restart.",
 					"label": "Tool result size"
 				},
 				"toolRelevanceEnabled": {

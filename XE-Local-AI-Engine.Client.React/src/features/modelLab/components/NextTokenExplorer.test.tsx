@@ -283,6 +283,14 @@ describe("NextTokenExplorer", () => {
 		expect(bars("model-lab-next-token-simulated")).toEqual(['"Hi"100.00%', '"Hello"ChosenCut']);
 		expect(bars("model-lab-next-token-measured")).toEqual(['"Hi"60.00%', '"Hello"Chosen30.00%']);
 		expect(screen.getByTestId("model-lab-next-token-sim-label")).toBeTruthy();
+
+		// Each simulated knob explains itself with the explanation panel's overview text.
+		fireEvent.mouseEnter(screen.getByRole("button", { name: "About Simulated top-k" }));
+		const card = await screen.findByRole("tooltip");
+		expect(card.textContent).toContain(i18next.t("pages.modelLab.nextToken.explain.topK.overview"));
+		for (const id of ["temperature", "top-p", "min-p"]) {
+			expect(screen.getByTestId(`model-lab-next-token-info-${id}`)).toBeTruthy();
+		}
 	});
 
 	it("says when the chosen entry is not among the candidates", async () => {
