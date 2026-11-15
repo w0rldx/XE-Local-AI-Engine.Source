@@ -30,8 +30,13 @@ FOOTER_RESERVE_BYTES = 160
 MAX_NEW_TOKENS_LIMIT = 4096
 
 # A token or candidate text in result.json: its JSON-escaped UTF-8 form at most this long, cut ones ending in CUT_MARK.
+# Only a result over TRACE_RESULT_BUDGET_BYTES is cut.
 CANDIDATE_TEXT_BYTES = 64
 CUT_MARK = "\u2026"
+
+# A tenth below the host's ModelLabTraceSpec.MaxResultBytes (1 MiB), which refuses a larger file. The bytes are
+# measured as written; the margin only absorbs a later change on either side.
+TRACE_RESULT_BUDGET_BYTES = 900 * 1024
 
 # A vector this long against the residual norm: the spike's choice from six scales.
 STEERING_NORM_FACTOR = 0.5
@@ -219,7 +224,7 @@ def cut_text(text):
 def step_candidates(ids, texts, logprobs):
     """One step's top candidates, best first. One a generation processor masked has no probability and is left out."""
     return [
-        {"id": token, "text": cut_text(text), "logprob": _floored(logprob)}
+        {"id": token, "text": text, "logprob": _floored(logprob)}
         for token, text, logprob in zip(ids, texts, logprobs, strict=True)
         if math.isfinite(logprob)
     ]
@@ -230,12 +235,52 @@ def scored_token(token_id, text, raw, processed):
     processed after the checkpoint's generation-config processors. Each is (chosen logprob, ids, texts, logprobs)."""
     return {
         "id": token_id,
-        "text": cut_text(text),
+        "text": text,
         "logprob": _floored_logprob(raw[0]),
         "candidates": step_candidates(*raw[1:]),
         "processedLogprob": _floored_logprob(processed[0]),
         "processedCandidates": step_candidates(*processed[1:]),
     }
+
+
+def check_aligned(chosen, generated):
+    """Raises unless the steps the candidate processor saw chose exactly the generated tokens, one step per token."""
+    if list(chosen) != list(generated):
+        raise RuntimeError(
+            f"The candidate steps ({len(chosen)}) did not choose the generated tokens ({len(generated)}): "
+            "a later processor or the decoding loop changed the choice."
+        )
+
+
+def _trace_result_bytes(result):
+    return json.dumps(result, ensure_ascii=False).encode()
+
+
+def _cut_candidate_texts(tokens):
+    for token in tokens:
+        for candidate in token["candidates"] + token["processedCandidates"]:
+            candidate["text"] = cut_text(candidate["text"])
+
+
+def _cut_token_texts(tokens):
+    for token in tokens:
+        token["text"] = cut_text(token["text"])
+
+
+def fitted_trace_result(result, budget=TRACE_RESULT_BUDGET_BYTES):
+    """A trace's result.json bytes, texts whole unless over the budget: then candidate texts are cut, then token texts.
+
+    Cuts ``result`` in place. Over the budget even then, it raises: the host would refuse the file.
+    """
+    blob = _trace_result_bytes(result)
+    for cut in (_cut_candidate_texts, _cut_token_texts):
+        if len(blob) <= budget:
+            return blob
+        cut(result["tokens"])
+        blob = _trace_result_bytes(result)
+    if len(blob) > budget:
+        raise ValueError(f"The trace result is {len(blob)} bytes with its texts cut, over its budget of {budget}.")
+    return blob
 
 
 def trace_record(step, layer, kind, norm, percentiles, top_indices, top_values):

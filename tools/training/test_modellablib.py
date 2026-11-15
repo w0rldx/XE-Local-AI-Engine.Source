@@ -21,13 +21,16 @@ from modellablib import (
     SOURCE_KIND,
     STEERING_KIND,
     TRACE_KIND,
+    TRACE_RESULT_BUDGET_BYTES,
     CappedTraceWriter,
     JobError,
     SourceRefusalError,
     block_index_of,
+    check_aligned,
     control_vector_bytes,
     cut_text,
     discover_block_path,
+    fitted_trace_result,
     heartbeat_counts,
     in_block_path,
     layer_kind,
@@ -57,6 +60,7 @@ def _load_modellab():
     """The real script with torch and transformers stubbed: this file runs without either. Leaves no stub behind."""
     transformers = mock.MagicMock()
     transformers.StoppingCriteria = object
+    transformers.LogitsProcessor = object
     with mock.patch.dict(sys.modules, {"torch": mock.MagicMock(), "transformers": transformers}):
         sys.modules.pop("modellab", None)
         import modellab
@@ -189,20 +193,84 @@ def test_a_long_text_is_cut_by_its_escaped_bytes_and_says_so():
         assert cut.endswith(CUT_MARK)
         assert text.startswith(cut[: -len(CUT_MARK)])
         assert len(json.dumps(cut, ensure_ascii=False).encode()) - 2 <= CANDIDATE_TEXT_BYTES
-    cut_candidate = step_candidates([9], ["\x01" * 99], [-1.0])[0]
-    assert cut_candidate["id"] == 9
-    assert cut_candidate["text"].endswith(CUT_MARK)
 
 
-def test_the_worst_result_fits_the_hosts_result_cap():
-    # ModelLabTraceSpec.MaxNewTokens steps under ModelLabTraceSpec.MaxResultBytes, written as write_result writes it:
-    # every token and candidate text a control character run (the costliest escape), ids and logprobs at full width.
-    # About 0.58 MiB; the full decoded "text" field beside it is the generation itself and is not cut.
-    max_new_tokens, max_result_bytes, text = 128, 1024 * 1024, "\x01" * 200
+def _trace_result(text):
+    """ModelLabTraceSpec.MaxNewTokens steps, ids and logprobs at full width, every text the given one."""
     step = (-12.345678, [151_000 + i for i in range(20)], [text] * 20, [-12.345678 - i for i in range(20)])
-    tokens = [scored_token(151_643, text, step, step) for _ in range(max_new_tokens)]
-    size = len(json.dumps({"promptTokens": 4096, "tokens": tokens, "seconds": 12.345}, ensure_ascii=False).encode())
-    assert size < max_result_bytes * 0.75, size
+    return {
+        "promptTokens": 4096,
+        "tokens": [scored_token(151_643, text, step, step) for _ in range(128)],
+        "text": text * 128,
+        "seconds": 12.345,
+    }
+
+
+def _texts(result):
+    tokens = result["tokens"]
+    candidates = [c["text"] for token in tokens for c in token["candidates"] + token["processedCandidates"]]
+    return [token["text"] for token in tokens], candidates
+
+
+def test_a_normal_result_keeps_every_text_whole():
+    long_word = "a" * 100  # over CANDIDATE_TEXT_BYTES, still whole when the result fits
+    result = _trace_result(long_word)
+    blob = fitted_trace_result(result)
+    assert blob == json.dumps(result, ensure_ascii=False).encode()
+    token_texts, candidate_texts = _texts(json.loads(blob))
+    assert set(token_texts) == set(candidate_texts) == {long_word}
+
+
+def test_the_worst_result_is_cut_and_fits_the_hosts_result_cap():
+    # Every token and candidate text a control character run (the costliest escape): about 6 MiB whole. Cut, the
+    # candidate texts end in the mark, the ids stay exact, and the file fits ModelLabTraceSpec.MaxResultBytes.
+    # The full decoded "text" field is the generation itself and is not cut.
+    max_result_bytes, text = 1024 * 1024, "\x01" * 200
+    result = _trace_result(text)
+    assert len(json.dumps(result, ensure_ascii=False).encode()) > max_result_bytes
+    blob = fitted_trace_result(result)
+    assert len(blob) <= TRACE_RESULT_BUDGET_BYTES < max_result_bytes, len(blob)
+    written = json.loads(blob)
+    _, candidate_texts = _texts(written)
+    assert all(cut.endswith(CUT_MARK) and text.startswith(cut[:-1]) for cut in candidate_texts)
+    assert written["text"] == text * 128
+    assert written["tokens"][0]["candidates"][19]["id"] == 151_019
+    assert written["tokens"][0]["id"] == 151_643
+
+
+def test_candidate_texts_are_cut_before_token_texts():
+    text = "b" * 200
+    whole = len(json.dumps(_trace_result(text), ensure_ascii=False).encode())
+    result = _trace_result(text)
+    candidates_cut = len(fitted_trace_result(result, budget=whole // 2))
+    token_texts, candidate_texts = _texts(result)
+    assert set(token_texts) == {text}
+    assert all(candidate.endswith(CUT_MARK) for candidate in candidate_texts)
+
+    result = _trace_result(text)
+    assert len(fitted_trace_result(result, budget=candidates_cut - 1)) < candidates_cut
+    token_texts, _ = _texts(result)
+    assert all(token.endswith(CUT_MARK) for token in token_texts)
+    assert result["text"] == text * 128
+
+
+def test_a_result_over_its_budget_even_cut_is_refused():
+    try:
+        fitted_trace_result(_trace_result("c" * 200), budget=1_000)
+    except ValueError as error:
+        assert "over its budget of 1000" in str(error)
+    else:
+        raise AssertionError("A result that cannot fit must not be written.")
+
+
+def test_the_candidate_steps_must_choose_the_generated_tokens():
+    check_aligned([5, 6, 7], [5, 6, 7])
+    for chosen in ([5, 6], [5, 6, 7, 8], [5, 9, 7]):
+        try:
+            check_aligned(chosen, [5, 6, 7])
+        except RuntimeError:
+            continue
+        raise AssertionError(f"{chosen} passed as aligned.")
 
 
 def test_a_non_finite_value_is_null_and_the_file_stays_strict_json():

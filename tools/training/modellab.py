@@ -33,7 +33,14 @@ import time
 
 import torch
 import transformers
-from transformers import AutoModelForCausalLM, AutoTokenizer, StoppingCriteria, StoppingCriteriaList
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    LogitsProcessor,
+    LogitsProcessorList,
+    StoppingCriteria,
+    StoppingCriteriaList,
+)
 
 from modellablib import (
     CONTRACT_VERSION,
@@ -43,9 +50,11 @@ from modellablib import (
     JobError,
     SourceRefusalError,
     block_index_of,
+    check_aligned,
     control_vector_bytes,
     describe_failure,
     discover_block_path,
+    fitted_trace_result,
     heartbeat_counts,
     layer_kind,
     layer_types_follow_cut,
@@ -228,12 +237,43 @@ def write_result(job, result):
         json.dump(result, handle, ensure_ascii=False)
 
 
-def _exact_candidates(tokenizer, logits, chosen):
-    """A step's float32 log-softmax over the whole vocabulary, on the GPU; only the chosen token and top k leave it."""
-    logprobs = torch.log_softmax(logits[0].float(), dim=-1)
-    top = torch.topk(logprobs, TOP_CANDIDATES)
-    ids = top.indices.tolist()
-    return logprobs[chosen].item(), ids, [tokenizer.decode([token]) for token in ids], top.values.tolist()
+class _Candidates(LogitsProcessor):
+    """Each step's top TOP_CANDIDATES and chosen token, raw and processed, taken as the step runs: no full-vocabulary
+    tensor outlives its step. A forward hook on the model reads the raw logits; the processor returns scores unchanged.
+    """
+
+    def __init__(self, model):
+        self.steps = []
+        self._raw = None
+        self._handle = model.register_forward_hook(self._read_raw)
+
+    def _read_raw(self, _module, _args, output):
+        # What _sample copies into next_token_logits: the model's output, softcapping included, last position.
+        self._raw = torch.log_softmax(output.logits[0, -1].float(), dim=-1)
+
+    def __call__(self, input_ids, scores):
+        # Merged after the generation-config processors, so these are the scores the greedy argmax reads.
+        raw, self._raw = self._raw, None
+        if raw is None:
+            raise RuntimeError("A generation step ran its processors without a model forward before them.")
+        chosen = torch.argmax(scores[0])
+        processed = torch.log_softmax(scores[0], dim=-1)
+        top = functools.partial(torch.topk, k=TOP_CANDIDATES)
+
+        # A copy, not raw[chosen]: a 0-d tensor index syncs the host and returns a view holding the whole vector.
+        def at_chosen(logprobs):
+            return logprobs.index_select(0, chosen.view(1)).squeeze(0)
+
+        # Kept on the GPU, a few hundred bytes a step that own their storage, so recording adds no host sync.
+        self.steps.append((chosen, at_chosen(raw), *top(raw), at_chosen(processed), *top(processed)))
+        return scores
+
+    def recorded(self):
+        """Per step (chosen id, raw logprob, logprobs, ids, processed logprob, logprobs, ids), as Python values."""
+        return [[value.tolist() for value in step] for step in self.steps]
+
+    def remove(self):
+        self._handle.remove()
 
 
 def trace(job, run):
@@ -251,20 +291,25 @@ def trace(job, run):
 
     writer = CappedTraceWriter(job["tracePath"], job["traceByteCap"])
     tracer = _Tracer(blocks, job["layers"], writer)
+    candidates = _Candidates(model)
     run.enter("tracing")
     started = time.perf_counter()
     try:
         with torch.inference_mode():
-            output = model.generate(
+            sequences = model.generate(
                 ids,
                 attention_mask=torch.ones_like(ids),
                 do_sample=False,
                 num_beams=1,  # a checkpoint's beam setting would break the step alignment below
                 max_new_tokens=total,
-                # Step i of logits (raw) and scores (after generation-config processors) chose sequences[prompt + i].
-                return_dict_in_generate=True,
-                output_logits=True,
-                output_scores=True,
+                logits_processor=LogitsProcessorList([candidates]),
+                # Explicit, because a checkpoint's generation_config fills what is not passed: a tensor result, and
+                # no per-step scores, logits, attentions or hidden states kept until generate returns.
+                return_dict_in_generate=False,
+                output_scores=False,
+                output_logits=False,
+                output_attentions=False,
+                output_hidden_states=False,
                 use_cache=True,
                 eos_token_id=stop_tokens(tokenizer, model.generation_config.eos_token_id),
                 pad_token_id=tokenizer.eos_token_id,
@@ -274,32 +319,39 @@ def trace(job, run):
         seconds = time.perf_counter() - started
     finally:
         tracer.remove()
+        candidates.remove()
     if run.stop.is_set():
         return True
 
     run.enter("saving")
     writer.close()
-    generated = output.sequences[0, prompt_tokens:].tolist()
+    generated = sequences[0, prompt_tokens:].tolist()
+    steps = candidates.recorded()
+    check_aligned([step[0] for step in steps], generated)
+
+    def texts(token_ids):
+        return [tokenizer.decode([token]) for token in token_ids]
+
     tokens = [
         scored_token(
             token,
             tokenizer.decode([token]),
-            _exact_candidates(tokenizer, logits, token),
-            _exact_candidates(tokenizer, scores, token),
+            (raw_logprob, raw_ids, texts(raw_ids), raw_logprobs),
+            (logprob, processed_ids, texts(processed_ids), processed_logprobs),
         )
-        for token, logits, scores in zip(generated, output.logits, output.scores, strict=True)
+        for token, (_, raw_logprob, raw_logprobs, raw_ids, logprob, processed_logprobs, processed_ids) in zip(
+            generated, steps, strict=True
+        )
     ]
-    del output  # the per-step full-vocabulary tensors
-    write_result(
-        job,
-        {
-            "promptTokens": prompt_tokens,
-            "tokens": tokens,
-            "text": tokenizer.decode(generated),
-            "seconds": round(seconds, 3),
-            **measured_facts(model, blocks),
-        },
-    )
+    result = {
+        "promptTokens": prompt_tokens,
+        "tokens": tokens,
+        "text": tokenizer.decode(generated),
+        "seconds": round(seconds, 3),
+        **measured_facts(model, blocks),
+    }
+    with open(job["resultPath"], "wb") as handle:
+        handle.write(fitted_trace_result(result))
     return False
 
 
