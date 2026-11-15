@@ -1,0 +1,20 @@
+/* Opaque, so content scrolling under the bar is hidden: the surface it sits on. */
+
+.bar {
+	background-color: var(--mantine-color-body);
+}
+
+/* In dark mode a Card is dark-6, not the body's dark-7. */
+
+:where([data-mantine-color-scheme="dark"]) :where([class~="mantine-Card-root"]) .bar {
+	background-color: var(--mantine-color-dark-6);
+}
+
+/* The page scroller (`main` in Layout) has 0.5rem top padding and sticky insets start inside it, so `top: 0` left a strip
+   above the stuck bar where content scrolled through. The bar reaches up over it; the margin keeps its resting place. */
+
+.top {
+	top: -0.5rem;
+	padding-top: 0.5rem;
+	margin-top: -0.5rem;
+}

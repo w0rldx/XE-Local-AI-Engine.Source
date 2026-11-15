@@ -8,7 +8,7 @@ import {
 	IconShieldCheck,
 	IconTrash,
 } from "@tabler/icons-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -17,6 +17,8 @@ import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { StickyBar } from "@/core/ui/components/StickyBar/StickyBar";
+import { scrollStuckTabsToTop } from "@/core/ui/components/StickyBar/StickyTabsScroll";
 import { toast } from "@/core/ui/notifications/Toast";
 import { DatasetSampleReview } from "@/features/training/components/DatasetSampleReview";
 import { DefinitionEditorDialog } from "@/features/training/components/DefinitionEditorDialog";
@@ -44,6 +46,7 @@ type DatasetsTab = "definitions" | "datasets" | "mocks";
 export function DatasetsPage() {
 	const { t } = useTranslation();
 	const [tab, setTab] = useState<DatasetsTab>("datasets");
+	const tabsRef = useRef<HTMLDivElement>(null);
 	const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
 	const [exported, setExported] = useState<{ format: string; content: string } | null>(null);
 	// `undefined` = editor closed; `null` = creating; a definition = editing it.
@@ -105,18 +108,27 @@ export function DatasetsPage() {
 				</SectionCard>
 			) : null}
 
-			<Tabs value={tab} onChange={(value) => setTab((value ?? "datasets") as DatasetsTab)}>
-				<Tabs.List>
-					<Tabs.Tab value="definitions" data-testid="training-tab-definitions">
-						{t("training.tabs.definitions", "Definitions")}
-					</Tabs.Tab>
-					<Tabs.Tab value="datasets" data-testid="training-tab-datasets">
-						{t("training.tabs.datasets", "Datasets")}
-					</Tabs.Tab>
-					<Tabs.Tab value="mocks" data-testid="training-tab-mocks">
-						{t("training.tabs.mocks", "Tool mocks")}
-					</Tabs.Tab>
-				</Tabs.List>
+			<Tabs
+				ref={tabsRef}
+				value={tab}
+				onChange={(value) => {
+					scrollStuckTabsToTop(tabsRef.current);
+					setTab((value ?? "datasets") as DatasetsTab);
+				}}
+			>
+				<StickyBar edge="top" data-testid="training-tabs-bar">
+					<Tabs.List>
+						<Tabs.Tab value="definitions" data-testid="training-tab-definitions">
+							{t("training.tabs.definitions", "Definitions")}
+						</Tabs.Tab>
+						<Tabs.Tab value="datasets" data-testid="training-tab-datasets">
+							{t("training.tabs.datasets", "Datasets")}
+						</Tabs.Tab>
+						<Tabs.Tab value="mocks" data-testid="training-tab-mocks">
+							{t("training.tabs.mocks", "Tool mocks")}
+						</Tabs.Tab>
+					</Tabs.List>
+				</StickyBar>
 
 				<Tabs.Panel value="definitions" pt="md">
 					<SectionCard

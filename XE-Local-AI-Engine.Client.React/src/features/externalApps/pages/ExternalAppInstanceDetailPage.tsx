@@ -2,13 +2,15 @@ import { Alert, Anchor, Button, Group, Progress, Skeleton, Stack, Table, Tabs, T
 import { IconApps } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getErrorStatus } from "@/core/api/errors/RetryClassification";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { StickyBar } from "@/core/ui/components/StickyBar/StickyBar";
+import { scrollStuckTabsToTop } from "@/core/ui/components/StickyBar/StickyTabsScroll";
 import { toast } from "@/core/ui/notifications/Toast";
 import {
 	externalAppConflictMessageKey,
@@ -66,6 +68,7 @@ export function ExternalAppInstanceDetailPage({ instanceId }: ExternalAppInstanc
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const [updateOpen, setUpdateOpen] = useState(false);
+	const tabsRef = useRef<HTMLDivElement>(null);
 
 	const live = useExternalAppHub(instanceId);
 	const instanceQuery = useExternalAppInstance(instanceId, { pollIntervalMs: live.pollIntervalMs });
@@ -160,21 +163,23 @@ export function ExternalAppInstanceDetailPage({ instanceId }: ExternalAppInstanc
 				</Alert>
 			) : null}
 
-			<Tabs defaultValue="overview">
-				<Tabs.List>
-					<Tabs.Tab value="overview" data-testid="external-app-detail-tab-overview">
-						{t(`${keyPrefix}.tabs.overview`)}
-					</Tabs.Tab>
-					<Tabs.Tab value="settings" data-testid="external-app-detail-tab-settings">
-						{t(`${keyPrefix}.tabs.settings`)}
-					</Tabs.Tab>
-					<Tabs.Tab value="history" data-testid="external-app-detail-tab-history">
-						{t(`${keyPrefix}.tabs.history`)}
-					</Tabs.Tab>
-					<Tabs.Tab value="logs" data-testid="external-app-detail-tab-logs">
-						{t(`${keyPrefix}.tabs.logs`)}
-					</Tabs.Tab>
-				</Tabs.List>
+			<Tabs ref={tabsRef} defaultValue="overview" onChange={() => scrollStuckTabsToTop(tabsRef.current)}>
+				<StickyBar edge="top" data-testid="external-app-detail-tabs-bar">
+					<Tabs.List>
+						<Tabs.Tab value="overview" data-testid="external-app-detail-tab-overview">
+							{t(`${keyPrefix}.tabs.overview`)}
+						</Tabs.Tab>
+						<Tabs.Tab value="settings" data-testid="external-app-detail-tab-settings">
+							{t(`${keyPrefix}.tabs.settings`)}
+						</Tabs.Tab>
+						<Tabs.Tab value="history" data-testid="external-app-detail-tab-history">
+							{t(`${keyPrefix}.tabs.history`)}
+						</Tabs.Tab>
+						<Tabs.Tab value="logs" data-testid="external-app-detail-tab-logs">
+							{t(`${keyPrefix}.tabs.logs`)}
+						</Tabs.Tab>
+					</Tabs.List>
+				</StickyBar>
 
 				<Tabs.Panel value="overview" pt="md">
 					<Stack gap="md" data-testid="external-app-detail-overview">

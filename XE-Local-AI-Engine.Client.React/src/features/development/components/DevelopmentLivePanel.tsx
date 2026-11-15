@@ -9,10 +9,12 @@ import {
 	IconTerminal2,
 	IconTool,
 } from "@tabler/icons-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { LiveOutputView } from "@/core/ui/components/LiveOutputView/LiveOutputView";
+import { StickyBar } from "@/core/ui/components/StickyBar/StickyBar";
+import { scrollStuckTabsToTop } from "@/core/ui/components/StickyBar/StickyTabsScroll";
 import { ArtifactContentView, ArtifactViewButton } from "@/features/development/components/DevelopmentArtifactViewers";
 import { Metric } from "@/features/development/components/DevelopmentMetricTile";
 import { ValidationReportView } from "@/features/development/components/DevelopmentValidationReportView";
@@ -91,6 +93,7 @@ function CommandOutputList({
 
 export function DevelopmentLivePanel({ attempt, live, artifacts, events, commandStop }: DevelopmentLivePanelProps) {
 	const { t } = useTranslation();
+	const tabsRef = useRef<HTMLDivElement>(null);
 	const [openArtifactId, setOpenArtifactId] = useState<string | null>(null);
 	const openArtifact = artifacts.find((artifact) => artifact.id === openArtifactId) ?? null;
 	const toggleArtifact = (artifact: DevelopmentArtifact): void =>
@@ -189,27 +192,29 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events, command
 				</Alert>
 			))}
 
-			<Tabs defaultValue="live">
-				<Tabs.List>
-					<Tabs.Tab value="live" leftSection={<IconCode size={14} />}>
-						{t("pages.development.live.tabs.live", "Live")}
-					</Tabs.Tab>
-					<Tabs.Tab value="tools" leftSection={<IconTool size={14} />}>
-						{t("pages.development.live.tabs.tools", "Tools")}
-					</Tabs.Tab>
-					<Tabs.Tab value="commands" leftSection={<IconTerminal2 size={14} />}>
-						{t("pages.development.live.tabs.commands", "Commands")}
-					</Tabs.Tab>
-					<Tabs.Tab value="files" leftSection={<IconFile size={14} />}>
-						{t("pages.development.live.tabs.files", "Files")}
-					</Tabs.Tab>
-					<Tabs.Tab value="validation" leftSection={<IconListCheck size={14} />}>
-						{t("pages.development.live.tabs.validation", "Validation")}
-					</Tabs.Tab>
-					<Tabs.Tab value="details" leftSection={<IconInfoCircle size={14} />}>
-						{t("pages.development.live.tabs.details", "Details")}
-					</Tabs.Tab>
-				</Tabs.List>
+			<Tabs ref={tabsRef} defaultValue="live" onChange={() => scrollStuckTabsToTop(tabsRef.current)}>
+				<StickyBar edge="top" data-testid="development-live-tabs-bar">
+					<Tabs.List>
+						<Tabs.Tab value="live" leftSection={<IconCode size={14} />}>
+							{t("pages.development.live.tabs.live", "Live")}
+						</Tabs.Tab>
+						<Tabs.Tab value="tools" leftSection={<IconTool size={14} />}>
+							{t("pages.development.live.tabs.tools", "Tools")}
+						</Tabs.Tab>
+						<Tabs.Tab value="commands" leftSection={<IconTerminal2 size={14} />}>
+							{t("pages.development.live.tabs.commands", "Commands")}
+						</Tabs.Tab>
+						<Tabs.Tab value="files" leftSection={<IconFile size={14} />}>
+							{t("pages.development.live.tabs.files", "Files")}
+						</Tabs.Tab>
+						<Tabs.Tab value="validation" leftSection={<IconListCheck size={14} />}>
+							{t("pages.development.live.tabs.validation", "Validation")}
+						</Tabs.Tab>
+						<Tabs.Tab value="details" leftSection={<IconInfoCircle size={14} />}>
+							{t("pages.development.live.tabs.details", "Details")}
+						</Tabs.Tab>
+					</Tabs.List>
+				</StickyBar>
 
 				<Tabs.Panel value="live" pt="md">
 					{/* A running command is the most live thing an attempt does, so its output leads the default tab. */}

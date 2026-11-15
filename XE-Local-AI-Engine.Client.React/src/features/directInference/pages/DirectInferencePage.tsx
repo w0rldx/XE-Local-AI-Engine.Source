@@ -4,14 +4,7 @@ import { IconBolt } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { type ChatSamplingOptions, toWireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
-import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
-import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { runDirectInference } from "@/core/directInference/DirectInferenceApi";
-import { DirectInferenceErrorAlert, DirectInferenceOutput } from "@/core/directInference/DirectInferenceOutput";
-import { DirectInferenceSamplingFields } from "@/core/directInference/DirectInferenceSamplingFields";
-import { DirectInferenceThinkingSwitch } from "@/core/directInference/DirectInferenceThinkingSwitch";
-import { useDirectInferenceModels } from "@/core/directInference/useDirectInferenceModels";
 import {
 	type DirectInferenceRequest,
 	type DirectInferenceResult,
@@ -19,6 +12,14 @@ import {
 	directInferenceMaxTopLogprobs,
 	emptyDirectInferenceResult,
 } from "@/core/directInference/DirectInferenceModels";
+import { DirectInferenceErrorAlert, DirectInferenceOutput } from "@/core/directInference/DirectInferenceOutput";
+import { DirectInferenceSamplingFields } from "@/core/directInference/DirectInferenceSamplingFields";
+import { DirectInferenceThinkingSwitch } from "@/core/directInference/DirectInferenceThinkingSwitch";
+import { useDirectInferenceModels } from "@/core/directInference/useDirectInferenceModels";
+import { type ChatSamplingOptions, toWireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { StickyBar } from "@/core/ui/components/StickyBar/StickyBar";
 import { DirectInferenceLogprobs } from "@/features/directInference/components/DirectInferenceLogprobs";
 
 /** One explicit prompt to one model: no agent, tools, history, persona, memory or knowledge base, and nothing saved. */
@@ -144,16 +145,18 @@ export function DirectInferencePage() {
 							onChange={(next) => setTopLogprobs(typeof next === "number" ? next : undefined)}
 						/>
 					)}
-					<Group>
-						<Button onClick={run} loading={running} disabled={modelId === null || prompt.trim().length === 0}>
-							{t("pages.directInference.send", "Send")}
-						</Button>
-						{running && (
-							<Button variant="default" onClick={stop}>
-								{t("pages.directInference.stop", "Stop")}
+					<StickyBar edge="bottom" data-testid="direct-inference-actions">
+						<Group>
+							<Button onClick={run} loading={running} disabled={modelId === null || prompt.trim().length === 0}>
+								{t("pages.directInference.send", "Send")}
 							</Button>
-						)}
-					</Group>
+							{running && (
+								<Button variant="default" onClick={stop}>
+									{t("pages.directInference.stop", "Stop")}
+								</Button>
+							)}
+						</Group>
+					</StickyBar>
 				</Stack>
 			</Paper>
 			<DirectInferenceErrorAlert result={result} />

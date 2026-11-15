@@ -115,6 +115,9 @@ export function ThemeProvider({ children }: ThemeProviderProperties) {
 					radius: "md",
 					padding: "lg",
 				},
+				// `clip` paints like Mantine's `hidden` but does not make the card a scroll container, which would
+				// capture a StickyBar inside it and keep it from sticking to the page scroller.
+				styles: { root: { overflow: "clip" } },
 			}),
 			// Every table in the app is wrapped in a Table.ScrollContainer, which renders a Mantine ScrollArea whose
 			// `type` defaults to "hover" — the scrollbar is hidden until a pointer enters the area. A touch device

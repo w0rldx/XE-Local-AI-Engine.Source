@@ -99,8 +99,13 @@ export function Layout({ headerStatus, headerIndicator, headerActions, drawerAct
 
 					{/* The routed content is the `main` landmark and the skip link's target. `tabIndex={-1}` makes it
 					    programmatically focusable so the jump moves the caret, not just the scroll position; it also
-					    keeps this the element that scrolls, so page scrolling is unchanged. */}
-					<main id="main-content" tabIndex={-1} className="flex-1 min-h-0 overflow-y-auto md:px-8 px-2 pt-2">
+					    keeps this the element that scrolls, so page scrolling is unchanged. The scroll padding keeps a field that
+					    gets focus out from under a StickyBar pinned to either edge (top: a two-row phone tab bar). */}
+					<main
+						id="main-content"
+						tabIndex={-1}
+						className="flex-1 min-h-0 overflow-y-auto scroll-pt-20 scroll-pb-16 md:px-8 px-2 pt-2"
+					>
 						<RoutedPage />
 					</main>
 				</m.div>

@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import { AssistActions } from "@/core/assist/components/AssistActions/AssistActions";
 import type { AssistDraft } from "@/core/assist/models/AssistModels";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { StickyBar } from "@/core/ui/components/StickyBar/StickyBar";
 import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
 import { ImageSourceThumbnail } from "@/features/images/components/ImageSourceThumbnail";
 import {
@@ -407,17 +408,19 @@ export function ImageGenerationForm({
 
 			{submitError ? <InlineErrorAlert message={submitError} data-testid="image-form-submit-error" /> : null}
 
-			<Group justify="flex-end">
-				<Button
-					leftSection={<IconSparkles size={16} />}
-					loading={isSubmitting}
-					disabled={!hasModels || cannotEdit}
-					onClick={handleSubmit}
-					data-testid="image-form-submit"
-				>
-					{t("pages.images.form.submit", "Generate")}
-				</Button>
-			</Group>
+			<StickyBar edge="bottom" data-testid="image-form-actions">
+				<Group justify="flex-end">
+					<Button
+						leftSection={<IconSparkles size={16} />}
+						loading={isSubmitting}
+						disabled={!hasModels || cannotEdit}
+						onClick={handleSubmit}
+						data-testid="image-form-submit"
+					>
+						{t("pages.images.form.submit", "Generate")}
+					</Button>
+				</Group>
+			</StickyBar>
 		</Stack>
 	);
 }

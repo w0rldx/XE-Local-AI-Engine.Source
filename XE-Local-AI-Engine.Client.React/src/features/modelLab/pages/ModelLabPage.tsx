@@ -1,10 +1,12 @@
 import { Loader, Tabs } from "@mantine/core";
 import { IconFlask } from "@tabler/icons-react";
-import { Suspense, use, useState } from "react";
+import { Suspense, use, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { StickyBar } from "@/core/ui/components/StickyBar/StickyBar";
+import { scrollStuckTabsToTop } from "@/core/ui/components/StickyBar/StickyTabsScroll";
 import { ArchitectureExplorer } from "@/features/modelLab/components/ArchitectureExplorer";
 import { InstalledModelInspector } from "@/features/modelLab/components/InstalledModelInspector";
 import { NextTokenExplorer } from "@/features/modelLab/components/NextTokenExplorer";
@@ -25,6 +27,7 @@ export function ModelLabPage() {
 function ModelLabContent() {
 	const { t, i18n } = useTranslation();
 	use(loadModelLabStrings(i18n.language));
+	const tabsRef = useRef<HTMLDivElement>(null);
 	return (
 		<PageShell>
 			<PageHeader
@@ -36,14 +39,16 @@ function ModelLabContent() {
 				)}
 			/>
 			{/* Both panels stay mounted, so switching tabs neither cancels a run nor drops a chosen model. */}
-			<Tabs defaultValue="compare">
-				<Tabs.List>
-					<Tabs.Tab value="compare">{t("pages.modelLab.compare.tab", "Same-prompt A/B")}</Tabs.Tab>
-					<Tabs.Tab value="nextToken">{t("pages.modelLab.nextToken.ui.tab", "Next token")}</Tabs.Tab>
-					<Tabs.Tab value="inspect">{t("pages.models.inspect.tab", "Inspect")}</Tabs.Tab>
-					<Tabs.Tab value="trace">{t("pages.modelLab.trace.tab", "Trace and steer")}</Tabs.Tab>
-					<Tabs.Tab value="architecture">{t("pages.modelLab.architecture.tab", "Architecture")}</Tabs.Tab>
-				</Tabs.List>
+			<Tabs ref={tabsRef} defaultValue="compare" onChange={() => scrollStuckTabsToTop(tabsRef.current)}>
+				<StickyBar edge="top" data-testid="model-lab-tabs-bar">
+					<Tabs.List>
+						<Tabs.Tab value="compare">{t("pages.modelLab.compare.tab", "Same-prompt A/B")}</Tabs.Tab>
+						<Tabs.Tab value="nextToken">{t("pages.modelLab.nextToken.ui.tab", "Next token")}</Tabs.Tab>
+						<Tabs.Tab value="inspect">{t("pages.models.inspect.tab", "Inspect")}</Tabs.Tab>
+						<Tabs.Tab value="trace">{t("pages.modelLab.trace.tab", "Trace and steer")}</Tabs.Tab>
+						<Tabs.Tab value="architecture">{t("pages.modelLab.architecture.tab", "Architecture")}</Tabs.Tab>
+					</Tabs.List>
+				</StickyBar>
 				<Tabs.Panel value="compare" pt="md">
 					<SamePromptComparison />
 				</Tabs.Panel>
