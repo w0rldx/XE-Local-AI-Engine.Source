@@ -92,11 +92,11 @@ public sealed class ModelLabPyTorchJoinerTests
         AssertEx.Empty(join.Components);
     }
 
-    /// <summary>Another architecture has no HF names: its groups link by the block child names, and a group no rule matches gets no link.</summary>
+    /// <summary>An unregistered architecture has no HF names: its groups link by the block child names, and a group no rule matches gets no link.</summary>
     [Test]
-    public void ALlamaGguf_LinksByChildName_AndLeavesAnUnmatchedGroupUnlinked()
+    public void AnUnregisteredArchitecture_LinksByChildName_AndLeavesAnUnmatchedGroupUnlinked()
     {
-        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, Qwen35TensorFixture.Inspection("llama",
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, Qwen35TensorFixture.Inspection("xe-unregistered-arch",
         [
             Qwen35TensorFixture.Tensor("token_embd.weight", [64, 10], "F32"),
             Qwen35TensorFixture.Tensor("blk.0.attn_q.weight", [64, 64], "F32"),
@@ -107,29 +107,8 @@ public sealed class ModelLabPyTorchJoinerTests
             Qwen35TensorFixture.Tensor("output_norm.weight", [64], "F32"),
             Qwen35TensorFixture.Tensor("output.weight", [64, 10], "F32")
         ]));
-        var index = new ModelLabPyTorchIndex
-        {
-            Blocks =
-            [
-                new ModelLabPyTorchBlock
-                {
-                    Index = 0,
-                    Path = "model.layers.0",
-                    Modules =
-                    [
-                        Module("model.layers.0"),
-                        Module("model.layers.0.self_attn"),
-                        Module("model.layers.0.self_attn.q_proj"),
-                        Module("model.layers.0.mlp"),
-                        Module("model.layers.0.input_layernorm"),
-                        Module("model.layers.0.post_attention_layernorm")
-                    ]
-                }
-            ],
-            Outside = [Module("model"), Module("model.embed_tokens"), Module("model.layers"), Module("model.norm"), Module("model.rotary_emb"), Module("lm_head")]
-        };
 
-        var join = ModelLabPyTorchJoiner.Join(descriptor, index);
+        var join = ModelLabPyTorchJoiner.Join(descriptor, OneLlamaLayerIndex());
 
         AssertEx.True(join.BlocksJoined);
         var links = join.Components.ToDictionary(static link => link.ComponentId, static link => string.Join(',', link.ModulePaths), StringComparer.Ordinal);
@@ -141,6 +120,34 @@ public sealed class ModelLabPyTorchJoinerTests
         AssertEx.Equal("model.norm", links["output_norm"]);
         AssertEx.Equal("lm_head", links["output"]);
         AssertEx.Empty(join.Tensors);
+    }
+
+    /// <summary>The llama descriptor's <c>model.layers.N.</c> HF names link each tensor to its own module, not only its group.</summary>
+    [Test]
+    public void ALlamaGguf_LinksItsTensorsThroughTheirHfNames()
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, Qwen35TensorFixture.Inspection("llama",
+        [
+            Qwen35TensorFixture.Tensor("token_embd.weight", [64, 10], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_q.weight", [64, 64], "Q4_K"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_up.weight", [64, 128], "Q4_K"),
+            Qwen35TensorFixture.Tensor("output_norm.weight", [64], "F32")
+        ]));
+
+        var join = ModelLabPyTorchJoiner.Join(descriptor, OneLlamaLayerIndex());
+
+        AssertEx.True(join.BlocksJoined, join.Reason ?? "joined");
+        var tensors = join.Tensors.ToDictionary(static link => link.GgufName, static link => link.ModulePath, StringComparer.Ordinal);
+        AssertEx.Equal("model.layers.0.self_attn.q_proj", tensors["blk.0.attn_q.weight"]);
+        AssertEx.Equal("model.layers.0.input_layernorm", tensors["blk.0.attn_norm.weight"]);
+        AssertEx.Equal("model.layers.0.post_attention_layernorm", tensors["blk.0.ffn_norm.weight"]);
+        AssertEx.Equal("model.layers.0.mlp.up_proj", tensors["blk.0.ffn_up.weight"]);
+        var links = join.Components.ToDictionary(static link => link.ComponentId, static link => string.Join(',', link.ModulePaths), StringComparer.Ordinal);
+        AssertEx.Equal("model.layers.0.self_attn", links["blk.0.attention"]);
+        AssertEx.Equal("model.layers.0.mlp", links["blk.0.ffn"]);
+        AssertEx.Equal("model.embed_tokens", links["embedding"]);
     }
 
     [Test]
@@ -161,6 +168,31 @@ public sealed class ModelLabPyTorchJoinerTests
     {
         AssertEx.Null(ModelLabPyTorchJoiner.InBlockModuleOrNull(hfName, block));
     }
+
+    // One LlamaDecoderLayer as transformers names it, trimmed to the modules the tests link.
+    private static ModelLabPyTorchIndex OneLlamaLayerIndex() =>
+        new()
+        {
+            Blocks =
+            [
+                new ModelLabPyTorchBlock
+                {
+                    Index = 0,
+                    Path = "model.layers.0",
+                    Modules =
+                    [
+                        Module("model.layers.0"),
+                        Module("model.layers.0.self_attn"),
+                        Module("model.layers.0.self_attn.q_proj"),
+                        Module("model.layers.0.mlp"),
+                        Module("model.layers.0.mlp.up_proj"),
+                        Module("model.layers.0.input_layernorm"),
+                        Module("model.layers.0.post_attention_layernorm")
+                    ]
+                }
+            ],
+            Outside = [Module("model"), Module("model.embed_tokens"), Module("model.layers"), Module("model.norm"), Module("model.rotary_emb"), Module("lm_head")]
+        };
 
     private static ModelLabPyTorchModule Module(string path) =>
         new()

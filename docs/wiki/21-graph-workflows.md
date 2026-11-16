@@ -3,8 +3,9 @@
 > Reviewed: 2026-10-02 · Code-grounded.
 
 **What this page covers.** Graph Workflows: operator-authored DAGs of LLM calls, agent turns, tool calls, conditions
-and human pauses, started manually and executed from the database, so a restart loses at most the in-flight work. A
-cycle is refused at save, only the operator saves a definition (a designer model may propose one, §12), and a `Tool` node runs only built-in read-local tools. The
+and human pauses, started by the operator, a chat, a schedule, an integration call or a spoken or typed command (each
+only if the definition accepts that source) and executed from the database, so a restart loses at most the in-flight
+work. A cycle is refused at save, only the operator saves a definition (a designer model may propose one, §12), and a `Tool` node runs only built-in read-local tools. The
 code spans `Client.Application/Services/GraphWorkflows/`, `Client.Persistence`, the `LocalApiRoutes.GraphWorkflows`
 family with `GraphWorkflowRunHub`, and the React `features/graphWorkflows/` folder.
 
@@ -53,8 +54,13 @@ canvases you care about.
 - **Operator-authored.** A definition is a graph the operator drew. Only the operator saves a definition. The designer (§12,
   [ADR 0022](../adr/0022-ai-proposed-graph-edits.md)) proposes a graph, and the operator accepts it into the canvas and
   saves; nothing else generates or edits one, and no agent may.
-- **Manually started.** A run begins because a person pressed Start (or a caller posted to the runs route with an
-  idempotency key). There is no schedule, no trigger, no event subscription in v1.
+- **Started from named sources.** A run begins because a person pressed Start (or a caller posted to the runs route
+  with an idempotency key), a chat sent into workflow mode (§3.6), a `run-graph` scheduled job fired
+  ([Scheduler](06-scheduler.md)), an integration trigger with a `Graph` target was invoked
+  ([API and hubs](09-api-and-hubs.md)), or a confirmed command matched the definition (§11). Every run records its
+  origin, and a definition starts only from the sources it accepts, `Manual | Chat` unless the Operator widens them
+  (§3.1, [ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md)). With graph workflows turned off, none of
+  them starts a run. There is no event subscription: nothing starts a run because a row or a file changed.
 - **Database-as-truth.** `GraphWorkflowDispatcher` re-reads the rows on every tick and writes back through the store.
   Its only in-memory state is a parsed-graph cache keyed by run id, which exists to avoid decrypting and re-parsing
   the pinned blob on every tick and can be dropped at any moment without changing an answer.
@@ -414,7 +420,7 @@ The run also refuses a graph over `MaxNodeRunsPerRun` and an input over `MaxRunI
 **Origin and accepted sources** ([ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md)). Every start names
 who starts it: `StartAsync` takes a required `GraphWorkflowRunOrigin` (`Source`, and the audit-only `PrincipalId` and
 `KeyPrefix` an integration key supplies), so no caller is recorded as `Manual` by omission. The SPA start route passes
-`Manual`, `GraphWorkflowChatService` passes `Chat`, the `run-graph` scheduler template ([Scheduler](06-scheduler.md)) passes `Schedule`, and `GraphWorkflowIntentService` passes `Intent` (§11). The source is one member of the `[Flags]` enum
+`Manual`, `GraphWorkflowChatService` passes `Chat`, the `run-graph` scheduler template ([Scheduler](06-scheduler.md)) passes `Schedule`, `IntegrationExecutionCoordinator` passes `Integration` with the invoking key's principal and prefix, and `GraphWorkflowIntentService` passes `Intent` (§11). The source is one member of the `[Flags]` enum
 `GraphWorkflowTriggerSource` (`Manual`, `Chat`, `Schedule`, `Integration`, `Intent`), stored as the plaintext
 `trigger_source` int on the run row beside `principal_id` and `key_prefix`; a run from before the column reads as
 `Manual`. The definition's plaintext `trigger_sources` int is the set it accepts, default `Manual | Chat`. A start whose

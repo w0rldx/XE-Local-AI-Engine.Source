@@ -19,9 +19,13 @@
 				"hfName": "Hugging-Face-Name",
 				"inferredBadge": "Aus llama.cpp abgeleitet ({{source}})",
 				"kindUntraceable": "{{kind}} (nicht tracebar)",
+				"layoutNote": {
+					"llama": "Die Hugging-Face-Namen setzen die Standardkonvertierung von LlamaForCausalLM voraus (model.layers.N.…). Eine Datei aus einem anderen Quellformat, etwa dem konsolidierten Format von Mistral oder dem Sprachteil eines Vision-Modells, hat andere Quell-Tensornamen."
+				},
 				"loadFailed": "Die Struktur des Modells konnte nicht gelesen werden.",
 				"noHfName": "Keiner",
 				"noOutput": "Diese Datei enthält keinen eigenen Ausgabe-Tensor; die Ausgabe nutzt möglicherweise die Embedding-Gewichte mit.",
+				"noTemplate": "Für diese Datei wird kein Operationsgraph gezeichnet: Ihr Aufbau, zum Beispiel Mixture-of-Experts, ist keiner, den die Vorlage für {{architecture}} beschreibt. Die Tensorgruppen werden wie gewohnt aus der Datei gelesen.",
 				"noTraceChosen": "Kein Trace",
 				"noTraces": "Für dieses Modell gibt es noch keinen fertigen Trace. Einen unter „Trace und Steering“ gestarteten Trace können Sie hier über die Blöcke legen.",
 				"notTraced": "Nicht getraced: Der gewählte Trace hat diesen Block nicht gemessen.",
@@ -36,7 +40,7 @@
 					"notStated": "Nicht angegeben",
 					"plusOne": "Der Hugging-Face-Wert plus eins",
 					"quantized": "Aus den Hugging-Face-Werten quantisiert",
-					"reordered": "Value-Heads gegenüber dem Hugging-Face-Tensor umsortiert, die Werte stehen also in anderer Reihenfolge"
+					"reordered": "Gegenüber dem Hugging-Face-Tensor umsortiert (Heads oder Rotationspaare umgruppiert); ein quantisierter Typ ändert zusätzlich die Werte"
 				},
 				"shape": "Form (GGUF-Reihenfolge)",
 				"tab": "Architektur",
@@ -64,6 +68,54 @@
 				"waiting": "Wartet auf das Ende des ersten Laufs."
 			},
 			"explain": {
+				"arch": {
+					"llama": {
+						"op": {
+							"rope": {
+								"detail": "Wird auf die Queries und Keys angewandt, nicht auf Values; kein eigenes gespeichertes Gewicht. Dateien mit der RoPE-Skalierung von Llama 3 enthalten zusätzlich `rope_freqs`: einen Frequenzfaktor pro gedrehtem Paar, der die langsamsten Paare weiter verlangsamt, damit Positionen über einen längeren Kontext unterscheidbar bleiben. Die übrigen Parameter stehen in den Metadaten der Datei.",
+								"math": "$$\\begin{pmatrix} u'_{2i} \\\\ u'_{2i+1} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_{2i} \\\\ u_{2i+1} \\end{pmatrix}, \\qquad \\theta_i = \\frac{b^{-i/r}}{f_i}$$\n\n- $u$: ein Query- oder Key-Head; $i < r$: llama.cpp paart benachbarte Dimensionen.\n- $2r$: Anzahl gedrehter Dimensionen; die übrigen bleiben unverändert.\n- $b$: Basisfrequenz; $p$: Position.\n- $f_i$: Frequenzfaktor aus `rope_freqs`, wenn die Datei ihn enthält, sonst 1.\n\nDas Llama von Hugging Face paart Dimension $i$ stattdessen mit $i + r$; deshalb ordnet der Konverter die Zeilen von Q und K passend um. Die Attention-Werte bleiben gleich."
+							}
+						}
+					},
+					"qwen35": {
+						"op": {
+							"attn": {
+								"math": "$$a^{(j)}_t = \\sum_{s \\le t} \\mathrm{softmax}_s\\!\\left(\\frac{\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s}{\\sqrt{d_h}}\\right) v^{(m)}_s$$\n\n- $t$: aktuelle Position; $s$: Positionen im Cache.\n- $m$: Key/Value-Head, den Query-Head $j$ nutzt.\n- $\\tilde q$, $\\tilde k$: Queries und Keys nach Normierung und RoPE.\n- $1/\\sqrt{d_h}$: Standardskalierung; eine Datei kann eine andere setzen."
+							},
+							"attn_norm": {
+								"detail": "RMSNorm mit dem gespeicherten Gewicht `attn_norm`, ein Wert pro Dimension. Nur der Mixer sieht den normierten Vektor; die Residual-Addition nutzt die unnormierte Eingabe. Im MTP-Block ist die Eingabe die Ausgabe von `nextn.eh_proj`.",
+								"math": "$$x = \\frac{h}{\\mathrm{rms}(h)} \\odot w$$\n\n- $h$: Blockeingabe.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ aus der Datei.\n- $w$: `attn_norm`, gespeichert als $1 + w_{\\text{HF}}$."
+							},
+							"attn_residual": {
+								"detail": "Die unnormierte Blockeingabe plus die Ausgabeprojektion des Mixers. Die Summe geht in `post_attention_norm` und bleibt für die zweite Residual-Addition erhalten."
+							},
+							"ffn_gate": {
+								"math": "$$g = W_{\\text{gate}}\\,x'$$\n\n- $x'$: Ausgabe von `post_attention_norm`.\n- $W_{\\text{gate}}$: `ffn_gate`, von $d$ auf $d_{ff}$."
+							},
+							"k": {
+								"detail": "`attn_k` erzeugt einen Key pro Key/Value-Head. Es kann weniger Key/Value-Heads als Query-Heads geben (Grouped-Query Attention); jeder bedient eine Gruppe von Query-Heads. Keys kommen nach Normierung und RoPE in den KV-Cache."
+							},
+							"mixer_out": {
+								"detail": "`attn_output` nimmt die verketteten, gegateten Heads und mischt sie zu einem Vektor der Breite `n_embd`.",
+								"math": "$$y = W_O\\,[\\,\\bar a^{(1)};\\dots;\\bar a^{(n_h)}\\,]$$\n\n- $\\bar a^{(j)}$: gegatete Ausgabe von Query-Head $j$.\n- $W_O$: `attn_output`, von $n_h d_h$ auf $d$.",
+								"overview": "Bildet die gegatete Attention-Ausgabe aller Heads zurück auf die Residualbreite ab."
+							},
+							"post_norm": {
+								"detail": "RMSNorm mit `post_attention_norm`, gespeichert als 1 plus der Hugging-Face-Wert. Trotz des Namens ist es eine Pre-Norm für das FFN: Die Residual-Addition nutzt die unnormierte Summe.",
+								"math": "$$x' = \\frac{h'}{\\mathrm{rms}(h')} \\odot w$$\n\n- $h'$: Ausgabe der ersten Residual-Addition.\n- $w$: `post_attention_norm`.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ aus der Datei."
+							},
+							"q": {
+								"detail": "`attn_q` liefert die doppelte übliche Query-Größe: Pro Head ist die erste Hälfte die Query, die zweite die Gate-Eingabe.",
+								"math": "$$[\\,q^{(j)}\\,;\\,g^{(j)}\\,] = (W_Q\\,x)^{(j)}$$\n\n- $W_Q$: `attn_q`, Ausgabelänge $2 n_h d_h$.\n- $j$: Query-Head; $n_h$ Heads der Größe $d_h$.\n- $q^{(j)}$: Query; $g^{(j)}$: Gate-Eingabe.",
+								"overview": "Projiziert die normierte Eingabe auf Queries, dazu pro Head eine zweite Hälfte, die zum Ausgabe-Gate wird."
+							},
+							"rope": {
+								"detail": "Wird auf die normierten Queries und Keys angewandt, nicht auf Values; kein gespeichertes Gewicht. qwen35 nutzt mehrachsiges RoPE (MRoPE): Jedes gedrehte Paar gehört zu einer Zeit-, Höhen- oder Breitenposition. Bei Text sind alle drei Positionen gleich, es wirkt dann wie gewöhnliches RoPE. Die Parameter stehen in den Metadaten der Datei.",
+								"math": "$$\\begin{pmatrix} u'_i \\\\ u'_{i+r} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_i \\\\ u_{i+r} \\end{pmatrix}, \\qquad \\theta_i = b^{-i/r}$$\n\n- $u$: ein Query- oder Key-Head; $i < r$.\n- $2r$: Anzahl gedrehter Dimensionen; die übrigen bleiben unverändert.\n- $b$: Basisfrequenz; $p$: Position.\n\nDer Wert $\\langle R_p q, R_s k \\rangle$ hängt dann von $p$ und $s$ nur über $p - s$ ab."
+							}
+						}
+					}
+				},
 				"block": {
 					"fullAttention": {
 						"detail": "Ein- und Ausgabe sind der Residualstrom: ein Vektor pro Token mit Breite `n_embd`. Eine Normierung bereitet die Eingabe vor, Attention liest frühere Tokens über den KV-Cache, das Ergebnis wird addiert. Danach folgen eine zweite Normierung und das Feed-Forward-Netz, wieder addiert.",
@@ -136,16 +188,16 @@
 					},
 					"attn": {
 						"detail": "Keys und Values aller früheren Tokens und des aktuellen kommen aus dem KV-Cache, daher wächst der Speicher mit dem Kontext. Jeder Key/Value-Head bedient eine Gruppe von Query-Heads. Dieser Schritt hat kein gespeichertes Gewicht, und Model Lab zeichnet seine Gewichte nicht auf.",
-						"math": "$$a^{(j)}_t = \\sum_{s \\le t} \\mathrm{softmax}_s\\!\\left(\\frac{\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s}{\\sqrt{d_h}}\\right) v^{(m)}_s$$\n\n- $t$: aktuelle Position; $s$: Positionen im Cache.\n- $m$: Key/Value-Head, den Query-Head $j$ nutzt.\n- $\\tilde q$, $\\tilde k$: Queries und Keys nach Normierung und RoPE.\n- $1/\\sqrt{d_h}$: Standardskalierung; eine Datei kann eine andere setzen.",
+						"math": "$$a^{(j)}_t = \\sum_{s \\le t} \\mathrm{softmax}_s\\!\\left(\\frac{\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s}{\\sqrt{d_h}}\\right) v^{(m)}_s$$\n\n- $t$: aktuelle Position; $s$: Positionen im Cache.\n- $m$: Key/Value-Head, den Query-Head $j$ nutzt.\n- $\\tilde q$, $\\tilde k$: Queries und Keys nach RoPE.\n- $1/\\sqrt{d_h}$: Standardskalierung; eine Datei kann eine andere setzen.",
 						"overview": "Jede Query bewertet jeden Key im Cache, die Werte werden zu Gewichten mit Summe 1, und die Ausgabe ist die gewichtete Mischung der Values."
 					},
 					"attn_norm": {
-						"detail": "RMSNorm mit dem gespeicherten Gewicht `attn_norm`, ein Wert pro Dimension. Nur der Mixer sieht den normierten Vektor; die Residual-Addition nutzt die unnormierte Eingabe. Im MTP-Block ist die Eingabe die Ausgabe von `nextn.eh_proj`.",
-						"math": "$$x = \\frac{h}{\\mathrm{rms}(h)} \\odot w$$\n\n- $h$: Blockeingabe.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ aus der Datei.\n- $w$: `attn_norm`, gespeichert als $1 + w_{\\text{HF}}$.",
+						"detail": "RMSNorm mit dem gespeicherten Gewicht `attn_norm`, ein Wert pro Dimension. Nur der Mixer sieht den normierten Vektor; die Residual-Addition nutzt die unnormierte Eingabe.",
+						"math": "$$x = \\frac{h}{\\mathrm{rms}(h)} \\odot w$$\n\n- $h$: Blockeingabe.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ aus der Datei.\n- $w$: `attn_norm`, ein Gewicht pro Dimension.",
 						"overview": "Normiert die Blockeingabe vor dem Mixer (Attention oder Linear Attention)."
 					},
 					"attn_residual": {
-						"detail": "Die unnormierte Blockeingabe plus die Ausgabeprojektion des Mixers. Die Summe geht in `post_attention_norm` und bleibt für die zweite Residual-Addition erhalten.",
+						"detail": "Die unnormierte Blockeingabe plus die Ausgabeprojektion des Mixers. Die Summe geht in die Norm vor dem FFN und bleibt für die zweite Residual-Addition erhalten.",
 						"math": "$$h' = h + y$$\n\n- $h$: Blockeingabe.\n- $y$: Mixer-Ausgabe (`attn_output` oder `ssm_out`).",
 						"overview": "Addiert das Ergebnis des Mixers zur Blockeingabe. Der Block ergänzt den Strom, er ersetzt ihn nie."
 					},
@@ -201,7 +253,7 @@
 					},
 					"ffn_gate": {
 						"detail": "`ffn_gate` bildet von Breite `n_embd` auf die FFN-Breite `n_ff` ab.",
-						"math": "$$g = W_{\\text{gate}}\\,x'$$\n\n- $x'$: Ausgabe von `post_attention_norm`.\n- $W_{\\text{gate}}$: `ffn_gate`, von $d$ auf $d_{ff}$.",
+						"math": "$$g = W_{\\text{gate}}\\,x'$$\n\n- $x'$: Ausgabe der Norm vor dem FFN.\n- $W_{\\text{gate}}$: `ffn_gate`, von $d$ auf $d_{ff}$.",
 						"overview": "Verbreitert den normierten Vektor zum Gate-Zweig des Feed-Forward-Netzes."
 					},
 					"ffn_residual": {
@@ -255,7 +307,7 @@
 						"overview": "Der Vektor, den dieser Block erhält: die laufende Summe aus Embedding und allem, was frühere Blöcke addiert haben (der Residualstrom)."
 					},
 					"k": {
-						"detail": "`attn_k` erzeugt einen Key pro Key/Value-Head. Es kann weniger Key/Value-Heads als Query-Heads geben (Grouped-Query Attention); jeder bedient eine Gruppe von Query-Heads. Keys kommen nach Normierung und RoPE in den KV-Cache.",
+						"detail": "`attn_k` erzeugt einen Key pro Key/Value-Head. Es kann weniger Key/Value-Heads als Query-Heads geben (Grouped-Query Attention); jeder bedient eine Gruppe von Query-Heads. Keys kommen nach RoPE in den KV-Cache.",
 						"math": "$$k = W_K\\,x$$\n\n- $W_K$: `attn_k`, Ausgabelänge $n_{kv} d_h$.\n- $n_{kv}$: Anzahl der Key/Value-Heads.",
 						"overview": "Projiziert die normierte Eingabe auf Keys, die Kennungen, mit denen Queries verglichen werden."
 					},
@@ -275,9 +327,9 @@
 						"overview": "Werte für das Entwurfs-Token. Daraus wird ein Entwurf gewählt, den das Hauptmodell danach prüft."
 					},
 					"mixer_out": {
-						"detail": "`attn_output` nimmt die verketteten, gegateten Heads und mischt sie zu einem Vektor der Breite `n_embd`.",
-						"math": "$$y = W_O\\,[\\,\\bar a^{(1)};\\dots;\\bar a^{(n_h)}\\,]$$\n\n- $\\bar a^{(j)}$: gegatete Ausgabe von Query-Head $j$.\n- $W_O$: `attn_output`, von $n_h d_h$ auf $d$.",
-						"overview": "Bildet die gegatete Attention-Ausgabe aller Heads zurück auf die Residualbreite ab."
+						"detail": "`attn_output` nimmt die verketteten Heads und mischt sie zu einem Vektor der Breite `n_embd`.",
+						"math": "$$y = W_O\\,[\\,a^{(1)};\\dots;a^{(n_h)}\\,]$$\n\n- $a^{(j)}$: Attention-Ausgabe von Query-Head $j$.\n- $W_O$: `attn_output`, von $n_h d_h$ auf $d$.",
+						"overview": "Bildet die Attention-Ausgabe aller Heads zurück auf die Residualbreite ab."
 					},
 					"output": {
 						"detail": "Gleiche Breite wie die Eingabe. Der nächste Block liest ihn als Eingabe; nach dem letzten Block machen `output_norm` und der LM-Head daraus Logits. Model-Lab-Traces messen diesen Vektor, ohne Control Vector.",
@@ -285,14 +337,14 @@
 						"overview": "Was der Block weitergibt: der aktualisierte Residualstrom."
 					},
 					"post_norm": {
-						"detail": "RMSNorm mit `post_attention_norm`, gespeichert als 1 plus der Hugging-Face-Wert. Trotz des Namens ist es eine Pre-Norm für das FFN: Die Residual-Addition nutzt die unnormierte Summe.",
-						"math": "$$x' = \\frac{h'}{\\mathrm{rms}(h')} \\odot w$$\n\n- $h'$: Ausgabe der ersten Residual-Addition.\n- $w$: `post_attention_norm`.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ aus der Datei.",
+						"detail": "RMSNorm mit eigenem gespeichertem Gewicht, ein Wert pro Dimension, in vielen Architekturen `ffn_norm` genannt. Sie ist eine Pre-Norm für das FFN: Die Residual-Addition nutzt die unnormierte Summe.",
+						"math": "$$x' = \\frac{h'}{\\mathrm{rms}(h')} \\odot w$$\n\n- $h'$: Ausgabe der ersten Residual-Addition.\n- $w$: das Gewicht der FFN-Norm (`ffn_norm` in vielen Architekturen).\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ aus der Datei.",
 						"overview": "Normiert den Strom erneut vor dem Feed-Forward-Netz."
 					},
 					"q": {
-						"detail": "`attn_q` liefert die doppelte übliche Query-Größe: Pro Head ist die erste Hälfte die Query, die zweite die Gate-Eingabe.",
-						"math": "$$[\\,q^{(j)}\\,;\\,g^{(j)}\\,] = (W_Q\\,x)^{(j)}$$\n\n- $W_Q$: `attn_q`, Ausgabelänge $2 n_h d_h$.\n- $j$: Query-Head; $n_h$ Heads der Größe $d_h$.\n- $q^{(j)}$: Query; $g^{(j)}$: Gate-Eingabe.",
-						"overview": "Projiziert die normierte Eingabe auf Queries, dazu pro Head eine zweite Hälfte, die zum Ausgabe-Gate wird."
+						"detail": "`attn_q` erzeugt eine Query pro Head, alle Heads nebeneinander in einem Vektor. Queries werden mit den Keys im Cache verglichen; sie selbst kommen nicht in den Cache.",
+						"math": "$$q = W_Q\\,x$$\n\n- $W_Q$: `attn_q`, Ausgabelänge $n_h d_h$.\n- $n_h$: Anzahl der Query-Heads; $d_h$: Head-Größe.",
+						"overview": "Projiziert die normierte Eingabe auf Queries: das, wonach jedes Token unter den Tokens sucht, auf die es achtet."
 					},
 					"q_norm": {
 						"detail": "RMSNorm über die Head-Dimension mit `attn_q_norm`: ein Gewicht pro Head-Dimension, von allen Heads geteilt, gespeichert als 1 plus der Hugging-Face-Wert.",
@@ -305,8 +357,8 @@
 						"overview": "Projiziert die normierte Eingabe mit einer Matrix auf Queries, Keys und Values für den Linear-Attention-Mixer."
 					},
 					"rope": {
-						"detail": "Wird auf die normierten Queries und Keys angewandt, nicht auf Values; kein gespeichertes Gewicht. qwen35 nutzt mehrachsiges RoPE (MRoPE): Jedes gedrehte Paar gehört zu einer Zeit-, Höhen- oder Breitenposition. Bei Text sind alle drei Positionen gleich, es wirkt dann wie gewöhnliches RoPE. Die Parameter stehen in den Metadaten der Datei.",
-						"math": "$$\\begin{pmatrix} u'_i \\\\ u'_{i+r} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_i \\\\ u_{i+r} \\end{pmatrix}, \\qquad \\theta_i = b^{-i/r}$$\n\n- $u$: ein Query- oder Key-Head; $i < r$.\n- $2r$: Anzahl gedrehter Dimensionen; die übrigen bleiben unverändert.\n- $b$: Basisfrequenz; $p$: Position.\n\nDer Wert $\\langle R_p q, R_s k \\rangle$ hängt dann von $p$ und $s$ nur über $p - s$ ab.",
+						"detail": "Wird auf die Queries und Keys angewandt, nicht auf Values; kein gespeichertes Gewicht. Basisfrequenz, Anzahl gedrehter Dimensionen und eine etwaige Kontextskalierung stehen in den Metadaten der Datei.",
+						"math": "$$\\begin{pmatrix} u'_{i_1} \\\\ u'_{i_2} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_{i_1} \\\\ u_{i_2} \\end{pmatrix}, \\qquad \\theta_i = b^{-i/r}$$\n\n- $u$: ein Query- oder Key-Head; Paar $i < r$ dreht seine Dimensionen $i_1$ und $i_2$.\n- Welche zwei Dimensionen ein Paar bilden, hängt vom Modell ab: Nachbarn ($i_1 = 2i$, $i_2 = 2i + 1$) oder die beiden Hälften ($i_1 = i$, $i_2 = i + r$).\n- $2r$: Anzahl gedrehter Dimensionen; die übrigen bleiben unverändert.\n- $b$: Basisfrequenz; $p$: Position.\n\nDer Wert $\\langle R_p q, R_s k \\rangle$ hängt dann von $p$ und $s$ nur über $p - s$ ab.",
 						"overview": "Kodiert die Position jedes Tokens, indem Wertepaare von Query und Key um einen mit der Position wachsenden Winkel gedreht werden. Der Attention-Wert hängt dann davon ab, wie weit zwei Tokens auseinanderliegen."
 					},
 					"split": {

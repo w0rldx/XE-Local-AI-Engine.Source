@@ -111,6 +111,47 @@ public sealed class ModelLabArchitectureEndpointTests
         AssertEx.Equal(expected: 1, json.RootElement.GetProperty("descriptorVersion").GetInt32());
     }
 
+    [Test]
+    public async Task ARegisteredLlamaGguf_IsDescribedInDetail()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var path = dir.FilePath("tiny.gguf");
+        await File.WriteAllBytesAsync(path,
+            new GgufHeaderBytesBuilder()
+                .WithString("general.architecture", "llama")
+                .WithUint32("llama.block_count", value: 1)
+                .WithTensor("token_embd.weight", [256, 10], ggmlType: 12, offset: 0)
+                .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 1_440)
+                .WithTensor("blk.0.attn_q.weight", [256, 4], ggmlType: 12, offset: 2_464)
+                .WithTensor("blk.0.attn_v.weight", [256, 4], ggmlType: 12, offset: 3_040)
+                .WithTensor("output_norm.weight", [256], ggmlType: 0, offset: 3_616)
+                .Build());
+        await using var factory = CreateFactory(path);
+        using var client = factory.CreateClient();
+
+        using var request = Authorized(factory, Uri.EscapeDataString(RegisteredModel));
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<ModelLabArchitectureResponse>(JsonOptions));
+        AssertEx.Equal("detailed", body.Support);
+        AssertEx.Equal("llama", body.Architecture);
+        var block = body.Blocks.Single();
+        AssertEx.Equal("fullAttention", block.Kind);
+        AssertEx.Equal("blk.0.attention,blk.0.norm", string.Join(',', block.Groups.Select(static group => group.ComponentId)));
+        var attention = block.Groups[0].Tensors.ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
+        AssertEx.Equal("model.layers.0.self_attn.q_proj.weight", attention["blk.0.attn_q.weight"].HfName);
+        // The converter permuted Q for NORM RoPE before quantizing, so the order change outlives Q4_K.
+        AssertEx.Equal("reordered", attention["blk.0.attn_q.weight"].ValueRelation);
+        AssertEx.Equal("quantized", attention["blk.0.attn_v.weight"].ValueRelation);
+        AssertEx.Equal("model.layers.0.input_layernorm.weight", block.Groups[1].Tensors.Single().HfName);
+        AssertEx.Equal("equal", block.Groups[1].Tensors.Single().ValueRelation);
+        var template = body.Templates.Single();
+        AssertEx.Equal("fullAttention", template.Kind);
+        AssertEx.Equal("llama.cpp src/models/llama.cpp @ b12014", template.Source);
+        AssertEx.Equal("model.embed_tokens.weight", body.NonBlock.Single(static group => group.ComponentId == "embedding").Tensors.Single().HfName);
+    }
+
     private static string Route(string encodedModelName) =>
         $"/api/local/v1/model-lab/architecture/{encodedModelName}";
 

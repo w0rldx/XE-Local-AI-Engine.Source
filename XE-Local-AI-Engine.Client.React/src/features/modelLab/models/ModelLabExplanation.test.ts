@@ -1,14 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { createInstance } from "i18next";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { blockKindColors } from "@/core/models/inspect/GgufInspectInsights";
 import de from "@/features/modelLab/locales/model-lab-de.json";
 import en from "@/features/modelLab/locales/model-lab-en.json";
-import { nextTokenTopics, traceMetrics } from "@/features/modelLab/models/ModelLabExplanation";
+import {
+	explanationKey,
+	nextTokenTopics,
+	operationCandidates,
+	traceMetrics,
+} from "@/features/modelLab/models/ModelLabExplanation";
 
 // Every component the descriptor can name: the backend's ModelLabArchitectureBuilder constants, as componentLabel lists them.
 const components = ["attention", "embedding", "ffn", "mtp", "norm", "other", "output", "ssm"];
 
-// Every node id the qwen35 templates send, from ModelLabQwen35Architecture (all three templates).
+// Every node id the templates send: ModelLabQwen35Architecture (all three templates) and ModelLabLlamaArchitecture, whose
+// ids are a subset of qwen35's full-attention ones.
 // shortcut: copied by hand, so a node added there passes here unnoticed (the panel shows no text for it); the llama.cpp
 // pin test that forces a template re-check is the reminder to extend this list. Upgrade to a descriptor fixture if one appears.
 const operations = [
@@ -104,11 +111,60 @@ describe.each([
 		expect(missing).toEqual([]);
 	});
 
+	it("override operations only for ids a template sends, each with text at the levels it overrides", () => {
+		const architectures = valueAt(bundle, "pages.modelLab.explain.arch") as Record<string, { op: Record<string, object> }>;
+		expect(Object.keys(architectures).sort()).toEqual(["llama", "qwen35"]);
+		for (const { op } of Object.values(architectures)) {
+			expect(Object.keys(op).filter((id) => !operations.includes(id))).toEqual([]);
+			expect(
+				Object.values(op)
+					.flatMap(explanationStrings)
+					.filter((text) => text.trim() === ""),
+			).toEqual([]);
+		}
+	});
+
 	it("never hold i18next interpolation, which would eat the text between the braces", () => {
 		const texts = [
 			...explanationStrings(valueAt(bundle, "pages.modelLab.explain")),
 			...explanationStrings(valueAt(bundle, "pages.modelLab.nextToken.explain")),
 		];
 		expect(texts.filter((text) => text.includes("{{"))).toEqual([]);
+	});
+});
+
+describe("operationCandidates", () => {
+	const store = createInstance({
+		lng: "en",
+		resources: {
+			en: {
+				translation: {
+					pages: {
+						modelLab: {
+							explain: {
+								opByKind: { mtp: { attn: { overview: "kind" } } },
+								arch: { llama: { op: { attn: { overview: "llama", math: "llama math" } } } },
+								op: { attn: { overview: "shared", detail: "shared detail", math: "shared math" } },
+							},
+						},
+					},
+				},
+			},
+		},
+	});
+	beforeAll(async () => {
+		await store.init();
+	});
+	const shown = (kind: string, architecture: string | null, level: "overview" | "detail" | "math") =>
+		explanationKey(store, operationCandidates(kind, architecture, "attn"), level);
+
+	it("takes the kind text first, then the architecture's, then the shared one, level by level", () => {
+		expect(shown("mtp", "llama", "overview")).toBe("pages.modelLab.explain.opByKind.mtp.attn.overview");
+		expect(shown("fullAttention", "llama", "overview")).toBe("pages.modelLab.explain.arch.llama.op.attn.overview");
+		expect(shown("fullAttention", "llama", "math")).toBe("pages.modelLab.explain.arch.llama.op.attn.math");
+		// The override has no detail text, so that level falls back to the shared one.
+		expect(shown("fullAttention", "llama", "detail")).toBe("pages.modelLab.explain.op.attn.detail");
+		expect(shown("fullAttention", "qwen35", "overview")).toBe("pages.modelLab.explain.op.attn.overview");
+		expect(shown("fullAttention", null, "overview")).toBe("pages.modelLab.explain.op.attn.overview");
 	});
 });

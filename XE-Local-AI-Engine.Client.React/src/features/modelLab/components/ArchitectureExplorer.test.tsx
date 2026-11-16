@@ -15,6 +15,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ArchitectureExplorer } from "@/features/modelLab/components/ArchitectureExplorer";
+import modelLabEn from "@/features/modelLab/locales/model-lab-en.json";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -89,13 +90,27 @@ const explain = {
 	op: {
 		input: { overview: "Fixture: the residual stream enters the block." },
 		attn: { overview: "Fixture: attention in any template." },
+		q: { overview: "Fixture: queries in any family." },
+		rope: { overview: "Fixture: RoPE in any family." },
+		v: { overview: "Fixture: values in any family." },
+	},
+	arch: {
+		llama: { op: { rope: { overview: "Fixture: RoPE as llama.cpp runs it for llama." } } },
+		qwen35: {
+			op: {
+				attn: { overview: "Fixture: attention in qwen35." },
+				q: { overview: "Fixture: queries and gates in qwen35." },
+			},
+		},
 	},
 	opByKind: { fullAttention: { attn: { overview: "Fixture: attention in a full-attention block." } } },
 	trace: { meanNorm: { overview: "Fixture: what a mean norm says and does not say." } },
 };
 
 beforeAll(() => {
-	i18next.addResourceBundle("en", "translation", { pages: { modelLab: { explain } } }, true, true);
+	// The layout note is looked up by architecture and has no in-code default, so the shipped one is added here.
+	const layoutNote = modelLabEn.pages.modelLab.architecture.layoutNote;
+	i18next.addResourceBundle("en", "translation", { pages: { modelLab: { explain, architecture: { layoutNote } } } }, true, true);
 	// jsdom does not implement scrollIntoView; a graph click scrolls the opened operation into view.
 	Element.prototype.scrollIntoView = vi.fn();
 });
@@ -352,7 +367,7 @@ describe("ArchitectureExplorer", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Block 0: Linear attention" }));
 		fireEvent.click(screen.getByRole("button", { name: "ssm_out.weight" }));
 		expect(screen.getByTestId("model-lab-architecture-tensor").textContent).toContain(
-			"Value heads reordered from the Hugging Face tensor, so values sit in another order",
+			"Reordered from the Hugging Face tensor (heads or rotary pairs regrouped); a quantized type also changes the values",
 		);
 	});
 
@@ -393,12 +408,13 @@ describe("ArchitectureExplorer", () => {
 	});
 
 	it("shows groups only for an overview, and says no operation graph is shown", async () => {
-		stubRoutes({ ...detailed, architecture: "llama", support: "overview", templates: detailed.templates });
+		stubRoutes({ ...detailed, architecture: "xe-unregistered-arch", support: "overview", templates: detailed.templates });
 		await openModel();
 
 		expect(screen.getByTestId("model-lab-architecture-overview-only").textContent).toContain(
-			"No operation graph is shown for the llama architecture",
+			"No operation graph is shown for the xe-unregistered-arch architecture",
 		);
+		expect(screen.queryByTestId("model-lab-architecture-no-template")).toBeNull();
 		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention" }));
 		expect(screen.getByTestId("model-lab-architecture-read-badge")).toBeTruthy();
 		expect(screen.queryByTestId("model-lab-architecture-inferred-badge")).toBeNull();
@@ -1051,8 +1067,87 @@ describe("ArchitectureExplorer explanations", () => {
 
 		fireEvent.click(screen.getByTestId("react-flow-node-attn"));
 		expect(operations.getByText("Fixture: attention in a full-attention block.")).toBeTruthy();
+		// The kind text outranks the architecture's own text too, not only the shared one.
+		expect(operations.queryByText("Fixture: attention in qwen35.")).toBeNull();
 		expect(operations.queryByText("Fixture: attention in any template.")).toBeNull();
 		expect(operations.queryByText("Fixture: the residual stream enters the block.")).toBeNull();
+	});
+
+	it("shows a family's own operation text before the shared one, and the shared one where it has none", async () => {
+		const fullAttention = detailed.blocks[1] as (typeof detailed.blocks)[number];
+		stubRoutes({
+			...detailed,
+			architecture: "llama",
+			blocks: [fullAttention],
+			templates: [
+				{
+					kind: "fullAttention",
+					provenance: "inferred",
+					source: "llama.cpp src/models/llama.cpp @ b12014",
+					nodes: [
+						{ id: "rope", label: "RoPE on Q and K", component: "attention" },
+						{ id: "v", label: "Value projection · attn_v", component: "attention" },
+					],
+					edges: [{ from: "v", to: "rope" }],
+				},
+			],
+		});
+		await openModel();
+
+		expect(screen.getByTestId("model-lab-architecture-layout-note").textContent).toContain(
+			"assume the standard LlamaForCausalLM conversion",
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention" }));
+		const operations = within(screen.getByTestId("model-lab-explain-operations"));
+
+		fireEvent.click(screen.getByTestId("react-flow-node-rope"));
+		expect(operations.getByText("Fixture: RoPE as llama.cpp runs it for llama.")).toBeTruthy();
+		expect(operations.queryByText("Fixture: RoPE in any family.")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("react-flow-node-v"));
+		expect(operations.getByText("Fixture: values in any family.")).toBeTruthy();
+	});
+
+	it("gives qwen35 its own text for a node and no layout note", async () => {
+		const template = detailed.templates[0] as (typeof detailed.templates)[number];
+		stubRoutes({
+			...detailed,
+			templates: [
+				{
+					...template,
+					nodes: [...template.nodes, { id: "q", label: "Query + gate projection · attn_q", component: "attention" }],
+				},
+			],
+		});
+		await openModel();
+
+		expect(screen.queryByTestId("model-lab-architecture-layout-note")).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention" }));
+		fireEvent.click(screen.getByTestId("react-flow-node-q"));
+		const operations = within(screen.getByTestId("model-lab-explain-operations"));
+		expect(operations.getByText("Fixture: queries and gates in qwen35.")).toBeTruthy();
+		expect(operations.queryByText("Fixture: queries in any family.")).toBeNull();
+	});
+
+	it("says why a described architecture draws no graph when the file's layout has no template", async () => {
+		stubRoutes({ ...detailed, architecture: "llama", templates: [] });
+		await openModel();
+
+		expect(screen.getByTestId("model-lab-architecture-no-template").textContent).toBe(
+			"No operation graph is drawn for this file: its layout, for example mixture-of-experts, is not one the llama template describes. The tensor groups are read from the file as usual.",
+		);
+		expect(screen.queryByTestId("model-lab-architecture-overview-only")).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention" }));
+		expect(screen.getByTestId("model-lab-architecture-read-badge")).toBeTruthy();
+		expect(screen.queryByTestId("react-flow")).toBeNull();
+	});
+
+	it("shows no missing-template notice for a file without blocks, such as a tensorless first shard", async () => {
+		stubRoutes({ ...detailed, architecture: "llama", blocks: [], templates: [] });
+		await openModel();
+
+		expect(screen.queryByTestId("model-lab-architecture-no-template")).toBeNull();
+		expect(screen.queryByTestId("model-lab-architecture-overview-only")).toBeNull();
 	});
 
 	it("reaches and opens every operation through buttons the keyboard moves between", async () => {

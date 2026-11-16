@@ -13,7 +13,7 @@ public sealed record ModelLabArchitectureResponse
 
     public required string? Architecture { get; init; }
 
-    /// <summary><c>detailed</c> (HF names and templates), <c>overview</c> (blocks and groups only) or <c>unreadable</c>.</summary>
+    /// <summary><c>detailed</c> (HF names and templates, for an architecture with a registered descriptor), <c>overview</c> (blocks and groups only) or <c>unreadable</c>.</summary>
     public required string Support { get; init; }
 
     /// <summary>Why the GGUF read stopped (<c>unreadable</c>, <c>unsupportedVersion</c>, <c>truncated</c>, <c>malformed</c>), or null.</summary>
@@ -26,7 +26,7 @@ public sealed record ModelLabArchitectureResponse
     /// <summary>One entry per <c>blk.N</c> index in ascending order; empty when the file was unreadable.</summary>
     public required IReadOnlyList<ModelLabArchitectureBlock> Blocks { get; init; }
 
-    /// <summary>One operation graph per block kind present; empty unless <see cref="Support" /> is <c>detailed</c>.</summary>
+    /// <summary>One operation graph per block kind present; empty unless <see cref="Support" /> is <c>detailed</c>, and for a layout no template describes.</summary>
     public required IReadOnlyList<ModelLabArchitectureTemplate> Templates { get; init; }
 
     /// <summary>The tensors outside any block, grouped as <c>embedding</c>, <c>output_norm</c>, <c>output</c> and <c>other</c>.</summary>
@@ -81,15 +81,24 @@ public sealed record ModelLabArchitectureTensor
     public required long? ByteSize { get; init; }
 
     /// <summary>
-    ///     GGUF value per HF value: <c>equal</c>, <c>plus_one</c>, <c>neg_exp</c> (−exp), <c>reordered</c> (value heads permuted) or
-    ///     <c>quantized</c> (not a float type); null when not stated.
+    ///     GGUF value per HF value: <c>equal</c>, <c>plus_one</c>, <c>neg_exp</c> (−exp), <c>reordered</c> (heads or rotary pairs
+    ///     regrouped) or <c>quantized</c> (not a float type); null when not stated.
     /// </summary>
     /// <remarks>
-    ///     <c>reordered</c> wins over <c>quantized</c>: when the linear-attention key and value head counts differ, the converter
-    ///     permutes the value heads before quantizing, so dequantized values still sit in another order. Null when
-    ///     <see cref="HfName" /> is, or when the file does not state both head counts.
+    ///     <c>reordered</c> wins over <c>quantized</c>: the converter permutes before quantizing (<c>qwen35</c> linear-attention
+    ///     value heads when the key and value head counts differ, <c>llama</c> Q and K for its RoPE), so dequantized values still
+    ///     sit in another order. Null when <see cref="HfName" /> is, or when the file does not state what decides it.
     /// </remarks>
     public required string? ValueRelation { get; init; }
+}
+
+/// <summary>An HF tensor name and how its values relate to the GGUF tensor's before quantization.</summary>
+internal sealed record ModelLabHfTensor
+{
+    public required string Name { get; init; }
+
+    /// <summary>Null when the file does not state what decides it.</summary>
+    public required string? Relation { get; init; }
 }
 
 /// <summary>The operation order of one block kind, inferred from llama.cpp rather than read from the file.</summary>

@@ -23,11 +23,13 @@ import {
 	componentIdFor,
 	componentLabel,
 } from "@/features/modelLab/models/ModelLabArchitecture";
-import { type ExplanationLevel, inferredBadgeStyles } from "@/features/modelLab/models/ModelLabExplanation";
+import { type ExplanationLevel, inferredBadgeStyles, operationCandidates } from "@/features/modelLab/models/ModelLabExplanation";
 import type { PyTorchCodeTarget } from "@/features/modelLab/models/ModelLabPyTorch";
 
 interface ArchitectureBlockDetailProps {
 	modelName: string;
+	// The GGUF `general.architecture`: its explanation texts come before the shared ones. Null when the file names none.
+	architecture: string | null;
 	suggestedBaseRepo: string | null;
 	// Undefined for the tensors outside every block: then `outside` names which end of the model they are.
 	block: ArchitectureBlock | undefined;
@@ -44,6 +46,7 @@ interface ArchitectureBlockDetailProps {
 // One block: what the file holds (read) and, apart from it, the operation order llama.cpp runs over it (inferred).
 export function ArchitectureBlockDetail({
 	modelName,
+	architecture,
 	suggestedBaseRepo,
 	block,
 	outside,
@@ -162,8 +165,7 @@ export function ArchitectureBlockDetail({
 							items={template.nodes.map((node) => ({
 								id: node.id,
 								label: node.label,
-								// A per-kind text first, where one id means different operations in different templates.
-								candidates: [`opByKind.${template.kind}.${node.id}`, `op.${node.id}`],
+								candidates: operationCandidates(template.kind, architecture, node.id),
 							}))}
 							level={explanationLevel}
 							basis={{ inferredFrom: template.source }}

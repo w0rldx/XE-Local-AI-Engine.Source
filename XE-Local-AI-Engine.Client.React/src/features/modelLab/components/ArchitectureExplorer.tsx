@@ -34,7 +34,7 @@ interface ArchitectureExplorerProps {
 
 // One installed model's structure from its GGUF header, with an optional saved trace of that model laid over its blocks.
 export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const models = useQuery({ ...listLocalModelsOptions(), staleTime: 30_000 });
 	const modelNames = (models.data?.items ?? []).flatMap((item) =>
 		item.provider === LLAMACPP_PROVIDER && item.modelName ? [item.modelName] : [],
@@ -169,6 +169,24 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 					)}
 				</Alert>
 			)}
+			{/* A file with no blocks (a tensorless first shard) has nothing a template could have drawn. */}
+			{data?.support === "detailed" && data.templates.length === 0 && data.blocks.length > 0 && (
+				<Alert color="blue" data-testid="model-lab-architecture-no-template">
+					{t(
+						"pages.modelLab.architecture.noTemplate",
+						"No operation graph is drawn for this file: its layout, for example mixture-of-experts, is not one the {{architecture}} template describes. The tensor groups are read from the file as usual.",
+						{ architecture: data.architecture ?? t("pages.models.details.unknown", "Unknown") },
+					)}
+				</Alert>
+			)}
+			{/* Only families whose Hugging Face names rest on an assumed source layout have a note; the rest show none. */}
+			{data?.support === "detailed" &&
+				data.architecture !== null &&
+				i18n.exists(`pages.modelLab.architecture.layoutNote.${data.architecture}`) && (
+					<Alert color="gray" data-testid="model-lab-architecture-layout-note">
+						{t(`pages.modelLab.architecture.layoutNote.${data.architecture}`)}
+					</Alert>
+				)}
 			{data && data.support !== "unreadable" && (
 				<>
 					<ArchitectureOverview
@@ -183,6 +201,7 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 						<ArchitectureBlockDetail
 							key={selection}
 							modelName={data.modelName}
+							architecture={data.architecture}
 							suggestedBaseRepo={data.suggestedBaseRepo}
 							block={block}
 							outside={selection === "output" ? "output" : "embedding"}

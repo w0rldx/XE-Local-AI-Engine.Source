@@ -19,9 +19,13 @@
 				"hfName": "Hugging Face name",
 				"inferredBadge": "Inferred from llama.cpp ({{source}})",
 				"kindUntraceable": "{{kind}} (not traceable)",
+				"layoutNote": {
+					"llama": "The Hugging Face names assume the standard LlamaForCausalLM conversion (model.layers.N.…). A file converted from another source layout, such as Mistral's consolidated format or a vision model's language tower, has other source tensor names."
+				},
 				"loadFailed": "The model's structure could not be read.",
 				"noHfName": "None",
 				"noOutput": "No separate output tensor in this file; the output may share the embedding weights.",
+				"noTemplate": "No operation graph is drawn for this file: its layout, for example mixture-of-experts, is not one the {{architecture}} template describes. The tensor groups are read from the file as usual.",
 				"noTraceChosen": "No trace",
 				"noTraces": "No finished trace of this model yet. A trace started under Trace and steer can be laid over its blocks here.",
 				"notTraced": "Not traced: the chosen trace did not measure this block.",
@@ -36,7 +40,7 @@
 					"notStated": "Not stated",
 					"plusOne": "The Hugging Face value plus one",
 					"quantized": "Quantized from the Hugging Face values",
-					"reordered": "Value heads reordered from the Hugging Face tensor, so values sit in another order"
+					"reordered": "Reordered from the Hugging Face tensor (heads or rotary pairs regrouped); a quantized type also changes the values"
 				},
 				"shape": "Shape (GGUF order)",
 				"tab": "Architecture",
@@ -64,6 +68,54 @@
 				"waiting": "Waiting for the first run to finish."
 			},
 			"explain": {
+				"arch": {
+					"llama": {
+						"op": {
+							"rope": {
+								"detail": "Applied to the queries and keys, not to values; no stored weight of its own. Files converted with Llama 3's RoPE scaling also hold `rope_freqs`: one frequency factor per rotated pair, which slows the slowest pairs further so positions stay distinguishable over a longer context. The other parameters come from the file's metadata.",
+								"math": "$$\\begin{pmatrix} u'_{2i} \\\\ u'_{2i+1} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_{2i} \\\\ u_{2i+1} \\end{pmatrix}, \\qquad \\theta_i = \\frac{b^{-i/r}}{f_i}$$\n\n- $u$: one query or key head; $i < r$: llama.cpp pairs neighbouring dimensions.\n- $2r$: number of rotated dimensions; the rest pass unchanged.\n- $b$: base frequency; $p$: position.\n- $f_i$: frequency factor from `rope_freqs` when the file has it, else 1.\n\nHugging Face's Llama pairs dimension $i$ with $i + r$ instead, so the converter reorders the rows of Q and K to match; the attention scores stay the same."
+							}
+						}
+					},
+					"qwen35": {
+						"op": {
+							"attn": {
+								"math": "$$a^{(j)}_t = \\sum_{s \\le t} \\mathrm{softmax}_s\\!\\left(\\frac{\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s}{\\sqrt{d_h}}\\right) v^{(m)}_s$$\n\n- $t$: current position; $s$: cached positions.\n- $m$: key/value head shared by query head $j$.\n- $\\tilde q$, $\\tilde k$: queries and keys after norm and RoPE.\n- $1/\\sqrt{d_h}$: default scale; a file can set another."
+							},
+							"attn_norm": {
+								"detail": "RMSNorm with the stored weight `attn_norm`, one value per dimension. Only the mixer sees the normed vector; the residual add uses the unnormed input. In the MTP block the input is the `nextn.eh_proj` output.",
+								"math": "$$x = \\frac{h}{\\mathrm{rms}(h)} \\odot w$$\n\n- $h$: block input.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ from the file.\n- $w$: `attn_norm`, stored as $1 + w_{\\text{HF}}$."
+							},
+							"attn_residual": {
+								"detail": "The unnormed block input plus the mixer's output projection. The sum feeds `post_attention_norm` and is kept for the second residual add."
+							},
+							"ffn_gate": {
+								"math": "$$g = W_{\\text{gate}}\\,x'$$\n\n- $x'$: output of `post_attention_norm`.\n- $W_{\\text{gate}}$: `ffn_gate`, from $d$ to $d_{ff}$."
+							},
+							"k": {
+								"detail": "`attn_k` produces one key per key/value head. There can be fewer key/value heads than query heads (grouped-query attention); each serves a group of query heads. Keys go into the KV cache after norm and RoPE."
+							},
+							"mixer_out": {
+								"detail": "`attn_output` takes the concatenated, gated heads and mixes them into one vector of width `n_embd`.",
+								"math": "$$y = W_O\\,[\\,\\bar a^{(1)};\\dots;\\bar a^{(n_h)}\\,]$$\n\n- $\\bar a^{(j)}$: gated output of query head $j$.\n- $W_O$: `attn_output`, from $n_h d_h$ to $d$.",
+								"overview": "Maps the gated attention output of all heads back to the residual width."
+							},
+							"post_norm": {
+								"detail": "RMSNorm with `post_attention_norm`, stored as 1 plus the Hugging Face value. Despite the name it is a pre-norm for the FFN: the residual add uses the unnormed sum.",
+								"math": "$$x' = \\frac{h'}{\\mathrm{rms}(h')} \\odot w$$\n\n- $h'$: output of the first residual add.\n- $w$: `post_attention_norm`.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ from the file."
+							},
+							"q": {
+								"detail": "`attn_q` outputs twice the usual query size: per head, the first half is the query and the second half the gate input.",
+								"math": "$$[\\,q^{(j)}\\,;\\,g^{(j)}\\,] = (W_Q\\,x)^{(j)}$$\n\n- $W_Q$: `attn_q`, output length $2 n_h d_h$.\n- $j$: query head; $n_h$ heads of size $d_h$.\n- $q^{(j)}$: query; $g^{(j)}$: gate input.",
+								"overview": "Projects the normed input into queries, plus a second half per head that becomes the output gate."
+							},
+							"rope": {
+								"detail": "Applied to the normed queries and keys, not to values; no stored weight. qwen35 uses multi-axis RoPE (MRoPE): each rotated pair is assigned to a time, height or width position. For text all three positions are equal, so it acts like ordinary RoPE. The parameters come from the file's metadata.",
+								"math": "$$\\begin{pmatrix} u'_i \\\\ u'_{i+r} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_i \\\\ u_{i+r} \\end{pmatrix}, \\qquad \\theta_i = b^{-i/r}$$\n\n- $u$: one query or key head; $i < r$.\n- $2r$: number of rotated dimensions; the rest pass unchanged.\n- $b$: base frequency; $p$: position.\n\nThe score $\\langle R_p q, R_s k \\rangle$ then depends on $p$ and $s$ only through $p - s$."
+							}
+						}
+					}
+				},
 				"block": {
 					"fullAttention": {
 						"detail": "Input and output are the residual stream: one vector per token, width `n_embd`. A norm prepares the input, attention reads earlier tokens through the KV cache, and the result is added back. A second norm and the feed-forward network follow, again added back.",
@@ -136,16 +188,16 @@
 					},
 					"attn": {
 						"detail": "Keys and values of all earlier tokens and the current one come from the KV cache, so memory grows with the context. Each key/value head serves a group of query heads. This step has no stored weight, and Model Lab does not record its weights.",
-						"math": "$$a^{(j)}_t = \\sum_{s \\le t} \\mathrm{softmax}_s\\!\\left(\\frac{\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s}{\\sqrt{d_h}}\\right) v^{(m)}_s$$\n\n- $t$: current position; $s$: cached positions.\n- $m$: key/value head shared by query head $j$.\n- $\\tilde q$, $\\tilde k$: queries and keys after norm and RoPE.\n- $1/\\sqrt{d_h}$: default scale; a file can set another.",
+						"math": "$$a^{(j)}_t = \\sum_{s \\le t} \\mathrm{softmax}_s\\!\\left(\\frac{\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s}{\\sqrt{d_h}}\\right) v^{(m)}_s$$\n\n- $t$: current position; $s$: cached positions.\n- $m$: key/value head shared by query head $j$.\n- $\\tilde q$, $\\tilde k$: queries and keys after RoPE.\n- $1/\\sqrt{d_h}$: default scale; a file can set another.",
 						"overview": "Each query scores every cached key, the scores become weights that sum to 1, and the output is the weighted mix of the values."
 					},
 					"attn_norm": {
-						"detail": "RMSNorm with the stored weight `attn_norm`, one value per dimension. Only the mixer sees the normed vector; the residual add uses the unnormed input. In the MTP block the input is the `nextn.eh_proj` output.",
-						"math": "$$x = \\frac{h}{\\mathrm{rms}(h)} \\odot w$$\n\n- $h$: block input.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ from the file.\n- $w$: `attn_norm`, stored as $1 + w_{\\text{HF}}$.",
+						"detail": "RMSNorm with the stored weight `attn_norm`, one value per dimension. Only the mixer sees the normed vector; the residual add uses the unnormed input.",
+						"math": "$$x = \\frac{h}{\\mathrm{rms}(h)} \\odot w$$\n\n- $h$: block input.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ from the file.\n- $w$: `attn_norm`, one weight per dimension.",
 						"overview": "Normalizes the block input before the mixer (attention or linear attention)."
 					},
 					"attn_residual": {
-						"detail": "The unnormed block input plus the mixer's output projection. The sum feeds `post_attention_norm` and is kept for the second residual add.",
+						"detail": "The unnormed block input plus the mixer's output projection. The sum feeds the norm before the feed-forward network and is kept for the second residual add.",
 						"math": "$$h' = h + y$$\n\n- $h$: block input.\n- $y$: mixer output (`attn_output` or `ssm_out`).",
 						"overview": "Adds the mixer's result to the block input. The block adds to the stream; it never replaces it."
 					},
@@ -201,7 +253,7 @@
 					},
 					"ffn_gate": {
 						"detail": "`ffn_gate` maps width `n_embd` to the FFN width `n_ff`.",
-						"math": "$$g = W_{\\text{gate}}\\,x'$$\n\n- $x'$: output of `post_attention_norm`.\n- $W_{\\text{gate}}$: `ffn_gate`, from $d$ to $d_{ff}$.",
+						"math": "$$g = W_{\\text{gate}}\\,x'$$\n\n- $x'$: output of the norm before the FFN.\n- $W_{\\text{gate}}$: `ffn_gate`, from $d$ to $d_{ff}$.",
 						"overview": "Widens the normed vector into the gate branch of the feed-forward network."
 					},
 					"ffn_residual": {
@@ -255,7 +307,7 @@
 						"overview": "The vector this block receives: the running sum of everything the embedding and earlier blocks have added (the residual stream)."
 					},
 					"k": {
-						"detail": "`attn_k` produces one key per key/value head. There can be fewer key/value heads than query heads (grouped-query attention); each serves a group of query heads. Keys go into the KV cache after norm and RoPE.",
+						"detail": "`attn_k` produces one key per key/value head. There can be fewer key/value heads than query heads (grouped-query attention); each serves a group of query heads. Keys go into the KV cache after RoPE.",
 						"math": "$$k = W_K\\,x$$\n\n- $W_K$: `attn_k`, output length $n_{kv} d_h$.\n- $n_{kv}$: number of key/value heads.",
 						"overview": "Projects the normed input into keys, the labels that queries are compared with."
 					},
@@ -275,9 +327,9 @@
 						"overview": "Scores for the draft token. A draft is picked from them, and the main model then checks it."
 					},
 					"mixer_out": {
-						"detail": "`attn_output` takes the concatenated, gated heads and mixes them into one vector of width `n_embd`.",
-						"math": "$$y = W_O\\,[\\,\\bar a^{(1)};\\dots;\\bar a^{(n_h)}\\,]$$\n\n- $\\bar a^{(j)}$: gated output of query head $j$.\n- $W_O$: `attn_output`, from $n_h d_h$ to $d$.",
-						"overview": "Maps the gated attention output of all heads back to the residual width."
+						"detail": "`attn_output` takes the concatenated heads and mixes them into one vector of width `n_embd`.",
+						"math": "$$y = W_O\\,[\\,a^{(1)};\\dots;a^{(n_h)}\\,]$$\n\n- $a^{(j)}$: attention output of query head $j$.\n- $W_O$: `attn_output`, from $n_h d_h$ to $d$.",
+						"overview": "Maps the attention output of all heads back to the residual width."
 					},
 					"output": {
 						"detail": "Same width as the input. The next block reads it as its input; after the last block, `output_norm` and the LM head turn it into logits. Model Lab traces measure this vector, without a control vector.",
@@ -285,14 +337,14 @@
 						"overview": "What the block passes on: the updated residual stream."
 					},
 					"post_norm": {
-						"detail": "RMSNorm with `post_attention_norm`, stored as 1 plus the Hugging Face value. Despite the name it is a pre-norm for the FFN: the residual add uses the unnormed sum.",
-						"math": "$$x' = \\frac{h'}{\\mathrm{rms}(h')} \\odot w$$\n\n- $h'$: output of the first residual add.\n- $w$: `post_attention_norm`.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ from the file.",
+						"detail": "RMSNorm with its own stored weight, one value per dimension, called `ffn_norm` in many architectures. It is a pre-norm for the FFN: the residual add uses the unnormed sum.",
+						"math": "$$x' = \\frac{h'}{\\mathrm{rms}(h')} \\odot w$$\n\n- $h'$: output of the first residual add.\n- $w$: the FFN norm's weight (`ffn_norm` in many architectures).\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ from the file.",
 						"overview": "Normalizes the stream again before the feed-forward network."
 					},
 					"q": {
-						"detail": "`attn_q` outputs twice the usual query size: per head, the first half is the query and the second half the gate input.",
-						"math": "$$[\\,q^{(j)}\\,;\\,g^{(j)}\\,] = (W_Q\\,x)^{(j)}$$\n\n- $W_Q$: `attn_q`, output length $2 n_h d_h$.\n- $j$: query head; $n_h$ heads of size $d_h$.\n- $q^{(j)}$: query; $g^{(j)}$: gate input.",
-						"overview": "Projects the normed input into queries, plus a second half per head that becomes the output gate."
+						"detail": "`attn_q` produces one query per head, all heads side by side in one vector. Queries are compared with the cached keys; they are not cached themselves.",
+						"math": "$$q = W_Q\\,x$$\n\n- $W_Q$: `attn_q`, output length $n_h d_h$.\n- $n_h$: number of query heads; $d_h$: head size.",
+						"overview": "Projects the normed input into queries: what each token looks for among the tokens it attends to."
 					},
 					"q_norm": {
 						"detail": "RMSNorm over the head dimension with `attn_q_norm`: one weight per head dimension, shared by all heads, stored as 1 plus the Hugging Face value.",
@@ -305,8 +357,8 @@
 						"overview": "Projects the normed input into queries, keys and values for the linear-attention mixer, with one matrix."
 					},
 					"rope": {
-						"detail": "Applied to the normed queries and keys, not to values; no stored weight. qwen35 uses multi-axis RoPE (MRoPE): each rotated pair is assigned to a time, height or width position. For text all three positions are equal, so it acts like ordinary RoPE. The parameters come from the file's metadata.",
-						"math": "$$\\begin{pmatrix} u'_i \\\\ u'_{i+r} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_i \\\\ u_{i+r} \\end{pmatrix}, \\qquad \\theta_i = b^{-i/r}$$\n\n- $u$: one query or key head; $i < r$.\n- $2r$: number of rotated dimensions; the rest pass unchanged.\n- $b$: base frequency; $p$: position.\n\nThe score $\\langle R_p q, R_s k \\rangle$ then depends on $p$ and $s$ only through $p - s$.",
+						"detail": "Applied to the queries and keys, not to values; no stored weight. The base frequency, the number of rotated dimensions and any context scaling come from the file's metadata.",
+						"math": "$$\\begin{pmatrix} u'_{i_1} \\\\ u'_{i_2} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_{i_1} \\\\ u_{i_2} \\end{pmatrix}, \\qquad \\theta_i = b^{-i/r}$$\n\n- $u$: one query or key head; pair $i < r$ rotates its dimensions $i_1$ and $i_2$.\n- Which two dimensions form a pair depends on the model: neighbours ($i_1 = 2i$, $i_2 = 2i + 1$) or the two halves ($i_1 = i$, $i_2 = i + r$).\n- $2r$: number of rotated dimensions; the rest pass unchanged.\n- $b$: base frequency; $p$: position.\n\nThe score $\\langle R_p q, R_s k \\rangle$ then depends on $p$ and $s$ only through $p - s$.",
 						"overview": "Encodes each token's position by rotating pairs of query and key values by an angle that grows with the position. The attention score then depends on how far apart two tokens are."
 					},
 					"split": {

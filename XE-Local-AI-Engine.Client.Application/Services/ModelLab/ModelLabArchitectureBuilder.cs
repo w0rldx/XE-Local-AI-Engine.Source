@@ -1,10 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelLab;
 
+using System.Collections.Frozen;
 using System.Globalization;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
-/// <summary>Turns a GGUF header inspection into the architecture descriptor; <c>qwen35</c> is the one detailed architecture.</summary>
+/// <summary>Turns a GGUF header inspection into the architecture descriptor; an architecture with a registered descriptor is detailed.</summary>
 public static class ModelLabArchitectureBuilder
 {
     public const int DescriptorVersion = 1;
@@ -20,10 +21,20 @@ public static class ModelLabArchitectureBuilder
     internal const string LinearAttentionKind = "linearAttention";
     internal const string MtpKind = "mtp";
 
+    /// <summary>The relation of a tensor the converter permuted (heads or rotary pairs); it holds whatever the stored type.</summary>
+    internal const string Reordered = "reordered";
+
     private const string BlockPrefix = "blk.";
+
+    // Adding a family: one IModelLabArchitectureDescriptor and one entry here.
+    private static readonly FrozenDictionary<string, IModelLabArchitectureDescriptor> Descriptors =
+        new IModelLabArchitectureDescriptor[] { new ModelLabQwen35Architecture(), new ModelLabLlamaArchitecture() }
+            .ToFrozenDictionary(static descriptor => descriptor.Architecture, StringComparer.Ordinal);
 
     // Group order inside a block: the mixer first, then the FFN, the norms, the MTP head and the rest.
     private static readonly string[] ComponentOrder = [Attention, Ssm, Ffn, Norm, Mtp, Other];
+
+    internal static IEnumerable<IModelLabArchitectureDescriptor> RegisteredDescriptors => Descriptors.Values;
 
     public static ModelLabArchitectureResponse Build(string modelName, GgufTensorInspection inspection)
     {
@@ -47,7 +58,7 @@ public static class ModelLabArchitectureBuilder
             };
         }
 
-        var detailed = string.Equals(inspection.Architecture, ModelLabQwen35Architecture.Architecture, StringComparison.Ordinal);
+        var descriptor = inspection.Architecture is { } architecture ? Descriptors.GetValueOrDefault(architecture) : null;
         var blockTensors = new SortedDictionary<int, List<GgufTensorInfo>>();
         var nonBlockTensors = new List<GgufTensorInfo>();
         foreach (var tensor in inspection.Tensors)
@@ -68,20 +79,18 @@ public static class ModelLabArchitectureBuilder
             }
         }
 
-        // qwen35.cpp: n_k_heads = ssm_n_group (ssm.group_count), n_v_heads = ssm_dt_rank (ssm.time_step_rank).
-        bool? valueHeadsDiffer = inspection is { SsmGroupCount: { } keyHeads, SsmTimeStepRank: { } valueHeads } ? keyHeads != valueHeads : null;
-        var blocks = blockTensors.Select(pair => ToBlock(pair.Key, pair.Value, detailed, valueHeadsDiffer)).ToList();
+        var blocks = blockTensors.Select(pair => ToBlock(pair.Key, pair.Value, descriptor, inspection)).ToList();
         return new ModelLabArchitectureResponse
         {
             DescriptorVersion = DescriptorVersion,
             ModelName = modelName,
             Architecture = inspection.Architecture,
-            Support = detailed ? "detailed" : "overview",
+            Support = descriptor is null ? "overview" : "detailed",
             ReadFailure = null,
             SuggestedBaseRepo = SuggestedBaseRepo(inspection),
             Blocks = blocks,
-            Templates = detailed ? ModelLabQwen35Architecture.TemplatesFor(blocks.Select(static block => block.Kind)) : [],
-            NonBlock = NonBlockGroups(nonBlockTensors, detailed)
+            Templates = descriptor?.TemplatesFor(blocks, inspection) ?? [],
+            NonBlock = NonBlockGroups(nonBlockTensors, descriptor)
         };
     }
 
@@ -153,7 +162,7 @@ public static class ModelLabArchitectureBuilder
         return stem.StartsWith("ffn_", StringComparison.Ordinal) ? Ffn : Other;
     }
 
-    private static ModelLabArchitectureBlock ToBlock(int index, List<GgufTensorInfo> tensors, bool detailed, bool? valueHeadsDiffer)
+    private static ModelLabArchitectureBlock ToBlock(int index, List<GgufTensorInfo> tensors, IModelLabArchitectureDescriptor? descriptor, GgufTensorInspection inspection)
     {
         var kind = BlockKind(tensors);
         var groups = tensors
@@ -165,7 +174,7 @@ public static class ModelLabArchitectureBuilder
                          Component = group.Key,
                          Provenance = "read",
                          // The MTP block has no HF decoder layer, so none of its tensors gets a layer-indexed HF name.
-                         Tensors = [.. group.Select(tensor => ToTensor(tensor, detailed && kind != MtpKind ? ModelLabQwen35Architecture.BlockHfName(tensor.Name, index, valueHeadsDiffer) : null))]
+                         Tensors = [.. group.Select(tensor => ToTensor(tensor, kind != MtpKind ? descriptor?.BlockHfName(tensor.Name, index, inspection) : null))]
                      })
                      .ToList();
 
@@ -178,7 +187,7 @@ public static class ModelLabArchitectureBuilder
         };
     }
 
-    private static List<ModelLabArchitectureGroup> NonBlockGroups(List<GgufTensorInfo> tensors, bool detailed) =>
+    private static List<ModelLabArchitectureGroup> NonBlockGroups(List<GgufTensorInfo> tensors, IModelLabArchitectureDescriptor? descriptor) =>
     [
         .. tensors
            .GroupBy(static tensor => tensor.Name switch
@@ -193,11 +202,11 @@ public static class ModelLabArchitectureBuilder
                ComponentId = group.Key,
                Component = group.Key == "output_norm" ? Norm : group.Key,
                Provenance = "read",
-               Tensors = [.. group.Select(tensor => ToTensor(tensor, detailed ? ModelLabQwen35Architecture.NonBlockHfName(tensor.Name) : null))]
+               Tensors = [.. group.Select(tensor => ToTensor(tensor, descriptor?.NonBlockHfName(tensor.Name)))]
            })
     ];
 
-    private static ModelLabArchitectureTensor ToTensor(GgufTensorInfo tensor, ModelLabQwen35Architecture.HfTensor? hf) =>
+    private static ModelLabArchitectureTensor ToTensor(GgufTensorInfo tensor, ModelLabHfTensor? hf) =>
         new()
         {
             GgufName = tensor.Name,
@@ -209,9 +218,9 @@ public static class ModelLabArchitectureBuilder
         };
 
     // A permutation outlives quantization (the converter permutes first), so "reordered" is kept for any stored type.
-    private static string? ValueRelation(GgufTensorInfo tensor, ModelLabQwen35Architecture.HfTensor hf)
+    private static string? ValueRelation(GgufTensorInfo tensor, ModelLabHfTensor hf)
     {
-        if (hf.Relation is null or ModelLabQwen35Architecture.Reordered)
+        if (hf.Relation is null or Reordered)
         {
             return hf.Relation;
         }
@@ -233,7 +242,7 @@ public static class ModelLabArchitectureBuilder
     }
 
     // "blk.12.attn_q_norm.weight" → "attn_q_norm"; "blk.64.nextn.eh_proj.weight" → "nextn".
-    private static string Stem(string name)
+    internal static string Stem(string name)
     {
         var start = name.IndexOf('.', BlockPrefix.Length) + 1;
         if (start == 0)

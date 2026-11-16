@@ -32,6 +32,12 @@ export const nextTokenTopics = [
 	{ id: "entries", basis: "background" },
 ] as const satisfies readonly { id: string; basis: ExplanationBasis }[];
 
+// A template node's explanation keys: per block kind, where one id means different operations in different templates, then
+// per GGUF architecture, then shared. A kind text outranks every architecture, so it must hold for each family with that kind.
+export function operationCandidates(kind: string, architecture: string | null, id: string): string[] {
+	return [`opByKind.${kind}.${id}`, ...(architecture === null ? [] : [`arch.${architecture}.op.${id}`]), `op.${id}`];
+}
+
 // The first candidate with text at this level, in the page's language or its fallback; null when none has any, so the
 // caller shows nothing instead of a raw key.
 export function explanationKey(

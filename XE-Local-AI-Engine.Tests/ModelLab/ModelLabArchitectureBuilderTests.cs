@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
-/// <summary>The architecture descriptor built from a header inspection: detailed for <c>qwen35</c>, an overview otherwise, nothing invented.</summary>
+/// <summary>The architecture descriptor built from a header inspection: detailed for a registered architecture, an overview otherwise, nothing invented.</summary>
 [Category(TestCategories.Unit)]
 public sealed class ModelLabArchitectureBuilderTests
 {
@@ -149,15 +149,18 @@ public sealed class ModelLabArchitectureBuilderTests
     }
 
     [Test]
-    public void EveryTemplate_IsMarkedInferred_ConnectsOnlyItsOwnNodes_AndNamesOnlyComponentsItsBlocksHave()
+    [Arguments("qwen35", 3)]
+    [Arguments("llama", 1)]
+    public void EveryTemplate_IsMarkedInferred_ConnectsOnlyItsOwnNodes_AndNamesOnlyComponentsItsBlocksHave(string architecture, int templateCount)
     {
-        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, Qwen35TensorFixture.Qwen35_27BLike());
+        var inspection = architecture == "llama" ? LlamaTensorFixture.Llama3_2_1B() : Qwen35TensorFixture.Qwen35_27BLike();
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
 
-        AssertEx.Equal(expected: 3, descriptor.Templates.Count);
+        AssertEx.Equal(templateCount, descriptor.Templates.Count);
         foreach (var template in descriptor.Templates)
         {
             AssertEx.Equal("inferred", template.Provenance);
-            AssertEx.Equal("llama.cpp src/models/qwen35.cpp @ b12014", template.Source);
+            AssertEx.Equal($"llama.cpp src/models/{architecture}.cpp @ b12014", template.Source);
             var ids = template.Nodes.Select(static node => node.Id).ToList();
             AssertEx.Equal(ids.Count, ids.Distinct(StringComparer.Ordinal).Count());
             AssertEx.Empty(template.Edges.Where(edge => !ids.Contains(edge.From) || !ids.Contains(edge.To)).Select(static edge => $"{edge.From}->{edge.To}"));
@@ -174,14 +177,20 @@ public sealed class ModelLabArchitectureBuilderTests
     [Test]
     public void TheTemplates_WereCheckedAgainstThePinnedLlamaCppTag()
     {
-        // A pin bump fails here on purpose: re-read src/models/qwen35.cpp and conversion/qwen.py at the new tag first.
-        AssertEx.Equal(LlamaCppReleasePins.PinnedTag, ModelLabQwen35Architecture.TemplateLlamaCppTag);
+        var descriptors = ModelLabArchitectureBuilder.RegisteredDescriptors.ToList();
+
+        AssertEx.NotEmpty(descriptors);
+        // A pin bump fails here on purpose: re-read each descriptor's upstream files at the new tag first.
+        foreach (var descriptor in descriptors)
+        {
+            AssertEx.Equal(LlamaCppReleasePins.PinnedTag, descriptor.LlamaCppTag, descriptor.Architecture);
+        }
     }
 
     [Test]
     public void AnotherArchitecture_IsAnOverview_WithNameGroupsAndNothingInvented()
     {
-        var inspection = Qwen35TensorFixture.Inspection("llama",
+        var inspection = Qwen35TensorFixture.Inspection("xe-unregistered-arch",
         [
             Qwen35TensorFixture.Tensor("token_embd.weight", [64, 100], "Q4_K"),
             Qwen35TensorFixture.Tensor("blk.0.attn_norm.weight", [64], "F32"),
@@ -198,7 +207,7 @@ public sealed class ModelLabArchitectureBuilderTests
         var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
 
         AssertEx.Equal("overview", descriptor.Support);
-        AssertEx.Equal("llama", descriptor.Architecture!);
+        AssertEx.Equal("xe-unregistered-arch", descriptor.Architecture!);
         AssertEx.Empty(descriptor.Templates);
         var block = descriptor.Blocks.Single();
         AssertEx.Equal("fullAttention", block.Kind);
@@ -206,6 +215,188 @@ public sealed class ModelLabArchitectureBuilderTests
         AssertEx.Equal("blk.0.attention,blk.0.ffn,blk.0.norm", string.Join(',', block.Groups.Select(static group => group.ComponentId)));
         AssertEx.Equal("embedding,other", string.Join(',', descriptor.NonBlock.Select(static group => group.ComponentId)));
         AssertEx.True(AllTensors(descriptor).All(static tensor => tensor.HfName is null && tensor.ValueRelation is null));
+    }
+
+    [Test]
+    public void ALlama3_2_1B_IsDetailed_WithOneFullAttentionTemplate_AndOnlyRopeFreqsUnmapped()
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, LlamaTensorFixture.Llama3_2_1B());
+
+        AssertEx.Equal("detailed", descriptor.Support);
+        AssertEx.Equal(LlamaTensorFixture.BlockCount, descriptor.Blocks.Count);
+        AssertEx.True(descriptor.Blocks.All(static block => block.Kind == "fullAttention"));
+        var template = descriptor.Templates.Single();
+        AssertEx.Equal("fullAttention", template.Kind);
+        AssertEx.Equal(string.Join(',', LlamaTensorFixture.TemplateNodeIds), string.Join(',', template.Nodes.Select(static node => node.Id)));
+        AssertEx.Equal("rope_freqs.weight", string.Join(',', AllTensors(descriptor).Where(static tensor => tensor.HfName is null).Select(static tensor => tensor.GgufName)));
+        var nonBlock = descriptor.NonBlock.ToDictionary(static group => group.ComponentId, static group => group.Tensors.Single(), StringComparer.Ordinal);
+        AssertEx.Equal("embedding,other,output_norm", string.Join(',', nonBlock.Keys.Order(StringComparer.Ordinal)));
+        AssertEx.Equal("model.embed_tokens.weight", nonBlock["embedding"].HfName!);
+        AssertEx.Equal("model.norm.weight", nonBlock["output_norm"].HfName!);
+        AssertEx.Equal("equal", nonBlock["output_norm"].ValueRelation!);
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(15)]
+    public void EveryRecordedLlamaRow_GetsItsHfName_AndValueRelation(int blockIndex)
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, LlamaTensorFixture.Llama3_2_1B());
+        var byName = descriptor.Blocks[blockIndex].Groups.SelectMany(static group => group.Tensors).ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
+
+        AssertEx.Equal(LlamaTensorFixture.Block.Length, byName.Count);
+        foreach (var row in LlamaTensorFixture.Block)
+        {
+            var tensor = byName[$"blk.{blockIndex}.{row.GgufSuffix}"];
+            AssertEx.Equal($"model.layers.{blockIndex}.{row.HfSuffix}", tensor.HfName!);
+            AssertEx.Equal(row.Relation, tensor.ValueRelation!, row.GgufSuffix);
+        }
+    }
+
+    /// <summary>The converter permutes Q and K weights and biases for NORM RoPE; V, the norms and the FFN keep their values.</summary>
+    [Test]
+    public void AnF32LlamaBlock_KeepsQAndKReordered_WithTheirBiases_AndTheRestEqual()
+    {
+        var inspection = Qwen35TensorFixture.Inspection("llama",
+        [
+            Qwen35TensorFixture.Tensor("blk.0.attn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_q.weight", [64, 64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_q.bias", [64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_k.weight", [64, 16], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_k.bias", [16], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_v.weight", [64, 16], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_v.bias", [16], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_output.weight", [64, 64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_gate.weight", [64, 128], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_up.weight", [64, 128], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_down.weight", [128, 64], "F32")
+        ]);
+
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
+
+        var relations = AllTensors(descriptor).ToDictionary(static tensor => tensor.GgufName, static tensor => tensor.ValueRelation, StringComparer.Ordinal);
+        string[] reordered = ["blk.0.attn_q.weight", "blk.0.attn_q.bias", "blk.0.attn_k.weight", "blk.0.attn_k.bias"];
+        foreach (var (name, relation) in relations)
+        {
+            AssertEx.Equal(reordered.Contains(name, StringComparer.Ordinal) ? "reordered" : "equal", relation, name);
+        }
+
+        AssertEx.Equal("model.layers.0.self_attn.k_proj.bias", AllTensors(descriptor).Single(static tensor => tensor.GgufName == "blk.0.attn_k.bias").HfName!);
+    }
+
+    /// <summary>A fused <c>attn_qkv</c> runs the same graph through <c>build_qkv</c>, but the table names no source for it and nothing is guessed.</summary>
+    [Test]
+    public void AFusedLlamaQkv_GetsNoHfName_WhileTheRestMap_AndTheTemplateStays()
+    {
+        var inspection = Qwen35TensorFixture.Inspection("llama",
+        [
+            Qwen35TensorFixture.Tensor("blk.0.attn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_qkv.weight", [64, 96], "Q4_K"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_output.weight", [64, 64], "Q4_K"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_up.weight", [64, 128], "Q4_K")
+        ]);
+
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
+
+        AssertEx.Equal("detailed", descriptor.Support);
+        AssertEx.Equal("fullAttention", descriptor.Blocks.Single().Kind);
+        var qkv = AllTensors(descriptor).Single(static tensor => tensor.GgufName == "blk.0.attn_qkv.weight");
+        AssertEx.Null(qkv.HfName);
+        AssertEx.Null(qkv.ValueRelation);
+        AssertEx.True(AllTensors(descriptor).Where(tensor => tensor != qkv).All(static tensor => tensor.HfName is not null));
+        AssertEx.Equal("fullAttention", descriptor.Templates.Single().Kind);
+    }
+
+    [Test]
+    public void AMixtralStyleLlama_NamesItsAttentionAndRouter_ButGetsNoTemplate()
+    {
+        var inspection = Qwen35TensorFixture.Inspection("llama",
+        [
+            Qwen35TensorFixture.Tensor("blk.0.attn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_q.weight", [64, 64], "Q4_K"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_gate_inp.weight", [64, 8], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_gate_exps.weight", [64, 128, 8], "Q4_K"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_up_exps.weight", [64, 128, 8], "Q4_K"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_down_exps.weight", [128, 64, 8], "Q4_K")
+        ]);
+
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
+
+        AssertEx.Equal("detailed", descriptor.Support);
+        AssertEx.Empty(descriptor.Templates);
+        var names = AllTensors(descriptor).ToDictionary(static tensor => tensor.GgufName, static tensor => tensor.HfName, StringComparer.Ordinal);
+        AssertEx.Equal("model.layers.0.self_attn.q_proj.weight", names["blk.0.attn_q.weight"]);
+        AssertEx.Equal("model.layers.0.block_sparse_moe.gate.weight", names["blk.0.ffn_gate_inp.weight"]);
+        AssertEx.Null(names["blk.0.ffn_up_exps.weight"]);
+    }
+
+    /// <summary>The router alone and an expert tensor alone each decline the dense template, without any expert-count metadata.</summary>
+    [Test]
+    [Arguments("ffn_gate_inp.weight")]
+    [Arguments("ffn_up_exps.weight")]
+    public void ALlamaBlock_WithOneMoeTensorAlone_GetsNoTemplate(string moeSuffix)
+    {
+        var inspection = Qwen35TensorFixture.Inspection("llama",
+        [
+            Qwen35TensorFixture.Tensor("blk.0.attn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_q.weight", [64, 64], "Q4_K"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor($"blk.0.{moeSuffix}", [64, 128, 8], "Q4_K")
+        ]);
+
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
+
+        AssertEx.Equal("detailed", descriptor.Support);
+        AssertEx.Equal("fullAttention", descriptor.Blocks.Single().Kind);
+        AssertEx.Empty(descriptor.Templates);
+    }
+
+    /// <summary>An untied checkpoint stores its own output head: it maps to <c>lm_head.weight</c>, equal when float, quantized otherwise.</summary>
+    [Test]
+    [Arguments("F32", "equal")]
+    [Arguments("Q6_K", "quantized")]
+    public void AnUntiedLlama_MapsOutputWeightToLmHead(string ggmlType, string relation)
+    {
+        var inspection = Qwen35TensorFixture.Inspection("llama",
+        [
+            Qwen35TensorFixture.Tensor("token_embd.weight", [64, 256], "Q4_K"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_q.weight", [64, 64], "Q4_K"),
+            Qwen35TensorFixture.Tensor("output_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor("output.weight", [64, 256], ggmlType)
+        ]);
+
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
+
+        var output = AllTensors(descriptor).Single(static tensor => tensor.GgufName == "output.weight");
+        AssertEx.Equal("lm_head.weight", output.HfName!);
+        AssertEx.Equal(relation, output.ValueRelation!);
+    }
+
+    /// <summary>A later shard lists no router tensor, and only the first shard carries metadata: either signal alone declines the dense template.</summary>
+    [Test]
+    public void ASplitLlamaShard_GetsNoTemplate_WhenTheMetadataSaysExperts_OrItListsNoBlock()
+    {
+        var attentionOnly = Qwen35TensorFixture.Inspection("llama",
+        [
+            Qwen35TensorFixture.Tensor("blk.0.attn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_q.weight", [64, 64], "Q4_K"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_k.weight", [64, 16], "Q4_K")
+        ], expertCount: 8, splitCount: 2);
+        var tensorlessFirstShard = Qwen35TensorFixture.Inspection("llama", [], expertCount: 0, splitCount: 2);
+
+        var moeShard = ModelLabArchitectureBuilder.Build(ModelName, attentionOnly);
+        var firstShard = ModelLabArchitectureBuilder.Build(ModelName, tensorlessFirstShard);
+
+        AssertEx.Equal("fullAttention", moeShard.Blocks.Single().Kind);
+        AssertEx.Empty(moeShard.Templates);
+        AssertEx.Equal("model.layers.0.self_attn.k_proj.weight", AllTensors(moeShard).Single(static tensor => tensor.GgufName == "blk.0.attn_k.weight").HfName!);
+        AssertEx.Equal("detailed", firstShard.Support);
+        AssertEx.Empty(firstShard.Blocks);
+        AssertEx.Empty(firstShard.Templates);
     }
 
     [Test]

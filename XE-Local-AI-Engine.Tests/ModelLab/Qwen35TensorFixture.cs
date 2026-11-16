@@ -72,7 +72,7 @@ internal static class Qwen35TensorFixture
 
     public static GgufTensorInspection Inspection(string? architecture, IEnumerable<GgufTensorInfo> tensors,
         GgufTensorReadFailure failure = GgufTensorReadFailure.None, long? ssmGroupCount = null, long? ssmTimeStepRank = null,
-        string? sourceRepoUrl = null, string? baseModelRepoUrl = null)
+        string? sourceRepoUrl = null, string? baseModelRepoUrl = null, long? expertCount = null, long? splitCount = null)
     {
         var list = tensors.ToList();
         return new GgufTensorInspection
@@ -94,9 +94,9 @@ internal static class Qwen35TensorFixture
             AttentionHeadCountKv = null,
             EmbeddingLength = null,
             ContextLength = null,
-            ExpertCount = null,
+            ExpertCount = expertCount,
             ChatTemplate = null,
-            SplitCount = null,
+            SplitCount = splitCount,
             TensorCount = list.Count,
             Tensors = list,
             HeaderBytes = 0,

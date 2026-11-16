@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Client.Services.ModelLab;
 
 using System.Collections.Frozen;
 using System.Globalization;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using static ModelLabTemplateParts;
 
 /// <summary>The static <c>qwen35</c> (Qwen3.5/3.8) knowledge behind a detailed descriptor: HF tensor names and one operation template per block kind.</summary>
 /// <remarks>
@@ -9,24 +11,19 @@ using System.Globalization;
 ///     (<c>Qwen3NextModel.modify_tensors</c>); templates follow <c>src/models/qwen35.cpp</c> (<c>graph</c>,
 ///     <c>build_layer_attn</c>, <c>build_layer_attn_linear</c>, <c>graph_mtp</c>), all at <see cref="TemplateLlamaCppTag" />.
 /// </remarks>
-internal static class ModelLabQwen35Architecture
+internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescriptor
 {
-    public const string Architecture = "qwen35";
-
     // The tag the table and templates were checked against. A test fails when the repo's llama.cpp pin moves past
     // it, so a bump re-reads the upstream files above before changing this.
-    public const string TemplateLlamaCppTag = "b12014";
+    private const string TemplateLlamaCppTag = "b12014";
 
     private const string Source = "llama.cpp src/models/qwen35.cpp @ " + TemplateLlamaCppTag;
     private const string LayerPrefix = "model.language_model.layers.";
     private const string Equal = "equal";
     private const string PlusOne = "plus_one";
 
-    /// <summary>The relation of a tensor whose value heads the converter permuted; it holds whatever the stored type.</summary>
-    public const string Reordered = "reordered";
-
     // Keyed by the name after "blk.N.". The converter adds 1 to every norm but linear_attn.norm and stores -exp(A_log).
-    private static readonly FrozenDictionary<string, HfTensor> BlockTensors = new Dictionary<string, HfTensor>(StringComparer.Ordinal)
+    private static readonly FrozenDictionary<string, ModelLabHfTensor> BlockTensors = new Dictionary<string, ModelLabHfTensor>(StringComparer.Ordinal)
     {
         ["attn_norm.weight"] = Hf("input_layernorm.weight", PlusOne),
         ["post_attention_norm.weight"] = Hf("post_attention_layernorm.weight", PlusOne),
@@ -65,7 +62,7 @@ internal static class ModelLabQwen35Architecture
     }.ToFrozenSet(StringComparer.Ordinal);
 
     // A tied checkpoint (the 0.8B) has no output.weight; lm_head.weight is the head name the converter keeps.
-    private static readonly FrozenDictionary<string, HfTensor> NonBlockTensors = new Dictionary<string, HfTensor>(StringComparer.Ordinal)
+    private static readonly FrozenDictionary<string, ModelLabHfTensor> NonBlockTensors = new Dictionary<string, ModelLabHfTensor>(StringComparer.Ordinal)
     {
         ["token_embd.weight"] = Hf("model.language_model.embed_tokens.weight", Equal),
         ["output_norm.weight"] = Hf("model.language_model.norm.weight", PlusOne),
@@ -76,9 +73,11 @@ internal static class ModelLabQwen35Architecture
     private static readonly ModelLabArchitectureTemplate FullAttentionTemplate = BuildFullAttention();
     private static readonly ModelLabArchitectureTemplate MtpTemplate = BuildMtp();
 
-    /// <summary>The HF tensor a block tensor was converted from, or null for a name the table does not hold.</summary>
-    /// <param name="valueHeadsDiffer">Whether the linear-attention key and value head counts differ; null when the file does not say.</param>
-    public static HfTensor? BlockHfName(string ggufName, int blockIndex, bool? valueHeadsDiffer)
+    public string Architecture => "qwen35";
+
+    public string LlamaCppTag => TemplateLlamaCppTag;
+
+    public ModelLabHfTensor? BlockHfName(string ggufName, int blockIndex, GgufTensorInspection inspection)
     {
         var prefix = string.Create(CultureInfo.InvariantCulture, $"blk.{blockIndex}.");
         var suffix = ggufName.StartsWith(prefix, StringComparison.Ordinal) ? ggufName[prefix.Length..] : null;
@@ -87,26 +86,28 @@ internal static class ModelLabQwen35Architecture
             return null;
         }
 
+        // qwen35.cpp: n_k_heads = ssm_n_group (ssm.group_count), n_v_heads = ssm_dt_rank (ssm.time_step_rank).
+        bool? valueHeadsDiffer = inspection is { SsmGroupCount: { } keyHeads, SsmTimeStepRank: { } valueHeads } ? keyHeads != valueHeads : null;
         var relation = entry.Relation;
         if (ValueHeadReordered.Contains(suffix) && valueHeadsDiffer != false)
         {
-            relation = valueHeadsDiffer == true ? Reordered : null;
+            relation = valueHeadsDiffer == true ? ModelLabArchitectureBuilder.Reordered : null;
         }
 
-        return new HfTensor
+        return new ModelLabHfTensor
         {
             Name = string.Create(CultureInfo.InvariantCulture, $"{LayerPrefix}{blockIndex}.{entry.Name}"),
             Relation = relation
         };
     }
 
-    public static HfTensor? NonBlockHfName(string ggufName) =>
+    public ModelLabHfTensor? NonBlockHfName(string ggufName) =>
         NonBlockTensors.GetValueOrDefault(ggufName);
 
-    /// <summary>One template per distinct block kind present, in the order linear attention, full attention, MTP.</summary>
-    public static IReadOnlyList<ModelLabArchitectureTemplate> TemplatesFor(IEnumerable<string> blockKinds)
+    // One template per distinct block kind present, in the order linear attention, full attention, MTP.
+    public IReadOnlyList<ModelLabArchitectureTemplate> TemplatesFor(IReadOnlyList<ModelLabArchitectureBlock> blocks, GgufTensorInspection inspection)
     {
-        var present = blockKinds.ToHashSet(StringComparer.Ordinal);
+        var present = blocks.Select(static block => block.Kind).ToHashSet(StringComparer.Ordinal);
         return
         [
             .. new[]
@@ -118,7 +119,7 @@ internal static class ModelLabQwen35Architecture
         ];
     }
 
-    private static HfTensor Hf(string name, string relation) =>
+    private static ModelLabHfTensor Hf(string name, string relation) =>
         new()
         {
             Name = name,
@@ -149,7 +150,7 @@ internal static class ModelLabQwen35Architecture
             E("decay", "delta"), E("beta", "delta"), E("delta", "gated_norm"), E("z", "gated_norm"), E("gated_norm", "mixer_out")
         ]);
         AddTail(nodes, edges, residualFrom: "input", trunk: true);
-        return Template(ModelLabArchitectureBuilder.LinearAttentionKind, nodes, edges);
+        return Template(ModelLabArchitectureBuilder.LinearAttentionKind, Source, nodes, edges);
     }
 
     // graph::build_layer_attn: Q carries a gate half, Q and K are RMS-normed, then MRoPE, attention and sigmoid(gate).
@@ -162,7 +163,7 @@ internal static class ModelLabQwen35Architecture
         edges.Add(E("input", "attn_norm"));
         AddGatedAttention(nodes, edges);
         AddTail(nodes, edges, residualFrom: "input", trunk: true);
-        return Template(ModelLabArchitectureBuilder.FullAttentionKind, nodes, edges);
+        return Template(ModelLabArchitectureBuilder.FullAttentionKind, Source, nodes, edges);
     }
 
     // graph_mtp: the normed trunk state and the token embedding are joined by eh_proj, run one full-attention block
@@ -187,7 +188,7 @@ internal static class ModelLabQwen35Architecture
         Node(nodes, "head", "LM head · nextn.shared_head_head, else output", component: null);
         Node(nodes, "logits", "Draft-token logits", component: null);
         edges.AddRange([E("ffn_residual", "head_norm"), E("head_norm", "head"), E("head", "logits")]);
-        return Template(ModelLabArchitectureBuilder.MtpKind, nodes, edges);
+        return Template(ModelLabArchitectureBuilder.MtpKind, Source, nodes, edges);
     }
 
     private static void AddGatedAttention(List<ModelLabArchitectureTemplateNode> nodes, List<ModelLabArchitectureTemplateEdge> edges)
@@ -230,39 +231,5 @@ internal static class ModelLabQwen35Architecture
             Node(nodes, "output", "Block output", component: null);
             edges.AddRange([E("ffn_residual", "control_vector"), E("control_vector", "output")]);
         }
-    }
-
-    private static void Node(List<ModelLabArchitectureTemplateNode> nodes, string id, string label, string? component) =>
-        nodes.Add(new ModelLabArchitectureTemplateNode
-        {
-            Id = id,
-            Label = label,
-            Component = component
-        });
-
-    private static ModelLabArchitectureTemplateEdge E(string from, string to) =>
-        new()
-        {
-            From = from,
-            To = to
-        };
-
-    private static ModelLabArchitectureTemplate Template(string kind, List<ModelLabArchitectureTemplateNode> nodes, List<ModelLabArchitectureTemplateEdge> edges) =>
-        new()
-        {
-            Kind = kind,
-            Provenance = "inferred",
-            Source = Source,
-            Nodes = nodes,
-            Edges = edges
-        };
-
-    /// <summary>An HF tensor name and how its values relate to the GGUF tensor's before quantization.</summary>
-    internal sealed record HfTensor
-    {
-        public required string Name { get; init; }
-
-        /// <summary>Null when the file does not state what decides it.</summary>
-        public required string? Relation { get; init; }
     }
 }
