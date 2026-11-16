@@ -1126,6 +1126,40 @@ public sealed class ComputeToolGatewayTests
         AssertEx.Null(provider.CreateRequest, "the refusal must land before a jail is created");
     }
 
+    /// <summary>The fail-open both ADR 0025 reviews found: Windows plain-path ceilings with previews on still refuse unattended run_python.</summary>
+    /// <remarks>
+    ///     The host advertises <c>SupportsResourceLimits</c>, yet run_python runs in the AppContainer boundary, which carries none. The
+    ///     refusal lands before provisioning; an approved call still runs, with no ceilings asked for.
+    /// </remarks>
+    [Test]
+    public async Task ExecuteDetailedAsync_OnWindowsPlainPathCeilingsWithPreviews_StillRefusesUnattendedExecution_BeforeProvisioning()
+    {
+        const SandboxProviderCapabilities windowsWithPreviews = Contained
+                                                                 | SandboxProviderCapabilities.SupportsAppContainerBoundary
+                                                                 | SandboxProviderCapabilities.SupportsHostFilesystemBoundary
+                                                                 | SandboxProviderCapabilities.SupportsResourceLimits;
+        var unattendedProvider = new RecordingSandboxProvider(windowsWithPreviews);
+        var unattendedEnvironment = new StubEnvironment("/provisioned/python");
+
+        var unattended = await CreateGateway(unattendedProvider, environment: unattendedEnvironment).ExecuteDetailedAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        }, requireResourceLimits: true);
+
+        AssertEx.False(unattended.Ran);
+        AssertEx.Equal(ComputeRefusalCodes.NoResourceLimits, unattended.RefusalCode);
+        AssertEx.False(unattendedEnvironment.Requested, "the refusal must land before the interpreter is provisioned");
+        AssertEx.Null(unattendedProvider.CreateRequest, "the refusal must land before a jail is created");
+
+        var approvedProvider = new RecordingSandboxProvider(windowsWithPreviews);
+        _ = await CreateGateway(approvedProvider).ExecuteDetailedAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        }, requireResourceLimits: false);
+
+        AssertEx.Null(AssertEx.NotNull(approvedProvider.CreateRequest).ResourceLimits, "the AppContainer boundary is never asked for ceilings");
+    }
+
     /// <summary>
     ///     Under the <c>high</c> profile every call requires ceilings, approved or not; the refusal reuses the existing code and names the
     ///     profile and its remedy (ADR 0020).

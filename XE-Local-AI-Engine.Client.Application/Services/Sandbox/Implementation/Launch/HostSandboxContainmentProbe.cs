@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Win32;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     The production <see cref="ISandboxContainmentProbe" />: measures what this host can really do by EXERCISING each mechanism once,
@@ -32,9 +33,6 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     /// <summary>The measured AppContainer mechanism's name (ADR 0019).</summary>
     internal const string MxcMechanism = "mxc-processcontainer";
 
-    /// <summary>Why a Windows host has no ceilings: ProcessContainer has none and no Job Object path is built.</summary>
-    internal const string WindowsResourceLimitsReason =
-        "Windows has no CPU, memory or process-count ceiling for a sandboxed child (the MXC ProcessContainer has none and the Job Object path is not implemented); a command is bounded only by its timeout";
 
     /// <summary>Why a Windows host has no SEPARATE egress mechanism: denial is part of the AppContainer boundary.</summary>
     internal const string WindowsNetworkIsolationReason =
@@ -60,13 +58,15 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     private readonly Func<bool> _isWindows;
     private readonly ILogger<HostSandboxContainmentProbe> _logger;
     private readonly IMxcSandboxRuntime? _mxcRuntime;
+    private readonly Func<WindowsJobProbeResult> _windowsJobProbe;
 
     // The logger is optional so tests can construct the probe directly; ActivatorUtilities injects it in production.
     public HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger = null)
         : this(logger,
             HostSandboxFilesystemIsolationProbe.Measure,
             OperatingSystem.IsWindows() ? new MxcSandboxRuntime() : null,
-            OperatingSystem.IsWindows)
+            OperatingSystem.IsWindows,
+            MeasureWindowsJobs)
     {
         var own = _containment;
         _containment = LazyInitializer.EnsureInitialized(ref processContainment, () => own);
@@ -76,19 +76,22 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     // network results survive intact. Instances built here keep their own cache, never the process-wide one.
     internal HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger,
         Func<IReadOnlyDictionary<string, string>, SandboxFilesystemIsolationProbeResult> filesystemProbe)
-        : this(logger, filesystemProbe, mxcRuntime: null, OperatingSystem.IsWindows)
+        : this(logger, filesystemProbe, mxcRuntime: null, OperatingSystem.IsWindows, MeasureWindowsJobs)
     {
     }
 
-    // The MXC runtime and the OS test are injectable so a Linux test drives the Windows branch through a fake runtime; the branch reaches
-    // the SDK only through the IMxcSandboxRuntime seam, so nothing Windows-only runs on the test host.
+    // The MXC runtime, the Job Object probe and the OS test are injectable so a Linux test drives the Windows branch through fakes; the
+    // branch reaches the SDK and kernel32 only through those seams, so nothing Windows-only runs on the test host.
     internal HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger,
         Func<IReadOnlyDictionary<string, string>, SandboxFilesystemIsolationProbeResult> filesystemProbe,
         IMxcSandboxRuntime? mxcRuntime,
-        Func<bool> isWindows)
+        Func<bool> isWindows,
+        Func<WindowsJobProbeResult> windowsJobProbe)
     {
         ArgumentNullException.ThrowIfNull(filesystemProbe);
         ArgumentNullException.ThrowIfNull(isWindows);
+        ArgumentNullException.ThrowIfNull(windowsJobProbe);
+        _windowsJobProbe = windowsJobProbe;
         _logger = logger ?? NullLogger<HostSandboxContainmentProbe>.Instance;
         _filesystemProbe = filesystemProbe;
         _mxcRuntime = mxcRuntime;
@@ -188,7 +191,8 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     /// <remarks>
     ///     The boundary is reported only when MXC accepts the policy AND reports no missing host preparation: MXC 1.0.0 warns rather than
     ///     fails when the one-time admin prep is absent, and children then fail to start, so a warned host is unavailable WITH the exact
-    ///     command to run. The product never runs the prep itself. Ceilings and a separate egress mechanism stay unavailable, with reasons.
+    ///     command to run. The product never runs the prep itself. Ceilings come from the Job Object probe and serve the plain path only
+    ///     (ADR 0025); a separate egress mechanism stays unavailable, with its reason.
     /// </remarks>
     private SandboxContainment MeasureWindows()
     {
@@ -219,11 +223,14 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             reason = result.Supported ? DescribeMissingHostPrep(result.Warnings) : result.Reason ?? "MXC reported the ProcessContainer unavailable";
         }
 
+        var jobs = MeasureWindowsJobCeilings();
         var containment = SandboxContainment.None with
         {
             AppContainerBoundary = boundary,
             AppContainerBoundaryUnavailableReason = reason,
-            ResourceLimitsUnavailableReason = WindowsResourceLimitsReason,
+            SupportsResourceLimits = jobs.Supported,
+            WindowsJobProcessorCount = jobs.Supported ? jobs.SystemProcessorCount : null,
+            ResourceLimitsUnavailableReason = jobs.Supported ? null : jobs.Reason,
             NetworkIsolationUnavailableReason = WindowsNetworkIsolationReason,
             FilesystemIsolationUnavailableReason = boundary is null
                 ? $"the Windows filesystem boundary is the MXC AppContainer boundary, and it is unavailable on this host: {reason}"
@@ -231,14 +238,45 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
         };
 
         _logger.LogInformation(
-            "Sandbox containment probe (Windows): AppContainer boundary {Available}{Detail}; MXC UI facts: {UiFacts}; OS {OsVersion}; resource limits unavailable; separate network isolation unavailable.",
+            "Sandbox containment probe (Windows): AppContainer boundary {Available}{Detail}; MXC UI facts: {UiFacts}; OS {OsVersion}; Job Object ceilings on the plain path {Limits}{LimitsDetail}; separate network isolation unavailable.",
             boundary is not null,
             boundary is null ? $" ({reason})" : $" (mechanism {boundary.Mechanism}, tier {boundary.Tier}, maturity {boundary.Maturity}, {boundary.Warnings.Count} warning(s))",
             MxcProbe.DescribeUiFacts(result.UiFacts),
-            DescribeOs(RuntimeInformation.OSDescription, OperatingSystem.IsWindows() ? ReadUpdateBuildRevision() : null));
+            DescribeOs(RuntimeInformation.OSDescription, OperatingSystem.IsWindows() ? ReadUpdateBuildRevision() : null),
+            jobs.Supported,
+            jobs.Supported ? $" ({jobs.SystemProcessorCount} logical processors)" : $" ({jobs.Reason})");
 
         return containment;
     }
+
+    /// <summary>Runs the Job Object controls inside their OWN guard, so a failure there withdraws the ceilings and nothing else.</summary>
+    /// <remarks>Never downgrades silently: a throw is an unsupported result with its reason (ADR 0025).</remarks>
+    private WindowsJobProbeResult MeasureWindowsJobCeilings()
+    {
+        try
+        {
+            return _windowsJobProbe();
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "The Windows Job Object ceilings probe failed; resource ceilings will not be advertised.");
+            return new WindowsJobProbeResult
+            {
+                Supported = false,
+                Reason = $"the Windows Job Object ceilings probe threw: {exception.Message}"
+            };
+        }
+    }
+
+    // The production Job Object probe: its controls run through the launcher every plain-path command uses.
+    private static WindowsJobProbeResult MeasureWindowsJobs() =>
+        OperatingSystem.IsWindows()
+            ? WindowsJobCeilingsProbe.Measure(new WindowsJobLauncher())
+            : new WindowsJobProbeResult
+            {
+                Supported = false,
+                Reason = NotWindowsReason
+            };
 
     /// <summary>The probe line's OS text: the description plus the Update Build Revision the MXC floor is defined by, when known.</summary>
     internal static string DescribeOs(string description, int? updateBuildRevision) =>

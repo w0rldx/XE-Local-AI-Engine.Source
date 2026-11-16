@@ -97,6 +97,9 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.StableDiffusionCpp\XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.WhisperCpp\XE-Local-AI-Engine.Providers.WhisperCpp.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Python\XE-Local-AI-Engine.Providers.Python.csproj"/>
+    <!-- Direct, not transitive-through-LlamaServer: the process sandbox launches every plain Windows command through its Job Object
+         launcher and probe (ADR 0025), the containment the launch path and the capability advertisement both depend on. -->
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.ProcessSupervision\XE-Local-AI-Engine.Providers.ProcessSupervision.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Training\XE-Local-AI-Engine.Providers.Training.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.AI.Contracts\XE-Local-AI-Engine.AI.Contracts.csproj"/>

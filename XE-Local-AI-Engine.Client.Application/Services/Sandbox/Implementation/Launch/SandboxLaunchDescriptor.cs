@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 
 using Microsoft.Mxc.Sdk.V1;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     The resolved wrapper chain for one sandboxed command, plus an honest record of which mechanisms were actually applied.
@@ -25,6 +26,12 @@ public sealed record SandboxLaunchDescriptor
 
     /// <summary><see langword="true" /> when real memory / PID / CPU ceilings were imposed on the child.</summary>
     public bool AppliedResourceLimits { get; init; }
+
+    /// <summary>
+    ///     The Job Object values the child is started under when the ceilings are a Windows job (ADR 0025), else <see langword="null" />.
+    /// </summary>
+    /// <remarks>When set, the provider starts the child through <c>WindowsJobLauncher</c>, and no other launcher may run this descriptor.</remarks>
+    public WindowsJobLimits? WindowsJobLimits { get; init; }
 
     /// <summary><see langword="true" /> when the child was placed in a fresh empty network namespace.</summary>
     public bool AppliedNetworkIsolation { get; init; }

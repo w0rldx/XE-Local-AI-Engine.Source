@@ -104,6 +104,25 @@ public sealed record SandboxRequirements
     /// </summary>
     public bool RequestsResourceLimits => Ceilings != SandboxCeilingProfile.None;
 
+    /// <summary>Whether this workload's launch would carry ceilings on a backend advertising <paramref name="capabilities" />: the ONE rule.</summary>
+    /// <remarks>
+    ///     Read by every consumer (<see cref="SandboxResourceCeilings.Resolve" />, the profile policy, the compute gateway, the isolation
+    ///     summary), and the raw flag nowhere else (an architecture test). The plain path is served where
+    ///     <see cref="SandboxProviderCapabilities.SupportsResourceLimits" /> is advertised; a boundary role only by a boundary carrying them:
+    ///     bubblewrap's scope does, the AppContainer boundary does not (ADR 0025), and a floor role with no boundary launches nothing.
+    /// </remarks>
+    public bool CeilingsServed(SandboxProviderCapabilities capabilities)
+    {
+        if (!RequestsResourceLimits || !capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits))
+        {
+            return false;
+        }
+
+        return RequestedIsolation(capabilities) != SandboxIsolationMode.Filesystem
+               || (capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation)
+                   && !capabilities.HasFlag(SandboxProviderCapabilities.SupportsAppContainerBoundary));
+    }
+
     /// <summary>Whether the workload's writes have to outlive the sandbox.</summary>
     public required SandboxPersistence Persistence { get; init; }
 

@@ -248,15 +248,15 @@ internal sealed class SandboxLifecycleRegistry
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot deny network egress on this host ({containment.NetworkIsolationUnavailableReason ?? "no mechanism is available"}), so NetworkPolicy.None cannot be honored. Use NetworkPolicy.Unrestricted to accept a shared host network, or an OS-isolated provider."));
         }
 
-        // Resource limits are honored where a transient systemd user scope can impose them and rejected fail-closed where it cannot:
-        // running without the ceiling the caller asked for is exactly the silent downgrade this contract exists to prevent.
+        // Resource limits are honored where a transient systemd user scope or a Windows Job Object can impose them and rejected
+        // fail-closed where neither can: running without the ceiling the caller asked for is the silent downgrade this contract prevents.
         var limits = request.ResourceLimits;
         var wantsLimits = limits is not null && (limits.CpuCount.HasValue || limits.MemoryMb.HasValue || limits.PidsLimit.HasValue);
-        // Isolation skips the systemd gate below only for bwrap's chain; the AppContainer boundary has no ceiling at all (ADR 0019 Q3).
+        // Isolation skips the gate below only for bwrap's chain; the AppContainer boundary has no ceiling at all (ADR 0019 Q3, ADR 0025).
         if (wantsLimits && appContainerBoundary is not null)
         {
             throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
-                $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider serves SandboxIsolationMode.Filesystem here through the {appContainerBoundary.Mechanism} AppContainer boundary (Preview, ADR 0019 Q3): the AppContainer boundary enforces no CPU, memory or process ceiling; omit SandboxResourceLimits for a timeout-only run."));
+                $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider serves SandboxIsolationMode.Filesystem here through the {appContainerBoundary.Mechanism} AppContainer boundary (Preview, ADR 0019 Q3): {SandboxContainment.AppContainerResourceLimitsReason}; omit SandboxResourceLimits for a timeout-only run."));
         }
 
         if (wantsLimits && !wantsIsolation && !containment.SupportsResourceLimits)

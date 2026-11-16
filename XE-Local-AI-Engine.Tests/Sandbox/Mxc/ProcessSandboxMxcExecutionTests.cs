@@ -152,7 +152,7 @@ public sealed class ProcessSandboxMxcExecutionTests
             }));
 
         AssertEx.Contains(refusal.Message, "mxc-processcontainer AppContainer boundary");
-        AssertEx.Contains(refusal.Message, "enforces no CPU, memory or process ceiling; omit SandboxResourceLimits for a timeout-only run");
+        AssertEx.Contains(refusal.Message, SandboxContainment.AppContainerResourceLimitsReason + "; omit SandboxResourceLimits for a timeout-only run");
     }
 
     [Test]

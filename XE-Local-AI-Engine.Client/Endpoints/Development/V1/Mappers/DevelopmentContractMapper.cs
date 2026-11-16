@@ -215,8 +215,7 @@ internal static class DevelopmentContractMapper
         var preconditions = SandboxSecurityProfilePolicy.Preconditions(requirements, profile, nodeRequiresEgressDenial);
         var networkRequired = SandboxEgressPolicy.IsRequired(requirements, preconditions.RequireEgressDenial);
         var filesystemRequired = boundaryFloor || preconditions.RequireFilesystemBoundary;
-        var limitsAdvertised = capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits);
-        var limits = requirements.RequestsResourceLimits && limitsAdvertised;
+        var limits = requirements.CeilingsServed(capabilities);
         // The process provider serves the boundary through bwrap where measured, otherwise through the AppContainer boundary it advertised
         // as eligible; a Preview mechanism is reported as such and never as "Isolated" (ADR 0019).
         var servedByAppContainer = filesystem
@@ -241,7 +240,7 @@ internal static class DevelopmentContractMapper
                 "filesystem boundary",
                 "its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read");
         var limitsReason = requirements.RequestsResourceLimits
-            ? ToResourceLimitsUnavailableReason(provider.ProviderName, containment)
+            ? ToResourceLimitsUnavailableReason(provider.ProviderName, containment, servedByAppContainer)
             : ToNotRequestedReason(requirements,
                 "CPU, memory or process-count ceilings",
                 "a runaway command is bounded only by its timeout and the machine");
@@ -292,14 +291,23 @@ internal static class DevelopmentContractMapper
         return $"not requested by this role: '{requirements.Workload}' declares no {what}, so {consequence}";
     }
 
-    // Guarded on the provider for ToFilesystemIsolationUnavailableReason's reason: the containment probe measures the
-    // HOST's systemd-run chain, which is the process provider's ceiling mechanism and nobody else's.
-    private static string ToResourceLimitsUnavailableReason(string providerName, SandboxContainment containment)
+    // Guarded on the provider: the probe measures the process provider's ceiling mechanism (systemd scope, Windows Job Object) and nobody
+    // else's. A host that has one still leaves an AppContainer role, or a floor role no boundary serves, unbounded (CeilingsServed).
+    private static string ToResourceLimitsUnavailableReason(string providerName, SandboxContainment containment, bool servedByAppContainer)
     {
-        return string.Equals(providerName, ProcessSandboxRuntimeProvider.Name, StringComparison.Ordinal)
-            ? containment.ResourceLimitsUnavailableReason
-              ?? "the supervised process sandbox did not advertise resource ceilings on this host"
-            : $"the '{providerName}' sandbox provider does not advertise resource ceilings";
+        if (!string.Equals(providerName, ProcessSandboxRuntimeProvider.Name, StringComparison.Ordinal))
+        {
+            return $"the '{providerName}' sandbox provider does not advertise resource ceilings";
+        }
+
+        if (servedByAppContainer)
+        {
+            return SandboxContainment.AppContainerResourceLimitsReason;
+        }
+
+        return containment.SupportsResourceLimits
+            ? "this role runs only behind a filesystem boundary, and none serves it on this host, so no launch carries its ceilings"
+            : containment.ResourceLimitsUnavailableReason ?? "the supervised process sandbox did not advertise resource ceilings on this host";
     }
 
     private static string ToIsolationBackend(string providerName, bool filesystemIsolation)

@@ -15,8 +15,8 @@ internal static class SandboxProcessTree
         {
             if (!process.HasExited)
             {
-                // entireProcessTree:true kills descendants too: on Linux the runtime kills the process group, on Windows it walks the tree
-                // via the OS APIs. A Windows Job Object would be stronger for orphan reaping but is not load-bearing for a Linux runtime.
+                // Linux kills the process group; Windows walks the tree and misses a reparented descendant. A Windows command with ceilings
+                // runs in a Job Object instead (WindowsJobSandboxChildProcess), whose kill reaches every member.
                 process.Kill(true);
             }
         }

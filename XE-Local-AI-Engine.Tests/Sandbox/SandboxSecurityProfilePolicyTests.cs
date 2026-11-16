@@ -28,6 +28,13 @@ public sealed class SandboxSecurityProfilePolicyTests
     internal const SandboxProviderCapabilities AppContainerOnly =
         SandboxProviderCapabilities.SupportsFilesystemIsolation | SandboxProviderCapabilities.SupportsAppContainerBoundary;
 
+    // Windows with Job Object ceilings on the plain path (ADR 0025), previews on: the ceilings flag is advertised, but it serves the plain
+    // path only, never the AppContainer roles.
+    internal const SandboxProviderCapabilities WindowsJobsAndAppContainer = AppContainerOnly | SandboxProviderCapabilities.SupportsResourceLimits;
+
+    // The same host with previews off: ceilings on the plain path, no boundary at all.
+    internal const SandboxProviderCapabilities WindowsJobsOnly = SandboxProviderCapabilities.SupportsResourceLimits;
+
     /// <summary>The preconditions under <c>high</c> per declaration: (egress, boundary, ceilings), the configuration key unset.</summary>
     [Test]
     [Arguments(nameof(SandboxWorkloads.AgentHome), true, true, true)]
@@ -105,6 +112,15 @@ public sealed class SandboxSecurityProfilePolicyTests
     [Arguments(nameof(SandboxWorkloads.McpStdio), BoundaryAndEgress, 1)]
     [Arguments(nameof(SandboxWorkloads.McpStdio), AllThree, 0)]
     [Arguments(nameof(SandboxWorkloads.McpStdio), AppContainerOnly, 1)]
+    // Windows Job Object ceilings (ADR 0025): the plain roles gain the ceilings axis, the AppContainer roles do not.
+    [Arguments(nameof(SandboxWorkloads.AgentHome), WindowsJobsAndAppContainer, 2)]
+    [Arguments(nameof(SandboxWorkloads.AgentHome), WindowsJobsOnly, 2)]
+    [Arguments(nameof(SandboxWorkloads.WorkSession), WindowsJobsAndAppContainer, 1)]
+    [Arguments(nameof(SandboxWorkloads.DevelopmentModeHostToolchain), WindowsJobsAndAppContainer, 2)]
+    [Arguments(nameof(SandboxWorkloads.RunPython), WindowsJobsAndAppContainer, 1)]
+    [Arguments(nameof(SandboxWorkloads.RunPython), WindowsJobsOnly, 1)]
+    [Arguments(nameof(SandboxWorkloads.McpStdio), WindowsJobsAndAppContainer, 1)]
+    [Arguments(nameof(SandboxWorkloads.McpStdio), WindowsJobsOnly, 1)]
     public void UnservedAxes_UnderHigh_CountWhatTheHostCannotServe(string declaration, SandboxProviderCapabilities capabilities, int unserved)
     {
         var requirements = Declaration(declaration);
@@ -124,6 +140,7 @@ public sealed class SandboxSecurityProfilePolicyTests
     [Arguments(BoundaryAndEgress)]
     [Arguments(AllThree)]
     [Arguments(AppContainerOnly)]
+    [Arguments(WindowsJobsAndAppContainer)]
     public void Refuses_UnderLow_OnlyWhereTheConfigurationKeyAsksForEgressTheHostCannotDeny(SandboxProviderCapabilities capabilities)
     {
         foreach (var requirements in Declarations())

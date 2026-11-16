@@ -28,10 +28,11 @@ public static class SandboxResourceCeilings
     ///     of the declaration.
     /// </param>
     /// <remarks>
-    ///     Capability-gated, and the gate is not defensive coding: <c>SandboxLifecycleRegistry.BuildLaunchPolicy</c> REFUSES a request
-    ///     carrying ceilings to a process backend whose host has no working systemd user scope, so asking unconditionally would stop
-    ///     AgentHome and Development Mode running there rather than harden them. A role that asks and does not get is reported as
-    ///     unbounded by the isolation summary, with the probe reason.
+    ///     Gated on <see cref="SandboxRequirements.CeilingsServed" />, and the gate is not defensive coding:
+    ///     <c>SandboxLifecycleRegistry.BuildLaunchPolicy</c> REFUSES a request carrying ceilings to a process backend whose host has no
+    ///     working mechanism (a systemd user scope, a Windows Job Object) and to the AppContainer boundary, so asking unconditionally would
+    ///     stop AgentHome, Development Mode and run_python rather than harden them. A role that asks and does not get is reported as
+    ///     unbounded by the isolation summary, with the reason.
     /// </remarks>
     public static SandboxResourceLimits? Resolve(SandboxRequirements requirements,
         SandboxProviderCapabilities capabilities,
@@ -42,7 +43,7 @@ public static class SandboxResourceCeilings
         ArgumentNullException.ThrowIfNull(computeDefaults);
         ArgumentNullException.ThrowIfNull(nodeDefaults);
 
-        if (!capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits))
+        if (!requirements.CeilingsServed(capabilities))
         {
             return null;
         }

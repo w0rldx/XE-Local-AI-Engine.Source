@@ -285,13 +285,12 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
             {
                 var capabilities = MaximumCapabilities[backend];
                 var ceilings = SandboxResourceCeilings.Resolve(requirements, capabilities, computeDefaults, nodeDefaults);
-                var expected = requirements.RequestsResourceLimits
-                               && capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits);
+                var expected = requirements.CeilingsServed(capabilities);
 
                 AssertEx.Equal(expected,
                     ceilings is not null,
-                    $"SandboxWorkloads.{name} on '{backend}': a role gets ceilings exactly when it declares a profile "
-                    + "AND the backend advertises that it can impose them.");
+                    $"SandboxWorkloads.{name} on '{backend}': a role gets ceilings exactly when SandboxRequirements.CeilingsServed says "
+                    + "the launch that serves it carries them.");
 
                 if (ceilings is null)
                 {
@@ -317,6 +316,41 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
                     + "OOM-killed on every attempt.");
             }
         }
+    }
+
+    /// <summary>Only <see cref="SandboxRequirements" /> and the providers that SET it read the ceilings flag; consumers ask CeilingsServed (ADR 0025).</summary>
+    /// <remarks>
+    ///     So a role the AppContainer boundary serves can never be called bounded because the plain path is. A source scan with comments and
+    ///     literals stripped; the exact set of files is asserted too. The host fact <c>SandboxContainment.SupportsResourceLimits</c> is a
+    ///     different member and is not matched.
+    /// </remarks>
+    [Test]
+    public void TheCeilingsCapabilityFlag_IsReadOnlyThroughCeilingsServed()
+    {
+        const string flag = "SandboxProviderCapabilities." + nameof(SandboxProviderCapabilities.SupportsResourceLimits);
+        string[] allowed = ["SandboxRequirements.cs", "ProcessSandboxRuntimeProvider.cs", "DockerSandboxRuntimeProvider.cs"];
+        var mentions = new List<string>();
+        foreach (var (path, relative) in EnforcedSourceFiles.All())
+        {
+            if (relative.Split('/')[0].Contains(".Tests", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var code = SourceCommentStripper.StripCommentsAndLiterals(File.ReadAllText(path));
+            if (!code.Contains(flag, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var file = Path.GetFileName(relative);
+            mentions.Add(file);
+            AssertEx.True(allowed.Contains(file, StringComparer.Ordinal),
+                $"{relative} reads {flag} directly. Ask SandboxRequirements.CeilingsServed for the role instead: the flag says the plain path "
+                + "is bounded, not that the launch serving a given role is (the AppContainer boundary carries no ceilings).");
+        }
+
+        AssertEx.Equal(string.Join(',', allowed.Order(StringComparer.Ordinal)), string.Join(',', mentions.Distinct().Order(StringComparer.Ordinal)));
     }
 
     /// <summary>

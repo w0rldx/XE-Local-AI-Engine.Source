@@ -151,18 +151,17 @@ public sealed class SandboxLauncher : ISandboxLauncher
     ///     Prepares the Windows AppContainer launch: the MXC ProcessContainer request the provider spawns instead of the start info.
     /// </summary>
     /// <remarks>
-    ///     The policy was resolved at create time to the boundary it carries (ADR 0019), so this never re-reads eligibility. Fails closed with
-    ///     <see cref="SandboxIsolationUnavailableException" /> like the bwrap branch. The child sees host path names, so the working directory
-    ///     stays the host path the provider resolved: inside the jail, or a granted read-only tree. Applied flags mirror
-    ///     <c>SandboxLaunchPlan.CreateIsolated</c>: the boundary denies egress, ingress and host loopback itself, so network isolation is
-    ///     applied; there is no process group, scope unit or ceiling (no Job Object; Q3: timeout-bounded only).
+    ///     Resolved at create time to the boundary it carries (ADR 0019), so eligibility is never re-read; fails closed with
+    ///     <see cref="SandboxIsolationUnavailableException" /> like the bwrap branch. The working directory stays the host path (jail or a
+    ///     granted tree). The boundary denies egress, ingress and host loopback itself, so network isolation is applied; there is no process
+    ///     group, scope unit or ceiling (the Job Object ceilings serve the plain path only, ADR 0025), so it is timeout-bounded.
     /// </remarks>
     private SandboxLaunchDescriptor CreateAppContainerDescriptor(ProcessStartInfo startInfo, SandboxLaunchPolicy policy, SandboxLaunchContext? context)
     {
         // The registry refuses limits under this boundary; a path that skipped it must fail, never drop the ceiling silently.
         if (policy.ResourceLimits is not null)
         {
-            throw new SandboxCapabilityNotSupportedException("the AppContainer boundary enforces no CPU, memory or process ceiling, and the launch policy carries one");
+            throw new SandboxCapabilityNotSupportedException($"{SandboxContainment.AppContainerResourceLimitsReason}, and the launch policy carries one");
         }
 
         if (context?.JailRoot is not { } jailRoot || string.IsNullOrWhiteSpace(jailRoot))

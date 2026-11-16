@@ -177,7 +177,7 @@ public sealed class MxcChildProcess : IDisposable
         }
     }
 
-    private static async Task PumpLinesAsync(Stream stream, Action<string> onLine)
+    internal static async Task PumpLinesAsync(Stream stream, Action<string> onLine)
     {
         // Yield first so a synchronously completing stream cannot run the whole pump inside the constructor.
         await Task.Yield();
@@ -189,9 +189,9 @@ public sealed class MxcChildProcess : IDisposable
                 onLine(line);
             }
         }
-        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException or OperationCanceledException)
         {
-            // The drain budget ran out and the stream was closed under this read; the lines read so far were delivered.
+            // The drain budget ran out and the stream was closed (or its read cancelled) under this read; the lines read so far were delivered.
         }
     }
 }

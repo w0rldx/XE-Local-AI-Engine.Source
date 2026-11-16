@@ -22,10 +22,10 @@ public interface ISandboxLauncher
     ///     <paramref name="policy" /> and available on this host, and returns what was actually applied.
     /// </summary>
     /// <remarks>
-    ///     It must never throw for an unavailable mechanism: it degrades, reports and lets the command run. The one exception is
-    ///     <see cref="SandboxIsolationMode.Filesystem" />, which does NOT degrade — a policy carrying it was accepted against a host
-    ///     measured able to deliver it, so failing to prepare the boundary at launch throws rather than quietly running without one.
-    ///     <paramref name="context" /> supplies the per-command facts that mode needs.
+    ///     An unavailable egress or process-group layer degrades and is reported. Two things never degrade: a
+    ///     <see cref="SandboxIsolationMode.Filesystem" /> boundary that cannot be prepared throws, and so do ceilings no mechanism applies
+    ///     (ADR 0025), because a policy carrying either was accepted against a host measured able to deliver it.
+    ///     <paramref name="context" /> supplies the per-command facts the boundary needs.
     /// </remarks>
     SandboxLaunchDescriptor Apply(ProcessStartInfo startInfo, SandboxLaunchPolicy policy, SandboxLaunchContext? context = null);
 }

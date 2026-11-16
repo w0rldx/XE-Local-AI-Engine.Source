@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Sandbox;
 
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -17,9 +18,9 @@ public sealed class SandboxLaunchPlanTests
     [Test]
     public async Task SandboxLaunchPlan_WhenHostContainsNothing_ReturnsThePlainCommandUnwrapped()
     {
-        var plan = SandboxLaunchPlan.Create("/bin/echo", ["hello"], Limits(memoryMb: 512, denyEgress: true), SandboxContainment.None);
+        var plan = SandboxLaunchPlan.Create("/bin/echo", ["hello"], new SandboxLaunchPolicy { DenyNetworkEgress = true }, SandboxContainment.None);
 
-        // A policy asking for everything on a host that offers nothing must still run the command — degraded, not failed.
+        // A policy asking for egress denial on a host that offers nothing still runs the command, the layer reported absent.
         AssertEx.Equal("/bin/echo", plan.FileName);
         AssertEx.Equal(expected: 1, plan.Arguments.Count);
         AssertEx.Equal("hello", plan.Arguments[0]);
@@ -210,17 +211,86 @@ public sealed class SandboxLaunchPlanTests
             ResourceLimitsUnavailableReason = "no user systemd bus"
         };
 
-        var plan = SandboxLaunchPlan.Create("/bin/true", [], Limits(memoryMb: 128, denyEgress: true), processGroupOnly);
+        var plan = SandboxLaunchPlan.Create("/bin/true", [], new SandboxLaunchPolicy { DenyNetworkEgress = true }, processGroupOnly);
 
         AssertEx.Equal("/usr/bin/setsid", plan.FileName);
         AssertEx.True(plan.AppliedProcessGroup);
-        AssertEx.False(plan.AppliedResourceLimits, "a host without the mechanism must not claim to enforce limits");
+        AssertEx.False(plan.AppliedResourceLimits);
         AssertEx.False(plan.AppliedNetworkIsolation, "a host without the mechanism must not claim to deny egress");
         AssertEx.False(plan.Arguments.Contains("--scope"));
         AssertEx.False(plan.Arguments.Contains("--net"));
 
         await Task.CompletedTask;
     }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task SandboxLaunchPlan_WhenLimitsHaveNoMechanism_Throws_RatherThanRunningUnbounded(bool processGroupOnly)
+    {
+        // ADR 0025: ceilings never degrade. A policy carrying them reaches here only if the registry's create-time refusal drifted.
+        var containment = processGroupOnly
+            ? SandboxContainment.None with
+            {
+                SupportsProcessGroup = true,
+                SetsidPath = "/usr/bin/setsid",
+                ResourceLimitsUnavailableReason = "no user systemd bus"
+            }
+            : SandboxContainment.None with
+            {
+                // The probe said yes but measured no mechanism to apply: still refused.
+                SupportsResourceLimits = true
+            };
+
+        var refusal = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() =>
+            SandboxLaunchPlan.Create("/bin/true", [], Limits(memoryMb: 128), containment));
+
+        AssertEx.Contains(refusal.Message, "neither a systemd scope nor a Windows job");
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task SandboxLaunchPlan_OnAWindowsJobHost_MapsTheJob_AndNeverBuildsTheSystemdChain()
+    {
+        var plan = SandboxLaunchPlan.Create(@"C:\tools\dotnet.exe", ["build"], Limits(memoryMb: 4096, pidsLimit: 64, cpuCount: 1), WindowsJobContainment());
+
+        AssertEx.Equal(@"C:\tools\dotnet.exe", plan.FileName);
+        AssertEx.Equal(1, plan.Arguments.Count);
+        AssertEx.Equal("build", plan.Arguments[0]);
+        AssertEx.True(plan.AppliedResourceLimits);
+        AssertEx.False(plan.AppliedProcessGroup);
+        AssertEx.Empty(plan.WrapperEnvironment);
+        AssertEx.Equal<WindowsJobLimits?>(WindowsJobLimits.Map(4096, 64, 1, systemProcessorCount: 16), plan.WindowsJobLimits);
+        AssertEx.Equal(625u, plan.WindowsJobLimits?.CpuRate);
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task SandboxLaunchPlan_OnAWindowsJobHost_WithoutLimits_IsThePlainChild()
+    {
+        var plan = SandboxLaunchPlan.Create(@"C:\tools\git.exe", ["status"], SandboxLaunchPolicy.Unconstrained, WindowsJobContainment());
+
+        AssertEx.Null(plan.WindowsJobLimits);
+        AssertEx.False(plan.AppliedResourceLimits);
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task SandboxLaunchPlan_OnLinux_CarriesNoWindowsJob()
+    {
+        var plan = SandboxLaunchPlan.Create("/bin/true", [], Limits(memoryMb: 512), FullContainment());
+
+        AssertEx.True(plan.AppliedResourceLimits);
+        AssertEx.Null(plan.WindowsJobLimits);
+        await Task.CompletedTask;
+    }
+
+    private static SandboxContainment WindowsJobContainment() =>
+        SandboxContainment.None with
+        {
+            SupportsResourceLimits = true,
+            WindowsJobProcessorCount = 16
+        };
 
     private static SandboxContainment FullContainment()
     {

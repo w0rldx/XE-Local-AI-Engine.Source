@@ -129,6 +129,8 @@ public sealed class LayerDependencyTests
                 // application layer is precisely how the stored value and the enforced value would come to disagree. Note the ordering trap below: this
                 // name is a PREFIX of nothing, but "…Providers.OpenAICompat" IS a prefix of this one.
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
+                // The process sandbox's Windows Job Object launcher and probe (ADR 0025).
+                "XE-Local-AI-Engine.Providers.ProcessSupervision",
                 // The compute tool provisions its venv through the shared uv machinery directly, not through Training.
                 "XE-Local-AI-Engine.Providers.Python",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
@@ -505,6 +507,8 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompat",
                 // See the project-reference list above for why the composition layer reaches the shared wire layer.
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
+                // The process sandbox's Windows Job Object launcher and probe (ADR 0025).
+                "XE-Local-AI-Engine.Providers.ProcessSupervision",
                 // The compute tool provisions its venv through the shared uv machinery directly, not through Training.
                 "XE-Local-AI-Engine.Providers.Python",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",

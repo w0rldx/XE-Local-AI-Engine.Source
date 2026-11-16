@@ -24,6 +24,13 @@ public sealed record SandboxContainment
     public const string PreviewServesFloorWorkloadsOnlyReason =
         "the Windows AppContainer boundary is a Preview mechanism and serves only workloads whose isolation floor is Filesystem (run_python and Sandboxed MCP); this role runs in its working-directory jail on the host filesystem";
 
+    /// <summary>
+    ///     The reason a role the Windows AppContainer boundary serves gets no ceilings: the Job Object ceilings serve the plain process path
+    ///     only (ADR 0025).
+    /// </summary>
+    public const string AppContainerResourceLimitsReason =
+        "the MXC AppContainer boundary carries no CPU, memory or process-count ceiling: Windows Job Object ceilings serve only the plain process path (ADR 0025), so a command under the boundary is bounded only by its timeout";
+
     /// <summary>A host that can contain nothing: the plain-child fallback. Used off-Linux and when every probe fails.</summary>
     public static SandboxContainment None { get; } = new();
 
@@ -35,11 +42,21 @@ public sealed record SandboxContainment
     public bool SupportsProcessGroup { get; init; }
 
     /// <summary>
-    ///     <see langword="true" /> when memory / PID / CPU ceilings can actually be imposed on the child (measured by
-    ///     really starting a constrained transient scope, not by probing for the binary). Gates
+    ///     <see langword="true" /> when memory / PID / CPU ceilings can actually be imposed on the child (measured by really starting a
+    ///     constrained transient scope on Linux, or by running the Job Object controls on Windows, never by probing for a binary). Gates
     ///     <see cref="SandboxProviderCapabilities.SupportsResourceLimits" />.
     /// </summary>
     public bool SupportsResourceLimits { get; init; }
+
+    /// <summary>
+    ///     The system's logical processor count when the ceilings are a Windows Job Object per command (ADR 0025), or <see langword="null" />
+    ///     when they are not; the CPU rate of every job is computed against it.
+    /// </summary>
+    /// <remarks>
+    ///     Set only together with <see cref="SupportsResourceLimits" />, by the probe that ran its controls through the same launcher, so a
+    ///     plan never maps a job the probe did not prove. A Windows host never has a <see cref="SystemdRunPath" />.
+    /// </remarks>
+    public int? WindowsJobProcessorCount { get; init; }
 
     /// <summary>
     ///     <see langword="true" /> when the child can be placed in a fresh empty network namespace with no route to the

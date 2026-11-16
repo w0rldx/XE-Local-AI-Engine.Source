@@ -429,6 +429,44 @@ public sealed class SandboxIsolationSummaryTests
             $"unexpected cause: {provider.FilesystemIsolationUnavailableReason}");
     }
 
+    /// <summary>Windows Job Object ceilings serve the plain path only (ADR 0025): the plain roles report them, the floor roles never do.</summary>
+    /// <remarks>
+    ///     With previews on, run_python and Sandboxed MCP run in the AppContainer boundary and report its reason; with previews off they run
+    ///     nowhere, so they report them unserved too.
+    /// </remarks>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public void ToIsolationSummary_WithWindowsJobCeilings_ReportsThemOnlyForThePlainPathRoles(bool previewsEnabled)
+    {
+        var containment = SandboxContainment.None with
+        {
+            FilesystemIsolationUnavailableReason = "the host is not Linux",
+            AppContainerBoundary = PreviewBoundary(),
+            SupportsResourceLimits = true,
+            WindowsJobProcessorCount = 16
+        };
+        using var provider = CreateProcessProvider(containment, previewsEnabled);
+
+        foreach (var requirements in new[] { SandboxWorkloads.AgentHome, SandboxWorkloads.DevelopmentModeHostToolchain })
+        {
+            var plain = DevelopmentContractMapper.ToIsolationSummary("plain", requirements, provider, containment);
+            AssertEx.True(plain.ResourceLimits, $"{requirements.Workload} runs on the plain path inside its job");
+            AssertEx.Null(plain.ResourceLimitsUnavailableReason);
+        }
+
+        foreach (var requirements in new[] { SandboxWorkloads.RunPython, SandboxWorkloads.McpStdio })
+        {
+            var floor = DevelopmentContractMapper.ToIsolationSummary("floor", requirements, provider, containment, profile: SandboxSecurityProfile.High);
+            AssertEx.False(floor.ResourceLimits, $"{requirements.Workload} must not be reported bounded");
+            AssertEx.False(floor.Satisfied, $"{requirements.Workload} under high is refused for its ceilings");
+            AssertEx.Equal(previewsEnabled
+                    ? SandboxContainment.AppContainerResourceLimitsReason
+                    : "this role runs only behind a filesystem boundary, and none serves it on this host, so no launch carries its ceilings",
+                floor.ResourceLimitsUnavailableReason);
+        }
+    }
+
     /// <summary>
     ///     An eligible Preview boundary serves floor roles only (ADR 0019): AgentHome's row stays unserved with the reason naming the
     ///     scoping, while the Sandboxed MCP row reports PreviewIsolated through the appcontainer backend.

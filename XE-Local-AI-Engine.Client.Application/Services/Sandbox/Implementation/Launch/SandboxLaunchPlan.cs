@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 
 using System.Globalization;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>The pure mapping from policy, measured host containment and the command to the exact wrapper chain that will be exec'd.</summary>
 /// <code>
@@ -32,9 +33,12 @@ public static class SandboxLaunchPlan
 
     /// <summary>Builds the wrapper chain for one command.</summary>
     /// <remarks>
-    ///     Never throws: a policy asking for a mechanism the host does not have yields a plan without that layer, and the corresponding
-    ///     <c>Applied…</c> flag stays false so the caller can log the degradation honestly.
+    ///     A policy asking for egress denial or a process group the host does not have yields a plan without that layer, its
+    ///     <c>Applied…</c> flag false. Ceilings never degrade: on Windows they become the descriptor's <see cref="WindowsJobLimits" /> (never a
+    ///     systemd chain), on Linux the systemd scope, and a policy carrying ceilings that neither applies THROWS, because the registry
+    ///     refuses such a sandbox at create and a launch reaching here anyway would run unbounded (ADR 0025).
     /// </remarks>
+    /// <exception cref="SandboxCapabilityNotSupportedException">The policy carries ceilings and the host applies none.</exception>
     public static SandboxLaunchDescriptor Create(string executable,
         IReadOnlyList<string> arguments,
         SandboxLaunchPolicy policy,
@@ -46,19 +50,31 @@ public static class SandboxLaunchPlan
         ArgumentNullException.ThrowIfNull(containment);
 
         var limits = NormalizeLimits(policy.ResourceLimits);
+        WindowsJobLimits? jobLimits = limits is not null && containment is { SupportsResourceLimits: true, WindowsJobProcessorCount: { } processors }
+            ? WindowsJobLimits.Map(limits.MemoryMb, limits.PidsLimit, limits.CpuCount, processors)
+            : null;
         var applyLimits = limits is not null
+                          && jobLimits is null
                           && containment is { SupportsResourceLimits: true, SystemdRunPath: not null, EnvPath: not null };
+        if (limits is not null && jobLimits is null && !applyLimits)
+        {
+            throw new SandboxCapabilityNotSupportedException(
+                $"the launch policy carries CPU, memory or process ceilings, and this host applies neither a systemd scope nor a Windows job ({containment.ResourceLimitsUnavailableReason ?? "no mechanism was measured"}); the command was not run");
+        }
+
         var applyNetwork = policy.DenyNetworkEgress
                            && containment is { SupportsNetworkIsolation: true, UnsharePath: not null };
         var applyProcessGroup = containment is { SupportsProcessGroup: true, SetsidPath: not null };
 
-        // Nothing to wrap: the plain child, byte-identical to the pre-hardening launch.
+        // Nothing to wrap: the plain child, byte-identical to the pre-hardening launch, inside its job where the ceilings are one.
         if (!applyLimits && !applyNetwork && !applyProcessGroup)
         {
             return new SandboxLaunchDescriptor
             {
                 FileName = executable,
-                Arguments = [.. arguments]
+                Arguments = [.. arguments],
+                AppliedResourceLimits = jobLimits is not null,
+                WindowsJobLimits = jobLimits
             };
         }
 
@@ -124,7 +140,8 @@ public static class SandboxLaunchPlan
             FileName = chain[0],
             Arguments = [.. chain.Skip(1)],
             AppliedProcessGroup = applyProcessGroup,
-            AppliedResourceLimits = applyLimits,
+            AppliedResourceLimits = applyLimits || jobLimits is not null,
+            WindowsJobLimits = jobLimits,
             AppliedNetworkIsolation = applyNetwork,
             WrapperEnvironment = wrapperEnvironment
         };

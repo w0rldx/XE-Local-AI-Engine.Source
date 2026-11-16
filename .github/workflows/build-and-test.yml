@@ -306,8 +306,9 @@ jobs:
           # upload-artifact refuses with a 409 unless the existing one may be replaced first.
           overwrite: true
 
-  # The MXC sandbox mechanism on real Windows: the Microsoft.Mxc.Sdk natives load, the ProcessContainer probe answers
-  # for the engine's policy, and a contained child is proven unable to read outside its jail or connect anywhere. Every
+  # The Windows sandbox mechanisms on real Windows: the Microsoft.Mxc.Sdk natives load, the ProcessContainer probe answers
+  # for the engine's policy, a contained child is proven unable to read outside its jail or connect anywhere, and the
+  # plain path's Job Object ceilings (ADR 0025) are proven by their probe and each ceiling's negative control. Every
   # other leg is Linux, where these classes report skipped. windows-2025 (build 26100), not windows-latest, so the OS
   # the probe measures cannot move under the leg. The execution test needs the one-time admin host prep MXC's
   # AppContainer + DACL tier asks for; wxc-host-prep.exe is not in the NuGet package, so it comes from the v1.0.1
@@ -384,7 +385,7 @@ jobs:
           RESULTS_DIR: ${{ runner.temp }}/windows-sandbox-results
         run: |
           $ErrorActionPreference = 'Stop'
-          $classes = @('MxcSandboxRuntimeWindowsTests', 'MxcAclResidueSweeperWindowsTests', 'ProcessSandboxAppContainerWindowsTests', 'ComputeSandboxAppContainerWindowsTests')
+          $classes = @('MxcSandboxRuntimeWindowsTests', 'MxcAclResidueSweeperWindowsTests', 'ProcessSandboxAppContainerWindowsTests', 'ComputeSandboxAppContainerWindowsTests', 'WindowsJobSandboxWindowsTests')
           $trxName = 'windows-sandbox.trx'
           & 'XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.exe' `
             --treenode-filter "/*/*/($($classes -join '|'))/*" `

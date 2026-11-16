@@ -331,8 +331,9 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     /// </summary>
     /// <remarks>
     ///     The boundary is ADVERTISED, so it fails closed before provisioning, identity and jail, and subsumes an egress check
-    ///     (docs/wiki/19-compute-tools.md, "2.1 Execution flow", step 2). The ceilings are capability-gated, so a host without a working
-    ///     systemd user scope runs a script unbounded: acceptable for an approved call, not for unattended code or under `high` (ADR 0020).
+    ///     (docs/wiki/19-compute-tools.md, "2.1 Execution flow", step 2). The ceilings go through <see cref="SandboxRequirements.CeilingsServed" />,
+    ///     so a host without a working systemd user scope, and the Windows AppContainer boundary (ADR 0025), run a script unbounded: acceptable
+    ///     for an approved call, not for unattended code or under `high` (ADR 0020).
     /// </remarks>
     private async Task<ComputeExecutionOutcome?> RefuseUnlessSandboxQualifiesAsync(bool requireResourceLimits, CancellationToken cancellationToken)
     {
@@ -349,11 +350,11 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             capabilities,
             await _runtimeSettings.GetSandboxSecurityProfileAsync(cancellationToken),
             configRequiresEgressDenial: false);
-        if ((requireResourceLimits && !capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits)) || refusedByProfile)
+        if ((requireResourceLimits && !SandboxWorkloads.RunPython.CeilingsServed(capabilities)) || refusedByProfile)
         {
             return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.NoResourceLimits,
                 requireResourceLimits
-                    ? "run_python rejected: this node's sandbox cannot enforce CPU, memory and process ceilings, and unattended execution is not run without them."
+                    ? "run_python rejected: the sandbox run_python uses on this node cannot enforce CPU, memory and process ceilings, and unattended execution is not run without them."
                     : $"run_python rejected: the node's {SandboxSecurityProfilePolicy.ProfileOptionKey} requires CPU, memory and process ceilings, and this node's sandbox cannot enforce them. "
                       + $"An operator can {SandboxSecurityProfilePolicy.Remedy}.");
         }

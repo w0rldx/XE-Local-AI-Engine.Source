@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     The <c>process</c> <see cref="ISandboxRuntimeProvider" />: a supervised child <see cref="Process" /> in a
@@ -94,6 +95,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     private readonly ISandboxMarkerStore _markerStore;
     private readonly IMxcSandboxRuntime? _mxcRuntime;
     private readonly IExecutionPreviewPolicy? _previewPolicy;
+    private readonly WindowsJobLauncher? _windowsJobLauncher;
 
     private readonly long _maxCopyFileBytes;
     private readonly long _maxJailDiskBytes;
@@ -109,7 +111,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         ISandboxLauncher? launcher = null,
         ISandboxMarkerStore? markerStore = null,
         IExecutionPreviewPolicy? previewPolicy = null,
-        IMxcSandboxRuntime? mxcRuntime = null)
+        IMxcSandboxRuntime? mxcRuntime = null,
+        WindowsJobLauncher? windowsJobLauncher = null)
     {
         ArgumentNullException.ThrowIfNull(copyOptions);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -121,6 +124,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // The MXC SDK is reached only for a launch the AppContainer boundary serves, which only a Windows probe can produce; elsewhere
         // there is no runtime and such a descriptor fails closed. Injectable so the MXC path is unit-tested on Linux through a fake.
         _mxcRuntime = mxcRuntime ?? (OperatingSystem.IsWindows() ? new MxcSandboxRuntime() : null);
+        // The same shape for the plain Windows path's Job Object ceilings (ADR 0025): only a Windows probe maps job limits into a descriptor.
+        _windowsJobLauncher = windowsJobLauncher ?? (OperatingSystem.IsWindows() ? new WindowsJobLauncher() : null);
 
         // Reuse the existing per-file copy ceiling so the jail's byte-cap-on-re-read matches the container provider's
         // (64 MiB default).
@@ -821,11 +826,11 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         };
     }
 
-    /// <summary>
-    ///     Starts the child the descriptor names: an MXC ProcessContainer spawn when the AppContainer boundary serves the launch, otherwise
-    ///     the (possibly wrapped) start info exactly as before.
-    /// </summary>
-    /// <remarks>A null <paramref name="onStandardOutputLine" /> leaves stdout raw for an interactive peer; stderr is always pumped.</remarks>
+    /// <summary>Starts the child the descriptor names: an MXC spawn, a Windows Job Object launch, or the (possibly wrapped) start info.</summary>
+    /// <remarks>
+    ///     A null <paramref name="onStandardOutputLine" /> leaves stdout raw for an interactive peer; stderr is always pumped. A descriptor
+    ///     whose ceilings the chosen launcher would not apply throws: the MXC spawn carries none (ADR 0025).
+    /// </remarks>
     private async Task<ISandboxChildProcess> StartChildAsync(ProcessStartInfo startInfo,
         SandboxLaunchDescriptor launch,
         Action<string?>? onStandardOutputLine,
@@ -834,6 +839,11 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     {
         if (launch.MxcRequest is { } mxcRequest)
         {
+            if (launch.AppliedResourceLimits || launch.WindowsJobLimits is not null)
+            {
+                throw new SandboxCapabilityNotSupportedException($"{SandboxContainment.AppContainerResourceLimitsReason}, and the launch carries ceilings");
+            }
+
             if (_mxcRuntime is null)
             {
                 throw new SandboxIsolationUnavailableException("the MXC runtime is not available in this process");
@@ -860,6 +870,11 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 _timeProvider,
                 onStandardOutputLine is null ? null : line => onStandardOutputLine(line),
                 line => onStandardErrorLine(line)));
+        }
+
+        if (launch.WindowsJobLimits is { } jobLimits)
+        {
+            return await StartInWindowsJobAsync(startInfo, jobLimits, onStandardOutputLine, onStandardErrorLine);
         }
 
         var process = new Process
@@ -892,10 +907,48 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         return new ProcessSandboxChildProcess(process);
     }
 
-    /// <summary>
-    ///     A start failure the command path reports instead of throwing: a plain child that could not be exec'd, or ANY MXC spawn failure
-    ///     (native error, policy guard refusal, missing runtime), except the caller's own cancellation.
-    /// </summary>
+    /// <summary>Starts the command suspended inside its own Job Object, verified and then resumed (<see cref="WindowsJobLauncher" />).</summary>
+    /// <remarks>Any setup failure throws with nothing running and no handle left; the command line follows the CommandLineToArgvW rules.</remarks>
+    private async Task<WindowsJobSandboxChildProcess> StartInWindowsJobAsync(ProcessStartInfo startInfo,
+        WindowsJobLimits limits,
+        Action<string?>? onStandardOutputLine,
+        Action<string?> onStandardErrorLine)
+    {
+        if (_windowsJobLauncher is null)
+        {
+            throw new InvalidOperationException("the Windows Job Object launcher is not available in this process");
+        }
+
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, value) in startInfo.Environment)
+        {
+            if (value is not null)
+            {
+                environment[name] = value;
+            }
+        }
+
+        var process = _windowsJobLauncher.Start(new WindowsJobStartInfo
+            {
+                CommandLine = WindowsCommandLine.Join(startInfo.FileName, startInfo.ArgumentList),
+                WorkingDirectory = startInfo.WorkingDirectory,
+                Environment = environment
+            },
+            limits);
+        if (!startInfo.RedirectStandardInput)
+        {
+            // An unredirected child reads end of stream, never the engine's own stdin.
+            await process.StandardInput.DisposeAsync();
+        }
+
+        return new WindowsJobSandboxChildProcess(process,
+            _timeProvider,
+            onStandardOutputLine is null ? null : line => onStandardOutputLine(line),
+            line => onStandardErrorLine(line));
+    }
+
+    /// <summary>A start failure reported instead of thrown: a plain child that could not be exec'd, or ANY MXC spawn or Job Object launch failure.</summary>
+    /// <remarks>Native error, policy guard refusal, read-back mismatch, missing runtime; never the caller's own cancellation.</remarks>
     private static bool IsLaunchFailure(Exception exception, SandboxLaunchDescriptor launch, CancellationToken cancellationToken)
     {
         if (exception is Win32Exception or InvalidOperationException)
@@ -903,11 +956,18 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             return true;
         }
 
-        return launch.MxcRequest is not null && !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested);
+        return (launch.MxcRequest is not null || launch.WindowsJobLimits is not null)
+               && !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested);
     }
 
     private string DescribeLaunchFailure(Exception exception, SandboxLaunchDescriptor launch)
     {
+        if (launch.WindowsJobLimits is not null)
+        {
+            _logger.LogError(exception, "The Windows Job Object that carries the sandbox ceilings could not be set up; the command was not run.");
+            return $"{SandboxCommandResult.LaunchFailurePrefix} inside its Windows job ({exception.Message}).";
+        }
+
         if (launch.MxcRequest is null)
         {
             return SandboxCommandResult.LaunchFailurePrefix + ".";
@@ -1027,8 +1087,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     /// <remarks>
     ///     First the scope's CGROUP, the only complete kill for a command in a PID namespace; then the process GROUP of a group
     ///     leader, which catches a detached descendant. <see cref="ISandboxChildProcess.Kill" /> has already run; these are the
-    ///     best-effort layers under it. An MXC launch has neither: MXC's kill took the contained tree, and no Linux killer may be
-    ///     pointed at a Windows pid.
+    ///     best-effort layers under it. An MXC or Windows job launch has neither: MXC's kill took the contained tree, terminating the job
+    ///     took every member, and no Linux killer may be pointed at a Windows pid.
     /// </remarks>
     private async Task TerminateLaunchAsync(SandboxLaunchDescriptor launch, ISandboxChildProcess process)
     {

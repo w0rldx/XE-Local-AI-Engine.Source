@@ -70,8 +70,8 @@ public static class SandboxSecurityProfilePolicy
     /// <remarks>
     ///     "Served" is what the create site would get: egress through <see cref="SandboxEgressPolicy" /> (a <c>None</c>-floor workload's
     ///     egress is its isolated chain's and is not counted here), the boundary through <see cref="SandboxRequirements.RequestedIsolation" />,
-    ///     so the Preview AppContainer boundary never satisfies the preference (ADR 0019 Decision 10), and ceilings through the capability
-    ///     <see cref="SandboxResourceCeilings.Resolve" /> gates on.
+    ///     so the Preview AppContainer boundary never satisfies the preference (ADR 0019 Decision 10), and ceilings through
+    ///     <see cref="SandboxRequirements.CeilingsServed" />, the rule <see cref="SandboxResourceCeilings.Resolve" /> gates on.
     /// </remarks>
     public static IReadOnlyList<string> UnservedAxes(SandboxRequirements requirements,
         SandboxProviderCapabilities capabilities,
@@ -93,7 +93,7 @@ public static class SandboxSecurityProfilePolicy
             unserved.Add("a Stable host-filesystem boundary");
         }
 
-        if (preconditions.RequireResourceCeilings && !capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits))
+        if (preconditions.RequireResourceCeilings && !requirements.CeilingsServed(capabilities))
         {
             unserved.Add("CPU, memory and process-count ceilings");
         }

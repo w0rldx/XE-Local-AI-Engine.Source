@@ -7,6 +7,7 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -30,11 +31,12 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
         AssertEx.Equal("AppContainerDacl", boundary.Tier);
         AssertEx.Equal(SandboxMechanismMaturity.Preview, boundary.Maturity);
         AssertEx.Null(containment.AppContainerBoundaryUnavailableReason);
-        // No bwrap, no ceilings, no separate egress mechanism on Windows — each with a reason, none advertised.
+        // No bwrap and no separate egress mechanism on Windows; ceilings only where the Job Object probe proved them (not here).
         AssertEx.False(containment.SupportsFilesystemIsolation);
         AssertEx.False(containment.SupportsResourceLimits);
+        AssertEx.Null(containment.WindowsJobProcessorCount);
         AssertEx.False(containment.SupportsNetworkIsolation);
-        AssertEx.Contains(containment.ResourceLimitsUnavailableReason, "bounded only by its timeout");
+        AssertEx.Equal(JobsUnsupported.Reason!, containment.ResourceLimitsUnavailableReason);
         AssertEx.Contains(containment.NetworkIsolationUnavailableReason, "AppContainer boundary");
         await Task.CompletedTask;
     }
@@ -132,6 +134,37 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
     }
 
     [Test]
+    public async Task AProvenJobProbe_AdvertisesCeilings_WithItsProcessorCount_AndLeavesTheBoundaryAlone()
+    {
+        var containment = Measure(Runtime(Probe(IsolationTier.AppContainerDacl)),
+            jobProbe: static () => new WindowsJobProbeResult
+            {
+                Supported = true,
+                SystemProcessorCount = 16
+            });
+
+        AssertEx.True(containment.SupportsResourceLimits);
+        AssertEx.Equal(16, containment.WindowsJobProcessorCount);
+        AssertEx.Null(containment.ResourceLimitsUnavailableReason);
+        AssertEx.Null(containment.SystemdRunPath, "a Windows host never has a systemd chain");
+        AssertEx.True(containment.SupportsAppContainerBoundary);
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task AThrowingJobProbe_WithdrawsOnlyTheCeilings_WithItsReason()
+    {
+        var containment = Measure(Runtime(Probe(IsolationTier.AppContainerDacl)),
+            jobProbe: static () => throw new InvalidOperationException("kernel32 refused"));
+
+        AssertEx.False(containment.SupportsResourceLimits);
+        AssertEx.Null(containment.WindowsJobProcessorCount);
+        AssertEx.Contains(containment.ResourceLimitsUnavailableReason, "kernel32 refused");
+        AssertEx.True(containment.SupportsAppContainerBoundary, "a failed job probe must not erase the measured boundary");
+        await Task.CompletedTask;
+    }
+
+    [Test]
     public async Task DescribeMissingHostPrep_NamesBothCommands_WhenBothAreMissing()
     {
         var reason = HostSandboxContainmentProbe.DescribeMissingHostPrep(["run wxc-host-prep prepare-system-drive", NullDeviceWarning]);
@@ -140,15 +173,24 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
         await Task.CompletedTask;
     }
 
-    private static SandboxContainment Measure(IMxcSandboxRuntime? mxcRuntime, ILogger<HostSandboxContainmentProbe>? logger = null)
+    private static SandboxContainment Measure(IMxcSandboxRuntime? mxcRuntime,
+        ILogger<HostSandboxContainmentProbe>? logger = null,
+        Func<WindowsJobProbeResult>? jobProbe = null)
     {
         // The filesystem probe must never run on the Windows branch: it would start a bwrap chain.
         var probe = new HostSandboxContainmentProbe(logger,
             _ => throw new InvalidOperationException("the bwrap probe must not run on the Windows branch"),
             mxcRuntime,
-            isWindows: static () => true);
+            isWindows: static () => true,
+            jobProbe ?? (static () => JobsUnsupported));
         return probe.Containment;
     }
+
+    private static readonly WindowsJobProbeResult JobsUnsupported = new()
+    {
+        Supported = false,
+        Reason = "the Windows Job Object ceilings probe failed: a 512 MB commit inside a 256 MB job succeeded"
+    };
 
     private static IMxcSandboxRuntime Runtime(ProbeOutput probe)
     {

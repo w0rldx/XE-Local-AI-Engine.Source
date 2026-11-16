@@ -2,10 +2,8 @@ namespace XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using Microsoft.Win32.SafeHandles;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <summary>
@@ -20,10 +18,8 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 ///     real tree-kill behavior MUST be verified on Windows 11.
 /// </remarks>
 [SupportedOSPlatform("windows")]
-public sealed partial class WindowsJobObjectProcessHandle : IProcessTreeHandle
+public sealed class WindowsJobObjectProcessHandle : IProcessTreeHandle
 {
-    private const int JobObjectExtendedLimitInformation = 9;
-    private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
     private readonly SafeJobHandle _job;
     private readonly Process _process;
     private readonly ProcessStderrTail? _stderrTail;
@@ -88,7 +84,7 @@ public sealed partial class WindowsJobObjectProcessHandle : IProcessTreeHandle
         SafeJobHandle? job = null;
         try
         {
-            job = CreateJobObjectW(IntPtr.Zero, lpName: null);
+            job = WindowsJobNative.CreateJobObjectW(IntPtr.Zero, lpName: null);
             if (job.IsInvalid)
             {
                 throw new Win32Exception(Marshal.GetLastPInvokeError());
@@ -121,33 +117,20 @@ public sealed partial class WindowsJobObjectProcessHandle : IProcessTreeHandle
 
     private static void ConfigureKillOnClose(SafeJobHandle job)
     {
-        var info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-        {
-            BasicLimitInformation = new JOBOBJECT_BASIC_LIMIT_INFORMATION
+        WindowsJobNative.SetInformation(job,
+            WindowsJobNative.JobObjectExtendedLimitInformation,
+            new WindowsJobNative.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
             {
-                LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-            }
-        };
-
-        var length = Marshal.SizeOf<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>();
-        var buffer = Marshal.AllocHGlobal(length);
-        try
-        {
-            Marshal.StructureToPtr(info, buffer, fDeleteOld: false);
-            if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, buffer, (uint)length))
-            {
-                throw new Win32Exception(Marshal.GetLastPInvokeError());
-            }
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(buffer);
-        }
+                BasicLimitInformation = new WindowsJobNative.JOBOBJECT_BASIC_LIMIT_INFORMATION
+                {
+                    LimitFlags = WindowsJobLimits.LimitKillOnJobClose
+                }
+            });
     }
 
     private static void AssignProcess(SafeJobHandle job, Process process)
     {
-        if (!AssignProcessToJobObject(job, process.Handle))
+        if (!WindowsJobNative.AssignProcessToJobObject(job, process.Handle))
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
@@ -166,79 +149,5 @@ public sealed partial class WindowsJobObjectProcessHandle : IProcessTreeHandle
         {
             // Best-effort cleanup on the failure path; the sanitized exception already carries the cause.
         }
-    }
-
-    [LibraryImport("kernel32.dll", EntryPoint = "CreateJobObjectW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    private static partial SafeJobHandle CreateJobObjectW(IntPtr lpJobAttributes, string? lpName);
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SetInformationJobObject(SafeJobHandle hJob,
-        int jobObjectInformationClass,
-        IntPtr lpJobObjectInformation,
-        uint cbJobObjectInformationLength);
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool AssignProcessToJobObject(SafeJobHandle hJob, IntPtr hProcess);
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool CloseHandle(IntPtr hObject);
-
-    /// <summary>Owns the Win32 job-object handle; closing it terminates the kill-on-close job's process tree.</summary>
-    private sealed class SafeJobHandle : SafeHandleZeroOrMinusOneIsInvalid
-    {
-        public SafeJobHandle() : base(ownsHandle: true)
-        {
-        }
-
-        protected override bool ReleaseHandle()
-        {
-            return CloseHandle(handle);
-        }
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    [SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Win32 interop struct — name mirrors the native layout exactly.")]
-    private struct JOBOBJECT_BASIC_LIMIT_INFORMATION
-    {
-        public long PerProcessUserTimeLimit;
-        public long PerJobUserTimeLimit;
-        public uint LimitFlags;
-        public UIntPtr MinimumWorkingSetSize;
-        public UIntPtr MaximumWorkingSetSize;
-        public uint ActiveProcessLimit;
-        public UIntPtr Affinity;
-        public uint PriorityClass;
-        public uint SchedulingClass;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    [SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Win32 interop struct — name mirrors the native layout exactly.")]
-    private struct IO_COUNTERS
-    {
-        public ulong ReadOperationCount;
-        public ulong WriteOperationCount;
-        public ulong OtherOperationCount;
-        public ulong ReadTransferCount;
-        public ulong WriteTransferCount;
-        public ulong OtherTransferCount;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    [SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Win32 interop struct — name mirrors the native layout exactly.")]
-    private struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-    {
-        public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
-        public IO_COUNTERS IoInfo;
-        public UIntPtr ProcessMemoryLimit;
-        public UIntPtr JobMemoryLimit;
-        public UIntPtr PeakProcessMemoryUsed;
-        public UIntPtr PeakJobMemoryUsed;
     }
 }
