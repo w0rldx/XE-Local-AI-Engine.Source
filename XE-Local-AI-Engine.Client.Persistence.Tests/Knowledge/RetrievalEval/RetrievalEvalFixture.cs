@@ -214,19 +214,19 @@ internal sealed class RetrievalEvalFixture : IDisposable
         return new RetrievalEvalFixture(databasePath, keyHolder, options, embeddingProvider, documentIdsByKey);
     }
 
-    /// <summary>The distinct (vector width, vector identity) pairs the ingested chunk vectors were stored with.</summary>
-    public async Task<IReadOnlyList<(long Dim, string Identity)>> ReadVectorShapesAsync(CancellationToken cancellationToken)
+    /// <summary>The distinct (vector width, vector identity) pairs the ingested chunk vectors were stored with, each with its vector count.</summary>
+    public async Task<IReadOnlyList<(long Dim, string Identity, long Count)>> ReadVectorShapesAsync(CancellationToken cancellationToken)
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(_databasePath, _keyHolder);
         var connection = context.Database.GetDbConnection();
         await OpenAsync(connection, cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT DISTINCT dim, vector_identity FROM knowledge_chunk_vectors;";
+        command.CommandText = "SELECT dim, vector_identity, COUNT(*) FROM knowledge_chunk_vectors GROUP BY dim, vector_identity;";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var shapes = new List<(long, string)>();
+        var shapes = new List<(long, string, long)>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            shapes.Add((reader.GetInt64(0), reader.GetString(1)));
+            shapes.Add((reader.GetInt64(0), reader.GetString(1), reader.GetInt64(2)));
         }
 
         return shapes;

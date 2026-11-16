@@ -135,6 +135,7 @@ public static class LlamaServerServiceCollectionExtensions
 
         // Options default here so the supervisor is resolvable; the host overrides them from node config.
         services.TryAddSingleton(new LlamaServerSupervisorOptions());
+        // An empty map (spawn every model); a host may replace it to attach external endpoints. Nothing binds it from node config.
         services.TryAddSingleton(new LlamaServerExternalEndpointOptions());
         services.TryAddSingleton<ILlamaServerEndpointBinding, LlamaServerEndpointBinding>();
 

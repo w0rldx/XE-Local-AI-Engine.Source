@@ -135,6 +135,36 @@ public sealed class RetrievalEvalHarnessMetricTests : IDisposable
     }
 
     [Test]
+    public async Task EvaluateAsync_RelevantCitationAnchor_CountsOnlyHitsFromRelevantDocuments()
+    {
+        var relevantA = Guid.NewGuid();
+        var relevantB = Guid.NewGuid();
+        var ids = new Dictionary<string, Guid>(StringComparer.Ordinal)
+        {
+            ["a"] = relevantA,
+            ["b"] = relevantB
+        };
+        var elsewhere = new LabeledQuery("elsewhere", "phrase in a distractor", "a", "thirteen month retention");
+        var multiSource = new LabeledQuery("multi", "phrase in the second source", "a", "thirteen month retention")
+        {
+            RelevantDocumentKeys = ["a", "b"]
+        };
+        var search = new FixedSearchService(new Dictionary<string, IReadOnlyList<KnowledgeSearchHit>>(StringComparer.Ordinal)
+        {
+            [elsewhere.Text] = [Hit(relevantA, "Policy", "the policy names a schedule"), Hit(Guid.NewGuid(), "Distractor", "a thirteen month retention rule")],
+            [multiSource.Text] = [Hit(relevantA, "Policy", "the policy names a schedule"), Hit(relevantB, "Runbook", "keep thirteen month retention")]
+        });
+
+        var metrics = await RetrievalEvalHarness.EvaluateAsync(search, [elsewhere, multiSource], ids, K, CancellationToken.None);
+
+        var distractorOnly = metrics.PerQuery.Single(result => result.QueryId == "elsewhere");
+        AssertEx.True(distractorOnly.CitationAnchorPresent, "control: the phrase is in the top-k, in an irrelevant hit.");
+        AssertEx.False(distractorOnly.RelevantCitationAnchorPresent, "an irrelevant hit must not satisfy the relevant-citation guard.");
+        AssertEx.True(metrics.PerQuery.Single(result => result.QueryId == "multi").RelevantCitationAnchorPresent,
+            "any relevant document of a multi-source query may carry the phrase.");
+    }
+
+    [Test]
     public void RepresentativeCorpus_DefinesEveryRequiredDeterministicScenarioGroup()
     {
         var groups = RetrievalEvalRepresentativeCorpus.AnswerableQueries

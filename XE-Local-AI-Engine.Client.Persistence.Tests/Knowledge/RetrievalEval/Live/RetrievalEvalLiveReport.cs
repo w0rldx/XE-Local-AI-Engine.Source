@@ -29,6 +29,9 @@ internal sealed record LiveMetricSummary
 
     public required double? CitationAnchorRate { get; init; }
 
+    /// <summary>Fraction of answerable queries whose citation phrase occurs in a top-k hit from a relevant document.</summary>
+    public required double? RelevantCitationAnchorRate { get; init; }
+
     public required double? SourceAnchorCoverage { get; init; }
 
     public required double? NoAnswerAccuracy { get; init; }
@@ -54,6 +57,7 @@ internal sealed record LiveMetricSummary
             NdcgAtK = Mean(answerable, static evaluation => evaluation.NdcgAtK),
             CitationCoverage = Mean(answerable, static evaluation => evaluation.CitationCoverage),
             CitationAnchorRate = Mean(answerable, static evaluation => evaluation.CitationAnchorPresent ? 1d : 0d),
+            RelevantCitationAnchorRate = Mean(answerable, static evaluation => evaluation.RelevantCitationAnchorPresent ? 1d : 0d),
             SourceAnchorCoverage = Mean(answerable, static evaluation => evaluation.SourceAnchorCoverage),
             NoAnswerAccuracy = Mean(noAnswer, static evaluation => evaluation.NoAnswerCorrect ? 1d : 0d)
         };
@@ -98,7 +102,7 @@ internal sealed record LiveLatency
         ordered[Math.Max(0, (int)Math.Ceiling(percentile * ordered.Length) - 1)];
 }
 
-/// <summary>One query's top-hit scores: the raw material for an abstention-threshold decision.</summary>
+/// <summary>One query's top-hit scores and per-query quality: the raw material for an abstention threshold and a paired bootstrap.</summary>
 internal sealed record LiveQueryScore
 {
     public required string QueryId { get; init; }
@@ -120,6 +124,18 @@ internal sealed record LiveQueryScore
 
     /// <summary>1-based rank of the first relevant hit, 0 when none was retrieved.</summary>
     public int FirstRelevantRank { get; init; }
+
+    /// <summary>Binary-gain nDCG at the report's k, credited by relevant document.</summary>
+    public double NdcgAtK { get; init; }
+
+    /// <summary>1/<see cref="FirstRelevantRank" />, 0 when no relevant hit was retrieved.</summary>
+    public double ReciprocalRank { get; init; }
+
+    /// <summary>Fraction of the citation snippet's tokens present anywhere in the top-k hits, irrelevant ones included.</summary>
+    public double CitationCoverage { get; init; }
+
+    /// <summary>Whether the citation phrase occurs contiguously in a top-k hit from a relevant document.</summary>
+    public bool RelevantCitationAnchorPresent { get; init; }
 
     public double? Margin => Top1Score - Top2Score;
 }
@@ -398,8 +414,11 @@ internal sealed record LiveEnvironment
 
 internal sealed record RetrievalEvalLiveReport
 {
-    /// <summary>3: PROD-spawn became PROD-cold (no search spawns the reranker), PROD-fresh runs after the eval's warm-up, per-query scores.</summary>
-    public int SchemaVersion { get; init; } = 3;
+    /// <summary>
+    ///     3: PROD-spawn became PROD-cold (no search spawns the reranker), PROD-fresh runs after the eval's warm-up, per-query scores.
+    ///     4: per-query nDCG, reciprocal rank and citation fields; ingestion chunk count and seconds.
+    /// </summary>
+    public int SchemaVersion { get; init; } = 4;
 
     /// <summary>False when the run aborted; the configs measured before the abort are still reported.</summary>
     public required bool Completed { get; init; }
@@ -413,6 +432,12 @@ internal sealed record RetrievalEvalLiveReport
     ///     checked against the production vector policy.
     /// </summary>
     public string? EmbeddingVectors { get; init; }
+
+    /// <summary>Chunk vectors ingestion stored, or null when the run aborted before ingestion finished.</summary>
+    public long? IngestionChunkCount { get; init; }
+
+    /// <summary>Wall-clock seconds the corpus took to ingest (extract, chunk, embed, write), or null before it finished.</summary>
+    public double? IngestionSeconds { get; init; }
 
     public required LiveEnvironment Environment { get; init; }
 

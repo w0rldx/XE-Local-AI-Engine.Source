@@ -139,6 +139,12 @@ public sealed record QueryEvaluation
     /// <summary>True when the expected citation phrase occurs contiguously in at least one retrieved chunk.</summary>
     public bool CitationAnchorPresent { get; init; }
 
+    /// <summary>
+    ///     <see cref="CitationAnchorPresent" /> over the retrieved chunks of relevant documents only, so a phrase that only
+    ///     an irrelevant hit happens to contain does not count.
+    /// </summary>
+    public bool RelevantCitationAnchorPresent { get; init; }
+
     /// <summary>True for an explicit no-answer label.</summary>
     public bool ExpectsNoAnswer { get; init; }
 
@@ -335,6 +341,8 @@ public static class RetrievalEvalHarness
             NdcgAtK = ComputeNdcgAtK(relevantDocumentIds, evaluatedHits, k),
             SourceAnchorCoverage = ComputeSourceAnchorCoverage(query.SourceAnchors, evaluatedHits),
             CitationAnchorPresent = ContainsCitationAnchor(query.CitationSnippet, evaluatedHits),
+            RelevantCitationAnchorPresent = ContainsCitationAnchor(query.CitationSnippet,
+                evaluatedHits.Where(hit => relevantDocumentIds.Contains(hit.DocumentId)).ToList()),
             ExpectsNoAnswer = query.ExpectsNoAnswer,
             NoAnswerCorrect = query.ExpectsNoAnswer && evaluatedHits.Count == 0,
             Top1Score = evaluatedHits.Count > 0 ? evaluatedHits[0].Score : null,

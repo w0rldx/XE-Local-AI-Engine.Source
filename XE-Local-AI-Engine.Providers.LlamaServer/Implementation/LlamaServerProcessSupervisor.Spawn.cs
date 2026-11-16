@@ -140,6 +140,12 @@ public sealed partial class LlamaServerProcessSupervisor
         var inputs = await PrepareLaunchInputsAsync(key, resolveArgs, applyLaunchPolicy, admission, benchmarkPolicy, ct).ConfigureAwait(false);
         var variant = inputs.Variant;
 
+        // Every consumer of this process shares the fallback, so the one spawn says it once.
+        if (key.Role == ModelRole.Embedding && EmbeddingModelProfile.For(key.ModelName) is { IsFallback: true } fallback)
+        {
+            _logger.LogInformation("No known embedding profile for {ModelName}: plain input, {Pooling} pooling.", key.ModelName, fallback.Pooling);
+        }
+
         // Serializes the spawn-through-readiness window of GPU-backed loads process-wide; CPU loads bypass. Acquired HERE, immediately before the cap decision that
         // may evict, and spanning BOTH plan attempts below. On the GPU load-admission gate, see wiki 03, section Spawn attempt sequencing.
         using var admissionTicket = variant == GpuVariant.Cpu
@@ -671,7 +677,8 @@ public sealed partial class LlamaServerProcessSupervisor
                     candidate.Plan,
                     key.Role,
                     inputs.LaunchTuning.ChatCacheReuse,
-                    inputs.LaunchTuning.ChatCacheRamMiB),
+                    inputs.LaunchTuning.ChatCacheRamMiB,
+                    EmbeddingModelProfile.For(key.ModelName).Pooling),
                 new LlamaServerLaunchAuxAssets(!string.IsNullOrWhiteSpace(inputs.AdapterFilePath),
                     !string.IsNullOrWhiteSpace(inputs.ProjectorFilePath),
                     !string.IsNullOrWhiteSpace(inputs.Speculative.DraftModelPath)),

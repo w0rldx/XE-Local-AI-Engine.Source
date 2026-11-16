@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -56,6 +57,9 @@ internal sealed class LiveLlamaServer : IAsyncDisposable
     /// <summary>The unique <c>--alias</c> this launch passed, the only model id its <c>/v1/models</c> may list.</summary>
     public required string Alias { get; init; }
 
+    /// <summary>The <c>--pooling</c> this launch passed: the embedding profile's for embedding, <c>rank</c> for the reranker, null for chat.</summary>
+    public string? Pooling { get; private init; }
+
     /// <summary>The last server output lines, for a failure report.</summary>
     public string OutputTail => string.Join('\n', _output);
 
@@ -63,7 +67,7 @@ internal sealed class LiveLlamaServer : IAsyncDisposable
     ///     The launch shape the PRODUCT gives this role, via <see cref="LlamaServerLaunchProjection.From" /> over a plan
     ///     built like <c>LlamaServerLaunchPolicy.ResolveAsync</c>: GPU = <c>--fit on</c>, metrics, KV quant; CPU = threads.
     /// </summary>
-    public static LlamaServerLaunchProjection ProductProjection(ModelRole role, int gpuLayers, int contextTokens)
+    public static LlamaServerLaunchProjection ProductProjection(ModelRole role, int gpuLayers, int contextTokens, string? embeddingModelName = null)
     {
         var policy = new LlamaServerLaunchPolicyOptions();
         var variant = gpuLayers > 0 ? GpuVariant.Cuda : GpuVariant.Cpu;
@@ -79,7 +83,8 @@ internal sealed class LiveLlamaServer : IAsyncDisposable
             plan,
             role,
             role == ModelRole.Chat ? supervisor.ChatCacheReuse : 0,
-            role == ModelRole.Chat ? supervisor.ChatCacheRamMiB : 0);
+            role == ModelRole.Chat ? supervisor.ChatCacheRamMiB : 0,
+            embeddingModelName is null ? null : EmbeddingModelProfile.For(embeddingModelName).Pooling);
     }
 
     /// <summary>
@@ -92,9 +97,15 @@ internal sealed class LiveLlamaServer : IAsyncDisposable
     ///     A unique <c>--alias</c> for the foreign-server guard: the product clients send no model id the single-model
     ///     server routes on (rerank sends none, embeddings send the installed name, which the server ignores).
     /// </remarks>
-    public static IReadOnlyList<string> BuildArguments(ModelRole role, string modelPath, int port, string alias, int gpuLayers, int contextTokens)
+    public static IReadOnlyList<string> BuildArguments(ModelRole role,
+        string modelPath,
+        int port,
+        string alias,
+        int gpuLayers,
+        int contextTokens,
+        string? embeddingModelName = null)
     {
-        var projection = ProductProjection(role, gpuLayers, contextTokens);
+        var projection = ProductProjection(role, gpuLayers, contextTokens, embeddingModelName);
         var args = new List<string>
         {
             "-m",
@@ -160,7 +171,9 @@ internal sealed class LiveLlamaServer : IAsyncDisposable
             return args;
         }
 
-        args.AddRange(role == ModelRole.Embedding ? ["--embeddings", "--pooling", "mean"] : ["--rerank", "--pooling", "rank"]);
+        args.AddRange([
+            role == ModelRole.Embedding ? LlamaServerManagedFlags.Embeddings : LlamaServerManagedFlags.Rerank, LlamaServerManagedFlags.Pooling, projection.Pooling!
+        ]);
         if (projection is { BatchSize: { } batch, UbatchSize: { } ubatch })
         {
             args.AddRange(["-b", batch.ToString(CultureInfo.InvariantCulture), "-ub", ubatch.ToString(CultureInfo.InvariantCulture)]);
@@ -193,7 +206,8 @@ internal sealed class LiveLlamaServer : IAsyncDisposable
         int gpuLayers,
         TimeSpan readyTimeout,
         CancellationToken cancellationToken,
-        int? chatContextTokens = null)
+        int? chatContextTokens = null,
+        string? embeddingModelName = null)
     {
         var contextTokens = role == ModelRole.Chat
             ? chatContextTokens ?? new LlamaServerLaunchPolicyOptions().ChatContextTokens
@@ -208,7 +222,8 @@ internal sealed class LiveLlamaServer : IAsyncDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
-        foreach (var argument in BuildArguments(role, modelPath, port, alias, gpuLayers, contextTokens))
+        var arguments = BuildArguments(role, modelPath, port, alias, gpuLayers, contextTokens, embeddingModelName);
+        foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
         }
@@ -233,7 +248,8 @@ internal sealed class LiveLlamaServer : IAsyncDisposable
 
         var server = new LiveLlamaServer(process, output, port, contextTokens)
         {
-            Alias = alias
+            Alias = alias,
+            Pooling = LlamaServerLaunchProjection.FromArgumentsOrNull(arguments)?.Pooling
         };
         try
         {
@@ -308,11 +324,21 @@ internal sealed class LiveLlamaServer : IAsyncDisposable
         var services = new ServiceCollection()
                        .AddLogging()
                        .AddSingleton(TimeProvider.System)
+                       .AddSingleton(NoHfToken())
                        .AddHuggingFaceGgufStore(configuration)
                        .AddGgufMetadataReader();
         await using var provider = services.BuildServiceProvider();
         var metadata = await provider.GetRequiredService<IGgufMetadataReader>().ReadMetadataAsync(modelPath, cancellationToken);
         return metadata.ContextLength;
+    }
+
+    // The GGUF store resolves a token store for gated header reads; a local file read never needs a token.
+    private static IHfTokenStore NoHfToken()
+    {
+        var store = Substitute.For<IHfTokenStore>();
+        store.GetTokenAsync(Arg.Any<CancellationToken>()).Returns((string?)null);
+        store.HasTokenAsync(Arg.Any<CancellationToken>()).Returns(false);
+        return store;
     }
 
     private static double? ReadRssMiB(int processId)

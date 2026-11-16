@@ -51,6 +51,8 @@ public sealed class RetrievalEvalLiveProcessPiecesTests
             Completed = false,
             AbortReason = "HttpRequestException: boom",
             EmbeddingVectors = "resolved 'nomic' (NOT confident: no vector policy applies); dim 768 identity x",
+            IngestionChunkCount = 812,
+            IngestionSeconds = 9.5,
             Environment = new LiveEnvironment
             {
                 CapturedAtUtc = "2026-09-27 00:00:00Z",
@@ -111,7 +113,13 @@ public sealed class RetrievalEvalLiveProcessPiecesTests
                     BacklogDrainMilliseconds = 10400,
                     PerQuery =
                     [
-                        Score("a1", answerable: true, 5d, 1d, "Rerank", top1Relevant: true),
+                        Score("a1", answerable: true, 5d, 1d, "Rerank", top1Relevant: true) with
+                        {
+                            NdcgAtK = 0.63,
+                            ReciprocalRank = 1,
+                            CitationCoverage = 0.75,
+                            RelevantCitationAnchorPresent = true
+                        },
                         Score("a2", answerable: true, 3d, 2.5d, "Rerank", top1Relevant: true),
                         Score("a3", answerable: true, 0.5d, 0.4d, "Rerank", top1Relevant: false),
                         Score("n1", answerable: false, 1d, 0.5d, "Rerank", top1Relevant: false),
@@ -153,13 +161,20 @@ public sealed class RetrievalEvalLiveProcessPiecesTests
         var config = json.RootElement.GetProperty("Configs")[0];
         AssertEx.False(config.GetProperty("Valid").GetBoolean());
         AssertEx.Equal(30d, config.GetProperty("EndToEnd").GetProperty("Max").GetDouble());
-        AssertEx.Equal(3, json.RootElement.GetProperty("SchemaVersion").GetInt32());
+        AssertEx.Equal(4, json.RootElement.GetProperty("SchemaVersion").GetInt32());
+        AssertEx.Equal(812, json.RootElement.GetProperty("IngestionChunkCount").GetInt64());
+        AssertEx.Equal(9.5, json.RootElement.GetProperty("IngestionSeconds").GetDouble());
         AssertEx.Equal(2, config.GetProperty("BusyFallbacks").GetInt32());
         var perQuery = config.GetProperty("PerQuery");
         AssertEx.Equal(6, perQuery.GetArrayLength());
         AssertEx.Equal("Rerank", perQuery[0].GetProperty("Top1ScoreKind").GetString());
         AssertEx.Equal(4d, perQuery[0].GetProperty("Margin").GetDouble());
         AssertEx.True(perQuery[0].GetProperty("Top1Relevant").GetBoolean());
+        // The paired bootstrap reads these per query from the JSON.
+        AssertEx.Equal(0.63, perQuery[0].GetProperty("NdcgAtK").GetDouble());
+        AssertEx.Equal(1d, perQuery[0].GetProperty("ReciprocalRank").GetDouble());
+        AssertEx.Equal(0.75, perQuery[0].GetProperty("CitationCoverage").GetDouble());
+        AssertEx.True(perQuery[0].GetProperty("RelevantCitationAnchorPresent").GetBoolean());
 
         var markdown = RetrievalEvalLiveReportWriter.RenderMarkdown(report);
         AssertEx.True(markdown.Contains("| bge20 | INVALID: forced rerank degraded |", StringComparison.Ordinal), markdown);
@@ -186,27 +201,33 @@ public sealed class RetrievalEvalLiveProcessPiecesTests
     }
 
     [Test]
-    [Arguments(ModelRole.Embedding, 99)]
-    [Arguments(ModelRole.Reranker, 99)]
-    [Arguments(ModelRole.Embedding, 0)]
-    [Arguments(ModelRole.Reranker, 0)]
-    public void BuildArguments_ParseBackToTheProductProjection_ExceptTheExplicitGpuLayers(ModelRole role, int gpuLayers)
+    [Arguments(ModelRole.Embedding, 99, "nomic-embed-text-v1.5.f16", "mean")]
+    [Arguments(ModelRole.Reranker, 99, null, "rank")]
+    [Arguments(ModelRole.Embedding, 0, "nomic-embed-text-v1.5.f16", "mean")]
+    [Arguments(ModelRole.Reranker, 0, null, "rank")]
+    [Arguments(ModelRole.Embedding, 99, "CompendiumLabs/bge-m3-gguf:F16", "cls")]
+    [Arguments(ModelRole.Embedding, 99, "embeddinggemma-2-Q8_0", "mean")]
+    [Arguments(ModelRole.Embedding, 99, "Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "mean")]
+    public void BuildArguments_ParseBackToTheProductProjection_ExceptTheExplicitGpuLayers(ModelRole role, int gpuLayers, string? embeddingModelName, string pooling)
     {
         var variant = gpuLayers > 0 ? GpuVariant.Cuda : GpuVariant.Cpu;
         var policy = new LlamaServerLaunchPolicyOptions();
         var plan = new LlamaServerLaunchPlan(1792,
             UseKvCacheQuantization: variant != GpuVariant.Cpu && policy.EnableGpuKvCacheQuantization,
             policy.KvCacheType,
-            variant == GpuVariant.Cpu ? LiveLlamaServer.ProductProjection(role, 0, 1792).Threads : null,
-            variant == GpuVariant.Cpu ? LiveLlamaServer.ProductProjection(role, 0, 1792).ThreadsBatch : null);
-        var product = LlamaServerLaunchProjection.From(variant, ResolvedLaunchArguments.Explore(), plan, role);
-        var arguments = LiveLlamaServer.BuildArguments(role, "/m.gguf", 1234, "xe-eval-test-1234", gpuLayers, contextTokens: 1792);
+            variant == GpuVariant.Cpu ? LiveLlamaServer.ProductProjection(role, 0, 1792, embeddingModelName).Threads : null,
+            variant == GpuVariant.Cpu ? LiveLlamaServer.ProductProjection(role, 0, 1792, embeddingModelName).ThreadsBatch : null);
+        // The composer's own source of the pooling: the profile of the installed name, never the GGUF header.
+        var product = LlamaServerLaunchProjection.From(variant, ResolvedLaunchArguments.Explore(), plan, role,
+            embeddingPooling: embeddingModelName is null ? null : EmbeddingModelProfile.For(embeddingModelName).Pooling);
+        var arguments = LiveLlamaServer.BuildArguments(role, "/m.gguf", 1234, "xe-eval-test-1234", gpuLayers, contextTokens: 1792, embeddingModelName);
 
         var parsed = AssertEx.NotNull(LlamaServerLaunchProjection.FromArgumentsOrNull(arguments), string.Join(' ', arguments));
 
         // Deliberate differences outside the projection: explicit -ngl, --device none on the CPU pass, and the guard's
         // --alias (FromArgumentsOrNull ignores flags it does not allow-list).
         AssertEx.Equal(gpuLayers, parsed.GpuLayers);
+        AssertEx.Equal(pooling, parsed.Pooling, string.Join(' ', arguments));
         AssertEx.True(arguments.Take(4).SequenceEqual(["-m", "/m.gguf", "--alias", "xe-eval-test-1234"]), string.Join(' ', arguments));
         AssertEx.Equal(product, parsed with
         {

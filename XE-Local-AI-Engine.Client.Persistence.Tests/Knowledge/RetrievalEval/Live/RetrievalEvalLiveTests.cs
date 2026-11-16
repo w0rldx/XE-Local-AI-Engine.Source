@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 /// <summary>
@@ -118,6 +119,8 @@ public sealed class RetrievalEvalLiveTests : IDisposable
                 AbortReason = abortReason,
                 Environment = environment,
                 EmbeddingVectors = run.EmbeddingVectors,
+                IngestionChunkCount = run.IngestionChunkCount,
+                IngestionSeconds = run.IngestionSeconds,
                 Servers = run.Servers,
                 Configs = run.Configs,
                 Sanity = run.Sanity,
@@ -154,12 +157,12 @@ public sealed class RetrievalEvalLiveTests : IDisposable
         await using var supervisor = new LiveEndpointSupervisor();
         var reranker = new LlamaServerRerankerClient(supervisor, _http, _degrades);
 
-        await using var embedServer = await LiveLlamaServer.StartAsync(settings.ServerPath, settings.EmbedModelPath, ModelRole.Embedding, settings.GpuLayers, PooledReadyTimeout, ct);
-        record.Servers.Add(Footprint("embedding", ModelRole.Embedding, embedServer));
-
         // The name the model store installs the GGUF under, so the product resolver matches it CONFIDENTLY and applies
-        // the same vector policy (Nomic v1.5 -> Matryoshka 512) production would.
+        // the same vector policy (Nomic v1.5 -> Matryoshka 512) and the launcher the same profile pooling production would.
         var embedName = InstalledModelName(settings.EmbedModelPath);
+        await using var embedServer = await LiveLlamaServer.StartAsync(settings.ServerPath, settings.EmbedModelPath, ModelRole.Embedding, settings.GpuLayers, PooledReadyTimeout, ct,
+            embeddingModelName: embedName);
+        record.Servers.Add(Footprint("embedding", ModelRole.Embedding, embedServer));
         supervisor.Register(embedName, ModelRole.Embedding, embedServer.BaseAddress);
         var store = Substitute.For<IGgufModelStore>();
         _ = store.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([
@@ -178,6 +181,7 @@ public sealed class RetrievalEvalLiveTests : IDisposable
 
         // Shipped KnowledgeBaseOptions defaults throughout: chunk window, vector mode and the configured embedding name,
         // which the resolver maps to the installed GGUF exactly as on a node.
+        var ingestionStarted = Stopwatch.GetTimestamp();
         using var fixture = await RetrievalEvalFixture.BuildAsync(Path.Combine(_rootPath, "live.sqlite"),
             _keyHolder,
             corpus.Documents,
@@ -185,11 +189,20 @@ public sealed class RetrievalEvalLiveTests : IDisposable
             new KnowledgeBaseOptions(),
             LiveCorpusView.SourcePathOf,
             ct);
+        record.IngestionSeconds = Stopwatch.GetElapsedTime(ingestionStarted).TotalSeconds;
         var resolution =
             await new EmbeddingModelResolver(Microsoft.Extensions.Options.Options.Create(new KnowledgeBaseOptions()), new FakeNodeSettingsStore(new StoredNodeSettings()))
                 .ResolveAsync(embeddingProvider, ct);
+        var productionPooling = EmbeddingModelProfile.For(resolution.Name).Pooling;
+        if (!string.Equals(embedServer.Pooling, productionPooling, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The embedder launched with --pooling {embedServer.Pooling ?? "(none)"}, but production pools '{resolution.Name}' with {productionPooling}: the run measures vectors no node builds.");
+        }
+
+        record.IngestionChunkCount = (await fixture.ReadVectorShapesAsync(ct)).Sum(static shape => shape.Count);
         record.EmbeddingVectors = $"resolved '{resolution.Name}' ({(resolution.IsConfident ? "confident" : "NOT confident: no vector policy applies")}); "
-                                  + await RequireProductionVectorPolicyAsync(fixture, embedName, ct);
+                                  + $"pooling {productionPooling}; " + await RequireProductionVectorPolicyAsync(fixture, resolution, ct);
 
         var runner = new ConfigRunner(fixture, corpus, settings.K, _degrades, _queryEmbeddingDegrades);
         var noReranker = Substitute.For<IRerankerClient>();
@@ -396,13 +409,13 @@ public sealed class RetrievalEvalLiveTests : IDisposable
     }
 
     /// <summary>
-    ///     Fails unless ingestion stored what production stores: one vector shape and, for Nomic v1.5, Matryoshka-512
-    ///     (<c>KnowledgeEmbeddingVectorPolicy</c>, CONFIDENT resolution only). Native width measures vectors no node ships.
+    ///     Fails unless ingestion stored one vector shape whose identity the product's matcher accepts for the resolution
+    ///     under the shipped vector mode (profile tag; Matryoshka-512 for Nomic v1.5).
     /// </summary>
-    private static async Task<string> RequireProductionVectorPolicyAsync(RetrievalEvalFixture fixture, string embedName, CancellationToken ct)
+    private static async Task<string> RequireProductionVectorPolicyAsync(RetrievalEvalFixture fixture,
+        EmbeddingModelResolution resolution,
+        CancellationToken ct)
     {
-        // KnowledgeEmbeddingVectorPolicy.MatryoshkaAlgorithm, private to the product.
-        const string matryoshkaAlgorithm = "layernorm-population-eps1e-5-truncate-l2:v1";
         var shapes = await fixture.ReadVectorShapesAsync(ct);
         var described = string.Join("; ", shapes.Select(static shape => $"dim {shape.Dim.ToString(CultureInfo.InvariantCulture)} identity {shape.Identity}"));
         if (shapes.Count != 1)
@@ -410,10 +423,9 @@ public sealed class RetrievalEvalLiveTests : IDisposable
             throw new InvalidOperationException($"Expected one stored vector shape after ingestion, found {shapes.Count.ToString(CultureInfo.InvariantCulture)}: {described}");
         }
 
-        var isNomicV15 = embedName.Contains("nomic-embed-text-v1.5", StringComparison.OrdinalIgnoreCase);
-        if (isNomicV15 && (shapes[0].Dim != 512 || !shapes[0].Identity.Contains(matryoshkaAlgorithm, StringComparison.Ordinal)))
+        if (!KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy(shapes[0].Identity, (int)shapes[0].Dim, resolution, new KnowledgeBaseOptions().EmbeddingVectorMode))
         {
-            throw new InvalidOperationException($"Nomic v1.5 must be stored under the Matryoshka-512 policy, as production does; stored: {described}");
+            throw new InvalidOperationException($"The stored vectors do not carry the identity production stores for '{resolution.Name}': {described}");
         }
 
         return described;
@@ -766,7 +778,11 @@ public sealed class RetrievalEvalLiveTests : IDisposable
                 Top2Score = evaluation.Top2Score,
                 Top1ScoreKind = evaluation.Top1ScoreKind?.ToString(),
                 Top1Relevant = evaluation.Top1Relevant,
-                FirstRelevantRank = evaluation.FirstRelevantRank
+                FirstRelevantRank = evaluation.FirstRelevantRank,
+                NdcgAtK = evaluation.NdcgAtK,
+                ReciprocalRank = evaluation.ReciprocalRank,
+                CitationCoverage = evaluation.CitationCoverage,
+                RelevantCitationAnchorPresent = evaluation.RelevantCitationAnchorPresent
             };
 
         // The harness searches the queries in order, one call each, so the i-th recorded hit list belongs to the i-th query.
@@ -854,6 +870,10 @@ internal sealed class RunRecord
     public List<LiveServerFootprint> Servers { get; } = [];
 
     public string? EmbeddingVectors { get; set; }
+
+    public long? IngestionChunkCount { get; set; }
+
+    public double? IngestionSeconds { get; set; }
 
     public LiveContentionResult? Contention { get; set; }
 }

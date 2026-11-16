@@ -466,7 +466,7 @@ public sealed class LlamaServerLaunchProjectionTests
             chatCacheReuse: 0,
             plan: plan);
 
-        AssertEx.Equal(LlamaServerLaunchProjection.From(variant, resolved, plan, ModelRole.Embedding),
+        AssertEx.Equal(LlamaServerLaunchProjection.From(variant, resolved, plan, ModelRole.Embedding, embeddingPooling: "mean"),
             AssertEx.NotNull(LlamaServerLaunchProjection.FromArgumentsOrNull(spec.Arguments)));
     }
 
@@ -599,6 +599,39 @@ public sealed class LlamaServerLaunchProjectionTests
         AssertEx.Equal<int?>(expected: 4096, plan.RequestedContextTokens);
         AssertEx.Null(plan.CpuThreads);
         AssertEx.Null(plan.CpuThreadsBatch);
+    }
+
+    [Test]
+    public void From_EmbeddingWithoutAPooling_Throws()
+    {
+        // A missing profile pooling must fail loudly; a silent default would launch a model with a pooling it was not trained for.
+        AssertEx.Throws<ArgumentException>(() => LlamaServerLaunchProjection.From(GpuVariant.Cpu, ResolvedLaunchArguments.Explore(), plan: null, ModelRole.Embedding));
+    }
+
+    [Test]
+    [Arguments(ModelRole.Embedding, "cls")]
+    [Arguments(ModelRole.Reranker, "rank")]
+    [Arguments(ModelRole.Chat, null)]
+    [Arguments(ModelRole.Decision, null)]
+    public void From_PoolingFollowsTheEmbeddingPoolingForTheEmbeddingRoleOnly(ModelRole role, string? expected)
+    {
+        var projection = LlamaServerLaunchProjection.From(GpuVariant.Cpu, ResolvedLaunchArguments.Explore(), plan: null, role, embeddingPooling: "cls");
+
+        AssertEx.Equal<string?>(expected, projection.Pooling);
+    }
+
+    [Test]
+    public void ComputeIdentity_ForANomicEmbeddingLaunch_IsTheHashItHadBeforeProfiles()
+    {
+        // Pins that explicit profile pooling left nomic's launch shape, and so IdentitySchemeVersion 3, untouched.
+        var projection = LlamaServerLaunchProjection.From(GpuVariant.Cpu,
+            ResolvedLaunchArguments.Replay(ctxSize: 3072),
+            plan: null,
+            ModelRole.Embedding,
+            embeddingPooling: EmbeddingModelProfile.For("nomic-ai/nomic-embed-text-v1.5-GGUF:F16").Pooling);
+
+        AssertEx.Equal("30a2430aecc8c573f75f669cc7df800c4cb7938029ed0d92037359eb7edabec8", projection.ComputeIdentity());
+        AssertEx.Equal(expected: 3, LlamaServerLaunchProjection.IdentitySchemeVersion);
     }
 
     [Test]

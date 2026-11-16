@@ -32,6 +32,9 @@ public static class LlamaServerManagedFlags
     public const string ControlVector = "--control-vector";
     public const string ControlVectorScaled = "--control-vector-scaled";
     public const string ControlVectorLayerRange = "--control-vector-layer-range";
+    public const string Embeddings = "--embeddings";
+    public const string Pooling = "--pooling";
+    public const string Rerank = "--rerank";
 
     /// <summary>Every managed spelling, aliases included, in match order.</summary>
     public static IReadOnlyList<string> All { get; } =
@@ -63,6 +66,9 @@ public static class LlamaServerManagedFlags
         Lora, "--lora-scaled",
 
         // Steering: a vector changes every output of its process, so it stays on the private harness launch that records it.
-        ControlVector, ControlVectorScaled, ControlVectorLayerRange
+        ControlVector, ControlVectorScaled, ControlVectorLayerRange,
+
+        // Serving mode: the embedding profile's pooling is part of the stored vector identity, and --rerank flips pooling to rank wherever it lands.
+        "--embedding", Embeddings, Pooling, Rerank, "--reranking"
     ];
 }

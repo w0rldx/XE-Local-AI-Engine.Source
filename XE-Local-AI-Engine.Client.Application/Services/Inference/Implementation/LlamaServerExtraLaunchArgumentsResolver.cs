@@ -48,6 +48,13 @@ public sealed class LlamaServerExtraLaunchArgumentsResolver : ILlamaServerExtraL
             }
 
             var sanitized = LlamaLaunchArgumentParser.ParseSanitized(raw);
+            if (LlamaLaunchArgumentParser.FindReservedFlag(raw) is not null)
+            {
+                // Never log the override text itself: an operator value may carry a secret.
+                _logger.LogInformation("Removed app-managed flag(s) from the stored extra llama-server arguments for model {ModelName}; the app sets those itself.",
+                    modelName);
+            }
+
             if (sanitized.Count > 0)
             {
                 _logger.LogInformation("Applying {Count} operator-supplied extra llama-server argument(s) for model {ModelName} ({Role}).",

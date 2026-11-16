@@ -130,6 +130,30 @@ public sealed class LlamaServerLaunchArgumentComposerTests
     }
 
     [Test]
+    [Arguments("nomic-ai/nomic-embed-text-v1.5-GGUF:F16", "mean")]
+    [Arguments("ggml-org/embeddinggemma-2-GGUF:Q8_0", "mean")]
+    [Arguments("Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "mean")]
+    [Arguments("CompendiumLabs/bge-m3-gguf:F16", "cls")]
+    [Arguments("my-embed:Q8_0", "mean")]
+    public void Composer_EmbeddingRole_EmitsTheProfilesPoolingOnce(string modelName, string pooling)
+    {
+        var spec = BuildCpuReplaySpec(new LlamaServerProcessSupervisor.ProcessKey(modelName, ModelRole.Embedding));
+
+        AssertEx.Equal(pooling, ValueOf(spec, "--pooling"));
+        AssertEx.Equal(expected: 1, spec.Arguments.Count(static argument => argument == "--pooling"));
+    }
+
+    [Test]
+    public void Composer_NomicEmbeddingAndReranker_KeepTheirArgumentVectors()
+    {
+        // Nomic's stored vectors stay valid only while its process launches exactly as before profiles existed.
+        AssertEx.Equal("-m /fake/models/model.gguf --host 127.0.0.1 --port 8080 --parallel 1 --no-warmup --embeddings --pooling mean -b 4096 -ub 4096 --cache-ram 0",
+            string.Join(' ', BuildCpuReplaySpec(new LlamaServerProcessSupervisor.ProcessKey("nomic-ai/nomic-embed-text-v1.5-GGUF:F16", ModelRole.Embedding)).Arguments));
+        AssertEx.Equal("-m /fake/models/model.gguf --host 127.0.0.1 --port 8080 --parallel 1 --no-warmup --rerank --pooling rank -b 4096 -ub 4096 --cache-ram 0",
+            string.Join(' ', BuildCpuReplaySpec(new LlamaServerProcessSupervisor.ProcessKey("CompendiumLabs/bge-m3-gguf:F16", ModelRole.Reranker)).Arguments));
+    }
+
+    [Test]
     public void ManagedFlags_ReserveTheChatSlotPoolFlags()
     {
         // An operator override could split the pool in half, uncap a slot or bring back the idle-slot clear.
@@ -209,6 +233,18 @@ public sealed class LlamaServerLaunchArgumentComposerTests
             "/fake/models/model.gguf",
             port: 8080,
             GpuVariant.Cuda,
+            ResolvedLaunchArguments.Replay(ctxSize: 4096),
+            chatCacheReuse: 0);
+    }
+
+    // A policy-free CPU replay emits no placement, KV or thread args, so the vector is only the role's own flags.
+    private static LlamaServerLaunchSpec BuildCpuReplaySpec(LlamaServerProcessSupervisor.ProcessKey key)
+    {
+        return LlamaServerLaunchArgumentComposer.BuildLaunchSpec(key,
+            "/fake/bin/llama-server",
+            "/fake/models/model.gguf",
+            port: 8080,
+            GpuVariant.Cpu,
             ResolvedLaunchArguments.Replay(ctxSize: 4096),
             chatCacheReuse: 0);
     }

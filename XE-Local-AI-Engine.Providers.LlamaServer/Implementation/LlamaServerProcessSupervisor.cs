@@ -158,6 +158,14 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         ArgumentNullException.ThrowIfNull(timeProvider);
         _timeProvider = timeProvider;
         _logger = logger ?? NullLogger<LlamaServerProcessSupervisor>.Instance;
+
+        // The map is fixed at DI time, so this states once per start what an attached embedding endpoint must run.
+        foreach (var modelName in _externalEndpoints.EmbeddingEndpointsByModel.Keys)
+        {
+            var profile = EmbeddingModelProfile.For(modelName);
+            _logger.LogInformation("Attached embedding endpoint for {ModelName}: profile {ProfileId} expects {Pooling} pooling; the node cannot verify it.",
+                modelName, profile.Id, profile.Pooling);
+        }
         _detachedSpawnScheduler = detachedSpawnScheduler ?? TaskScheduler.Default;
         _spawnReceipts = spawnReceipts ?? new ProcessSpawnReceiptStore(nodeDataRoot: null, "llama-server", _logger);
 

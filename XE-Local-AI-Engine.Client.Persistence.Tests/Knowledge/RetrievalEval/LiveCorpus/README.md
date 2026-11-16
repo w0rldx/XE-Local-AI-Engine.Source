@@ -17,7 +17,8 @@ is not a semantic model.
   - `long/` — handbooks. `water-utility-operations.md` (English, about 16 KB, long multi-chunk sections) and
     `genossenschaft-hausordnung.txt` (German, about 15 KB, no headings, so only character windows apply) carry the
     `long-document` answers in the middle of multi-chunk sections. The shorter handbooks carry chunk-boundary facts.
-  - `distractors/` — documents that share vocabulary with an answer but do not contain it.
+  - `distractors/` — documents that share vocabulary with an answer but do not contain it, except `wurmkiste.md`,
+    an answer of `ms-09`.
   - `code/` — pinned copies of repository source files (see Provenance).
 - `queries.json` — the labels (schema below).
 - `code-manifest.json` — origin path, commit and SHA-256 of every pinned code copy.
@@ -79,6 +80,14 @@ A document is relevant when a reader could answer the query from it alone, or, f
 `no-answer` query must not be answerable from any document, including the distractors.
 
 Labels frozen 2026-09-28 before the first scored run; any later change needs a new corpus revision noted in the report.
+
+Revision 2 (2026-11-16): +43 queries, frozen before the first scored run of the embedding-profile round. It adds 18
+German queries (`de-09`–`de-16`, `cl-11`–`cl-13`, `ld-08`, `ld-09`, `ms-08`, `ms-09`, `sem-09`–`sem-11`) and 25
+semantic code queries (`cc-09`–`cc-21`, `mx-08`–`mx-19`), written for the documents already here; no document changed.
+Each new citation phrase occurs in exactly one document. A query's cluster for a paired cluster bootstrap is its
+first `relevant` document, so the order of `relevant` is part of the label: revision 2 has 134 answerable queries in
+42 clusters. The frozen cluster map (query id to cluster) is kept with the benchmark evidence, not in this
+corpus. Scores from revision 1 and revision 2 are not compared.
 
 Labels are reviewed before the first scored run and are frozen afterwards: never tune a query, label or document
 after seeing results. A label that turns out to be wrong is corrected in its own reviewed change, and scores from

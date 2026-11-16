@@ -104,3 +104,5 @@ Superseded claims; the entries above are the active rules.
 | A verifiable criterion is decided by the policy config alone. | The judge resolves `item override ?? policy config` for both the verifier config and the reference answer (§3). |
 | A verifier that cannot run scores 0. | It fails the judging and the run is excluded as `verifier-unavailable`; only a TIMEOUT is a real 0 (§3, §4). |
 | The eligible-model listing re-hashes GGUF members. | Listing trusts recorded registry facts; only the freeze re-hashes (§3). |
+| The knowledge-base prefixer applies nomic's `search_document: `/`search_query: ` prefixes to every embedder. | Each model gets its own input format from `EmbeddingModelProfile`, chosen by the model segment of its resolved name; bge-m3 and the `plain` fallback embed raw text (wiki 15, "Embedding profiles"). |
+| Every embedding process is mean-pooled. | It launches with `--pooling` from its profile (`cls` for bge-m3), and the pooling is part of the stored vector identity (wiki 15, "Embedding profiles"). |

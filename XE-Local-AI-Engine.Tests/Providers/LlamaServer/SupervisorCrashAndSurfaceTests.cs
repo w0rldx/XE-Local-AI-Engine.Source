@@ -205,6 +205,46 @@ public sealed class SupervisorCrashAndSurfaceTests
     }
 
     [Test]
+    public async Task Construction_WithAnAttachedEmbeddingEndpoint_LogsTheProfilesUnverifiedPoolingOnce()
+    {
+        // The node cannot see an attached endpoint's pooling, so it states what the stored vectors assume.
+        var logger = new RecordingLogger<LlamaServerProcessSupervisor>();
+        var external = new LlamaServerExternalEndpointOptions
+        {
+            EmbeddingEndpointsByModel = new Dictionary<string, Uri>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["CompendiumLabs/bge-m3-gguf:F16"] = new("http://127.0.0.1:9999/v1")
+            }
+        };
+        await using var supervisor = SupervisorFactory.Create(new FakeProcessLauncher(), externalEndpoints: external, logger: logger);
+
+        _ = await supervisor.EnsureRunningAsync("CompendiumLabs/bge-m3-gguf:F16", ModelRole.Embedding, CancellationToken.None);
+
+        var line = logger.Entries.Single(static entry => entry.Message.Contains("Attached embedding endpoint", StringComparison.Ordinal));
+        AssertEx.Equal(LogLevel.Information, line.Level);
+        AssertEx.Contains(line.Message, "CompendiumLabs/bge-m3-gguf:F16", StringComparison.Ordinal);
+        AssertEx.Contains(line.Message, "expects cls pooling", StringComparison.Ordinal);
+    }
+
+    [Test]
+    [Arguments("my-embed:Q8_0", true)]
+    [Arguments("nomic-ai/nomic-embed-text-v1.5-GGUF:F16", false)]
+    public async Task EnsureRunning_EmbeddingWithNoKnownProfile_LogsThePlainFallbackAtSpawn(string modelName, bool expectLine)
+    {
+        var logger = new RecordingLogger<LlamaServerProcessSupervisor>();
+        await using var supervisor = SupervisorFactory.Create(new FakeProcessLauncher(), logger: logger);
+
+        _ = await supervisor.EnsureRunningAsync(modelName, ModelRole.Embedding, CancellationToken.None);
+
+        var lines = logger.Entries.Where(static entry => entry.Message.Contains("No known embedding profile", StringComparison.Ordinal)).ToList();
+        AssertEx.Equal(expectLine ? 1 : 0, lines.Count);
+        if (expectLine)
+        {
+            AssertEx.Contains(lines[0].Message, $"{modelName}: plain input, mean pooling", StringComparison.Ordinal);
+        }
+    }
+
+    [Test]
     public void ExternalEndpointResolve_RerankerDoesNotFallThroughToChat()
     {
         var external = new LlamaServerExternalEndpointOptions

@@ -22,6 +22,20 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 > The source version identity in `eng/ReleaseVersion.props` still reads `1.0.0-rc.2` — the version that has already
 > shipped. It is bumped when the next release is cut, at which point this section takes that version's heading.
 
+> **Breaking (pre-release): each embedding model is embedded with its own prompt format and pooling.** The format and
+> pooling now come from the model's name (nomic, EmbeddingGemma, bge-m3, or plain text with mean pooling for anything
+> else) and are part of the stored vector identity.
+> - A knowledge base indexed with any embedder other than nomic reindexes once. Until the scheduled reconcile (its first
+>   run is one interval after start, 60 minutes by default) or a manual corpus reindex (`ReindexCorpusEndpoint`, the
+>   Knowledge Base reindex action), search ranks those documents lexically and reports `EmbedderChanged`. Nomic nodes
+>   are unaffected.
+> - An external app that embeds with bge-m3 through the node's embeddings proxy now gets CLS-pooled vectors, which do
+>   not compare with the vectors it stored before: re-embed them.
+> - A per-model launch-argument override can no longer set `--embedding`/`--embeddings`, `--pooling` or
+>   `--rerank`/`--reranking`: a save naming one is refused, and a stored override has them stripped at spawn.
+>   `LLAMA_ARG_EMBEDDINGS`, `LLAMA_ARG_POOLING` and `LLAMA_ARG_RERANKING` are removed from the `llama-server` child
+>   environment.
+
 > **Breaking (pre-release): Dev Workflows is retired (ADR 0023).** Graph Workflows runs development work through its
 > `DevTask` node instead; start from the Graph samples "Development intake" (`dev-intake`) and `research-plan-approval`.
 > - The upgrade drops every stored Dev Workflow row without export: definitions, runs, work items and rule sets, plus the

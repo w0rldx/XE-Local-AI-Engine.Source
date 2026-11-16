@@ -29,7 +29,7 @@ It lists the supervisor's `EnsureRunningAsync` flow and spawn internals, spawn s
   <context/placement/thread args>   # from the launch policy — see below; chat -c = window + background headroom
   --jinja                  # ModelRole.Chat
   --kv-unified --kv-unified-per-slot <window> --no-cache-idle-slots  # ModelRole.Chat
-  --embeddings --pooling mean  # ModelRole.Embedding
+  --embeddings --pooling <mean|cls>  # ModelRole.Embedding: EmbeddingModelProfile.For(model).Pooling
   --rerank --pooling rank      # ModelRole.Reranker
 ```
 

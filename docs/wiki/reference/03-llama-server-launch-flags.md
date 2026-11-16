@@ -66,7 +66,11 @@ Three properties are load-bearing:
   (`Services/Inference/LlamaLaunchArgumentParser.cs`), over the provider's `LlamaServerManagedFlags` — the same list
   `LlamaServerLaunchArgumentComposer` emits from, so a newly managed flag is one edit: *reachability* (`-m`/`--model`, `--host`, `--port`, and `-a`/`--alias`, which the composer sets to the routed model id so relayed responses never name the GGUF host path) and the
   *memory-fit placement* family (`-c`, `-ngl`, `-ts`, `-ot`, `-ctk`/`-ctv`, `-fa`, `--parallel`, the chat slot-pool flags
-  `-kvu`/`--kv-unified`, `--kv-unified-per-slot` and `--cache-idle-slots`, `-b`/`-ub`, and their long aliases and negations), plus `--lora`/`--lora-scaled` and `--control-vector`/`--control-vector-scaled`/`--control-vector-layer-range`. Placement is decided before admission and recorded in the
+  `-kvu`/`--kv-unified`, `--kv-unified-per-slot` and `--cache-idle-slots`, `-b`/`-ub`, and their long aliases and negations), plus `--lora`/`--lora-scaled`, `--control-vector`/`--control-vector-scaled`/`--control-vector-layer-range`, and the
+  *serving-mode* flags `--embedding`/`--embeddings`, `--pooling` and `--rerank`/`--reranking` (an embedding model's
+  pooling is part of its stored vector identity). `LlamaServerProcessLauncher` also removes `LLAMA_ARG_EMBEDDINGS`,
+  `LLAMA_ARG_POOLING` and `LLAMA_ARG_RERANKING` from the child environment, because a role that emits no serving-mode
+  flag would otherwise inherit one. A stripped override logs one Information line naming the model, never the override text. Placement is decided before admission and recorded in the
   memory ledger, so a post-hoc override would invalidate the ledger, defeat the KV-quant safe-config retry, and
   overcommit RAM/VRAM. Everything else llama.cpp accepts (sampling, RoPE, penalties, samplers, grammar, mirostat)
   stays available — re-exploring is the supported way to change placement.

@@ -517,7 +517,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
             });
 
             // Prefix with the query intent so an asymmetric embedding model builds a query vector, not a passage vector.
-            var generated = await generator.GenerateAsync([_prefixer.ForQuery(query)], options: null, cancellationToken);
+            var generated = await generator.GenerateAsync([_prefixer.ForQuery(resolution, query)], options: null, cancellationToken);
             if (generated.Count == 0)
             {
                 return new QueryEmbedding(ReadOnlyMemory<float>.Empty, embeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity);

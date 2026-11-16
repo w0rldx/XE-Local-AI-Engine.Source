@@ -104,7 +104,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
             for (var index = 0; index < count; index++)
             {
                 // Prepend the document-intent prefix only on the text handed to the generator — never into stored content.
-                batch.Add(_prefixer.ForDocument(chunkContents[offset + index]));
+                batch.Add(_prefixer.ForDocument(resolution, chunkContents[offset + index]));
             }
 
             IReadOnlyList<Embedding<float>>? generated = null;
