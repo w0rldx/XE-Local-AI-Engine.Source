@@ -28,6 +28,7 @@ export const imageJobStatusPushSchema = z.object({
 	elapsedMs: z.number().nullish(),
 	imageId: z.string().nullish(),
 	sanitizedError: z.string().nullish(),
+	failureReason: z.string().nullish(),
 	occurredAtUtc: z.number(),
 	seq: z.number(),
 	generationPhase: z.string().nullish(),

@@ -119,6 +119,7 @@ public sealed class ImageJobCoordinatorEditTests
 
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
         AssertEx.Equal("The source image no longer exists.", harness.Store.FailureOf(jobId));
+        AssertEx.Equal(ImageJobFailureReason.SourceImageMissing, harness.Store.ReasonOf(jobId));
         AssertEx.Equal(expected: 0, harness.Runtime.CallCount);
     }
 
@@ -136,6 +137,7 @@ public sealed class ImageJobCoordinatorEditTests
 
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
         AssertEx.Equal("The image runtime build does not support this edit mode.", harness.Store.FailureOf(jobId));
+        AssertEx.Equal(ImageJobFailureReason.EditModeUnsupported, harness.Store.ReasonOf(jobId));
     }
 
     [Test]
@@ -373,7 +375,7 @@ public sealed class ImageJobCoordinatorEditTests
     /// <summary>In-memory job rows: keeps every create as handed over plus the current status and failure text.</summary>
     private sealed class RecordingJobStore : IImageJobStore
     {
-        private readonly ConcurrentDictionary<Guid, (ImageJobStatus Status, string? Error)> _state = new();
+        private readonly ConcurrentDictionary<Guid, (ImageJobStatus Status, string? Error, ImageJobFailureReason? Reason)> _state = new();
 
         public ConcurrentDictionary<Guid, ImageJobCreate> Created { get; } = new();
 
@@ -383,10 +385,13 @@ public sealed class ImageJobCoordinatorEditTests
         public string? FailureOf(Guid jobId) =>
             _state.TryGetValue(jobId, out var state) ? state.Error : null;
 
+        public ImageJobFailureReason? ReasonOf(Guid jobId) =>
+            _state.TryGetValue(jobId, out var state) ? state.Reason : null;
+
         public Task CreateQueuedAsync(ImageJobCreate create, CancellationToken cancellationToken)
         {
             Created[create.Id] = create;
-            _state[create.Id] = (ImageJobStatus.Queued, null);
+            _state[create.Id] = (ImageJobStatus.Queued, null, null);
             return Task.CompletedTask;
         }
 
@@ -403,7 +408,7 @@ public sealed class ImageJobCoordinatorEditTests
             Task.FromResult<IReadOnlyList<string>?>(null);
 
         public Task MarkGeneratingAsync(Guid jobId, long startedAtUtc, CancellationToken cancellationToken) =>
-            Set(jobId, ImageJobStatus.Generating, error: null);
+            Set(jobId, ImageJobStatus.Generating, error: null, reason: null);
 
         public Task MarkSucceededAsync(Guid jobId,
             Guid imageId,
@@ -413,13 +418,13 @@ public sealed class ImageJobCoordinatorEditTests
             int outputHeight,
             long resolvedSeed,
             CancellationToken cancellationToken) =>
-            Set(jobId, ImageJobStatus.Succeeded, error: null);
+            Set(jobId, ImageJobStatus.Succeeded, error: null, reason: null);
 
-        public Task MarkFailedAsync(Guid jobId, string sanitizedError, long completedAtUtc, CancellationToken cancellationToken) =>
-            Set(jobId, ImageJobStatus.Failed, sanitizedError);
+        public Task MarkFailedAsync(Guid jobId, ImageJobFailureReason reason, string sanitizedError, long completedAtUtc, CancellationToken cancellationToken) =>
+            Set(jobId, ImageJobStatus.Failed, sanitizedError, reason);
 
         public Task MarkCancelledAsync(Guid jobId, long completedAtUtc, CancellationToken cancellationToken) =>
-            Set(jobId, ImageJobStatus.Cancelled, error: null);
+            Set(jobId, ImageJobStatus.Cancelled, error: null, reason: null);
 
         public Task MarkCancellationRequestedAsync(Guid jobId, long requestedAtUtc, CancellationToken cancellationToken) =>
             Task.CompletedTask;
@@ -427,9 +432,9 @@ public sealed class ImageJobCoordinatorEditTests
         public Task<IReadOnlyList<Guid>> MarkInterruptedFailedAsync(string sanitizedError, long completedAtUtc, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<Guid>>([]);
 
-        private Task Set(Guid jobId, ImageJobStatus status, string? error)
+        private Task Set(Guid jobId, ImageJobStatus status, string? error, ImageJobFailureReason? reason)
         {
-            _state[jobId] = (status, error);
+            _state[jobId] = (status, error, reason);
             return Task.CompletedTask;
         }
     }

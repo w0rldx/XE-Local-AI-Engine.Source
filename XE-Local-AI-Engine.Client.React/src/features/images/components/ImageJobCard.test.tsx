@@ -64,6 +64,7 @@ function job(overrides: Partial<ImageJobView> = {}): ImageJobView {
 		durationMs: null,
 		imageId: null,
 		sanitizedError: null,
+		failureReason: null,
 		editMode: null,
 		sourceImageId: null,
 		strength: null,

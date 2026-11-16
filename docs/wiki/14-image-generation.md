@@ -454,6 +454,14 @@ An sd-server that dies during a job, while the node keeps running, does not wait
 
 A job the daemon itself reports as `failed` (for example CUDA out of memory after a chat model took the VRAM) is recycled, not reused: `StableDiffusionCppRuntime` logs one Warning with the daemon's error code and message (control characters stripped, bounded length), releases its job lease and evicts the daemon, so the next generation spawns a fresh process instead of failing against the same broken one. The same Warning carries the daemon's stderr tail, read from the job lease before the eviction discards it; the HTTP error alone ("generate_image returned no results") never names the cause. When that tail shows `out of memory`, `CUDA error` or `cudaMalloc`, the job fails with the fixed "The GPU ran out of memory while loading the image model. Unload other models and retry." Otherwise the operator sees the generic "Image generation failed."; the daemon's text is foreign and never shown.
 
+**Every failure carries a reason the UI translates.** Beside the English `sanitized_error`, each `Failed` job stores
+`failure_reason`, an `ImageJobFailureReason` name (`Generic`, `EditModeUnsupported`, `ProcessExited`, `OutOfMemory`,
+`LoadedModelCapReached`, `SourceImageMissing`, `TrainingRunning`, `ChatModelBusy`, `Interrupted`). The job response
+and the `imageJob.statusChanged` push expose it as `failureReason`, and the SPA renders
+`pages.images.jobs.failure.<reason>` in the operator's language. The English text stays for API clients and for a job
+that failed before the column existed (its reason is null, so the SPA shows the stored text). The translated
+`ProcessExited` text omits the exit code; the English text and the supervisor's Warning keep it.
+
 **Interrupted jobs are never auto-retried.** Image generation is expensive and nondeterministic, so the operator resubmits explicitly. This mirrors the scheduler's stale-run reconciliation in `Program`.
 
 The ordering that makes the pass race-free: migrations are applied in `Program` before the host runs; hosted services then start in registration order; and the web host (Kestrel) starts after all of them. Since the create-job endpoint is the only production enqueue path, reconciliation always completes before a new job could race it.

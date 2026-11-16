@@ -71,6 +71,9 @@ internal sealed record class ImageJob
     /// <summary>A display-safe failure reason when <see cref="Status" /> is <see cref="ImageJobStatus.Failed" />.</summary>
     public string? SanitizedError { get; set; }
 
+    /// <summary>Why the job failed, or <see langword="null" /> when it did not (or failed before reasons were stored).</summary>
+    public ImageJobFailureReason? FailureReason { get; set; }
+
     /// <summary>When a cancel was requested (unix ms UTC), or <see langword="null" />.</summary>
     public long? CancellationRequestedAtUtc { get; set; }
 

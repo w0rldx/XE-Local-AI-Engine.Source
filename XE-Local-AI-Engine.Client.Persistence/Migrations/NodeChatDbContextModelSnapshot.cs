@@ -3646,6 +3646,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("edit_mode");
 
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failure_reason");
+
                     b.Property<int>("Height")
                         .HasColumnType("INTEGER")
                         .HasColumnName("height");

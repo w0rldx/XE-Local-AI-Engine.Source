@@ -313,13 +313,13 @@ public sealed class ApplicationHubWireTests
     private static readonly string SamplingImageJobFrame =
         "{\"type\":1,\"target\":\"imageJob.statusChanged\",\"arguments\":[{\"jobId\":\"11111111-1111-4111-8111-111111111111\","
         + "\"phase\":\"Generating\",\"queuePosition\":null,\"elapsedMs\":1500,\"imageId\":null,\"sanitizedError\":null,"
-        + "\"occurredAtUtc\":1758000000000,\"seq\":4,\"generationPhase\":\"Sampling\",\"step\":3,\"totalSteps\":20,"
+        + "\"failureReason\":null,\"occurredAtUtc\":1758000000000,\"seq\":4,\"generationPhase\":\"Sampling\",\"step\":3,\"totalSteps\":20,"
         + "\"secondsPerIteration\":0.25,\"estimatedRemainingMs\":4250}]}" + RecordSeparator;
 
     private static readonly string ReconciledImageJobFrame =
         "{\"type\":1,\"target\":\"imageJob.statusChanged\",\"arguments\":[{\"jobId\":\"22222222-2222-4222-8222-222222222222\","
         + "\"phase\":\"Failed\",\"queuePosition\":2,\"elapsedMs\":null,\"imageId\":\"11111111-1111-4111-8111-111111111111\","
-        + "\"sanitizedError\":\"Interrupted.\",\"occurredAtUtc\":1758000000001,\"seq\":0,\"generationPhase\":null,\"step\":null,"
+        + "\"sanitizedError\":\"Interrupted.\",\"failureReason\":\"Interrupted\",\"occurredAtUtc\":1758000000001,\"seq\":0,\"generationPhase\":null,\"step\":null,"
         + "\"totalSteps\":null,\"secondsPerIteration\":null,\"estimatedRemainingMs\":null}]}" + RecordSeparator;
 
     private static ImageJobStatusEvent SamplingImageJobEvent()
@@ -352,6 +352,7 @@ public sealed class ApplicationHubWireTests
             ElapsedMs = null,
             ImageId = FirstId,
             SanitizedError = "Interrupted.",
+            FailureReason = ImageJobFailureReason.Interrupted,
             OccurredAtUtc = 1758000000001,
             Seq = 0
         };

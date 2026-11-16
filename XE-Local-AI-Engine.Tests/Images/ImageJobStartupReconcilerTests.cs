@@ -61,6 +61,7 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
             var view = AssertEx.NotNull(await GetAsync(scopeFactory, interruptedId));
             AssertEx.Equal(ImageJobStatus.Failed, view.Status);
             AssertEx.Equal(ImageJobStartupReconciler.InterruptedReason, view.SanitizedError);
+            AssertEx.Equal(ImageJobFailureReason.Interrupted, view.FailureReason);
             AssertEx.NotNull((object?)view.CompletedAtUtc, "A reconciled job records its completion time.");
             AssertEx.Equal("a reconciler prompt", view.Prompt, "The prompt ciphertext must survive the status-only update.");
         }
@@ -71,6 +72,7 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
         var preFailed = AssertEx.NotNull(await GetAsync(scopeFactory, failedId));
         AssertEx.Equal(ImageJobStatus.Failed, preFailed.Status);
         AssertEx.Equal("pre-existing failure", preFailed.SanitizedError);
+        AssertEx.Equal(ImageJobFailureReason.OutOfMemory, preFailed.FailureReason);
 
         // Exactly one Failed event per interrupted job was pushed, carrying the interrupted reason (and never a prompt).
         AssertEx.Equal(expected: 2, publisher.Published.Count);
@@ -82,7 +84,8 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
         {
             AssertEx.ContainsSingle(publisher.Published, statusEvent => statusEvent.JobId == interruptedId
                                                                         && statusEvent.Phase == ImageJobStatus.Failed.ToString()
-                                                                        && statusEvent.SanitizedError == ImageJobStartupReconciler.InterruptedReason);
+                                                                        && statusEvent.SanitizedError == ImageJobStartupReconciler.InterruptedReason
+                                                                        && statusEvent.FailureReason == ImageJobFailureReason.Interrupted);
         }
     }
 
@@ -178,7 +181,7 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
                 await store.MarkSucceededAsync(jobId, Guid.NewGuid(), completedAtUtc: 3, durationMs: 1, outputWidth: 512, outputHeight: 512, resolvedSeed: 42, CancellationToken.None);
                 break;
             case ImageJobStatus.Failed:
-                await store.MarkFailedAsync(jobId, "pre-existing failure", completedAtUtc: 3, CancellationToken.None);
+                await store.MarkFailedAsync(jobId, ImageJobFailureReason.OutOfMemory, "pre-existing failure", completedAtUtc: 3, CancellationToken.None);
                 break;
             case ImageJobStatus.Cancelled:
                 await store.MarkCancelledAsync(jobId, completedAtUtc: 3, CancellationToken.None);

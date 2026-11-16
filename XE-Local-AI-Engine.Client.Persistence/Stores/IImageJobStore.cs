@@ -65,8 +65,8 @@ public interface IImageJobStore
         long resolvedSeed,
         CancellationToken cancellationToken);
 
-    /// <summary>Marks a job <see cref="ImageJobStatus.Failed" /> with a display-safe (already sanitized) error.</summary>
-    Task MarkFailedAsync(Guid jobId, string sanitizedError, long completedAtUtc, CancellationToken cancellationToken);
+    /// <summary>Marks a job <see cref="ImageJobStatus.Failed" /> with its reason and a display-safe (already sanitized) error.</summary>
+    Task MarkFailedAsync(Guid jobId, ImageJobFailureReason reason, string sanitizedError, long completedAtUtc, CancellationToken cancellationToken);
 
     /// <summary>Marks a job <see cref="ImageJobStatus.Cancelled" /> and records its completion time.</summary>
     Task MarkCancelledAsync(Guid jobId, long completedAtUtc, CancellationToken cancellationToken);
@@ -76,7 +76,8 @@ public interface IImageJobStore
 
     /// <summary>
     ///     Marks every non-terminal job (<see cref="ImageJobStatus.Queued" /> / <see cref="ImageJobStatus.Generating" />)
-    ///     as <see cref="ImageJobStatus.Failed" /> with the given display-safe reason and returns the affected job ids.
+    ///     as <see cref="ImageJobStatus.Failed" /> with <see cref="ImageJobFailureReason.Interrupted" /> and the given
+    ///     display-safe text, and returns the affected job ids.
     /// </summary>
     /// <remarks>
     ///     Used by startup reconciliation: after a process restart the in-memory job registry is gone, so nothing
@@ -134,6 +135,7 @@ public sealed record ImageJobView
     public long? DurationMs { get; init; }
     public Guid? ImageId { get; init; }
     public string? SanitizedError { get; init; }
+    public ImageJobFailureReason? FailureReason { get; init; }
     public long? CancellationRequestedAtUtc { get; init; }
     public ImageEditMode? EditMode { get; init; }
 

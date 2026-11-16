@@ -3,10 +3,12 @@
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageJobList } from "@/features/images/components/ImageJobList";
 import type { ImageJobView } from "@/features/images/models/ImageModels";
+import de from "@/locales/de.json";
 import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 // The card's live timeline rides the hub; this file is about the pager, so the transport is driven directly.
@@ -31,6 +33,7 @@ function job(id: string): ImageJobView {
 		durationMs: 5000,
 		imageId: null,
 		sanitizedError: null,
+		failureReason: null,
 		editMode: null,
 		sourceImageId: null,
 		strength: null,
@@ -102,5 +105,48 @@ describe("ImageJobList pagination", () => {
 
 		expect(screen.queryByTestId("image-job-list-empty")).not.toBeNull();
 		expect(screen.queryByTestId("image-job-list-pagination")).toBeNull();
+	});
+});
+
+// The real bundles, not a stub: what the operator reads is the translation of the job's reason, and the stored English
+// text only for a job that failed before reasons were stored.
+describe("ImageJobList failure message", () => {
+	beforeEach(installJsdomEnvironmentMocks);
+	afterEach(async () => {
+		cleanup();
+		await i18next.changeLanguage("en");
+	});
+
+	function failed(id: string, failureReason: string | null): ImageJobView {
+		return {
+			...job(id),
+			status: "Failed",
+			sanitizedError: "The image server stopped unexpectedly (exit code 137). It restarts with the next generation.",
+			failureReason,
+		};
+	}
+
+	function errorTexts(): (string | null)[] {
+		return screen.getAllByTestId("image-job-error").map((element) => element.textContent);
+	}
+
+	it("shows a German user the German text for a reason and the stored text for a job without one", async () => {
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage("de");
+		renderList({ jobs: [failed("job-1", "ProcessExited"), failed("job-2", null)], totalCount: 2, page: 1 });
+
+		expect(errorTexts()).toEqual([
+			"Der Bildserver wurde unerwartet beendet. Er startet bei der nächsten Generierung neu.",
+			"The image server stopped unexpectedly (exit code 137). It restarts with the next generation.",
+		]);
+	});
+
+	it("shows an English user the English text for a reason and falls back to the stored text for an unknown one", () => {
+		renderList({ jobs: [failed("job-1", "OutOfMemory"), failed("job-2", "SolarFlare")], totalCount: 2, page: 1 });
+
+		expect(errorTexts()).toEqual([
+			"The GPU ran out of memory while loading the image model. Unload other models and retry.",
+			"The image server stopped unexpectedly (exit code 137). It restarts with the next generation.",
+		]);
 	});
 });

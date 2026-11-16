@@ -1,4 +1,4 @@
-import { t } from "i18next";
+import i18next, { t } from "i18next";
 import { describe, expect, it } from "vitest";
 
 import type {
@@ -23,11 +23,13 @@ import {
 	type SchedulerRuns,
 } from "@/core/operations/models/JobOperationModels";
 import { isActiveOperation } from "@/core/operations/models/OperationModels";
+import de from "@/locales/de.json";
 
 const run = (status: string, errorMessage?: string) => ({ id: "run-1", status, errorMessage }) as TrainingRunResponse;
 const dataset = (workStatus: string | null, workErrorMessage?: string) =>
 	({ id: "ds-1", name: "Support", workStatus, workErrorMessage }) as TrainingDatasetResponse;
-const imageJob = (status: string, sanitizedError?: string) => ({ id: "job-1", status, sanitizedError }) as ImageJobResponse;
+const imageJob = (status: string, sanitizedError?: string, failureReason?: string) =>
+	({ id: "job-1", status, sanitizedError, failureReason }) as ImageJobResponse;
 
 describe("job sources map into operation rows", () => {
 	it("maps a training run through its lifecycle, links the training page and drops a cancelled run", () => {
@@ -63,6 +65,18 @@ describe("job sources map into operation rows", () => {
 		expect(fromImageJobs([imageJob("Generating")], t)[0]).toMatchObject({ state: "running" });
 		expect(fromImageJobs([imageJob("Succeeded")], t)[0]).toMatchObject({ state: "succeeded", label: "Your image is ready" });
 		expect(fromImageJobs([imageJob("Failed", "Out of VRAM.")], t)[0]).toMatchObject({ state: "failed", detail: "Out of VRAM." });
+	});
+
+	it("shows a German user a failed image job's reason in German and the stored text for a job without one", () => {
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		const german = i18next.getFixedT("de");
+		const stored = "The image server stopped unexpectedly (exit code 137). It restarts with the next generation.";
+
+		expect(fromImageJobs([imageJob("Failed", stored, "ProcessExited")], german)[0]).toMatchObject({
+			state: "failed",
+			detail: "Der Bildserver wurde unerwartet beendet. Er startet bei der nächsten Generierung neu.",
+		});
+		expect(fromImageJobs([imageJob("Failed", stored)], german)[0]).toMatchObject({ state: "failed", detail: stored });
 	});
 
 	it("keeps a failed download in Activity but never a failed job", () => {

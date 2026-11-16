@@ -30,6 +30,7 @@ internal sealed class ImageJobConfiguration : IEntityTypeConfiguration<ImageJob>
         builder.Property(entity => entity.DurationMs).HasColumnName("duration_ms");
         builder.Property(entity => entity.ImageId).HasColumnName("image_id");
         builder.Property(entity => entity.SanitizedError).HasColumnName("sanitized_error");
+        builder.Property(entity => entity.FailureReason).HasColumnName("failure_reason").HasConversion<string>().HasMaxLength(32);
         builder.Property(entity => entity.CancellationRequestedAtUtc).HasColumnName("cancellation_requested_at_utc");
         builder.Property(entity => entity.EditMode).HasColumnName("edit_mode");
         builder.Property(entity => entity.SourceImageId).HasColumnName("source_image_id");

@@ -3154,6 +3154,7 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = z.object(
 	durationMs: z.int().nullish(),
 	imageId: z.guid().nullish(),
 	sanitizedError: z.string().nullish(),
+	failureReason: z.string().nullish(),
 	cancellationRequestedAtUtc: z.int().nullish(),
 	editMode: z.string().nullish(),
 	sourceImageId: z.guid().nullish(),

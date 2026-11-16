@@ -72,7 +72,9 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
             // Added at head by AddImageEditColumns.
             "edit_mode",
             "source_image_id",
-            "strength"
+            "strength",
+            // Added at head by AddImageJobFailureReason.
+            "failure_reason"
         }), "image_jobs should expose all mapped columns.");
     }
 

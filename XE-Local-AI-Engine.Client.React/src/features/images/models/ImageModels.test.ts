@@ -220,4 +220,24 @@ describe("edit fields on the wire views", () => {
 		});
 		expect(toImageJobView(base)).toMatchObject({ editMode: null, sourceImageId: null, strength: null });
 	});
+
+	it("maps a failed job's reason and reads an absent one as null", () => {
+		const failed = {
+			id: "j",
+			modelName: "sd",
+			prompt: "p",
+			status: "Failed",
+			seed: "1",
+			width: 512,
+			height: 512,
+			steps: 20,
+			sampler: "euler",
+			cfgScale: 7,
+			createdAtUtc: 0,
+			sanitizedError: "Image generation failed.",
+		} as ImageJobResponse;
+
+		expect(toImageJobView({ ...failed, failureReason: "Generic" }).failureReason).toBe("Generic");
+		expect(toImageJobView(failed).failureReason).toBeNull();
+	});
 });

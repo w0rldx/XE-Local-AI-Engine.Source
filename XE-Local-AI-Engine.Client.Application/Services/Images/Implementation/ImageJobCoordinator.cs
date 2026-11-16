@@ -168,7 +168,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
         // Create the replay log BEFORE the first push so the initial Queued event is buffered as seq 0.
         _ = GetOrCreateEventLog(jobId);
-        PushStatus(jobId, ImageJobStatus.Queued, queuePosition: null, elapsedMs: null, imageId: null, sanitizedError: null, ImageJobProgressDetail.None, isMilestone: true);
+        PushStatus(jobId, ImageJobStatus.Queued, queuePosition: null, elapsedMs: null, imageId: null, ImageJobProgressDetail.None, isMilestone: true);
 
         EvictExpiredEventLogs();
         // The job's own pushes reach only its group; this broadcast lets a feed that never saw it re-read the list.
@@ -354,7 +354,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         catch (OperationCanceledException)
         {
             await RunStoreAsync(store => store.MarkCancelledAsync(jobId, NowUnixMs(), CancellationToken.None), jobId, "mark cancelled");
-            PushStatus(jobId, ImageJobStatus.Cancelled, queuePosition: null, elapsedMs: null, imageId: null, sanitizedError: null, ImageJobProgressDetail.None, isMilestone: true);
+            PushStatus(jobId, ImageJobStatus.Cancelled, queuePosition: null, elapsedMs: null, imageId: null, ImageJobProgressDetail.None, isMilestone: true);
             _logger.LogInformation("Operator cancelled queued image job {JobId} before generation started.", jobId);
             Cleanup(jobId);
             return;
@@ -379,8 +379,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
                 var source = await _imageStore.OpenReadAsync(sourceId, token);
                 if (source is null)
                 {
-                    await RunStoreAsync(store => store.MarkFailedAsync(jobId, SourceImageMissing, NowUnixMs(), CancellationToken.None), jobId, "mark failed");
-                    PushStatus(jobId, ImageJobStatus.Failed, queuePosition: null, elapsedMs: null, imageId: null, SourceImageMissing, ImageJobProgressDetail.None, isMilestone: true);
+                    await FailJobAsync(jobId, new ImageJobFailure(ImageJobFailureReason.SourceImageMissing, SourceImageMissing));
                     return;
                 }
 
@@ -399,23 +398,19 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             // still waits behind another, so this is the only point at which it is definitely about to allocate VRAM. HELD through generation — checking then releasing would let a run admit.
             if (!_gpuWorkGate.TryBeginShared(GpuWorkKind.ImageJob, out gpuAdmission))
             {
-                const string trainingBusy = "A training run is using the GPU. Try again once it finishes.";
-                await RunStoreAsync(store => store.MarkFailedAsync(jobId, trainingBusy, NowUnixMs(), CancellationToken.None), jobId, "mark failed");
-                PushStatus(jobId, ImageJobStatus.Failed, queuePosition: null, elapsedMs: null, imageId: null, trainingBusy, ImageJobProgressDetail.None, isMilestone: true);
+                await FailJobAsync(jobId, new ImageJobFailure(ImageJobFailureReason.TrainingRunning, "A training run is using the GPU. Try again once it finishes."));
                 return;
             }
 
             if (!await FreeLlamaServerVramAsync(jobId, token))
             {
-                const string chatBusy = "A chat model is still generating; wait for it to finish, then retry the image.";
-                await RunStoreAsync(store => store.MarkFailedAsync(jobId, chatBusy, NowUnixMs(), CancellationToken.None), jobId, "mark failed");
-                PushStatus(jobId, ImageJobStatus.Failed, queuePosition: null, elapsedMs: null, imageId: null, chatBusy, ImageJobProgressDetail.None, isMilestone: true);
+                await FailJobAsync(jobId, new ImageJobFailure(ImageJobFailureReason.ChatModelBusy, "A chat model is still generating; wait for it to finish, then retry the image."));
                 return;
             }
 
             var startedAt = NowUnixMs();
             await RunStoreAsync(store => store.MarkGeneratingAsync(jobId, startedAt, CancellationToken.None), jobId, "mark generating");
-            PushStatus(jobId, ImageJobStatus.Generating, queuePosition: null, elapsedMs: 0, imageId: null, sanitizedError: null, ImageJobProgressDetail.None, isMilestone: true);
+            PushStatus(jobId, ImageJobStatus.Generating, queuePosition: null, elapsedMs: 0, imageId: null, ImageJobProgressDetail.None, isMilestone: true);
 
             // Deliberately NOT Progress<T>: with no SynchronizationContext it queues callbacks to the thread pool, so ordered step reports arrive out of order and, since seq is
             // assigned here on the delivery side, a reordered pair gets ASCENDING seqs — the client's monotonic dedupe then accepts a stale step and the bar walks backwards.
@@ -440,27 +435,27 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             await RunStoreAsync(store => store.MarkSucceededAsync(jobId, imageId, NowUnixMs(), durationMs, result.Width, result.Height, result.Seed, CancellationToken.None),
                 jobId,
                 "mark succeeded");
-            PushStatus(jobId, ImageJobStatus.Succeeded, queuePosition: null, elapsedMs: durationMs, imageId: imageId, sanitizedError: null, ImageJobProgressDetail.None, isMilestone: true);
+            PushStatus(jobId, ImageJobStatus.Succeeded, queuePosition: null, elapsedMs: durationMs, imageId: imageId, ImageJobProgressDetail.None, isMilestone: true);
         }
         catch (OperationCanceledException)
         {
             await RunStoreAsync(store => store.MarkCancelledAsync(jobId, NowUnixMs(), CancellationToken.None), jobId, "mark cancelled");
-            PushStatus(jobId, ImageJobStatus.Cancelled, queuePosition: null, elapsedMs: null, imageId: null, sanitizedError: null, ImageJobProgressDetail.None, isMilestone: true);
+            PushStatus(jobId, ImageJobStatus.Cancelled, queuePosition: null, elapsedMs: null, imageId: null, ImageJobProgressDetail.None, isMilestone: true);
             _logger.LogInformation("Operator cancelled image job {JobId} during generation.", jobId);
         }
         catch (Exception exception)
         {
             // Sanitized: never surface a raw message (it may carry internal/model detail) and never log the prompt. A daemon
             // death, a GPU out-of-memory and a full loaded-model cap are the runtime texts passed through: fixed, display-safe and telling the operator what happened.
-            var sanitizedError = exception switch
+            var failure = exception switch
             {
-                StableDiffusionRuntimeException { FeatureUnsupported: true } => EditModeUnsupportedByRuntime,
-                StableDiffusionRuntimeException { ProcessExited: true } or StableDiffusionRuntimeException { OutOfMemory: true }
-                    or StableDiffusionRuntimeException { LoadedModelCapReached: true } => exception.Message,
-                _ => "Image generation failed."
+                StableDiffusionRuntimeException { FeatureUnsupported: true } => new ImageJobFailure(ImageJobFailureReason.EditModeUnsupported, EditModeUnsupportedByRuntime),
+                StableDiffusionRuntimeException { ProcessExited: true } => new ImageJobFailure(ImageJobFailureReason.ProcessExited, exception.Message),
+                StableDiffusionRuntimeException { OutOfMemory: true } => new ImageJobFailure(ImageJobFailureReason.OutOfMemory, exception.Message),
+                StableDiffusionRuntimeException { LoadedModelCapReached: true } => new ImageJobFailure(ImageJobFailureReason.LoadedModelCapReached, exception.Message),
+                _ => new ImageJobFailure(ImageJobFailureReason.Generic, "Image generation failed.")
             };
-            await RunStoreAsync(store => store.MarkFailedAsync(jobId, sanitizedError, NowUnixMs(), CancellationToken.None), jobId, "mark failed");
-            PushStatus(jobId, ImageJobStatus.Failed, queuePosition: null, elapsedMs: null, imageId: null, sanitizedError: sanitizedError, ImageJobProgressDetail.None, isMilestone: true);
+            await FailJobAsync(jobId, failure);
             _logger.LogWarning(exception, "Image job {JobId} failed during generation.", jobId);
         }
         finally
@@ -534,7 +529,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         var isMilestone = !_lastGenerationPhase.TryGetValue(jobId, out var lastPhase) || !string.Equals(lastPhase, phaseKey, StringComparison.Ordinal);
         _lastGenerationPhase[jobId] = phaseKey;
 
-        PushStatus(jobId, ImageJobStatus.Generating, queuePosition: null, elapsedMs, imageId: null, sanitizedError: null, detail, isMilestone);
+        PushStatus(jobId, ImageJobStatus.Generating, queuePosition: null, elapsedMs, imageId: null, detail, isMilestone);
     }
 
     /// <summary>Projects a runtime observation onto the wire fields, every value passed through unchanged.</summary>
@@ -611,7 +606,6 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         int? queuePosition,
         long? elapsedMs,
         Guid? imageId,
-        string? sanitizedError,
         ImageJobProgressDetail detail,
         bool isMilestone)
     {
@@ -626,7 +620,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
                 _lastProgressPushTicks.TryRemove(jobId, out _);
             }
 
-            BroadcastStatus(jobId, status, queuePosition, elapsedMs, imageId, sanitizedError, detail, buffer: true);
+            BroadcastStatus(jobId, status, queuePosition, elapsedMs, imageId, failure: null, detail, buffer: true);
             return;
         }
 
@@ -638,7 +632,15 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         }
 
         _lastProgressPushTicks[jobId] = now;
-        BroadcastStatus(jobId, status, queuePosition, elapsedMs, imageId, sanitizedError, detail, buffer: false);
+        BroadcastStatus(jobId, status, queuePosition, elapsedMs, imageId, failure: null, detail, buffer: false);
+    }
+
+    // Persists and pushes a failure. Always a terminal milestone, so it bypasses PushStatus's throttle bookkeeping.
+    private async Task FailJobAsync(Guid jobId, ImageJobFailure failure)
+    {
+        await RunStoreAsync(store => store.MarkFailedAsync(jobId, failure.Reason, failure.SanitizedError, NowUnixMs(), CancellationToken.None), jobId, "mark failed");
+        _lastProgressPushTicks.TryRemove(jobId, out _);
+        BroadcastStatus(jobId, ImageJobStatus.Failed, queuePosition: null, elapsedMs: null, imageId: null, failure, ImageJobProgressDetail.None, buffer: true);
     }
 
     private void BroadcastStatus(Guid jobId,
@@ -646,7 +648,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         int? queuePosition,
         long? elapsedMs,
         Guid? imageId,
-        string? sanitizedError,
+        ImageJobFailure? failure,
         ImageJobProgressDetail detail,
         bool buffer)
     {
@@ -663,7 +665,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
                 QueuePosition = queuePosition,
                 ElapsedMs = elapsedMs,
                 ImageId = imageId,
-                SanitizedError = sanitizedError,
+                SanitizedError = failure?.SanitizedError,
+                FailureReason = failure?.Reason,
                 OccurredAtUtc = nowUnixMs,
                 Seq = seq,
                 GenerationPhase = detail.GenerationPhase,
@@ -939,4 +942,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             }
         }
     }
+
+    /// <summary>Why a job failed (translated by the UI) and the English text stored beside it.</summary>
+    private readonly record struct ImageJobFailure(ImageJobFailureReason Reason, string SanitizedError);
 }

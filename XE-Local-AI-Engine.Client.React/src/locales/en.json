@@ -4936,6 +4936,17 @@
 			"jobs": {
 				"cancelError": "Could not cancel the job.",
 				"empty": "No image jobs yet. Generate one to see it here.",
+				"failure": {
+					"ChatModelBusy": "A chat model is still generating; wait for it to finish, then retry the image.",
+					"EditModeUnsupported": "The image runtime build does not support this edit mode.",
+					"Generic": "Image generation failed.",
+					"Interrupted": "Interrupted by an application shutdown; submit the job again to retry.",
+					"LoadedModelCapReached": "The maximum number of local image models are already loaded. Unload a model or raise the limit, then try again.",
+					"OutOfMemory": "The GPU ran out of memory while loading the image model. Unload other models and retry.",
+					"ProcessExited": "The image server stopped unexpectedly. It restarts with the next generation.",
+					"SourceImageMissing": "The source image no longer exists.",
+					"TrainingRunning": "A training run is using the GPU. Try again once it finishes."
+				},
 				"title": "Jobs"
 			},
 			"models": {

@@ -59,6 +59,7 @@ internal sealed class ImageJobEventPublisher : IImageJobEventPublisher
             ElapsedMs = statusEvent.ElapsedMs,
             ImageId = statusEvent.ImageId,
             SanitizedError = statusEvent.SanitizedError,
+            FailureReason = statusEvent.FailureReason?.ToString(),
             OccurredAtUtc = statusEvent.OccurredAtUtc,
             Seq = statusEvent.Seq,
             GenerationPhase = statusEvent.GenerationPhase,

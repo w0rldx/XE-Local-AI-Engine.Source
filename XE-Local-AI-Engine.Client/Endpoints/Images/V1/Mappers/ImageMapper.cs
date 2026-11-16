@@ -66,6 +66,7 @@ internal static class ImageMapper
             DurationMs = view.DurationMs,
             ImageId = view.ImageId,
             SanitizedError = view.SanitizedError,
+            FailureReason = view.FailureReason?.ToString(),
             CancellationRequestedAtUtc = view.CancellationRequestedAtUtc,
             EditMode = view.EditMode is { } mode ? ImageEditModeNames.ToName(mode) : null,
             SourceImageId = view.SourceImageId,

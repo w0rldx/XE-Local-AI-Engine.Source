@@ -42,6 +42,7 @@ function job(overrides: Partial<ImageJobView> = {}): ImageJobView {
 		durationMs: 1000,
 		imageId: "66666666-6666-4666-8666-666666666666",
 		sanitizedError: null,
+		failureReason: null,
 		editMode: "img2img",
 		sourceImageId: sourceId,
 		strength: 0.5,

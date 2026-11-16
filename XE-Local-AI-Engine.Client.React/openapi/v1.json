@@ -36797,6 +36797,10 @@
             "type": "string",
             "nullable": true
           },
+          "failureReason": {
+            "type": "string",
+            "nullable": true
+          },
           "cancellationRequestedAtUtc": {
             "type": "integer",
             "nullable": true

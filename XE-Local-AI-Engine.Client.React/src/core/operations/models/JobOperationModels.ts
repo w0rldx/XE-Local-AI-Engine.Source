@@ -5,6 +5,7 @@ import type {
 	XeLocalAiEngineClientEndpointsTrainingV1TrainingDatasetResponse as TrainingDatasetResponse,
 	XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse as TrainingRunResponse,
 } from "@/core/api/generated";
+import { imageJobFailureMessage } from "@/core/models/ImageJobFailure";
 import {
 	byteLine,
 	INDETERMINATE,
@@ -108,7 +109,7 @@ export function fromImageJobs(jobs: readonly ImageJobResponse[], t: TFunction): 
 						),
 						progress: INDETERMINATE,
 						state,
-						detail: state === "failed" ? (job.sanitizedError ?? undefined) : undefined,
+						detail: state === "failed" ? (imageJobFailureMessage(t, job) ?? undefined) : undefined,
 						href: { to: "/images" },
 					} satisfies Operation,
 				];

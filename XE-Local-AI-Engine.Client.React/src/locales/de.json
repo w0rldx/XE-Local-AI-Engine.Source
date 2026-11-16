@@ -4936,6 +4936,17 @@
 			"jobs": {
 				"cancelError": "Die Aufgabe konnte nicht abgebrochen werden.",
 				"empty": "Noch keine Bildaufgaben. Erzeugen Sie eine, um sie hier zu sehen.",
+				"failure": {
+					"ChatModelBusy": "Ein Chatmodell generiert noch. Warten Sie, bis es fertig ist, und erzeugen Sie das Bild dann erneut.",
+					"EditModeUnsupported": "Diese Version der Bild-Laufzeit unterstützt diesen Bearbeitungsmodus nicht.",
+					"Generic": "Die Bildgenerierung ist fehlgeschlagen.",
+					"Interrupted": "Durch das Beenden der Anwendung unterbrochen. Senden Sie die Aufgabe erneut, um es noch einmal zu versuchen.",
+					"LoadedModelCapReached": "Die maximale Anzahl lokaler Bildmodelle ist bereits geladen. Entladen Sie ein Modell oder erhöhen Sie das Limit und versuchen Sie es dann erneut.",
+					"OutOfMemory": "Der GPU ist beim Laden des Bildmodells der Speicher ausgegangen. Entladen Sie andere Modelle und versuchen Sie es erneut.",
+					"ProcessExited": "Der Bildserver wurde unerwartet beendet. Er startet bei der nächsten Generierung neu.",
+					"SourceImageMissing": "Das Ausgangsbild existiert nicht mehr.",
+					"TrainingRunning": "Ein Training belegt die GPU. Versuchen Sie es erneut, sobald es abgeschlossen ist."
+				},
 				"title": "Aufgaben"
 			},
 			"models": {

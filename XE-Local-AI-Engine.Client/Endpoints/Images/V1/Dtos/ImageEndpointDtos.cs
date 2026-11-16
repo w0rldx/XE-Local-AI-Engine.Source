@@ -108,8 +108,14 @@ public sealed class ImageJobResponse
     /// <summary>The produced image id (retrievable via <c>GET images/{imageId}</c>); null until succeeded.</summary>
     public Guid? ImageId { get; init; }
 
-    /// <summary>Operator-safe error reason; non-null only when <see cref="Status" /> is <c>Failed</c>.</summary>
+    /// <summary>Operator-safe English error text; non-null only when <see cref="Status" /> is <c>Failed</c>.</summary>
     public string? SanitizedError { get; init; }
+
+    /// <summary>
+    ///     The <c>ImageJobFailureReason</c> name of a failed job, which the client translates; <see langword="null" />
+    ///     otherwise, and for a job that failed before reasons were stored (show <see cref="SanitizedError" /> then).
+    /// </summary>
+    public string? FailureReason { get; init; }
 
     public long? CancellationRequestedAtUtc { get; init; }
 

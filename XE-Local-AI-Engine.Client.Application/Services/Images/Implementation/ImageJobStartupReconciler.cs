@@ -86,6 +86,7 @@ public sealed class ImageJobStartupReconciler : IHostedService
             ElapsedMs = null,
             ImageId = null,
             SanitizedError = InterruptedReason,
+            FailureReason = ImageJobFailureReason.Interrupted,
             OccurredAtUtc = NowUnixMs(),
             Seq = 0
         };

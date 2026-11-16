@@ -15,7 +15,7 @@ public enum ImageJobStatus
     /// <summary>Generation completed and the result image was persisted.</summary>
     Succeeded = 2,
 
-    /// <summary>Generation failed; <c>SanitizedError</c> carries a display-safe reason.</summary>
+    /// <summary>Generation failed; <c>FailureReason</c> says why and <c>SanitizedError</c> carries the English text.</summary>
     Failed = 3,
 
     /// <summary>The job was cancelled (queued → clean cancel, or generating → daemon restart).</summary>

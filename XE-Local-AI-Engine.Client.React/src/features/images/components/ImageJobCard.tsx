@@ -3,6 +3,7 @@ import { IconPencil } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { imageJobFailureMessage } from "@/core/models/ImageJobFailure";
 import { ImageJobDeleteButton } from "@/features/images/components/ImageJobDeleteButton";
 import { ImageResultView } from "@/features/images/components/ImageResultView";
 import { ImageEditLineage } from "@/features/images/components/ImageSourceThumbnail";
@@ -119,6 +120,7 @@ export function ImageJobCard({ job, isCancelling, onCancel, onEdit }: ImageJobCa
 	const canCancel = !isTerminalStatus(job.status);
 	const display = toProgressDisplay(useImageJobProgress(job.id));
 	const imageId = job.status === "Succeeded" ? job.imageId : null;
+	const failureMessage = job.status === "Failed" ? imageJobFailureMessage(t, job) : null;
 	const handleEdit =
 		onEdit === undefined || imageId === null ? undefined : () => onEdit({ imageId, width: job.width, height: job.height });
 
@@ -186,9 +188,9 @@ export function ImageJobCard({ job, isCancelling, onCancel, onEdit }: ImageJobCa
 
 				{isTerminalStatus(job.status) ? null : <GenerationTimeline display={display} />}
 
-				{job.status === "Failed" && job.sanitizedError ? (
+				{failureMessage ? (
 					<Text size="sm" c="red" data-testid="image-job-error">
-						{job.sanitizedError}
+						{failureMessage}
 					</Text>
 				) : null}
 

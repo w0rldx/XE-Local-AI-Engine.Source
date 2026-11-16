@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Images;
 
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+
 /// <summary>Publishes image-job status changes to the connected operator over SignalR.</summary>
 /// <remarks>
 ///     Every event carries the <c>JobId</c> (scoping delivery to the per-job group) and a per-job monotonic
@@ -41,6 +43,9 @@ public sealed class ImageJobStatusEvent
     public required Guid? ImageId { get; init; }
 
     public required string? SanitizedError { get; init; }
+
+    /// <summary>Why the job failed, set with <see cref="SanitizedError" /> on a <c>Failed</c> push; the UI translates it.</summary>
+    public ImageJobFailureReason? FailureReason { get; init; }
 
     public required long OccurredAtUtc { get; init; }
 

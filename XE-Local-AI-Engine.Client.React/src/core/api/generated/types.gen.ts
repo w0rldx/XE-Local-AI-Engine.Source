@@ -2877,6 +2877,7 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = {
 	durationMs?: number | null;
 	imageId?: string | null;
 	sanitizedError?: string | null;
+	failureReason?: string | null;
 	cancellationRequestedAtUtc?: number | null;
 	editMode?: string | null;
 	sourceImageId?: string | null;

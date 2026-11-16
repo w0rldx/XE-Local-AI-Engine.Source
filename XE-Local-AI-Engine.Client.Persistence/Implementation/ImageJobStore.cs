@@ -170,7 +170,7 @@ public sealed class ImageJobStore : IImageJobStore
         _ = await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task MarkFailedAsync(Guid jobId, string sanitizedError, long completedAtUtc, CancellationToken cancellationToken)
+    public async Task MarkFailedAsync(Guid jobId, ImageJobFailureReason reason, string sanitizedError, long completedAtUtc, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedError);
 
@@ -181,6 +181,7 @@ public sealed class ImageJobStore : IImageJobStore
         }
 
         entity.Status = ImageJobStatus.Failed;
+        entity.FailureReason = reason;
         entity.SanitizedError = sanitizedError;
         entity.CompletedAtUtc = completedAtUtc;
         _ = await _dbContext.SaveChangesAsync(cancellationToken);
@@ -228,6 +229,7 @@ public sealed class ImageJobStore : IImageJobStore
         foreach (var entity in entities)
         {
             entity.Status = ImageJobStatus.Failed;
+            entity.FailureReason = ImageJobFailureReason.Interrupted;
             entity.SanitizedError = sanitizedError;
             entity.CompletedAtUtc = completedAtUtc;
         }
@@ -264,6 +266,7 @@ public sealed class ImageJobStore : IImageJobStore
             DurationMs = entity.DurationMs,
             ImageId = entity.ImageId,
             SanitizedError = entity.SanitizedError,
+            FailureReason = entity.FailureReason,
             CancellationRequestedAtUtc = entity.CancellationRequestedAtUtc,
             // An unrecognised stored name reads as no mode rather than failing the whole list.
             EditMode = ImageEditModeNames.TryParse(entity.EditMode, out var mode) ? mode : null,

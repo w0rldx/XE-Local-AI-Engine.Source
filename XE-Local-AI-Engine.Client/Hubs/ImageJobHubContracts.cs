@@ -59,6 +59,9 @@ internal sealed class ImageJobStatusHubMessage
 
     public required string? SanitizedError { get; init; }
 
+    /// <summary>The <c>ImageJobFailureReason</c> name on a <c>Failed</c> push, which the client translates; otherwise null.</summary>
+    public required string? FailureReason { get; init; }
+
     public required long OccurredAtUtc { get; init; }
 
     public required long Seq { get; init; }

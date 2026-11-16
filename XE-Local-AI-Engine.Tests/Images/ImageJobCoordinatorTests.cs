@@ -68,6 +68,7 @@ public sealed class ImageJobCoordinatorTests
         var jobId = await harness.Coordinator.EnqueueAsync(NewInput("while training"), CancellationToken.None);
 
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
+        await AssertFailedWithAsync(harness, jobId, ImageJobFailureReason.TrainingRunning, "A training run is using the GPU. Try again once it finishes.");
         AssertEx.Equal(expected: 0, harness.Runtime.CallCount, "The runtime must not be called while a run holds the GPU.");
     }
 
@@ -105,8 +106,8 @@ public sealed class ImageJobCoordinatorTests
         var jobId = await harness.Coordinator.EnqueueAsync(NewInput("while chatting"), CancellationToken.None);
 
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
-        AssertEx.Equal("A chat model is still generating; wait for it to finish, then retry the image.",
-            AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None)).SanitizedError);
+        await AssertFailedWithAsync(harness, jobId, ImageJobFailureReason.ChatModelBusy,
+            "A chat model is still generating; wait for it to finish, then retry the image.");
         AssertEx.Equal(expected: 0, harness.Runtime.CallCount, "The runtime must not be called while a chat request holds the GPU.");
         await supervisor.DidNotReceiveWithAnyArgs().EjectAsync(default!, default, default, default);
     }
@@ -136,7 +137,7 @@ public sealed class ImageJobCoordinatorTests
         var jobId = await harness.Coordinator.EnqueueAsync(NewInput("oom"), CancellationToken.None);
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
 
-        AssertEx.Equal(instruction, AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None)).SanitizedError);
+        await AssertFailedWithAsync(harness, jobId, ImageJobFailureReason.OutOfMemory, instruction);
     }
 
     [Test]
@@ -151,7 +152,19 @@ public sealed class ImageJobCoordinatorTests
         var jobId = await harness.Coordinator.EnqueueAsync(NewInput("cap"), CancellationToken.None);
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
 
-        AssertEx.Equal(instruction, AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None)).SanitizedError);
+        await AssertFailedWithAsync(harness, jobId, ImageJobFailureReason.LoadedModelCapReached, instruction);
+    }
+
+    [Test]
+    public async Task RunJob_UnclassifiedRuntimeFailure_FailsWithTheGenericReasonAndNeverTheRawMessage()
+    {
+        using var harness = Harness.Create(blockRuntime: false,
+            runtimeFailure: new StableDiffusionRuntimeException("The image runtime rejected the generation request."));
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("generic"), CancellationToken.None);
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
+
+        await AssertFailedWithAsync(harness, jobId, ImageJobFailureReason.Generic, "Image generation failed.");
     }
 
     [Test]
@@ -297,7 +310,7 @@ public sealed class ImageJobCoordinatorTests
         var jobId = await harness.Coordinator.EnqueueAsync(NewInput("daemon dies"), CancellationToken.None);
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
 
-        AssertEx.Equal(explanation, AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None)).SanitizedError);
+        await AssertFailedWithAsync(harness, jobId, ImageJobFailureReason.ProcessExited, explanation);
     }
 
     [Test]
@@ -635,6 +648,18 @@ public sealed class ImageJobCoordinatorTests
         };
     }
 
+    // The stored row and the terminal push both carry the reason the UI translates, beside the English fallback text.
+    private static async Task AssertFailedWithAsync(Harness harness, Guid jobId, ImageJobFailureReason reason, string sanitizedError)
+    {
+        var view = AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None));
+        AssertEx.Equal(reason, view.FailureReason);
+        AssertEx.Equal(sanitizedError, view.SanitizedError);
+        await AssertEx.EventuallyAsync(() => harness.Coordinator.SnapshotBufferedEvents(jobId)
+                                                    .Any(e => e.Phase == nameof(ImageJobStatus.Failed) && e.FailureReason == reason && e.SanitizedError == sanitizedError),
+            Timeout,
+            $"Job {jobId} pushed no Failed event carrying {reason}.");
+    }
+
     private static async Task WaitForStatusAsync(Harness harness, Guid jobId, ImageJobStatus status)
     {
         await AssertEx.EventuallyAsync(() => harness.Store.StatusOf(jobId) == status, Timeout,
@@ -970,11 +995,12 @@ public sealed class ImageJobCoordinatorTests
             return Task.CompletedTask;
         }
 
-        public Task MarkFailedAsync(Guid jobId, string sanitizedError, long completedAtUtc, CancellationToken cancellationToken)
+        public Task MarkFailedAsync(Guid jobId, ImageJobFailureReason reason, string sanitizedError, long completedAtUtc, CancellationToken cancellationToken)
         {
             Update(jobId, view => view with
             {
                 Status = ImageJobStatus.Failed,
+                FailureReason = reason,
                 SanitizedError = sanitizedError,
                 CompletedAtUtc = completedAtUtc
             });
@@ -1011,6 +1037,7 @@ public sealed class ImageJobCoordinatorTests
                 Update(jobId, view => view with
                 {
                     Status = ImageJobStatus.Failed,
+                    FailureReason = ImageJobFailureReason.Interrupted,
                     SanitizedError = sanitizedError,
                     CompletedAtUtc = completedAtUtc
                 });

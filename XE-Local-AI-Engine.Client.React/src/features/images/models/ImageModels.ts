@@ -117,6 +117,8 @@ export interface ImageJobView {
 	durationMs: number | null;
 	imageId: string | null;
 	sanitizedError: string | null;
+	/** The backend ImageJobFailureReason name of a failed job; `null` for a job that failed before reasons were stored. */
+	failureReason: string | null;
 	editMode: ImageEditMode | null;
 	sourceImageId: string | null;
 	strength: number | null;
@@ -143,6 +145,7 @@ export function toImageJobView(dto: ImageJobResponse): ImageJobView {
 		durationMs: dto.durationMs ?? null,
 		imageId: dto.imageId ?? null,
 		sanitizedError: dto.sanitizedError ?? null,
+		failureReason: dto.failureReason ?? null,
 		editMode: toImageEditMode(dto.editMode),
 		sourceImageId: dto.sourceImageId ?? null,
 		strength: dto.strength ?? null,
