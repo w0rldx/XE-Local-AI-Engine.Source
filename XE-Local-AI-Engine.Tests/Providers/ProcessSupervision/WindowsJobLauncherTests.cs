@@ -142,7 +142,22 @@ public sealed class WindowsJobLauncherTests
         var failure = AssertEx.Throws<InvalidOperationException>(() => new WindowsJobLauncher(api).Start(Command, WindowsJobLimits.Map(2048, 64, 2, 16)));
 
         AssertEx.Contains(failure.Message, "not a member");
+        // The job's terminate cannot reach a process the job does not hold, so the launcher kills it directly.
+        AssertEx.Equal(1, api.ProcessTerminations, "a non-member is terminated at process level");
         AssertNothingSurvived(api, resumeAttempted: false);
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task ATerminateFailureDuringCleanup_IsSwallowed_AndTheOriginalFailureIsReported()
+    {
+        var api = new FakeWindowsJobApi { Member = false, FailAt = "Terminate" };
+
+        var failure = AssertEx.Throws<InvalidOperationException>(() => new WindowsJobLauncher(api).Start(Command, WindowsJobLimits.Map(2048, 64, 2, 16)));
+
+        AssertEx.Contains(failure.Message, "not a member");
+        AssertEx.True(api.Calls.Contains("Terminate"), "the cleanup still tried the job's terminate");
+        AssertEx.Equal(0, api.OpenHandles, "a failed terminate still closes every handle");
         await Task.CompletedTask;
     }
 

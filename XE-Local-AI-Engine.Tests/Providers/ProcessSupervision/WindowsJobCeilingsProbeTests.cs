@@ -23,10 +23,10 @@ public sealed partial class WindowsJobCeilingsProbeTests
         AssertEx.True(result.Supported, result.Reason);
         AssertEx.Null(result.Reason);
         AssertEx.Equal(16, result.SystemProcessorCount);
-        AssertEx.Equal(3, api.Started.Count);
+        AssertEx.Equal(4, api.Started.Count);
         // Every control runs under the probe's own small job, the CPU rate included, and through the one launcher.
         AssertEx.Equal(2, api.Calls.Count(static call => call == "TryCommit"));
-        AssertEx.Equal(3, api.Calls.Count(static call => call == "SetCpuRate"));
+        AssertEx.Equal(4, api.Calls.Count(static call => call == "SetCpuRate"));
         AssertEx.Equal(0, api.OpenHandles);
         await Task.CompletedTask;
     }
@@ -65,9 +65,20 @@ public sealed partial class WindowsJobCeilingsProbeTests
     public async Task AChainInsideTheCapThatCannotStart_IsUnsupported()
     {
         var api = HonestHost();
-        api.ExitCodeFor = static start => IsHolder(start) ? null : 1;
+        api.ExitCodeUnderCap = static (start, _) => IsHolder(start) ? null : 1;
 
         AssertUnsupported(WindowsJobCeilingsProbe.Measure(new WindowsJobLauncher(api), Cmd), "a chain of 2 processes inside a 4-process job exited 1");
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task APastCapChainThatCannotRunUnderAWiderCapEither_IsUnsupported()
+    {
+        // The five-deep chain fails whatever the cap: its failure under four proves nothing about the cap.
+        var api = HonestHost();
+        api.ExitCodeUnderCap = static (start, _) => IsHolder(start) ? null : ShallowOnly(start);
+
+        AssertUnsupported(WindowsJobCeilingsProbe.Measure(new WindowsJobLauncher(api), Cmd), "a chain of 5 processes inside a 8-process job exited 1");
         await Task.CompletedTask;
     }
 
@@ -75,7 +86,7 @@ public sealed partial class WindowsJobCeilingsProbeTests
     public async Task AChainPastTheCapThatRuns_IsUnsupported()
     {
         var api = HonestHost();
-        api.ExitCodeFor = static start => IsHolder(start) ? null : 7;
+        api.ExitCodeUnderCap = static (start, _) => IsHolder(start) ? null : 7;
 
         AssertUnsupported(WindowsJobCeilingsProbe.Measure(new WindowsJobLauncher(api), Cmd), "the active-process limit is not enforced");
         await Task.CompletedTask;
@@ -123,11 +134,15 @@ public sealed partial class WindowsJobCeilingsProbeTests
         new()
         {
             Commit = static bytes => bytes <= 256UL * 1_048_576 ? 0 : 1455,
-            ExitCodeFor = static start => IsHolder(start) ? null : ChainExit(start)
+            ExitCodeUnderCap = static (start, cap) => IsHolder(start) ? null : ChainExit(start, cap)
         };
 
-    private static int ChainExit(WindowsJobStartInfo start) =>
-        ChainDepth().Count(start.CommandLine) <= 4 ? 7 : 1;
+    // A chain runs to its exit code exactly when its depth fits the job's cap.
+    private static int ChainExit(WindowsJobStartInfo start, uint cap) =>
+        ChainDepth().Count(start.CommandLine) <= cap ? 7 : 1;
+
+    private static int ShallowOnly(WindowsJobStartInfo start) =>
+        ChainDepth().Count(start.CommandLine) <= 2 ? 7 : 1;
 
     private static bool IsHolder(WindowsJobStartInfo start) =>
         start.CommandLine.EndsWith("/k", StringComparison.Ordinal);

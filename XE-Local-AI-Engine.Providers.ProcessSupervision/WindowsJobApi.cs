@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
@@ -11,13 +12,15 @@ using Microsoft.Win32.SafeHandles;
 /// <remarks>
 ///     Handle rules (ADR 0025): every pipe is created non-inheritable. The three child ends become inheritable only inside
 ///     <see cref="LaunchLock" />, around the one <c>CreateProcessW</c> whose <c>PROC_THREAD_ATTRIBUTE_HANDLE_LIST</c> names exactly them, and
-///     the engine's copies are closed right after. The parent ends are never inheritable. .NET's own <c>Process.Start</c> inherits every
-///     inheritable handle under a lock no other code can take, so a concurrent start inside that window can still inherit a child end;
-///     the cost is a delayed end of output, which the drain budget of the reader bounds.
+///     the engine's copies are closed right after. The parent ends are never inheritable; stdout and stderr are read overlapped. .NET's
+///     own <c>Process.Start</c> inherits every inheritable handle under a lock no other code can take, so a concurrent start inside that
+///     window can still inherit a child end; the cost is a delayed end of output, which the reader's cancellable drain budget bounds.
 /// </remarks>
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsJobApi : IWindowsJobApi
 {
+    private const uint PipeBufferBytes = 65_536;
+
     private static readonly Lock LaunchLock = new();
 
     public int GetSystemProcessorCount() =>
@@ -86,18 +89,20 @@ internal sealed class WindowsJobApi : IWindowsJobApi
 
     [SuppressMessage("Reliability",
         "CA2000:Dispose objects before losing scope",
-        Justification = "The three parent ends are owned by the returned FileStreams; every failure path disposes all six ends.")]
+        Justification = "The parent ends and the process and thread handles are owned by the returned child; every failure path disposes all of them.")]
     public WindowsJobChild CreateSuspended(SafeHandle job, WindowsJobStartInfo startInfo)
     {
         ArgumentNullException.ThrowIfNull(startInfo);
         SafeFileHandle? stdinRead = null, stdinWrite = null, stdoutRead = null, stdoutWrite = null, stderrRead = null, stderrWrite = null;
+        SafeProcessHandle? process = null;
+        SafeWaitHandle? thread = null;
         try
         {
             CreatePipe(out stdinRead, out stdinWrite);
-            CreatePipe(out stdoutRead, out stdoutWrite);
-            CreatePipe(out stderrRead, out stderrWrite);
+            CreateOverlappedReadPipe(out stdoutRead, out stdoutWrite);
+            CreateOverlappedReadPipe(out stderrRead, out stderrWrite);
 
-            WindowsJobNative.PROCESS_INFORMATION created;
+            uint processId;
             lock (LaunchLock)
             {
                 try
@@ -105,7 +110,11 @@ internal sealed class WindowsJobApi : IWindowsJobApi
                     MakeInheritable(stdinRead);
                     MakeInheritable(stdoutWrite);
                     MakeInheritable(stderrWrite);
-                    created = CreateProcess(job, startInfo, stdinRead, stdoutWrite, stderrWrite);
+                    var created = CreateProcess(job, startInfo, stdinRead, stdoutWrite, stderrWrite);
+                    // Owned at once, before anything else here can throw.
+                    process = new SafeProcessHandle(created.hProcess, ownsHandle: true);
+                    thread = new SafeWaitHandle(created.hThread, ownsHandle: true);
+                    processId = created.dwProcessId;
                 }
                 finally
                 {
@@ -118,16 +127,18 @@ internal sealed class WindowsJobApi : IWindowsJobApi
 
             return new WindowsJobChild
             {
-                Process = new SafeProcessHandle(created.hProcess, ownsHandle: true),
-                Thread = new SafeWaitHandle(created.hThread, ownsHandle: true),
-                ProcessId = checked((int)created.dwProcessId),
+                Process = process,
+                Thread = thread,
+                ProcessId = checked((int)processId),
                 StandardInput = new FileStream(stdinWrite, FileAccess.Write, bufferSize: 4096, isAsync: false),
-                StandardOutput = new FileStream(stdoutRead, FileAccess.Read, bufferSize: 4096, isAsync: false),
-                StandardError = new FileStream(stderrRead, FileAccess.Read, bufferSize: 4096, isAsync: false)
+                StandardOutput = new FileStream(stdoutRead, FileAccess.Read, bufferSize: 4096, isAsync: true),
+                StandardError = new FileStream(stderrRead, FileAccess.Read, bufferSize: 4096, isAsync: true)
             };
         }
         catch
         {
+            thread?.Dispose();
+            process?.Dispose();
             stdinRead?.Dispose();
             stdinWrite?.Dispose();
             stdoutRead?.Dispose();
@@ -210,12 +221,11 @@ internal sealed class WindowsJobApi : IWindowsJobApi
         return unchecked((int)exitCode);
     }
 
-    public void CancelPendingReads(Stream stream)
+    public void TerminateProcess(SafeHandle process)
     {
-        // ERROR_NOT_FOUND (nothing pending) is the common answer and not a failure.
-        if (stream is FileStream { SafeFileHandle: { IsClosed: false } handle })
+        if (!WindowsJobNative.TerminateProcess(process, uExitCode: 1))
         {
-            _ = WindowsJobNative.CancelIoEx(handle, IntPtr.Zero);
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
     }
 
@@ -240,6 +250,40 @@ internal sealed class WindowsJobApi : IWindowsJobApi
     private static void CreatePipe(out SafeFileHandle read, out SafeFileHandle write)
     {
         if (!WindowsJobNative.CreatePipe(out read, out write, IntPtr.Zero, 0))
+        {
+            var error = Marshal.GetLastPInvokeError();
+            read.Dispose();
+            write.Dispose();
+            throw new Win32Exception(error);
+        }
+    }
+
+    /// <summary>An overlapped server end the engine reads and a synchronous client end the child writes.</summary>
+    /// <remarks>
+    ///     Windows documents cancelling a blocked read on another thread only for overlapped I/O, so the drain budget needs this read end
+    ///     overlapped. One instance, local clients only, a GUID name: the engine's own client open is the pipe's only connection.
+    /// </remarks>
+    private static void CreateOverlappedReadPipe(out SafeFileHandle read, out SafeFileHandle write)
+    {
+        var name = string.Create(CultureInfo.InvariantCulture, $@"\\.\pipe\xe-sandbox-{Environment.ProcessId}-{Guid.NewGuid():N}");
+        read = WindowsJobNative.CreateNamedPipeW(name,
+            WindowsJobNative.PipeAccessInbound | WindowsJobNative.FileFlagOverlapped | WindowsJobNative.FileFlagFirstPipeInstance,
+            WindowsJobNative.PipeRejectRemoteClients,
+            nMaxInstances: 1,
+            nOutBufferSize: PipeBufferBytes,
+            nInBufferSize: PipeBufferBytes,
+            nDefaultTimeOut: 0,
+            IntPtr.Zero);
+        if (read.IsInvalid)
+        {
+            var error = Marshal.GetLastPInvokeError();
+            read.Dispose();
+            write = new SafeFileHandle();
+            throw new Win32Exception(error);
+        }
+
+        write = WindowsJobNative.CreateFileW(name, WindowsJobNative.GenericWrite, 0, IntPtr.Zero, WindowsJobNative.OpenExisting, 0, IntPtr.Zero);
+        if (write.IsInvalid || (!WindowsJobNative.ConnectNamedPipe(read, IntPtr.Zero) && Marshal.GetLastPInvokeError() != WindowsJobNative.ErrorPipeConnected))
         {
             var error = Marshal.GetLastPInvokeError();
             read.Dispose();

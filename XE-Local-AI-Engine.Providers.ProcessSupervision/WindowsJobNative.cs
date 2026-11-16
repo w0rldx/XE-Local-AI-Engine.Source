@@ -26,6 +26,14 @@ internal static partial class WindowsJobNative
     public const uint CreateNoWindow = 0x0800_0000;
 
     public const uint StartfUseStdHandles = 0x0000_0100;
+
+    public const uint PipeAccessInbound = 0x0000_0001;
+    public const uint FileFlagFirstPipeInstance = 0x0008_0000;
+    public const uint FileFlagOverlapped = 0x4000_0000;
+    public const uint PipeRejectRemoteClients = 0x0000_0008;
+    public const uint GenericWrite = 0x4000_0000;
+    public const uint OpenExisting = 3;
+    public const int ErrorPipeConnected = 535;
     public const uint HandleFlagInherit = 0x1;
     public const uint Synchronize = 0x0010_0000;
     public const uint DuplicateSameAccess = 0x2;
@@ -128,6 +136,37 @@ internal static partial class WindowsJobNative
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool CreatePipe(out SafeFileHandle hReadPipe, out SafeFileHandle hWritePipe, IntPtr lpPipeAttributes, uint nSize);
 
+    [LibraryImport("kernel32.dll", EntryPoint = "CreateNamedPipeW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial SafeFileHandle CreateNamedPipeW(string lpName,
+        uint dwOpenMode,
+        uint dwPipeMode,
+        uint nMaxInstances,
+        uint nOutBufferSize,
+        uint nInBufferSize,
+        uint nDefaultTimeOut,
+        IntPtr lpSecurityAttributes);
+
+    [LibraryImport("kernel32.dll", EntryPoint = "CreateFileW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial SafeFileHandle CreateFileW(string lpFileName,
+        uint dwDesiredAccess,
+        uint dwShareMode,
+        IntPtr lpSecurityAttributes,
+        uint dwCreationDisposition,
+        uint dwFlagsAndAttributes,
+        IntPtr hTemplateFile);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ConnectNamedPipe(SafeHandle hNamedPipe, IntPtr lpOverlapped);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool TerminateProcess(SafeHandle hProcess, uint uExitCode);
+
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -203,11 +242,6 @@ internal static partial class WindowsJobNative
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool VirtualFreeEx(SafeHandle hProcess, IntPtr lpAddress, nuint dwSize, uint dwFreeType);
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool CancelIoEx(SafeHandle hFile, IntPtr lpOverlapped);
 
     [StructLayout(LayoutKind.Sequential)]
     [SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Win32 interop struct — name mirrors the native layout exactly.")]

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
-using System.Text;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
@@ -9,15 +8,17 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision;
 ///     whatever the command started dies with it.
 /// </summary>
 /// <remarks>
-///     When the root exits, the job is terminated first, which ends every member still holding an output pipe, and the line pumps then
-///     get <see cref="MxcChildProcess.PumpDrainBudget" /> to reach end of stream. Past it (a process outside the job inherited a pipe end,
-///     the residual the launcher's handle rules leave) the pending reads are cancelled and the wait returns. Output is read as UTF-8,
-///     as on the MXC path. <see cref="Kill" /> terminates the job; <see cref="Dispose" /> closes it.
+///     When the root exits, the job is terminated first, ending every member that holds an output pipe, and the pumps get
+///     <see cref="MxcChildProcess.PumpDrainBudget" /> to reach end of stream; past it (a process outside the job holds a pipe end) their
+///     overlapped reads are cancelled and the wait returns. Text is coded as .NET's <c>Process</c> codes it by default on Windows: the
+///     console code pages, through the same <c>EncodingHelper</c> behind <see cref="Console.OutputEncoding" /> and
+///     <see cref="Console.InputEncoding" />, with byte-order-mark detection on read and no preamble on write.
 /// </remarks>
 internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
 {
     private readonly WindowsJobProcess _process;
     private readonly Task[] _pumps;
+    private readonly CancellationTokenSource _readsCancelled = new();
     private readonly bool _standardOutputPumped;
     private readonly TimeProvider _timeProvider;
 
@@ -31,10 +32,10 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
         ArgumentNullException.ThrowIfNull(onStandardErrorLine);
         _process = process;
         _timeProvider = timeProvider;
-        var pumps = new List<Task>(2) { MxcChildProcess.PumpLinesAsync(process.StandardError, onStandardErrorLine) };
+        var pumps = new List<Task>(2) { Pump(process.StandardError, onStandardErrorLine) };
         if (onStandardOutputLine is not null)
         {
-            pumps.Add(MxcChildProcess.PumpLinesAsync(process.StandardOutput, onStandardOutputLine));
+            pumps.Add(Pump(process.StandardOutput, onStandardOutputLine));
             _standardOutputPumped = true;
         }
 
@@ -58,7 +59,7 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
     public async Task WriteStandardInputAndCloseAsync(string text, CancellationToken cancellationToken)
     {
         await using var stream = _process.StandardInput;
-        await stream.WriteAsync(new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(text), cancellationToken);
+        await stream.WriteAsync(Console.InputEncoding.GetBytes(text), cancellationToken);
     }
 
     public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)
@@ -76,6 +77,8 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
         try
         {
             await _process.WaitForExitAsync(cancellationToken);
+            // As in WaitForExitAsync: once the root is gone, no member may keep the pumps open.
+            _process.Terminate();
             await Task.WhenAll(_pumps).WaitAsync(cancellationToken);
             return true;
         }
@@ -88,8 +91,16 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
     public void Kill() =>
         _process.Terminate();
 
-    public void Dispose() =>
+    public void Dispose()
+    {
+        // Ends the pumps before the token's source goes away, so no read registers on a disposed source.
+        _readsCancelled.Cancel();
+        _readsCancelled.Dispose();
         _process.Dispose();
+    }
+
+    private Task Pump(Stream stream, Action<string> onLine) =>
+        MxcChildProcess.PumpLinesAsync(stream, onLine, Console.OutputEncoding, detectEncodingFromByteOrderMarks: true, _readsCancelled.Token);
 
     private async Task DrainPumpsAsync()
     {
@@ -102,7 +113,7 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
             return;
         }
 
-        // The pumps end on the cancelled read (an I/O error they swallow); nothing awaits them past this point.
-        _process.CancelPendingReads();
+        // A process outside the job holds a pipe: cancel the pumps' reads, which ends them; nothing awaits them past this point.
+        await _readsCancelled.CancelAsync();
     }
 }

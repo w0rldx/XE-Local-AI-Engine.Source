@@ -36,6 +36,9 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
     /// <summary>The exit code of a created process, or null for one that runs until its job is terminated.</summary>
     public Func<WindowsJobStartInfo, int?> ExitCodeFor { get; set; } = static _ => 0;
 
+    /// <summary>When set, replaces <see cref="ExitCodeFor" /> with an answer that also sees the job's active-process cap.</summary>
+    public Func<WindowsJobStartInfo, uint, int?>? ExitCodeUnderCap { get; set; }
+
     /// <summary>Answers a commit of the given bytes with the Win32 error it fails with, or 0 when it succeeds.</summary>
     public Func<ulong, int> Commit { get; set; } = static _ => 0;
 
@@ -43,6 +46,15 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
     public string StandardOutputText { get; set; } = string.Empty;
 
     public FakePipe? LastStandardInput { get; private set; }
+
+    /// <summary>A process outside the job keeps the child's stdout open: it never reaches end of stream, not even on terminate.</summary>
+    public bool HoldStandardOutput { get; set; }
+
+    /// <summary>Closing the child's stdin throws, as a broken pipe would.</summary>
+    public bool StandardInputFailsOnDispose { get; set; }
+
+    /// <summary>The processes terminated directly, not through their job.</summary>
+    public int ProcessTerminations { get; private set; }
 
     public int OpenHandles => _handles.Count(static handle => !handle.IsClosed);
 
@@ -97,12 +109,16 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
         LastStandardInput = new FakePipe();
         _exits[process] = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _members[job].Add(process);
-        if (ExitCodeFor(startInfo) is { } exitCode)
+        var answer = ExitCodeUnderCap is null ? ExitCodeFor(startInfo) : ExitCodeUnderCap(startInfo, _set.ActiveProcessLimit);
+        if (answer is { } exitCode)
         {
             _exitCodes[process] = exitCode;
-            output.Complete();
+            if (!HoldStandardOutput)
+            {
+                output.Complete();
+            }
         }
-        else
+        else if (!HoldStandardOutput)
         {
             _pendingOutputs[process] = output;
         }
@@ -114,7 +130,7 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
             Process = process,
             Thread = Issue("thread"),
             ProcessId = 4242,
-            StandardInput = LastStandardInput.Writer,
+            StandardInput = StandardInputFailsOnDispose ? new FailingDisposeStream() : LastStandardInput.Writer,
             StandardOutput = output.Reader,
             StandardError = error.Reader
         };
@@ -139,7 +155,7 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
 
     public void Terminate(SafeHandle job)
     {
-        Calls.Add(nameof(Terminate));
+        Step(nameof(Terminate));
         ObjectDisposedException.ThrowIf(job.IsClosed, job);
         Terminations++;
         foreach (var process in _members[job])
@@ -162,7 +178,13 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
 
     public int GetExitCode(SafeHandle process) => _exitCodes[process];
 
-    public void CancelPendingReads(Stream stream) => Calls.Add(nameof(CancelPendingReads));
+    public void TerminateProcess(SafeHandle process)
+    {
+        Calls.Add(nameof(TerminateProcess));
+        ProcessTerminations++;
+        _exitCodes.TryAdd(process, 1);
+        _exits[process].TrySetResult();
+    }
 
     public bool TryCommit(SafeHandle process, ulong bytes, out int error)
     {
@@ -185,6 +207,15 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
         var handle = new FakeHandle(kind);
         _handles.Add(handle);
         return handle;
+    }
+
+    internal sealed class FailingDisposeStream : MemoryStream
+    {
+        public override async ValueTask DisposeAsync()
+        {
+            await base.DisposeAsync();
+            throw new IOException("injected: the pipe broke");
+        }
     }
 
     internal sealed class FakeHandle : SafeHandle

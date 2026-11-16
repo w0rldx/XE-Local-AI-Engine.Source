@@ -54,7 +54,7 @@ public sealed class ProcessSandboxWindowsJobTests
     }
 
     [Test]
-    public async Task StandardInput_ReachesTheJobChild_AsUtf8()
+    public async Task StandardInput_ReachesTheJobChild_InTheConsoleInputEncoding()
     {
         var api = new FakeWindowsJobApi();
         using var provider = Provider(api);
@@ -63,7 +63,7 @@ public sealed class ProcessSandboxWindowsJobTests
         var result = await provider.ExecuteAsync(handle, Command("stdin", "tool.exe") with { StandardInput = "grüße" });
 
         AssertEx.Equal(0, result.ExitCode);
-        using var reader = new StreamReader(AssertEx.NotNull(api.LastStandardInput).Reader);
+        using var reader = new StreamReader(AssertEx.NotNull(api.LastStandardInput).Reader, Console.InputEncoding);
         AssertEx.Equal("grüße", await reader.ReadToEndAsync());
         await provider.KillAsync(handle);
     }
@@ -117,6 +117,43 @@ public sealed class ProcessSandboxWindowsJobTests
 
         AssertEx.True(api.Terminations >= 1);
         AssertEx.Equal(0, api.OpenHandles);
+        await provider.KillAsync(handle);
+    }
+
+    [Test]
+    public async Task AFailedStdinClose_RefusesTheCommand_AndDisposesItsJob()
+    {
+        var api = new FakeWindowsJobApi { StandardInputFailsOnDispose = true, ExitCodeFor = static _ => null };
+        var markers = new CountingMarkerStore();
+        using var provider = Provider(api, markers);
+        var handle = await provider.CreateOrAttachAsync(Request());
+
+        var result = await provider.ExecuteAsync(handle, Command("stdin-close", "tool.exe"));
+
+        AssertRefused(result, api, markers);
+        AssertEx.True(api.Terminations >= 1, "the started command's job is terminated, not left for a finalizer");
+        await provider.KillAsync(handle);
+    }
+
+    [Test]
+    public async Task CeilingsNoMechanismApplies_RefuseTheCommand_RatherThanThrowing()
+    {
+        // The probe advertised ceilings but measured nothing to apply them with: SandboxLaunchPlan.Create refuses (ADR 0025), and the
+        // command path turns that into a failed launch with nothing run.
+        var api = new FakeWindowsJobApi();
+        using var provider = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()),
+            TimeProvider.System,
+            logger: null,
+            new SandboxLauncher(new FixedProbe(SandboxContainment.None with { SupportsResourceLimits = true })),
+            new CountingMarkerStore(),
+            windowsJobLauncher: new WindowsJobLauncher(api));
+        var handle = await provider.CreateOrAttachAsync(Request());
+
+        var result = await provider.ExecuteAsync(handle, Command("no-mechanism", "tool.exe"));
+
+        AssertEx.True(result.LaunchFailed);
+        AssertEx.Contains(result.StandardError, "neither a systemd scope nor a Windows job");
+        AssertEx.Empty(api.Started);
         await provider.KillAsync(handle);
     }
 

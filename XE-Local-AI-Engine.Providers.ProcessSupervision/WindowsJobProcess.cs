@@ -64,13 +64,6 @@ public sealed class WindowsJobProcess : IDisposable
         }
     }
 
-    /// <summary>Unblocks reads on stdout and stderr that a process outside the job still holds open.</summary>
-    public void CancelPendingReads()
-    {
-        _api.CancelPendingReads(_child.StandardOutput);
-        _api.CancelPendingReads(_child.StandardError);
-    }
-
     public void Dispose()
     {
         _ = ExitCode;

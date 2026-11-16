@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
@@ -83,7 +84,7 @@ public sealed class WindowsJobSandboxWindowsTests
     [Test]
     public async Task TheCommitCeiling_FailsAnAllocationPastIt_AndAdmitsOneUnderIt()
     {
-        const string allocate = "$b = [byte[]]::new(800MB); $b[0] = 1; 'allocated'";
+        const string allocate = "'starting'; $b = [byte[]]::new(800MB); $b[0] = 1; 'allocated'";
         using var provider = Provider();
         var tight = await provider.CreateOrAttachAsync(Request(new SandboxResourceLimits { MemoryMb = 512 }));
         var roomy = await provider.CreateOrAttachAsync(Request(new SandboxResourceLimits { MemoryMb = 2048 }));
@@ -92,7 +93,10 @@ public sealed class WindowsJobSandboxWindowsTests
             var past = await provider.ExecuteAsync(tight, PowerShell("commit-past", allocate));
             var under = await provider.ExecuteAsync(roomy, PowerShell("commit-under", allocate));
 
+            // The marker proves powershell started, so the missing "allocated" is the commit ceiling's doing, not a failed start.
+            AssertEx.Contains(past.StandardOutput, "starting");
             AssertEx.False(past.StandardOutput.Contains("allocated", StringComparison.Ordinal), "an 800 MB array was allocated inside a 512 MB job");
+            AssertEx.Contains(under.StandardOutput, "starting");
             AssertEx.Contains(under.StandardOutput, "allocated");
         }
         finally
@@ -121,45 +125,128 @@ public sealed class WindowsJobSandboxWindowsTests
         }
     }
 
-    /// <summary>
-    ///     One core's worth of a host whose engine is pinned to two processors: the rate is computed against the WHOLE system, so the
-    ///     members get one core, not the two a process-relative denominator would give (ADR 0025, CPU rule).
-    /// </summary>
+    /// <summary>One core's worth under a two-processor affinity: the rate is against the WHOLE system, not the processors a member may use.</summary>
+    /// <remarks>Only the child is pinned, never this test host, so no other test runs under a changed affinity (ADR 0025, CPU rule).</remarks>
     [Test]
-    public async Task TheCpuCeiling_HoldsOneCore_UnderRestrictedEngineAffinity()
+    public async Task TheCpuCeiling_HoldsOneCore_UnderRestrictedAffinity()
     {
         var system = new WindowsJobLauncher().SystemProcessorCount;
         AssertEx.True(system >= 2, $"this test needs at least two logical processors; the host has {system}");
-        var self = Process.GetCurrentProcess();
-        var affinity = self.ProcessorAffinity;
-        self.ProcessorAffinity = 0b11;
-        WindowsJobProcess process;
+        using var process = Launch("powershell -NoProfile -NonInteractive -Command \"Start-Sleep 1; 1..2 | ForEach-Object { [powershell]::Create().AddScript('while ($true) {}').BeginInvoke() } | Out-Null; Start-Sleep 60\"",
+            WindowsJobLimits.Map(4096, 64, 1, system));
         try
         {
-            process = Launch("powershell -NoProfile -NonInteractive -Command \"1..2 | ForEach-Object { [powershell]::Create().AddScript('while ($true) {}').BeginInvoke() } | Out-Null; Start-Sleep 60\"",
-                WindowsJobLimits.Map(4096, 64, 1, system));
+            // Pinned before its spinner threads exist; a process-relative denominator would give the job two of these processors.
+            using (var root = Process.GetProcessById(process.Id))
+            {
+                root.ProcessorAffinity = 0b11;
+            }
+
+            // real-timer: a CPU measurement window, not a wait for an event; the job's CPU time is read at both ends of it.
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            var before = JobCpuTime(process.Job);
+            var clock = Stopwatch.StartNew();
+            await Task.Delay(TimeSpan.FromSeconds(4));
+            var cores = (JobCpuTime(process.Job) - before).TotalSeconds / clock.Elapsed.TotalSeconds;
+
+            AssertEx.True(cores > 0.3, $"the spinners used {cores:F2} cores; the measurement saw no work");
+            AssertEx.True(cores <= 1.35, $"the job used {cores:F2} cores under a one-core ceiling");
         }
         finally
         {
-            self.ProcessorAffinity = affinity;
+            process.Terminate();
+        }
+    }
+
+    /// <summary>Non-ASCII output decodes exactly as a bare <c>Process</c> decodes it by default (the console code page), never as UTF-8 regardless.</summary>
+    [Test]
+    public async Task NonAsciiOutput_DecodesAsTheBareProcessPathDoes()
+    {
+        var bare = new ProcessStartInfo("cmd.exe")
+        {
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            // As the job launcher's CREATE_NO_WINDOW: both children get a console of their own with the same default code page.
+            CreateNoWindow = true
+        };
+        foreach (var argument in new[] { "/d", "/c", "echo", "grüße" })
+        {
+            bare.ArgumentList.Add(argument);
         }
 
-        using (process)
+        string expected;
+        using (var reference = Process.Start(bare)!)
         {
-            try
-            {
-                // real-timer: a CPU measurement window, not a wait for an event; the job's CPU time is read at both ends of it.
-                var before = JobCpuTime(process.Job);
-                var clock = Stopwatch.StartNew();
-                await Task.Delay(TimeSpan.FromSeconds(4));
-                var cores = (JobCpuTime(process.Job) - before).TotalSeconds / clock.Elapsed.TotalSeconds;
+            expected = await reference.StandardOutput.ReadToEndAsync();
+            await reference.WaitForExitAsync();
+        }
 
-                AssertEx.True(cores > 0.3, $"the spinners used {cores:F2} cores; the measurement saw no work");
-                AssertEx.True(cores <= 1.35, $"the job used {cores:F2} cores under a one-core ceiling");
-            }
-            finally
+        using var provider = Provider();
+        var handle = await provider.CreateOrAttachAsync(Request(new SandboxResourceLimits { MemoryMb = 2048 }));
+        try
+        {
+            var result = await provider.ExecuteAsync(handle, Cmd("encoding", "echo", "grüße"));
+
+            AssertEx.Contains(expected, "gr");
+            AssertEx.Equal(expected.TrimEnd(), result.StandardOutput.TrimEnd());
+        }
+        finally
+        {
+            await provider.KillAsync(handle);
+        }
+    }
+
+    /// <summary>A process outside the job holding stdout open ends the command at the drain budget, and both pumps finish.</summary>
+    /// <remarks>
+    ///     The root duplicates its own stdout into this test host, which is outside the job, then exits. Windows documents cancelling a
+    ///     blocked read on another thread for overlapped I/O, so the engine reads stdout and stderr overlapped (ADR 0025).
+    /// </remarks>
+    [Test]
+    public async Task AStdoutHeldOutsideTheJob_EndsAtTheDrainBudget_AndBothPumpsFinish()
+    {
+        var script = """
+                     Add-Type -Name K -Namespace XeTest -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n); [DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr OpenProcess(uint access, bool inherit, int pid); [DllImport("kernel32.dll", SetLastError = true)] public static extern bool DuplicateHandle(IntPtr sourceProcess, IntPtr source, IntPtr targetProcess, out IntPtr target, uint access, bool inherit, uint options); [DllImport("kernel32.dll")] public static extern IntPtr GetCurrentProcess();'
+                     $engine = [XeTest.K]::OpenProcess(0x40, $false, ENGINE_PID)
+                     $held = [IntPtr]::Zero
+                     if (-not [XeTest.K]::DuplicateHandle([XeTest.K]::GetCurrentProcess(), [XeTest.K]::GetStdHandle(-11), $engine, [ref]$held, 0, $false, 2)) { exit 9 }
+                     [Console]::Error.WriteLine($held.ToInt64())
+                     """.Replace("ENGINE_PID", Environment.ProcessId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
+        var errors = new List<string>();
+        using var child = new WindowsJobSandboxChildProcess(Launch($"powershell -NoProfile -NonInteractive -EncodedCommand {encoded}", WindowsJobLimits.Map(4096, 256, null, Environment.ProcessorCount)),
+            TimeProvider.System,
+            static _ => { },
+            line =>
             {
-                process.Terminate();
+                lock (errors)
+                {
+                    errors.Add(line);
+                }
+            });
+        var held = IntPtr.Zero;
+        try
+        {
+            var clock = Stopwatch.StartNew();
+            var exitCode = await child.WaitForExitAsync(CancellationToken.None);
+            var returnedAfter = clock.Elapsed;
+            lock (errors)
+            {
+                held = errors.Select(static line => long.TryParse(line, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? checked((IntPtr)value) : IntPtr.Zero)
+                             .FirstOrDefault(static value => value != IntPtr.Zero);
+            }
+
+            AssertEx.Equal(0, exitCode, $"the root could not hand its stdout over: {string.Join(" | ", errors)}");
+            AssertEx.True(held != IntPtr.Zero, "the root reported no duplicated handle");
+            AssertEx.True(returnedAfter >= MxcChildProcess.PumpDrainBudget - TimeSpan.FromSeconds(1), $"returned after {returnedAfter}, before the held pipe's drain budget");
+            AssertEx.True(returnedAfter <= MxcChildProcess.PumpDrainBudget + TimeSpan.FromSeconds(30), $"returned after {returnedAfter}: the held read was not cancelled");
+            using var pumps = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            AssertEx.True(await child.TryWaitForExitAsync(pumps.Token), "a pump stayed blocked on the held pipe after its read was cancelled");
+        }
+        finally
+        {
+            if (held != IntPtr.Zero)
+            {
+                _ = CloseHandle(held);
             }
         }
     }
@@ -186,7 +273,9 @@ public sealed class WindowsJobSandboxWindowsTests
     [Test]
     public async Task AFailedMembershipCheck_LeavesNoProcess()
     {
-        var api = new MembershipFailingApi();
+        // The child really lands outside the command's job, in a decoy job with no kill-on-close, so only a process-level terminate
+        // reaches it: the job's terminate and its close both miss it.
+        using var api = new OutsideTheJobApi();
 
         var failure = AssertEx.Throws<InvalidOperationException>(() =>
             new WindowsJobLauncher(api).Start(StartInfo("cmd /d /c ping -n 60 127.0.0.1"), WindowsJobLimits.Map(4096, 64, null, Environment.ProcessorCount)));
@@ -394,10 +483,16 @@ public sealed class WindowsJobSandboxWindowsTests
         public uint TotalTerminatedProcesses;
     }
 
-    /// <summary>The real native calls, except that the created child is reported outside its job.</summary>
-    private sealed class MembershipFailingApi : IWindowsJobApi
+    /// <summary>The real native calls, except that the child is created inside a decoy job instead of the command's.</summary>
+    private sealed class OutsideTheJobApi : IWindowsJobApi, IDisposable
     {
         private readonly WindowsJobApi _real = new();
+        private readonly SafeHandle _decoy;
+
+        public OutsideTheJobApi()
+        {
+            _decoy = _real.CreateJob();
+        }
 
         public int CreatedProcessId { get; private set; }
 
@@ -413,23 +508,30 @@ public sealed class WindowsJobSandboxWindowsTests
 
         public WindowsJobChild CreateSuspended(SafeHandle job, WindowsJobStartInfo startInfo)
         {
-            var child = _real.CreateSuspended(job, startInfo);
+            var child = _real.CreateSuspended(_decoy, startInfo);
             CreatedProcessId = child.ProcessId;
             return child;
         }
 
-        public bool IsProcessInJob(SafeHandle process, SafeHandle job) => false;
+        public bool IsProcessInJob(SafeHandle process, SafeHandle job) => _real.IsProcessInJob(process, job);
 
         public void Resume(SafeHandle thread) => throw new InvalidOperationException("a child that failed its membership check must never be resumed");
 
         public void Terminate(SafeHandle job) => _real.Terminate(job);
 
+        public void TerminateProcess(SafeHandle process) => _real.TerminateProcess(process);
+
         public Task WaitForExitAsync(SafeHandle process) => _real.WaitForExitAsync(process);
 
         public int GetExitCode(SafeHandle process) => _real.GetExitCode(process);
 
-        public void CancelPendingReads(Stream stream) => _real.CancelPendingReads(stream);
-
         public bool TryCommit(SafeHandle process, ulong bytes, out int error) => _real.TryCommit(process, bytes, out error);
+
+        public void Dispose() => _decoy.Dispose();
     }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(IntPtr hObject);
 }

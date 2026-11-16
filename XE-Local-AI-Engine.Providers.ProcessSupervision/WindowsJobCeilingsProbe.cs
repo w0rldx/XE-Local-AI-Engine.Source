@@ -5,10 +5,10 @@ using System.Globalization;
 
 /// <summary>Proves the plain-path job ceilings on this host through the SAME <see cref="WindowsJobLauncher" /> every command uses (ADR 0025).</summary>
 /// <remarks>
-///     A commit under the job limit succeeds and one past it fails with the commitment-limit error; a process chain inside the cap exits
-///     normally and one past it cannot start its last member. Every launch reads every limit back, the CPU rate included, so a refused rate
-///     (RDS with DFSS) or an ancestor job that breaks the launcher fails a control. Only the system <c>cmd.exe</c> runs. Nothing throws: any
-///     failure is an unsupported result with its reason, and the caller advertises nothing.
+///     A commit under the job limit succeeds and one past it fails with the commitment-limit error; a chain inside the cap runs, and one
+///     past it cannot start its last member while the same chain under a wider cap can. Every launch reads every limit back, so a refused
+///     CPU rate or a launcher-breaking ancestor job fails a control. Only the system <c>cmd.exe</c> runs, and any failure is an unsupported
+///     result with its reason. The result is cached for the process (ADR 0025).
 /// </remarks>
 public static class WindowsJobCeilingsProbe
 {
@@ -22,6 +22,9 @@ public static class WindowsJobCeilingsProbe
     // with conhost) stay inside four, five (six with conhost) cannot.
     internal const int ChainInsideCap = 2;
     internal const int ChainPastCap = 5;
+
+    // The control for the past-cap chain: the same five-deep chain under a cap it fits in must run, so its failure under four is the cap's.
+    internal const int WideProcessLimit = 8;
 
     // ERROR_COMMITMENT_LIMIT: the error a commit past JOB_OBJECT_LIMIT_JOB_MEMORY returns (ADR 0025, Context).
     internal const int CommitmentLimitError = 1455;
@@ -44,9 +47,11 @@ public static class WindowsJobCeilingsProbe
             }
 
             var limits = WindowsJobLimits.Map(ProbeMemoryMb, ProbeProcessLimit, cpuCount: 1, processors);
+            var wide = WindowsJobLimits.Map(ProbeMemoryMb, WideProcessLimit, cpuCount: 1, processors);
             return MeasureCommit(launcher, commandInterpreter, limits)
-                   ?? MeasureChain(launcher, commandInterpreter, limits, ChainInsideCap, expectStart: true)
-                   ?? MeasureChain(launcher, commandInterpreter, limits, ChainPastCap, expectStart: false)
+                   ?? MeasureChain(launcher, commandInterpreter, limits, ProbeProcessLimit, ChainInsideCap, expectStart: true)
+                   ?? MeasureChain(launcher, commandInterpreter, wide, WideProcessLimit, ChainPastCap, expectStart: true)
+                   ?? MeasureChain(launcher, commandInterpreter, limits, ProbeProcessLimit, ChainPastCap, expectStart: false)
                    ?? new WindowsJobProbeResult
                    {
                        Supported = true,
@@ -89,6 +94,7 @@ public static class WindowsJobCeilingsProbe
     private static WindowsJobProbeResult? MeasureChain(WindowsJobLauncher launcher,
         string commandInterpreter,
         WindowsJobLimits limits,
+        int cap,
         int depth,
         bool expectStart)
     {
@@ -126,8 +132,8 @@ public static class WindowsJobCeilingsProbe
         }
 
         return Unsupported(expectStart
-            ? Invariant($"a chain of {depth} processes inside a {ProbeProcessLimit}-process job exited {chain.ExitCode}, not {ChainExitCode}")
-            : Invariant($"a chain of {depth} processes ran inside a {ProbeProcessLimit}-process job, so the active-process limit is not enforced"));
+            ? Invariant($"a chain of {depth} processes inside a {cap}-process job exited {chain.ExitCode}, not {ChainExitCode}")
+            : Invariant($"a chain of {depth} processes ran inside a {cap}-process job, so the active-process limit is not enforced"));
     }
 
     private static WindowsJobStartInfo StartInfo(string commandInterpreter, IEnumerable<string> arguments)

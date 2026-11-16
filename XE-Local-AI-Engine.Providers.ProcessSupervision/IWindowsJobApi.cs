@@ -21,6 +21,7 @@ internal interface IWindowsJobApi
     WindowsJobLimits QueryLimits(SafeHandle job);
 
     /// <summary>Creates the process suspended, inside <paramref name="job" /> from creation, with three fresh stdio pipes.</summary>
+    /// <remarks>The stdout and stderr streams are overlapped, so a read another process keeps blocked is cancelled through its token.</remarks>
     WindowsJobChild CreateSuspended(SafeHandle job, WindowsJobStartInfo startInfo);
 
     bool IsProcessInJob(SafeHandle process, SafeHandle job);
@@ -29,13 +30,13 @@ internal interface IWindowsJobApi
 
     void Terminate(SafeHandle job);
 
+    /// <summary>Terminates one process directly: the only kill that reaches a child its job does not hold.</summary>
+    void TerminateProcess(SafeHandle process);
+
     /// <summary>Completes when the process has exited; owns whatever it waits on, so the caller may close its handles at any time.</summary>
     Task WaitForExitAsync(SafeHandle process);
 
     int GetExitCode(SafeHandle process);
-
-    /// <summary>Cancels a read blocked on a pipe another process still holds open.</summary>
-    void CancelPendingReads(Stream stream);
 
     /// <summary>Commits and releases <paramref name="bytes" /> in the process, charging its job: the probe's commit control.</summary>
     bool TryCommit(SafeHandle process, ulong bytes, out int error);

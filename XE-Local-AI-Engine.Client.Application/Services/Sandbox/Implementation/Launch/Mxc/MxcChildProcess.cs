@@ -177,14 +177,22 @@ public sealed class MxcChildProcess : IDisposable
         }
     }
 
-    internal static async Task PumpLinesAsync(Stream stream, Action<string> onLine)
+    private static Task PumpLinesAsync(Stream stream, Action<string> onLine) =>
+        PumpLinesAsync(stream, onLine, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, CancellationToken.None);
+
+    /// <summary>Delivers each line of <paramref name="stream" /> until end of stream, an I/O error or <paramref name="cancellationToken" />.</summary>
+    internal static async Task PumpLinesAsync(Stream stream,
+        Action<string> onLine,
+        Encoding encoding,
+        bool detectEncodingFromByteOrderMarks,
+        CancellationToken cancellationToken)
     {
         // Yield first so a synchronously completing stream cannot run the whole pump inside the constructor.
         await Task.Yield();
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false);
+        using var reader = new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks);
         try
         {
-            while (await reader.ReadLineAsync(CancellationToken.None) is { } line)
+            while (await reader.ReadLineAsync(cancellationToken) is { } line)
             {
                 onLine(line);
             }

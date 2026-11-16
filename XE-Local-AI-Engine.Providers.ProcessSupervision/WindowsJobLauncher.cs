@@ -70,6 +70,12 @@ public sealed class WindowsJobLauncher
         }
         catch
         {
+            // A child its job does not hold (the membership check failed) is out of reach of the job's terminate: kill it directly.
+            if (child is not null)
+            {
+                TryTerminateProcess(child.Process);
+            }
+
             if (job is not null)
             {
                 TryTerminate(job);
@@ -84,6 +90,18 @@ public sealed class WindowsJobLauncher
     internal static string Describe(WindowsJobLimits limits) =>
         string.Create(CultureInfo.InvariantCulture,
             $"flags 0x{limits.LimitFlags:X}, commit {limits.JobMemoryLimit} bytes, {limits.ActiveProcessLimit} active processes, CPU rate {limits.CpuRate}");
+
+    private void TryTerminateProcess(SafeHandle process)
+    {
+        try
+        {
+            _api.TerminateProcess(process);
+        }
+        catch (Win32Exception)
+        {
+            // Already exited, or terminated with its job below; the original failure is the one to report.
+        }
+    }
 
     private void TryTerminate(SafeHandle job)
     {

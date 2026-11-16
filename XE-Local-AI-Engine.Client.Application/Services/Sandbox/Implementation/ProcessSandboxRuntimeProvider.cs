@@ -277,6 +277,17 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 LaunchFailed = true
             };
         }
+        catch (SandboxCapabilityNotSupportedException exception)
+        {
+            // FAIL CLOSED, non-throwing: the policy carries ceilings no mechanism on this host applies (ADR 0025), so the command
+            // would have run unbounded. The registry refuses such a sandbox at create; reaching here means the host changed underneath.
+            _logger.LogError(exception, "The sandbox ceilings could not be applied; the command was not run.");
+
+            return NotCompleted(request.ExecutionId, $"{SandboxCommandResult.LaunchFailurePrefix} ({exception.Message}).", startedAt) with
+            {
+                LaunchFailed = true
+            };
+        }
 
         // Anchor the occupancy baseline BEFORE the child starts, while the jail holds only what the ENGINE staged: measured
         // after, a command's own first write is free for it and every later command here. Null means the watchdog does not apply.
@@ -935,10 +946,19 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 Environment = environment
             },
             limits);
-        if (!startInfo.RedirectStandardInput)
+        try
         {
-            // An unredirected child reads end of stream, never the engine's own stdin.
-            await process.StandardInput.DisposeAsync();
+            if (!startInfo.RedirectStandardInput)
+            {
+                // An unredirected child reads end of stream, never the engine's own stdin.
+                await process.StandardInput.DisposeAsync();
+            }
+        }
+        catch
+        {
+            // The command already runs: its job must not wait for a finalizer.
+            process.Dispose();
+            throw;
         }
 
         return new WindowsJobSandboxChildProcess(process,
