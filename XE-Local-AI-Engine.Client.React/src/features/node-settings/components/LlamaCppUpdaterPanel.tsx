@@ -201,26 +201,22 @@ export function LlamaCppUpdaterPanel() {
 			message: t("pages.nodeSettings.llamaCpp.updater.toastPreparing", "Downloading and verifying {{tag}}…", { tag }),
 		});
 		const variant = updateVariant;
-		updateMutation.mutate(
-			{ tag, variant },
-			{
-				onSuccess: () => {
-					setNoPrebuiltVariant(null);
-					toast.success(t("pages.nodeSettings.llamaCpp.updater.toastSuccess", "llama.cpp runtime updated to {{tag}}.", { tag }), {
-						id: UPDATE_TOAST_ID,
-						title: t("pages.nodeSettings.llamaCpp.updater.toastSuccessTitle", "Runtime updated"),
-					});
-				},
-				onError: (error) => {
-					noteNoPrebuilt(variant, error);
-					toast.error(
-						apiErrorMessage(
-							error,
-							t("pages.nodeSettings.llamaCpp.updater.toastError", "Could not update the llama.cpp runtime."),
-						),
-						{ id: UPDATE_TOAST_ID, title: t("pages.nodeSettings.llamaCpp.updater.toastErrorTitle", "Update failed") },
-					);
-				},
+		// The promise, not mutate()'s per-call callbacks: those are dropped when the panel unmounts (a tab switch or a
+		// page change during the long install), which left the sticky progress toast on screen for good.
+		updateMutation.mutateAsync({ tag, variant }).then(
+			() => {
+				setNoPrebuiltVariant(null);
+				toast.success(t("pages.nodeSettings.llamaCpp.updater.toastSuccess", "llama.cpp runtime updated to {{tag}}.", { tag }), {
+					id: UPDATE_TOAST_ID,
+					title: t("pages.nodeSettings.llamaCpp.updater.toastSuccessTitle", "Runtime updated"),
+				});
+			},
+			(error: unknown) => {
+				noteNoPrebuilt(variant, error);
+				toast.error(
+					apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.updater.toastError", "Could not update the llama.cpp runtime.")),
+					{ id: UPDATE_TOAST_ID, title: t("pages.nodeSettings.llamaCpp.updater.toastErrorTitle", "Update failed") },
+				);
 			},
 		);
 	};

@@ -32,7 +32,7 @@ const { hooksMock, devModeMock } = vi.hoisted(() => ({
 		isFetching: false,
 		isLoading: false,
 		refresh: vi.fn(() => Promise.resolve()),
-		mutate: vi.fn(),
+		mutateAsync: vi.fn((_variables: { tag: string; variant?: string }) => Promise.resolve()),
 		ensureMutate: vi.fn(),
 		automaticMutate: vi.fn(),
 		isPending: false,
@@ -48,7 +48,7 @@ vi.mock("@/features/node-settings/queries/useLocalRuntime", () => ({
 		isLoading: hooksMock.isLoading,
 		error: null,
 	}),
-	useUpdateLlamaCppRuntime: () => ({ mutate: hooksMock.mutate, isPending: hooksMock.isPending }),
+	useUpdateLlamaCppRuntime: () => ({ mutateAsync: hooksMock.mutateAsync, isPending: hooksMock.isPending }),
 	useEnsureLlamaCppBinary: () => ({ mutate: hooksMock.ensureMutate, isPending: false }),
 	useRefreshLlamaCppRuntime: () => hooksMock.refresh,
 	useRestoreAutomaticLlamaCppVariant: () => ({ mutate: hooksMock.automaticMutate, isPending: false }),
@@ -122,7 +122,7 @@ describe("LlamaCppUpdaterPanel", () => {
 		hooksMock.sourceBuildRunning = false;
 		devModeMock.developerMode = false;
 		vi.clearAllMocks();
-		hooksMock.mutate.mockReset();
+		hooksMock.mutateAsync.mockReset().mockResolvedValue(undefined);
 		hooksMock.automaticMutate.mockReset();
 	});
 
@@ -300,7 +300,7 @@ describe("LlamaCppUpdaterPanel", () => {
 		renderPanel();
 		fireEvent.click(screen.getByTestId("llamacpp-updater-update-button"));
 
-		expect(hooksMock.mutate.mock.calls[0]?.[0]).toEqual({ tag: "b9800", variant: "vulkan" });
+		expect(hooksMock.mutateAsync.mock.calls[0]?.[0]).toEqual({ tag: "b9800", variant: "vulkan" });
 	});
 
 	it("leaves the variant to the node when nothing is installed and the operator picked none", () => {
@@ -317,7 +317,7 @@ describe("LlamaCppUpdaterPanel", () => {
 		renderPanel();
 		fireEvent.click(screen.getByTestId("llamacpp-updater-update-button"));
 
-		expect(hooksMock.mutate.mock.calls[0]?.[0]).toEqual({ tag: "b9800", variant: undefined });
+		expect(hooksMock.mutateAsync.mock.calls[0]?.[0]).toEqual({ tag: "b9800", variant: undefined });
 	});
 
 	it("sends the picked CUDA variant and shows the source-build hint when the node has no CUDA prebuilt", async () => {
@@ -330,8 +330,8 @@ describe("LlamaCppUpdaterPanel", () => {
 			runningProcessCount: 0,
 			checkedAtUtc: 1,
 		};
-		hooksMock.mutate.mockImplementation((_vars: unknown, options?: { onError?: (error: unknown) => void }) =>
-			options?.onError?.(new Error("llama.cpp publishes no prebuilt CUDA build for Linux x64; build it from source.")),
+		hooksMock.mutateAsync.mockRejectedValue(
+			new Error("llama.cpp publishes no prebuilt CUDA build for Linux x64; build it from source."),
 		);
 
 		renderPanel();
@@ -340,11 +340,11 @@ describe("LlamaCppUpdaterPanel", () => {
 		expect(screen.queryByTestId("llamacpp-updater-no-prebuilt-hint")).toBeNull();
 		fireEvent.click(screen.getByTestId("llamacpp-updater-update-button"));
 
-		expect(hooksMock.mutate.mock.calls[0]?.[0]).toEqual({ tag: "b9800", variant: "cuda" });
-		expect(screen.getByTestId("llamacpp-updater-no-prebuilt-hint").textContent).toContain("no prebuilt cuda build");
+		expect(hooksMock.mutateAsync.mock.calls[0]?.[0]).toEqual({ tag: "b9800", variant: "cuda" });
+		expect((await screen.findByTestId("llamacpp-updater-no-prebuilt-hint")).textContent).toContain("no prebuilt cuda build");
 	});
 
-	it("shows no source-build hint for an unrelated update failure", () => {
+	it("shows no source-build hint for an unrelated update failure", async () => {
 		hooksMock.statusData = {
 			installed: { tag: "b9700", variant: "cuda", asset: "a", installedAtUtc: 0 },
 			recommendedTag: "b9800",
@@ -354,14 +354,45 @@ describe("LlamaCppUpdaterPanel", () => {
 			runningProcessCount: 0,
 			checkedAtUtc: 1,
 		};
-		hooksMock.mutate.mockImplementation((_vars: unknown, options?: { onError?: (error: unknown) => void }) =>
-			options?.onError?.(new Error("The downloaded llama.cpp runtime failed its post-install self-check.")),
-		);
+		hooksMock.mutateAsync.mockRejectedValue(new Error("The downloaded llama.cpp runtime failed its post-install self-check."));
 
 		renderPanel();
 		fireEvent.click(screen.getByTestId("llamacpp-updater-update-button"));
 
+		await vi.waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
 		expect(screen.queryByTestId("llamacpp-updater-no-prebuilt-hint")).toBeNull();
+	});
+
+	// A tab switch or page change during the long install unmounts the panel; the sticky progress toast must still be
+	// finalized, or it stays on screen with no close button.
+	it("finalizes the progress toast when the install finishes after the panel unmounted", async () => {
+		hooksMock.statusData = {
+			installed: { tag: "b9700", variant: "vulkan", asset: "a", installedAtUtc: 0 },
+			recommendedTag: "b9800",
+			upstreamLatestTag: null,
+			updateAvailable: true,
+			isOffline: false,
+			runningProcessCount: 0,
+			checkedAtUtc: 1,
+		};
+		let finishInstall: () => void = () => undefined;
+		hooksMock.mutateAsync.mockReturnValue(
+			new Promise<void>((resolve) => {
+				finishInstall = resolve;
+			}),
+		);
+
+		renderPanel();
+		fireEvent.click(screen.getByTestId("llamacpp-updater-update-button"));
+		cleanup();
+		finishInstall();
+
+		await vi.waitFor(() =>
+			expect(toast.success).toHaveBeenCalledWith(
+				"llama.cpp runtime updated to b9800.",
+				expect.objectContaining({ id: "llamacpp-runtime-update" }),
+			),
+		);
 	});
 
 	it("ensures cpu by default when nothing is installed yet", () => {
