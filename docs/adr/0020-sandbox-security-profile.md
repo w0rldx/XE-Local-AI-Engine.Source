@@ -112,7 +112,9 @@ interface-mode step is now asked it at the next sign-in, and a null sandbox prof
   confirmed on the widening change.
 - **`high` refuses every executing workload on today's Windows.** The containment probe reports no separate egress
   mechanism and no resource limits there (ADR 0019, Decision 8), and every executing workload declares ceilings. The chooser recommends `low` on such a host. Operators who choose `high` there get a node that
-  refuses to run sandboxed work, by design.
+  refuses to run sandboxed work, by design. (Amended 2026-11-16 by [ADR 0025](0025-windows-job-object-ceilings.md): where
+  its probe passes, the plain process path has Job Object ceilings, so `high` refuses AgentHome, Coder, work sessions and
+  Development Mode for egress and the Stable boundary only, and still refuses `run_python` and Sandboxed MCP for ceilings.)
 - **`high` refuses every executing workload on Linux without a systemd user scope.** All workloads declare ceilings and
   the ceilings are served by that mechanism.
 - **Under the MXC Preview boundary, `high` refuses `run_python` and Sandboxed MCP for the missing ceilings** (the

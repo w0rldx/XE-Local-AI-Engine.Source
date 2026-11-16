@@ -130,7 +130,9 @@ derivable from a repository would be `devcontainer.json` under another name.
   (`HostSandboxContainmentProbe`: "the Windows Job Object path is not implemented"). This record does not change that; it
   makes the shortfall expressible, which is a prerequisite for reporting it honestly, not a fix. *(Note, 2026-10-07: the
   Windows probe now measures the MXC AppContainer boundary, a Preview mechanism that serves the `Filesystem` floor while the
-  operator enables it; ceilings remain absent on Windows. See [ADR 0019](0019-execution-previews-and-the-appcontainer-boundary.md).)*
+  operator enables it; ceilings remain absent on Windows. See [ADR 0019](0019-execution-previews-and-the-appcontainer-boundary.md).
+  Note, 2026-11-16: the plain Windows path now carries Job Object ceilings where their probe passes, a resource governor
+  and not a boundary; see [ADR 0025](0025-windows-job-object-ceilings.md).)*
 - **Renaming the SPI, or collapsing the role markers before there is a second consumer that needs it.**
 - **A trust model for MCP servers.** Trust tiers (Sandboxed / PrivilegedHost / BuiltInTrusted) are a separate decision;
   remote non-loopback HTTP MCP stays deferred.

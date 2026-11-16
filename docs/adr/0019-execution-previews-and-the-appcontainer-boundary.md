@@ -4,6 +4,8 @@
   evidence: tester runs of 2026-10-12/13 (see "Evidence (2026-10-13)") and the `run_python` run of 2026-10-14 (see
   "Evidence (2026-10-14)").
   Amended 2026-10-11: Win32k is allowed inside the boundary (see "Amendment (2026-10-11)").
+  Amended 2026-11-16 by [ADR 0025](0025-windows-job-object-ceilings.md) (Proposed): the plain Windows path gets Job Object
+  ceilings; the AppContainer boundary stays timeout-only until ADR 0025 Decision 2.
 - **Date:** 2026-10-07
 - **Scope:** How a sandbox launch MECHANISM's maturity is recorded, who may enable a Preview mechanism, and what the
   `SandboxIsolationMode.Filesystem` floor means on Windows when the Microsoft MXC SDK (`Microsoft.Mxc.Sdk` 1.0.0) serves it
@@ -67,7 +69,8 @@ does not do.
    is reported only when MXC accepts the policy AND reports no missing host preparation; MXC 1.0.0 only warns when the
    one-time admin `wxc-host-prep prepare-system-drive` / per-boot `prepare-null-device` step is missing, and children then
    fail to start, so that host reports the boundary unavailable with the exact command. The product never runs the prep.
-   Resource limits and a separate egress mechanism are reported unavailable on Windows with their reasons. For a sandbox
+   A separate egress mechanism is reported unavailable on Windows with its reason; resource limits come from the Job Object
+   probe and serve the plain process path only (amended by ADR 0025). For a sandbox
    created under the boundary, `SandboxLauncher` builds an MXC `ContainerRequest` (through `MxcPolicyMapper`, re-checked by
    `MxcPolicyGuard` before every spawn) instead of an argv chain, and the provider runs it through `ISandboxChildProcess`,
    whose MXC implementation kills the contained tree with MXC's own `Kill()`. No Linux killer (scope unit, process group,
@@ -100,7 +103,8 @@ does not do.
 - **Timeout-only execution on Windows.** Under the AppContainer boundary, `run_python` and sandboxed MCP servers run
   with no CPU, memory or process-count ceiling. The per-command timeout is the only bound; the setting description and
   the confirmation dialog say so. Both roles send no ceiling on Windows and are served, but a create request that carries
-  explicit ceilings is refused rather than run with them silently dropped.
+  explicit ceilings is refused rather than run with them silently dropped. (Amended 2026-11-16: the plain process path is
+  bounded by a Job Object per command, ADR 0025; this risk now covers the AppContainer roles only.)
 - **Host path names are visible, and OS system trees are readable.** The boundary grants only engine-owned trees and
   rests on the AppContainer default deny. The explicit profile deny is usually dropped (Decision 9), so a folder that
   carries an `ALL APPLICATION PACKAGES` ACE is readable wherever it sits. It does not hide the shape of the host.
