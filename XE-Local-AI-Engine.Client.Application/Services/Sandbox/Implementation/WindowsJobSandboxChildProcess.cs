@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
+using System.Text;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
@@ -10,12 +11,14 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision;
 /// <remarks>
 ///     When the root exits, the job is terminated first, ending every member that holds an output pipe, and the pumps get
 ///     <see cref="MxcChildProcess.PumpDrainBudget" /> to reach end of stream; past it (a process outside the job holds a pipe end) their
-///     overlapped reads are cancelled and the wait returns. Text is coded as .NET's <c>Process</c> codes it by default on Windows: the
-///     console code pages, through the same <c>EncodingHelper</c> behind <see cref="Console.OutputEncoding" /> and
-///     <see cref="Console.InputEncoding" />, with byte-order-mark detection on read and no preamble on write.
+///     overlapped reads are cancelled and the wait returns. Text is UTF-8 both ways, no preamble, as on the MXC path: git, Python and
+///     dotnet output is the data that matters (patches are stored as UTF-8), so a cmd builtin printing in the OEM code page is not
+///     decoded faithfully, an accepted trade-off (ADR 0025).
 /// </remarks>
 internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
 {
+    private static readonly UTF8Encoding Utf8WithoutPreamble = new(encoderShouldEmitUTF8Identifier: false);
+
     private readonly WindowsJobProcess _process;
     private readonly Task[] _pumps;
     private readonly CancellationTokenSource _readsCancelled = new();
@@ -59,7 +62,7 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
     public async Task WriteStandardInputAndCloseAsync(string text, CancellationToken cancellationToken)
     {
         await using var stream = _process.StandardInput;
-        await stream.WriteAsync(Console.InputEncoding.GetBytes(text), cancellationToken);
+        await stream.WriteAsync(Utf8WithoutPreamble.GetBytes(text), cancellationToken);
     }
 
     public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)
@@ -100,7 +103,7 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
     }
 
     private Task Pump(Stream stream, Action<string> onLine) =>
-        MxcChildProcess.PumpLinesAsync(stream, onLine, Console.OutputEncoding, detectEncodingFromByteOrderMarks: true, _readsCancelled.Token);
+        MxcChildProcess.PumpLinesAsync(stream, onLine, _readsCancelled.Token);
 
     private async Task DrainPumpsAsync()
     {

@@ -37,7 +37,7 @@ public sealed class MxcChildProcess : IDisposable
         if (onStandardOutputLine is not null && process.StandardOutput is { } standardOutput)
         {
             // The SDK hands out a closer only for a stream already taken, so it is requested right after the stream.
-            pumps.Add(PumpLinesAsync(standardOutput, onStandardOutputLine));
+            pumps.Add(PumpLinesAsync(standardOutput, onStandardOutputLine, CancellationToken.None));
             AddCloser(process.StandardOutputCloser);
         }
         else if (process.StandardOutput is { } rawOutput)
@@ -48,7 +48,7 @@ public sealed class MxcChildProcess : IDisposable
 
         if (onStandardErrorLine is not null && process.StandardError is { } standardError)
         {
-            pumps.Add(PumpLinesAsync(standardError, onStandardErrorLine));
+            pumps.Add(PumpLinesAsync(standardError, onStandardErrorLine, CancellationToken.None));
             AddCloser(process.StandardErrorCloser);
         }
         else
@@ -177,19 +177,12 @@ public sealed class MxcChildProcess : IDisposable
         }
     }
 
-    private static Task PumpLinesAsync(Stream stream, Action<string> onLine) =>
-        PumpLinesAsync(stream, onLine, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, CancellationToken.None);
-
-    /// <summary>Delivers each line of <paramref name="stream" /> until end of stream, an I/O error or <paramref name="cancellationToken" />.</summary>
-    internal static async Task PumpLinesAsync(Stream stream,
-        Action<string> onLine,
-        Encoding encoding,
-        bool detectEncodingFromByteOrderMarks,
-        CancellationToken cancellationToken)
+    /// <summary>Delivers each UTF-8 line of <paramref name="stream" /> until end of stream, an I/O error or <paramref name="cancellationToken" />.</summary>
+    internal static async Task PumpLinesAsync(Stream stream, Action<string> onLine, CancellationToken cancellationToken)
     {
         // Yield first so a synchronously completing stream cannot run the whole pump inside the constructor.
         await Task.Yield();
-        using var reader = new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false);
         try
         {
             while (await reader.ReadLineAsync(cancellationToken) is { } line)

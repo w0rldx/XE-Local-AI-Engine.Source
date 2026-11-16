@@ -54,7 +54,7 @@ public sealed class ProcessSandboxWindowsJobTests
     }
 
     [Test]
-    public async Task StandardInput_ReachesTheJobChild_InTheConsoleInputEncoding()
+    public async Task StandardInput_ReachesTheJobChild_AsUtf8()
     {
         var api = new FakeWindowsJobApi();
         using var provider = Provider(api);
@@ -63,7 +63,7 @@ public sealed class ProcessSandboxWindowsJobTests
         var result = await provider.ExecuteAsync(handle, Command("stdin", "tool.exe") with { StandardInput = "grüße" });
 
         AssertEx.Equal(0, result.ExitCode);
-        using var reader = new StreamReader(AssertEx.NotNull(api.LastStandardInput).Reader, Console.InputEncoding);
+        using var reader = new StreamReader(AssertEx.NotNull(api.LastStandardInput).Reader, System.Text.Encoding.UTF8);
         AssertEx.Equal("grüße", await reader.ReadToEndAsync());
         await provider.KillAsync(handle);
     }

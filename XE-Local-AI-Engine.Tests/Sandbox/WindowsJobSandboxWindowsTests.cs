@@ -158,37 +158,20 @@ public sealed class WindowsJobSandboxWindowsTests
         }
     }
 
-    /// <summary>Non-ASCII output decodes exactly as a bare <c>Process</c> decodes it by default (the console code page), never as UTF-8 regardless.</summary>
+    /// <summary>Raw UTF-8 bytes a tool writes come back as the same text: the job path decodes UTF-8, as the MXC path does (ADR 0025).</summary>
     [Test]
-    public async Task NonAsciiOutput_DecodesAsTheBareProcessPathDoes()
+    public async Task Utf8Output_RoundTripsThroughTheJobPath()
     {
-        var bare = new ProcessStartInfo("cmd.exe")
-        {
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-            // As the job launcher's CREATE_NO_WINDOW: both children get a console of their own with the same default code page.
-            CreateNoWindow = true
-        };
-        foreach (var argument in new[] { "/d", "/c", "echo", "grüße" })
-        {
-            bare.ArgumentList.Add(argument);
-        }
-
-        string expected;
-        using (var reference = Process.Start(bare)!)
-        {
-            expected = await reference.StandardOutput.ReadToEndAsync();
-            await reference.WaitForExitAsync();
-        }
-
+        // The bytes, not the console code page: g r ü ß e in UTF-8, written straight to the stdout handle as git would write them.
+        const string script = "$o = [Console]::OpenStandardOutput(); $b = [byte[]](0x67,0x72,0xC3,0xBC,0xC3,0x9F,0x65,0x0A); $o.Write($b, 0, $b.Length); $o.Flush()";
         using var provider = Provider();
         var handle = await provider.CreateOrAttachAsync(Request(new SandboxResourceLimits { MemoryMb = 2048 }));
         try
         {
-            var result = await provider.ExecuteAsync(handle, Cmd("encoding", "echo", "grüße"));
+            var result = await provider.ExecuteAsync(handle, PowerShell("utf8", script));
 
-            AssertEx.Contains(expected, "gr");
-            AssertEx.Equal(expected.TrimEnd(), result.StandardOutput.TrimEnd());
+            AssertEx.Equal(0, result.ExitCode, result.StandardError);
+            AssertEx.Equal("grüße", result.StandardOutput.TrimEnd('\r', '\n'));
         }
         finally
         {

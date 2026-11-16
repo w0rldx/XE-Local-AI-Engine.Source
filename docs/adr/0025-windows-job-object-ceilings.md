@@ -48,8 +48,11 @@ can open its owner with `VM_WRITE`, `CREATE_THREAD` and `TERMINATE`.
      result is cached until the engine restarts, so a failed probe leaves the ceilings off until then.
    - Output is read overlapped. Windows documents cancelling a blocked read on another thread only for overlapped I/O
      (`CancelIoEx`; synchronous I/O needs `CancelSynchronousIo` on the reading thread), so stdout and stderr are named-pipe
-     server ends opened with `FILE_FLAG_OVERLAPPED`, and the drain budget cancels their reads through a token. Text is
-     coded as .NET's `Process` codes it by default: the console code pages.
+     server ends opened with `FILE_FLAG_OVERLAPPED`, and the drain budget cancels their reads through a token.
+   - Text is UTF-8 both ways, with no preamble, as on the MXC path, on Linux and in Docker. git, Python and dotnet write
+     UTF-8 whatever the console code page, and a captured `git diff` is stored as a UTF-8 patch, so decoding with an OEM or
+     ANSI code page would corrupt non-ASCII patches. Accepted trade-off: a `cmd` builtin that prints in the OEM code page
+     is not decoded faithfully.
    - The launcher always passes exactly the three stdio ends in its handle list. It has no path yet that inherits nothing
      (`bInheritHandles = FALSE`, no handle list), which the broker of Decision 2 needs.
    - The ceilings serve the plain path only. One predicate, `SandboxRequirements.CeilingsServed`, decides for every

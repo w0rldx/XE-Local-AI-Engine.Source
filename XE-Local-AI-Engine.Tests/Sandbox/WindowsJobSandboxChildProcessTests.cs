@@ -48,7 +48,7 @@ public sealed class WindowsJobSandboxChildProcessTests
     }
 
     [Test]
-    public async Task StandardInput_IsWrittenInTheConsoleInputEncoding_WithoutAPreamble()
+    public async Task StandardInput_IsWrittenAsUtf8_WithoutAPreamble()
     {
         var api = new FakeWindowsJobApi { ExitCodeFor = static _ => 0 };
         using var child = new WindowsJobSandboxChildProcess(new WindowsJobLauncher(api).Start(Command, Limits()), TimeProvider.System, null, static _ => { });
@@ -57,7 +57,8 @@ public sealed class WindowsJobSandboxChildProcessTests
 
         using var written = new MemoryStream();
         await AssertEx.NotNull(api.LastStandardInput).Reader.CopyToAsync(written);
-        AssertEx.Equal(Convert.ToHexString(Console.InputEncoding.GetBytes("grüße")), Convert.ToHexString(written.ToArray()));
+        // g r ü(C3 BC) ß(C3 9F) e, and no EF BB BF in front.
+        AssertEx.Equal("6772C3BCC39F65", Convert.ToHexString(written.ToArray()));
     }
 
     private static WindowsJobLimits Limits() =>
