@@ -252,7 +252,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
     }
 
     /// <summary>The failure page's text for a failed start, and whether it offers the WebView2 download: only a window
-    ///     that could not open after the engine was ready on Windows; a page that never loaded is the engine's side.</summary>
+    ///     that could not open after the engine was ready on Windows; a page that never loaded may be either side.</summary>
     internal static StartupFailureNotice DescribeStartupFailure(Exception exception, bool engineReady, bool windows, bool linuxWindow)
     {
         // The window's 30-second readiness deadline (TimeoutException) is a page that never loaded too; a missing WebView2

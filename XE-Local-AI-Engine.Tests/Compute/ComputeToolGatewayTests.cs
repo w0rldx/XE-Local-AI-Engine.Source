@@ -510,6 +510,37 @@ public sealed class ComputeToolGatewayTests
     }
 
     [Test]
+    public async Task ExecuteAsync_WhenTheSandboxCouldNotStartTheInterpreter_ReportsALaunchFailure_NotATimeout()
+    {
+        var provider = new RecordingSandboxProvider(Contained | SandboxProviderCapabilities.SupportsResourceLimits)
+        {
+            Result = new SandboxCommandResult
+            {
+                ExecutionId = "x",
+                ExitCode = -1,
+                StandardError = SandboxCommandResult.LaunchFailurePrefix + " under the AppContainer boundary (The request is not supported).",
+                Completed = false,
+                LaunchFailed = true
+            }
+        };
+        var gateway = CreateGateway(provider);
+        var request = new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        };
+
+        var rendered = await gateway.ExecuteAsync(request);
+        var outcome = await gateway.ExecuteDetailedAsync(request, requireResourceLimits: true);
+
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.GetCodeOrNull(rendered));
+        AssertEx.Contains(rendered, "could not start the script");
+        AssertEx.Contains(rendered, "The request is not supported");
+        AssertEx.Contains(rendered, ToolFailureText.NotRunNotice);
+        AssertEx.False(rendered.Contains("did not finish within", StringComparison.Ordinal), rendered);
+        AssertEx.Equal(ComputeRefusalCodes.LaunchFailed, outcome.RefusalCode, "an unattended caller must read it as unmeasurable, not as a run");
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenTheArgumentsAreInvalid_LeavesTheRetryOpen()
     {
         var provider = new RecordingSandboxProvider(Contained);
@@ -1272,6 +1303,38 @@ public sealed class ComputeToolGatewayTests
         AssertEx.Equal("wrote <workspace>/out.csv", payloads.SelectMany(static payload => payload.Lines).Single().Text,
             "the root the script sees is redacted");
         AssertEx.True(payloads[^1] is { CommandRunning: false, CommandExitCode: 0 });
+    }
+
+    [Test]
+    public async Task RunPython_AScriptThatPrintsTheLaunchFailureTextAndIsStopped_StaysStopped_NeverLaunchFailed()
+    {
+        // The provider keeps a stopped script's own stderr ahead of the cancel line, so stderr text cannot say "never ran".
+        var stops = new ToolCommandStopRegistry();
+        var messageId = Guid.NewGuid();
+        var notCompleted = new SandboxCommandResult
+        {
+            ExecutionId = "x",
+            ExitCode = -1,
+            Completed = false,
+            StandardError = SandboxCommandResult.LaunchFailurePrefix + " (printed by the script).\n" + SandboxCommandResult.CancelledMessage
+        };
+        var handler = new RunPythonToolHandler(CreateGateway(new RecordingSandboxProvider(Contained | SandboxProviderCapabilities.SupportsCommandCancellation)
+        {
+            Result = notCompleted,
+            OnExecute = () => _ = stops.TryStopAsync(messageId, "call-py", CancellationToken.None)
+        }));
+        const string Arguments = """{"code":"import sys; sys.stderr.write('The sandbox command could not be launched')"}""";
+
+        string stopped;
+        using (ToolCommandOutputScope.Open(Guid.NewGuid(), messageId, Substitute.For<IWorkerEventDispatcher>(), stops, TimeProvider.System, NullLogger.Instance))
+            using (AmbientToolCall.Enter("call-py", "run_python"))
+            {
+                stopped = await handler.ExecuteAsync(Arguments);
+            }
+
+        AssertEx.Equal(ToolFailureText.StoppedCode, ToolFailureText.GetCodeOrNull(stopped));
+        AssertEx.False(stopped.Contains("could not start the script", StringComparison.Ordinal), stopped);
+        AssertEx.False(stopped.Contains(ToolFailureText.NotRunNotice, StringComparison.Ordinal), stopped);
     }
 
     [Test]

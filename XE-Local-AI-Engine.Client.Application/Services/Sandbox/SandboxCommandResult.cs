@@ -37,6 +37,12 @@ public sealed record SandboxCommandResult
     /// <summary>Whether the provider discarded standard-error bytes after its capture ceiling was reached.</summary>
     public bool StandardErrorTruncated { get; init; }
 
+    /// <summary>
+    ///     Set only by the provider when the command never started (the launch threw, the boundary could not be set up, or a
+    ///     wrapper could not exec it). A script can print <see cref="LaunchFailurePrefix" /> itself, so that text is display only.
+    /// </summary>
+    public bool LaunchFailed { get; init; }
+
     /// <summary>Whether the command ran to completion (false when cancelled or killed mid-flight).</summary>
     public required bool Completed { get; init; }
 

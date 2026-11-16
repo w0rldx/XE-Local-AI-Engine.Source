@@ -135,8 +135,27 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         });
 
         AssertEx.False(result.Completed, "a timed-out command must not be Completed");
+        AssertEx.False(result.LaunchFailed, "a command that started and timed out was launched");
         AssertEx.Equal(expected: -1, result.ExitCode);
         AssertEx.Equal("timeout-1", result.ExecutionId);
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_Execute_WhenTheExecutableCannotStart_MarksTheResultLaunchFailed()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+
+        var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "missing-1",
+            Executable = "xe-no-such-tool-" + Guid.NewGuid().ToString("N"),
+            Arguments = []
+        });
+
+        AssertEx.False(result.Completed);
+        AssertEx.True(result.LaunchFailed, result.StandardError);
+        AssertEx.True(result.StandardError.StartsWith(SandboxCommandResult.LaunchFailurePrefix, StringComparison.Ordinal), result.StandardError);
     }
 
     [Test]

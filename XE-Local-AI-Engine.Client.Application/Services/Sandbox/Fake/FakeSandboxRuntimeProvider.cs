@@ -659,6 +659,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
             StandardOutput = scripted.StandardOutput,
             StandardError = completed || scripted.FailsToLaunch ? scripted.StandardError : CancelledStandardError(scripted.StandardError),
             Completed = completed,
+            LaunchFailed = scripted.FailsToLaunch,
             Duration = _timeProvider.GetUtcNow() - startedAt
         };
     }

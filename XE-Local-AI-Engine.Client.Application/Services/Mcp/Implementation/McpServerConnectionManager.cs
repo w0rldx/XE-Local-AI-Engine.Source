@@ -633,7 +633,12 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             }
 
             _logger.LogWarning(ex, "MCP server {ServerId} could not be started under its trust tier ({Reason}); it will contribute no tools.", record.Id, reason);
-            return ConnectResult.Failed(McpFailureDescriber.SafeMessage(reason), reason);
+            // The provider's launch refusals all start with the launch-failure prefix: the boundary failed, not the server's folder.
+            var message = reason == McpConnectionFailureReason.SandboxRefused
+                          && ex.Message.StartsWith(SandboxCommandResult.LaunchFailurePrefix, StringComparison.Ordinal)
+                ? McpFailureDescriber.SandboxLaunchFailedMessage
+                : McpFailureDescriber.SafeMessage(reason);
+            return ConnectResult.Failed(message, reason);
         }
         catch (Exception ex) when (ex is McpException
                                        or McpServerStartupException

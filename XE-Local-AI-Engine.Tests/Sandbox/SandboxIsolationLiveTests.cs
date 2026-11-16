@@ -276,6 +276,7 @@ public sealed class SandboxIsolationLiveTests
 
         AssertEx.False(result.Completed);
         AssertEx.True(result.StandardError.StartsWith(SandboxCommandResult.LaunchFailurePrefix, StringComparison.Ordinal), result.StandardError);
+        AssertEx.True(result.LaunchFailed, "the provider marks a launch failure structurally");
         AssertEx.Contains(result.StandardError, "xe-no-such-tool");
 
         await Task.CompletedTask;
@@ -296,6 +297,7 @@ public sealed class SandboxIsolationLiveTests
 
         AssertEx.False(result.Completed);
         AssertEx.True(result.StandardError.StartsWith(SandboxCommandResult.LaunchFailurePrefix, StringComparison.Ordinal), result.StandardError);
+        AssertEx.True(result.LaunchFailed, "the provider marks a launch failure structurally");
         AssertEx.Contains(result.StandardError, "filesystem boundary could not be established");
 
         await Task.CompletedTask;

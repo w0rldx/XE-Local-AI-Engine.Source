@@ -51,7 +51,7 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 	// One line per role PER AXIS. Two axes can be "No" for different reasons at once — Development Mode on this Linux
 	// box has neither a filesystem boundary nor a ceiling, and the two sentences are not interchangeable — so they are
 	// flattened rather than folded into one. The axis label reuses the column header key, so no new copy to translate.
-	const reasons = roles
+	const perRoleReasons = roles
 		.flatMap((role) => [
 			{
 				key: `${role.role}-filesystem`,
@@ -76,6 +76,16 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 			},
 		])
 		.filter((reason) => reason.text !== "");
+
+	// A host-wide sentence (the same ceilings reason for every role on a backend without them) is said once, naming every
+	// role it applies to; the line keeps the first role's test id.
+	const grouped = new Map<string, (typeof perRoleReasons)[number]>();
+	for (const reason of perRoleReasons) {
+		const key = `${reason.label}\n${reason.text}`;
+		const first = grouped.get(key);
+		grouped.set(key, first === undefined ? reason : { ...first, role: `${first.role}, ${reason.role}` });
+	}
+	const reasons = [...grouped.values()];
 
 	return (
 		<SectionCard
@@ -133,7 +143,8 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 								<Table.Td data-testid={`sandbox-isolation-provider-${role.role}`}>{role.provider}</Table.Td>
 								<Table.Td data-testid={`sandbox-isolation-backend-${role.role}`}>{role.backend}</Table.Td>
 								<Table.Td style={nowrapCell}>
-									<Badge color={levelColor(role.level)} data-testid={`sandbox-isolation-level-${role.role}`}>
+									{/* A badge's label clips with an ellipsis, so its min-content is a sliver; it keeps its full width instead. */}
+									<Badge color={levelColor(role.level)} miw="max-content" data-testid={`sandbox-isolation-level-${role.role}`}>
 										{levelLabel(t, role.level)}
 									</Badge>
 								</Table.Td>

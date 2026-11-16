@@ -254,6 +254,13 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
                 },
                 cancellationToken);
             liveOutput?.Complete(result);
+            if (result.LaunchFailed)
+            {
+                // The interpreter never started (an MXC CreateProcessW refusal, say), so this is not a timeout: nothing ran to time out.
+                return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.LaunchFailed,
+                    $"run_python could not start the script. {result.StandardError.TrimEnd()}");
+            }
+
             if (OperatingSystem.IsWindows() && StripRealpathWarning(result.StandardError, command.Executable) is { } stripped)
             {
                 if (Interlocked.Exchange(ref _realpathWarningLogged, 1) == 0)

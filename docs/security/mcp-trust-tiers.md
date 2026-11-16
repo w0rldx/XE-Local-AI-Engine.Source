@@ -107,7 +107,9 @@ being broken.
 Every failed status also carries `McpServerConnectionStatus.FailureReason` (`failureReason` on the tools response),
 which the settings page words in the operator's language. A sandbox failure is `SandboxUnavailable` when this node
 cannot isolate at all and `SandboxRefused` when it can but refused this registration (a denied root) or could not
-establish the boundary or launch the chain. A command that does not exist is `ServerNotFound` on both tiers: the
+establish the boundary or launch the chain. The two `SandboxRefused` causes carry different fixed texts: a denied root
+names the protected folder, and a launch the provider refused (its `SandboxCommandResult.LaunchFailurePrefix` message)
+says the node's sandbox failed, not the server's folder. A command that does not exist is `ServerNotFound` on both tiers: the
 `PrivilegedHost` launch fails in `Process.Start`, and the `Sandboxed` transport checks the command against the
 **jail's** `PATH` before any sandbox is created, since inside the jail it would only be an early exit. That `PATH` is
 `/usr/bin:/bin`, or the registration's own `PATH` variable when it sets one (the chain applies it last, so it replaces

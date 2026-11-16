@@ -22,6 +22,10 @@ internal static class McpFailureDescriber
     // Stderr can hold anything the server printed, so only a short, secret-scrubbed tail reaches the UI.
     private const int MaxStderrTailCharacters = 1024;
 
+    /// <summary>The <see cref="McpConnectionFailureReason.SandboxRefused" /> text when the sandbox boundary itself failed to start the server.</summary>
+    internal const string SandboxLaunchFailedMessage =
+        "The sandbox could not start the MCP server: its isolation boundary could not be established or refused the launch, so the server never ran. This is a problem with this node's sandbox, not with the server's folder; the engine log has the error.";
+
     internal readonly record struct SessionFailure(McpConnectionFailureReason Reason, string Detail);
 
     internal static bool IsTransportFault(Exception exception)
@@ -140,7 +144,7 @@ internal static class McpFailureDescriber
                 ? "This node cannot isolate the MCP server from the host filesystem. On Windows that needs the MXC AppContainer boundary (Preview) available and execution previews enabled in Node settings, or move the server to the Privileged host tier."
                 : "This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.",
             McpConnectionFailureReason.SandboxRefused =>
-                "The sandbox refused to start the MCP server: its command or working directory is, or lies inside, a protected folder (a credential store, the engine's data or install folder), or the sandbox boundary could not be established. Point it at the folder holding the server's own files; the engine log names the path.",
+                "The sandbox refused to start the MCP server: its command or working directory is, or lies inside, a protected folder (a credential store, the engine's data or install folder). Point it at the folder holding the server's own files; the engine log names the path.",
             McpConnectionFailureReason.SandboxRefusedByProfile =>
                 "The node's sandbox security profile is 'high', and this node's sandbox cannot impose the CPU, memory and process-count ceilings that profile requires for a Sandboxed MCP server. Install the missing mechanism the sandbox isolation summary names, or "
                 + SandboxSecurityProfilePolicy.Remedy + ".",

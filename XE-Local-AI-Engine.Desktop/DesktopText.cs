@@ -81,11 +81,12 @@ internal static class DesktopText
             ? "Das XE-Fenster konnte nicht geöffnet werden. Unter Windows muss Microsoft Edge WebView2 Runtime installiert sein. Prüfen Sie die Installation und die Engine-Protokolle."
             : "The XE window could not open. On Windows, Microsoft Edge WebView2 Runtime must be installed. Check the installation and engine logs.";
 
-    /// <summary>WebView2 works but the start page never loaded from the engine within the retry window.</summary>
+    /// <summary>The window opened but the start page never showed in time: the shell cannot tell an engine that did not answer
+    ///     from an embedded browser that could not render, so the text names both and points at desktop.log.</summary>
     internal static string PageLoadFailed =>
         German
-            ? "Das XE-Fenster konnte die Engine nicht erreichen. Die Engine wurde gestartet, aber ihre Seite hat innerhalb der Wartezeit nicht geantwortet. Prüfen Sie die Engine-Protokolle und starten Sie XE erneut."
-            : "The XE window could not reach the engine. The engine started, but its page did not answer in time. Check the engine logs, then start XE again.";
+            ? "Das XE-Fenster hat die Seite der Engine nicht rechtzeitig angezeigt. Entweder konnte der eingebettete Browser die Seite nicht laden, oder die Engine hat nicht geantwortet. Prüfen Sie desktop.log und die Engine-Protokolle im Protokollordner und starten Sie XE erneut."
+            : "The XE window did not show the engine's page in time. Either the embedded browser could not load the page, or the engine did not answer. Check desktop.log and the engine logs in the logs folder, then start XE again.";
 
     /// <summary>The engine stopped at start because a node setting failed validation; <paramref name="report" /> is its
     ///     own description of the setting, when it wrote one.</summary>

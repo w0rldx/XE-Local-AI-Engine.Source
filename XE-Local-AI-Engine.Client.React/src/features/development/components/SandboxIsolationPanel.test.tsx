@@ -283,6 +283,33 @@ describe("SandboxIsolationPanel", () => {
 		expect(screen.getByTestId("sandbox-isolation-maturity-agent-home").textContent).toBe("Stable");
 	});
 
+	// A backend without ceilings gives every role the same sentence; it is said once, naming each role, not once per row.
+	it("shows a reason shared by several roles once, naming every role", () => {
+		const noCeilings = {
+			provider: "process",
+			backend: "appcontainer",
+			level: "PreviewIsolated",
+			maturity: "Preview",
+			filesystemIsolation: true,
+			networkIsolation: true,
+			networkIsolationRequired: true,
+			resourceLimits: false,
+			readOnlyMounts: false,
+			filesystemIsolationUnavailableReason: null,
+			resourceLimitsUnavailableReason: "the AppContainer boundary imposes no ceilings",
+		} as const;
+		renderPanel([
+			{ ...noCeilings, role: "run_python" },
+			{ ...noCeilings, role: "mcp-stdio" },
+		]);
+
+		expect(screen.getAllByText(/the AppContainer boundary imposes no ceilings/)).toHaveLength(1);
+		expect(screen.getByTestId("sandbox-isolation-limits-reason-run_python").textContent).toBe(
+			"Python compute tool, mcp-stdio · Resource limits: the AppContainer boundary imposes no ceilings",
+		);
+		expect(screen.queryByTestId("sandbox-isolation-limits-reason-mcp-stdio")).toBeNull();
+	});
+
 	// Under the high profile a declared boundary is a requirement. The Required column lists what the role needs, Served
 	// the part of it this host delivers, and a row whose requirement is not met is the one that refuses to start.
 	it("shows required against served boundaries and marks an unsatisfied row", () => {

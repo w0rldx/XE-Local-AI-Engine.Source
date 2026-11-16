@@ -33,6 +33,9 @@ internal static class ComputeRefusalCodes
 
     /// <summary>The sandbox could not be created with the requested containment.</summary>
     public const string ContainmentUnavailable = "containment-unavailable";
+
+    /// <summary>The sandbox was created but could not start the interpreter inside it, so no script ran.</summary>
+    public const string LaunchFailed = "launch-failed";
 }
 
 /// <summary>

@@ -310,17 +310,17 @@ jobs:
   # for the engine's policy, and a contained child is proven unable to read outside its jail or connect anywhere. Every
   # other leg is Linux, where these classes report skipped. windows-2025 (build 26100), not windows-latest, so the OS
   # the probe measures cannot move under the leg. The execution test needs the one-time admin host prep MXC's
-  # AppContainer + DACL tier asks for; wxc-host-prep.exe is not in the NuGet package, so it comes from the v1.0.0
-  # release zip, pinned by SHA-256 for both the zip and the extracted exe. Matches the 1.0.0 package pin in
+  # AppContainer + DACL tier asks for; wxc-host-prep.exe is not in the NuGet package, so it comes from the v1.0.1
+  # release zip, pinned by SHA-256 for both the zip and the extracted exe. Matches the 1.0.1 package pin in
   # Directory.Packages.props; bump all three together.
   windows-sandbox:
     runs-on: windows-2025
     timeout-minutes: 45
     env:
-      MXC_RELEASE_ZIP_URL: https://github.com/microsoft/mxc/releases/download/v1.0.0/mxc-release-binaries.zip
-      MXC_RELEASE_ZIP_SHA256: 0bb483b3592d0f663f2c5a7a2ae17db89cc04b82238684b0a1a9384b0fe828ed
+      MXC_RELEASE_ZIP_URL: https://github.com/microsoft/mxc/releases/download/v1.0.1/mxc-release-binaries.zip
+      MXC_RELEASE_ZIP_SHA256: 0e832239454ba7fcd338ff56218a287eef4c0a01c1484084b869f55feff8abe9
       MXC_HOST_PREP_ENTRY: x64/wxc-host-prep.exe
-      MXC_HOST_PREP_SHA256: 7aed7a6287283d388ca4f1717b10d5edec867307a7c6696fbd31ba44d8476304
+      MXC_HOST_PREP_SHA256: c18783ad3dd62c0a54530b25192b7c4015706b3f518cd9619259ae9750d4ab6e
 
     steps:
       - name: Checkout

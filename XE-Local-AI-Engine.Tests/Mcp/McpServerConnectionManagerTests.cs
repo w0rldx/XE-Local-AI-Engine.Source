@@ -252,18 +252,21 @@ public sealed class McpServerConnectionManagerTests
     }
 
     private const string SandboxRefusedMessage =
-        "The sandbox refused to start the MCP server: its command or working directory is, or lies inside, a protected folder (a credential store, the engine's data or install folder), or the sandbox boundary could not be established. Point it at the folder holding the server's own files; the engine log names the path.";
+        "The sandbox refused to start the MCP server: its command or working directory is, or lies inside, a protected folder (a credential store, the engine's data or install folder). Point it at the folder holding the server's own files; the engine log names the path.";
 
     private const string SandboxUnavailableMessage =
         "This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.";
 
     [Test]
-    public async Task RefreshAsync_SandboxRefusalOnAnIsolationCapableNode_ReportsSandboxRefusedWithTheFixedMessage()
+    public async Task RefreshAsync_SandboxLaunchFailureOnAnIsolationCapableNode_SaysTheBoundaryFailed_NotAProtectedFolder()
     {
-        var status = await RefreshWithFailureAsync(static () => new SandboxCapabilityNotSupportedException("The sandbox command could not be launched."), IsolationCapableProvider());
+        var status = await RefreshWithFailureAsync(
+            static () => new SandboxCapabilityNotSupportedException(SandboxCommandResult.LaunchFailurePrefix + " under the AppContainer boundary (The request is not supported)."),
+            IsolationCapableProvider());
 
         AssertEx.Equal(McpConnectionFailureReason.SandboxRefused, status.FailureReason);
-        AssertEx.Equal(SandboxRefusedMessage, status.LastError);
+        AssertEx.Equal(McpFailureDescriber.SandboxLaunchFailedMessage, status.LastError);
+        AssertEx.False(status.LastError!.Contains("protected folder", StringComparison.Ordinal), status.LastError);
     }
 
     [Test]

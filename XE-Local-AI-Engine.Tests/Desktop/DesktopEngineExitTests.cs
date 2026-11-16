@@ -170,7 +170,7 @@ public sealed class DesktopEngineExitTests
 
             var pageLoad = DesktopApplication.DescribeStartupFailure(new DesktopPageLoadException("no page"), engineReady: true, windows: true, linuxWindow: false);
             AssertEx.Equal(DesktopText.PageLoadFailed, pageLoad.Text);
-            AssertEx.False(pageLoad.IncludeWebViewLink, "A page that never loaded is the engine's side, not a missing runtime.");
+            AssertEx.False(pageLoad.IncludeWebViewLink, "A page that never loaded is not a missing runtime.");
             AssertEx.False(pageLoad.Text.Contains("WebView2", StringComparison.Ordinal));
             AssertEx.Equal(DesktopText.PageLoadFailed,
                 DesktopApplication.DescribeStartupFailure(new DesktopPageLoadException("no page"), engineReady: true, windows: false, linuxWindow: true).Text,

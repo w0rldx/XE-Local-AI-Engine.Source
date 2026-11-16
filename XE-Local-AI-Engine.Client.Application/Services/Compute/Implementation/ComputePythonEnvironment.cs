@@ -2,6 +2,7 @@
 
 using XE_Local_AI_Engine.Client.Services.ManagedPython;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Diagnostics;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Python.Contracts;
 using XE_Local_AI_Engine.Providers.Python.Implementation;
@@ -668,15 +669,17 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
 
         // --locked makes uv fail rather than re-resolve when the lockfile and pyproject.toml disagree, which is what
         // makes this reproducible instead of merely repeatable.
+        var syncOutput = new OutputTail();
         var syncExit = await _processRunner.RunAsync(uv,
             ["sync", "--locked", "--project", staging],
             environment,
             staging,
-            LogLine,
+            line => LogAndKeepLine(line, syncOutput),
             SyncTimeout,
             cancellationToken);
         if (syncExit != 0)
         {
+            LogStepFailed("uv sync --locked", syncExit, syncOutput);
             throw new ComputeEnvironmentException("Installing the pinned compute runtime packages failed.");
         }
 
@@ -687,15 +690,17 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         }
 
         // A sync that exits 0 over a closure that cannot import must not replace a working venv.
+        var probeOutput = new OutputTail();
         var probeExit = await _processRunner.RunAsync(stagedInterpreter,
             ["-I", "-c", "import numpy, scipy, sympy"],
             environment,
             staging,
-            LogLine,
+            line => LogAndKeepLine(line, probeOutput),
             ProbeTimeout,
             cancellationToken);
         if (probeExit != 0)
         {
+            LogStepFailed("import check", probeExit, probeOutput);
             throw new ComputeEnvironmentException("The provisioned compute runtime failed its import check.");
         }
     }
@@ -738,6 +743,21 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         _logger.LogDebug("compute runtime provision: {Line}", line);
     }
 
+    private void LogAndKeepLine(string line, OutputTail tail)
+    {
+        LogLine(line);
+        tail.Append(line);
+    }
+
+    // The thrown message stays model-safe and fixed; the reason a tester needs lives in the log, bounded and path-sanitized.
+    private void LogStepFailed(string step, int exitCode, OutputTail output)
+    {
+        _logger.LogWarning("Provisioning the compute Python runtime failed at {Step} (exit code {ExitCode}). Last output: {OutputTail}",
+            step,
+            exitCode,
+            output.Snapshot());
+    }
+
     private static ManagedPythonEnvironmentStatus Status(ManagedPythonEnvironmentState state,
         ManagedPythonReasonCode reasonCode,
         string? reason,
@@ -753,6 +773,42 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             Installed = installed,
             Mismatches = mismatches ?? []
         };
+    }
+
+    /// <summary>The last lines one provisioning step printed, bounded and path-sanitized, for its failure's Warning.</summary>
+    private sealed class OutputTail
+    {
+        private const int MaxLines = 20;
+        private const int MaxLineCharacters = 500;
+
+        private readonly Lock _gate = new();
+        private readonly Queue<string> _lines = new();
+
+        public void Append(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                return;
+            }
+
+            var sanitized = AbsolutePathSanitizer.Sanitize(line.Trim());
+            lock (_gate)
+            {
+                _lines.Enqueue(sanitized.Length > MaxLineCharacters ? sanitized[..MaxLineCharacters] + "…" : sanitized);
+                if (_lines.Count > MaxLines)
+                {
+                    _ = _lines.Dequeue();
+                }
+            }
+        }
+
+        public string Snapshot()
+        {
+            lock (_gate)
+            {
+                return _lines.Count == 0 ? "(none)" : string.Join(" | ", _lines);
+            }
+        }
     }
 
     /// <summary>One in-flight execution; disposing it more than once releases it once.</summary>

@@ -74,7 +74,7 @@ internal static class TrainingRuntimeTestInfrastructure
         }
     }
 
-    private static void CreateInterpreter(IReadOnlyList<string> args, string? pythonInstallDirectory)
+    public static void CreateInterpreter(IReadOnlyList<string> args, string? pythonInstallDirectory)
     {
         var projectIndex = args.ToList().IndexOf("--project");
         if (projectIndex < 0 || projectIndex + 1 >= args.Count)

@@ -267,7 +267,10 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // would put a workload promised a boundary onto the host filesystem. The caller learns why in a failed-launch shape.
             _logger.LogError(exception, "The sandbox filesystem boundary could not be established; the command was not run.");
 
-            return NotCompleted(request.ExecutionId, $"{SandboxCommandResult.BoundaryFailurePrefix} ({exception.Message}).", startedAt);
+            return NotCompleted(request.ExecutionId, $"{SandboxCommandResult.BoundaryFailurePrefix} ({exception.Message}).", startedAt) with
+            {
+                LaunchFailed = true
+            };
         }
 
         // Anchor the occupancy baseline BEFORE the child starts, while the jail holds only what the ENGINE staged: measured
@@ -305,7 +308,10 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
             // The executable could not be launched (not found / not executable, or MXC refused the spawn). Surface a non-completed result
             // rather than throwing, so the AgentHome run flow records a failed command the same way a non-zero exit does.
-            return NotCompleted(request.ExecutionId, DescribeLaunchFailure(exception, launch), startedAt);
+            return NotCompleted(request.ExecutionId, DescribeLaunchFailure(exception, launch), startedAt) with
+            {
+                LaunchFailed = true
+            };
         }
 
         // The chain has been exec'd and the child holds its own copies of every descriptor the argument vector names, so the
@@ -387,7 +393,10 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 && SandboxWrapperExecFailure.Describe(request.Executable, exitCode, standardOutput, standardError) is { } launchFailure)
             {
                 _logger.LogWarning("The sandbox command {Executable} could not be launched: {LaunchFailure}", request.Executable, launchFailure);
-                return NotCompleted(request.ExecutionId, launchFailure, startedAt);
+                return NotCompleted(request.ExecutionId, launchFailure, startedAt) with
+                {
+                    LaunchFailed = true
+                };
             }
 
             return new SandboxCommandResult
@@ -579,7 +588,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // FAIL CLOSED, and here it THROWS rather than returning a failed-command shape: there is no result object to carry a
             // reason, and the caller (a Sandboxed stdio MCP server) must see a refusal, never a host-filesystem peer.
-            throw new SandboxCapabilityNotSupportedException($"The sandbox filesystem boundary could not be established ({exception.Message}); the command was not started.",
+            throw new SandboxCapabilityNotSupportedException($"{SandboxCommandResult.BoundaryFailurePrefix} ({exception.Message}); the command was not started.",
                 exception);
         }
 

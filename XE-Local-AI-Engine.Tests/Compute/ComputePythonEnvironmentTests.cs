@@ -1,6 +1,7 @@
 ﻿namespace XE_Local_AI_Engine.Tests.Compute;
 
 using System.Runtime.Versioning;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
@@ -368,6 +369,54 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
 
         AssertEx.Equal(ManagedPythonEnvironmentState.Failed, status.State);
         AssertEx.Equal("Installing the pinned compute runtime packages failed.", status.Reason);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Provision_WhenTheSyncFails_LogsTheStepExitCodeAndOutputTail_AtWarning()
+    {
+        var logger = new RecordingLogger<ComputePythonEnvironment>();
+        using var environment = Create(new FakeProcessRunner((_, _, logSink) =>
+            {
+                logSink("error: The lockfile at `uv.lock` needs to be updated");
+                return 2;
+            }),
+            logger);
+
+        _ = await AssertEx.ThrowsAsync<ComputeEnvironmentException>(() => environment.GetRuntimeAsync());
+
+        var warning = logger.Entries.Single(static entry => entry.Level == LogLevel.Warning);
+        AssertEx.Contains(warning.Message, "uv sync --locked");
+        AssertEx.Contains(warning.Message, "exit code 2");
+        AssertEx.Contains(warning.Message, "needs to be updated");
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Provision_WhenTheImportCheckFails_LogsItsOutputTail_WithoutDirectories()
+    {
+        var logger = new RecordingLogger<ComputePythonEnvironment>();
+        using var environment = Create(new FakeProcessRunner((file, args, uvEnvironment, logSink) =>
+            {
+                if (file.EndsWith(ManagedPythonPins.Current.ExecutableName, StringComparison.Ordinal))
+                {
+                    CreateInterpreter(args, uvEnvironment.GetValueOrDefault("UV_PYTHON_INSTALL_DIR"));
+                    return 0;
+                }
+
+                logSink("  File \"/srv/secret-layout/site-packages/numpy/__init__.py\", line 1");
+                logSink("MemoryError");
+                return 1;
+            }),
+            logger);
+
+        _ = await AssertEx.ThrowsAsync<ComputeEnvironmentException>(() => environment.GetRuntimeAsync());
+
+        var warning = logger.Entries.Single(static entry => entry.Level == LogLevel.Warning);
+        AssertEx.Contains(warning.Message, "import check");
+        AssertEx.Contains(warning.Message, "exit code 1");
+        AssertEx.Contains(warning.Message, "MemoryError");
+        AssertEx.False(warning.Message.Contains("secret-layout", StringComparison.Ordinal), "the tail keeps file names, not directories");
     }
 
     [Test]
@@ -888,11 +937,11 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
         });
     }
 
-    private ComputePythonEnvironment Create(IPythonToolRunner runner)
+    private ComputePythonEnvironment Create(IPythonToolRunner runner, ILogger<ComputePythonEnvironment>? logger = null)
     {
         return new ComputePythonEnvironment(new UvBinaryAcquirer(_http),
             runner,
-            NullLogger<ComputePythonEnvironment>.Instance,
+            logger ?? NullLogger<ComputePythonEnvironment>.Instance,
             CacheRoot,
             ScriptsDirectory,
             Toolchain);
