@@ -3,7 +3,8 @@ import type { i18n as I18n } from "i18next";
 export type ExplanationLevel = "overview" | "detail" | "math";
 
 // What a shown explanation rests on. The badge states it, so text about inferred structure never reads as read from the file.
-export type ExplanationBasis = "background" | "measurement" | "llamaCpp" | "simulated" | { inferredFrom: string };
+// Unavailable: what the shown run or block cannot provide, so a missing view never reads as an empty measurement.
+export type ExplanationBasis = "background" | "measurement" | "llamaCpp" | "simulated" | "unavailable" | { inferredFrom: string };
 
 const explanationRoot = "pages.modelLab.explain";
 

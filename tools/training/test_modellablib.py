@@ -13,6 +13,7 @@ import threading
 from unittest import mock
 
 from modellablib import (
+    ATTENTION_WEIGHT_SCALE,
     CANDIDATE_TEXT_BYTES,
     CONTRACT_VERSION,
     CUT_MARK,
@@ -25,7 +26,9 @@ from modellablib import (
     CappedTraceWriter,
     JobError,
     SourceRefusalError,
+    attention_record,
     block_index_of,
+    captures_attention,
     check_aligned,
     control_vector_bytes,
     cut_text,
@@ -135,6 +138,12 @@ def test_the_cap_holds_on_deliberate_overflow_and_counts_what_it_dropped():
         assert footer["truncated"] is True
         assert footer["records"] == len(lines) - 1
         assert footer["records"] + footer["dropped"] == 5_000
+
+
+def test_a_file_with_no_record_still_ends_in_its_footer():
+    size, on_disk, lines = _write(1_000, 0)
+    assert size == on_disk
+    assert lines == [{"footer": True, "truncated": False, "records": 0, "dropped": 0, "payloadBytes": 0, "cap": 1_000}]
 
 
 def test_a_cap_without_room_for_the_footer_is_refused():
@@ -252,6 +261,32 @@ def test_candidate_texts_are_cut_before_token_texts():
     token_texts, _ = _texts(result)
     assert all(token.endswith(CUT_MARK) for token in token_texts)
     assert result["text"] == text * 128
+
+
+def test_prompt_piece_texts_are_cut_after_candidate_texts_and_before_token_texts():
+    text = "d" * 200
+
+    def with_pieces():
+        return {**_trace_result(text), "promptPieces": [{"id": 9, "text": text} for _ in range(512)]}
+
+    def cut(result):
+        token_texts, candidate_texts = _texts(result)
+        pieces = [piece["text"] for piece in result["promptPieces"]]
+        return [all(t.endswith(CUT_MARK) for t in texts) for texts in (candidate_texts, pieces, token_texts)]
+
+    whole = len(json.dumps(with_pieces(), ensure_ascii=False).encode())
+    result = with_pieces()
+    candidates_cut = len(fitted_trace_result(result, budget=whole - 1))
+    assert cut(result) == [True, False, False]
+
+    result = with_pieces()
+    pieces_cut = len(fitted_trace_result(result, budget=candidates_cut - 1))
+    assert cut(result) == [True, True, False]
+    assert result["promptPieces"][0]["id"] == 9
+
+    result = with_pieces()
+    fitted_trace_result(result, budget=pieces_cut - 1)
+    assert cut(result) == [True, True, True]
 
 
 def test_a_result_over_its_budget_even_cut_is_refused():
@@ -429,6 +464,87 @@ def test_trace_layers_out_of_order_are_refused_and_any_ascending_set_is_kept():
         assert validate_job({**VALID_JOB, "layers": layers})["layers"] == layers
 
 
+ATTENTION_FIELDS = {
+    "attentionPath": "/work/attention.jsonl",
+    "attentionLayers": [3, 7, 11],
+    "attentionTopKeys": 32,
+    "attentionByteCap": 3_932_320,
+}
+
+
+def test_a_job_with_all_attention_fields_captures_and_one_without_or_with_nulls_does_not():
+    assert captures_attention(validate_job({**VALID_JOB, **ATTENTION_FIELDS}))
+    assert not captures_attention(validate_job(dict(VALID_JOB)))
+    assert not captures_attention(validate_job({**VALID_JOB, **dict.fromkeys(ATTENTION_FIELDS)}))
+
+
+def test_attention_fields_come_all_four_or_none():
+    for missing in ATTENTION_FIELDS:
+        for absent in ({}, {missing: None}):
+            fields = {**{k: v for k, v in ATTENTION_FIELDS.items() if k != missing}, **absent}
+            try:
+                validate_job({**VALID_JOB, **fields})
+            except JobError as error:
+                assert "all four or none" in str(error), str(error)
+                continue
+            raise AssertionError(f"A job without {missing} but with the other attention fields must be refused.")
+
+
+def test_every_unusable_attention_field_is_refused():
+    bad_values = {
+        "attentionPath": ["", 1],
+        "attentionLayers": [[], [3, 3], [7, 3], [-1], ["3"], [True], list(range(9)), 3],
+        "attentionTopKeys": [0, 65, "32", True, 1.5],
+        "attentionByteCap": [FOOTER_RESERVE_BYTES, "9", True],
+    }
+    for field, values in bad_values.items():
+        for value in values:
+            try:
+                validate_job({**VALID_JOB, **ATTENTION_FIELDS, field: value})
+            except JobError as error:
+                assert field in str(error), str(error)
+                continue
+            raise AssertionError(f"{field}={value!r} must be refused.")
+    assert validate_job({**VALID_JOB, **ATTENTION_FIELDS, "attentionLayers": list(range(8)), "attentionTopKeys": 64})
+
+
+def test_an_attention_record_has_the_wire_shape():
+    record = attention_record(2, 7, 14, [[14, 0], [3, 14]], [[0.6, 0.25], [0.5, 0.123456]])
+    assert record == {
+        "s": 2,
+        "l": 7,
+        "q": 14,
+        "k": [[14, 0], [3, 14]],
+        "w": [[6000, 2500], [5000, 1234]],
+        "r": [1500, 3765],
+    }
+    assert json.loads(json.dumps(record, allow_nan=False)) == record
+    assert ATTENTION_WEIGHT_SCALE == 10_000
+
+
+def test_an_attention_row_rounded_down_never_sums_past_the_scale():
+    rows = [
+        [0.33333334, 0.33333334, 0.33333334],  # a float32 softmax row a hair past 1
+        [0.99995, 0.00004, 0.00001],
+        [0.12345678] * 8,
+        [1.0],
+    ]
+    record = attention_record(0, 3, 0, [list(range(len(row))) for row in rows], rows)
+    for weights, rest in zip(record["w"], record["r"], strict=True):
+        assert rest >= 0
+        assert sum(weights) + rest <= ATTENTION_WEIGHT_SCALE, (weights, rest)
+    assert record["r"][0] == 0  # clamped, not negative
+    assert record["w"][3] == [10_000]
+
+
+def test_a_query_with_fewer_keys_than_asked_for_keeps_a_short_row():
+    # The first predicting query of a two-token prompt sees two keys, whatever attentionTopKeys asks for.
+    record = attention_record(0, 3, 1, [[1, 0]] * 2, [[0.75, 0.25]] * 2)
+    assert record["k"] == [[1, 0], [1, 0]]
+    assert record["w"] == [[7500, 2500], [7500, 2500]]
+    assert record["r"] == [0, 0]
+
+
 def test_layers_past_the_last_block_are_named():
     assert out_of_range_layers([3, 24, 99], 24) == [24, 99]
     assert out_of_range_layers([3, 23], 24) == []
@@ -561,14 +677,14 @@ VALID_SOURCE_JOB = {
 }
 
 
-def test_the_contract_is_version_3_and_a_version_2_job_is_refused():
-    assert CONTRACT_VERSION == 3
+def test_the_contract_is_version_4_and_a_version_3_job_is_refused():
+    assert CONTRACT_VERSION == 4
     for job in (VALID_JOB, VALID_STEERING_JOB, VALID_SOURCE_JOB):
         try:
-            validate_job({**job, "contractVersion": 2})
+            validate_job({**job, "contractVersion": 3})
         except JobError:
             continue
-        raise AssertionError(f"A version 2 {job['kind']} job must be refused.")
+        raise AssertionError(f"A version 3 {job['kind']} job must be refused.")
 
 
 def test_a_valid_source_job_passes():

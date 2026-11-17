@@ -282,6 +282,36 @@ public sealed class ModelLabCheckpointPreflightServiceTests : IDisposable
         AssertEx.Equal(LicenseGateService.BuildModelLabText("Qwen/Saved", "apache-2.0", isGated: false, metadataPresent: true), result.LicenseConfirmationText!);
     }
 
+    /// <summary>transformers builds a Qwen3.5 config with no <c>layer_types</c> from its interval, so the node must name the same blocks full.</summary>
+    [Test]
+    [Arguments(""","num_attention_heads":8""", "3,7,11,15,19,23", 8)]
+    [Arguments(""","full_attention_interval":6""", "5,11,17,23", null)]
+    [Arguments(""","layer_types":["full_attention","linear_attention"]""", "0", null)]
+    public async Task BlockKinds_AreTheConfigsOwn_OrDerivedFromItsInterval(string extra, string fullBlocks, int? heads)
+    {
+        GgufHeader(embeddingLength: 1024, blockCount: 24);
+        using var files = Files(Config08B);
+        var config = $$$"""{"model_type":"qwen3_5","text_config":{"hidden_size":1024,"num_hidden_layers":24{{{extra}}}}}""";
+
+        var result = await Service(files, Weights08B).CheckDownloadedAsync(Saved(config, license: null), Gguf, CancellationToken.None);
+
+        AssertEx.Null(result.Refusal, result.RefusalMessage);
+        var types = result.CheckpointLayerTypes!;
+        AssertEx.Equal(fullBlocks, string.Join(',', Enumerable.Range(0, types.Count).Where(layer => types[layer] == "full_attention")));
+        AssertEx.Equal(heads, result.CheckpointAttentionHeads);
+    }
+
+    [Test]
+    public async Task AModelTypeTheScriptDoesNotKnow_GetsNoDerivedBlockKinds()
+    {
+        GgufHeader(embeddingLength: 1024, blockCount: 24);
+        using var files = Files(Config08B);
+
+        var result = await Service(files, Weights08B).CheckDownloadedAsync(Saved(ConfigOfType("gpt2"), license: null), Gguf, CancellationToken.None);
+
+        AssertEx.Null(result.CheckpointLayerTypes, "The interval rule is Qwen3.5's; another layout's blocks are not guessed.");
+    }
+
     /// <summary>The operator must confirm the same words <c>CreateRowAsync</c> records and hashes for this artifact.</summary>
     [Test]
     public async Task ACheckpointOnDisk_WithNoLicenseMetadata_SaysSo_NotThatItDeclaresNone()

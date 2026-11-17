@@ -218,6 +218,7 @@ import {
 	getModelGgufInspection,
 	getModelLabArchitecture,
 	getModelLabExperiment,
+	getModelLabExperimentAttention,
 	getModelLabExperimentTrace,
 	getModelLabPyTorchIndex,
 	getModelLabPyTorchSource,
@@ -1005,6 +1006,9 @@ import type {
 	GetModelLabArchitectureData,
 	GetModelLabArchitectureError,
 	GetModelLabArchitectureResponse,
+	GetModelLabExperimentAttentionData,
+	GetModelLabExperimentAttentionError,
+	GetModelLabExperimentAttentionResponse,
 	GetModelLabExperimentData,
 	GetModelLabExperimentResponse,
 	GetModelLabExperimentTraceData,
@@ -9285,6 +9289,28 @@ export const getModelLabExperimentOptions = (options: Options<GetModelLabExperim
 			return data;
 		},
 		queryKey: getModelLabExperimentQueryKey(options),
+	});
+
+export const getModelLabExperimentAttentionQueryKey = (options: Options<GetModelLabExperimentAttentionData>) =>
+	createQueryKey("getModelLabExperimentAttention", options, false, ["Model-Lab"]);
+
+export const getModelLabExperimentAttentionOptions = (options: Options<GetModelLabExperimentAttentionData>) =>
+	queryOptions<
+		GetModelLabExperimentAttentionResponse,
+		AxiosError<GetModelLabExperimentAttentionError>,
+		GetModelLabExperimentAttentionResponse,
+		ReturnType<typeof getModelLabExperimentAttentionQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelLabExperimentAttention({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelLabExperimentAttentionQueryKey(options),
 	});
 
 export const cancelModelLabExperimentMutation = (

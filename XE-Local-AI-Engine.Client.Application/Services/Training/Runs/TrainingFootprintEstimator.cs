@@ -156,7 +156,8 @@ public static class TrainingFootprintEstimator
                     VocabSize = config.VocabSize ?? text.VocabSize,
                     MaxPositionEmbeddings = config.MaxPositionEmbeddings ?? text.MaxPositionEmbeddings,
                     TorchDtype = config.TorchDtype ?? text.TorchDtype,
-                    LayerTypes = config.LayerTypes ?? text.LayerTypes
+                    LayerTypes = config.LayerTypes ?? text.LayerTypes,
+                    FullAttentionInterval = config.FullAttentionInterval ?? text.FullAttentionInterval
                 };
         }
         catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)

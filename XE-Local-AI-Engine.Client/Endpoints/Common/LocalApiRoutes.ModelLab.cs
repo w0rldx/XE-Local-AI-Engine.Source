@@ -19,6 +19,9 @@ public static partial class LocalApiRoutes
 
         public const string ExperimentTrace = "model-lab/experiments/{experimentId:guid}/trace";
 
+        // One captured block's attention rows of a trace that recorded them: one block per call, because the whole blob is several megabytes.
+        public const string ExperimentAttention = "model-lab/experiments/{experimentId:guid}/attention/{layer:int}";
+
         public const string ExperimentNotes = "model-lab/experiments/{experimentId:guid}/notes";
 
         // A pinned experiment is exempt from retention's trim.

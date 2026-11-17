@@ -4760,6 +4760,28 @@ export type XeLocalAiEngineClientEndpointsModelLabV1GetModelLabPyTorchSourceRequ
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabAttentionHeadResponse = {
+	keys: Array<number>;
+	weights: Array<number>;
+	rest: number;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabAttentionResponse = {
+	layer: number;
+	heads: number;
+	kvHeads: number;
+	topKeys: number;
+	rows: Array<XeLocalAiEngineClientEndpointsModelLabV1ModelLabAttentionRowResponse>;
+	truncated: boolean;
+	droppedRecords: number;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabAttentionRowResponse = {
+	step: number;
+	queryPosition: number;
+	heads: Array<XeLocalAiEngineClientEndpointsModelLabV1ModelLabAttentionHeadResponse>;
+};
+
 export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest = {
 	repoId: string;
 	revision?: string | null;
@@ -4798,6 +4820,10 @@ export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPreflightR
 	licenseConfirmationText: string | null;
 	refusal: XeLocalAiEngineClientServicesModelLabModelLabCheckpointRefusal | null;
 	refusalMessage: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentAttentionRouteRequest = {
+	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentListResponse = {
@@ -4893,6 +4919,7 @@ export type XeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentReque
 	licenseConfirmed: boolean;
 	steering?: XeLocalAiEngineClientServicesModelLabModelLabSteeringRequest | null;
 	layers?: Array<number> | null;
+	recordAttention?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentResponse = {
@@ -7148,6 +7175,17 @@ export type XeLocalAiEngineClientServicesModelLabModelLabArmOutput = {
 	finishReason?: string | null;
 };
 
+export type XeLocalAiEngineClientServicesModelLabModelLabAttentionSummary = {
+	layers?: Array<number>;
+	heads?: number;
+	kvHeads?: number;
+	headDim?: number;
+	topKeys?: number;
+	weightScale?: number;
+	records?: number;
+	truncated?: boolean;
+};
+
 export type XeLocalAiEngineClientServicesModelLabModelLabCheckpointRefusal =
 	| "UnsupportedPlatform"
 	| "NotTrainable"
@@ -7162,6 +7200,11 @@ export type XeLocalAiEngineClientServicesModelLabModelLabCheckpointRefusal =
 	| "LicenseNotConfirmed"
 	| "DownloadRejected"
 	| "UnsupportedModelType";
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPromptPiece = {
+	id?: number;
+	text?: string;
+};
 
 export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchBlock = {
 	index?: number;
@@ -7308,7 +7351,8 @@ export type XeLocalAiEngineClientServicesModelLabModelLabStartRefusal =
 	| "InvalidLayer"
 	| "InvalidTraceLayers"
 	| "PinLimitReached"
-	| "ModelNotLoaded";
+	| "ModelNotLoaded"
+	| "AttentionUnavailable";
 
 export type XeLocalAiEngineClientServicesModelLabModelLabSteeringArm = {
 	name: string;
@@ -7366,6 +7410,10 @@ export type XeLocalAiEngineClientServicesModelLabModelLabTraceResult = {
 	seed?: number | null;
 	maxNewTokens?: number | null;
 	steering?: XeLocalAiEngineClientServicesModelLabModelLabSteeringResult | null;
+	promptPieces?: Array<XeLocalAiEngineClientServicesModelLabModelLabPromptPiece> | null;
+	layerKinds?: string | null;
+	attnImplementation?: string | null;
+	attention?: XeLocalAiEngineClientServicesModelLabModelLabAttentionSummary | null;
 };
 
 export type XeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus = "InsufficientData" | "Improved" | "Flat" | "Regressed";
@@ -18069,6 +18117,45 @@ export type GetModelLabExperimentResponses = {
 };
 
 export type GetModelLabExperimentResponse = GetModelLabExperimentResponses[keyof GetModelLabExperimentResponses];
+
+export type GetModelLabExperimentAttentionData = {
+	body?: never;
+	path: {
+		experimentId: string;
+		layer: number;
+	};
+	query?: never;
+	url: "/api/local/v1/model-lab/experiments/{experimentId}/attention/{layer}";
+};
+
+export type GetModelLabExperimentAttentionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	422: FastEndpointsProblemDetails;
+};
+
+export type GetModelLabExperimentAttentionError =
+	GetModelLabExperimentAttentionErrors[keyof GetModelLabExperimentAttentionErrors];
+
+export type GetModelLabExperimentAttentionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelLabV1ModelLabAttentionResponse;
+};
+
+export type GetModelLabExperimentAttentionResponse =
+	GetModelLabExperimentAttentionResponses[keyof GetModelLabExperimentAttentionResponses];
 
 export type CancelModelLabExperimentData = {
 	body?: never;

@@ -56,6 +56,28 @@ export function toTraceTable(
 	return { layers: orderedLayers, rows };
 }
 
+export interface StepperBlock {
+	index: number;
+	kind: string;
+	// Undefined for a block this run did not trace; null where the cap dropped its record or the value was not finite.
+	norm: number | null | undefined;
+}
+
+// One cell per block at a step: every block of the model when the result names each block's kind (in the records' F/L/?
+// letters), else the traced blocks only, which is all a trace that does not name them can show.
+export function stepperBlocks(
+	table: { layers: TraceLayer[]; rows: TraceRow[] },
+	step: number,
+	layerKinds?: readonly string[],
+): StepperBlock[] {
+	const norms = table.rows.find((row) => row.step === step)?.norms ?? [];
+	const traced = new Map(table.layers.map((layer, at) => [layer.index, norms[at] ?? null]));
+	if (layerKinds) {
+		return layerKinds.map((kind, index) => ({ index, kind, norm: traced.get(index) }));
+	}
+	return table.layers.map((layer) => ({ index: layer.index, kind: layer.kind, norm: traced.get(layer.index) ?? null }));
+}
+
 // Raw: the model's own logits. Processed: after the checkpoint's generation-config processors, which chose the token.
 export type CandidateBasis = "raw" | "processed";
 

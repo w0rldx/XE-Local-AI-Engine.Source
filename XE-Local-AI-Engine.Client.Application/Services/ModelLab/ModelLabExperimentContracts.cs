@@ -43,6 +43,21 @@ public sealed record ModelLabTraceJobV1
     public required int TraceByteCap { get; init; }
 
     public int Seed { get; init; } = ModelLabTraceSpec.Seed;
+
+    /// <summary>Where the script writes the attention rows. This and the three below are set together, and left out of the file when the trace records no attention.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AttentionPath { get; init; }
+
+    /// <summary><see cref="ModelLabTraceSpec.AttentionLayersFor" />: full-attention blocks only, ascending.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<int>? AttentionLayers { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? AttentionTopKeys { get; init; }
+
+    /// <summary><see cref="ModelLabTraceSpec.AttentionByteCapFor" /> of the layers and the checkpoint's query heads.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? AttentionByteCap { get; init; }
 }
 
 /// <summary>What <c>modellab.py</c> reads for a steering job. Holds the plaintext contrast prompts, in the owner-only work directory.</summary>
@@ -85,6 +100,9 @@ public sealed record ModelLabExperimentRequest
 
     /// <summary>The blocks a trace records, in any order. Null for <see cref="ModelLabTraceSpec.LayersFor" />; a steering job has its own layer.</summary>
     public IReadOnlyList<int>? Layers { get; init; }
+
+    /// <summary>A trace also records each generated step's attention row at the blocks <see cref="ModelLabTraceSpec.AttentionLayersFor" /> picks.</summary>
+    public bool RecordAttention { get; init; }
 }
 
 /// <summary>A steering job's inputs. The arm's prompts are the request's <c>prompt</c> and then <see cref="AdditionalTestPrompts" />.</summary>
@@ -119,7 +137,8 @@ public enum ModelLabStartRefusal
     InvalidLayer,
     InvalidTraceLayers,
     PinLimitReached,
-    ModelNotLoaded
+    ModelNotLoaded,
+    AttentionUnavailable
 }
 
 public sealed record ModelLabStart
@@ -185,6 +204,44 @@ public sealed record ModelLabTrace
     public required ModelLabTraceReadStatus Status { get; init; }
 
     public IReadOnlyList<ModelLabTraceRecord> Records { get; init; } = [];
+
+    public ModelLabTraceFooter? Footer { get; init; }
+}
+
+/// <summary>One predicted token's query row at one block, per query head: the kept keys, most weight first, and the mass of the keys left out.</summary>
+public sealed record ModelLabAttentionRecord
+{
+    /// <summary>The index of the token this row predicted.</summary>
+    [JsonPropertyName("s")]
+    public int Step { get; init; }
+
+    [JsonPropertyName("l")]
+    public int Layer { get; init; }
+
+    [JsonPropertyName("q")]
+    public int QueryPosition { get; init; }
+
+    /// <summary>Key positions, per head.</summary>
+    [JsonPropertyName("k")]
+    public IReadOnlyList<IReadOnlyList<int>> Keys { get; init; } = [];
+
+    /// <summary>Weights in units of <see cref="ModelLabAttentionSummary.WeightScale" />, rounded down, matching <see cref="Keys" />.</summary>
+    [JsonPropertyName("w")]
+    public IReadOnlyList<IReadOnlyList<int>> Weights { get; init; } = [];
+
+    /// <summary>The weight outside the kept keys, per head, in the same units.</summary>
+    [JsonPropertyName("r")]
+    public IReadOnlyList<int> Rest { get; init; } = [];
+}
+
+/// <summary>A trace's attention rows at one block, with the run's capture shape.</summary>
+public sealed record ModelLabAttention
+{
+    public required ModelLabTraceReadStatus Status { get; init; }
+
+    public ModelLabAttentionSummary? Summary { get; init; }
+
+    public IReadOnlyList<ModelLabAttentionRecord> Records { get; init; } = [];
 
     public ModelLabTraceFooter? Footer { get; init; }
 }
@@ -256,6 +313,51 @@ public sealed record ModelLabTraceResult
 
     /// <summary>Set on a steering job. The fields above then describe its derive pass, and the tokens stay empty.</summary>
     public ModelLabSteeringResult? Steering { get; init; }
+
+    /// <summary>The rendered prompt's tokens, in order. Null, like the three below, on a result saved before contract 4.</summary>
+    public IReadOnlyList<ModelLabPromptPiece>? PromptPieces { get; init; }
+
+    /// <summary>One character per block: F for full attention, L for linear, ? when the model does not say.</summary>
+    public string? LayerKinds { get; init; }
+
+    /// <summary>The attention kernel the run used, such as <c>sdpa</c>.</summary>
+    public string? AttnImplementation { get; init; }
+
+    /// <summary>Null unless the trace recorded attention.</summary>
+    public ModelLabAttentionSummary? Attention { get; init; }
+}
+
+/// <summary>One token of the rendered prompt. The text is what the tokenizer decodes the id to on its own, and can be cut to keep the result under its cap.</summary>
+public sealed record ModelLabPromptPiece
+{
+    public int Id { get; init; }
+
+    public string Text { get; init; } = string.Empty;
+}
+
+/// <summary>What a trace's attention capture recorded. The rows themselves are in the run's attention blob.</summary>
+public sealed record ModelLabAttentionSummary
+{
+    /// <summary>The captured blocks, ascending.</summary>
+    public IReadOnlyList<int> Layers { get; init; } = [];
+
+    /// <summary>Query heads per block; query head h reads key/value head h / (Heads / KvHeads).</summary>
+    public int Heads { get; init; }
+
+    public int KvHeads { get; init; }
+
+    public int HeadDim { get; init; }
+
+    /// <summary>Keys kept per row and head; a row over fewer keys keeps them all.</summary>
+    public int TopKeys { get; init; }
+
+    /// <summary>A stored weight of <c>n</c> means <c>n / WeightScale</c>.</summary>
+    public int WeightScale { get; init; }
+
+    public int Records { get; init; }
+
+    /// <summary>True when the byte cap dropped rows.</summary>
+    public bool Truncated { get; init; }
 }
 
 /// <summary>A derived vector and each arm that has finished. Arms compare only with each other: their launches are not a chat's.</summary>

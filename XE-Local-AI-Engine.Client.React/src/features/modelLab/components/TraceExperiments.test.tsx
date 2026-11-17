@@ -316,6 +316,79 @@ describe("TraceExperiments", () => {
 		expect(starts[2]).not.toHaveProperty("layers");
 	});
 
+	it("sends Record attention only while it is on, and shows the server's refusal of it", async () => {
+		const starts: Record<string, unknown>[] = [];
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json(emptyList)),
+			http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ items: [artifactRow("Ready")] })),
+			http.get(localApiPath("training/base-artifacts/:artifactId"), () => HttpResponse.json(artifactRow("Ready"))),
+			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
+			http.post(localApiPath("model-lab/experiments"), async ({ request }) => {
+				starts.push((await request.json()) as Record<string, unknown>);
+				return HttpResponse.json(
+					{
+						reason: "AttentionUnavailable",
+						message: "This checkpoint has more than 32 heads, so its attention is not recorded.",
+					},
+					{ status: 409 },
+				);
+			}),
+		);
+
+		renderWithProviders(<TraceExperiments />);
+		await chooseOption(/Installed GGUF/, gguf);
+		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
+		fireEvent.click(screen.getByTestId("model-lab-check"));
+		fireEvent.click(await screen.findByRole("checkbox", { name: preflightBase.licenseConfirmationText }));
+		fireEvent.change(await screen.findByRole("textbox", { name: /Prompt/ }), { target: { value: "hello" } });
+
+		const record = screen.getByRole("switch", { name: "Record attention" }) as HTMLInputElement;
+		expect(record.checked).toBe(false);
+		expect(record.disabled).toBe(false);
+		expect(screen.getByRole("button", { name: "About Record attention" })).toBeTruthy();
+		fireEvent.click(screen.getByTestId("model-lab-start"));
+		await waitFor(() => expect(starts).toHaveLength(1));
+		expect(starts[0]).not.toHaveProperty("recordAttention");
+
+		fireEvent.click(record);
+		fireEvent.click(screen.getByTestId("model-lab-start"));
+		await waitFor(() => expect(starts).toHaveLength(2));
+		expect(starts[1]).toMatchObject({ recordAttention: true });
+		expect((await screen.findByTestId("model-lab-start-refused")).textContent).toBe(
+			"This checkpoint has more than 32 heads, so its attention is not recorded.",
+		);
+
+		fireEvent.click(record);
+		fireEvent.click(screen.getByTestId("model-lab-start"));
+		await waitFor(() => expect(starts).toHaveLength(3));
+		expect(starts[2]).not.toHaveProperty("recordAttention");
+	});
+
+	it("offers no Record attention for a checkpoint without a full-attention block, and says why", async () => {
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json(emptyList)),
+			http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ items: [artifactRow("Ready")] })),
+			http.get(localApiPath("training/base-artifacts/:artifactId"), () => HttpResponse.json(artifactRow("Ready"))),
+			http.post(localApiPath("model-lab/checkpoint-preflight"), () =>
+				HttpResponse.json({ ...preflightBase, checkpointLayerTypes: Array.from({ length: 24 }, () => "linear_attention") }),
+			),
+		);
+
+		renderWithProviders(<TraceExperiments />);
+		await chooseOption(/Installed GGUF/, gguf);
+		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
+		fireEvent.click(screen.getByTestId("model-lab-check"));
+		fireEvent.click(await screen.findByRole("checkbox", { name: preflightBase.licenseConfirmationText }));
+
+		// Mantine renders the description inside the label, so the reason ends the switch's name.
+		const record = (await screen.findByRole("switch", { name: /^Record attention/ })) as HTMLInputElement;
+		expect(record.disabled).toBe(true);
+		expect(record.checked).toBe(false);
+		expect(screen.getByText("This checkpoint has no full-attention block, so there is no attention to record.")).toBeTruthy();
+	});
+
 	it("marks a steering row in the list, and only that one", async () => {
 		const row = {
 			repoId: "Qwen/Qwen3.5-0.8B",

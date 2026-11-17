@@ -38,6 +38,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     private const int MaxAppVersionCharacters = 64;
 
     private const string TraceFileName = "trace.jsonl";
+    private const string AttentionFileName = "attention.jsonl";
     private const string ResultFileName = "result.json";
     private const string VectorFileName = "steer.gguf";
     private const string RandomVectorFileName = "random.gguf";
@@ -90,7 +91,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         ArgumentNullException.ThrowIfNull(timeProvider);
         _arms = arms;
         _blobs = new ManagedEncryptedBlobStore(dataDirectory, keyHolder, "model-lab", "artifacts", "model_lab_artifact_blob",
-            ModelLabTraceSpec.MaxTraceByteCap, "Model Lab artifact");
+            Math.Max(ModelLabTraceSpec.MaxTraceByteCap, ModelLabTraceSpec.MaxAttentionByteCap), "Model Lab artifact");
         _dataDirectory = dataDirectory;
         _events = events;
         _gpuWorkGate = gpuWorkGate;
@@ -111,6 +112,9 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
 
     public static string UnsupportedPlatformMessage =>
         "Tracing runs on Linux only for now, because it needs the Python training runtime, which is available on Linux only. The other Model Lab tools work here.";
+
+    /// <summary>Runs just before a trace's attention blob is written. A test throws here to fail the second write after the first has landed.</summary>
+    internal Action? BeforeAttentionBlobWrite { get; set; }
 
     /// <summary>Awaited by tests so a started job can be observed to its end; null when nothing has run.</summary>
     internal Task? InFlight { get; private set; }
@@ -269,6 +273,11 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                     $"This checkpoint has blocks 0 to {blockCount - 1}. Choose distinct trace layers in that range."));
             }
 
+            if (request.RecordAttention && AttentionRefusalOrNull(preflight) is { } noAttention)
+            {
+                return Refuse(ModelLabStartRefusal.AttentionUnavailable, noAttention);
+            }
+
             return await AdmitAndStartAsync(request, artifact, preflight, layer: null, interpreter, scriptPath, services, ct);
         }
 
@@ -289,6 +298,25 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
 
         return await AdmitAndStartAsync(request, artifact, preflight, layer, interpreter, scriptPath, services, ct);
+    }
+
+    /// <summary>The cap is computed from the checkpoint's own shape, so a config that does not state it cannot record attention.</summary>
+    private static string? AttentionRefusalOrNull(ModelLabCheckpointPreflight preflight)
+    {
+        if (preflight.CheckpointLayerTypes is not { } layerTypes || preflight.CheckpointAttentionHeads is not { } heads)
+        {
+            return "This checkpoint's config does not state its block kinds and attention heads, so attention cannot be recorded. Start the trace without it.";
+        }
+
+        if (ModelLabTraceSpec.AttentionLayersFor(layerTypes).Count == 0)
+        {
+            return "This checkpoint has no full-attention block, and only those have attention weights to record. Start the trace without it.";
+        }
+
+        return heads is < 1 or > ModelLabTraceSpec.MaxAttentionHeads
+            ? string.Create(CultureInfo.InvariantCulture,
+                $"This checkpoint has {heads} attention heads per block, and a recording holds 1 to {ModelLabTraceSpec.MaxAttentionHeads}. Start the trace without it.")
+            : null;
     }
 
     private static async Task<string?> GetRuntimeRefusalAsync(IServiceProvider services, CancellationToken ct)
@@ -388,6 +416,51 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             {
                 Status = ModelLabTraceReadStatus.Unavailable
             };
+    }
+
+    /// <summary>One captured block's rows. Not found for a steering row, a trace that recorded no attention, or a block it did not capture.</summary>
+    public async Task<ModelLabAttention> ReadAttentionAsync(Guid id, int layer, CancellationToken ct)
+    {
+        var record = await GetAsync(id, ct);
+        if (record is not { Kind: ModelLabExperimentKind.Trace, AttentionBlobId: { } blobId, AttentionSha256: { } hash, AttentionByteCount: { } bytes })
+        {
+            return new ModelLabAttention
+            {
+                Status = ModelLabTraceReadStatus.NotFound
+            };
+        }
+
+        // The blob's shape is the result's: without a readable summary its rows cannot be decoded.
+        if ((record.ResultJson is { } json ? ModelLabTraceSpec.ReadResultOrNull(json)?.Attention : null) is not { Heads: > 0, WeightScale: > 0 } summary)
+        {
+            return new ModelLabAttention
+            {
+                Status = ModelLabTraceReadStatus.Unavailable
+            };
+        }
+
+        if (!summary.Layers.Contains(layer))
+        {
+            return new ModelLabAttention
+            {
+                Status = ModelLabTraceReadStatus.NotFound
+            };
+        }
+
+        var read = await _blobs.ReadAsync(id, blobId, hash, bytes, ct);
+        var attention = read.Status == ManagedBlobReadStatus.Found
+            ? ModelLabTraceSpec.ParseAttention(read.Content, summary.Heads)
+            : new ModelLabAttention
+            {
+                Status = ModelLabTraceReadStatus.Unavailable
+            };
+        return attention.Status == ModelLabTraceReadStatus.Found
+            ? attention with
+            {
+                Summary = summary,
+                Records = [.. attention.Records.Where(row => row.Layer == layer)]
+            }
+            : attention;
     }
 
     public Task StartAsync(CancellationToken cancellationToken) =>
@@ -502,6 +575,8 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             };
             // Ascending, always: the script counts a token step when the first listed layer's hook fires.
             var traced = request.Layers?.Order().ToArray() ?? ModelLabTraceSpec.LayersFor(preflight.CheckpointBlockCount ?? 0);
+            // Checked at the start: a trace that records attention has both. A steering job records none.
+            var attentionLayers = layer is null && request.RecordAttention ? ModelLabTraceSpec.AttentionLayersFor(preflight.CheckpointLayerTypes!) : null;
             var heldLease = lease;
             var heldReservation = reservation;
 #pragma warning disable CA2025 // The job owns all three holds from here; job below keeps this method from disposing them.
@@ -514,7 +589,11 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                     TracePath = Path.Combine(WorkDirectory(id), TraceFileName),
                     ResultPath = Path.Combine(WorkDirectory(id), ResultFileName),
                     Layers = traced,
-                    TraceByteCap = ModelLabTraceSpec.TraceByteCapFor(traced.Count)
+                    TraceByteCap = ModelLabTraceSpec.TraceByteCapFor(traced.Count),
+                    AttentionPath = attentionLayers is null ? null : Path.Combine(WorkDirectory(id), AttentionFileName),
+                    AttentionLayers = attentionLayers,
+                    AttentionTopKeys = attentionLayers is null ? null : ModelLabTraceSpec.AttentionTopKeys,
+                    AttentionByteCap = attentionLayers is null ? null : ModelLabTraceSpec.AttentionByteCapFor(attentionLayers.Count, preflight.CheckpointAttentionHeads!.Value)
                 }, script);
 
             lock (_jobLock)
@@ -634,6 +713,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     {
         var id = active.ExperimentId;
         ModelLabExperimentCompletion? recorded = null;
+        ModelLabExperimentCompletion? finished = null;
         try
         {
             ModelLabExperimentCompletion completion;
@@ -655,6 +735,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                 };
             }
 
+            finished = completion;
             await using var scope = _scopeFactory.CreateAsyncScope();
             // A save that failed earlier left the row behind what the job has, and this may still get through.
             await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>()
@@ -671,6 +752,11 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         {
             // The row stays Running until the next startup fails it; the GPU must still come back now.
             _logger.LogError(exception, "Recording the end of Model Lab experiment {ExperimentId} failed.", id);
+            // A trace's blobs are named only by the completion that was not saved, so nothing would delete them later. A steering vector is already on the row.
+            if (finished?.TraceBlobId is not null)
+            {
+                _blobs.DeleteScope(id);
+            }
         }
         finally
         {
@@ -930,26 +1016,50 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     {
         var trace = new FileInfo(job.TracePath);
         var result = new FileInfo(job.ResultPath);
-        if (!trace.Exists || !result.Exists)
+        // The script writes the attention file whenever it was asked to, with only a footer when it kept no row.
+        var attention = job.AttentionPath is { } attentionPath ? new FileInfo(attentionPath) : null;
+        if (!trace.Exists || !result.Exists || attention is { Exists: false })
         {
             return Finished(ModelLabExperimentStatus.Failed, "The Model Lab script finished without writing its results.");
         }
 
         // The script holds the cap itself. This is the check that does not depend on the script being right.
-        if (trace.Length > job.TraceByteCap || result.Length > ModelLabTraceSpec.MaxResultBytes)
+        if (trace.Length > job.TraceByteCap || result.Length > ModelLabTraceSpec.MaxResultBytes || (attention is not null && attention.Length > job.AttentionByteCap))
         {
             return Finished(ModelLabExperimentStatus.Failed, "The Model Lab script wrote more than its byte cap, so nothing was kept.");
         }
 
+        var resultJson = await File.ReadAllBytesAsync(job.ResultPath, CancellationToken.None);
         var blobId = Guid.NewGuid();
-        var written = await _blobs.WriteAsync(id, blobId, await File.ReadAllBytesAsync(job.TracePath, CancellationToken.None), CancellationToken.None);
+        Guid? attentionBlobId = attention is null ? null : Guid.NewGuid();
+        ManagedBlobWriteResult written;
+        ManagedBlobWriteResult? attentionWritten = null;
+        try
+        {
+            written = await _blobs.WriteAsync(id, blobId, await File.ReadAllBytesAsync(job.TracePath, CancellationToken.None), CancellationToken.None);
+            if (attentionBlobId is { } second)
+            {
+                BeforeAttentionBlobWrite?.Invoke();
+                attentionWritten = await _blobs.WriteAsync(id, second, await File.ReadAllBytesAsync(job.AttentionPath!, CancellationToken.None), CancellationToken.None);
+            }
+        }
+        catch
+        {
+            // No row names these blobs yet, so a half-published run would leave them on disk for good.
+            _blobs.DeleteScope(id);
+            throw;
+        }
+
         return new ModelLabExperimentCompletion
         {
             Status = ModelLabExperimentStatus.Succeeded,
-            ResultJson = await File.ReadAllBytesAsync(job.ResultPath, CancellationToken.None),
+            ResultJson = resultJson,
             TraceBlobId = blobId,
             TraceSha256 = written.ContentHash,
-            TraceByteCount = written.ByteCount
+            TraceByteCount = written.ByteCount,
+            AttentionBlobId = attentionBlobId,
+            AttentionSha256 = attentionWritten?.ContentHash,
+            AttentionByteCount = attentionWritten?.ByteCount
         };
     }
 

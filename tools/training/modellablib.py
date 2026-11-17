@@ -12,7 +12,7 @@ import struct
 from typing import Any, TypeGuard
 
 # Separate from trainlib.CONTRACT_VERSION: this script and train.py change independently.
-CONTRACT_VERSION = 3
+CONTRACT_VERSION = 4
 
 TRACE_KIND = "trace"
 STEERING_KIND = "steering"
@@ -28,6 +28,13 @@ TORCH_FILE_PREFIX = "torch:"
 FOOTER_RESERVE_BYTES = 160
 
 MAX_NEW_TOKENS_LIMIT = 4096
+
+# A trace records attention only with all four, a null one counting as absent.
+_ATTENTION_FIELDS = ("attentionPath", "attentionLayers", "attentionTopKeys", "attentionByteCap")
+MAX_ATTENTION_LAYERS = 8
+MAX_ATTENTION_TOP_KEYS = 64
+# Attention weights are stored as integers in 1/ATTENTION_WEIGHT_SCALE, rounded down.
+ATTENTION_WEIGHT_SCALE = 10_000
 
 # A token or candidate text in result.json: its JSON-escaped UTF-8 form at most this long, cut ones ending in CUT_MARK.
 # Only a result over TRACE_RESULT_BUDGET_BYTES is cut.
@@ -81,7 +88,36 @@ def validate_job(job):
         raise JobError("The job has no usable 'traceByteCap'.")
     if not _is_int(job.get("seed")):
         raise JobError("The job has no usable 'seed'.")
+    _validate_attention_fields(job)
     return job
+
+
+def _validate_attention_fields(job):
+    given = [name for name in _ATTENTION_FIELDS if job.get(name) is not None]
+    if not given:
+        return
+    if len(given) != len(_ATTENTION_FIELDS):
+        raise JobError(f"The job's attention fields come all four or none, and it gives only {given}.")
+    _require_strings(job, ("attentionPath",))
+    layers = job["attentionLayers"]
+    usable = (
+        isinstance(layers, list)
+        and 1 <= len(layers) <= MAX_ATTENTION_LAYERS
+        and all(_is_int(layer) and layer >= 0 for layer in layers)
+        and layers == sorted(set(layers))
+    )
+    if not usable:
+        raise JobError("The job has no usable 'attentionLayers'.")
+    keys = job["attentionTopKeys"]
+    if not _is_int(keys) or not 1 <= keys <= MAX_ATTENTION_TOP_KEYS:
+        raise JobError("The job has no usable 'attentionTopKeys'.")
+    cap = job["attentionByteCap"]
+    if not _is_int(cap) or cap <= FOOTER_RESERVE_BYTES:
+        raise JobError("The job has no usable 'attentionByteCap'.")
+
+
+def captures_attention(job):
+    return job.get("attentionPath") is not None
 
 
 def _validated_steering_job(job):
@@ -256,27 +292,33 @@ def _trace_result_bytes(result):
     return json.dumps(result, ensure_ascii=False).encode()
 
 
-def _cut_candidate_texts(tokens):
-    for token in tokens:
+def _cut_candidate_texts(result):
+    for token in result["tokens"]:
         for candidate in token["candidates"] + token["processedCandidates"]:
             candidate["text"] = cut_text(candidate["text"])
 
 
-def _cut_token_texts(tokens):
-    for token in tokens:
+def _cut_prompt_texts(result):
+    for piece in result.get("promptPieces", ()):
+        piece["text"] = cut_text(piece["text"])
+
+
+def _cut_token_texts(result):
+    for token in result["tokens"]:
         token["text"] = cut_text(token["text"])
 
 
 def fitted_trace_result(result, budget=TRACE_RESULT_BUDGET_BYTES):
-    """A trace's result.json bytes, texts whole unless over the budget: then candidate texts are cut, then token texts.
+    """A trace's result.json bytes, texts whole unless over the budget: then candidate texts are cut, then the prompt
+    pieces' texts, then token texts.
 
     Cuts ``result`` in place. Over the budget even then, it raises: the host would refuse the file.
     """
     blob = _trace_result_bytes(result)
-    for cut in (_cut_candidate_texts, _cut_token_texts):
+    for cut in (_cut_candidate_texts, _cut_prompt_texts, _cut_token_texts):
         if len(blob) <= budget:
             return blob
-        cut(result["tokens"])
+        cut(result)
         blob = _trace_result_bytes(result)
     if len(blob) > budget:
         raise ValueError(f"The trace result is {len(blob)} bytes with its texts cut, over its budget of {budget}.")
@@ -293,6 +335,25 @@ def trace_record(step, layer, kind, norm, percentiles, top_indices, top_values):
         "p": [_rounded(value) for value in percentiles],
         "ti": list(top_indices),
         "tv": [_rounded(value) for value in top_values],
+    }
+
+
+def _scaled_down(weight):
+    return math.floor(weight * ATTENTION_WEIGHT_SCALE)
+
+
+def attention_record(step, layer, query_position, keys, weights):
+    """The attention of the query that predicts token ``step``, at one layer: per head the kept key positions best
+    first, their weights, and the rest of the row's mass. All rounded down, so a head's row never sums past the scale.
+    """
+    return {
+        "s": step,
+        "l": layer,
+        "q": query_position,
+        "k": [list(head) for head in keys],
+        "w": [[_scaled_down(weight) for weight in head] for head in weights],
+        # Clamped: a float32 softmax row can sum a hair past 1.
+        "r": [max(0, _scaled_down(1 - sum(head))) for head in weights],
     }
 
 

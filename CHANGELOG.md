@@ -156,6 +156,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Model Lab: step through a saved trace and see real attention.** A trace's result can be replayed token by token
+  (blocks, candidates). A Qwen3.5 trace started with **Record attention** also stores each full-attention head's
+  strongest 32 positions per generated token, recomputed beside the SDPA kernel so the output stays unchanged; linear
+  blocks show that they have no attention matrix. New `GET model-lab/experiments/{id}/attention/{layer}`.
 - **A shorter first run** — a fresh install asks for the account, the recovery code and the external-access choice only,
   with "Step n of 3" on each screen. It starts in Simple mode with the Low sandbox profile; after the first answer a card
   offers both choices once, and both stay in Node settings. An install that already chose keeps its choice.
@@ -448,6 +452,9 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Model Lab trace contract 4.** The host and `modellab.py` move together; cached PyTorch source indexes are rebuilt once.
+- **Model Lab reads block kinds from `full_attention_interval`** when a Qwen3.5 config has no `layer_types`, so the
+  default steering layer of such a checkpoint is now a full-attention block, as it already was for configs that list them.
 - **EmbeddingGemma 2 Q8_0 is the recommended embedding model.** The knowledge base's one-click download installs
   `ggml-org/embeddinggemma-2-GGUF:Q8_0` (~310 MB, weights only, no image projector) instead of nomic-embed-text v1.5.
   It changes what a fresh node downloads; a node with a pinned embedder keeps it. A node with nothing pinned now picks

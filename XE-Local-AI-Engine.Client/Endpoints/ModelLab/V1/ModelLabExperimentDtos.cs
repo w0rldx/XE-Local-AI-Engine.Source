@@ -40,6 +40,9 @@ public sealed class StartModelLabExperimentRequest
 
     /// <summary>The distinct blocks a trace records, in any order. Left out, the three quarter points; not allowed with <see cref="Steering" />.</summary>
     public IReadOnlyList<int>? Layers { get; init; }
+
+    /// <summary>A trace also records each step's attention row at up to eight full-attention blocks the node picks. Not allowed with <see cref="Steering" />.</summary>
+    public bool RecordAttention { get; init; }
 }
 
 public sealed class StartModelLabExperimentResponse
@@ -148,6 +151,54 @@ public sealed class ModelLabTraceRecordResponse
     public required IReadOnlyList<int> TopIndices { get; init; }
 
     public required IReadOnlyList<double?> TopValues { get; init; }
+}
+
+public sealed class ModelLabExperimentAttentionRouteRequest
+{
+    public Guid ExperimentId { get; init; }
+
+    public int Layer { get; init; }
+}
+
+/// <summary>One head of one attention row: the kept keys, most weight first, and the weight of every key left out.</summary>
+public sealed class ModelLabAttentionHeadResponse
+{
+    /// <summary>Key positions in the prompt-plus-generated sequence.</summary>
+    public required IReadOnlyList<int> Keys { get; init; }
+
+    /// <summary>Fractions of the row, matching <see cref="Keys" />, rounded down to four decimals.</summary>
+    public required IReadOnlyList<double> Weights { get; init; }
+
+    public required double Rest { get; init; }
+}
+
+/// <summary>The query row of the position that predicted generated token <see cref="Step" />.</summary>
+public sealed class ModelLabAttentionRowResponse
+{
+    public required int Step { get; init; }
+
+    public required int QueryPosition { get; init; }
+
+    /// <summary>Indexed by query head.</summary>
+    public required IReadOnlyList<ModelLabAttentionHeadResponse> Heads { get; init; }
+}
+
+public sealed class ModelLabAttentionResponse
+{
+    public required int Layer { get; init; }
+
+    public required int Heads { get; init; }
+
+    public required int KvHeads { get; init; }
+
+    public required int TopKeys { get; init; }
+
+    public required IReadOnlyList<ModelLabAttentionRowResponse> Rows { get; init; }
+
+    /// <summary>True when the run's byte cap dropped rows, at this block or another.</summary>
+    public required bool Truncated { get; init; }
+
+    public required int DroppedRecords { get; init; }
 }
 
 public sealed class ModelLabTraceResponse

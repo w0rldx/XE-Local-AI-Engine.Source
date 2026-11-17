@@ -628,6 +628,9 @@ import type {
 	GetModelLabArchitectureData,
 	GetModelLabArchitectureErrors,
 	GetModelLabArchitectureResponses,
+	GetModelLabExperimentAttentionData,
+	GetModelLabExperimentAttentionErrors,
+	GetModelLabExperimentAttentionResponses,
 	GetModelLabExperimentData,
 	GetModelLabExperimentErrors,
 	GetModelLabExperimentResponses,
@@ -1643,6 +1646,7 @@ import {
 	zGetModelCatalogInfoResponse,
 	zGetModelGgufInspectionResponse,
 	zGetModelLabArchitectureResponse,
+	zGetModelLabExperimentAttentionResponse,
 	zGetModelLabExperimentResponse,
 	zGetModelLabExperimentTraceResponse,
 	zGetModelLabPyTorchIndexResponse,
@@ -9532,6 +9536,28 @@ export const getModelLabExperiment = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/model-lab/experiments/{experimentId}",
+		...options,
+	});
+
+export const getModelLabExperimentAttention = <ThrowOnError extends boolean = true>(
+	options: Options<GetModelLabExperimentAttentionData, ThrowOnError>,
+): RequestResult<GetModelLabExperimentAttentionResponses, GetModelLabExperimentAttentionErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetModelLabExperimentAttentionResponses, GetModelLabExperimentAttentionErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelLabExperimentAttentionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/experiments/{experimentId}/attention/{layer}",
 		...options,
 	});
 

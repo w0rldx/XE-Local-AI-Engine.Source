@@ -398,6 +398,43 @@
 						}
 					}
 				},
+				"stepper": {
+					"attentionMap": {
+						"detail": "Columns are the key positions that hold a stored weight for this block and head in any step, in position order; beyond 256 columns, the ones with the largest summed weight stay and a note counts the rest. The color scale runs from 0 to the largest weight in view, named in the legend, so colors do not compare across heads or blocks. Cells without a measured weight have their own states: future position (the key comes after the query, so causal attention cannot read it), not in the top K (not stored; its weight is part of the row's rest), floored to 0 (stored, but below 1/10,000) and row missing (the run dropped this step's row at its size limit). A bright column through many rows is often an attention sink on a template or first token, not a sign of relevance. The key list holds the same values for the current row.",
+						"math": "$$M_{s,c} = a^{(j)}_{P+s-1,\\,c}$$\n\n- $s$: generated token (row); $c$: key position (column); $j$: the chosen head.\n- Future position: $c > P+s-1$; the causal mask makes $a = 0$.\n- Not in the top K: $c \\notin \\mathcal{K}$ of that row; the weight is unknown and counted in the rest.\n- Floored to 0: $c \\in \\mathcal{K}$ with $a < 10^{-4}$.\n- Color: $M_{s,c} / \\max M$ over the cells in view.",
+						"overview": "The map stacks the rows of all steps: one row per generated token, one column per key position. A darker cell means more weight; the current step's row is marked."
+					},
+					"attentionRow": {
+						"detail": "The query belongs to the position the step reads, so the row of generated token $s$ covers key positions 0 to $P+s-1$. A weight shows where the head reads from, not what it writes: the values are mixed by these weights, then a gate per dimension and the output projection decide how much reaches the residual stream, so a large weight on a small or gated-off value changes little. Attention is therefore neither an explanation nor an importance score. Template tokens and the first token often take a large share (attention sinks); a high weight there says nothing about relevant content. The weights are recomputed in fp32 from the query and key tensors the kernel used; only the top keys are kept, rounded down to 1/10,000.",
+						"math": "$$a^{(j)}_{t,s} = \\frac{\\exp\\big(\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s / \\sqrt{d_h}\\big)}{\\sum_{u \\le t} \\exp\\big(\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_u / \\sqrt{d_h}\\big)}, \\qquad s \\le t$$\n\n$$o^{(j)}_t = \\mathrm{sigmoid}\\big(g^{(j)}_t\\big) \\odot \\sum_{s \\le t} a^{(j)}_{t,s}\\, v^{(m)}_s, \\qquad y_t = W_O\\big[o^{(1)}_t; \\dots; o^{(H)}_t\\big]$$\n\n- $t$: query position; $s$: key position; $j$: query head; $m$: the key/value head of its group.\n- $\\tilde q = \\mathrm{RoPE}(\\mathrm{RMSNorm}(q))$, $\\tilde k$ likewise: RMSNorm per head (`q_norm`, `k_norm`), then RoPE on the first part of each head only; the checkpoint config sets that share.\n- $d_h$: head dimension; this model scales by exactly $1/\\sqrt{d_h}$.\n- $g^{(j)}_t$: gate half of the query projection; $W_O$: `o_proj`.\n\nThe row shown is $a^{(j)}_{t,\\cdot}$; the values, the gate and $W_O$ act after it and are not recorded.",
+						"overview": "For the chosen step, block and head, this row shows how the head's query spread its weight over all earlier positions and its own. Each weight lies between 0 and 1, and the row adds up to 1."
+					},
+					"heads": {
+						"detail": "The checkpoint config sets the head counts. With grouped-query attention, several query heads share one key/value head: they compare against the same keys, but with their own queries, so their rows still differ. The default Qwen3.5 config, for example, has 16 query heads sharing 4 key/value heads (groups of 4) and a full-attention block every 4th block; the run states the values of this checkpoint. A recorded block stores all of its query heads. Head numbers are positions in the model, not a ranking; this view does not rate any head as important.",
+						"math": "$$G = H / H_{kv}, \\qquad j = m\\,G + g, \\quad 0 \\le g < G$$\n\n- $H$: query heads; $H_{kv}$: key/value heads; $G$: query heads per group.\n- Query head $j$ reads key/value head $m = \\lfloor j / G \\rfloor$.\n- Heads of one group share $\\tilde k^{(m)}$ and $v^{(m)}$ and differ in $\\tilde q^{(j)}$ and in their gate.\n\nAll $H$ head outputs are concatenated before $W_O$, so what one head contributes also depends on $W_O$.",
+						"overview": "Attention runs as several heads side by side, each with its own query and its own weights. You view one head at a time; different heads can look at very different positions."
+					},
+					"linearNoMatrix": {
+						"detail": "Instead of a growing KV cache, each value head carries one state matrix of fixed size from token to token. Each token first fades the state, then writes into it, and the output reads the state with the query. Earlier tokens are blended into that matrix and cannot be separated again, so no weight per position exists, measured or otherwise. A full-attention block shows a row where the run recorded one.",
+						"math": "$$S_t = \\gamma_t S_{t-1} + \\beta_t\\, \\hat k_t \\big(v_t - \\gamma_t S_{t-1}^{\\top} \\hat k_t\\big)^{\\top}, \\qquad o_t = S_t^{\\top} \\hat q_t / \\sqrt{d_k}$$\n\n- $S_t \\in \\mathbb{R}^{d_k \\times d_v}$: state of one value head, the same size at every position.\n- $\\gamma_t \\in (0,1)$: decay; $\\beta_t \\in (0,1)$: write strength.\n- $\\hat q_t$, $\\hat k_t$: L2-normed query and key; $v_t$: value.\n\n$o_t$ depends on earlier tokens only through $S_{t-1}$, so there is no $a_{t,s}$ to record. The operation `delta` explains the update step by step.",
+						"overview": "This block uses linear attention (gated delta rule). It never compares the query with each earlier position, so there is no row of weights to show."
+					},
+					"notRecorded": {
+						"detail": "The weights cannot be rebuilt from a finished trace: they need the query and the keys of every position, and a trace keeps neither, only residual norms and candidates. Runs saved before attention recording existed never have them. For a new run, turn on \"Record attention\" in the trace form; it costs storage and some generation time, so leave it off when norms and candidates are enough. Linear-attention blocks have no weights to record in any run.",
+						"math": "$$a_{t,s} = \\mathrm{softmax}_s\\big(\\tilde q_t \\cdot \\tilde k_s / \\sqrt{d_h}\\big)$$\n\n- Needs $\\tilde q_t$ and every $\\tilde k_s$, $s \\le t$, of the block; a trace without recording stores neither.\n- A residual norm $\\lVert h_t \\rVert$ does not determine $\\tilde q_t$ or $\\tilde k_s$, so the weights cannot be derived from it.",
+						"overview": "This run has no attention weights for this block. They are recorded only when a trace starts with \"Record attention\" on, and then only for the full-attention blocks the node records by default."
+					},
+					"step": {
+						"detail": "The prompt pass (prefill) runs every prompt token through all blocks; the output at its last position gives the candidates for the first generated token. Each later step reads one token: full-attention blocks look up the keys and values of all earlier positions in the KV cache, which grows by one entry per step, and linear-attention blocks update their fixed-size state. The trace decodes greedily, so the chosen token is the top candidate after the checkpoint's generation settings. Everything shown comes from this one saved run of the Hugging Face checkpoint in bf16, not from the GGUF that \"Next token\" runs.",
+						"math": "$$\\ell^{(s)} = f\\big(x_0, \\dots, x_{P+s-1}\\big)_{P+s-1}, \\qquad x_{P+s} = \\arg\\max_i \\tilde\\ell^{(s)}_i$$\n\n- $P$: number of prompt tokens; positions count from 0.\n- $s$: index of the generated token, from 0. Its step reads position $P+s-1$: the last prompt token for $s = 0$, otherwise generated token $s-1$.\n- $\\ell^{(s)}$: logits at that position; $\\tilde\\ell^{(s)}$: the same after the checkpoint's processors.\n\nWith the cache, a step computes only its own position in each block and reads the $P+s$ cached keys of each full-attention block; the prefill computes all prompt positions in one pass, with the same result up to rounding.",
+						"overview": "One step of the replay is one forward pass of the model that produces one generated token. The first step reads the whole prompt at once; every later step feeds in only the token chosen before it."
+					},
+					"topKeys": {
+						"detail": "The run sets K and states it; a row shorter than K keeps every key. Each kept weight is rounded down to a multiple of 1/10,000, so a weight below 0.01 % shows as 0 and the shown values never exceed the true ones. The rest is the combined weight of all keys that were not kept, one number per row and head; which positions it falls on is not stored. A small rest means the kept keys cover almost the whole row; a large rest means the head spreads its weight thinly. Because of the rounding, kept weights and rest can add up to slightly less than 100 %. The list shows the kept keys in position order, with one neighbour on each side for context.",
+						"math": "$$\\mathcal{K}_t = \\text{positions of the } \\min(K,\\, t+1) \\text{ largest } a_{t,s}, \\quad s \\le t$$\n\n$$\\hat a_{t,s} = \\frac{\\lfloor 10^4\\, a_{t,s} \\rfloor}{10^4} \\;\\; (s \\in \\mathcal{K}_t), \\qquad r_t = 1 - \\sum_{s \\in \\mathcal{K}_t} a_{t,s}$$\n\n- $t$: query position; the row has $t+1$ keys.\n- $\\hat a$: stored weight; $r_t$: the rest.\n\n$\\sum_{s \\in \\mathcal{K}_t} \\hat a_{t,s} + r_t \\le 1$. The kernel does not return weights; they are computed beside it in fp32 from the same post-RoPE query and keys, for every head of the block.",
+						"overview": "A row over a long prompt has thousands of weights. The run keeps only the K largest per row and head, plus one number for all others: the rest."
+					}
+				},
 				"trace": {
 					"maxP99": {
 						"detail": "For each step the tracer computes the 1st, 50th and 99th percentile over the dimensions of the block output at the newest position, on signed values. The summary keeps the largest 99th percentile over all steps. One step is enough to set it, and it says nothing about large negative values.",
@@ -420,6 +457,7 @@
 					"basisLlamaCpp": "Measured by llama.cpp",
 					"basisMeasurement": "What this measurement means",
 					"basisSimulated": "Simulated on this page",
+					"basisUnavailable": "Not available here",
 					"heading": "Explanation",
 					"level": {
 						"detail": "Detail",
@@ -769,6 +807,11 @@
 				"pinned": "Pinned",
 				"progress": "Token {{step}} of up to {{total}}, {{vram}} on the GPU.",
 				"prompt": "Prompt",
+				"recordAttention": {
+					"help": "Also stores, for every generated token, where each head of the full-attention blocks read from: the top keys of its row and the weight of the rest. The model's output is unchanged.\n\nIt costs a few MB of storage per run and makes the trace slightly slower. Turn it on to step through a run's attention; leave it off when you only need norms and candidates, or to keep runs small.",
+					"label": "Record attention",
+					"unavailable": "This checkpoint has no full-attention block, so there is no attention to record."
+				},
 				"repo": "Checkpoint repository",
 				"retention": "The newest {{count}} unpinned experiments are kept. Pinned ones stay until you delete them: {{pinned}} of {{max}} pinned.",
 				"revision": "Revision (optional)",
@@ -789,12 +832,74 @@
 					"Succeeded": "Finished"
 				},
 				"stepButton": "Step {{step}}: {{text}}",
+				"stepper": {
+					"attention": "Attention at block {{index}}",
+					"attentionFailed": "The attention rows could not be read.",
+					"attentionNotFound": "This run kept no attention rows for block {{index}}.",
+					"attentionNote": "Recomputed in fp32 from the kernel's own query/key tensors, top K kept, floored. This run kept the top {{topKeys}} keys per row and head; its {{heads}} query heads share {{kvHeads}} key/value heads.",
+					"attentionTruncated_one": "The attention file reached its cap: {{count}} row of this block was not kept, and the map marks it as missing.",
+					"attentionTruncated_other": "The attention file reached its cap: {{count}} rows of this block were not kept, and the map marks them as missing.",
+					"attentionTruncated_zero": "The attention file reached its cap, but every row of this block was kept.",
+					"block": "Block {{index}}, {{kind}}: {{norm}}",
+					"blocks": "Blocks at this step",
+					"explain": {
+						"attentionMap": "Reading the map",
+						"attentionRow": "What this row shows",
+						"heads": "Heads and key/value heads",
+						"topKeys": "Top K and the rest"
+					},
+					"head": "Head",
+					"headOption": "Head {{head}} (key/value head {{kvHead}})",
+					"kind": {
+						"full": "full attention",
+						"linear": "linear attention",
+						"unknown": "kind not named"
+					},
+					"legend": {
+						"floored": "Stored, under 0.01 %",
+						"future": "Later position (never read)",
+						"missing": "Row not kept",
+						"notTopK": "Not in the top K (part of the rest)",
+						"weight": "Weight, 0 to {{max}}"
+					},
+					"linearNoMatrix": "A linear-attention block keeps one running state instead of weights over earlier positions, so it has no attention matrix to show.",
+					"mapCapped": "The map shows {{shown}} of {{total}} key positions; the {{dropped}} with the least summed weight are left out.",
+					"mapCaption": "Map: one row per generated token, one column per stored key position; the current step's row is outlined.",
+					"next": "Next step",
+					"noBlocks": "This run recorded no blocks.",
+					"noRecord": "no record at this step",
+					"noTokens": "This run generated no tokens to step through.",
+					"norm": "residual norm {{norm}}",
+					"notCaptured": "This run recorded attention for blocks {{layers}} only; this block was not among them.",
+					"notRecorded": "This run did not record attention.",
+					"notTraced": "not traced in this run",
+					"position": "Step {{step}} of {{total}}: {{text}}",
+					"previous": "Previous step",
+					"provenance": "Hugging Face checkpoint, bf16, transformers {{transformers}}; not the GGUF. Every value below is from this one saved run.",
+					"provenanceKernel": "Hugging Face checkpoint, bf16, transformers {{transformers}}, attention kernel {{kernel}}; not the GGUF. Every value below is from this one saved run.",
+					"recorded": "{{block}}, attention recorded",
+					"recordedLegend": "The eye marks the blocks whose attention this run recorded.",
+					"rowCaption": "Stored keys of head {{head}} at step {{step}}, in position order, each with its neighbours",
+					"rowMissing": "This step's row was not kept.",
+					"rowPosition": "Position",
+					"rowRest": "Rest of the row: {{rest}}",
+					"rowToken": "Token in context",
+					"rowWeight": "Weight",
+					"shade": "F: full attention, L: linear attention. The shade is the block's residual norm at this step, relative to the largest in this run.",
+					"slider": "Step",
+					"tokens": "Generated tokens"
+				},
 				"tab": "Trace and steer",
 				"token": "Token",
 				"traceFailed": "The trace could not be loaded.",
 				"truncated": "The trace reached its {{cap}} cap: {{dropped}} records were not kept. Generation was not affected.",
 				"tryNextToken": "Try in Next token",
-				"unsupported": "Tracing runs on Linux only for now, because it needs the Python training runtime, which is available on Linux only. The other Model Lab tools work here."
+				"unsupported": "Tracing runs on Linux only for now, because it needs the Python training runtime, which is available on Linux only. The other Model Lab tools work here.",
+				"view": {
+					"label": "Show the run as",
+					"stepper": "Step through",
+					"table": "Table"
+				}
 			}
 		}
 	}

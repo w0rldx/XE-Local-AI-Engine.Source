@@ -59,7 +59,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         using (var job = JsonDocument.Parse(script.LastJob!))
         {
             AssertEx.Equal("source", job.RootElement.GetProperty("kind").GetString()!);
-            AssertEx.Equal(expected: 3, job.RootElement.GetProperty("contractVersion").GetInt32());
+            AssertEx.Equal(expected: ModelLabTraceSpec.ContractVersion, job.RootElement.GetProperty("contractVersion").GetInt32());
             AssertEx.Equal(ModelLabTraceSpec.MaxResultBytes, job.RootElement.GetProperty("maxResultBytes").GetInt32());
         }
 
@@ -73,7 +73,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         AssertEx.Equal("checkpoint", index.Source.Kind);
         AssertEx.Equal("Qwen/Qwen3.5-0.8B", index.Source.RepoId);
         AssertEx.Equal(lab.ArtifactId, index.Source.BaseArtifactId!.Value);
-        AssertEx.Equal($"{Sha256(ModelLabExperimentServiceTests.LabHost.Config)}-5.17.0-2.13.0+cpu-3", index.IndexId);
+        AssertEx.Equal($"{Sha256(ModelLabExperimentServiceTests.LabHost.Config)}-5.17.0-2.13.0+cpu-{ModelLabTraceSpec.ContractVersion}", index.IndexId);
         AssertEx.Equal("Qwen3_5ForCausalLM", index.Index.ModelClass);
         AssertEx.Null(index.Index.DeclaredArchitectures, "A config with no architectures declares none.");
         AssertEx.Empty(Directory.EnumerateFileSystemEntries(lab.WorkRoot), "No work directory survives the job.");
@@ -134,7 +134,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         _ = await AssertEx.ThrowsAsync<ModelLabPyTorchIndexNotFoundException>(() => lab.Service.GetLastAsync(ModelLabExperimentServiceTests.Gguf, CancellationToken.None));
         var second = await lab.Service.BuildAsync(lab.CheckpointRequest(), CancellationToken.None);
         AssertEx.Equal(expected: 2, script.SpawnCount);
-        AssertEx.True(second.Index!.IndexId.EndsWith("-2.14.0+cpu-3", StringComparison.Ordinal), second.Index.IndexId);
+        AssertEx.True(second.Index!.IndexId.EndsWith($"-2.14.0+cpu-{ModelLabTraceSpec.ContractVersion}", StringComparison.Ordinal), second.Index.IndexId);
         AssertEx.NotEqual(first.Index!.IndexId, second.Index.IndexId);
     }
 
@@ -330,7 +330,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         AssertEx.True(File.Exists(Path.GetFullPath(Path.Combine(runtime.SitePackages, "transformers", EscapingFile))), "The escaping name points at a real file with the listed hash.");
         await lab.ExpectSourceAsync(ModelLabPyTorchRefusal.SourceNotInIndex, indexId, EscapingFile);
         await lab.ExpectSourceAsync(ModelLabPyTorchRefusal.SourceNotInIndex, "../" + indexId, ModelingFile);
-        await lab.ExpectSourceAsync(ModelLabPyTorchRefusal.SourceNotInIndex, new string('a', 64) + "-5.17.0-2.13.0+cpu-3", ModelingFile);
+        await lab.ExpectSourceAsync(ModelLabPyTorchRefusal.SourceNotInIndex, new string('a', 64) + $"-5.17.0-2.13.0+cpu-{ModelLabTraceSpec.ContractVersion}", ModelingFile);
         await lab.ExpectSourceAsync(ModelLabPyTorchRefusal.SourceTooLarge, indexId, "big.py");
 
         runtime.SetTorchVersion("2.14.0+cpu");

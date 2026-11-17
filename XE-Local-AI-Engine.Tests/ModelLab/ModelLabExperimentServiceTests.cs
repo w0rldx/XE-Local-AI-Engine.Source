@@ -98,6 +98,11 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(3), root.GetProperty("traceByteCap").GetInt32());
         AssertEx.Equal("[6,12,18]", root.GetProperty("layers").GetRawText());
         AssertEx.Equal(Prompt, root.GetProperty("prompt").GetString());
+        foreach (var attentionField in new[] { "attentionPath", "attentionLayers", "attentionTopKeys", "attentionByteCap" })
+        {
+            AssertEx.False(root.TryGetProperty(attentionField, out _), $"A trace without attention leaves {attentionField} out, so the script sees all four absent.");
+        }
+
         AssertEx.Equal("modellab.py", Path.GetFileName(process.Request!.Arguments[0]));
         if (OperatingSystem.IsLinux())
         {
@@ -711,7 +716,9 @@ public sealed class ModelLabExperimentServiceTests
     public async Task Retention_NeverTrimsAPinnedRun_ButAManualDeleteStillRemovesIt()
     {
         using var process = new ScriptedProcess();
-        await using var host = await LabHost.StartAsync(process);
+        // Rows are ordered by a millisecond timestamp: on the system clock two quick seeds can tie, and the tie-break by
+        // id then decides at random which of them is the oldest.
+        await using var host = await LabHost.StartAsync(process, configure: static services => services.AddSingleton<TimeProvider>(new StrictlyIncreasingClock()));
         var pinned = Guid.NewGuid();
         await host.SeedFinishedAsync(pinned);
         AssertEx.Equal(ModelLabExperimentUpdateOutcome.Updated, await host.Service.SetPinnedAsync(pinned, pinned: true, CancellationToken.None));
@@ -738,6 +745,16 @@ public sealed class ModelLabExperimentServiceTests
 
         AssertEx.Equal(ModelLabExperimentDeleteOutcome.Deleted, await host.Service.DeleteAsync(pinned, CancellationToken.None));
         AssertEx.False(Directory.Exists(pinnedScope), "A manual delete takes a pinned run's blobs too.");
+    }
+
+    /// <summary>Wall time that moves forward by a millisecond on every read, so rows created in a row never share a timestamp; timers stay real.</summary>
+    private sealed class StrictlyIncreasingClock : TimeProvider
+    {
+        private readonly DateTimeOffset _start = System.GetUtcNow();
+        private long _reads;
+
+        public override DateTimeOffset GetUtcNow() =>
+            _start.AddMilliseconds(Interlocked.Increment(ref _reads));
     }
 
     [Test]
@@ -1387,7 +1404,7 @@ public sealed class ModelLabExperimentServiceTests
     internal sealed class LabHost : IAsyncDisposable
     {
         public const string Config =
-            """{"model_type":"qwen3_5","text_config":{"hidden_size":1024,"num_hidden_layers":24,"layer_types":["linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention"]}}""";
+            """{"model_type":"qwen3_5","text_config":{"hidden_size":1024,"num_hidden_layers":24,"num_attention_heads":8,"layer_types":["linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention"]}}""";
 
         private readonly TestServerWebAppFactory _factory;
         private readonly Guid _artifactId;
@@ -1425,7 +1442,8 @@ public sealed class ModelLabExperimentServiceTests
             ModelLabJobOptions? options = null,
             ILlamaServerProcessSupervisor? supervisor = null,
             long availableVramBytes = Card,
-            Action<IServiceCollection>? configure = null)
+            Action<IServiceCollection>? configure = null,
+            string config = Config)
         {
             var interpreter = Path.Combine(Path.GetTempPath(), "python-" + Guid.NewGuid().ToString("N"));
             var runtime = Substitute.For<ITrainingRuntimeService>();
@@ -1526,7 +1544,7 @@ public sealed class ModelLabExperimentServiceTests
 #pragma warning restore CA2000
             _ = factory.Server;
 
-            var artifactId = await SeedReadyArtifactAsync(factory.Services);
+            var artifactId = await SeedReadyArtifactAsync(factory.Services, config);
             return new LabHost(factory, artifactId, runtime, checkpoints);
         }
 
@@ -1586,7 +1604,7 @@ public sealed class ModelLabExperimentServiceTests
         public async ValueTask DisposeAsync() =>
             await _factory.DisposeAsync();
 
-        private static async Task<Guid> SeedReadyArtifactAsync(IServiceProvider services)
+        private static async Task<Guid> SeedReadyArtifactAsync(IServiceProvider services, string config)
         {
             await using var scope = services.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<ITrainingBaseArtifactStore>();
@@ -1594,7 +1612,7 @@ public sealed class ModelLabExperimentServiceTests
             var directory = Path.Combine(services.GetRequiredService<INodeDataDirectory>().Root, "training", "base", record.Id.ToString());
             Directory.CreateDirectory(directory);
             var configPath = Path.Combine(directory, "config.json");
-            await File.WriteAllTextAsync(configPath, Config);
+            await File.WriteAllTextAsync(configPath, config);
             var files = JsonSerializer.SerializeToUtf8Bytes(new[]
             {
                 new BaseArtifactFileView("Config", "config.json", configPath, 100, null),
@@ -1614,6 +1632,11 @@ public sealed class ModelLabExperimentServiceTests
         private readonly Channel<string> _output = Channel.CreateUnbounded<string>();
 
         public string TraceContent { get; init; } = "{\"footer\":true,\"truncated\":false,\"records\":0,\"dropped\":0,\"payloadBytes\":0,\"cap\":262144}\n";
+
+        /// <summary>Written when the job names an attention file; null leaves it unwritten.</summary>
+        public string? AttentionContent { get; init; } = "{\"footer\":true,\"truncated\":false,\"records\":0,\"dropped\":0,\"payloadBytes\":0,\"cap\":262144}\n";
+
+        public string TraceResult { get; init; } = """{"promptTokens":3,"tokens":[{"id":9,"text":"hi"}],"text":"hi","seconds":0.5,"peakVramBytes":10,"blockCount":24}""";
 
         public byte[] VectorContent { get; init; } = "the-steering-vector-bytes"u8.ToArray();
 
@@ -1700,8 +1723,11 @@ public sealed class ModelLabExperimentServiceTests
             else
             {
                 await File.WriteAllTextAsync(job.RootElement.GetProperty("tracePath").GetString()!, TraceContent);
-                await File.WriteAllTextAsync(job.RootElement.GetProperty("resultPath").GetString()!,
-                    """{"promptTokens":3,"tokens":[{"id":9,"text":"hi"}],"text":"hi","seconds":0.5,"peakVramBytes":10,"blockCount":24}""");
+                await File.WriteAllTextAsync(job.RootElement.GetProperty("resultPath").GetString()!, TraceResult);
+                if (AttentionContent is not null && job.RootElement.TryGetProperty("attentionPath", out var attentionPath))
+                {
+                    await File.WriteAllTextAsync(attentionPath.GetString()!, AttentionContent);
+                }
             }
 
             foreach (var line in lines)

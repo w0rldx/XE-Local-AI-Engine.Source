@@ -1,14 +1,15 @@
 """Model Lab: reads chosen layers of a local safetensors checkpoint with forward hooks that change no value.
 
 Three kinds of ``job.json``. A trace (``ModelLabTraceJobV1`` on the C# side) records statistics while generating; the
-host fixes the layers, token count and byte cap. A steering job (``ModelLabSteeringJobV1``) derives a control vector
-from two contrasting prompt sets and writes it with a random one of the same norm. A source job
+host fixes the layers, token count and byte cap, and may ask for the attention rows of full-attention blocks. A
+steering job (``ModelLabSteeringJobV1``) derives a control vector from two contrasting prompt sets and writes it with
+a random one of the same norm. A source job
 (``ModelLabSourceJobV1``) indexes the PyTorch code of a model from its config.json alone, on the meta device: no
 weights, no GPU. Nothing in a job can name code to run. Offline, no remote code, no unsloth.
 
 The protocol is the trainer's JSON-lines shape with its own contract version, on stdout:
 
-    {"event": "handshake", "contractVersion": 3, ...versions}
+    {"event": "handshake", "contractVersion": 4, ...versions}
     {"event": "phase",     "phase": "loading" | "tracing" | "deriving" | "exporting" | "saving"}
     {"event": "progress",  "step", "totalSteps", "vramBytes"}    a token, or a contrast prompt
     {"event": "heartbeat", "phase"}          until the first progress, and while saving; progress proves life between
@@ -36,6 +37,7 @@ import transformers
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
+    DynamicCache,
     LogitsProcessor,
     LogitsProcessorList,
     StoppingCriteria,
@@ -43,13 +45,16 @@ from transformers import (
 )
 
 from modellablib import (
+    ATTENTION_WEIGHT_SCALE,
     CONTRACT_VERSION,
     SOURCE_KIND,
     STEERING_KIND,
     CappedTraceWriter,
     JobError,
     SourceRefusalError,
+    attention_record,
     block_index_of,
+    captures_attention,
     check_aligned,
     control_vector_bytes,
     describe_failure,
@@ -162,6 +167,62 @@ class _Tracer:
     def remove(self):
         for handle in self._handles:
             handle.remove()
+
+
+class _AttentionRows:
+    """The attention of each predicting query in the chosen full-attention blocks, recomputed in float32 beside the
+    kernel, whose result is returned unchanged. Wraps the "sdpa" entry, which every attention module resolves per call.
+    """
+
+    def __init__(self, chosen, prompt_tokens, top_keys):
+        from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
+        from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Attention
+
+        self.rows = []
+        self._steps = dict.fromkeys(chosen, -1)
+        self._prompt_tokens = prompt_tokens
+        self._top_keys = top_keys
+        self._module_class = Qwen3_5Attention
+        self._functions = ALL_ATTENTION_FUNCTIONS
+        self._kernel = ALL_ATTENTION_FUNCTIONS["sdpa"]
+        ALL_ATTENTION_FUNCTIONS["sdpa"] = self._wrapper
+
+    def _wrapper(self, module, query, key, value, attention_mask, **kwargs):
+        result = self._kernel(module, query, key, value, attention_mask, **kwargs)
+        # The vision tower's attention shares the registry and has no layer_idx.
+        if isinstance(module, self._module_class) and module.layer_idx in self._steps:
+            self._capture(module, query, key)
+        return result
+
+    def _capture(self, module, query, key):
+        layer = module.layer_idx
+        self._steps[layer] += 1
+        step = self._steps[layer]
+        length = key.shape[2]
+        # A static cache hands over its whole buffer and a chunked prefill one chunk: rows would sit at wrong positions.
+        if query.shape[0] != 1 or length != self._prompt_tokens + step:
+            raise JobError(
+                f"Block {layer} saw {length} keys at step {step}, not the prompt's {self._prompt_tokens} plus the "
+                "step: the cache or prefill is not the one attention capture needs."
+            )
+        heads, kv_heads = query.shape[1], key.shape[1]
+        # Query head h reads KV head h // groups: the queries are grouped instead of expanding the key history.
+        last = query[0, :, -1].float().view(kv_heads, heads // kv_heads, -1)
+        scores = torch.matmul(last, key[0].float().transpose(1, 2)) * module.scaling
+        weights = torch.softmax(scores, dim=-1).view(heads, length)
+        top = weights.topk(min(self._top_keys, length), dim=-1)
+        # Kept on the GPU until saving, like the candidates: no host sync per step.
+        self.rows.append((step, layer, length - 1, top.indices.to(torch.int32), top.values))
+
+    def recorded(self):
+        return [
+            attention_record(step, layer, position, keys.tolist(), weights.tolist())
+            for step, layer, position, keys, weights in self.rows
+        ]
+
+    def remove(self):
+        # Assignment wrote the instance's local mapping only; deleting it brings back the kernel.
+        del self._functions["sdpa"]
 
 
 class _ProgressAndStop(StoppingCriteria):
@@ -282,6 +343,15 @@ def trace(job, run):
     blocks = blocks_of(model)
     if outside := out_of_range_layers(job["layers"], len(blocks)):
         raise JobError(f"The job names layers {outside}, and this checkpoint has {len(blocks)} blocks.")
+    capture = captures_attention(job)
+    attention_layers = job["attentionLayers"] if capture else []
+    if other := [
+        i for i in attention_layers if i >= len(blocks) or getattr(blocks[i], "block_type", None) != "full_attention"
+    ]:
+        raise JobError(f"The job asks for attention in blocks {other}, which are not full-attention blocks.")
+    kernel = model.config._attn_implementation
+    if capture and kernel != "sdpa":
+        raise JobError(f"Attention is captured beside the sdpa kernel, and this model runs {kernel!r}.")
 
     ids = prompt_ids(tokenizer, job["prompt"]).to("cuda")
     prompt_tokens = ids.shape[1]
@@ -293,6 +363,17 @@ def trace(job, run):
     writer = CappedTraceWriter(job["tracePath"], job["traceByteCap"])
     tracer = _Tracer(blocks, job["layers"], writer)
     candidates = _Candidates(model)
+    attention = _AttentionRows(attention_layers, prompt_tokens, job["attentionTopKeys"]) if capture else None
+    # Pinned with capture on: a checkpoint's static cache or chunked prefill would break the position check.
+    pinned_cache = (
+        {
+            "past_key_values": DynamicCache(config=model.config.get_text_config(decoder=True)),
+            "cache_implementation": None,
+            "prefill_chunk_size": None,
+        }
+        if capture
+        else {}
+    )
     run.enter("tracing")
     started = time.perf_counter()
     try:
@@ -315,12 +396,15 @@ def trace(job, run):
                 eos_token_id=stop_tokens(tokenizer, model.generation_config.eos_token_id),
                 pad_token_id=tokenizer.eos_token_id,
                 stopping_criteria=StoppingCriteriaList([_ProgressAndStop(run, prompt_tokens, total)]),
+                **pinned_cache,
             )
         torch.cuda.synchronize()
         seconds = time.perf_counter() - started
     finally:
         tracer.remove()
         candidates.remove()
+        if attention:
+            attention.remove()
     if run.stop.is_set():
         return True
 
@@ -329,6 +413,11 @@ def trace(job, run):
     generated = sequences[0, prompt_tokens:].tolist()
     steps = candidates.recorded()
     check_aligned([step[0] for step in steps], generated)
+    if attention and len(attention.rows) != len(generated) * len(attention_layers):
+        raise RuntimeError(
+            f"Attention was captured {len(attention.rows)} times for {len(generated)} tokens in "
+            f"{len(attention_layers)} blocks: a step ran past the wrapped kernel."
+        )
 
     def texts(token_ids):
         return [tokenizer.decode([token]) for token in token_ids]
@@ -353,7 +442,26 @@ def trace(job, run):
         "layers": job["layers"],
         "seed": job["seed"],
         "maxNewTokens": total,
+        "promptPieces": [{"id": token, "text": tokenizer.decode([token])} for token in ids[0].tolist()],
+        "layerKinds": "".join(layer_kind(getattr(block, "block_type", None)) for block in blocks),
+        "attnImplementation": kernel,
     }
+    if attention:
+        attention_writer = CappedTraceWriter(job["attentionPath"], job["attentionByteCap"])
+        for record in attention.recorded():
+            attention_writer.write(record)
+        attention_writer.close()
+        text_config = model.config.get_text_config(decoder=True)
+        result["attention"] = {
+            "layers": attention_layers,
+            "heads": text_config.num_attention_heads,
+            "kvHeads": text_config.num_key_value_heads,
+            "headDim": text_config.head_dim,
+            "topKeys": job["attentionTopKeys"],
+            "weightScale": ATTENTION_WEIGHT_SCALE,
+            "records": attention_writer.records,
+            "truncated": attention_writer.truncated,
+        }
     with open(job["resultPath"], "wb") as handle:
         handle.write(fitted_trace_result(result))
     return False

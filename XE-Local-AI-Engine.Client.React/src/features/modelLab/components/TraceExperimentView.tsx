@@ -30,16 +30,11 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
-import { NextTokenStepView } from "@/features/modelLab/components/NextTokenStepView";
 import { SteeringExperimentResult } from "@/features/modelLab/components/SteeringExperimentResult";
+import { TraceStepCandidates } from "@/features/modelLab/components/TraceStepCandidates";
+import { TraceStepper } from "@/features/modelLab/components/TraceStepper";
 import type { ModelLabJump } from "@/features/modelLab/models/ModelLabNavigation";
-import {
-	activeJobPollMs,
-	type CandidateBasis,
-	sameCandidates,
-	toStepEntry,
-	toTraceTable,
-} from "@/features/modelLab/models/ModelLabTrace";
+import { activeJobPollMs, type CandidateBasis, toStepEntry, toTraceTable } from "@/features/modelLab/models/ModelLabTrace";
 
 // The server's own bound (SetModelLabExperimentNotesRequestValidator).
 const maxNotesLength = 8000;
@@ -135,6 +130,7 @@ export function TraceExperimentView({ experimentId, isLive, onJump }: TraceExper
 	const { t } = useTranslation();
 	const [selectedStep, setSelectedStep] = useState<number>();
 	const [basis, setBasis] = useState<CandidateBasis>("raw");
+	const [view, setView] = useState<"table" | "stepper">("table");
 	const path = { path: { experimentId } };
 	const experiment = useQuery({
 		...getModelLabExperimentOptions(path),
@@ -261,6 +257,18 @@ export function TraceExperimentView({ experimentId, isLive, onJump }: TraceExper
 					</Alert>
 				)}
 				{table && (
+					<SegmentedControl
+						value={view}
+						onChange={(value) => setView(value === "stepper" ? "stepper" : "table")}
+						aria-label={t("pages.modelLab.trace.view.label", "Show the run as")}
+						data={[
+							{ value: "table", label: t("pages.modelLab.trace.view.table", "Table") },
+							{ value: "stepper", label: t("pages.modelLab.trace.view.stepper", "Step through") },
+						]}
+						data-testid="model-lab-trace-view-switch"
+					/>
+				)}
+				{view === "table" && table && (
 					<ScrollArea.Autosize mah={420} type="auto">
 						<Table striped={true} stickyHeader={true} data-testid="model-lab-trace-table">
 							<Table.Thead>
@@ -332,54 +340,30 @@ export function TraceExperimentView({ experimentId, isLive, onJump }: TraceExper
 						</Table>
 					</ScrollArea.Autosize>
 				)}
-				{table && result && !hasCandidates && (
+				{view === "table" && table && result && !hasCandidates && (
 					<Text size="sm" c="dimmed" data-testid="model-lab-trace-no-candidates">
 						{t("pages.modelLab.trace.noCandidates", "This trace recorded no candidates (made before this version).")}
 					</Text>
 				)}
-				{table && hasCandidates && !selectedEntry && (
+				{view === "table" && table && hasCandidates && !selectedEntry && (
 					<Text size="sm" c="dimmed">
 						{t("pages.modelLab.trace.pickStep", "Pick a token to see its next-token candidates.")}
 					</Text>
 				)}
-				{selectedToken && selectedEntry && selectedStep !== undefined && (
-					<Stack gap="xs" data-testid="model-lab-trace-candidates">
-						<SegmentedControl
-							value={basis}
-							onChange={(value) => setBasis(value === "processed" ? "processed" : "raw")}
-							aria-label={t("pages.modelLab.trace.basisLabel", "Candidates from")}
-							data={[
-								{ value: "raw", label: t("pages.modelLab.trace.basisRaw", "Raw logits") },
-								{ value: "processed", label: t("pages.modelLab.trace.basisProcessed", "Processed scores") },
-							]}
-							data-testid="model-lab-trace-basis"
-						/>
-						{sameCandidates(selectedToken) && (
-							<Text size="xs" c="dimmed" data-testid="model-lab-trace-same-candidates">
-								{t(
-									"pages.modelLab.trace.sameCandidates",
-									"Raw and processed candidates are identical for this step: the generation config's processors changed nothing among these candidates.",
-								)}
-							</Text>
-						)}
-						<NextTokenStepView
-							entry={selectedEntry}
-							stepNumber={selectedStep + 1}
-							trace={{
-								processed: basis === "processed",
-								basis:
-									basis === "raw"
-										? t(
-												"pages.modelLab.trace.basisRawNote",
-												"Computed by PyTorch from the model's raw logits over the whole vocabulary",
-											)
-										: t(
-												"pages.modelLab.trace.basisProcessedNote",
-												"Computed by PyTorch from the processed scores, after the checkpoint's generation config processors",
-											),
-							}}
-						/>
-					</Stack>
+				{view === "table" && selectedToken && selectedStep !== undefined && (
+					<TraceStepCandidates token={selectedToken} step={selectedStep} basis={basis} onBasisChange={setBasis} />
+				)}
+				{view === "stepper" && table && result && (
+					<TraceStepper
+						experimentId={experimentId}
+						result={result}
+						table={table}
+						layerKinds={result.layerKinds ? [...result.layerKinds] : undefined}
+						step={selectedStep ?? 0}
+						onStepChange={setSelectedStep}
+						basis={basis}
+						onBasisChange={setBasis}
+					/>
 				)}
 				<ExperimentNotes experimentId={experimentId} notes={data.notes ?? ""} running={data.status === "Running"} />
 			</Stack>

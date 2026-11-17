@@ -114,6 +114,34 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
     }
 
     [Test]
+    public async Task ACompletion_StoresTheAttentionBlobBesideTheTrace()
+    {
+        await using var context = await CreateDatabaseAsync();
+        var store = new ModelLabExperimentStore(context, TimeProvider.System);
+        var id = Guid.NewGuid();
+        var attention = Guid.NewGuid();
+        await store.CreateRunningAsync(Create(id));
+
+        await store.CompleteAsync(id, new ModelLabExperimentCompletion
+        {
+            Status = ModelLabExperimentStatus.Succeeded,
+            TraceBlobId = Guid.NewGuid(),
+            TraceSha256 = "trace",
+            TraceByteCount = 10,
+            AttentionBlobId = attention,
+            AttentionSha256 = "attention",
+            AttentionByteCount = 20
+        });
+        context.ChangeTracker.Clear();
+
+        var read = (await store.GetAsync(id))!;
+        AssertEx.Equal(attention, read.AttentionBlobId!.Value);
+        AssertEx.Equal("attention", read.AttentionSha256!);
+        AssertEx.Equal(expected: 20L, read.AttentionByteCount!.Value);
+        AssertEx.Equal(expected: 10L, read.TraceByteCount!.Value);
+    }
+
+    [Test]
     public async Task EveryPrivateColumn_IsCiphertextAtRest_AndReadsBackDecrypted()
     {
         await using var context = await CreateDatabaseAsync();

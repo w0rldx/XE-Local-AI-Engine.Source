@@ -41,5 +41,10 @@ public sealed class StartModelLabExperimentRequestValidator : Validator<StartMod
             .Null()
             .WithMessage("A steering job has its own layer. Leave out the trace layers.")
             .When(static request => request.Steering is not null);
+
+        RuleFor(static request => request.RecordAttention)
+            .Equal(false)
+            .WithMessage("A steering job does not record attention. Leave it off.")
+            .When(static request => request.Steering is not null);
     }
 }

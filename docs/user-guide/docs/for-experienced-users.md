@@ -269,6 +269,10 @@ Everything lives in one directory (`%LOCALAPPDATA%\XE-Local-AI-Engine`), separat
   read from the llama-server already running the GGUF. A long prompt can take a moment. Reading them
   never loads a model: if the model was unloaded or its server stopped, run it again. A trace runs the Hugging Face checkpoint in PyTorch, so a trace's tokens
   and probabilities can differ from the GGUF's for the same prompt.
+- **Model Lab can record real attention in a trace.** With **Record attention** on, a Qwen3.5 trace keeps, for every
+  generated token, the 32 strongest positions each head of the full-attention blocks read, plus the rest of the row.
+  The weights are recomputed beside the model's own attention kernel, so the generated text is unchanged. It costs a few
+  MB per run and a little time. A weight shows where a head read, not why the model chose a token.
 
 ---
 

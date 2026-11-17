@@ -8,6 +8,7 @@ import {
 	SegmentedControl,
 	Select,
 	Stack,
+	Switch,
 	Text,
 	Textarea,
 	TextInput,
@@ -29,6 +30,7 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
+import { FieldWithInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
 import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNotice";
 import { SteeringForm } from "@/features/modelLab/components/SteeringForm";
 import { TraceLayerPicker } from "@/features/modelLab/components/TraceLayerPicker";
@@ -58,6 +60,7 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 	const [jobKind, setJobKind] = useState("trace");
 	const [steeringDraft, setSteeringDraft] = useState(starterSteeringDraft);
 	const [layers, setLayers] = useState<number[]>([]);
+	const [recordAttention, setRecordAttention] = useState(false);
 
 	const preflight = useMutation(preflightModelLabCheckpointMutation());
 	const download = useMutation({
@@ -83,8 +86,9 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 		download.reset();
 		start.reset();
 		setLicenseConfirmed(false);
-		// Another checkpoint can have fewer blocks.
+		// Another checkpoint can have fewer blocks, or no full-attention block.
 		setLayers([]);
+		setRecordAttention(false);
 	};
 
 	const body = { repoId: repoId.trim(), revision: revision.trim() || undefined, installedModelName: installedModelName ?? "" };
@@ -94,6 +98,9 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 	const allowed = check !== undefined && check.refusal === null;
 	const ready = artifact.data?.status === "Ready";
 	const progress = artifact.data?.progress;
+	// Only a full-attention block has weights over earlier positions; the server refuses the rest.
+	const canRecordAttention = check?.checkpointLayerTypes?.includes("full_attention") === true;
+	const recordAttentionLabel = t("pages.modelLab.trace.recordAttention.label", "Record attention");
 
 	return (
 		<Paper withBorder={true} p="md">
@@ -274,6 +281,30 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 								{check.checkpointBlockCount ? (
 									<TraceLayerPicker blockCount={check.checkpointBlockCount} value={layers} onChange={setLayers} disabled={busy} />
 								) : null}
+								<FieldWithInfo
+									label={recordAttentionLabel}
+									text={t(
+										"pages.modelLab.trace.recordAttention.help",
+										"Also stores, for every generated token, where each head of the full-attention blocks read from: the top keys of its row and the weight of the rest. The model's output is unchanged.\n\nIt costs a few MB of storage per run and makes the trace slightly slower. Turn it on to step through a run's attention; leave it off when you only need norms and candidates, or to keep runs small.",
+									)}
+									testId="model-lab-record-attention-info"
+								>
+									<Switch
+										label={recordAttentionLabel}
+										description={
+											canRecordAttention
+												? undefined
+												: t(
+														"pages.modelLab.trace.recordAttention.unavailable",
+														"This checkpoint has no full-attention block, so there is no attention to record.",
+													)
+										}
+										checked={recordAttention && canRecordAttention}
+										onChange={(event) => setRecordAttention(event.currentTarget.checked)}
+										disabled={busy || !canRecordAttention}
+										data-testid="model-lab-record-attention"
+									/>
+								</FieldWithInfo>
 								<Text size="xs" c="dimmed">
 									{t(
 										"pages.modelLab.trace.spec",
@@ -292,6 +323,7 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 													prompt,
 													licenseConfirmed,
 													...(layers.length > 0 ? { layers } : {}),
+													...(recordAttention && canRecordAttention ? { recordAttention: true } : {}),
 												},
 											})
 										}
