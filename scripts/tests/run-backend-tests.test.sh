@@ -50,13 +50,16 @@ exec "$@"
 EOF
 
 # `guard --test-bins -- <cmd>`: runs the command, then reports FAKE_GUARD_EXIT instead of its status.
+# FAKE_ARCH_GUARD_EXIT does the same for a `--root` guard only, which is the Architecture pre-lane's.
 cat >"$FAKE/scripts/assembly-guard.sh" <<'EOF'
 #!/usr/bin/env bash
 echo "guard $*" >>"$FAKE_LOG"
+root=""; [[ " $* " == *" --root "* ]] && root=1
 while (($#)); do [[ "$1" == "--" ]] && { shift; break; }; shift; done
 "$@"
 status=$?
 [[ -n "${FAKE_GUARD_EXIT:-}" ]] && exit "$FAKE_GUARD_EXIT"
+[[ -n "$root" && -n "${FAKE_ARCH_GUARD_EXIT:-}" ]] && exit "$FAKE_ARCH_GUARD_EXIT"
 exit "$status"
 EOF
 
@@ -84,6 +87,7 @@ EOF
 # Stands in for the whole `dotnet` CLI: only `test` is interesting, the rest just has to succeed.
 cat >"$FAKE/bin/dotnet" <<'EOF'
 #!/usr/bin/env bash
+[[ "$1" == "build-server" ]] && { echo "build-server $2" >>"$FAKE_LOG"; exit 0; }
 if [[ "$1" == "build" ]]; then
   echo "build $2" >>"$FAKE_LOG"
   exit "${FAKE_BUILD_EXIT:-0}"
@@ -190,6 +194,8 @@ EOF
 # The batched module's test host, as the Architecture fail-fast pre-lane calls it: `--list-tests` then the
 # run. FAKE_ARCH_NO_MATCH makes the listing exit 8 (MTP's zero-match), FAKE_ARCH_FAIL fails one test
 # whose method lives in a fake Architecture source file, so the class lookup has something to find.
+# The run is concurrent with the lanes: FAKE_ARCH_AWAIT is a condition it waits for (bounded) before it
+# answers, so a case can order its verdict after a lane event; FAKE_ARCH_SLEEP blocks it like FAKE_SLEEP.
 ARCH_HOST="$FAKE/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests"
 mkdir -p "$(dirname "$ARCH_HOST")" "$FAKE/XE-Local-AI-Engine.Tests/Architecture"
 cat >"$ARCH_HOST" <<'EOF'
@@ -201,6 +207,16 @@ if [[ " $* " == *" --list-tests "* ]]; then
   exit 0
 fi
 echo "arch-run $*" >>"$FAKE_LOG"
+if [[ -n "${FAKE_ARCH_AWAIT:-}" ]]; then
+  deadline=$((SECONDS + 30))
+  # real-timer: the awaited event is another real process (a lane) registering or finishing.
+  until eval "$FAKE_ARCH_AWAIT"; do (( SECONDS <= deadline )) || { echo arch-await-timeout >>"$FAKE_LOG"; break; }; sleep 0.1; done
+fi
+if [[ -n "${FAKE_ARCH_SLEEP:-}" ]]; then
+  echo "$$" >>"$FAKE_PIDS"
+  sleep "$FAKE_ARCH_SLEEP" & echo "$!" >>"$FAKE_PIDS"
+  wait
+fi
 if [[ -n "${FAKE_ARCH_FAIL:-}" ]]; then
   for name in ${FAKE_ARCH_FAIL_NAME:-Layers_NeverReferenceUp}; do printf 'failed %s (12ms)\n  boom\n' "$name"; done
   printf 'Test run summary: Failed!\n  total: 2\n  failed: 1\n  succeeded: 1\n  skipped: 0\n'
@@ -268,8 +284,12 @@ grep -q '^runner .* TRX_DIR=.*/\.tmp/backend-test-results/XE-Local-AI-Engine\.Te
 # One `dotnet test` per sibling, none for the batched module.
 [[ "$(grep -c '^test project=' "$TMP/enrol.log")" -eq 2 ]]
 refute_grep '^test project=XE-Local-AI-Engine.Tests/' "$TMP/enrol.log"
-# Siblings are guarded and each gets its own results directory; the third guard is the Architecture pre-lane.
-[[ "$(grep -c '^guard guard --test-bins --' "$TMP/enrol.log")" -eq 3 ]]
+# Siblings are guarded and each gets its own results directory. The Architecture pre-lane guards only the
+# batched module's own bin: it runs beside the siblings (see the coverage case).
+[[ "$(grep -c '^guard guard --test-bins --' "$TMP/enrol.log")" -eq 2 ]]
+ARCH_BIN="$FAKE_REAL/XE-Local-AI-Engine.Tests/bin/Release/net10.0"
+grep -Fxq "guard guard --root $ARCH_BIN -- $ARCH_BIN/XE-Local-AI-Engine.Tests --treenode-filter /*/XE_Local_AI_Engine.Tests.Architecture/*/* --maximum-parallel-tests 1" \
+  "$TMP/enrol.log" || { echo "no --root guard for the pre-lane:" >&2; cat "$TMP/enrol.log" >&2; exit 1; }
 grep -q 'results=.*/XE-Local-AI-Engine.AI.Agent.Tests ' "$TMP/enrol.log"
 grep -q 'results=.*/XE-Local-AI-Engine.Client.Persistence.Tests ' "$TMP/enrol.log"
 
@@ -283,20 +303,20 @@ last_line="$(printf '%s\n' "$output" | grep -v '^[[:space:]]*$' | tail -1)"
 refute_grep -E 'unbound variable|command not found|: line [0-9]+:' <<<"$output"
 
 # --- Architecture fail-fast pre-lane ---
-# Green: listed first, then run with the batched runner's own namespace filter, all before any lane.
+# Green: listed before any lane starts, then run beside the lanes with the batched runner's own filter.
 grep -Fq 'arch-list --list-tests --treenode-filter /*/XE_Local_AI_Engine.Tests.Architecture/*/*' "$TMP/enrol.log"
 grep -Fq 'arch-run --treenode-filter /*/XE_Local_AI_Engine.Tests.Architecture/*/* --maximum-parallel-tests 1' "$TMP/enrol.log"
 grep -Fq '>> Fail-fast: Architecture green (2 passed)' <<<"$output"
 first_lane="$(grep -nE '^(runner |test project=)' "$TMP/enrol.log" | head -1 | cut -d: -f1)"
-arch_line="$(grep -n '^arch-run ' "$TMP/enrol.log" | cut -d: -f1)"
-(( arch_line < first_lane )) || { echo "pre-lane ran after a lane started" >&2; cat "$TMP/enrol.log" >&2; exit 1; }
+arch_line="$(grep -n '^arch-list ' "$TMP/enrol.log" | cut -d: -f1)"
+(( arch_line < first_lane )) || { echo "the listing ran after a lane started" >&2; cat "$TMP/enrol.log" >&2; exit 1; }
 # Not a row of the summary table: the totals are the lanes' alone.
 refute_grep -iE '^architecture' <<<"$output"
 
-# Red: exit 1 with the marker and the failing class, and no lane ever starts.
+# Red: exit 1 with the marker and the failing class; the lanes are stopped (see "fail-fast stops").
 run_gate arch-red env FAKE_ARCH_FAIL=1
 [[ "$status" -eq 1 ]] || { echo "arch-red exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
-grep -Fq 'FAIL-FAST: Architecture conventions red; long lanes not run' <<<"$output"
+grep -Fxq 'FAIL-FAST: Architecture conventions red; long lanes stopped' <<<"$output"
 grep -Fxq 'FAILED CLASS: LayerDependencyTests' <<<"$output" \
   || { echo "arch-red printed no exact class line:" >&2; printf '%s\n' "$output" >&2; exit 1; }
 grep -Fq 'FAILED TEST: Layers_NeverReferenceUp' <<<"$output"
@@ -312,7 +332,6 @@ grep -Fxq 'RULE: (no summary)' <<<"$output" \
 run_gate arch-red-no-source env FAKE_ARCH_FAIL=1 FAKE_ARCH_FAIL_NAME=Nowhere_Declared
 grep -Fxq 'FAILED CLASS: ? (no source matched Nowhere_Declared)' <<<"$output"
 grep -Fxq 'RULE: (no summary)' <<<"$output"
-refute_grep -E '^(runner |test project=|contract )' "$TMP/arch-red.log"
 refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
 
 # A filter that matches nothing is a failure, never a pass, and nothing runs after the listing.
@@ -322,11 +341,11 @@ grep -Fq '(8 = the filter matched no test)' <<<"$output"
 grep -Fq 'FAIL-FAST: Architecture conventions red; long lanes not run' <<<"$output"
 refute_grep -E '^(arch-run |runner |test project=)' "$TMP/arch-no-match.log"
 
-# Contaminated pre-lane: void (75), and still no lane.
-run_gate arch-contaminated env FAKE_GUARD_EXIT=75
-[[ "$status" -eq 75 ]] || { echo "arch-contaminated exited $status" >&2; exit 1; }
+# Contaminated pre-lane: void (75) although every lane is green.
+run_gate arch-contaminated env FAKE_ARCH_GUARD_EXIT=75
+[[ "$status" -eq 75 ]] || { echo "arch-contaminated exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
 grep -Fq 'RESULT VOID: assemblies changed under the Architecture pre-lane' <<<"$output"
-refute_grep -E '^(runner |test project=)' "$TMP/arch-contaminated.log"
+refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
 
 # The escape hatch skips the pre-lane; a red Architecture host is then never even called.
 run_gate arch-off env XE_GATE_FAIL_FAST=0 FAKE_ARCH_FAIL=1
@@ -411,6 +430,13 @@ assert_history $((n + 10)) '*' '*' '*' '*' '*' '*' '*' '*' scope=shard '*' exit=
 GATE_ARGS=(--siblings-only)
 run_gate history-scope-siblings env NO_BUILD=
 assert_history $((n + 11)) '*' '*' '*' Tests= '*' '*' '*' '*' scope=siblings-only '*' exit=0
+# The compiler servers are shut down before the build and again after it, before the first lane.
+build_steps="$(grep -E '^build' "$TMP/history-scope-siblings.log" | sed -E 's/^build .*\.slnx$/build/' | paste -sd' ')"
+[[ "$build_steps" == "build-server shutdown build build-server shutdown" ]] \
+  || { echo "build steps were '$build_steps'" >&2; exit 1; }
+(( $(grep -n '^build-server' "$TMP/history-scope-siblings.log" | tail -1 | cut -d: -f1) \
+   < $(grep -n '^test project=' "$TMP/history-scope-siblings.log" | head -1 | cut -d: -f1) )) \
+  || { echo "a lane started before the post-build shutdown" >&2; cat "$TMP/history-scope-siblings.log" >&2; exit 1; }
 run_gate history-scope-siblings-nobuild env
 GATE_ARGS=()
 assert_history $((n + 12)) '*' '*' '*' '*' '*' '*' '*' '*' scope=no-build '*' exit=0
@@ -452,6 +478,52 @@ run_gate history-cli env
 write_solution "${ALL_PROJECTS[@]}"
 [[ "$status" -eq 0 ]] || { echo "history-cli exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
 assert_history $((n + 22)) '*' '*' '*' Tests=7/0/0 Persistence=3/0/0 Agent=3/0/0 Cli=3/0/0 Contracts=skipped '*' '*' exit=0
+
+# --- fail-fast stops: the Architecture run is concurrent with the lanes, and its verdict outranks theirs ---
+# No process a lane started may outlive the gate: bounded, because a KILLed grandchild can linger for a moment.
+await_no_survivors() {
+  local label="$1" pid deadline=$((SECONDS + 60)) survivors
+  while :; do
+    survivors=()
+    while read -r pid; do kill -0 "$pid" 2>/dev/null && survivors+=("$pid"); done <"$PIDS_FILE"
+    (( ${#survivors[@]} == 0 )) && return 0
+    (( SECONDS <= deadline )) || { echo "$label: processes survived: ${survivors[*]}" >&2; exit 1; }
+    # real-timer: the assertion waits for real OS processes to disappear after KILL escalation.
+    sleep 0.5
+  done
+}
+PIDS_FILE="$TMP/lane-pids"
+# Red while every lane is still running (the TERM-resistant runner needs the KILL): exit 1, reason fail-fast,
+# the failing name recorded, the lane fields empty as when fail-fast ran before them, and nothing left running.
+: >"$PIDS_FILE"
+n="$(history_lines)"
+# shellcheck disable=SC2016 # FAKE_ARCH_AWAIT is expanded by the fake host's eval, not here.
+run_gate arch-red-running env FAKE_ARCH_FAIL=1 FAKE_PIDS="$PIDS_FILE" FAKE_SLEEP=120 FAKE_RUNNER_SLEEP=120 \
+  XE_GATE_CANCEL_GRACE=1 FAKE_ARCH_AWAIT='[[ $(wc -l <"$FAKE_PIDS") -ge 6 ]]'
+[[ "$status" -eq 1 ]] || { echo "arch-red-running exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+refute_grep -F arch-await-timeout "$TMP/arch-red-running.log"
+grep -Fxq 'FAIL-FAST: Architecture conventions red; long lanes stopped' <<<"$output"
+assert_history $((n + 1)) '*' "$FAKE_REAL" '*' Tests= Persistence= Agent= Cli= Contracts=skipped '*' '*' exit=1
+assert_reason fail-fast ''
+assert_extra unreported=0 failed=Layers_NeverReferenceUp flakes=- "ratchets=$RATCHETS"
+await_no_survivors arch-red-running
+# Green: the lanes decide the verdict.
+run_gate arch-green-lane-red env FAKE_TEST_EXIT=1
+[[ "$status" -eq 1 ]] || { echo "arch-green-lane-red exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq '>> Fail-fast: Architecture green (2 passed)' <<<"$output"
+assert_reason tests ''
+refute_grep -F 'FAIL-FAST' <<<"$output"
+# A lane's void outranks a green pre-lane, and a red one: here the red verdict waits for the void lane's result.
+run_gate lane-void env FAKE_RUNNER_EXIT=75
+[[ "$status" -eq 75 ]] || { echo "lane-void exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq 'RESULT VOID: assemblies changed under a run' <<<"$output"
+assert_reason contaminated ''
+mkdir -p "$TMP/void-red-tmp"
+run_gate lane-void-arch-red env FAKE_ARCH_FAIL=1 FAKE_RUNNER_EXIT=75 TMPDIR="$TMP/void-red-tmp" \
+  FAKE_ARCH_AWAIT="compgen -G '$TMP/void-red-tmp/*/XE-Local-AI-Engine.Tests.result' >/dev/null"
+[[ "$status" -eq 75 ]] || { echo "lane-void-arch-red exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+refute_grep -F arch-await-timeout "$TMP/lane-void-arch-red.log"
+assert_reason contaminated ''
 
 # --- the acknowledgment file: nothing ever removes or rewrites an inherited one ---
 printf 'keep me\n' >"$TMP/inherited-ack"
@@ -576,6 +648,14 @@ mapfile -t lane_receipts < <(grep -E '^(runner|test)-(start|end)' "$TMP/low-memo
 for ((i = 0; i < 6; i += 2)); do
   [[ "${lane_receipts[i]}" == *-start* && "${lane_receipts[i+1]}" == *-end* ]]
 done
+# The pre-lane keeps its serial place: run before any lane starts, and a red one starts none.
+first_lane="$(grep -nE '^(runner |test project=)' "$TMP/low-memory.log" | head -1 | cut -d: -f1)"
+arch_line="$(grep -n '^arch-run ' "$TMP/low-memory.log" | cut -d: -f1)"
+(( arch_line < first_lane )) || { echo "low-memory pre-lane ran after a lane started" >&2; cat "$TMP/low-memory.log" >&2; exit 1; }
+run_gate low-memory-arch-red env XE_TEST_PROFILE=low-memory FAKE_ARCH_FAIL=1
+[[ "$status" -eq 1 ]] || { echo "low-memory-arch-red exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fxq 'FAIL-FAST: Architecture conventions red; long lanes not run' <<<"$output"
+refute_grep -E '^(runner |test project=)' "$TMP/low-memory-arch-red.log"
 
 # Explicit tuning still wins inside the profile.
 run_gate low-memory-overrides env XE_TEST_PROFILE=low-memory JOBS=2 PAR=3 XE_TEST_WIDTH_DEFAULT=4
@@ -622,8 +702,11 @@ grep -Fq "COVERAGE_DIR=$TMP/cov/XE-Local-AI-Engine.Tests" "$TMP/coverage.log"
 # Coverage mode already writes TRX per unit, so no TRX_DIR on top.
 grep -q '^runner .* TRX_DIR=$' "$TMP/coverage.log"
 refute_grep '^guard .* -- dotnet test ' "$TMP/coverage.log"
-# The pre-lane stays guarded: it runs before any lane instruments anything.
-grep -q '^guard guard --test-bins -- .*/XE-Local-AI-Engine.Tests --treenode-filter' "$TMP/coverage.log"
+# The pre-lane stays guarded, but only over the batched module's own bin: it runs beside siblings whose
+# instrumentation rewrites THEIR bins, which a --test-bins guard would report as contamination every time.
+grep -Fxq "guard guard --root $ARCH_BIN -- $ARCH_BIN/XE-Local-AI-Engine.Tests --treenode-filter /*/XE_Local_AI_Engine.Tests.Architecture/*/* --maximum-parallel-tests 1" \
+  "$TMP/coverage.log" || { echo "coverage pre-lane guard:" >&2; cat "$TMP/coverage.log" >&2; exit 1; }
+refute_grep -- '--test-bins' "$TMP/coverage.log"
 
 # --- --siblings-only: the CI leg shape, no runner lane ---
 GATE_ARGS=(--siblings-only)
@@ -1028,20 +1111,21 @@ done
 await_cancel_history_line "$n"
 
 # The parallel case below owns a fresh receipt set. Keeping the serialized case's two dead PIDs
-# would let its six-PID readiness check pass after only four of the six new processes registered.
+# would let its eight-PID readiness check pass after only six of the eight new processes registered.
 : >"$PIDS_FILE"
 n="$(history_lines)"
 
 set -m
-FAKE_LOG="$TMP/cancel.log" FAKE_PIDS="$PIDS_FILE" FAKE_SLEEP=120 FAKE_RUNNER_SLEEP=120 NO_BUILD=1 \
-  BUILD_LOCK_FILE="$LOCK" XE_GATE_CANCEL_GRACE=2 \
+FAKE_LOG="$TMP/cancel.log" FAKE_PIDS="$PIDS_FILE" FAKE_SLEEP=120 FAKE_RUNNER_SLEEP=120 FAKE_ARCH_SLEEP=120 \
+  NO_BUILD=1 BUILD_LOCK_FILE="$LOCK" XE_GATE_CANCEL_GRACE=2 \
   "$FAKE/scripts/run-backend-tests.sh" >"$TMP/cancel.out" 2>&1 &
 PUBLIC=$!
 set +m
 
-# Three lanes, each registering itself and a grandchild.
+# Three lanes and the Architecture pre-lane, each registering itself and a grandchild. The gate is
+# waiting on the pre-lane, which a cancel must stop like a lane.
 deadline=$((SECONDS + 60))
-while [[ "$(wc -l <"$PIDS_FILE")" -lt 6 ]]; do
+while [[ "$(wc -l <"$PIDS_FILE")" -lt 8 ]]; do
   if (( SECONDS > deadline )); then
     echo "lanes never started: $(cat "$PIDS_FILE")" >&2
     cancel_case_cleanup

@@ -295,7 +295,7 @@ in four tests. `ResolveBindUrl_WhenPersistedPortIsTaken_FallsBackToDynamicBind` 
 `ResolveBindUrl_WhenPersistedPortIsFree_RebindsThatPort` and `PersistThenResolve_RoundTripsToTheSameLoopbackUrl` need
 the number free when `DesktopPortStore` probes it and want the retry form. Not converted because they are synchronous.
 
-The engine CLI's exit code 6 is the `DesktopPortStore.IsPortAvailable` branch of `Program`; the CLI never falls back to another port.
+The engine CLI exits 6 both from the `DesktopPortStore.IsPortAvailable` branch of `Program` and when another process takes the port between that probe and Kestrel's bind (`PortInUseFailure` in the top-level catch); the CLI never falls back to another port.
 
 ### The full Tests module balloons to ~3.5 GB — it is a framework leak, not a fixture bug
 

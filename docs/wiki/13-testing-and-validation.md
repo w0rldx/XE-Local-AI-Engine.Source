@@ -197,13 +197,16 @@ overrides the detection (default `auto`). The lane is independent of `NO_BUILD` 
 tests scripts rather than assemblies, and it runs unguarded.
 
 After its Release build, `scripts/run-backend-tests.sh` runs the Architecture namespace of `XE-Local-AI-Engine.Tests`
-alone with the batched runner's own filter (`--list-tests` first, so a filter that matches nothing fails). A red result
-stops the gate with exit 1 and a `FAIL-FAST` line before any lane starts; each failing test gets `FAILED TEST`,
+with the batched runner's own filter. The `--list-tests` check comes first, before any lane starts, so a filter
+that matches nothing fails there. The run itself starts together with the long lanes and is judged first: a red
+result stops the running lanes and the gate with exit 1 and a `FAIL-FAST` line. Each failing test gets `FAILED TEST`,
 `FAILED CLASS` and a `RULE:` line, the first sentence of the test's `<summary>`, else its class's, else
-`(no summary)`. `XE_GATE_FAIL_FAST=0` skips the pre-lane;
-`--siblings-only` never runs it. The namespace still runs inside the batched lane, and the pre-lane is never counted
-in the totals. Every run (green, red, void 75, lock 69) appends one tab-separated line to the main checkout's
-`.tmp/gate-history.log`: time, worktree, the tip HEAD had when the lock was taken (suffixed `+dirty` when the tree had
+`(no summary)`. Under `XE_TEST_PROFILE=low-memory` the run stays serial, before any lane. When several outcomes
+apply, contamination (75) wins over a cancel (130/143), which wins over the fail-fast red, which wins over a red
+lane. `XE_GATE_FAIL_FAST=0` skips the pre-lane; `--siblings-only` never runs it. The namespace still runs inside
+the batched lane, and the pre-lane is never counted in the totals. Every run (green, red, void 75, lock 69) appends
+one tab-separated line to the main checkout's `.tmp/gate-history.log`: time, worktree, the tip HEAD had when the
+lock was taken (suffixed `+dirty` when the tree had
 changes then and `+moved` when HEAD changed during the run; a suffixed tip certifies nothing), per-lane pass/fail/skip,
 `scope` (`full` only when this invocation built and ran every lane unsharded; otherwise the first of `no-build`, `shard`,
 `siblings-only` or `contracts-skipped`, the last meaning the diff needed the release contract tests but
@@ -237,15 +240,24 @@ the profile trades elapsed time for lower concurrent memory demand without dropp
 When `XE_TEST_PROFILE` is unset, `JOBS` is not a fixed default either: `scripts/lib/test-sizing.sh` (sourced by
 both scripts) reads `MemAvailable` from `/proc/meminfo` and computes
 `JOBS = clamp(1, default, floor((MemAvailable − SIBLING_RESERVE_GB − HEADROOM_GB) / BATCH_GB))`, with
-`BATCH_GB=1.5`, `SIBLING_RESERVE_GB=5` and `HEADROOM_GB=4` — all three measured against this repo's own runs, not
-modeled, with the measurements next to the constants in that file. Today's numbers: 0.3–1.5 GB per batch of the
-batched module, and `Client.Persistence.Tests` 3.2 GB at its pinned sibling width (11.6 GB only at TUnit's
+`BATCH_GB=1.0`, `SIBLING_RESERVE_GB=5` and `HEADROOM_GB=4` — all three measured against this repo's own runs, not
+modeled, with the measurements next to the constants in that file. Today's numbers: about 0.8 GB per live batch of the
+batched module (summed host trees at JOBS 10–12; single batches range 0.3–1.7 GB), and `Client.Persistence.Tests` 3.2 GB at its pinned sibling width (11.6 GB only at TUnit's
 unpinned default, which the gate never uses) — do not quote the older "~15 GB per lane" rationale in
 `with-build-lock.sh`'s header as current; it predates the 2026-08-15 leak fix and the test-perf program. The
 computed `JOBS` is printed as a `>> Sizing: MemAvailable=… GB → JOBS=… (default …)` line in the gate log, so the
 log is the evidence for what ran. Explicit `JOBS`, `PAR`, `XE_TEST_WIDTH_*` and `XE_TEST_PROFILE=low-memory` all
 still win over the computed value; unknown memory (no `/proc/meminfo`, e.g. macOS) falls back to the measured
 default unchanged.
+
+Each batch process is a Microsoft.Testing.Platform test-host controller, and the test host that holds the memory is
+its child. The runner's `peakRSS=` per batch and the summary's `peakRSS(any batch)` are therefore the summed RSS of
+the controller and all its descendants, read from one `ps` snapshot per second (`scripts/lib/proc-tree.sh`). A
+figure printed before 2026-11-17 counted the controller alone. A `SAFETY-KILL` (MemAvailable under `AVAIL_FLOOR`)
+kills the descendants together with the controller and stays a red `(oom)` batch. Sizing reads free RAM once, so the
+runner also applies backpressure: while a batch is running, the next one starts only when MemAvailable fits one
+`BATCH_GB` plus `AVAIL_FLOOR`, or when a running batch finishes, and a held launch prints one
+`.. holding the next batch` line. Unknown memory never holds a launch.
 
 Two operating rules for that script are stated once, in the script header and the
 [backend-tests runner topic](../agent-knowledge/backend-tests-runner.md) of agent knowledge, and not repeated here: what `COVERAGE_DIR` costs you in contamination

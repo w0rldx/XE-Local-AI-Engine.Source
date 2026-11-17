@@ -18,21 +18,21 @@ check() {
   echo "PASS $name"
 }
 
-check "sourcing defines the constants" "1.5 5 4" \
+check "sourcing defines the constants" "1.0 5 4" \
   "$XE_SIZING_BATCH_GB $XE_SIZING_SIBLING_RESERVE_GB $XE_SIZING_HEADROOM_GB"
 check "compute_jobs 10 6 -> 1" 1 "$(xe_sizing_compute_jobs 10 6)"
 check "compute_jobs 10 40 -> 10" 10 "$(xe_sizing_compute_jobs 10 40)"
-check "compute_jobs 10 23 -> 9" 9 "$(xe_sizing_compute_jobs 10 23)"
-check "compute_jobs 16 23 -> 9" 9 "$(xe_sizing_compute_jobs 16 23)"
+check "compute_jobs 10 15 -> 6" 6 "$(xe_sizing_compute_jobs 10 15)"
+check "compute_jobs 16 23 -> 14" 14 "$(xe_sizing_compute_jobs 16 23)"
 check "compute_jobs 10 '' -> default" 10 "$(xe_sizing_compute_jobs 10 '')"
 
-printf 'MemTotal:       32000000 kB\nMemAvailable:   24222105 kB\n' >"$TMP/meminfo"
-check "mem_available_gb reads MemAvailable" 23.1 "$(XE_SIZING_MEMINFO="$TMP/meminfo" xe_sizing_mem_available_gb)"
-check "compute_jobs reads meminfo" 9 "$(XE_SIZING_MEMINFO="$TMP/meminfo" xe_sizing_compute_jobs 10)"
+printf 'MemTotal:       32000000 kB\nMemAvailable:   17406362 kB\n' >"$TMP/meminfo"
+check "mem_available_gb reads MemAvailable" 16.6 "$(XE_SIZING_MEMINFO="$TMP/meminfo" xe_sizing_mem_available_gb)"
+check "compute_jobs reads meminfo" 7 "$(XE_SIZING_MEMINFO="$TMP/meminfo" xe_sizing_compute_jobs 10)"
 check "no meminfo -> empty" "" "$(XE_SIZING_MEMINFO="$TMP/absent" xe_sizing_mem_available_gb)"
 check "no meminfo -> default" 16 "$(XE_SIZING_MEMINFO="$TMP/absent" xe_sizing_compute_jobs 16)"
 
-check "describe known" ">> Sizing: MemAvailable=23.1 GB → JOBS=9 (default 10)" "$(xe_sizing_describe 10 23.1)"
+check "describe known" ">> Sizing: MemAvailable=16.6 GB → JOBS=7 (default 12)" "$(xe_sizing_describe 12 16.6)"
 check "describe unknown" ">> Sizing: MemAvailable unknown → JOBS=10 (default)" \
   "$(XE_SIZING_MEMINFO="$TMP/absent" xe_sizing_describe 10)"
 

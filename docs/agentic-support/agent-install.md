@@ -415,7 +415,7 @@ Remove `~/.claude/skills/xe-local-ai-engine` and
 | 3 | Validation failure (email, password, or scope). |
 | 4 | Single-instance lease already held. |
 | 5 | Setup/auth/credential command failure. |
-| 6 | Requested port unavailable. |
+| 6 | Requested port unavailable, including a port another process took just before the engine bound it. |
 | 7 | The unlock page's port was taken after an unlock; start the engine again. |
 | 8 | The node key cannot open the database (key mismatch, or `node.key` missing next to an existing database). |
 | 9 | Database migration failed; stderr names how to restore or move the database aside. |

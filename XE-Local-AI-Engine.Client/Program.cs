@@ -65,6 +65,13 @@ catch (Exception ex) when (ApplicationControlBlock.TryDescribe(ex, out var block
     await Console.Error.WriteLineAsync(ApplicationControlBlock.Describe(blockedFile));
     return XE_Local_AI_Engine.Client.Program.ApplicationControlBlockedExitCode;
 }
+catch (Exception ex) when (PortInUseFailure.TryFind(ex, out var bindFailure))
+{
+    // The port probe released its socket before Kestrel bound, and another process took the port in between. The same refusal as a port the probe
+    // found taken, not a crash. It covers the vault unlock page's bind and the real host's bind after an unlock too: both start inside this try.
+    Log.Fatal(ex, "The port was taken before the host could bind it ({BindFailure}); --port does not fall back automatically.", bindFailure);
+    return XE_Local_AI_Engine.Client.Program.PortInUseExitCode;
+}
 catch (Exception ex)
 {
     // Before the startup logger is installed Log.Fatal writes nothing, so a crash in the Velopack / desktop bootstrap window would vanish with no console and

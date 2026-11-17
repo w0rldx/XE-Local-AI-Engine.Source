@@ -410,7 +410,8 @@ listener, write readiness evidence, and request graceful application stop when t
 The standalone desktop bootstrap opens the browser unless suppressed; the native shell always suppresses it. MCP-only never opens a browser. Real packaged behavior still
 requires observation on the target OS; this flow description is not a retained smoke-test transcript.
 
-`--port <1-65535>` pins the requested loopback port and exits 6 if unavailable. On
+`--port <1-65535>` pins the requested loopback port and exits 6 if unavailable, also when another process takes it
+between the startup check and the host's bind. On
 `ApplicationStarted`, both modes print exactly one unformatted line in stable key order and write
 canonical `ready.json` with `{version,url,mcpUrl,dataDir,pid,startedAtUtc}`. Graceful shutdown removes
 the file; consumers must reject it when the PID is dead and poll `/health/ready` before trusting it.

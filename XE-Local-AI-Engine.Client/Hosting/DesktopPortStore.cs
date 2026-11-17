@@ -299,7 +299,7 @@ internal static class DesktopPortStore
     internal static bool IsPortAvailable(int port)
     {
         // Probe by binding a throwaway loopback listener; rejection means the port is taken and a dynamic one is used. The listener stops before Kestrel binds, leaving a TOCTOU window.
-        // Best-effort rather than holding the socket across that gap: if another process wins it, Kestrel fails fast exactly as for any unavailable chosen port.
+        // Best-effort rather than holding the socket across that gap: if another process wins it, Kestrel fails fast and startup exits 6 (PortInUseFailure), as for a port this probe finds taken.
         try
         {
             using var listener = new TcpListener(IPAddress.Loopback, port);

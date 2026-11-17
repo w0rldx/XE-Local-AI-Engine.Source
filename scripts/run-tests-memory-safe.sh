@@ -113,11 +113,31 @@
 #   host is saturated, so the family finishing ~20 % sooner only hands its cores to another namespace
 #   (GraphWorkflows grew 314 s -> 330 s) and the module's wall did not move (7:02 without an
 #   exception, 7:08 with one) while peak RSS per batch rose from 1369 MB to 2064 MB.
-#   Second, JOBS is the lever, and its best value tracks the host — hence the two measured defaults
-#   below rather than one number. Free RAM caps them: with no profile and no explicit JOBS,
-#   JOBS = clamp(1, default, floor((MemAvailable − 5 − 4) / 1.5)) in GB, printed as a ">> Sizing:"
+#   Second, JOBS is the lever, and its best value tracks the host — hence the measured defaults
+#   below rather than one number. Re-measured 2026-11-17 on a 16-vCPU / 32 GB WSL2 host, full gate
+#   shape (siblings concurrent), NO_BUILD, 3 interleaved runs per point, median batched-lane wall:
+#     JOBS=6 515 s (one run)   JOBS=10 373 s (371-392)   JOBS=12 348 s (345-353)
+#   all green, CPU still ~30-50 % idle, MemAvailable never under 12 GB; hence 12 on 16-31 CPUs.
+#   Free RAM caps them: with no profile and no explicit JOBS,
+#   JOBS = clamp(1, default, floor((MemAvailable − 5 − 4) / 1.0)) in GB, printed as a ">> Sizing:"
 #   line (constants and their evidence: scripts/lib/test-sizing.sh).
 #   JOBS=1 PAR=1 reproduces the old fully serialized behavior exactly.
+#
+# peakRSS, SAFETY-KILL and backpressure
+#   Every batch runs in Microsoft.Testing.Platform's test-host-controller mode: the PID this script
+#   starts is a ~105 MB controller, and the test host that holds the memory is its child
+#   (`--internal-testhostcontroller-pid`), which spawns engine processes in turn. So once a second, from
+#   one `ps` snapshot (scripts/lib/proc-tree.sh), a batch's sample is the summed RSS of the controller and
+#   all its descendants: `peakRSS=` and the summary's peakRSS(any batch) are the largest such tree,
+#   not the controller alone. A peakRSS printed before 2026-11-17 sampled only the PID started, which in
+#   controller mode is the controller.
+#   SAFETY-KILL (MemAvailable under AVAIL_FLOOR): the batch's descendants are listed first, then they and
+#   the controller get KILL together, since a dead controller's children are reparented out of reach.
+#   The batch stays in this script's process group, so a cancel of the gate's lane still reaches it.
+#   Backpressure: sizing reads free RAM once, and other worktrees can take it afterwards. So while a batch
+#   is running, the next one is not started until MemAvailable fits one batch allowance
+#   (XE_SIZING_BATCH_GB) plus AVAIL_FLOOR or a running batch finishes; a held launch prints one
+#   ".. holding the next batch" line. Unknown memory never holds.
 #
 # Usage:
 #   scripts/run-tests-memory-safe.sh                # build (Release) + run every namespace batch
@@ -132,11 +152,12 @@
 #   XE_TEST_PROFILE low-memory defaults JOBS and PAR to 1; explicit JOBS/PAR still win. Unset uses
 #                   the measured defaults below, capped by free RAM.
 #   JOBS            how many namespace batch PROCESSES run concurrently (1 = sequential). Default 16 on a
-#                   host with >= 32 CPUs, 10 below that — the two measured points above — lowered to
+#                   host with >= 32 CPUs, 12 on 16-31, 10 below that — the measured points above — lowered to
 #                   what MemAvailable fits (see "Batch-level parallelism"). Unknown memory keeps the default.
 #   PAR             max parallel tests per batch (default 1 = deterministic + lowest RSS; >1 is faster but can flake)
 #   AVAIL_FLOOR     a batch aborts if available RAM drops below this many MB (default 800; with JOBS>1
-#                   every batch that observes the breach kills itself — safety over completeness)
+#                   every batch that observes the breach kills itself — safety over completeness);
+#                   also part of the backpressure threshold for starting a further batch
 #   TEST_GROUPS     when set to N, pack the namespaces into N processes (LPT by measured weight)
 #                   instead of one process per namespace, and filter each with a treenode
 #                   alternation. This is the shape CI uses and the one coverage runs want — see
@@ -192,6 +213,10 @@ PROJ="$REPO/XE-Local-AI-Engine.Tests"
 EXE="$PROJ/bin/Release/net10.0/XE-Local-AI-Engine.Tests"
 # shellcheck source=scripts/lib/test-sizing.sh
 source "$REPO/scripts/lib/test-sizing.sh"
+# shellcheck source=scripts/lib/proc-tree.sh
+source "$REPO/scripts/lib/proc-tree.sh"
+# Telemetry is overhead in every batch process and no verdict reads it (the gate sets the same pair).
+export TESTINGPLATFORM_TELEMETRY_OPTOUT=1 DOTNET_CLI_TELEMETRY_OPTOUT=1
 SIZING_LINE=""
 case "${XE_TEST_PROFILE:-}" in
   "") DEFAULT_JOBS="$(xe_sizing_default_jobs)" ;;
@@ -305,6 +330,11 @@ lost_sentinels() {
   printf '%s' "${names[*]}"
 }
 
+# MemAvailable in MB, empty when unknown; the same file and seam the sizing reads (lib/test-sizing.sh).
+mem_available_mb() {
+  awk '/^MemAvailable:/ { print int($2 / 1024); exit }' "${XE_SIZING_MEMINFO:-/proc/meminfo}" 2>/dev/null
+}
+
 run_ns() {
   local ns="$1" filter="$2" out; out="$(mktemp)"; local t0=$EPOCHSECONDS
   # Coverage/TRX is opt-in: one results directory per batch, because MTP resolves --coverage-output
@@ -349,12 +379,17 @@ SETTINGS
       "${report_args[@]}" >"$out" 2>&1 &
     local pid=$!
     while kill -0 "$pid" 2>/dev/null; do
-      local rss avail
-      rss="$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ')"
-      [[ -n "$rss" && "$rss" -gt "$peak" ]] && peak="$rss"
-      avail="$(free -m | awk '/^Mem:/{print $7}')"
+      local rss avail tree
+      avail="$(mem_available_mb)"
+      # $pid is the MTP controller; the host and its engines are its descendants (header, "peakRSS"). Read after
+      # avail, so a breach kills every descendant that existed when it was seen.
+      read -r rss tree <<<"$(xe_proc_tree "$pid")"
+      (( rss > peak )) && peak="$rss"
       if [[ "${avail:-9999}" -lt "$AVAIL_FLOOR" ]]; then
-        echo "   !! SAFETY-KILL $ns: avail ${avail}MB < ${AVAIL_FLOOR}MB (rss ${rss}KB)"; kill -9 "$pid" 2>/dev/null
+        echo "   !! SAFETY-KILL $ns: avail ${avail}MB < ${AVAIL_FLOOR}MB (rss ${rss}KB)"
+        # Descendants with the controller: once it dies they are reparented out of reach.
+        # shellcheck disable=SC2086 # word splitting is the point: tree is a PID list
+        kill -9 $tree "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
         echo "0 1 $peak oom $((EPOCHSECONDS-t0)) 0 0 0" >"$RESULTS_DIR/$ns.result"; rm -f "$out"
         release_slot "$slot"; return
       fi
@@ -625,8 +660,17 @@ if [[ -n "${COVERAGE_DIR:-}" ]]; then
   printf '%s\n' "${UNITS[@]%%$'\t'*}" >"$COVERAGE_DIR/units.txt"
 fi
 
+# Backpressure (header, "Backpressure"): room for one more batch is one batch allowance plus the kill floor.
+LAUNCH_ROOM_MB="$(awk -v b="$XE_SIZING_BATCH_GB" -v f="$AVAIL_FLOOR" 'BEGIN { print int(b * 1024 + f) }')"
+launch_room() { local mb; mb="$(mem_available_mb)"; [[ -z "$mb" ]] || (( mb >= LAUNCH_ROOM_MB )); }
 running=0
 for unit in "${UNITS[@]}"; do
+  live="$(jobs -pr | wc -l)"
+  if (( live > 0 )) && ! launch_room; then
+    echo "   .. holding the next batch: MemAvailable $(mem_available_mb)MB < ${LAUNCH_ROOM_MB}MB" \
+         "(one batch ${XE_SIZING_BATCH_GB} GB + AVAIL_FLOOR ${AVAIL_FLOOR}MB); waiting for memory or a batch to finish"
+    while (( $(jobs -pr | wc -l) >= live )) && ! launch_room; do sleep 1; done
+  fi
   run_ns "${unit%%$'\t'*}" "${unit#*$'\t'}" &
   running=$((running+1))
   if (( running >= JOBS )); then wait -n; running=$((running-1)); fi
