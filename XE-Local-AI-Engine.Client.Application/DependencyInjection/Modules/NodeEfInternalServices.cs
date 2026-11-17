@@ -1,6 +1,10 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using System.Collections.Concurrent;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
@@ -18,7 +22,9 @@ internal sealed class NodeEfInternalServices : IDisposable
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
         ArgumentNullException.ThrowIfNull(materializationInterceptor);
-        Provider = new ServiceCollection().AddEntityFrameworkSqlite()
+        // Registered before AddEntityFrameworkSqlite, whose TryAdd then keeps it.
+        Provider = new ServiceCollection().AddSingleton<IModelSource, ProcessSharedModelSource>()
+                                          .AddEntityFrameworkSqlite()
                                           .AddSingleton(loggerFactory)
                                           .AddSingleton<ISingletonInterceptor>(materializationInterceptor)
                                           .BuildServiceProvider();
@@ -28,4 +34,26 @@ internal sealed class NodeEfInternalServices : IDisposable
 
     public void Dispose() =>
         Provider.Dispose();
+
+    /// <summary>
+    ///     Hands every test host in the process the runtime model the first host built, sparing each later host the model build.
+    /// </summary>
+    /// <remarks>
+    ///     Safe because neither context's model holds host state: no converter, comparer or convention captures a key, cipher, clock or
+    ///     host service (docs/agent-knowledge.md §1). Retains one host's model and the EF singletons it was built with for the process,
+    ///     never one per host. Design-time models stay per host and are built only on request.
+    /// </remarks>
+    private sealed class ProcessSharedModelSource : ModelSource
+    {
+        private static readonly ConcurrentDictionary<Type, IModel> RuntimeModels = new();
+
+        public ProcessSharedModelSource(ModelSourceDependencies dependencies) : base(dependencies)
+        {
+        }
+
+        public override IModel GetModel(DbContext context, ModelCreationDependencies modelCreationDependencies, bool designTime) =>
+            designTime
+                ? base.GetModel(context, modelCreationDependencies, designTime)
+                : RuntimeModels.GetOrAdd(context.GetType(), _ => base.GetModel(context, modelCreationDependencies, designTime: false));
+    }
 }

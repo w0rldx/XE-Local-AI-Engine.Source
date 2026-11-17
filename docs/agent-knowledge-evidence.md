@@ -309,6 +309,13 @@ refuses per-context differences in provider-constant options such as `ConfigureW
 loaded machine with `/usr/bin/time` peak RSS: `Endpoints.Benchmarks.V1` at width 1 peaked at 3.3 GB cached, 674 MB
 with `NodeEfInternalServices`; `DevWorkflows.Materialization` at width 1 took 463 s uncached per scope, 55 s now.
 A low `DOTNET_GCHeapHardLimit` is not a valid leak verdict: size-cap tests allocate large payloads.
+Measured 2026-11-17, Release: each test host built the NodeChat model again (about 100 ms of first-scope work), and a
+runtime model passed through `UseModel` alone made `MigrateAsync` slower, because EF 10's migrator runs
+`HasPendingModelChanges()` and builds a design-time model unless `PendingModelChangesWarning` is ignored. With the
+process-shared model source and that ignore, `TestServerWebAppFactoryTimingTests` (two interleaved runs per build,
+10 hosts each) put the `EnsureApp` median at 640 ms on the parent commit and 452 ms with the change. A weak-reference
+probe over four sequential hosts showed every host getting the same model instance, and the same hosts collected
+(all but the first and last) with and without the change, so the shared model adds no per-host retention.
 
 Why the fixture rules exist: `WebApplicationFactory<Program>`'s `HostingListener` roots every host; the per-host JSON options exist for MEAI's descriptor cache; `AddRateLimiter` creates an undisposed replenishment timer per host, which is why `ConfigureServices` captures plain ints rather than `builder`. `scripts/run-tests-memory-safe.sh` is the runner these measurements came from.
 

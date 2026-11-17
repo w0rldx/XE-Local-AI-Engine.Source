@@ -80,8 +80,8 @@ internal static class AddNodeModelRuntimeExtensions
                        serviceProvider.GetRequiredService<NodeSqliteCommandInterceptor>(),
                        serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>());
 
-            // EF refuses singleton interceptors and per-context warning settings with an internal provider, so NodeEfInternalServices
-            // holds the interceptor there; the ignore stops cached test hosts tripping EF's throwing twenty-provider warning.
+            // EF refuses singleton interceptors through the options with an internal provider, so NodeEfInternalServices holds the
+            // interceptor there; the ignore stops cached test hosts tripping EF's throwing twenty-provider warning.
             if (efServiceProviderCaching)
             {
                 options.ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
@@ -89,7 +89,7 @@ internal static class AddNodeModelRuntimeExtensions
             }
             else
             {
-                options.UseInternalServiceProvider(serviceProvider.GetRequiredService<NodeEfInternalServices>().Provider);
+                UseNodeEfInternalServices(options, serviceProvider);
             }
         });
 
@@ -104,7 +104,7 @@ internal static class AddNodeModelRuntimeExtensions
                        serviceProvider.GetRequiredService<NodeSqliteCommandInterceptor>());
             if (!efServiceProviderCaching)
             {
-                options.UseInternalServiceProvider(serviceProvider.GetRequiredService<NodeEfInternalServices>().Provider);
+                UseNodeEfInternalServices(options, serviceProvider);
             }
         });
 
@@ -254,6 +254,21 @@ internal static class AddNodeModelRuntimeExtensions
         {
             _ = builder.Services.AddExternalOpenAiModelProvider();
         }
+    }
+
+    /// <summary>
+    ///     The test-host branch of both node DbContexts: the host's one internal EF provider, whose model source shares the runtime
+    ///     model across hosts (<see cref="NodeEfInternalServices" />).
+    /// </summary>
+    /// <remarks>
+    ///     EF requires identical warning settings on every context sharing an internal provider, hence one helper for both. The ignore
+    ///     skips the migrator's model-drift check, which would rebuild a design-time model per host; Client.Persistence.Tests owns that
+    ///     check (docs/agent-knowledge.md §1).
+    /// </remarks>
+    private static void UseNodeEfInternalServices(DbContextOptionsBuilder options, IServiceProvider serviceProvider)
+    {
+        options.UseInternalServiceProvider(serviceProvider.GetRequiredService<NodeEfInternalServices>().Provider)
+               .ConfigureWarnings(static warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
     }
 
     private static ModelRoutingLocalChatClient CreateLocalChatClient(IServiceProvider serviceProvider)
