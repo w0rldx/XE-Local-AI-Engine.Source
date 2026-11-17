@@ -642,6 +642,7 @@ const preflight = (hiddenSize: number | null) => ({
 	cardVramBytes: null,
 	license: null,
 	isGated: false,
+	metadataPresent: false,
 	checkpointHiddenSize: hiddenSize,
 	checkpointBlockCount: hiddenSize === null ? null : 2,
 	ggufEmbeddingLength: hiddenSize === null ? null : 1024,

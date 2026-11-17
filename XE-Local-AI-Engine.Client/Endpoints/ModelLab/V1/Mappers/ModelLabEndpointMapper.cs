@@ -16,6 +16,7 @@ internal static class ModelLabEndpointMapper
             CardVramBytes = result.CardVramBytes,
             License = result.License,
             IsGated = result.IsGated,
+            MetadataPresent = result.MetadataPresent,
             CheckpointHiddenSize = result.CheckpointHiddenSize,
             CheckpointBlockCount = result.CheckpointBlockCount,
             GgufEmbeddingLength = result.GgufEmbeddingLength,

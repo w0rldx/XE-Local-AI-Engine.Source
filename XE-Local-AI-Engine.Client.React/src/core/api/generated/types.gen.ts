@@ -4810,6 +4810,7 @@ export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPreflightR
 	cardVramBytes: number | null;
 	license: string | null;
 	isGated: boolean;
+	metadataPresent: boolean;
 	checkpointHiddenSize: number | null;
 	checkpointBlockCount: number | null;
 	ggufEmbeddingLength: number | null;

@@ -807,6 +807,15 @@
 				"layersClear": "Leeren",
 				"layersCost": "Jeder getracete Block kostet Generierungszeit: Bei getesteten Modellen kamen für drei Blöcke etwa 9 % hinzu, für alle Blöcke etwa 60 %.",
 				"layersDefault": "Keine gewählt: Die Blöcke {{layers}} werden getraced.",
+				"license": {
+					"confirm": "Ich bestätige, dass ich diese Gewichte herunterladen und Experimente damit durchführen darf.",
+					"declared": "Der Basis-Checkpoint „{{repoId}}“ deklariert die Lizenz „{{license}}“.",
+					"englishOriginal": "Englisches Original",
+					"englishOriginalNote": "Dieser englische Text wird als Ihre Bestätigung gespeichert.",
+					"gated": "Das Repository ist zugangsbeschränkt, und seine Bedingungen wurden auf Hugging Face akzeptiert.",
+					"noMetadata": "Für den Basis-Checkpoint „{{repoId}}“ wurden keine Lizenz-Metadaten gefunden.",
+					"undeclared": "Der Basis-Checkpoint „{{repoId}}“ deklariert keine Lizenz."
+				},
 				"listFailed": "Die Experimente konnten nicht geladen werden.",
 				"loadFailed": "Das Experiment konnte nicht geladen werden.",
 				"measured": "Gemessen",

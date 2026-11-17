@@ -807,6 +807,15 @@
 				"layersClear": "Clear",
 				"layersCost": "Each traced block adds generation time: on tested models three blocks added about 9 % and every block about 60 %.",
 				"layersDefault": "None chosen: blocks {{layers}} are traced.",
+				"license": {
+					"confirm": "I confirm I am permitted to download these weights and to run experiments on them.",
+					"declared": "The base checkpoint '{{repoId}}' declares the license '{{license}}'.",
+					"englishOriginal": "English original",
+					"englishOriginalNote": "This English text is what the node records as your confirmation.",
+					"gated": "The repository is gated and its terms were accepted on Hugging Face.",
+					"noMetadata": "The base checkpoint '{{repoId}}' has no license metadata found for it.",
+					"undeclared": "The base checkpoint '{{repoId}}' declares no license."
+				},
 				"listFailed": "The experiments could not be loaded.",
 				"loadFailed": "The experiment could not be loaded.",
 				"measured": "Measured",

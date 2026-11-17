@@ -7756,6 +7756,7 @@ export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPrefligh
 	cardVramBytes: z.int().nullable(),
 	license: z.string().nullable(),
 	isGated: z.boolean(),
+	metadataPresent: z.boolean(),
 	checkpointHiddenSize: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })

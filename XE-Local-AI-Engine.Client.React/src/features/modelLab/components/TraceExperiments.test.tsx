@@ -3,11 +3,13 @@
 // The Trace tab against stubbed routes (MSW): the other-platform explanation, a refusal before any download, the flow to a saved
 // trace, a refused start, and Cancel on a running job.
 
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import i18next from "i18next";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { TraceExperiments } from "@/features/modelLab/components/TraceExperiments";
+import { loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -79,7 +81,10 @@ const preflightBase = {
 	defaultSteeringLayer: 15,
 	ggufEmbeddingLength: 1024,
 	ggufBlockCount: 24,
-	licenseConfirmationText: "The base checkpoint declares the license 'apache-2.0'.",
+	metadataPresent: true,
+	// The server's canonical English text (LicenseGateService.BuildModelLabText); the English page renders the same words.
+	licenseConfirmationText:
+		"The base checkpoint 'Qwen/Qwen3.5-0.8B' declares the license 'apache-2.0'. I confirm I am permitted to download these weights and to run experiments on them.",
 	refusal: null,
 	refusalMessage: null,
 };
@@ -163,6 +168,43 @@ describe("TraceExperiments", () => {
 		expect(screen.queryByTestId("model-lab-download")).toBeNull();
 	});
 
+	it("shows the license confirmation in German, keeps the English original reachable, and translates its refusal", async () => {
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json(emptyList)),
+			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
+			http.post(localApiPath("model-lab/checkpoint-download"), () =>
+				HttpResponse.json({
+					// The server's message for this code is the English confirmation.
+					preflight: { ...preflightBase, refusal: "LicenseNotConfirmed", refusalMessage: preflightBase.licenseConfirmationText },
+					baseArtifactId: null,
+					artifactStatus: null,
+				}),
+			),
+		);
+		const german =
+			"Der Basis-Checkpoint „Qwen/Qwen3.5-0.8B“ deklariert die Lizenz „apache-2.0“. Ich bestätige, dass ich diese Gewichte herunterladen und Experimente damit durchführen darf.";
+
+		try {
+			renderWithProviders(<TraceExperiments />);
+			await pickCheckpoint();
+			await screen.findByTestId("model-lab-license");
+			await loadModelLabStrings("de");
+			await act(() => i18next.changeLanguage("de"));
+
+			fireEvent.click(screen.getByRole("checkbox", { name: german }));
+			const original = screen.getByTestId("model-lab-license-original");
+			expect(original.getAttribute("aria-label")).toMatch(/Englisches Original/);
+			fireEvent.focus(original);
+			expect(await screen.findByText(preflightBase.licenseConfirmationText)).toBeTruthy();
+
+			fireEvent.click(screen.getByTestId("model-lab-download"));
+			expect((await screen.findByTestId("model-lab-refusal")).textContent).toBe(german);
+		} finally {
+			await act(() => i18next.changeLanguage("en"));
+		}
+	});
+
 	it("needs the license confirmed, then downloads, and a loaded model's refusal reads as its message", async () => {
 		stubModels();
 		const downloads: unknown[] = [];
@@ -206,6 +248,9 @@ describe("TraceExperiments", () => {
 
 		const download = await screen.findByTestId("model-lab-download");
 		expect((download as HTMLButtonElement).disabled).toBe(true);
+		// In English the label is the recorded text itself, so there is no original to offer.
+		expect(screen.getByRole("checkbox", { name: preflightBase.licenseConfirmationText })).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-license-original")).toBeNull();
 		fireEvent.click(screen.getByRole("checkbox"));
 		fireEvent.click(download);
 		await waitFor(() => expect(downloads).toHaveLength(1));

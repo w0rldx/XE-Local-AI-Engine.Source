@@ -72,10 +72,14 @@ export function TraceLensPanel({ experimentId, result, step, selectedBlock, laye
 		}
 		const view = viewport.getBoundingClientRect();
 		const box = row.getBoundingClientRect();
+		// The horizontal bar is an overlay on the scroller's bottom edge. While it shows, ScrollArea reserves its height
+		// as the viewport's bottom padding, which only adds room at the scroll end; a row aligned to the box's bottom
+		// would sit under the bar, so it is aligned to the top of that padding instead.
+		const bottom = view.bottom - (Number.parseFloat(getComputedStyle(viewport).paddingBottom) || 0);
 		if (box.top < view.top) {
 			viewport.scrollTop += box.top - view.top;
-		} else if (box.bottom > view.bottom) {
-			viewport.scrollTop += box.bottom - view.bottom;
+		} else if (box.bottom > bottom) {
+			viewport.scrollTop += box.bottom - bottom;
 		}
 	}, [selectedBlock, loaded]);
 	const title = (
@@ -237,7 +241,8 @@ export function TraceLensPanel({ experimentId, result, step, selectedBlock, laye
 													</>
 												)}
 											</Table.Td>
-											<Table.Td miw={96}>
+											{/* Unbroken like its siblings: "12.34%, rank 5" on one line; a narrow screen scrolls sideways. */}
+											<Table.Td miw={96} style={{ whiteSpace: "nowrap" }}>
 												<Stack gap={2}>
 													{/* The text below carries the value; the bar repeats it for the eye down the blocks. */}
 													<Progress value={probabilityOf(block.chosenLogprob) * 100} size="sm" aria-hidden={true} />

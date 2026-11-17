@@ -675,6 +675,7 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.Equal(ModelLabCheckpointRefusal.LicenseNotConfirmed, refused.Preflight.Refusal!.Value);
         AssertEx.Null(refused.BaseArtifactId);
         AssertEx.True(refused.Preflight.RefusalMessage!.Contains("declares the license 'apache-2.0'", StringComparison.Ordinal), refused.Preflight.RefusalMessage);
+        AssertEx.True(refused.Preflight.MetadataPresent, "The page translates this refusal from the preflight's facts, so they ride along with it.");
         await host.Checkpoints.DidNotReceive().DownloadAsync(Arg.Is<BaseCheckpointManifest>(manifest => manifest.Files.Any(file => file.Role == BaseCheckpointFileRole.Weights)),
             Arg.Any<string>(),
             Arg.Any<IProgress<PullProgress>?>(),

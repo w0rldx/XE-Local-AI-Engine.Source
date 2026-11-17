@@ -43832,6 +43832,7 @@
           "cardVramBytes",
           "license",
           "isGated",
+          "metadataPresent",
           "checkpointHiddenSize",
           "checkpointBlockCount",
           "ggufEmbeddingLength",
@@ -43868,6 +43869,9 @@
             "nullable": true
           },
           "isGated": {
+            "type": "boolean"
+          },
+          "metadataPresent": {
             "type": "boolean"
           },
           "checkpointHiddenSize": {

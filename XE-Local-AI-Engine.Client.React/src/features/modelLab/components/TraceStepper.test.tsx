@@ -738,6 +738,27 @@ describe("TraceStepper with a logit lens", () => {
 		expect(scrolled).toHaveBeenCalledTimes(1);
 	});
 
+	it("keeps a newly selected row clear of the horizontal scrollbar at the scroller's bottom edge", async () => {
+		stubLens();
+		await openStepper(v5Result, v5Records);
+		await screen.findByTestId("model-lab-stepper-lens-table");
+		const region = screen.getByRole("region", { name: /lens readout at step 1/ });
+		// What ScrollArea sets while its horizontal bar shows: the bar's height as the viewport's bottom padding.
+		region.style.paddingBottom = "8px";
+		const rect = (top: number, bottom: number) => ({ top, bottom }) as DOMRect;
+		onTestFinished(() => {
+			vi.restoreAllMocks();
+		});
+		vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+			return this === region ? rect(100, 460) : this.getAttribute("aria-current") === "true" ? rect(900, 930) : rect(0, 0);
+		});
+		const scrolled = vi.spyOn(region, "scrollTop", "set");
+
+		fireEvent.click(screen.getByRole("button", { name: "Block 3, full attention: residual norm 1" }));
+
+		expect(scrolled).toHaveBeenCalledWith(478);
+	});
+
 	it("shows a readout that was not a finite number as not available, never as a rank or a tie", async () => {
 		const [first, ...rest] = lensSteps;
 		const nan = lensBlock(0, [20, 21, 22], [null, null, null], null, null, null);

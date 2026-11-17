@@ -34,6 +34,7 @@ import { FieldWithInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
 import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNotice";
 import { SteeringForm } from "@/features/modelLab/components/SteeringForm";
 import { TraceLayerPicker } from "@/features/modelLab/components/TraceLayerPicker";
+import { licenseConfirmationLabel } from "@/features/modelLab/models/ModelLabLicense";
 import { starterSteeringDraft } from "@/features/modelLab/models/ModelLabSteering";
 
 // The transfer has no hub of its own, so the page reads its progress while it runs.
@@ -94,8 +95,16 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 	const body = { repoId: repoId.trim(), revision: revision.trim() || undefined, installedModelName: installedModelName ?? "" };
 	const checkBody = savedId ? { baseArtifactId: savedId, installedModelName: body.installedModelName } : body;
 	const check = preflight.data;
-	const refusal = download.data?.preflight?.refusalMessage ?? check?.refusalMessage;
+	const refused = download.data?.preflight?.refusalMessage ? download.data.preflight : check;
+	// The server's message for this code is the English confirmation, so it is rebuilt from the same facts in the page's language.
+	const refusal = refused?.refusal === "LicenseNotConfirmed" ? licenseConfirmationLabel(t, refused) : refused?.refusalMessage;
 	const allowed = check !== undefined && check.refusal === null;
+	const licenseLabel = allowed ? licenseConfirmationLabel(t, check) : "";
+	// The English text is what the node records; it is offered beside a translation, which it would only repeat in English.
+	const licenseOriginal =
+		allowed && check.licenseConfirmationText && check.licenseConfirmationText !== licenseLabel
+			? `${t("pages.modelLab.trace.license.englishOriginalNote", "This English text is what the node records as your confirmation.")}\n\n${check.licenseConfirmationText}`
+			: undefined;
 	const ready = artifact.data?.status === "Ready";
 	const progress = artifact.data?.progress;
 	// Only a full-attention block has weights over earlier positions; the server refuses the rest.
@@ -201,12 +210,18 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 								revision: check.revision?.slice(0, 12),
 							})}
 						</Text>
-						<Checkbox
-							label={check.licenseConfirmationText}
-							checked={licenseConfirmed}
-							onChange={(event) => setLicenseConfirmed(event.currentTarget.checked)}
-							data-testid="model-lab-license"
-						/>
+						<FieldWithInfo
+							label={t("pages.modelLab.trace.license.englishOriginal", "English original")}
+							text={licenseOriginal}
+							testId="model-lab-license-original"
+						>
+							<Checkbox
+								label={licenseLabel}
+								checked={licenseConfirmed}
+								onChange={(event) => setLicenseConfirmed(event.currentTarget.checked)}
+								data-testid="model-lab-license"
+							/>
+						</FieldWithInfo>
 						{savedId === null && (
 							<Group>
 								<Button

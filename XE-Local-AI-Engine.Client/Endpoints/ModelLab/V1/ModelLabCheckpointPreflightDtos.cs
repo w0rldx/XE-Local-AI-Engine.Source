@@ -34,6 +34,9 @@ public sealed class ModelLabCheckpointPreflightResponse
 
     public required bool IsGated { get; init; }
 
+    /// <summary>False when no licensing metadata was found, which differs from a repository that declares no license.</summary>
+    public required bool MetadataPresent { get; init; }
+
     public required int? CheckpointHiddenSize { get; init; }
 
     public required int? CheckpointBlockCount { get; init; }
@@ -51,7 +54,7 @@ public sealed class ModelLabCheckpointPreflightResponse
     /// <summary>The layer a steering job takes when none is named.</summary>
     public required int? DefaultSteeringLayer { get; init; }
 
-    /// <summary>The text the operator confirms before the download. Null until the checkpoint's license has been read.</summary>
+    /// <summary>The canonical English text of what the operator confirms, recorded and hashed with the run; the page shows a translation built from <see cref="RepoId" />, <see cref="License" />, <see cref="IsGated" /> and <see cref="MetadataPresent" />. Null until the checkpoint's license has been read.</summary>
     public required string? LicenseConfirmationText { get; init; }
 
     public required ModelLabCheckpointRefusal? Refusal { get; init; }

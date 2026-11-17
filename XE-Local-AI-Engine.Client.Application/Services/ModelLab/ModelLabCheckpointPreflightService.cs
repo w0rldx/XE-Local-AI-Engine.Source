@@ -130,6 +130,7 @@ public sealed class ModelLabCheckpointPreflightService
             CardVramBytes = cardBytes,
             License = license,
             IsGated = isGated,
+            MetadataPresent = metadataPresent,
             // The same words the row records: a live hub answer always has metadata, a saved artifact may not.
             LicenseConfirmationText = LicenseGateService.BuildModelLabText(repoId, license, isGated, metadataPresent)
         };

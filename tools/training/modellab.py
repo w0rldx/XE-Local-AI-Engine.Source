@@ -283,10 +283,16 @@ def load_model(job, run):
     path = job["checkpointPath"]
     # A local directory fixed by the host, offline, so there is no revision to pin.
     tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True, trust_remote_code=False)  # nosec B615
+    # Straight onto the current CUDA device, as .to("cuda") did: the threaded loader skips a serial copy per tensor.
     model = AutoModelForCausalLM.from_pretrained(  # nosec B615
-        path, dtype=torch.bfloat16, local_files_only=True, trust_remote_code=False, use_safetensors=True
+        path,
+        dtype=torch.bfloat16,
+        local_files_only=True,
+        trust_remote_code=False,
+        use_safetensors=True,
+        device_map="cuda",
     )
-    return tokenizer, model.to("cuda").eval()
+    return tokenizer, model.eval()
 
 
 def measured_facts(model, blocks):

@@ -12,27 +12,43 @@ import { InstalledModelInspector } from "@/features/modelLab/components/Installe
 import { NextTokenExplorer } from "@/features/modelLab/components/NextTokenExplorer";
 import { SamePromptComparison } from "@/features/modelLab/components/SamePromptComparison";
 import { TraceExperiments } from "@/features/modelLab/components/TraceExperiments";
-import type { ModelLabIntent, ModelLabJump } from "@/features/modelLab/models/ModelLabNavigation";
+import {
+	type ModelLabIntent,
+	type ModelLabJump,
+	type ModelLabTab,
+	modelLabTabs,
+} from "@/features/modelLab/models/ModelLabNavigation";
 import { forgetFailedModelLabStrings, loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
 
-export function ModelLabPage() {
+// `tab` and `onTabChange` come from the route's `?tab=`; without them (unit tests) the page keeps its own tab.
+interface ModelLabPageProps {
+	tab?: ModelLabTab;
+	onTabChange?: (tab: ModelLabTab) => void;
+}
+
+export function ModelLabPage(props: ModelLabPageProps) {
 	// Once per mount, outside the boundary that suspends.
 	useState(forgetFailedModelLabStrings);
 	return (
 		<Suspense fallback={<Loader size="sm" />}>
-			<ModelLabContent />
+			<ModelLabContent {...props} />
 		</Suspense>
 	);
 }
 
-function ModelLabContent() {
+function ModelLabContent({ tab, onTabChange }: ModelLabPageProps) {
 	const { t, i18n } = useTranslation();
 	use(loadModelLabStrings(i18n.language));
 	const tabsRef = useRef<HTMLDivElement>(null);
-	const [tab, setTab] = useState<string | null>("compare");
+	const [ownTab, setOwnTab] = useState<ModelLabTab>("compare");
 	const [intent, setIntent] = useState<ModelLabIntent>();
 	const showTab = (value: string | null): void => {
-		setTab(value);
+		const next = modelLabTabs.find((known) => known === value);
+		if (next === undefined) {
+			return;
+		}
+		setOwnTab(next);
+		onTabChange?.(next);
 		scrollStuckTabsToTop(tabsRef.current);
 	};
 	const jump = (to: ModelLabJump): void => {
@@ -50,7 +66,7 @@ function ModelLabContent() {
 				)}
 			/>
 			{/* Both panels stay mounted, so switching tabs neither cancels a run nor drops a chosen model. */}
-			<Tabs ref={tabsRef} value={tab} onChange={showTab}>
+			<Tabs ref={tabsRef} value={tab ?? ownTab} onChange={showTab}>
 				<StickyBar edge="top" data-testid="model-lab-tabs-bar">
 					<Tabs.List>
 						<Tabs.Tab value="compare">{t("pages.modelLab.compare.tab", "Same-prompt A/B")}</Tabs.Tab>
