@@ -219,6 +219,7 @@ import {
 	getModelLabArchitecture,
 	getModelLabExperiment,
 	getModelLabExperimentAttention,
+	getModelLabExperimentLens,
 	getModelLabExperimentTrace,
 	getModelLabPyTorchIndex,
 	getModelLabPyTorchSource,
@@ -1010,6 +1011,9 @@ import type {
 	GetModelLabExperimentAttentionError,
 	GetModelLabExperimentAttentionResponse,
 	GetModelLabExperimentData,
+	GetModelLabExperimentLensData,
+	GetModelLabExperimentLensError,
+	GetModelLabExperimentLensResponse,
 	GetModelLabExperimentResponse,
 	GetModelLabExperimentTraceData,
 	GetModelLabExperimentTraceError,
@@ -9328,6 +9332,28 @@ export const cancelModelLabExperimentMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getModelLabExperimentLensQueryKey = (options: Options<GetModelLabExperimentLensData>) =>
+	createQueryKey("getModelLabExperimentLens", options, false, ["Model-Lab"]);
+
+export const getModelLabExperimentLensOptions = (options: Options<GetModelLabExperimentLensData>) =>
+	queryOptions<
+		GetModelLabExperimentLensResponse,
+		AxiosError<GetModelLabExperimentLensError>,
+		GetModelLabExperimentLensResponse,
+		ReturnType<typeof getModelLabExperimentLensQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelLabExperimentLens({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelLabExperimentLensQueryKey(options),
+	});
 
 export const setModelLabExperimentNotesMutation = (
 	options?: Partial<Options<SetModelLabExperimentNotesData>>,

@@ -273,6 +273,10 @@ Everything lives in one directory (`%LOCALAPPDATA%\XE-Local-AI-Engine`), separat
   generated token, the 32 strongest positions each head of the full-attention blocks read, plus the rest of the row.
   The weights are recomputed beside the model's own attention kernel, so the generated text is unchanged. It costs a few
   MB per run and a little time. A weight shows where a head read, not why the model chose a token.
+- **Every Model Lab trace now records a logit lens.** For each generated token, every block is read through the
+  model's own final norm and output head: its top 5 tokens, the chosen token's probability and rank, and the spread
+  of that readout in nats. The last block is the model's real output. It adds about 0.5 MB and a fraction of a second
+  per trace. Early blocks are not meant to be read this way, so low agreement there is expected.
 
 ---
 

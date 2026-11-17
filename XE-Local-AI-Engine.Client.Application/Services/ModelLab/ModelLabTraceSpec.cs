@@ -1,13 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelLab;
 
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 /// <summary>What every job runs. Fixed or bounded here so no request can widen what a job measures or stores past these limits.</summary>
 public static class ModelLabTraceSpec
 {
     /// <summary>Separate from the trainer's: the two scripts change independently. Pinned by <c>modellablib.CONTRACT_VERSION</c>.</summary>
-    public const int ContractVersion = 4;
+    public const int ContractVersion = 5;
 
     public const int MaxNewTokens = 128;
 
@@ -67,8 +69,23 @@ public static class ModelLabTraceSpec
     /// <summary>The cap from when every trace had three layers. No layer count gets less, so no trace that fitted then is refused now.</summary>
     private const int MinTraceByteCap = 256 * 1024;
 
-    /// <summary>The largest cap a request can ask for; with <see cref="MaxAttentionByteCap" />, the bound on what the blob store keeps.</summary>
-    public static readonly int MaxTraceByteCap = TraceByteCapFor(MaxTraceLayers);
+    /// <summary>Tokens a logit lens keeps per step and block, besides the chosen one.</summary>
+    public const int LensTopTokens = 5;
+
+    /// <summary>Worst-case field widths, not a measurement: ids 5 x 7 + 3, logprobs 5 x 11 + 3, chosen 11, rank 7, entropy 7.</summary>
+    private const int LensBytesPerBlock = 121;
+
+    /// <summary>One <c>"248319":"..."</c> entry with its text cut to 64 escaped bytes.</summary>
+    private const int LensBytesPerText = 76;
+
+    private const int LensBytesPerLine = 64;
+
+    private const string LensLinePrefix = "{\"lens\"";
+
+    private const string LensFooterPrefix = "{\"lensFooter\"";
+
+    /// <summary>The largest file a trace can write: every layer traced and a lens at every block; with <see cref="MaxAttentionByteCap" />, the bound on what the blob store keeps.</summary>
+    public static readonly int MaxTraceByteCap = TraceByteCapFor(MaxTraceLayers) + LensByteCapFor(MaxTraceLayers);
 
     /// <summary>The largest attention cap a checkpoint can ask for: about 20 MiB.</summary>
     public static readonly int MaxAttentionByteCap = AttentionByteCapFor(MaxAttentionLayers, MaxAttentionHeads);
@@ -99,6 +116,14 @@ public static class ModelLabTraceSpec
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(layerCount);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(layerCount, MaxTraceLayers);
         return Math.Max(MinTraceByteCap, (layerCount * MaxNewTokens * TraceBytesPerTokenLayer * TraceCapMargin) + TraceFooterReserveBytes);
+    }
+
+    /// <summary>A lens line per <see cref="MaxNewTokens" /> step at its widest (every block's fields and a text for each of its top tokens), plus the lens footer's own reserve.</summary>
+    public static int LensByteCapFor(int blockCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(blockCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(blockCount, MaxTraceLayers);
+        return (MaxNewTokens * (LensBytesPerLine + (blockCount * (LensBytesPerBlock + (LensTopTokens * LensBytesPerText))))) + TraceFooterReserveBytes;
     }
 
     /// <summary>Three layers spread across the stack. Quarter points, so block 0, which cannot be steered, is not one of them.</summary>
@@ -171,6 +196,73 @@ public static class ModelLabTraceSpec
             };
     }
 
+    /// <summary>A trace file's lens lines, skipping every other line. Unavailable when a line does not parse or the lines fail the checks below.</summary>
+    /// <remarks>
+    ///     The steps run 0, 1, 2, ... in order; their count matches the summary and the lens footer, and is <paramref name="expectedTokens" /> or, when that
+    ///     footer says the cap cut them, fewer. The summary's blocks are 0 to B-1 and its truncated flag is the footer's. Every block has the top-token count, a
+    ///     rank of at least 1 (null exactly where the chosen logprob is), an entropy that is null or not negative, and a text for every top id.
+    /// </remarks>
+    internal static ModelLabLens ParseLens(ReadOnlyMemory<byte> content, ModelLabLensSummary summary, int expectedTokens)
+    {
+        var records = new List<ModelLabLensRecord>();
+        ModelLabTraceFooter? footer = null;
+        try
+        {
+            foreach (var line in Lines(content))
+            {
+                if (line.StartsWith(LensFooterPrefix, StringComparison.Ordinal))
+                {
+                    footer = JsonSerializer.Deserialize<LensFooterLine>(line, JsonSerializerOptions.Default)?.LensFooter;
+                }
+                else if (line.StartsWith(LensLinePrefix, StringComparison.Ordinal))
+                {
+                    records.Add(JsonSerializer.Deserialize<LensLine>(line, JsonSerializerOptions.Default)?.Lens ?? throw new JsonException("A lens line without its record."));
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            return new ModelLabLens
+            {
+                Status = ModelLabTraceReadStatus.Unavailable
+            };
+        }
+
+        var readable = footer is { } lensFooter
+                       && summary is { Layers.Count: > 0, TopTokens: > 0 }
+                       && summary.Layers.SequenceEqual(Enumerable.Range(0, summary.Layers.Count))
+                       && summary.Truncated == lensFooter.Truncated
+                       && records.Count == summary.Records
+                       && records.Count == lensFooter.Records
+                       && (records.Count == expectedTokens || (records.Count < expectedTokens && lensFooter.Truncated))
+                       && records.Select(static record => record.Step).SequenceEqual(Enumerable.Range(0, records.Count))
+                       && records.TrueForAll(record => IsWellFormed(record, summary.Layers.Count, summary.TopTokens));
+        return readable
+            ? new ModelLabLens
+            {
+                Status = ModelLabTraceReadStatus.Found,
+                Summary = summary,
+                Records = records,
+                Footer = footer
+            }
+            : new ModelLabLens
+            {
+                Status = ModelLabTraceReadStatus.Unavailable
+            };
+    }
+
+    private static bool IsWellFormed(ModelLabLensRecord record, int blocks, int topTokens) =>
+        record is { Ids: { } ids, Logprobs: { } logprobs, ChosenLogprobs: { } chosen, ChosenRanks: { } ranks, Entropies: { } entropies, Texts: { } texts }
+        && ids.Count == blocks
+        && logprobs.Count == blocks
+        && chosen.Count == blocks
+        && ranks.Count == blocks
+        && entropies.Count == blocks
+        && ids.All(block => block is { } top && top.Count == topTokens && top.All(id => id >= 0 && texts.GetValueOrDefault(id.ToString(CultureInfo.InvariantCulture)) is not null))
+        && logprobs.All(block => block?.Count == topTokens)
+        && ranks.Zip(chosen).All(static block => (block.First is null) == (block.Second is null) && block.First is null or >= 1)
+        && entropies.All(static entropy => entropy is null or >= 0);
+
     // JSON null deserializes into the non-nullable lists, so each is checked: a malformed row is unreadable, not a crash.
     private static bool IsWellFormed(ModelLabAttentionRecord record, int heads) =>
         record is { Keys: { } keys, Weights: { } weights, Rest: { } rest }
@@ -179,15 +271,23 @@ public static class ModelLabTraceSpec
         && rest.Count == heads
         && keys.Zip(weights).All(static head => head is { First: { } headKeys, Second: { } headWeights } && headKeys.Count == headWeights.Count);
 
-    /// <summary>The JSON lines both capped files share: records, then the footer the script's writer appends. Null when a line does not parse; the footer is null when the file has none.</summary>
+    private static string[] Lines(ReadOnlyMemory<byte> content) =>
+        Encoding.UTF8.GetString(content.Span).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>The JSON lines both capped files share: records, then the writer's footer. Lens lines and their footer are skipped, never read as a default record. Null when a line does not parse.</summary>
     private static ParsedLines<T>? ParseLinesOrNull<T>(ReadOnlyMemory<byte> content)
     {
         var records = new List<T>();
         ModelLabTraceFooter? footer = null;
-        foreach (var line in Encoding.UTF8.GetString(content.Span).Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var line in Lines(content))
         {
             try
             {
+                if (line.StartsWith(LensLinePrefix, StringComparison.Ordinal) || line.StartsWith(LensFooterPrefix, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 if (line.StartsWith("{\"footer\"", StringComparison.Ordinal))
                 {
                     footer = JsonSerializer.Deserialize<ModelLabTraceFooter>(line, JsonSerializerOptions.Default);
@@ -209,6 +309,18 @@ public static class ModelLabTraceSpec
             Records = records,
             Footer = footer
         };
+    }
+
+    private sealed class LensLine
+    {
+        [JsonPropertyName("lens")]
+        public ModelLabLensRecord? Lens { get; init; }
+    }
+
+    private sealed class LensFooterLine
+    {
+        [JsonPropertyName("lensFooter")]
+        public ModelLabTraceFooter? LensFooter { get; init; }
     }
 
     private sealed class ParsedLines<T>

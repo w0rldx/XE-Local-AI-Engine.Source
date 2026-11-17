@@ -414,6 +414,36 @@
 						"math": "$$G = H / H_{kv}, \\qquad j = m\\,G + g, \\quad 0 \\le g < G$$\n\n- $H$: query heads; $H_{kv}$: key/value heads; $G$: query heads per group.\n- Query head $j$ reads key/value head $m = \\lfloor j / G \\rfloor$.\n- Heads of one group share $\\tilde k^{(m)}$ and $v^{(m)}$ and differ in $\\tilde q^{(j)}$ and in their gate.\n\nAll $H$ head outputs are concatenated before $W_O$, so what one head contributes also depends on $W_O$.",
 						"overview": "Attention runs as several heads side by side, each with its own query and its own weights. You view one head at a time; different heads can look at very different positions."
 					},
+					"lens": {
+						"detail": "For each generated step, the run keeps every block's output at the position the step reads passes the blocks before the last through the final RMSNorm and the output projection (`lm_head`) in one batched call, takes the last block's row straight from the model's own output logits, then applies one softmax over the whole vocabulary. The modules are the model's own, so the norm's $(1 + w)$ scaling, its float32 arithmetic and any weight sharing with the token embeddings are exactly those of the real readout. The lens uses the raw logits; the checkpoint's generation settings do not apply to it. Each block keeps its top N tokens (the run states N), the chosen token's log-probability and rank, and the readout's spread; log-probabilities are rounded down to 1/10,000. At the last block the lens is the model's own output; at every earlier block it is the final readout applied early, which the model never does. The vocabulary size V comes from the checkpoint (about 248k tokens for Qwen3.5, for example).",
+						"math": "$$p^{(b)}_t = \\mathrm{softmax}\\big(W_U\\, \\mathrm{RMSNorm}_f(h^{(b)}_t)\\big), \\qquad \\mathrm{RMSNorm}_f(x) = \\frac{x}{\\sqrt{\\tfrac{1}{d}\\sum_i x_i^2 + \\epsilon}} \\odot (1 + w)$$\n\n- $h^{(b)}_t$: output of block $b$ at position $t = P+s-1$, the position step $s$ reads; $b = 0, \\dots, B-1$.\n- $W_U \\in \\mathbb{R}^{V \\times d}$: the output projection (`lm_head`), without bias; whether it equals the token embedding matrix depends on the checkpoint config.\n- $w$, $\\epsilon$: weight and epsilon of the final norm, which runs in float32 and casts its result back to bf16; the logits stay bf16, softmax runs in float32.\n- $B$, $d$ (hidden size) and $V$ come from the checkpoint.\n- The norm shown is Qwen3.5's, the family traces support; other families scale by $w$ instead of $(1 + w)$, and the lens always runs the checkpoint's own norm module.\n\nAt $b = B-1$ this is the model's output: $W_U\\,\\mathrm{RMSNorm}_f(h^{(B-1)}_t) = \\ell^{(s)}$. For $b < B-1$ it is a readout the model never computes.",
+						"overview": "The logit lens reads every block's output at this step through the model's own final norm and output projection, as if the model stopped after that block. It shows which tokens that early readout favours. It is a derived analysis computed beside the run, not what the model computed: only the last block's output reached the output layer."
+					},
+					"lensCaveats": {
+						"detail": "Four limits apply. Only the last block's output reaches the output layer in the real model; the other readouts are computed beside the run and never influence a token. Early blocks' states are not yet in the basis the output projection reads, so low agreement with the chosen token and high spread there are expected and say little. When the checkpoint shares the output projection with the token embeddings (the run says whether it does), the first blocks tend to echo the token at the current position, because their state is still close to that token's embedding. And this is the plain readout, not a tuned lens: no block gets a learned translation into the output basis, so a block can hold information the lens cannot show. A high lens probability is therefore no proof that a block \"decided\" or \"knows\" anything, and a low one no proof that it does not.",
+						"math": "$$h^{(b)}_t = e_{x_t} + \\sum_{j=0}^{b} \\Delta^{(j)}_t, \\qquad \\ell^{(b)}_v = e_v^{\\top}\\, \\mathrm{RMSNorm}_f\\big(h^{(b)}_t\\big) \\;\\; (W_U = E)$$\n\n- $e_{x_t}$: embedding of the token read at position $t$; $\\Delta^{(j)}_t$: what block $j$ adds to the residual stream.\n- With tied weights, row $v$ of $W_U$ is token $v$'s embedding $e_v$; while $h^{(b)}_t$ is still close to $e_{x_t}$, the logit of $v = x_t$ tends to be large.\n- No readout for $b < B-1$ enters generation; each token comes from $\\ell^{(s)}$ alone.",
+						"overview": "A lens readout is the model's final readout applied early, not what the model \"thinks\" at that block. It is a derived analysis: computed from measured states, but not something the model computed or used for its decision."
+					},
+					"lensChosen": {
+						"detail": "The chosen token is the one the trace generated: the top candidate after the checkpoint's generation settings. The lens reads raw logits, so even at the last block its rank can be greater than 1 when those settings changed the order. Rank 1 means no token has a higher lens probability. Tokens with exactly the same value share the better rank, so the chosen token can be rank 1 while another token is listed first; the view then says \"tied for first\". When the token is outside a block's top N, the view still shows its rank and probability, which the run stores separately. The shown probability comes from the log-probability rounded down, so it never exceeds the computed one. A probability that rises across the blocks shows where the final readout would start to pick this token; it does not show that a block decided anything.",
+						"math": "$$\\pi^{(b)} = p^{(b)}_{t,x}, \\qquad r^{(b)} = 1 + \\big|\\{\\, v : p^{(b)}_{t,v} > p^{(b)}_{t,x} \\,\\}\\big|$$\n\n- $x = x_{P+s}$: the token generated at step $s$; $p^{(b)}_t$: the lens distribution of block $b$.\n- $r^{(b)}$: competition rank; equal values share the better rank, so $r^{(b)} = 1$ does not exclude a tie.\n- Stored: $\\lambda^{(b)} = \\ln \\pi^{(b)}$, rounded down to a multiple of $10^{-4}$; shown: $e^{\\lambda^{(b)}} \\le \\pi^{(b)}$.",
+						"overview": "For every block, this column shows the probability and rank its lens readout gives the token the model actually chose at this step. Read down the blocks to see from which depth the final readout would pick it; that is not where the model decided."
+					},
+					"lensEntropy": {
+						"detail": "The spread is the entropy of the block's lens distribution over the whole vocabulary, computed in float32 and stored to three decimals. Its unit is the nat because it uses the natural logarithm, like every log-probability here. $e^H$ turns it into a count: a readout with spread $H$ is about as spread as $e^H$ equally likely tokens, so about 0.69 nats is like a coin flip between two and 2.30 nats like a choice among ten. The maximum is $\\ln V$, reached only when all V tokens are equally likely. High spread at early blocks is expected for a lens: their states are not yet in the basis the output projection reads, so the final readout applied there often gives a flat distribution. The spread describes that readout, not the model's uncertainty at that block. A low spread does not mean correct either: a readout can be sharp on a token the model does not choose. At the last block it is the spread of the raw output, before the generation settings. \"–\" marks a value that was not a finite number.",
+						"math": "$$H^{(b)} = -\\sum_{v=1}^{V} p^{(b)}_{t,v} \\ln p^{(b)}_{t,v}, \\qquad 0 \\le H^{(b)} \\le \\ln V, \\qquad k^{(b)} = e^{H^{(b)}}$$\n\n- $p^{(b)}_{t,v}$: lens probability of token $v$ at block $b$; a term with $p = 0$ counts as 0.\n- $H = 0$: one token has probability 1; $H = \\ln V$: all $V$ tokens are equally likely.\n- $k^{(b)}$: the number of equally likely tokens with the same entropy, since $k$ of them give exactly $\\ln k$.\n- Unit nats; in bits it would be $H / \\ln 2$.\n\nExample: with the roughly 248k tokens of Qwen3.5, $\\ln V \\approx 12.42$; the view computes the bound from this checkpoint's $V$.",
+						"overview": "The spread says how evenly one block's lens readout shares out its probability. 0 nats means one token takes all of it; the higher the value, the more tokens share it."
+					},
+					"lensLastBlock": {
+						"detail": "Both numbers come from logits before the checkpoint's generation settings, and the lens takes the last block's row directly from the model's output instead of recomputing it, because a batched recomputation rounds slightly differently. Only the stored rounding can separate the two, so they agree within the tolerance the view states. A larger difference means the stored lens does not belong to this step's output, a recording fault, and the view warns; the generation settings cannot explain it, since neither number includes them. Agreement checks the readout itself; it says nothing about how well the earlier blocks' readouts describe the model.",
+						"math": "$$\\Delta = \\big|\\lambda^{(B-1)} - \\lambda^{\\mathrm{out}}\\big|, \\qquad \\lambda^{\\mathrm{out}} = \\ln \\mathrm{softmax}\\big(\\ell^{(s)}\\big)_x$$\n\n- $\\lambda^{(B-1)}$: the chosen token's log-probability from the last block's lens; $\\lambda^{\\mathrm{out}}$: the same from the step's raw output logits $\\ell^{(s)}$.\n- $\\ell^{(s)} = W_U\\,\\mathrm{RMSNorm}_f(h^{(B-1)}_t)$; the lens takes $\\ell^{(s)}$ itself for the last block, so $\\Delta$ is only the stored rounding.\n- The view warns when $\\Delta$ exceeds the stated tolerance.",
+						"overview": "At the last block the lens is the model's real output: its row is taken from the step's raw output logits, not recomputed. The view shows both numbers for the chosen token: its probability from the last block's lens and from the raw model output."
+					},
+					"lensNotRecorded": {
+						"detail": "The lens cannot be rebuilt from a finished trace: it needs the full output vector of every block at every step, and a trace without it keeps only residual-norm statistics of the traced blocks and the output candidates. Runs saved before lens recording existed never have it, and a checkpoint with more blocks than the limit traces as before, without a lens. When a run reached its lens size limit, the first steps keep their readouts and later steps say \"not kept\"; the generated tokens are not affected.",
+						"math": "$$p^{(b)}_t = \\mathrm{softmax}\\big(W_U\\, \\mathrm{RMSNorm}_f(h^{(b)}_t)\\big), \\qquad h^{(b)}_t \\in \\mathbb{R}^{d}$$\n\n- Needs all $d$ components of $h^{(b)}_t$ for every block $b$ and step; $d$ is the checkpoint's hidden size.\n- A norm $\\lVert h^{(b)}_t \\rVert$ or a few top dimensions do not determine $\\mathrm{RMSNorm}_f(h^{(b)}_t)$, so the readout cannot be derived from them.",
+						"overview": "This run has no logit lens. Traces record it only from the node version that added it, and only for checkpoints within the lens block limit."
+					},
 					"linearNoMatrix": {
 						"detail": "Instead of a growing KV cache, each value head carries one state matrix of fixed size from token to token. Each token first fades the state, then writes into it, and the output reads the state with the query. Earlier tokens are blended into that matrix and cannot be separated again, so no weight per position exists, measured or otherwise. A full-attention block shows a row where the run recorded one.",
 						"math": "$$S_t = \\gamma_t S_{t-1} + \\beta_t\\, \\hat k_t \\big(v_t - \\gamma_t S_{t-1}^{\\top} \\hat k_t\\big)^{\\top}, \\qquad o_t = S_t^{\\top} \\hat q_t / \\sqrt{d_k}$$\n\n- $S_t \\in \\mathbb{R}^{d_k \\times d_v}$: state of one value head, the same size at every position.\n- $\\gamma_t \\in (0,1)$: decay; $\\beta_t \\in (0,1)$: write strength.\n- $\\hat q_t$, $\\hat k_t$: L2-normed query and key; $v_t$: value.\n\n$o_t$ depends on earlier tokens only through $S_{t-1}$, so there is no $a_{t,s}$ to record. The operation `delta` explains the update step by step.",
@@ -454,6 +484,7 @@
 				},
 				"ui": {
 					"basisBackground": "General background",
+					"basisDerived": "Derived analysis",
 					"basisLlamaCpp": "Measured by llama.cpp",
 					"basisMeasurement": "What this measurement means",
 					"basisSimulated": "Simulated on this page",
@@ -861,6 +892,40 @@
 						"missing": "Row not kept",
 						"notTopK": "Not in the top K (part of the rest)",
 						"weight": "Weight, 0 to {{max}}"
+					},
+					"lens": {
+						"block": "Block",
+						"caption": "Each block's lens readout at step {{step}}; the chosen token is {{text}}",
+						"chosen": "Chosen token",
+						"chosenLine": "Chosen token {{text}}: {{rank}}, {{percent}}",
+						"chosenMissing": "Chosen token {{text}}: not available (not a finite number).",
+						"detailTitle": "Lens readout of block {{index}}",
+						"explain": {
+							"caveats": "What the lens cannot tell",
+							"chosen": "The chosen token across the blocks",
+							"entropy": "Spread in nats",
+							"lastBlock": "The last block and the raw output",
+							"lens": "What the logit lens shows"
+						},
+						"failed": "The logit lens could not be read.",
+						"lastBlock": "Chosen token: {{lens}} from the last block's lens (block {{index}}), {{raw}} in the raw model output.",
+						"mismatch": "Their log-probabilities differ by {{delta}} nats, more than the tolerance: the lens did not reproduce this step's raw output.",
+						"noTop": "This block's readout is not a finite number, so it has no top tokens to show.",
+						"notAvailable": "not available",
+						"notFound": "This run kept no logit lens.",
+						"note": "The model's final norm and output layer applied to each block's output at this step. A derived readout, not what the model computed: the output layer read only the last block's output.",
+						"rank": "rank {{rank}}",
+						"spread": "Spread (nats)",
+						"spreadLine": "Spread of this block's readout: {{entropy}} nats, about as spread as e^H ≈ {{tokens}} equally likely tokens (at most ln V = {{max}} nats for this vocabulary).",
+						"spreadMissing": "Spread of this block's readout: not available (not a finite number).",
+						"stepMissing": "This step's lens readout was not kept.",
+						"tied": "tied for first",
+						"tiedEmbeddings": "This checkpoint shares its output layer with the token embeddings, so the first blocks tend to read back the token at the current position.",
+						"title": "What each block would predict (logit lens)",
+						"tolerance": "The view warns when their log-probabilities differ by more than {{tolerance}} nats, one step of the stored rounding.",
+						"top": "Lens top token",
+						"truncated": "The lens reached its size limit: the first steps kept their readouts, later steps were not kept. The generated tokens are not affected.",
+						"unavailable": "This run has no logit lens: it was saved before lens recording, or its checkpoint has more blocks than the lens limit of 64."
 					},
 					"linearNoMatrix": "A linear-attention block keeps one running state instead of weights over earlier positions, so it has no attention matrix to show.",
 					"mapCapped": "The map shows {{shown}} of {{total}} key positions; the {{dropped}} with the least summed weight are left out.",

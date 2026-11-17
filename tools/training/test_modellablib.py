@@ -19,6 +19,7 @@ from modellablib import (
     CUT_MARK,
     FOOTER_RESERVE_BYTES,
     MAX_CONFIG_BYTES,
+    MAX_LENS_TOP_TOKENS,
     SOURCE_KIND,
     STEERING_KIND,
     TRACE_KIND,
@@ -30,19 +31,24 @@ from modellablib import (
     block_index_of,
     captures_attention,
     check_aligned,
+    competition_rank,
     control_vector_bytes,
     cut_text,
+    cut_written_text,
     discover_block_path,
     fitted_trace_result,
     heartbeat_counts,
     in_block_path,
     layer_kind,
     layer_types_follow_cut,
+    lens_readable,
+    lens_record,
     named_files,
     op_graphs,
     op_location,
     out_of_range_layers,
     read_raw_config,
+    records_lens,
     register_anchors,
     relative_source_file,
     representatives,
@@ -508,6 +514,285 @@ def test_every_unusable_attention_field_is_refused():
     assert validate_job({**VALID_JOB, **ATTENTION_FIELDS, "attentionLayers": list(range(8)), "attentionTopKeys": 64})
 
 
+LENS_FIELDS = {"lensTopTokens": 5, "lensByteCap": 1_547_424}
+
+
+def test_a_job_with_both_lens_fields_records_the_lens_and_one_without_or_with_nulls_does_not():
+    assert records_lens(validate_job({**VALID_JOB, **LENS_FIELDS}))
+    assert not records_lens(validate_job(dict(VALID_JOB)))
+    assert not records_lens(validate_job({**VALID_JOB, **dict.fromkeys(LENS_FIELDS)}))
+
+
+def test_lens_fields_come_both_or_neither():
+    for missing in LENS_FIELDS:
+        for absent in ({}, {missing: None}):
+            fields = {**{k: v for k, v in LENS_FIELDS.items() if k != missing}, **absent}
+            try:
+                validate_job({**VALID_JOB, **fields})
+            except JobError as error:
+                assert "both or neither" in str(error), str(error)
+                continue
+            raise AssertionError(f"A job without {missing} but with the other lens field must be refused.")
+
+
+def test_every_unusable_lens_field_is_refused():
+    bad_values = {
+        "lensTopTokens": [0, MAX_LENS_TOP_TOKENS + 1, "5", True, 1.5],
+        "lensByteCap": [FOOTER_RESERVE_BYTES, "9", True],
+    }
+    for field, values in bad_values.items():
+        for value in values:
+            try:
+                validate_job({**VALID_JOB, **LENS_FIELDS, field: value})
+            except JobError as error:
+                assert field in str(error), str(error)
+                continue
+            raise AssertionError(f"{field}={value!r} must be refused.")
+    assert validate_job({**VALID_JOB, **LENS_FIELDS, "lensTopTokens": 1})
+    assert validate_job({**VALID_JOB, **LENS_FIELDS, "lensTopTokens": MAX_LENS_TOP_TOKENS})
+
+
+def test_a_lens_record_has_the_wire_shape():
+    nan, inf = float("nan"), float("inf")
+    texts = {7: "a", 9: "b", 3: "c", 11: "unused"}
+    record = lens_record(
+        4,
+        [[7, 9], [3, 7], [9, 3]],
+        [[-0.12345, -2.5], [-0.5, -inf], [nan, nan]],
+        [-0.12345, -3.0, nan],
+        [1, 3, 1],
+        [-0.0, 2.0, nan],
+        texts,
+    )
+    assert record == {
+        "lens": {
+            "s": 4,
+            "i": [[7, 9], [3, 7], [9, 3]],
+            "p": [[-0.1235, -2.5], [-0.5, None], [None, None]],
+            "c": [-0.1235, -3.0, None],
+            # A NaN row: no logprob, no rank (it would read 1) and no entropy.
+            "r": [1, 3, None],
+            "e": [0.0, 2.0, None],
+            "t": {"3": "c", "7": "a", "9": "b"},
+        }
+    }
+    # A one-hot readout's -0.0 is written as 0.0, never "-0.0".
+    assert '"e":[0.0,2.0,null]' in json.dumps(record, separators=(",", ":"))
+    assert lens_record(0, [[1]], [[-1.0]], [-1.0], [1], [1.23456], {1: "x"})["lens"]["e"] == [1.235]
+    # A masked chosen token (-inf) has no rank either: r is null exactly where c is.
+    assert lens_record(0, [[1]], [[-1.0]], [-inf], [7], [1.0], {1: "x"})["lens"]["r"] == [None]
+
+
+def test_the_chosen_rank_shares_the_better_rank_on_a_tie():
+    class Row:
+        # The two tensor operations competition_rank uses, on a plain list.
+        def __init__(self, items):
+            self.items = list(items)
+
+        def __gt__(self, value):
+            return Row(item > value for item in self.items)
+
+        def sum(self, _dim):
+            return sum(self.items)
+
+    row = Row([-0.5, -1.0, -0.5, -2.0, -1.0])
+    assert competition_rank(row, -0.5) == 1
+    assert competition_rank(row, -1.0) == 3
+    assert competition_rank(row, -2.0) == 5
+    # A NaN chosen value compares above nothing: the helper says 1, which is why lens_record nulls it.
+    nan = float("nan")
+    assert competition_rank(Row([nan, nan, nan]), nan) == 1
+    assert lens_record(0, [[0]], [[nan]], [nan], [competition_rank(Row([nan]), nan)], [nan], {0: ""})["lens"]["r"] == [
+        None
+    ]
+
+
+def test_the_lens_is_read_only_where_the_batched_rows_are_the_models_own():
+    from types import SimpleNamespace
+
+    plain = SimpleNamespace(hidden_size=1024)
+    neutral = SimpleNamespace(final_logit_softcapping=None, logits_scaling=1.0, logit_scale=1)
+    assert lens_readable(24, object(), object(), plain)
+    assert lens_readable(2, object(), object(), neutral)
+    assert not lens_readable(1, object(), object(), plain)
+    assert not lens_readable(0, object(), object(), plain)
+    assert not lens_readable(24, None, object(), plain)
+    assert not lens_readable(24, object(), None, plain)
+    for name, value in (("final_logit_softcapping", 30.0), ("logits_scaling", 8.0), ("logit_scale", 0.0625)):
+        assert not lens_readable(24, object(), object(), SimpleNamespace(**{name: value})), name
+
+
+def _written(text):
+    return len(json.dumps(text)) - 2
+
+
+def test_a_lens_text_is_cut_by_its_written_escaped_bytes():
+    for text in ("\u4e2d" * 20, "\U0001f600" * 10, "\x01" * 20, "a\u4e2d\U0001f600\x01" * 8, '"\\' * 40):
+        cut = cut_written_text(text)
+        assert _written(cut) <= CANDIDATE_TEXT_BYTES, cut
+        assert cut.endswith(CUT_MARK)
+        assert text.startswith(cut[: -len(CUT_MARK)])
+    # 45 UTF-8 bytes but 90 written: cut_text keeps it whole, the lens cut does not.
+    assert cut_text("\u4e2d" * 15) == "\u4e2d" * 15
+    assert cut_written_text("\u4e2d" * 15) == "\u4e2d" * 9 + CUT_MARK
+    assert cut_written_text("x" * CANDIDATE_TEXT_BYTES) == "x" * CANDIDATE_TEXT_BYTES
+
+
+def _line_bytes(record):
+    return len((json.dumps(record, separators=(",", ":"), allow_nan=False) + "\n").encode())
+
+
+def test_the_worst_lens_line_fits_its_share_of_the_cap():
+    blocks, top = 64, 5
+    # ModelLabTraceSpec.LensByteCapFor(64): 128 lines and the footer reserve.
+    cap = 128 * (64 + blocks * (121 + top * 76)) + FOOTER_RESERVE_BYTES
+    ids = [[248_319 - (block * top + slot) for slot in range(top)] for block in range(blocks)]
+    worst = ("\u4e2d" * 40, "\U0001f600" * 40, "\x01" * 40, "x" * 200, '"' * 100)
+    texts = {token: worst[token % len(worst)] for row in ids for token in row}
+    record = lens_record(
+        127, ids, [[-1234.5678] * top] * blocks, [-1234.5678] * blocks, [248_320] * blocks, [12.422] * blocks, texts
+    )
+    assert len(record["lens"]["t"]) == blocks * top
+    assert all(_written(text) <= CANDIDATE_TEXT_BYTES for text in record["lens"]["t"].values())
+    assert _line_bytes(record) <= (cap - FOOTER_RESERVE_BYTES) // 128, _line_bytes(record)
+
+
+def _hook_and_lens(hook_cap, hook_count, lens_cap, lens_count, with_lens=True):
+    lens_line = lens_record(0, [[1, 2]], [[-0.1, -2.0]], [-0.1], [1], [0.5], {1: "a", 2: "b"})
+    with tempfile.TemporaryDirectory() as directory:
+        path = os.path.join(directory, "trace.jsonl")
+        writer = CappedTraceWriter(path, hook_cap)
+        for _ in range(hook_count):
+            writer.write(RECORD)
+        if with_lens:
+            section = writer.section(lens_cap, "lensFooter")
+            for _ in range(lens_count):
+                section.write(lens_line)
+            section.close()
+        writer.close()
+        with open(path, "rb") as handle:
+            raw = handle.read()
+        return raw, _lines(path)
+
+
+def _parts(lines):
+    hook = [line for line in lines if "footer" not in line and "lens" not in line and "lensFooter" not in line]
+    lens = [line for line in lines if "lens" in line]
+    (footer,) = [line for line in lines if "footer" in line]
+    (lens_footer,) = [line["lensFooter"] for line in lines if "lensFooter" in line]
+    return hook, footer, lens, lens_footer
+
+
+def test_a_lens_overflow_leaves_the_hook_records_and_footer_byte_for_byte():
+    alone, _ = _hook_and_lens(100_000, 10, 0, 0, with_lens=False)
+    raw, lines = _hook_and_lens(100_000, 10, 1_000, 500)
+    assert len(raw) <= 100_000 + 1_000
+    hook, footer, lens, lens_footer = _parts(lines)
+    assert len(hook) == 10
+    assert footer == json.loads(alone.splitlines()[-1])
+    # The hook part is today's bytes; the lens part only adds lines.
+    hook_bytes = [line for line in raw.splitlines() if not line.startswith((b'{"lens"', b'{"lensFooter"'))]
+    assert hook_bytes == alone.splitlines()
+    assert lens_footer["truncated"] is True
+    assert lens_footer["records"] == len(lens)
+    assert lens_footer["records"] + lens_footer["dropped"] == 500
+    assert lens_footer["cap"] == 1_000
+    assert lens_footer["payloadBytes"] <= 1_000 - FOOTER_RESERVE_BYTES
+
+
+def test_a_hook_overflow_leaves_the_lens_section_writing():
+    raw, lines = _hook_and_lens(1_000, 500, 100_000, 20)
+    assert len(raw) <= 1_000 + 100_000
+    hook, footer, lens, lens_footer = _parts(lines)
+    assert footer["truncated"] is True
+    assert footer["records"] == len(hook)
+    assert len(lens) == 20
+    assert lens_footer == {
+        "truncated": False,
+        "records": 20,
+        "dropped": 0,
+        "payloadBytes": 20 * _line_bytes(lens[0]),
+        "cap": 100_000,
+    }
+
+
+class _Hidden:
+    """A block output's shape and its last position, enough for the lens hook."""
+
+    def __init__(self, tokens, tag, width=4, batch=1):
+        self.shape = (batch, tokens, width)
+        self._tag = tag
+
+    def dim(self):
+        return len(self.shape)
+
+    def __getitem__(self, index):
+        assert index == (0, -1), index
+        return mock.Mock(clone=mock.Mock(return_value=self._tag))
+
+
+def _lens_with_hooks(blocks=3, width=4):
+    modellab = _load_modellab()
+    model = mock.MagicMock()
+    model.config.get_text_config.return_value.hidden_size = width
+    block_modules = [mock.MagicMock() for _ in range(blocks)]
+    lens = modellab._Lens(model, block_modules, 5, mock.MagicMock(), mock.MagicMock())
+    hooks = [module.register_forward_hook.call_args.args[0] for module in block_modules[:-1]]
+    # The last block has no hook: its readout is the model's own logits.
+    assert not block_modules[-1].register_forward_hook.called
+    return lens, hooks
+
+
+def test_the_lens_hook_keeps_the_last_position_of_a_tuple_or_bare_output_at_prefill_and_decode():
+    lens, hooks = _lens_with_hooks()
+    hooks[0](None, None, (_Hidden(17, "prefill-0"), None))
+    hooks[1](None, None, _Hidden(17, "prefill-1"))
+    assert lens._stash == {0: "prefill-0", 1: "prefill-1"}
+    hooks[0](None, None, _Hidden(1, "decode-0"))
+    hooks[1](None, None, (_Hidden(1, "decode-1"),))
+    assert lens._stash == {0: "decode-0", 1: "decode-1"}
+
+
+def test_the_lens_hook_refuses_an_output_of_another_shape():
+    lens, hooks = _lens_with_hooks(width=4)
+    for wrong in (_Hidden(3, "x", width=5), _Hidden(3, "x", batch=2)):
+        try:
+            hooks[0](None, None, wrong)
+        except RuntimeError as error:
+            assert "Block 0" in str(error), str(error)
+            continue
+        raise AssertionError(f"{wrong.shape} must be refused.")
+    assert lens._stash == {}
+
+
+def test_a_chunked_prefill_keeps_the_last_chunk_and_a_missing_block_fails_the_step():
+    lens, hooks = _lens_with_hooks()
+    for chunk in ("chunk-1", "chunk-2"):
+        for index, hook in enumerate(hooks):
+            hook(None, None, _Hidden(8, f"{chunk}-{index}"))
+    assert lens._stash == {0: "chunk-2-0", 1: "chunk-2-1"}
+
+    lens, hooks = _lens_with_hooks()
+    hooks[0](None, None, _Hidden(1, "only-0"))
+    lens._read_raw(None, None, mock.MagicMock())
+    try:
+        lens(None, mock.MagicMock())
+    except RuntimeError as error:
+        assert "blocks [1]" in str(error), str(error)
+    else:
+        raise AssertionError("A step without every block's state must fail.")
+
+    lens, hooks = _lens_with_hooks()
+    for index, hook in enumerate(hooks):
+        hook(None, None, _Hidden(1, index))
+    try:
+        lens(None, mock.MagicMock())
+    except RuntimeError as error:
+        assert "logits" in str(error), str(error)
+    else:
+        raise AssertionError("A step without the model's logits must fail.")
+
+
 def test_an_attention_record_has_the_wire_shape():
     record = attention_record(2, 7, 14, [[14, 0], [3, 14]], [[0.6, 0.25], [0.5, 0.123456]])
     assert record == {
@@ -677,14 +962,14 @@ VALID_SOURCE_JOB = {
 }
 
 
-def test_the_contract_is_version_4_and_a_version_3_job_is_refused():
-    assert CONTRACT_VERSION == 4
+def test_the_contract_is_version_5_and_a_version_4_job_is_refused():
+    assert CONTRACT_VERSION == 5
     for job in (VALID_JOB, VALID_STEERING_JOB, VALID_SOURCE_JOB):
         try:
-            validate_job({**job, "contractVersion": 3})
+            validate_job({**job, "contractVersion": 4})
         except JobError:
             continue
-        raise AssertionError(f"A version 3 {job['kind']} job must be refused.")
+        raise AssertionError(f"A version 4 {job['kind']} job must be refused.")
 
 
 def test_a_valid_source_job_passes():

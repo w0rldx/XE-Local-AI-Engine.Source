@@ -19,7 +19,7 @@ interface CandidateBarProps {
 	color: string;
 }
 
-function CandidateBar({ text, chosen, probability, color }: CandidateBarProps) {
+export function CandidateBar({ text, chosen, probability, color }: CandidateBarProps) {
 	const { t } = useTranslation();
 	return (
 		<Stack gap={2} data-testid="model-lab-next-token-bar">

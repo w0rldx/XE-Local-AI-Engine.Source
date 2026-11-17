@@ -1,7 +1,8 @@
 """Model Lab: reads chosen layers of a local safetensors checkpoint with forward hooks that change no value.
 
 Three kinds of ``job.json``. A trace (``ModelLabTraceJobV1`` on the C# side) records statistics while generating; the
-host fixes the layers, token count and byte cap, and may ask for the attention rows of full-attention blocks. A
+host fixes the layers, token count and byte cap, and may ask for the attention rows of full-attention blocks and for
+the logit lens of every block. A
 steering job (``ModelLabSteeringJobV1``) derives a control vector from two contrasting prompt sets and writes it with
 a random one of the same norm. A source job
 (``ModelLabSourceJobV1``) indexes the PyTorch code of a model from its config.json alone, on the meta device: no
@@ -9,7 +10,7 @@ weights, no GPU. Nothing in a job can name code to run. Offline, no remote code,
 
 The protocol is the trainer's JSON-lines shape with its own contract version, on stdout:
 
-    {"event": "handshake", "contractVersion": 4, ...versions}
+    {"event": "handshake", "contractVersion": 5, ...versions}
     {"event": "phase",     "phase": "loading" | "tracing" | "deriving" | "exporting" | "saving"}
     {"event": "progress",  "step", "totalSteps", "vramBytes"}    a token, or a contrast prompt
     {"event": "heartbeat", "phase"}          until the first progress, and while saving; progress proves life between
@@ -56,6 +57,7 @@ from modellablib import (
     block_index_of,
     captures_attention,
     check_aligned,
+    competition_rank,
     control_vector_bytes,
     describe_failure,
     discover_block_path,
@@ -63,11 +65,14 @@ from modellablib import (
     heartbeat_counts,
     layer_kind,
     layer_types_follow_cut,
+    lens_readable,
+    lens_record,
     named_files,
     op_graphs,
     op_location,
     out_of_range_layers,
     read_raw_config,
+    records_lens,
     register_anchors,
     relative_source_file,
     representatives,
@@ -247,6 +252,11 @@ def blocks_of(model):
     return inner.language_model.layers if hasattr(inner, "language_model") else inner.layers
 
 
+def final_norm_of(model):
+    inner = model.model
+    return getattr(inner.language_model if hasattr(inner, "language_model") else inner, "norm", None)
+
+
 def prompt_ids(tokenizer, prompt):
     if not tokenizer.chat_template:
         return tokenizer(prompt, return_tensors="pt").input_ids
@@ -338,6 +348,71 @@ class _Candidates(LogitsProcessor):
         self._handle.remove()
 
 
+class _Lens(LogitsProcessor):
+    """Each step's logit lens: every block's newest state read through the model's own final norm and output layer.
+
+    Blocks 0..B-2 in one batched readout a step; the last block's readout is the model's raw logits, which that
+    readout is by construction (a batched one is not bit for bit). Clone-only hooks; the results stay on the GPU
+    until saving, so no step syncs the host. The processor returns scores unchanged.
+    """
+
+    def __init__(self, model, blocks, top, norm, head):
+        self.steps = []
+        self._top = top
+        self._count = len(blocks) - 1
+        self._hidden = model.config.get_text_config(decoder=True).hidden_size
+        self._norm = norm
+        self._head = head
+        self.vocab_size = self._head.out_features
+        self.tied_embeddings = self._head.weight.data_ptr() == model.get_input_embeddings().weight.data_ptr()
+        self._stash = {}
+        self._raw = None
+        self._handles = [blocks[i].register_forward_hook(self._hook(i)) for i in range(self._count)]
+        self._handles.append(model.register_forward_hook(self._read_raw))
+
+    def _hook(self, index):
+        def run(_module, _args, output):
+            hidden = output[0] if isinstance(output, tuple) else output
+            if hidden.dim() != 3 or hidden.shape[0] != 1 or hidden.shape[2] != self._hidden:
+                raise RuntimeError(f"Block {index} returned {tuple(hidden.shape)}, not (1, tokens, {self._hidden}).")
+            # A clone: a view would keep the block's whole prefill output alive. Overwritten, so a chunked prefill
+            # keeps its last chunk's last position.
+            self._stash[index] = hidden[0, -1].clone()
+
+        return run
+
+    def _read_raw(self, _module, _args, output):
+        self._raw = output.logits[0, -1]
+
+    def __call__(self, input_ids, scores):
+        raw, self._raw = self._raw, None
+        if raw is None or len(self._stash) != self._count:
+            missing = [i for i in range(self._count) if i not in self._stash]
+            raise RuntimeError(f"A lens step ran without the model's logits or the states of blocks {missing}.")
+        chosen = torch.argmax(scores[0])
+        states = torch.stack([self._stash[i] for i in range(self._count)])
+        self._stash.clear()
+        logits = torch.cat([self._head(self._norm(states)), raw.view(1, -1)])
+        logprobs = torch.log_softmax(logits, -1, dtype=torch.float32)
+        top = logprobs.topk(self._top, dim=-1)
+        at = logprobs.index_select(1, chosen.view(1))
+        # In nats, over the whole vocabulary, in place: one [B, V] buffer. nansum drops a masked token's 0 * -inf.
+        entropy = -(logprobs.exp().mul_(logprobs)).nansum(-1)
+        # nansum would make a NaN row finite. log_softmax turns a row with a NaN or +inf logit (or all -inf) wholly
+        # NaN, so its first column tells; such a row is written null.
+        entropy = torch.where(torch.isnan(logprobs[:, 0]), torch.nan, entropy)
+        self.steps.append((chosen, top.indices, top.values, at.squeeze(1), competition_rank(logprobs, at), entropy))
+        return scores
+
+    def recorded(self):
+        """Per step (chosen id, ids [B][N], logprobs [B][N], chosen logprobs [B], ranks [B], entropies [B])."""
+        return [[value.tolist() for value in step] for step in self.steps]
+
+    def remove(self):
+        for handle in self._handles:
+            handle.remove()
+
+
 def trace(job, run):
     tokenizer, model = load_model(job, run)
     blocks = blocks_of(model)
@@ -363,6 +438,11 @@ def trace(job, run):
     writer = CappedTraceWriter(job["tracePath"], job["traceByteCap"])
     tracer = _Tracer(blocks, job["layers"], writer)
     candidates = _Candidates(model)
+    lens = None
+    if records_lens(job):
+        norm, head = final_norm_of(model), model.get_output_embeddings()
+        if lens_readable(len(blocks), norm, head, model.config.get_text_config(decoder=True)):
+            lens = _Lens(model, blocks, job["lensTopTokens"], norm, head)
     attention = _AttentionRows(attention_layers, prompt_tokens, job["attentionTopKeys"]) if capture else None
     # Pinned with capture on: a checkpoint's static cache or chunked prefill would break the position check.
     pinned_cache = (
@@ -384,7 +464,7 @@ def trace(job, run):
                 do_sample=False,
                 num_beams=1,  # a checkpoint's beam setting would break the step alignment below
                 max_new_tokens=total,
-                logits_processor=LogitsProcessorList([candidates]),
+                logits_processor=LogitsProcessorList([candidates] + ([lens] if lens else [])),
                 # Explicit, because a checkpoint's generation_config fills what is not passed: a tensor result, and
                 # no per-step scores, logits, attentions or hidden states kept until generate returns.
                 return_dict_in_generate=False,
@@ -396,6 +476,8 @@ def trace(job, run):
                 eos_token_id=stop_tokens(tokenizer, model.generation_config.eos_token_id),
                 pad_token_id=tokenizer.eos_token_id,
                 stopping_criteria=StoppingCriteriaList([_ProgressAndStop(run, prompt_tokens, total)]),
+                # A checkpoint's watermark would change the scores after every processor passed here.
+                watermarking_config=None,
                 **pinned_cache,
             )
         torch.cuda.synchronize()
@@ -403,16 +485,20 @@ def trace(job, run):
     finally:
         tracer.remove()
         candidates.remove()
+        if lens:
+            lens.remove()
         if attention:
             attention.remove()
     if run.stop.is_set():
         return True
 
     run.enter("saving")
-    writer.close()
     generated = sequences[0, prompt_tokens:].tolist()
     steps = candidates.recorded()
     check_aligned([step[0] for step in steps], generated)
+    lens_steps = lens.recorded() if lens else []
+    if lens:
+        check_aligned([step[0] for step in lens_steps], generated, "lens")
     if attention and len(attention.rows) != len(generated) * len(attention_layers):
         raise RuntimeError(
             f"Attention was captured {len(attention.rows)} times for {len(generated)} tokens in "
@@ -446,6 +532,24 @@ def trace(job, run):
         "layerKinds": "".join(layer_kind(getattr(block, "block_type", None)) for block in blocks),
         "attnImplementation": kernel,
     }
+    if lens:
+        # After the hook records, under its own cap and footer: neither part's overflow touches the other's counts.
+        lens_writer = writer.section(job["lensByteCap"], "lensFooter")
+        decoded = {}
+        for step, (_, top_ids, top_logprobs, chosen, ranks, entropies) in enumerate(lens_steps):
+            for token in {token for row in top_ids for token in row} - decoded.keys():
+                decoded[token] = tokenizer.decode([token])
+            lens_writer.write(lens_record(step, top_ids, top_logprobs, chosen, ranks, entropies, decoded))
+        lens_writer.close()
+        result["lens"] = {
+            "layers": list(range(len(blocks))),
+            "topTokens": job["lensTopTokens"],
+            "records": lens_writer.records,
+            "truncated": lens_writer.truncated,
+            "tiedEmbeddings": lens.tied_embeddings,
+            "vocabSize": lens.vocab_size,
+        }
+    writer.close()
     if attention:
         attention_writer = CappedTraceWriter(job["attentionPath"], job["attentionByteCap"])
         for record in attention.recorded():

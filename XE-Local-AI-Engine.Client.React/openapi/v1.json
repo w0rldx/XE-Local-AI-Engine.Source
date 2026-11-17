@@ -18281,6 +18281,64 @@
         ]
       }
     },
+    "/api/local/v1/model-lab/experiments/{experimentId}/lens": {
+      "get": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "getModelLabExperimentLens",
+        "parameters": [
+          {
+            "name": "experimentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-lab/experiments/{experimentId}/notes": {
       "put": {
         "tags": [
@@ -43992,6 +44050,144 @@
         "type": "object",
         "additionalProperties": false
       },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensBlockResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "layer",
+          "ids",
+          "logprobs",
+          "chosenLogprob",
+          "chosenRank",
+          "entropy"
+        ],
+        "properties": {
+          "layer": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "logprobs": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double",
+              "nullable": true
+            }
+          },
+          "chosenLogprob": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "chosenRank": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "entropy": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "layers",
+          "topTokens",
+          "tiedEmbeddings",
+          "vocabSize",
+          "steps",
+          "texts",
+          "truncated",
+          "droppedSteps"
+        ],
+        "properties": {
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "topTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tiedEmbeddings": {
+            "type": "boolean"
+          },
+          "vocabSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensStepResponse"
+            }
+          },
+          "texts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensTextResponse"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "droppedSteps": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensStepResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "step",
+          "blocks"
+        ],
+        "properties": {
+          "step": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensBlockResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensTextResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "text"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabPromptTokenResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -52742,6 +52938,37 @@
           "UnsupportedModelType"
         ]
       },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabLensSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "topTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "records": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "tiedEmbeddings": {
+            "type": "boolean"
+          },
+          "vocabSize": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientServicesModelLabModelLabPromptPiece": {
         "type": "object",
         "additionalProperties": false,
@@ -53491,6 +53718,14 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabAttentionSummary"
+              }
+            ]
+          },
+          "lens": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabLensSummary"
               }
             ]
           }

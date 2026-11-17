@@ -374,10 +374,10 @@ public sealed class ModelLabAttentionTests
     private static string[] Kinds(int blocks, int interval) =>
         [.. Enumerable.Range(0, blocks).Select(layer => (layer + 1) % interval == 0 ? "full_attention" : "linear_attention")];
 
-    private static string Scope(LabHost host, Guid id) =>
+    internal static string Scope(LabHost host, Guid id) =>
         Path.Combine(host.DataRoot, "model-lab", "artifacts", id.ToString("N"));
 
-    private static async Task<Guid> RunAsync(LabHost host, ScriptedProcess process, bool recordAttention = true)
+    internal static async Task<Guid> RunAsync(LabHost host, ScriptedProcess process, bool recordAttention = true)
     {
         var start = await host.Service.StartExperimentAsync(host.Request() with
         {
@@ -389,7 +389,7 @@ public sealed class ModelLabAttentionTests
         return start.ExperimentId!.Value;
     }
 
-    private static async Task<string> ExpectStatusAsync(LabHost host, HttpClient client, string path, HttpStatusCode expected)
+    internal static async Task<string> ExpectStatusAsync(LabHost host, HttpClient client, string path, HttpStatusCode expected)
     {
         using var request = host.Authorized(HttpMethod.Get, path);
         using var response = await client.SendAsync(request);
@@ -398,6 +398,6 @@ public sealed class ModelLabAttentionTests
         return body;
     }
 
-    private static async Task<JsonDocument> GetJsonAsync(LabHost host, HttpClient client, string path, HttpStatusCode expected) =>
+    internal static async Task<JsonDocument> GetJsonAsync(LabHost host, HttpClient client, string path, HttpStatusCode expected) =>
         JsonDocument.Parse(await ExpectStatusAsync(host, client, path, expected));
 }

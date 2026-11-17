@@ -166,7 +166,7 @@ public sealed class ModelLabExperimentServiceTests
     {
         using var process = new ScriptedProcess
         {
-            TraceContent = new string('x', ModelLabTraceSpec.TraceByteCapFor(3) + 1)
+            TraceContent = new string('x', ModelLabTraceSpec.TraceByteCapFor(3) + ModelLabTraceSpec.LensByteCapFor(24) + 1)
         };
         await using var host = await LabHost.StartAsync(process);
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
@@ -206,16 +206,17 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.True(start.ExperimentId.HasValue);
     }
 
-    /// <summary>Every block of the 24: the store must keep what the scaled cap allows, which is far past the three-layer cap, and nothing past it.</summary>
+    /// <summary>Every block of the 24: the store must keep what the scaled cap and the lens cap allow, which is far past the three-layer cap, and nothing past it.</summary>
     [Test]
     [Arguments(0, ModelLabExperimentStatus.Succeeded)]
     [Arguments(1, ModelLabExperimentStatus.Failed)]
     public async Task AFullDepthTrace_IsKeptUpToItsScaledCap_AndNotPastIt(int bytesOverCap, ModelLabExperimentStatus expected)
     {
         var cap = ModelLabTraceSpec.TraceByteCapFor(24);
+        var fileCap = cap + ModelLabTraceSpec.LensByteCapFor(24);
         using var process = new ScriptedProcess
         {
-            TraceContent = new string('x', cap + bytesOverCap)
+            TraceContent = new string('x', fileCap + bytesOverCap)
         };
         await using var host = await LabHost.StartAsync(process);
 
@@ -234,7 +235,7 @@ public sealed class ModelLabExperimentServiceTests
 
         var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(expected, record.Status, record.ErrorMessage ?? "no error");
-        AssertEx.Equal(bytesOverCap == 0 ? (long)cap : null, record.TraceByteCount);
+        AssertEx.Equal(bytesOverCap == 0 ? (long)fileCap : null, record.TraceByteCount);
     }
 
     [Test]
@@ -314,7 +315,6 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.Equal((24 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(24));
         AssertEx.Equal((32 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(32));
         AssertEx.Equal((64 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(64));
-        AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(ModelLabTraceSpec.MaxTraceLayers), ModelLabTraceSpec.MaxTraceByteCap);
         AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.TraceByteCapFor(0));
         AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.TraceByteCapFor(ModelLabTraceSpec.MaxTraceLayers + 1));
     }
@@ -1443,7 +1443,8 @@ public sealed class ModelLabExperimentServiceTests
             ILlamaServerProcessSupervisor? supervisor = null,
             long availableVramBytes = Card,
             Action<IServiceCollection>? configure = null,
-            string config = Config)
+            string config = Config,
+            int ggufBlockCount = 24)
         {
             var interpreter = Path.Combine(Path.GetTempPath(), "python-" + Guid.NewGuid().ToString("N"));
             var runtime = Substitute.For<ITrainingRuntimeService>();
@@ -1487,7 +1488,7 @@ public sealed class ModelLabExperimentServiceTests
                 ModelName = null,
                 ParamCount = null,
                 FileType = null,
-                BlockCount = 24,
+                BlockCount = ggufBlockCount,
                 NextnPredictLayers = null,
                 Alignment = null,
                 AttentionHeadCount = null,

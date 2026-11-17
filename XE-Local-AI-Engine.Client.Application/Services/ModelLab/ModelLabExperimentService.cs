@@ -463,6 +463,44 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             : attention;
     }
 
+    /// <summary>The trace's logit lens. Not found for a steering row or a trace that recorded none: one saved before contract 5, or of a checkpoint too deep for it.</summary>
+    public async Task<ModelLabLens> ReadLensAsync(Guid id, CancellationToken ct)
+    {
+        var record = await GetAsync(id, ct);
+        if (record is not { Kind: ModelLabExperimentKind.Trace, TraceBlobId: { } blobId, TraceSha256: { } hash, TraceByteCount: { } bytes })
+        {
+            return new ModelLabLens
+            {
+                Status = ModelLabTraceReadStatus.NotFound
+            };
+        }
+
+        // The lines are checked against the run's own summary and token count, so without a readable result they cannot be.
+        if ((record.ResultJson is { } json ? ModelLabTraceSpec.ReadResultOrNull(json) : null) is not { } result)
+        {
+            return new ModelLabLens
+            {
+                Status = ModelLabTraceReadStatus.Unavailable
+            };
+        }
+
+        if (result.Lens is not { } summary)
+        {
+            return new ModelLabLens
+            {
+                Status = ModelLabTraceReadStatus.NotFound
+            };
+        }
+
+        var read = await _blobs.ReadAsync(id, blobId, hash, bytes, ct);
+        return read.Status == ManagedBlobReadStatus.Found
+            ? ModelLabTraceSpec.ParseLens(read.Content, summary, result.Tokens.Count)
+            : new ModelLabLens
+            {
+                Status = ModelLabTraceReadStatus.Unavailable
+            };
+    }
+
     public Task StartAsync(CancellationToken cancellationToken) =>
         Task.CompletedTask;
 
@@ -577,6 +615,8 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             var traced = request.Layers?.Order().ToArray() ?? ModelLabTraceSpec.LayersFor(preflight.CheckpointBlockCount ?? 0);
             // Checked at the start: a trace that records attention has both. A steering job records none.
             var attentionLayers = layer is null && request.RecordAttention ? ModelLabTraceSpec.AttentionLayersFor(preflight.CheckpointLayerTypes!) : null;
+            // Every block, when there are few enough to cap; a deeper checkpoint traces as it did before the lens. One block has no earlier block to read.
+            var lensBlocks = preflight.CheckpointBlockCount is { } blocks and >= 2 and <= ModelLabTraceSpec.MaxTraceLayers ? blocks : (int?)null;
             var heldLease = lease;
             var heldReservation = reservation;
 #pragma warning disable CA2025 // The job owns all three holds from here; job below keeps this method from disposing them.
@@ -593,7 +633,9 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                     AttentionPath = attentionLayers is null ? null : Path.Combine(WorkDirectory(id), AttentionFileName),
                     AttentionLayers = attentionLayers,
                     AttentionTopKeys = attentionLayers is null ? null : ModelLabTraceSpec.AttentionTopKeys,
-                    AttentionByteCap = attentionLayers is null ? null : ModelLabTraceSpec.AttentionByteCapFor(attentionLayers.Count, preflight.CheckpointAttentionHeads!.Value)
+                    AttentionByteCap = attentionLayers is null ? null : ModelLabTraceSpec.AttentionByteCapFor(attentionLayers.Count, preflight.CheckpointAttentionHeads!.Value),
+                    LensTopTokens = lensBlocks is null ? null : ModelLabTraceSpec.LensTopTokens,
+                    LensByteCap = lensBlocks is { } lensBlockCount ? ModelLabTraceSpec.LensByteCapFor(lensBlockCount) : null
                 }, script);
 
             lock (_jobLock)
@@ -1024,7 +1066,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
 
         // The script holds the cap itself. This is the check that does not depend on the script being right.
-        if (trace.Length > job.TraceByteCap || result.Length > ModelLabTraceSpec.MaxResultBytes || (attention is not null && attention.Length > job.AttentionByteCap))
+        if (trace.Length > job.TraceByteCap + (job.LensByteCap ?? 0) || result.Length > ModelLabTraceSpec.MaxResultBytes || (attention is not null && attention.Length > job.AttentionByteCap))
         {
             return Finished(ModelLabExperimentStatus.Failed, "The Model Lab script wrote more than its byte cap, so nothing was kept.");
         }

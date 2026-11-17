@@ -58,6 +58,14 @@ public sealed record ModelLabTraceJobV1
     /// <summary><see cref="ModelLabTraceSpec.AttentionByteCapFor" /> of the layers and the checkpoint's query heads.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? AttentionByteCap { get; init; }
+
+    /// <summary><see cref="ModelLabTraceSpec.LensTopTokens" />. Set with <see cref="LensByteCap" /> for a checkpoint of 2 to <see cref="ModelLabTraceSpec.MaxTraceLayers" /> blocks, and left out of the file otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? LensTopTokens { get; init; }
+
+    /// <summary><see cref="ModelLabTraceSpec.LensByteCapFor" /> of the block count: the lens lines' own cap, on top of <see cref="TraceByteCap" /> in the same file.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? LensByteCap { get; init; }
 }
 
 /// <summary>What <c>modellab.py</c> reads for a steering job. Holds the plaintext contrast prompts, in the owner-only work directory.</summary>
@@ -246,6 +254,50 @@ public sealed record ModelLabAttention
     public ModelLabTraceFooter? Footer { get; init; }
 }
 
+/// <summary>One generated step's logit lens: per block, the final norm and output layer applied to that block's last-position output. The short names are the file's.</summary>
+public sealed record ModelLabLensRecord
+{
+    /// <summary>The index of the generated token.</summary>
+    [JsonPropertyName("s")]
+    public int Step { get; init; }
+
+    /// <summary>Per block, the top token ids of the readout, most probable first.</summary>
+    [JsonPropertyName("i")]
+    public IReadOnlyList<IReadOnlyList<int>> Ids { get; init; } = [];
+
+    /// <summary>Per block, their natural-log probabilities, rounded down to four decimals; null where not finite.</summary>
+    [JsonPropertyName("p")]
+    public IReadOnlyList<IReadOnlyList<double?>> Logprobs { get; init; } = [];
+
+    /// <summary>Per block, the generated token's logprob in the readout.</summary>
+    [JsonPropertyName("c")]
+    public IReadOnlyList<double?> ChosenLogprobs { get; init; } = [];
+
+    /// <summary>Per block, the generated token's competition rank in the readout: tokens tied with it share the better rank. Null where its logprob is.</summary>
+    [JsonPropertyName("r")]
+    public IReadOnlyList<int?> ChosenRanks { get; init; } = [];
+
+    /// <summary>Per block, the readout's entropy in nats, to three decimals; null where not finite.</summary>
+    [JsonPropertyName("e")]
+    public IReadOnlyList<double?> Entropies { get; init; } = [];
+
+    /// <summary>The step's distinct top ids, as decimal strings, to their decoded text cut to 64 escaped bytes.</summary>
+    [JsonPropertyName("t")]
+    public IReadOnlyDictionary<string, string?> Texts { get; init; } = new Dictionary<string, string?>(StringComparer.Ordinal);
+}
+
+/// <summary>A trace's logit lens lines, with the run's lens summary and the lens section's own footer.</summary>
+public sealed record ModelLabLens
+{
+    public required ModelLabTraceReadStatus Status { get; init; }
+
+    public ModelLabLensSummary? Summary { get; init; }
+
+    public IReadOnlyList<ModelLabLensRecord> Records { get; init; } = [];
+
+    public ModelLabTraceFooter? Footer { get; init; }
+}
+
 /// <summary>One generated token. The text is what the tokenizer decodes the id to on its own.</summary>
 public sealed record ModelLabResultToken
 {
@@ -325,6 +377,29 @@ public sealed record ModelLabTraceResult
 
     /// <summary>Null unless the trace recorded attention.</summary>
     public ModelLabAttentionSummary? Attention { get; init; }
+
+    /// <summary>Null on a result saved before contract 5, and for a checkpoint with fewer than 2 or more than <see cref="ModelLabTraceSpec.MaxTraceLayers" /> blocks.</summary>
+    public ModelLabLensSummary? Lens { get; init; }
+}
+
+/// <summary>What a trace's logit lens recorded. The lines themselves follow the hook records in the trace blob.</summary>
+public sealed record ModelLabLensSummary
+{
+    /// <summary>Every block, ascending.</summary>
+    public IReadOnlyList<int> Layers { get; init; } = [];
+
+    public int TopTokens { get; init; }
+
+    public int Records { get; init; }
+
+    /// <summary>True when the lens cap dropped steps.</summary>
+    public bool Truncated { get; init; }
+
+    /// <summary>True when the output layer shares the input embedding's weights.</summary>
+    public bool TiedEmbeddings { get; init; }
+
+    /// <summary>The output layer's width: the V an entropy is bounded by, ln V.</summary>
+    public int VocabSize { get; init; }
 }
 
 /// <summary>One token of the rendered prompt. The text is what the tokenizer decodes the id to on its own, and can be cut to keep the result under its cap.</summary>

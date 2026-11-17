@@ -4857,6 +4857,36 @@ export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentRouteReque
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabLensBlockResponse = {
+	layer: number;
+	ids: Array<number>;
+	logprobs: Array<number | null>;
+	chosenLogprob: number | null;
+	chosenRank: number | null;
+	entropy: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabLensResponse = {
+	layers: Array<number>;
+	topTokens: number;
+	tiedEmbeddings: boolean;
+	vocabSize: number;
+	steps: Array<XeLocalAiEngineClientEndpointsModelLabV1ModelLabLensStepResponse>;
+	texts: Array<XeLocalAiEngineClientEndpointsModelLabV1ModelLabLensTextResponse>;
+	truncated: boolean;
+	droppedSteps: number;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabLensStepResponse = {
+	step: number;
+	blocks: Array<XeLocalAiEngineClientEndpointsModelLabV1ModelLabLensBlockResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabLensTextResponse = {
+	id: number;
+	text: string;
+};
+
 export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokenResponse = {
 	id: number;
 	piece: string;
@@ -7201,6 +7231,15 @@ export type XeLocalAiEngineClientServicesModelLabModelLabCheckpointRefusal =
 	| "DownloadRejected"
 	| "UnsupportedModelType";
 
+export type XeLocalAiEngineClientServicesModelLabModelLabLensSummary = {
+	layers?: Array<number>;
+	topTokens?: number;
+	records?: number;
+	truncated?: boolean;
+	tiedEmbeddings?: boolean;
+	vocabSize?: number;
+};
+
 export type XeLocalAiEngineClientServicesModelLabModelLabPromptPiece = {
 	id?: number;
 	text?: string;
@@ -7414,6 +7453,7 @@ export type XeLocalAiEngineClientServicesModelLabModelLabTraceResult = {
 	layerKinds?: string | null;
 	attnImplementation?: string | null;
 	attention?: XeLocalAiEngineClientServicesModelLabModelLabAttentionSummary | null;
+	lens?: XeLocalAiEngineClientServicesModelLabModelLabLensSummary | null;
 };
 
 export type XeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus = "InsufficientData" | "Improved" | "Flat" | "Regressed";
@@ -18187,6 +18227,42 @@ export type CancelModelLabExperimentResponses = {
 	 */
 	202: unknown;
 };
+
+export type GetModelLabExperimentLensData = {
+	body?: never;
+	path: {
+		experimentId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/model-lab/experiments/{experimentId}/lens";
+};
+
+export type GetModelLabExperimentLensErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	422: FastEndpointsProblemDetails;
+};
+
+export type GetModelLabExperimentLensError = GetModelLabExperimentLensErrors[keyof GetModelLabExperimentLensErrors];
+
+export type GetModelLabExperimentLensResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelLabV1ModelLabLensResponse;
+};
+
+export type GetModelLabExperimentLensResponse = GetModelLabExperimentLensResponses[keyof GetModelLabExperimentLensResponses];
 
 export type SetModelLabExperimentNotesData = {
 	body: XeLocalAiEngineClientEndpointsModelLabV1SetModelLabExperimentNotesRequest;

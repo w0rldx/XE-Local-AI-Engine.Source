@@ -4860,6 +4860,68 @@ export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentAttentio
 
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentRouteRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabLensBlockResponse = z.object({
+	layer: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	ids: z.array(
+		z
+			.int()
+			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	),
+	logprobs: z.array(z.number().nullable()),
+	chosenLogprob: z.number().nullable(),
+	chosenRank: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	entropy: z.number().nullable(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabLensStepResponse = z.object({
+	step: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	blocks: z.array(zXeLocalAiEngineClientEndpointsModelLabV1ModelLabLensBlockResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabLensTextResponse = z.object({
+	id: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	text: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabLensResponse = z.object({
+	layers: z.array(
+		z
+			.int()
+			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	),
+	topTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	tiedEmbeddings: z.boolean(),
+	vocabSize: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	steps: z.array(zXeLocalAiEngineClientEndpointsModelLabV1ModelLabLensStepResponse),
+	texts: z.array(zXeLocalAiEngineClientEndpointsModelLabV1ModelLabLensTextResponse),
+	truncated: z.boolean(),
+	droppedSteps: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokenResponse = z.object({
 	id: z
 		.int()
@@ -7724,6 +7786,34 @@ export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownload
 	artifactStatus: z.string().nullable(),
 });
 
+export const zXeLocalAiEngineClientServicesModelLabModelLabLensSummary = z.object({
+	layers: z
+		.array(
+			z
+				.int()
+				.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+				.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+		)
+		.optional(),
+	topTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	records: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	truncated: z.boolean().optional(),
+	tiedEmbeddings: z.boolean().optional(),
+	vocabSize: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
 export const zXeLocalAiEngineClientServicesModelLabModelLabPromptPiece = z.object({
 	id: z
 		.int()
@@ -8047,6 +8137,7 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabTraceResult = z.objec
 	layerKinds: z.string().nullish(),
 	attnImplementation: z.string().nullish(),
 	attention: zXeLocalAiEngineClientServicesModelLabModelLabAttentionSummary.nullish(),
+	lens: zXeLocalAiEngineClientServicesModelLabModelLabLensSummary.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse = z.object({
@@ -13007,6 +13098,15 @@ export const zGetModelLabExperimentAttentionResponse = zXeLocalAiEngineClientEnd
 export const zCancelModelLabExperimentPath = z.object({
 	experimentId: z.guid(),
 });
+
+export const zGetModelLabExperimentLensPath = z.object({
+	experimentId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetModelLabExperimentLensResponse = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabLensResponse;
 
 export const zSetModelLabExperimentNotesBody = zXeLocalAiEngineClientEndpointsModelLabV1SetModelLabExperimentNotesRequest;
 

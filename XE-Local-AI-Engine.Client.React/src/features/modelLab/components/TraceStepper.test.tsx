@@ -6,10 +6,11 @@ import { fileURLToPath } from "node:url";
 
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { TraceExperimentView } from "@/features/modelLab/components/TraceExperimentView";
 import { TraceStepper } from "@/features/modelLab/components/TraceStepper";
+import { loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
 import { toTraceTable } from "@/features/modelLab/models/ModelLabTrace";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -534,6 +535,326 @@ describe("TraceStepper with recorded attention", () => {
 			"This run recorded attention for blocks 7 only; this block was not among them.",
 		);
 		expect(attention.requests).toBe(0);
+	});
+});
+
+// A contract-5 run with a logit lens over four blocks (L L L F), the top 3 kept, tied embeddings. The lens file reached
+// its cap after two steps, so step 3 has no readout. Step 1's last block is one storage quantum below the raw output;
+// step 2's is two.
+const lensTokens = [{ ...tokens[0], logprob: -0.5108 }, { ...tokens[1], logprob: Math.log(0.5) }, tokens[2]];
+const v5Result = {
+	...result,
+	tokens: lensTokens,
+	layerKinds: "LLLF",
+	attnImplementation: "sdpa",
+	lens: { layers: [0, 1, 2, 3], topTokens: 3, records: 2, truncated: true, tiedEmbeddings: true, vocabSize: 248_320 },
+};
+const v5Records = [0, 1, 2].map((step) => ({ step, layer: 3, kind: "F", norm: step + 1 }));
+const lensBlock = (
+	layer: number,
+	ids: number[],
+	logprobs: (number | null)[],
+	chosenLogprob: number | null,
+	chosenRank: number | null,
+	entropy: number | null,
+) => ({
+	layer,
+	ids,
+	logprobs,
+	chosenLogprob,
+	chosenRank,
+	entropy,
+});
+const lensSteps = [
+	{
+		step: 0,
+		blocks: [
+			lensBlock(0, [20, 21, 22], [Math.log(0.5), Math.log(0.2), Math.log(0.1)], Math.log(0.01), 40, 9.876),
+			// The chosen token shares the top value with " Hi", which is listed first.
+			lensBlock(1, [21, 1, 22], [Math.log(0.4), Math.log(0.4), Math.log(0.1)], Math.log(0.4), 1, null),
+			lensBlock(2, [1, 20, 21], [Math.log(0.55), Math.log(0.2), Math.log(0.1)], Math.log(0.55), 1, 1.234),
+			lensBlock(3, [1, 2, 20], [-0.5109, Math.log(0.3), Math.log(0.05)], -0.5109, 1, 0.693),
+		],
+	},
+	{
+		step: 1,
+		blocks: [0, 1, 2, 3].map((layer) =>
+			lensBlock(
+				layer,
+				[4, 20, 22],
+				[Math.log(0.5), Math.log(0.2), Math.log(0.1)],
+				Math.log(0.5) - (layer === 3 ? 0.0002 : 0),
+				1,
+				2,
+			),
+		),
+	},
+];
+const lensTexts = [
+	{ id: 1, text: "Hi" },
+	{ id: 2, text: "Hello" },
+	{ id: 4, text: "!" },
+	{ id: 20, text: "the" },
+	{ id: 21, text: " Hi" },
+	{ id: 22, text: "x" },
+];
+
+function lensResponse(overrides: Record<string, unknown> = {}): Response {
+	return HttpResponse.json({
+		layers: [0, 1, 2, 3],
+		topTokens: 3,
+		tiedEmbeddings: true,
+		vocabSize: 248_320,
+		steps: lensSteps,
+		texts: lensTexts,
+		truncated: true,
+		droppedSteps: 1,
+		...overrides,
+	});
+}
+
+function stubLens(respond: () => Response = () => lensResponse()): { requests: number } {
+	const seen = { requests: 0 };
+	server.use(
+		http.get(localApiPath(`model-lab/experiments/${experimentId}/lens`), () => {
+			seen.requests++;
+			return respond();
+		}),
+	);
+	return seen;
+}
+
+function lensRows(): HTMLElement[] {
+	return screen.getAllByTestId("model-lab-stepper-lens-row");
+}
+
+// The row header (the block), then its cells.
+function cellTexts(row: HTMLElement | undefined): (string | null)[] {
+	const header = within(row as HTMLElement).getByRole("rowheader");
+	return [header, ...within(row as HTMLElement).getAllByRole("cell")].map((cell) => cell.textContent);
+}
+
+describe("TraceStepper with a logit lens", () => {
+	// The explanation texts ship in the route's own bundle, which the page loads.
+	beforeAll(() => loadModelLabStrings("en"));
+
+	it("lists every block's readout at the step in a table, under a derived badge and its note, fetched once per run", async () => {
+		const lens = stubLens();
+		await openStepper(v5Result, v5Records);
+
+		const table = await screen.findByTestId("model-lab-stepper-lens-table");
+		const panel = screen.getByTestId("model-lab-stepper-lens");
+		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("Derived analysis");
+		expect(screen.getByTestId("model-lab-stepper-lens-note").textContent).toBe(
+			"The model's final norm and output layer applied to each block's output at this step. A derived readout, not what the model computed: the output layer read only the last block's output.",
+		);
+		expect(
+			within(table)
+				.getAllByRole("columnheader")
+				.map((header) => header.textContent),
+		).toEqual(["Block", "Lens top token", "Chosen token", "Spread (nats)"]);
+		expect(lensRows().map(cellTexts)).toEqual([
+			["L 0", '"the" 50.00%', "1.00%, rank 40", "9.88"],
+			// Rank 1 behind another token is a tie at the top; a value that was not finite is announced, not blank.
+			["L 1", '" Hi" 40.00%', "40.00%, tied for first", "–not available"],
+			["L 2", '"Hi" 55.00%', "55.00%, rank 1", "1.23"],
+			["F 3", '"Hi" 60.00%', "60.00%, rank 1", "0.69"],
+		]);
+		// One bar per block for the chosen token, hidden from assistive technology: the text beside it carries the value.
+		const bars = table.querySelectorAll(".mantine-Progress-root");
+		expect(bars).toHaveLength(4);
+		expect([...bars].every((bar) => bar.getAttribute("aria-hidden") === "true")).toBe(true);
+		// The rows add no Tab stop: the block strip stays the selector.
+		expect(table.querySelectorAll("button, a[href], input, [tabindex]")).toHaveLength(0);
+		expect(lensRows()[0]?.getAttribute("aria-current")).toBe("true");
+		expect(within(screen.getByTestId("model-lab-stepper-lens-explain")).getAllByRole("button")).toHaveLength(5);
+
+		fireEvent.click(screen.getByRole("button", { name: "Next step" }));
+		expect(cellTexts(lensRows()[0])[1]).toBe('"!" 50.00%');
+		expect(lens.requests).toBe(1);
+	});
+
+	it("shows the selected block's top tokens, the chosen token's rank and the spread as equally likely tokens", async () => {
+		stubLens();
+		await openStepper(v5Result, v5Records);
+
+		const detail = await screen.findByTestId("model-lab-stepper-lens-detail");
+		expect(
+			within(detail)
+				.getAllByTestId("model-lab-next-token-bar")
+				.map((bar) => bar.textContent),
+		).toEqual(['"the"50.00%', '" Hi"20.00%', '"x"10.00%']);
+		// Outside the top 3: its rank and probability come from their own stored values.
+		expect(screen.getByTestId("model-lab-stepper-lens-chosen").textContent).toBe('Chosen token "Hi": rank 40, 1.00%');
+		expect(screen.getByTestId("model-lab-stepper-lens-spread").textContent).toBe(
+			"Spread of this block's readout: 9.88 nats, about as spread as e^H ≈ 19,500 equally likely tokens (at most ln V = 12.42 nats for this vocabulary).",
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Block 1, linear attention: not traced in this run" }));
+
+		expect(lensRows()[1]?.getAttribute("aria-current")).toBe("true");
+		expect(lensRows()[0]?.hasAttribute("aria-current")).toBe(false);
+		const tied = screen.getByTestId("model-lab-stepper-lens-detail");
+		expect(
+			within(tied).getByTestId("model-lab-next-token-chosen").closest("[data-testid='model-lab-next-token-bar']")?.textContent,
+		).toBe('"Hi"Chosen40.00%');
+		expect(screen.getByTestId("model-lab-stepper-lens-chosen").textContent).toBe('Chosen token "Hi": tied for first, 40.00%');
+		expect(screen.getByTestId("model-lab-stepper-lens-spread").textContent).toBe(
+			"Spread of this block's readout: not available (not a finite number).",
+		);
+	});
+
+	it("puts the table in a scroll region named by its caption", async () => {
+		stubLens();
+		await openStepper(v5Result, v5Records);
+		await screen.findByTestId("model-lab-stepper-lens-table");
+
+		const region = screen.getByRole("region", { name: 'Each block\'s lens readout at step 1; the chosen token is "Hi"' });
+		expect(region.getAttribute("tabindex")).toBe("0");
+		expect(within(region).getByTestId("model-lab-stepper-lens-table")).toBeTruthy();
+	});
+
+	it("scrolls a newly selected block's row into the table's scroller, and leaves it on a step change", async () => {
+		stubLens();
+		await openStepper(v5Result, v5Records);
+		await screen.findByTestId("model-lab-stepper-lens-table");
+		const region = screen.getByRole("region", { name: /lens readout at step 1/ });
+		// The scroller shows 100–460 px; the selected row sits below it, at 900–930 px.
+		const rect = (top: number, bottom: number) => ({ top, bottom }) as DOMRect;
+		onTestFinished(() => {
+			vi.restoreAllMocks();
+		});
+		vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+			return this === region ? rect(100, 460) : this.getAttribute("aria-current") === "true" ? rect(900, 930) : rect(0, 0);
+		});
+		const scrolled = vi.spyOn(region, "scrollTop", "set");
+
+		fireEvent.click(screen.getByRole("button", { name: "Block 3, full attention: residual norm 1" }));
+
+		expect(scrolled).toHaveBeenCalledTimes(1);
+		expect(scrolled).toHaveBeenCalledWith(470);
+
+		fireEvent.click(screen.getByRole("button", { name: "Next step" }));
+		expect(scrolled).toHaveBeenCalledTimes(1);
+	});
+
+	it("shows a readout that was not a finite number as not available, never as a rank or a tie", async () => {
+		const [first, ...rest] = lensSteps;
+		const nan = lensBlock(0, [20, 21, 22], [null, null, null], null, null, null);
+		stubLens(() => lensResponse({ steps: [{ step: 0, blocks: [nan, ...(first?.blocks.slice(1) ?? [])] }, ...rest] }));
+		await openStepper(v5Result, v5Records);
+
+		await screen.findByTestId("model-lab-stepper-lens-table");
+		expect(cellTexts(lensRows()[0])).toEqual(["L 0", '"the" –not available', "–not available", "–not available"]);
+		expect(screen.getByTestId("model-lab-stepper-lens-chosen").textContent).toBe(
+			'Chosen token "Hi": not available (not a finite number).',
+		);
+		// No bar would be honest for a value that was not finite.
+		expect(within(screen.getByTestId("model-lab-stepper-lens-detail")).queryAllByTestId("model-lab-next-token-bar")).toEqual([]);
+		expect(screen.getByTestId("model-lab-stepper-lens-no-top").textContent).toBe(
+			"This block's readout is not a finite number, so it has no top tokens to show.",
+		);
+		expect(screen.getByTestId("model-lab-stepper-lens").textContent).not.toContain("rank null");
+		// Only block 1's real tie at the top is named.
+		expect(screen.getAllByText(/tied for first/)).toHaveLength(1);
+	});
+
+	it("claims no tie when the run does not name the chosen token's id", async () => {
+		stubLens();
+		const [first, ...rest] = lensTokens;
+		await openStepper({ ...v5Result, tokens: [{ ...first, id: undefined }, ...rest] }, v5Records);
+
+		await screen.findByTestId("model-lab-stepper-lens-table");
+		expect(cellTexts(lensRows()[1])[2]).toBe("40.00%, rank 1");
+		expect(screen.queryByText(/tied for first/)).toBeNull();
+	});
+
+	it("shows the last block's lens beside the raw output with the tolerance, and warns only above it", async () => {
+		stubLens();
+		await openStepper(v5Result, v5Records);
+
+		const last = await screen.findByTestId("model-lab-stepper-lens-last");
+		// One storage quantum apart: within the tolerance, so both numbers and no verdict.
+		expect(last.textContent).toContain(
+			"Chosen token: 60.00% from the last block's lens (block 3), 60.00% in the raw model output.",
+		);
+		expect(screen.getByTestId("model-lab-stepper-lens-tolerance").textContent).toBe(
+			"The view warns when their log-probabilities differ by more than 0.0001 nats, one step of the stored rounding.",
+		);
+		expect(screen.queryByTestId("model-lab-stepper-lens-mismatch")).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: "Next step" }));
+
+		expect(screen.getByTestId("model-lab-stepper-lens-last").textContent).toContain(
+			"Chosen token: 49.99% from the last block's lens (block 3), 50.00% in the raw model output.",
+		);
+		expect(screen.getByTestId("model-lab-stepper-lens-mismatch").textContent).toBe(
+			"Their log-probabilities differ by 0.0002 nats, more than the tolerance: the lens did not reproduce this step's raw output.",
+		);
+	});
+
+	it("says a step past the lens cap was not kept", async () => {
+		stubLens();
+		await openStepper(v5Result, v5Records);
+		await screen.findByTestId("model-lab-stepper-lens-table");
+
+		expect(screen.getByTestId("model-lab-stepper-lens-truncated").textContent).toBe(
+			"The lens reached its size limit: the first steps kept their readouts, later steps were not kept. The generated tokens are not affected.",
+		);
+		fireEvent.click(screen.getByRole("button", { name: 'Step 3: "\\n"' }));
+
+		expect(screen.getByTestId("model-lab-stepper-lens-missing").textContent).toBe("This step's lens readout was not kept.");
+		expect(screen.queryByTestId("model-lab-stepper-lens-table")).toBeNull();
+		expect(screen.queryByTestId("model-lab-stepper-lens-last")).toBeNull();
+	});
+
+	it("leaves the tied-embeddings caveat out for a checkpoint with its own output layer", async () => {
+		stubLens(() => lensResponse({ tiedEmbeddings: false, truncated: false, droppedSteps: 0 }));
+		await openStepper({ ...v5Result, lens: { ...v5Result.lens, tiedEmbeddings: false } }, v5Records);
+		await screen.findByTestId("model-lab-stepper-lens-table");
+
+		expect(screen.queryByTestId("model-lab-stepper-lens-tied")).toBeNull();
+		expect(screen.queryByTestId("model-lab-stepper-lens-truncated")).toBeNull();
+	});
+
+	it("names the tied-embeddings caveat for a checkpoint that ties them", async () => {
+		stubLens();
+		await openStepper(v5Result, v5Records);
+		await screen.findByTestId("model-lab-stepper-lens-table");
+
+		expect(screen.getByTestId("model-lab-stepper-lens-tied").textContent).toBe(
+			"This checkpoint shares its output layer with the token embeddings, so the first blocks tend to read back the token at the current position.",
+		);
+	});
+
+	it("shows a run without a lens as not available, with the reason, and never asks for one", async () => {
+		const lens = stubLens();
+		await openStepper(v4Result, v4Records);
+
+		const panel = screen.getByTestId("model-lab-stepper-lens");
+		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("Not available here");
+		expect(screen.getByTestId("model-lab-stepper-lens-unavailable").textContent).toBe(
+			"This run has no logit lens: it was saved before lens recording, or its checkpoint has more blocks than the lens limit of 64.",
+		);
+		expect(within(panel).getByTestId("model-lab-explain-entry").textContent).toContain("This run has no logit lens.");
+		expect(lens.requests).toBe(0);
+	});
+
+	it("says the run kept no lens on a 404", async () => {
+		stubLens(() => new HttpResponse(null, { status: 404 }));
+		await openStepper(v5Result, v5Records);
+
+		expect((await screen.findByTestId("model-lab-stepper-lens-failed")).textContent).toBe("This run kept no logit lens.");
+		expect(screen.queryByTestId("model-lab-stepper-lens-table")).toBeNull();
+	});
+
+	it("shows the server's reason when the stored lens does not read back (422)", async () => {
+		stubLens(() => HttpResponse.json({ statusCode: 422, message: "The stored logit lens failed its check." }, { status: 422 }));
+		await openStepper(v5Result, v5Records);
+
+		expect((await screen.findByTestId("model-lab-stepper-lens-failed")).textContent).toBe(
+			"The stored logit lens failed its check.",
+		);
 	});
 });
 

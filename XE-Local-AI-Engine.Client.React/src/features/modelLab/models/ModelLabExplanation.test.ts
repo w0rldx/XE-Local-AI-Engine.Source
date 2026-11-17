@@ -6,6 +6,7 @@ import de from "@/features/modelLab/locales/model-lab-de.json";
 import en from "@/features/modelLab/locales/model-lab-en.json";
 import {
 	explanationKey,
+	lensTopics,
 	nextTokenTopics,
 	operationCandidates,
 	traceMetrics,
@@ -66,6 +67,7 @@ const entries = [
 	...components.map((component) => `component.${component}`),
 	...operations.map((id) => `op.${id}`),
 	...traceMetrics.map((metric) => `trace.${metric}`),
+	...lensTopics.map((topic) => `stepper.${topic}`),
 ];
 
 const levels = ["overview", "detail", "math"];
@@ -91,7 +93,7 @@ describe.each([
 	["en", en],
 	["de", de],
 ])("Model Lab explanations (%s)", (_language, bundle) => {
-	it("cover every block kind, component, qwen35 operation and trace value at every level", () => {
+	it("cover every block kind, component, qwen35 operation, trace value and lens topic at every level", () => {
 		const missing = entries.flatMap((entry) =>
 			levels.flatMap((level) => {
 				const text = valueAt(bundle, `pages.modelLab.explain.${entry}.${level}`);

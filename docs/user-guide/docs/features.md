@@ -430,7 +430,8 @@ answers, **Thinking off** skips the thinking, so the output limit goes to the an
 runs can be **compared** side by side (2 to 4 of one kind), with every setting that differs listed first, carry your own
 **note**, and be **pinned** so cleanup keeps them. A saved trace can be **stepped through** token by token: the
 blocks of that step, the candidates behind the token and, if the trace was started with **Record attention**, where
-each attention head of a full-attention block looked. Blocks of the linear kind have no such map and say so.
+each attention head of a full-attention block looked. Blocks of the linear kind have no such map and say so. Each step also shows a **logit lens**: what every block would
+predict if the model's final readout were applied there, labelled as a derived analysis, not the model's decision.
 
 Training and Model Lab are **experimental**: no 1.0 stability promise, and they may change or be cut.
 [Feature tiers](for-experienced-users.md#feature-tiers)

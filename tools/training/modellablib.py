@@ -12,7 +12,7 @@ import struct
 from typing import Any, TypeGuard
 
 # Separate from trainlib.CONTRACT_VERSION: this script and train.py change independently.
-CONTRACT_VERSION = 4
+CONTRACT_VERSION = 5
 
 TRACE_KIND = "trace"
 STEERING_KIND = "steering"
@@ -35,6 +35,13 @@ MAX_ATTENTION_LAYERS = 8
 MAX_ATTENTION_TOP_KEYS = 64
 # Attention weights are stored as integers in 1/ATTENTION_WEIGHT_SCALE, rounded down.
 ATTENTION_WEIGHT_SCALE = 10_000
+
+# A trace reads every block through the output head with both, a null one counting as absent.
+_LENS_FIELDS = ("lensTopTokens", "lensByteCap")
+MAX_LENS_TOP_TOKENS = 20
+# Text-config fields that change the logits after the output layer, with their neutral values: the batched lens rows
+# would miss such a transform, so a model that sets one gets no lens.
+_NEUTRAL_LOGIT_TRANSFORMS = {"final_logit_softcapping": (None,), "logits_scaling": (None, 1), "logit_scale": (None, 1)}
 
 # A token or candidate text in result.json: its JSON-escaped UTF-8 form at most this long, cut ones ending in CUT_MARK.
 # Only a result over TRACE_RESULT_BUDGET_BYTES is cut.
@@ -89,15 +96,21 @@ def validate_job(job):
     if not _is_int(job.get("seed")):
         raise JobError("The job has no usable 'seed'.")
     _validate_attention_fields(job)
+    _validate_lens_fields(job)
     return job
 
 
+def _given(job, fields, kind, together):
+    """Whether the job gives a group of optional fields, refused when it gives only some."""
+    given = [name for name in fields if job.get(name) is not None]
+    if given and len(given) != len(fields):
+        raise JobError(f"The job's {kind} fields come {together}, and it gives only {given}.")
+    return bool(given)
+
+
 def _validate_attention_fields(job):
-    given = [name for name in _ATTENTION_FIELDS if job.get(name) is not None]
-    if not given:
+    if not _given(job, _ATTENTION_FIELDS, "attention", "all four or none"):
         return
-    if len(given) != len(_ATTENTION_FIELDS):
-        raise JobError(f"The job's attention fields come all four or none, and it gives only {given}.")
     _require_strings(job, ("attentionPath",))
     layers = job["attentionLayers"]
     usable = (
@@ -116,8 +129,34 @@ def _validate_attention_fields(job):
         raise JobError("The job has no usable 'attentionByteCap'.")
 
 
+def _validate_lens_fields(job):
+    if not _given(job, _LENS_FIELDS, "lens", "both or neither"):
+        return
+    top = job["lensTopTokens"]
+    if not _is_int(top) or not 1 <= top <= MAX_LENS_TOP_TOKENS:
+        raise JobError("The job has no usable 'lensTopTokens'.")
+    cap = job["lensByteCap"]
+    if not _is_int(cap) or cap <= FOOTER_RESERVE_BYTES:
+        raise JobError("The job has no usable 'lensByteCap'.")
+
+
 def captures_attention(job):
     return job.get("attentionPath") is not None
+
+
+def records_lens(job):
+    return job.get("lensTopTokens") is not None
+
+
+def lens_readable(block_count, final_norm, output_layer, text_config):
+    """Whether the batched readout is the model's own for blocks 0..B-2: at least two blocks, a final norm and an
+    output layer, and no logit transform after that layer. A model that fails this traces as without the lens."""
+    return (
+        block_count >= 2
+        and final_norm is not None
+        and output_layer is not None
+        and all(getattr(text_config, name, None) in neutral for name, neutral in _NEUTRAL_LOGIT_TRANSFORMS.items())
+    )
 
 
 def _validated_steering_job(job):
@@ -247,14 +286,28 @@ def _json_bytes(text):
     return len(json.dumps(text, ensure_ascii=False).encode()) - 2
 
 
+def _written_bytes(text):
+    # As CappedTraceWriter writes it: ASCII-escaped, so a CJK character takes 6 bytes and an astral one 12.
+    return len(json.dumps(text)) - 2
+
+
+def _cut(text, size):
+    if size(text) <= CANDIDATE_TEXT_BYTES:
+        return text
+    while size(text + CUT_MARK) > CANDIDATE_TEXT_BYTES:
+        text = text[:-1]
+    return text + CUT_MARK
+
+
 def cut_text(text):
     """A token text whose JSON form takes at most CANDIDATE_TEXT_BYTES, a cut one ending in an ellipsis; the id stays
     exact. Bytes, not characters: 64 control characters escape to 384 bytes, and 41 texts a step must fit the cap."""
-    if _json_bytes(text) <= CANDIDATE_TEXT_BYTES:
-        return text
-    while _json_bytes(text + CUT_MARK) > CANDIDATE_TEXT_BYTES:
-        text = text[:-1]
-    return text + CUT_MARK
+    return _cut(text, _json_bytes)
+
+
+def cut_written_text(text):
+    """cut_text for a trace line: the same bound, measured in the ASCII-escaped form the trace writer writes."""
+    return _cut(text, _written_bytes)
 
 
 def step_candidates(ids, texts, logprobs):
@@ -279,11 +332,11 @@ def scored_token(token_id, text, raw, processed):
     }
 
 
-def check_aligned(chosen, generated):
-    """Raises unless the steps the candidate processor saw chose exactly the generated tokens, one step per token."""
+def check_aligned(chosen, generated, steps="candidate"):
+    """Raises unless the steps a processor saw chose exactly the generated tokens, one step per token."""
     if list(chosen) != list(generated):
         raise RuntimeError(
-            f"The candidate steps ({len(chosen)}) did not choose the generated tokens ({len(generated)}): "
+            f"The {steps} steps ({len(chosen)}) did not choose the generated tokens ({len(generated)}): "
             "a later processor or the decoding loop changed the choice."
         )
 
@@ -338,6 +391,31 @@ def trace_record(step, layer, kind, norm, percentiles, top_indices, top_values):
     }
 
 
+def competition_rank(logprobs, chosen):
+    """The chosen token's rank per row, ties sharing the better rank: 1 plus the count strictly above it. On tensors
+    in modellab.py: ``logprobs`` [B, V], ``chosen`` [B, 1]. A NaN chosen value compares above nothing and ranks 1,
+    so lens_record writes the rank only beside a finite chosen logprob."""
+    return (logprobs > chosen).sum(-1) + 1
+
+
+def lens_record(step, ids, logprobs, chosen, ranks, entropies, texts):
+    """One step's logit lens, per block (index = block): the top ids and logprobs, the chosen token's logprob and
+    rank, and the readout's entropy in nats; a rank is null exactly where its chosen logprob is. ``texts`` maps every
+    id to its decoded text; the line keeps the step's distinct top ids' texts, each cut as written."""
+    return {
+        "lens": {
+            "s": step,
+            "i": [list(row) for row in ids],
+            "p": [[_floored_logprob(value) for value in row] for row in logprobs],
+            "c": [_floored_logprob(value) for value in chosen],
+            "r": [rank if math.isfinite(value) else None for rank, value in zip(ranks, chosen, strict=True)],
+            # + 0.0: a one-hot readout sums to -0.0, written 0.0.
+            "e": [_rounded(value + 0.0) for value in entropies],
+            "t": {str(token): cut_written_text(texts[token]) for token in sorted({t for row in ids for t in row})},
+        }
+    }
+
+
 def _scaled_down(weight):
     return math.floor(weight * ATTENTION_WEIGHT_SCALE)
 
@@ -360,7 +438,7 @@ def attention_record(step, layer, query_position, keys, weights):
 class CappedTraceWriter:
     """JSON lines with a hard byte cap. Once a record does not fit, every later one is counted, not written."""
 
-    def __init__(self, path, cap):
+    def __init__(self, path, cap, footer_key=None, handle=None):
         if cap <= FOOTER_RESERVE_BYTES:
             raise ValueError("The trace byte cap is too small for its footer.")
         self.path = path
@@ -368,8 +446,15 @@ class CappedTraceWriter:
         self.bytes = 0
         self.records = 0
         self.dropped = 0
+        self._footer_key = footer_key
+        self._owns_handle = handle is None
         # The directory is owner-only; the file holds statistics of the prompt's activations.
-        self._handle = open(path, "wb")  # noqa: SIM115 - it stays open across the hooks, until close().
+        self._handle = open(path, "wb") if handle is None else handle  # noqa: SIM115 - open until close().
+
+    def section(self, cap, footer_key):
+        """Lines on the same file under their own cap and counts, ending in a ``{footer_key: {...}}`` line; this
+        writer's records and footer stay as they would be without it. Close the section before this writer."""
+        return CappedTraceWriter(self.path, cap, footer_key, self._handle)
 
     @property
     def truncated(self):
@@ -389,19 +474,20 @@ class CappedTraceWriter:
         return True
 
     def close(self):
-        footer = {
-            "footer": True,
+        counts = {
             "truncated": self.truncated,
             "records": self.records,
             "dropped": self.dropped,
             "payloadBytes": self.bytes,
             "cap": self.cap,
         }
+        footer = {"footer": True, **counts} if self._footer_key is None else {self._footer_key: counts}
         line = (json.dumps(footer, separators=(",", ":")) + "\n").encode()
         if len(line) > FOOTER_RESERVE_BYTES:
             raise ValueError("The trace footer is larger than its reserve.")
         self._handle.write(line)
-        self._handle.close()
+        if self._owns_handle:
+            self._handle.close()
         return self.bytes + len(line)
 
 

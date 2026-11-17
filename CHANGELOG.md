@@ -156,6 +156,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Model Lab: a logit lens in the trace stepper.** Every Qwen3.5 trace now reads each block through the model's own
+  final norm and output head at every generated step: top 5 tokens, the chosen token's probability and rank, and the
+  readout's entropy, labelled as a derived analysis. The last block is the model's real output. New
+  `GET model-lab/experiments/{id}/lens`.
 - **Model Lab: step through a saved trace and see real attention.** A trace's result can be replayed token by token
   (blocks, candidates). A Qwen3.5 trace started with **Record attention** also stores each full-attention head's
   strongest 32 positions per generated token, recomputed beside the SDPA kernel so the output stays unchanged; linear
@@ -452,6 +456,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Model Lab trace contract 5; traces turn generation watermarking off.** A watermark processor would change scores
+  after the trace records them. Cached PyTorch source indexes are rebuilt once.
 - **Model Lab trace contract 4.** The host and `modellab.py` move together; cached PyTorch source indexes are rebuilt once.
 - **Model Lab reads block kinds from `full_attention_interval`** when a Qwen3.5 config has no `layer_types`, so the
   default steering layer of such a checkpoint is now a full-attention block, as it already was for configs that list them.

@@ -72,6 +72,13 @@ export function BasisBadge({ basis }: BasisBadgeProps) {
 			</Badge>
 		);
 	}
+	if (basis === "derived") {
+		return (
+			<Badge variant="light" color="cyan" data-testid="model-lab-explain-basis">
+				{t("pages.modelLab.explain.ui.basisDerived", "Derived analysis")}
+			</Badge>
+		);
+	}
 	if (basis === "unavailable") {
 		return (
 			<Badge variant="outline" color="gray" data-testid="model-lab-explain-basis">

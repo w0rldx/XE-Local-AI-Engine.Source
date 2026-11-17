@@ -633,6 +633,9 @@ import type {
 	GetModelLabExperimentAttentionResponses,
 	GetModelLabExperimentData,
 	GetModelLabExperimentErrors,
+	GetModelLabExperimentLensData,
+	GetModelLabExperimentLensErrors,
+	GetModelLabExperimentLensResponses,
 	GetModelLabExperimentResponses,
 	GetModelLabExperimentTraceData,
 	GetModelLabExperimentTraceErrors,
@@ -1647,6 +1650,7 @@ import {
 	zGetModelGgufInspectionResponse,
 	zGetModelLabArchitectureResponse,
 	zGetModelLabExperimentAttentionResponse,
+	zGetModelLabExperimentLensResponse,
 	zGetModelLabExperimentResponse,
 	zGetModelLabExperimentTraceResponse,
 	zGetModelLabPyTorchIndexResponse,
@@ -9578,6 +9582,28 @@ export const cancelModelLabExperiment = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/model-lab/experiments/{experimentId}/cancel",
+		...options,
+	});
+
+export const getModelLabExperimentLens = <ThrowOnError extends boolean = true>(
+	options: Options<GetModelLabExperimentLensData, ThrowOnError>,
+): RequestResult<GetModelLabExperimentLensResponses, GetModelLabExperimentLensErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetModelLabExperimentLensResponses, GetModelLabExperimentLensErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelLabExperimentLensResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/experiments/{experimentId}/lens",
 		...options,
 	});
 
