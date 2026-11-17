@@ -1,14 +1,23 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 
 using System.Diagnostics.CodeAnalysis;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <inheritdoc />
+/// <remarks>A refusal is GPU demand: it asks an idle holder to leave, after the lock, so a later attempt can admit.</remarks>
 public sealed class GpuWorkGate : IGpuWorkGate
 {
     private readonly Lock _gate = new();
+    private readonly IGpuIdleHolderPreemption _idlePreemption;
     private readonly List<GpuWorkKind> _shared = [];
 
     private GpuWorkKind? _exclusive;
+
+    /// <param name="idlePreemption">Told of every refusal; null (no idle holder can exist) raises nothing.</param>
+    public GpuWorkGate(IGpuIdleHolderPreemption? idlePreemption = null)
+    {
+        _idlePreemption = idlePreemption ?? NoOpGpuIdleHolderPreemption.Instance;
+    }
 
     public GpuWorkKind? ExclusiveKind
     {
@@ -36,32 +45,34 @@ public sealed class GpuWorkGate : IGpuWorkGate
     {
         lock (_gate)
         {
-            if (_exclusive is not null || _shared.Count > 0)
+            if (_exclusive is null && _shared.Count == 0)
             {
-                handle = null;
-                return false;
+                _exclusive = kind;
+                handle = new Handle(this, kind, exclusive: true);
+                return true;
             }
-
-            _exclusive = kind;
-            handle = new Handle(this, kind, exclusive: true);
-            return true;
         }
+
+        handle = null;
+        _idlePreemption.RequestPreemption();
+        return false;
     }
 
     public bool TryBeginShared(GpuWorkKind kind, [NotNullWhen(true)] out IDisposable? handle)
     {
         lock (_gate)
         {
-            if (_exclusive is not null)
+            if (_exclusive is null)
             {
-                handle = null;
-                return false;
+                _shared.Add(kind);
+                handle = new Handle(this, kind, exclusive: false);
+                return true;
             }
-
-            _shared.Add(kind);
-            handle = new Handle(this, kind, exclusive: false);
-            return true;
         }
+
+        handle = null;
+        _idlePreemption.RequestPreemption();
+        return false;
     }
 
     private void Release(GpuWorkKind kind, bool exclusive)

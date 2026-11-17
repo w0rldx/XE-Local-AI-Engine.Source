@@ -279,8 +279,9 @@ public sealed class OpenApiDocumentTests
         var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
         AssertSchemaProperties(schemas, "RuntimeResidentsResponse", ["items"]);
         AssertSchemaProperties(schemas, "RuntimeResidentResponse", ["runtime", "modelId", "state", "backend", "canEject"]);
-        AssertSchemaEnum(schemas, "RuntimeResidentKindDto", ["image", "transcription"]);
+        AssertSchemaEnum(schemas, "RuntimeResidentKindDto", ["image", "transcription", "modelLab"]);
         AssertSchemaEnum(schemas, "RuntimeResidentStateDto", ["starting", "idle", "active", "exited"]);
+        AssertResponses(paths, "/api/local/v1/model-lab/warm/eject", "post", ["204", "401", "403", "409"]);
     }
 
     [Test]

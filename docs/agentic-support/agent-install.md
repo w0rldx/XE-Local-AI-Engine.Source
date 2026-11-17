@@ -209,7 +209,7 @@ CLI; use the linked runbook rather than translating syntax between clients.
 
 A `delegate` key sees exactly 8 shared tools; the `agentic` key additionally exposes the
 administration tools listed in the shipped skill reference. The exact names, scopes, inputs,
-lifecycle values, and 18-field settings allowlist are in the
+lifecycle values, and 19-field settings allowlist are in the
 [MCP tools reference](../../skills/xe-local-ai-engine/references/mcp-tools.md).
 
 ## 7. Security model

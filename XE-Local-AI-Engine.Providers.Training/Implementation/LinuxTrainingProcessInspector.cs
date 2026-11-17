@@ -23,20 +23,23 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
     private static readonly TimeSpan TerminateGrace = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ExitPollInterval = TimeSpan.FromMilliseconds(50);
 
+    /// <summary>How long the post-SIGKILL re-inspection waits for the pid to be provably gone.</summary>
+    internal static readonly TimeSpan KillVerifyBound = TimeSpan.FromSeconds(10);
+
     private readonly Func<int, int, int> _kill;
     private readonly ILogger<LinuxTrainingProcessInspector> _logger;
-    private readonly Func<int, TrainingProcessStat?> _readStat;
+    private readonly Func<int, TrainingProcessStatRead> _readStat;
     private readonly TimeProvider _timeProvider;
 
     public LinuxTrainingProcessInspector(TimeProvider timeProvider, ILogger<LinuxTrainingProcessInspector> logger)
-        : this(timeProvider, logger, ReadStatOrNull, Kill)
+        : this(timeProvider, logger, ReadStat, Kill)
     {
     }
 
     /// <summary>Seam for the identity check: the stat reader and <c>kill(2)</c> are swapped out by tests.</summary>
     internal LinuxTrainingProcessInspector(TimeProvider timeProvider,
         ILogger<LinuxTrainingProcessInspector> logger,
-        Func<int, TrainingProcessStat?> readStat,
+        Func<int, TrainingProcessStatRead> readStat,
         Func<int, int, int> kill)
     {
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -70,76 +73,107 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
         };
     }
 
+    public TrainingProcessPresence ProbePresence(int processId) =>
+        processId <= 0 || !OperatingSystem.IsLinux() ? TrainingProcessPresence.Gone : _readStat(processId).Presence;
+
     /// <summary>This host's own process group, read live; 0 off Linux.</summary>
     public static int HostProcessGroupId => OperatingSystem.IsLinux() ? GetProcessGroup() : 0;
 
     int ITrainingProcessInspector.HostProcessGroupId => HostProcessGroupId;
 
-    public Task KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default)
+    public Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default)
     {
         // 0 is the CALLER's group, -1 every process this user owns, and the host's own group is the node itself.
         if (processGroupId <= 1 || processGroupId == HostProcessGroupId || !OperatingSystem.IsLinux())
         {
-            return Task.CompletedTask;
+            return Task.FromResult(TrainingProcessPresence.Unknown);
         }
 
         return TerminateAsync(-processGroupId, processGroupId, expectedStartTicks, cancellationToken);
     }
 
-    public Task KillProcessAsync(int processId, long expectedStartTicks, CancellationToken cancellationToken = default)
+    public Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, CancellationToken cancellationToken = default)
     {
         if (processId <= 1 || processId == Environment.ProcessId || !OperatingSystem.IsLinux())
         {
-            return Task.CompletedTask;
+            return Task.FromResult(TrainingProcessPresence.Unknown);
         }
 
         return TerminateAsync(processId, processId, expectedStartTicks, cancellationToken);
     }
 
     /// <summary>
-    ///     SIGTERM <paramref name="target" />, wait for <paramref name="identityPid" /> to vanish, then SIGKILL. Each signal is sent
-    ///     only while that pid still carries <paramref name="expectedStartTicks" />, so a recycled pid is never signaled.
+    ///     SIGTERM <paramref name="target" />, wait for <paramref name="identityPid" /> to vanish, SIGKILL, then re-inspect until it
+    ///     is provably gone or <see cref="KillVerifyBound" /> passes. A signal is sent only while the pid is provably ours.
     /// </summary>
-    private async Task TerminateAsync(int target, int identityPid, long expectedStartTicks, CancellationToken cancellationToken)
+    private async Task<TrainingProcessPresence> TerminateAsync(int target, int identityPid, long expectedStartTicks, CancellationToken cancellationToken)
     {
-        if (!SignalIfSameProcess(target, identityPid, expectedStartTicks, Sigterm))
+        var presence = SignalIfSameProcess(target, identityPid, expectedStartTicks, Sigterm);
+        if (presence != TrainingProcessPresence.Alive)
         {
-            return;
+            return presence;
         }
 
-        var deadline = _timeProvider.GetUtcNow() + TerminateGrace;
-        while (_timeProvider.GetUtcNow() < deadline)
+        if (await WaitUntilGoneAsync(identityPid, expectedStartTicks, TerminateGrace, cancellationToken).ConfigureAwait(false) == TrainingProcessPresence.Gone)
         {
-            if (!IsSameProcess(identityPid, expectedStartTicks))
+            return TrainingProcessPresence.Gone;
+        }
+
+        presence = SignalIfSameProcess(target, identityPid, expectedStartTicks, Sigkill);
+        return presence != TrainingProcessPresence.Alive
+            ? presence
+            : await WaitUntilGoneAsync(identityPid, expectedStartTicks, KillVerifyBound, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Polls until the pid is provably gone or <paramref name="bound" /> passes; returns the last presence read.</summary>
+    private async Task<TrainingProcessPresence> WaitUntilGoneAsync(int processId, long expectedStartTicks, TimeSpan bound, CancellationToken cancellationToken)
+    {
+        var deadline = _timeProvider.GetUtcNow() + bound;
+        while (true)
+        {
+            var presence = PresenceOf(_readStat(processId), expectedStartTicks);
+            if (presence == TrainingProcessPresence.Gone || _timeProvider.GetUtcNow() >= deadline)
             {
-                return;
+                return presence;
             }
 
             await Task.Delay(ExitPollInterval, _timeProvider, cancellationToken).ConfigureAwait(false);
         }
-
-        _ = SignalIfSameProcess(target, identityPid, expectedStartTicks, Sigkill);
     }
 
-    // Read-then-signal still leaves a microsecond window; pidfd_open + pidfd_send_signal is the upgrade that closes it.
-    private bool SignalIfSameProcess(int target, int identityPid, long expectedStartTicks, int signal)
+    /// <summary>Signals only on a fresh stat read that matches; otherwise returns what the read proves: gone, or unknown.</summary>
+    /// <returns><see cref="TrainingProcessPresence.Alive" /> once the signal was sent.</returns>
+    private TrainingProcessPresence SignalIfSameProcess(int target, int identityPid, long expectedStartTicks, int signal)
     {
-        if (!IsSameProcess(identityPid, expectedStartTicks))
+        var read = _readStat(identityPid);
+        if (!MaySignal(read, expectedStartTicks))
         {
-            _logger.LogWarning("Pid {Pid} no longer carries the recorded start time {StartTicks}; signal {Signal} was not sent.",
-                identityPid, expectedStartTicks, signal);
-            return false;
+            var presence = PresenceOf(read, expectedStartTicks);
+            _logger.LogWarning("Pid {Pid} is not provably the recorded process ({Presence}); signal {Signal} was not sent.", identityPid, presence, signal);
+            return presence;
         }
 
+        // Read-then-signal still leaves a microsecond window; pidfd_open + pidfd_send_signal is the upgrade that closes it.
         _ = _kill(target, signal);
-        return true;
+        return TrainingProcessPresence.Alive;
     }
 
-    private bool IsSameProcess(int processId, long expectedStartTicks) =>
-        _readStat(processId) is { } stat && stat.StartTicks == expectedStartTicks;
+    /// <summary>True only when the stat was read now and carries the recorded start time: an unreadable pid may have been reused.</summary>
+    internal static bool MaySignal(TrainingProcessStatRead read, long expectedStartTicks) =>
+        read.Stat is { } stat && stat.StartTicks == expectedStartTicks;
 
-    /// <summary>Process-group id (field 5) and start time (field 22) of <c>/proc/[pid]/stat</c>, or null when gone.</summary>
-    public static TrainingProcessStat? ReadStatOrNull(int processId)
+    private static TrainingProcessPresence PresenceOf(TrainingProcessStatRead read, long expectedStartTicks) =>
+        read.Stat is { } stat && stat.StartTicks != expectedStartTicks ? TrainingProcessPresence.Gone : read.Presence;
+
+    /// <summary>Process-group id (field 5) and start time (field 22) of <c>/proc/[pid]/stat</c>, or null when gone or unreadable.</summary>
+    public static TrainingProcessStat? ReadStatOrNull(int processId) =>
+        ReadStat(processId).Stat;
+
+    internal static TrainingProcessStatRead ReadStat(int processId) =>
+        ReadStatFile(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/stat"));
+
+    /// <summary>Reads one stat file: missing is gone, unreadable or unparsable is unknown, and a zombie is gone.</summary>
+    internal static TrainingProcessStatRead ReadStatFile(string path)
     {
         string raw;
         try
@@ -147,12 +181,16 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
             // Forced sync: reached from the synchronous ITrainingProcessSpawner.Inspect contract and from the spawner's
             // post-start identity read; the source is procfs, which never blocks on a device.
 #pragma warning disable MA0045 // Contract-forced: sync Inspect contract, procfs read.
-            raw = File.ReadAllText(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/stat"));
+            raw = File.ReadAllText(path);
 #pragma warning restore MA0045
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return TrainingProcessStatRead.Missing;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            return null;
+            return TrainingProcessStatRead.Unreadable;
         }
 
         // Field 2 (comm) is parenthesized and may contain spaces and parentheses, so the rest is located from the LAST
@@ -160,20 +198,27 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
         var commEnd = raw.LastIndexOf(')');
         if (commEnd < 0 || commEnd + 2 >= raw.Length)
         {
-            return null;
+            return TrainingProcessStatRead.Unreadable;
         }
 
         var fields = raw[(commEnd + 2)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        const int stateIndex = 0;
         const int pgidIndex = 2;
         const int startTimeIndex = 19;
         if (fields.Length <= startTimeIndex
             || !int.TryParse(fields[pgidIndex], NumberStyles.Integer, CultureInfo.InvariantCulture, out var pgid)
             || !long.TryParse(fields[startTimeIndex], NumberStyles.Integer, CultureInfo.InvariantCulture, out var startTicks))
         {
-            return null;
+            return TrainingProcessStatRead.Unreadable;
         }
 
-        return new TrainingProcessStat(pgid, startTicks);
+        // Z (zombie) and X (dead) hold no memory and run nothing; only the parent's wait() is left.
+        var exited = fields[stateIndex] is "Z" or "X";
+        return new TrainingProcessStatRead
+        {
+            Presence = exited ? TrainingProcessPresence.Gone : TrainingProcessPresence.Alive,
+            Stat = new TrainingProcessStat(pgid, startTicks)
+        };
     }
 
     public static string? ResolveExecutablePath(int processId)
@@ -208,7 +253,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
                        .Split('\0', StringSplitOptions.RemoveEmptyEntries)
                        .Where(static entry => entry.StartsWith(prefix, StringComparison.Ordinal))
                        .Select(static entry => entry[prefix.Length..])
-                       .FirstOrDefault();
+                       .FirstOrDefault() ?? string.Empty;
     }
 
     // pid_t getpgrp(void); — the calling process's group, which a trainer must never be signaled through.

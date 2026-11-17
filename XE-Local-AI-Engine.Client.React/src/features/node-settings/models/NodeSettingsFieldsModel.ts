@@ -85,6 +85,8 @@ export interface NodeSettingsFieldsForm {
 	llamaGpuReservePercent: number | string;
 	llamaRamReservePercent: number | string;
 	imageIdleTimeToLiveSeconds: number | string;
+	// 0 turns keeping a Model Lab model warm off; read live at each idle transition.
+	modelLabWarmIdleSeconds: number | string;
 	modelFitSafetyMarginPercent: number | string;
 	maxProviderCallsPerInvocation: number | string;
 	customToolMaxTimeoutSeconds: number | string;
@@ -240,6 +242,7 @@ export const tunableFields = [
 	"llamaGpuReservePercent",
 	"llamaRamReservePercent",
 	"imageIdleTimeToLiveSeconds",
+	"modelLabWarmIdleSeconds",
 	"modelFitSafetyMarginPercent",
 	"maxProviderCallsPerInvocation",
 	"customToolMaxTimeoutSeconds",
@@ -366,6 +369,7 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	llamaGpuReservePercent: 5,
 	llamaRamReservePercent: 15,
 	imageIdleTimeToLiveSeconds: 15,
+	modelLabWarmIdleSeconds: 300,
 	modelFitSafetyMarginPercent: 12,
 	maxProviderCallsPerInvocation: 200,
 	customToolMaxTimeoutSeconds: 300,

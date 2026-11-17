@@ -15,6 +15,9 @@ public interface IBenchmarkQueueStore
     /// </remarks>
     Task<IReadOnlyDictionary<BenchmarkWorkKind, int>> CountActiveWorkAsync(Guid projectId, CancellationToken cancellationToken = default);
 
+    /// <summary>Whether any work item is queued, without claiming one, so an empty poll can skip the GPU work gate.</summary>
+    Task<bool> HasQueuedWorkAsync(CancellationToken cancellationToken = default);
+
     Task<BenchmarkClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default);
 
     Task<int> RecoverOnStartupAsync(CancellationToken cancellationToken = default);

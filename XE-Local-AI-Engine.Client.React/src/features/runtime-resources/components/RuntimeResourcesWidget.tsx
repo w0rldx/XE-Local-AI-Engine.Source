@@ -23,6 +23,7 @@ import {
 	type ResidentRuntime,
 	usagePercent,
 } from "@/features/runtime-resources/models/RuntimeResourcesModels";
+import { useEjectModelLabWarmWorker } from "@/features/runtime-resources/queries/useEjectModelLabWarmWorker";
 import { useRuntimeResidents } from "@/features/runtime-resources/queries/useRuntimeResidents";
 import { useRuntimeResources } from "@/features/runtime-resources/queries/useRuntimeResources";
 
@@ -75,8 +76,8 @@ function UsageRow({ label, usage }: { label: string; usage: MemoryUsage }) {
 	);
 }
 
-// Always-visible gauge in the header: whole-machine RAM and VRAM plus the llama.cpp models, image and transcription
-// processes the engine holds, each with a graceful eject. Force eject stays on the Loaded Models page. Rendered only for a signed-in operator session on a
+// Always-visible gauge in the header: whole-machine RAM and VRAM plus the llama.cpp models, image, transcription and
+// Model Lab processes the engine holds, each with a graceful eject. Force eject stays on the Loaded Models page. Rendered only for a signed-in operator session on a
 // node with the model-fit surface, because both endpoints sit behind the Operator policy.
 export function RuntimeResourcesWidget() {
 	const { t } = useTranslation();
@@ -89,10 +90,11 @@ export function RuntimeResourcesWidget() {
 	// The two resident lists follow the residency hub's pushes and poll only while it is degraded.
 	const runningModelsQuery = useRunningModels(enabled);
 	const ejectMutation = useEjectRunningModel();
-	// Image and transcription rows each follow their own capability; with both off the residents query never fires.
-	const residentsQuery = useRuntimeResidents(enabled && (nodeCapabilities.images || nodeCapabilities.transcription));
+	// Image and transcription rows each follow their own capability; the Model Lab is ungated, so the query always fires.
+	const residentsQuery = useRuntimeResidents(enabled);
 	const ejectImageMutation = useEjectImageRuntime();
 	const ejectTranscriptionMutation = useEjectTranscriptionRuntime();
+	const ejectModelLabMutation = useEjectModelLabWarmWorker();
 	const queryClient = useQueryClient();
 	const [opened, setOpened] = useState(false);
 
@@ -102,9 +104,12 @@ export function RuntimeResourcesWidget() {
 	}
 
 	const residents = runningModelsQuery.data ?? [];
-	const runtimeResidents = (residentsQuery.data ?? []).filter((resident) =>
-		resident.runtime === "image" ? nodeCapabilities.images : nodeCapabilities.transcription,
-	);
+	const shownRuntimes: Record<ResidentRuntime, boolean> = {
+		image: nodeCapabilities.images,
+		transcription: nodeCapabilities.transcription,
+		modelLab: true,
+	};
+	const runtimeResidents = (residentsQuery.data ?? []).filter((resident) => shownRuntimes[resident.runtime]);
 	const residentCount = residents.length + runtimeResidents.length;
 	const firstGpu = resources.gpus[0];
 	// Keyed by model AND role: the same model can run as chat and as embedding at once.
@@ -142,7 +147,16 @@ export function RuntimeResourcesWidget() {
 			},
 		);
 
-	const runtimeEjectMutations = { image: ejectImageMutation, transcription: ejectTranscriptionMutation };
+	const runtimeEjectMutations = {
+		image: ejectImageMutation,
+		transcription: ejectTranscriptionMutation,
+		modelLab: ejectModelLabMutation,
+	};
+	const runtimeEjectErrors: Record<ResidentRuntime, string> = {
+		image: t("pages.nodeSettings.imageRuntime.sourceBuild.ejectError", "Could not eject the image-runtime processes."),
+		transcription: t("pages.transcription.runtime.ejectFailed", "Could not eject the runtime."),
+		modelLab: t("runtimeResources.ejectModelLabFailed", "Could not unload the Model Lab model."),
+	};
 	// The mutations already refresh their own feature's status query; this refreshes the widget's residents and gauge. No force:
 	// a 409 (job running or queued, spawn in flight) carries the server's reason, shown as the toast.
 	const handleRuntimeEject = (runtime: ResidentRuntime) =>
@@ -152,15 +166,7 @@ export function RuntimeResourcesWidget() {
 					queryClient.invalidateQueries({ queryKey: getRuntimeResidentsQueryKey() }),
 					queryClient.invalidateQueries({ queryKey: getRuntimeResourcesQueryKey() }),
 				]),
-			onError: (error) =>
-				toast.error(
-					apiErrorMessage(
-						error,
-						runtime === "image"
-							? t("pages.nodeSettings.imageRuntime.sourceBuild.ejectError", "Could not eject the image-runtime processes.")
-							: t("pages.transcription.runtime.ejectFailed", "Could not eject the runtime."),
-					),
-				),
+			onError: (error) => toast.error(apiErrorMessage(error, runtimeEjectErrors[runtime])),
 		});
 
 	return (

@@ -11,6 +11,8 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 public sealed class StartTrainingRuntimeInstallEndpoint : EndpointWithoutRequest<StartTrainingRuntimeInstallResponse>
 {
+    private const string GpuJobRunningMessage = "A GPU job is running. Wait for it to finish, or cancel it, before installing the runtime.";
+
     private readonly TrainingRuntimeOrchestrationService _runtime;
 
     public StartTrainingRuntimeInstallEndpoint(TrainingRuntimeOrchestrationService runtime)
@@ -35,11 +37,9 @@ public sealed class StartTrainingRuntimeInstallEndpoint : EndpointWithoutRequest
             return;
         }
 
-        if (_runtime.IsGpuJobRunning)
+        if (_runtime.RefusesForRunningGpuJob())
         {
-            await BlockAsync(TrainingRuntimeBlockedEndpointSupport.GpuJobRunningReason,
-                "A GPU job is running. Wait for it to finish, or cancel it, before installing the runtime.",
-                prerequisites: null);
+            await BlockAsync(TrainingRuntimeBlockedEndpointSupport.GpuJobRunningReason, GpuJobRunningMessage, prerequisites: null);
             return;
         }
 
@@ -62,6 +62,9 @@ public sealed class StartTrainingRuntimeInstallEndpoint : EndpointWithoutRequest
                     await BlockAsync("prerequisites",
                         "One or more training runtime prerequisites are missing; resolve the checklist before installing.",
                         result.Prerequisites?.ToResponse());
+                    return;
+                case TrainingRuntimeInstallOutcome.GpuJobRunning:
+                    await BlockAsync(TrainingRuntimeBlockedEndpointSupport.GpuJobRunningReason, GpuJobRunningMessage, prerequisites: null);
                     return;
                 case TrainingRuntimeInstallOutcome.Started:
                     break;

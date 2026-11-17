@@ -102,7 +102,8 @@ public sealed class NodeAgentMcpToolsTests
             SpeculativeDraftGpuLayers = null,
             KvCacheType = null,
             RerankerModelName = null,
-            AutoEffortFastModelName = null
+            AutoEffortFastModelName = null,
+            ModelLabWarmIdleSeconds = null
         });
 
         var models = await harness.Tools.ListModelsAsync(CancellationToken.None);

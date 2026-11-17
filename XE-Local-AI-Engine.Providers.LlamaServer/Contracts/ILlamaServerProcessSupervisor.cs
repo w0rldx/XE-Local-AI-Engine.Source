@@ -28,7 +28,9 @@ public interface ILlamaServerProcessSupervisor
     ///     Atomically acquires an exclusive runtime-mutation lease only when no process is running or starting. While
     ///     held, new <see cref="EnsureRunningAsync(string, ModelRole, CancellationToken)" /> calls wait. Returns null when a process already owns the runtime.
     /// </summary>
-    Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct)
+    /// <param name="ct">Cancels the wait for the gate.</param>
+    /// <param name="raisesDemand">False only for an idle GPU holder's own admission, so it never preempts itself.</param>
+    Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct, bool raisesDemand = true)
     {
         return Task.FromResult<ILlamaServerRuntimeMutationLease?>(null);
     }
@@ -38,6 +40,12 @@ public interface ILlamaServerProcessSupervisor
     ///     requests remain governed by <see cref="EnsureRunningAsync(string, ModelRole, CancellationToken)" /> and are not suppressed by this signal.
     /// </summary>
     bool IsKeepWarmSuppressed()
+    {
+        return false;
+    }
+
+    /// <summary>Whether a caller is waiting to enter the runtime-mutation gate, shared or exclusive; an idle GPU holder about to keep the gate yields to it.</summary>
+    bool HasRuntimeGateWaiters()
     {
         return false;
     }

@@ -6,6 +6,15 @@ using System.Text.Json.Serialization;
 public interface IModelLabActiveJob
 {
     Guid? ActiveBaseArtifactId { get; }
+
+    /// <summary>
+    ///     Evicts an idle warm worker that holds <paramref name="baseArtifactId" /> and waits for it to go. <c>Busy</c> while a job holds it;
+    ///     <c>NotConfirmed</c> while any worker that may hold the checkpoint (its own, or one of unknown checkpoint) was not seen to exit.
+    /// </summary>
+    Task<ModelLabEjectOutcome> EvictIdleWorkerAsync(Guid baseArtifactId, CancellationToken ct);
+
+    /// <summary>True while a worker not confirmed stopped may still run from the training runtime: a kept receipt, or a receipt scan that failed. Retries their reap first.</summary>
+    Task<bool> HasUnconfirmedWorkerAsync(CancellationToken ct);
 }
 
 /// <summary>Bounds on one Model Lab job, each a separate failure.</summary>
@@ -18,6 +27,24 @@ public sealed class ModelLabJobOptions
 
     /// <summary>How long the script gets to exit after a stop request or after closing its output, before its group is killed.</summary>
     public TimeSpan ExitGracePeriod { get; init; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>From a serving worker's spawn to its handshake: the imports, before any job.</summary>
+    public TimeSpan HandshakeTimeout { get; init; } = TimeSpan.FromSeconds(60);
+
+    /// <summary>How long one command line to a serving worker's stdin may take.</summary>
+    public TimeSpan CommandWriteTimeout { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>From a cancel to the job's terminal frame, and from a closed output to the exit; then the group is killed.</summary>
+    public TimeSpan CancelAcknowledgementTimeout { get; init; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>From a job's terminal frame to the worker's ready frame.</summary>
+    public TimeSpan ReadyTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>How long an evicted worker gets to exit on its own before its group is killed.</summary>
+    public TimeSpan EvictGrace { get; init; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>How long a killed worker may take to be seen gone; past it the exit counts as unverified.</summary>
+    public TimeSpan ExitVerifyTimeout { get; init; } = TimeSpan.FromSeconds(10);
 }
 
 /// <summary>What <c>modellab.py</c> reads from <c>job.json</c> for a trace. Holds the plaintext prompt, in the owner-only work directory.</summary>
@@ -26,6 +53,9 @@ public sealed record ModelLabTraceJobV1
     public int ContractVersion { get; init; } = ModelLabTraceSpec.ContractVersion;
 
     public string Kind { get; init; } = "trace";
+
+    /// <summary>The model a serving worker holds for this job; a worker holding another refuses it.</summary>
+    public required string ModelKey { get; init; }
 
     public required string CheckpointPath { get; init; }
 
@@ -74,6 +104,9 @@ public sealed record ModelLabSteeringJobV1
     public int ContractVersion { get; init; } = ModelLabTraceSpec.ContractVersion;
 
     public string Kind { get; init; } = "steering";
+
+    /// <summary>The model a serving worker holds for this job; a worker holding another refuses it.</summary>
+    public required string ModelKey { get; init; }
 
     public required string CheckpointPath { get; init; }
 
@@ -146,7 +179,10 @@ public enum ModelLabStartRefusal
     InvalidTraceLayers,
     PinLimitReached,
     ModelNotLoaded,
-    AttentionUnavailable
+    AttentionUnavailable,
+
+    /// <summary>A warm worker's exit was never confirmed, so it may still hold GPU memory; every start retries its reap first.</summary>
+    OrphanWorker
 }
 
 public sealed record ModelLabStart
@@ -380,6 +416,12 @@ public sealed record ModelLabTraceResult
 
     /// <summary>Null on a result saved before contract 5, and for a checkpoint with fewer than 2 or more than <see cref="ModelLabTraceSpec.MaxTraceLayers" /> blocks.</summary>
     public ModelLabLensSummary? Lens { get; init; }
+
+    /// <summary>True when the worker already held the model. Null on a result saved before contract 6.</summary>
+    public bool? Warm { get; init; }
+
+    /// <summary>Seconds the model took to load for this run: 0 when warm. Null on a result saved before contract 6.</summary>
+    public double? LoadSeconds { get; init; }
 }
 
 /// <summary>What a trace's logit lens recorded. The lines themselves follow the hook records in the trace blob.</summary>

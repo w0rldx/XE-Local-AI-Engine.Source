@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -31,6 +32,9 @@ public sealed class TrainingExportService : ITrainingExportService
     /// <summary>How many trailing subprocess lines reach the run's log tail. Enough to carry a stack, not a whole build log.</summary>
     private const int SubprocessTailLines = 40;
 
+    /// <summary>The refusal while any other exclusive holder owns the node, an idle Model Lab worker having been waited out once.</summary>
+    internal const string GpuBusyReason = "A training run, an evaluation, another export or a Model Lab experiment is using the GPU.";
+
     /// <summary>
     ///     Absolute ceiling on one export. A merge writes the whole model twice and a quantize reads it again, so the
     ///     bound is generous — it exists to stop a wedged subprocess holding the GPU forever, not to pace the work.
@@ -42,6 +46,7 @@ public sealed class TrainingExportService : ITrainingExportService
     private readonly INodeDataDirectory _dataDirectory;
     private readonly ITrainingRunEventBuffer _events;
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly IGpuIdleHolderPreemption _idlePreemption;
     private readonly IGgufImportInspector _inspector;
     private readonly ILogger<TrainingExportService> _logger;
     private readonly ITrainingRuntimeService _runtime;
@@ -55,6 +60,7 @@ public sealed class TrainingExportService : ITrainingExportService
     public TrainingExportService(IServiceScopeFactory scopeFactory,
         ITrainingRunEventBuffer events,
         IGpuWorkGate gpuWorkGate,
+        IGpuIdleHolderPreemption idlePreemption,
         ILlamaServerProcessSupervisor supervisor,
         ITrainingRuntimeService runtime,
         ITrainingProcessSpawner spawner,
@@ -72,6 +78,7 @@ public sealed class TrainingExportService : ITrainingExportService
         ArgumentNullException.ThrowIfNull(dataDirectory);
         ArgumentNullException.ThrowIfNull(events);
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
+        ArgumentNullException.ThrowIfNull(idlePreemption);
         ArgumentNullException.ThrowIfNull(inspector);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(runtime);
@@ -86,6 +93,7 @@ public sealed class TrainingExportService : ITrainingExportService
         _dataDirectory = dataDirectory;
         _events = events;
         _gpuWorkGate = gpuWorkGate;
+        _idlePreemption = idlePreemption;
         _inspector = inspector;
         _logger = logger;
         _runtime = runtime;
@@ -144,13 +152,13 @@ public sealed class TrainingExportService : ITrainingExportService
         // Acquired in the queue's order and BEFORE anything is written, so a busy machine costs a refused request rather
         // than a half-written staged file.
 #pragma warning disable CA2000 // Disposed on every refusal below, otherwise owned by the detached pipeline.
-        if (!_gpuWorkGate.TryBeginExclusive(GpuWorkKind.Export, out var activity))
+        if (await _gpuWorkGate.BeginExclusiveOrNullAsync(_idlePreemption, GpuWorkKind.Export, cancellationToken) is not { } activity)
 #pragma warning restore CA2000
         {
             return new TrainingExportStart
             {
                 Outcome = TrainingExportStartOutcome.Busy,
-                Reason = "Training or another export is already running."
+                Reason = GpuBusyReason
             };
         }
 
@@ -174,6 +182,21 @@ public sealed class TrainingExportService : ITrainingExportService
                 Reason = "A model is loaded. Eject it and try the export again."
             };
         }
+
+        // Read again now the lease is held: a runtime removal that won the wait for an idle worker published its phase first and
+        // then sees this lease as a running job, so between the two reads exactly one of them proceeds.
+        if (_runtime.GetStatus().Phase != TrainingRuntimePhase.Ready || _runtime.ResolveInterpreterPath() is not { } leasedInterpreter)
+        {
+            await lease.DisposeAsync();
+            activity.Dispose();
+            return new TrainingExportStart
+            {
+                Outcome = TrainingExportStartOutcome.RuntimeUnavailable,
+                Reason = "The Python training runtime is being installed or removed. Wait for it to finish, then start the export again."
+            };
+        }
+
+        interpreter = leasedInterpreter;
 
         // Detached on purpose: the endpoint answers 202 and the operator follows the export on the run hub. The
         // request's own token is NOT flowed in — it dies with the HTTP response, which would kill the export.
@@ -203,10 +226,8 @@ public sealed class TrainingExportService : ITrainingExportService
         }
 
         var view = await ResolveSmokeViewAsync(store, artifact, cancellationToken);
-        if (!_gpuWorkGate.TryBeginExclusive(GpuWorkKind.Export, out var activity))
-        {
-            throw new TrainingExportRejectedException("Training or an export is already running.");
-        }
+        var activity = await _gpuWorkGate.BeginExclusiveOrNullAsync(_idlePreemption, GpuWorkKind.Export, cancellationToken)
+                       ?? throw new TrainingExportRejectedException(GpuBusyReason);
 
         ILlamaServerRuntimeMutationLease? lease = null;
         try

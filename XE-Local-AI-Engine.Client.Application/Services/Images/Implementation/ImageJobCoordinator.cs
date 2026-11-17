@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -27,6 +28,9 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAsyncDisposable
 {
     private const int MaxEchoedModelNameLength = 120;
+
+    // Any exclusive holder refuses an image: a training run, an evaluation, an export or a Model Lab experiment.
+    internal const string GpuBusyMessage = "Other GPU work is using the GPU. Try again once it finishes.";
 
     // Minimum gap between two pushed step updates for one job, protecting the socket from a fast GPU sampling several steps per second. Milestones — the initial
     // push, every terminal push and every generation-phase transition — bypass it and are never delayed or dropped; only the step counter within a phase is limited.
@@ -50,6 +54,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     private readonly ILogger<ImageJobCoordinator> _logger;
     private readonly IImageRuntimeActivityGate _runtimeActivityGate;
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly IGpuIdleHolderPreemption _idlePreemption;
     private readonly ILlamaServerProcessSupervisor _llamaSupervisor;
     private readonly IImageModelRegistry _modelRegistry;
 
@@ -89,10 +94,13 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         ILogger<ImageJobCoordinator> logger,
         IImageRuntimeActivityGate runtimeActivityGate,
         IGpuWorkGate gpuWorkGate,
+        IGpuIdleHolderPreemption idlePreemption,
         ILlamaServerProcessSupervisor llamaSupervisor,
         IImageModelRegistry modelRegistry,
         IJobCreatedPublisher jobCreated)
     {
+        ArgumentNullException.ThrowIfNull(idlePreemption);
+        _idlePreemption = idlePreemption;
         ArgumentNullException.ThrowIfNull(jobCreated);
         _jobCreated = jobCreated;
         ArgumentNullException.ThrowIfNull(modelRegistry);
@@ -396,9 +404,10 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
             // A training run holds the whole GPU (decision #13). Admission sits here, after the slot is held and before the runtime is called: a run can begin while this job
             // still waits behind another, so this is the only point at which it is definitely about to allocate VRAM. HELD through generation — checking then releasing would let a run admit.
-            if (!_gpuWorkGate.TryBeginShared(GpuWorkKind.ImageJob, out gpuAdmission))
+            gpuAdmission = await _gpuWorkGate.BeginSharedOrNullAsync(_idlePreemption, GpuWorkKind.ImageJob, token);
+            if (gpuAdmission is null)
             {
-                await FailJobAsync(jobId, new ImageJobFailure(ImageJobFailureReason.TrainingRunning, "A training run is using the GPU. Try again once it finishes."));
+                await FailJobAsync(jobId, new ImageJobFailure(ImageJobFailureReason.TrainingRunning, GpuBusyMessage));
                 return;
             }
 

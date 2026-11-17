@@ -66,16 +66,24 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
             }
 
             BenchmarkClaimedWork? work = null;
-            // The gate is taken BEFORE the claim and held through execution. Refusing at the CLAIM rather than at the executor keeps queued benchmark work queued:
-            // it resumes on the next poll once the exclusive holder releases, instead of being terminalized as failed with no retry to fall back on — attempt pins to 1.
-            var admitted = _gpuWorkGate.TryBeginShared(GpuWorkKind.Benchmark, out var admission);
+            IDisposable? admission = null;
+            var refused = false;
             try
             {
-                if (admitted)
+                await using (var claimScope = _scopeFactory.CreateAsyncScope())
                 {
-                    await using var claimScope = _scopeFactory.CreateAsyncScope();
                     var store = claimScope.ServiceProvider.GetRequiredService<IBenchmarkQueueStore>();
-                    work = await store.ClaimNextAsync(stoppingToken);
+                    // Peeked first: an empty poll never touches the gate, whose refusal would evict an idle Model Lab worker over nothing.
+                    if (await store.HasQueuedWorkAsync(stoppingToken))
+                    {
+                        // The gate is taken BEFORE the claim and held through execution. Refusing at the CLAIM keeps queued benchmark work queued: it resumes once the
+                        // exclusive holder releases, instead of being terminalized as failed with no retry to fall back on — attempt pins to 1.
+                        refused = !_gpuWorkGate.TryBeginShared(GpuWorkKind.Benchmark, out admission);
+                        if (!refused)
+                        {
+                            work = await store.ClaimNextAsync(stoppingToken);
+                        }
+                    }
                 }
 
                 if (work is not null)
@@ -131,7 +139,7 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
 
             if (work is null)
             {
-                await _signal.WaitAsync(!admitted && GateRetryInterval < _pollInterval ? GateRetryInterval : _pollInterval, stoppingToken);
+                await _signal.WaitAsync(refused && GateRetryInterval < _pollInterval ? GateRetryInterval : _pollInterval, stoppingToken);
             }
         }
     }

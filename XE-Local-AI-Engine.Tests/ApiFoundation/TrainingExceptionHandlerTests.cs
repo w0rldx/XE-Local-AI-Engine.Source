@@ -103,7 +103,7 @@ public sealed class TrainingExceptionHandlerTests
             Exception = new TrainingConflictException("TrainingBusy"),
             StatusCode = StatusCodes.Status409Conflict,
             Code = TrainingErrorCode.TrainingBusy,
-            Message = "Training, an evaluation or an export holds the GPU; dataset generation cannot start until it finishes.",
+            Message = "Training, an evaluation, an export or a Model Lab experiment holds the GPU; dataset generation cannot start until it finishes.",
             ForbiddenProviderText = null
         },
         new()

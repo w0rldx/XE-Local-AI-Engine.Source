@@ -175,7 +175,8 @@ public sealed class NodeInfoService : INodeInfoService
         nameof(StoredNodeSettings.AgentHomeMaxInnerToolCalls),
         nameof(StoredNodeSettings.AgentHomePatchApplyTimeoutSeconds),
         nameof(StoredNodeSettings.AgentHomeRunRetentionMaxRuns),
-        nameof(StoredNodeSettings.AgentHomeRunRetentionMaxTotalBytes)
+        nameof(StoredNodeSettings.AgentHomeRunRetentionMaxTotalBytes),
+        nameof(StoredNodeSettings.ModelLabWarmIdleSeconds)
     };
 
     /// <summary>The settings fields the report never carries; a test fails when a new field is in neither set.</summary>

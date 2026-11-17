@@ -470,6 +470,8 @@ public sealed class TrainingExclusivityTests
 
     private static BenchmarkQueueHostedService BuildBenchmarkQueue(IBenchmarkQueueStore store, IBenchmarkQueueSignal signal, IGpuWorkGate gate)
     {
+        // Work is always queued here: these tests are about the gate, which the queue asks only when its peek finds work.
+        _ = store.HasQueuedWorkAsync(Arg.Any<CancellationToken>()).Returns(true);
         var scopeFactory = ScopeFactory(services =>
         {
             _ = services.AddScoped(_ => store);
@@ -492,6 +494,8 @@ public sealed class TrainingExclusivityTests
         IGpuWorkGate gate,
         IDatasetGenerationExecutor? executor = null)
     {
+        // Work is always queued here: these tests are about the gate, which the queue asks only when its peek finds work.
+        _ = store.HasQueuedWorkAsync(Arg.Any<CancellationToken>()).Returns(true);
         var scopeFactory = ScopeFactory(services =>
         {
             _ = services.AddScoped(_ => store);

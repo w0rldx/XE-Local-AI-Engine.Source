@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Common.Implementation;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
@@ -303,6 +304,7 @@ public sealed class ImageJobCoordinatorEditTests
                 NullLogger<ImageJobCoordinator>.Instance,
                 new ImageRuntimeActivityGate(),
                 new GpuWorkGate(),
+                NoOpGpuIdleHolderPreemption.Instance,
                 supervisor,
                 registry,
                 new NullJobCreatedPublisher());

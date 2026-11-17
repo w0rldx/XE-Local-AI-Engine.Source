@@ -237,7 +237,8 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
         ILogger<WhisperServerProcessSupervisor>? logger = null,
         WhisperCudaFailureSignal? cudaFailureSignal = null,
         ProcessSpawnReceiptStore? spawnReceipts = null,
-        IRuntimeResidencyChangeNotifier? residencyNotifier = null)
+        IRuntimeResidencyChangeNotifier? residencyNotifier = null,
+        IGpuIdleHolderPreemption? idlePreemption = null)
     {
         Launcher = launcher ?? new FakeWhisperProcessLauncher();
         ReadinessProbe = readinessProbe ?? new FakeWhisperReadinessProbe();
@@ -269,7 +270,8 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
             ActivityGate,
             CudaFailureSignal,
             spawnReceipts,
-            residencyNotifier);
+            residencyNotifier,
+            idlePreemption);
     }
 
     public WhisperServerProcessSupervisor Supervisor { get; }

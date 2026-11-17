@@ -89,6 +89,9 @@ public static class WhisperCppServiceCollectionExtensions
         // a plain AddSingleton carrying the real singleton shared with the llama-server and image supervisors.
         services.TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>();
 
+        // No idle GPU holder in a provider-only host; the application registers its broker with a plain AddSingleton, which wins.
+        services.TryAddSingleton<IGpuIdleHolderPreemption>(NoOpGpuIdleHolderPreemption.Instance);
+
         // ONE whisper-server spawn-receipt store, keyed by server name: the supervisor writes the receipts the startup reaper reads back. A
         // provider-only host registers no INodeDataDirectory, and then receipts are off and only the binaries-root reap applies.
         services.TryAddKeyedSingleton(ServerName, static (sp, _) =>
@@ -108,7 +111,8 @@ public static class WhisperCppServiceCollectionExtensions
             sp.GetRequiredService<IWhisperRuntimeActivityGate>(),
             sp.GetRequiredService<WhisperCudaFailureSignal>(),
             sp.GetRequiredKeyedService<ProcessSpawnReceiptStore>(ServerName),
-            sp.GetRequiredService<IRuntimeResidencyChangeNotifier>()));
+            sp.GetRequiredService<IRuntimeResidencyChangeNotifier>(),
+            sp.GetRequiredService<IGpuIdleHolderPreemption>()));
         services.TryAddSingleton<IWhisperServerSupervisor>(static sp => sp.GetRequiredService<WhisperServerProcessSupervisor>());
 
         services.TryAddSingleton<IWhisperTranscriber>(static sp =>

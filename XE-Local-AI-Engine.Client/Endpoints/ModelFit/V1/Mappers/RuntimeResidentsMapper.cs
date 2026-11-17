@@ -31,6 +31,7 @@ internal static class RuntimeResidentsMapper
         {
             RuntimeResidentKind.Image => RuntimeResidentKindDto.Image,
             RuntimeResidentKind.Transcription => RuntimeResidentKindDto.Transcription,
+            RuntimeResidentKind.ModelLab => RuntimeResidentKindDto.ModelLab,
             _ => throw new ArgumentOutOfRangeException(nameof(runtime), runtime, "Unknown resident runtime.")
         };
     }

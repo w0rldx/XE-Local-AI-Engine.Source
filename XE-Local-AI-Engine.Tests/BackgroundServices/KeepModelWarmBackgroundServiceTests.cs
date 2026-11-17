@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Tests.Capacity;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -222,6 +223,41 @@ public sealed class KeepModelWarmBackgroundServiceTests
         await harness.Service.RunIterationAsync(CancellationToken.None);
 
         await harness.Resolver.DidNotReceiveWithAnyArgs().ResolveProviderForModelAsync(default!, default);
+    }
+
+    /// <summary>
+    ///     The only periodic ensure must never evict an idle Model Lab worker: the worker's lease suppresses it on the REAL
+    ///     supervisor, so the iteration returns before any ensure and the worker survives its whole idle time.
+    /// </summary>
+    [Test]
+    public async Task RunIterationAsync_WhileAnIdleGpuHolderHoldsTheLease_RaisesNoDemand()
+    {
+        await using var holders = new IdleHolderHarness();
+        var holder = await holders.AdmitIdleAsync();
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+        runtimeSettings.GetKeepModelWarmEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        runtimeSettings.GetKeepModelWarmModelNameAsync(Arg.Any<CancellationToken>()).Returns("llama3");
+        runtimeSettings.GetKeepModelWarmIntervalAsync(Arg.Any<CancellationToken>()).Returns(TimeSpan.FromSeconds(60));
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        using var service = new KeepModelWarmBackgroundService(runtimeSettings,
+            resolver,
+            holders.Supervisor,
+            Substitute.For<ILlamaCppSourceBuildActivity>(),
+            new LlamaServerSupervisorOptions
+            {
+                // Two slots, so the iteration reaches the suppression check instead of stopping at the capacity warning.
+                MaxLoadedProcesses = 3
+            },
+            new ManualTimeProvider(),
+            NullLogger<KeepModelWarmBackgroundService>.Instance);
+        AssertEx.True(holders.Supervisor.IsKeepWarmSuppressed(), "The idle worker's lease is what suppresses keep-warm.");
+
+        await service.RunIterationAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, holder.PreemptionRequestCount, "Keep-warm raised demand against the idle worker.");
+        AssertEx.Equal(FakeGpuIdleHolder.HolderState.Idle, holder.State);
+        await resolver.DidNotReceiveWithAnyArgs().ResolveProviderForModelAsync(default!, default);
+        AssertEx.Equal(expected: 0, holders.Launcher.LaunchCount);
     }
 
     [Test]

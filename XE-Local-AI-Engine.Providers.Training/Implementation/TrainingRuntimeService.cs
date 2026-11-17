@@ -137,7 +137,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     }
 
     /// <inheritdoc />
-    public async Task<TrainingRuntimeInstallResult> InstallAsync(CancellationToken ct)
+    public async Task<TrainingRuntimeInstallResult> InstallAsync(Func<CancellationToken, Task<bool>>? admitAsync, CancellationToken ct)
     {
         if (!OperatingSystem.IsLinux())
         {
@@ -173,6 +173,14 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
                 {
                     Outcome = outcome,
                     Prerequisites = report
+                };
+            }
+
+            if (!await PublishThenAdmitAsync(TrainingRuntimePhase.AcquiringUv, admitAsync, ct).ConfigureAwait(false))
+            {
+                return new TrainingRuntimeInstallResult
+                {
+                    Outcome = TrainingRuntimeInstallOutcome.GpuJobRunning
                 };
             }
 
@@ -261,7 +269,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     }
 
     /// <inheritdoc />
-    public async Task<bool> RemoveAsync(CancellationToken ct)
+    public async Task<TrainingRuntimeRemoveOutcome> RemoveAsync(Func<CancellationToken, Task<bool>>? admitAsync, CancellationToken ct)
     {
         await _startGate.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -270,10 +278,13 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             {
                 if (_isRunning)
                 {
-                    return false;
+                    return TrainingRuntimeRemoveOutcome.AlreadyRunning;
                 }
+            }
 
-                _phase = TrainingRuntimePhase.Removing;
+            if (!await PublishThenAdmitAsync(TrainingRuntimePhase.Removing, admitAsync, ct).ConfigureAwait(false))
+            {
+                return TrainingRuntimeRemoveOutcome.GpuJobRunning;
             }
 
             await PublishPhaseAsync(TrainingRuntimePhase.Removing, terminal: false, sanitizedError: null).ConfigureAwait(false);
@@ -290,12 +301,52 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             }
 
             await PublishPhaseAsync(TrainingRuntimePhase.Idle, terminal: true, sanitizedError: null).ConfigureAwait(false);
-            return true;
+            return TrainingRuntimeRemoveOutcome.Removed;
         }
         finally
         {
             _startGate.Release();
         }
+    }
+
+    /// <summary>Sets <paramref name="phase" />, then asks the caller's admission; a refusal or a throw restores and re-publishes the prior phase.</summary>
+    /// <remarks>
+    ///     The phase goes first on purpose: a Model Lab start that takes its lease after this reads the non-ready phase and
+    ///     refuses, and one that took the lease before is seen as busy by the admission check, so the two never both proceed.
+    /// </remarks>
+    private async Task<bool> PublishThenAdmitAsync(TrainingRuntimePhase phase, Func<CancellationToken, Task<bool>>? admitAsync, CancellationToken ct)
+    {
+        TrainingRuntimePhase prior;
+        lock (_stateLock)
+        {
+            prior = _phase;
+            _phase = phase;
+        }
+
+        var admitted = false;
+        string? priorError = null;
+        try
+        {
+            admitted = admitAsync is null || await admitAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (!admitted)
+            {
+                lock (_stateLock)
+                {
+                    _phase = prior;
+                    priorError = _sanitizedError;
+                }
+            }
+        }
+
+        if (!admitted)
+        {
+            await PublishPhaseAsync(prior, terminal: true, priorError).ConfigureAwait(false);
+        }
+
+        return admitted;
     }
 
     /// <inheritdoc />

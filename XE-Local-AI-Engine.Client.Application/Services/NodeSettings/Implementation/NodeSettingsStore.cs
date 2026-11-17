@@ -462,6 +462,8 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
                 StoredNodeSettings.MinAgentHomeRunRetentionMaxRuns, StoredNodeSettings.MaxAgentHomeRunRetentionMaxRuns),
             AgentHomeRunRetentionMaxTotalBytes = ClampToRange(settings.AgentHomeRunRetentionMaxTotalBytes,
                 StoredNodeSettings.MinAgentHomeRunRetentionMaxTotalBytes, StoredNodeSettings.MaxAgentHomeRunRetentionMaxTotalBytes),
+            ModelLabWarmIdleSeconds = ClampToRange(settings.ModelLabWarmIdleSeconds,
+                StoredNodeSettings.MinModelLabWarmIdleSeconds, StoredNodeSettings.MaxModelLabWarmIdleSeconds),
             UsageRates = NormalizeUsageRates(settings.UsageRates),
             ExternalAccessProfile = NormalizeExternalAccessProfile(settings.ExternalAccessProfile),
             UiMode = NormalizeUiMode(settings.UiMode),

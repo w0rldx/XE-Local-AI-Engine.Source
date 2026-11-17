@@ -55,6 +55,7 @@ const infoFields = [
 	"imageMaxLoadedProcesses",
 	"imageIdleTimeToLiveSeconds",
 	"imageTextEncoderOnGpu",
+	"modelLabWarmIdleSeconds",
 	"toolPipelineMaxIterationsPerRequest",
 	"toolPipelineMaxToolResultChars",
 ] as const;

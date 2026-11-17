@@ -51,9 +51,9 @@ export function usagePercent(usage: MemoryUsage): number {
 export type ResidentRuntime = XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentKindDto;
 export type RuntimeResidentState = XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentStateDto;
 
-// A stable-diffusion.cpp or whisper.cpp process the engine holds in memory. Both runtimes eject as a whole, so a row
-// carries no role. `modelId` is null while the process is still starting (or whisper is switching models); `backend`
-// is only ever set for transcription.
+// A stable-diffusion.cpp, whisper.cpp or Model Lab worker process the engine holds in memory. Each runtime ejects as a
+// whole, so a row carries no role. `modelId` is null while the process is still starting (or whisper is switching
+// models); `backend` is only ever set for transcription.
 export interface RuntimeResident {
 	readonly runtime: ResidentRuntime;
 	readonly modelId: string | null;

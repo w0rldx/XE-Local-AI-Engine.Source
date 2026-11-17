@@ -1633,6 +1633,35 @@ describe("runtime and workspace knobs", () => {
 	});
 });
 
+describe("Model Lab warm time", () => {
+	const bounds = toNodeSettingsFieldBounds(undefined);
+	const baseline = toNodeSettingsFieldsForm(undefined);
+
+	it("defaults to 300 seconds in the runtime section and reads the stored value and bounds back", () => {
+		expect(baseline.modelLabWarmIdleSeconds).toBe(300);
+		expect(nodeSettingsSectionOf("modelLabWarmIdleSeconds")).toBe("runtime");
+		expect(bounds.tunables.modelLabWarmIdleSeconds).toEqual({ min: 0, max: 3600 });
+		const response = { modelLabWarmIdleSeconds: 0, minModelLabWarmIdleSeconds: 0, maxAllowedModelLabWarmIdleSeconds: 1800 };
+		expect(toNodeSettingsFieldsForm(response).modelLabWarmIdleSeconds).toBe(0);
+		expect(toNodeSettingsFieldBounds(response).tunables.modelLabWarmIdleSeconds).toEqual({ min: 0, max: 1800 });
+	});
+
+	it("sends 0 as a real value, in seconds, without a restart", () => {
+		const { body, errors } = buildNodeSettingsRequest({ ...baseline, modelLabWarmIdleSeconds: 0 }, baseline, bounds, false);
+
+		expect(errors).toEqual({});
+		expect(body).toEqual({ modelLabWarmIdleSeconds: 0 });
+		expect(touchesRestartGatedField(body, restartRequiredFields)).toBe(false);
+	});
+
+	it.each([-1, 3601, 1.5])("rejects %s with a range error and never sends it", (value) => {
+		const { body, errors } = buildNodeSettingsRequest({ ...baseline, modelLabWarmIdleSeconds: value }, baseline, bounds, false);
+
+		expect(errors).toMatchObject({ modelLabWarmIdleSeconds: "range" });
+		expect(body).toEqual({});
+	});
+});
+
 describe("feature switches", () => {
 	const bounds = toNodeSettingsFieldBounds(undefined);
 	const baseline = toNodeSettingsFieldsForm(undefined);

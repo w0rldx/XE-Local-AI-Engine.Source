@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.ModelFit;
 
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
@@ -220,13 +221,69 @@ public sealed class RuntimeResidentsServiceTests
         AssertEx.True(rows.All(static row => row.CanEject));
     }
 
-    private RuntimeResidentsService CreateService(bool transcriptionEnabled = true)
+    [Test]
+    public async Task ModelLabRow_WithTheDefaultSource_IsAbsent()
+    {
+        _imageSupervisor.GetResidents().Returns([]);
+
+        var rows = await CreateService(modelLabWarm: new NullModelLabWarmResidentSource()).GetResidentsAsync();
+
+        AssertEx.False(rows.Any(static row => row.Runtime == RuntimeResidentKind.ModelLab), "no warm session registered means no Model Lab row.");
+    }
+
+    [Test]
+    [Arguments(RuntimeResidentState.Idle, true)]
+    [Arguments(RuntimeResidentState.Active, false)]
+    [Arguments(RuntimeResidentState.Starting, false)]
+    public async Task ModelLabRow_CarriesTheRepoIdAndState_AndCanEjectOnlyWhenIdle(RuntimeResidentState state, bool canEject)
+    {
+        _imageSupervisor.GetResidents().Returns([]);
+        var warm = new FakeModelLabWarmResidentSource
+        {
+            Resident = new ModelLabWarmResident
+            {
+                State = state,
+                ModelId = "Qwen/Qwen3-0.6B"
+            }
+        };
+
+        var row = (await CreateService(modelLabWarm: warm).GetResidentsAsync()).Single();
+
+        AssertEx.Equal(RuntimeResidentKind.ModelLab, row.Runtime);
+        AssertEx.Equal("Qwen/Qwen3-0.6B", row.ModelId);
+        AssertEx.Equal(state, row.State);
+        AssertEx.Null(row.Backend);
+        AssertEx.Equal(canEject, row.CanEject);
+    }
+
+    [Test]
+    public async Task ModelLabRow_IsListedWhenTranscriptionIsOff()
+    {
+        // The transcription switch hides only whisper rows; the warm worker is not transcription's to hide.
+        _imageSupervisor.GetResidents().Returns([]);
+        _whisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Ready, "base", WhisperBackend.Cpu);
+        var warm = new FakeModelLabWarmResidentSource
+        {
+            Resident = new ModelLabWarmResident
+            {
+                State = RuntimeResidentState.Idle,
+                ModelId = "Qwen/Qwen3-0.6B"
+            }
+        };
+
+        var row = (await CreateService(transcriptionEnabled: false, modelLabWarm: warm).GetResidentsAsync()).Single();
+
+        AssertEx.Equal(RuntimeResidentKind.ModelLab, row.Runtime);
+    }
+
+    private RuntimeResidentsService CreateService(bool transcriptionEnabled = true, IModelLabWarmResidentSource? modelLabWarm = null)
     {
         return new RuntimeResidentsService(_imageSupervisor,
             _imageGate,
             _whisperSupervisor,
             _whisperGate,
-            SeededNodeRuntimeSettings.FromSeed("Transcription:Enabled", transcriptionEnabled));
+            SeededNodeRuntimeSettings.FromSeed("Transcription:Enabled", transcriptionEnabled),
+            modelLabWarm ?? new NullModelLabWarmResidentSource());
     }
 
     private static ImageServerResidentSnapshot ImageProcess(string modelName, bool leased, bool exited)

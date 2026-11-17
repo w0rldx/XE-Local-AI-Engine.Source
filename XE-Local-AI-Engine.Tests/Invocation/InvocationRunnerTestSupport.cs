@@ -47,6 +47,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Client.Services.WebAccess.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -960,7 +961,7 @@ internal static class InvocationRunnerTestSupport
             resolvedOrchestrationFactory,
             resolvedValidator,
             new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, modelTrustResolver ?? new FakeModelTrustResolver(),
-                cloudModelResolver ?? Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate()),
+                cloudModelResolver ?? Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate(), NoOpGpuIdleHolderPreemption.Instance),
             resolvedProviderStreamResilience,
             contextBudgeter ?? new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions), runtimeSettings),
             Options.Create(resolvedContextBudgetOptions),

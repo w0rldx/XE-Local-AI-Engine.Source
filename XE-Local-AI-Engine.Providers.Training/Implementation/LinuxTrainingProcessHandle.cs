@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Text;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
@@ -23,6 +24,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
     private readonly ILogger _logger;
     private readonly Process _process;
     private readonly Channel<string> _output;
+    private readonly SemaphoreSlim _stdinGate = new(1, 1);
 
     private int _disposed;
 
@@ -46,6 +48,34 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
     {
         await _process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
         return _process.ExitCode;
+    }
+
+    public async Task WriteLineAsync(string line, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        if (line.AsSpan().ContainsAny('\n', '\r'))
+        {
+            throw new ArgumentException("A stdin command is one line; an embedded line break would split it into two.", nameof(line));
+        }
+
+        if (!_process.StartInfo.RedirectStandardInput)
+        {
+            throw new InvalidOperationException("This trainer was spawned without a stdin pipe.");
+        }
+
+        // The raw stream, not StandardInput's writer, so the encoding is UTF-8 without a BOM whatever the platform default.
+        var bytes = Encoding.UTF8.GetBytes(line + "\n");
+        await _stdinGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var stdin = _process.StandardInput.BaseStream;
+            await stdin.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+            await stdin.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _ = _stdinGate.Release();
+        }
     }
 
     public void RequestStop()
@@ -88,6 +118,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
         {
             _ = _output.Writer.TryComplete();
             _process.Dispose();
+            _stdinGate.Dispose();
         }
     }
 
@@ -106,7 +137,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
     /// <summary>Sends <paramref name="signal" /> only while the trainer pid still has the receipt's start time.</summary>
     private void SignalIfSameProcess(int target, int signal)
     {
-        if (Receipt.StartTicks > 0 && LinuxTrainingProcessInspector.ReadStatOrNull(Receipt.Pid)?.StartTicks != Receipt.StartTicks)
+        if (Receipt.StartTicks > 0 && !LinuxTrainingProcessInspector.MaySignal(LinuxTrainingProcessInspector.ReadStat(Receipt.Pid), Receipt.StartTicks))
         {
             _logger.LogWarning("Trainer pid {Pid} no longer carries its recorded start time; signal {Signal} was not sent.", Receipt.Pid, signal);
             return;

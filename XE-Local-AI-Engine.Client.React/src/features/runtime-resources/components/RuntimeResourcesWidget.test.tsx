@@ -277,19 +277,75 @@ describe("RuntimeResourcesWidget", () => {
 		expect(within(dropdown).queryByTestId("runtime-resources-row-transcription-base")).toBeNull();
 	});
 
-	it("never asks for image or transcription residents when both surfaces are off", async () => {
+	it("still lists the ungated Model Lab worker when the image and transcription surfaces are off", async () => {
 		capabilityState.images = false;
 		capabilityState.transcription = false;
-		// No residents route: a request for one would fail the test as undeclared.
-		server.use(
-			jsonRoute("get", "model-fit/resources", { totalRamBytes: 16 * gib, availableRamBytes: 4 * gib, gpus: [] }),
-			jsonRoute("get", "model-fit/running", { items: [resident()] }),
+		serve(
+			[],
+			[resident()],
+			[runtimeResident(), runtimeResident({ runtime: "modelLab", modelId: "Qwen/Qwen3-0.6B", state: "idle" })],
 		);
 
 		const dropdown = await openPopover();
 
-		expect(await within(dropdown).findByTestId("runtime-resources-row-qwen3-4b")).toBeTruthy();
-		expect(screen.getByTestId("runtime-resources-count").textContent).toBe("1");
+		expect(await within(dropdown).findByTestId("runtime-resources-row-modelLab-Qwen/Qwen3-0.6B")).toBeTruthy();
+		expect(within(dropdown).queryByTestId("runtime-resources-row-image-sdxl-turbo")).toBeNull();
+		expect(screen.getByTestId("runtime-resources-count").textContent).toBe("2");
+	});
+
+	it.each([
+		["starting", null, false, "Starting"],
+		["active", "Qwen/Qwen3-0.6B", false, "Active"],
+		["idle", "Qwen/Qwen3-0.6B", true, "Idle"],
+	] as const)("shows a %s Model Lab worker and enables Eject only when idle", async (state, modelId, canEject, badge) => {
+		serve([gpu(0, 32, 8)], [], [runtimeResident({ runtime: "modelLab", modelId, state, canEject })]);
+
+		const dropdown = await openPopover();
+
+		const row = await within(dropdown).findByTestId(`runtime-resources-row-modelLab-${modelId ?? "starting"}`);
+		expect(within(row).getByText("Model Lab")).toBeTruthy();
+		expect(within(row).getByText(modelId ?? "Starting…")).toBeTruthy();
+		expect(within(row).getByText(badge)).toBeTruthy();
+		expect(within(row).getByRole("button", { name: "Eject Model Lab worker" })).toHaveProperty("disabled", !canEject);
+	});
+
+	it("ejects the idle Model Lab worker through its own endpoint and refreshes the residents", async () => {
+		let ejects = 0;
+		let residentReads = 0;
+		server.use(
+			jsonRoute("get", "model-fit/resources", { totalRamBytes: 16 * gib, availableRamBytes: 4 * gib, gpus: [] }),
+			jsonRoute("get", "model-fit/running", { items: [] }),
+			http.get(localApiPath("model-fit/runtime-residents"), () => {
+				residentReads += 1;
+				return HttpResponse.json({ items: [runtimeResident({ runtime: "modelLab", modelId: "Qwen/Qwen3-0.6B" })] });
+			}),
+			http.post(localApiPath("model-lab/warm/eject"), () => {
+				ejects += 1;
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+
+		const dropdown = await openPopover();
+		fireEvent.click(await within(dropdown).findByRole("button", { name: "Eject Model Lab worker" }));
+
+		await waitFor(() => expect(residentReads).toBe(2));
+		expect(ejects).toBe(1);
+		expect(toastMock.error).not.toHaveBeenCalled();
+	});
+
+	it("shows the server's reason when the Model Lab eject is refused as busy", async () => {
+		serve([gpu(0, 32, 8)], [], [runtimeResident({ runtime: "modelLab", modelId: "Qwen/Qwen3-0.6B" })]);
+		server.use(
+			domainErrorRoute("post", "model-lab/warm/eject", 409, {
+				reason: "Busy",
+				message: "A Model Lab job is using the worker.",
+			}),
+		);
+
+		const dropdown = await openPopover();
+		fireEvent.click(await within(dropdown).findByRole("button", { name: "Eject Model Lab worker" }));
+
+		await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("A Model Lab job is using the worker."));
 	});
 
 	it("disables eject while the server says the runtime cannot be ejected", async () => {

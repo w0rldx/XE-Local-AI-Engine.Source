@@ -9,10 +9,12 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Training.Export;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
+using XE_Local_AI_Engine.Tests.Capacity;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Training.Runs;
 
@@ -143,8 +145,67 @@ public sealed class TrainingExportServiceTests : IDisposable
         var start = await harness.StartAsync(TrainingArtifactKind.MergedGguf);
 
         AssertEx.Equal(TrainingExportStartOutcome.Busy, start.Outcome);
+        AssertEx.Equal(TrainingExportService.GpuBusyReason, start.Reason);
         AssertEx.Equal(0, harness.Spawner.Requests.Count);
         _ = await harness.Store.DidNotReceiveWithAnyArgs().CreateArtifactAsync(default!, default);
+    }
+
+    /// <summary>An idle Model Lab worker is not busy work: the refusal evicts it, the export retries once and is accepted.</summary>
+    [Test]
+    public async Task Start_WhileAnIdleModelLabWorkerHoldsTheGpu_EvictsIt_AndIsAccepted()
+    {
+        await using var holders = new IdleHolderHarness();
+        var holder = await holders.AdmitIdleAsync();
+        using var harness = Harness.Create(this, gate: holders.Gate, idlePreemption: holders.Broker);
+        harness.ScriptMergedPipeline();
+
+        var start = await harness.StartAsync(TrainingArtifactKind.MergedGguf);
+
+        AssertEx.Equal(TrainingExportStartOutcome.Accepted, start.Outcome, start.Reason);
+        AssertEx.Equal(expected: 1, holder.EvictionCount);
+        await harness.DrainAsync();
+    }
+
+    /// <summary>A runtime removal that wins the wait for the same idle worker changes the runtime under the export: the lease holder reads it again.</summary>
+    [Test]
+    public async Task Start_WhenARuntimeRemovalWinsTheWaitForAnIdleWorker_IsRefusedAfterTheLease_AndGivesEverythingBack()
+    {
+        await using var holders = new IdleHolderHarness();
+        var evictionMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var holder = await holders.AdmitIdleAsync(evictionMayFinish.Task);
+        using var harness = Harness.Create(this, gate: holders.Gate, idlePreemption: holders.Broker);
+        harness.ScriptMergedPipeline();
+
+        var starting = harness.StartAsync(TrainingArtifactKind.MergedGguf);
+        await AssertEx.EventuallyAsync(() => holder.EvictionCount == 1, TestBudgets.Contended, "The export waits for the idle worker to go.");
+        // The removal published its phase while both waited; the interpreter it removes resolves to nothing from here on.
+        _ = harness.Runtime.GetStatus().Returns(RuntimeStatus(TrainingRuntimePhase.Removing));
+        _ = harness.Runtime.ResolveInterpreterPath().Returns((string?)null);
+        evictionMayFinish.SetResult();
+        var start = await starting.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.Equal(TrainingExportStartOutcome.RuntimeUnavailable, start.Outcome, start.Reason);
+        AssertEx.Equal(0, harness.Spawner.Requests.Count, "No pipeline was scheduled.");
+        AssertEx.Null(holders.Gate.ExclusiveKind, "The gate is given back.");
+        await harness.Lease.Received(1).DisposeAsync();
+        _ = await harness.Store.DidNotReceiveWithAnyArgs().CreateArtifactAsync(default!, default);
+    }
+
+    /// <summary>A RUNNING experiment refuses the export at once with the holder-neutral reason; its demand waits for the job's end.</summary>
+    [Test]
+    public async Task Start_WhileAModelLabExperimentRuns_IsRefusedAtOnce_AndLatchesTheDemand()
+    {
+        await using var holders = new IdleHolderHarness();
+        var holder = await holders.AdmitAsync();
+        using var harness = Harness.Create(this, gate: holders.Gate, idlePreemption: holders.Broker);
+
+        var start = await harness.StartAsync(TrainingArtifactKind.MergedGguf);
+
+        AssertEx.Equal(TrainingExportStartOutcome.Busy, start.Outcome);
+        AssertEx.Equal(TrainingExportService.GpuBusyReason, start.Reason);
+        AssertEx.Equal(FakeGpuIdleHolder.HolderState.Active, holder.State);
+        AssertEx.True(holder.PreemptionPending);
+        AssertEx.Equal(0, harness.Spawner.Requests.Count);
     }
 
     [Test]
@@ -390,6 +451,20 @@ public sealed class TrainingExportServiceTests : IDisposable
     }
 
     /// <summary>Wires one export service over scripted collaborators and a temp-directory workspace.</summary>
+    private static TrainingRuntimeStatus RuntimeStatus(TrainingRuntimePhase phase) =>
+        new()
+        {
+            Phase = phase,
+            IsRunning = false,
+            Terminal = true,
+            LogLines = [],
+            LogStartSequence = 0,
+            SanitizedError = null,
+            Installed = null,
+            StartedAtUtc = null,
+            CompletedAtUtc = null
+        };
+
     private sealed class Harness : IDisposable
     {
         public const string GgufPyDirectory = "/opt/llama.cpp/gguf-py";
@@ -429,12 +504,18 @@ public sealed class TrainingExportServiceTests : IDisposable
         public string? RecordedSmokeReason { get; private set; }
         public bool SmokeRan { get; private set; }
 
+        public ITrainingRuntimeService Runtime { get; private set; } = null!;
+
+        public ILlamaServerRuntimeMutationLease Lease { get; private set; } = null!;
+
         public string LogText => _logger.AllText;
 
         public static Harness Create(TrainingExportServiceTests owner,
             bool quantizerPresent = true,
             TrainingRunStatus runStatus = TrainingRunStatus.Succeeded,
-            GgufImportInspection? inspection = null)
+            GgufImportInspection? inspection = null,
+            IGpuWorkGate? gate = null,
+            IGpuIdleHolderPreemption? idlePreemption = null)
         {
             var runId = Guid.NewGuid();
             var dataDirectory = new FakeNodeDataDirectory(owner._root);
@@ -453,19 +534,7 @@ public sealed class TrainingExportServiceTests : IDisposable
 
             var runtime = Substitute.For<ITrainingRuntimeService>();
             _ = runtime.ResolveInterpreterPath().Returns("/venv/bin/python");
-            _ = runtime.GetStatus()
-                       .Returns(new TrainingRuntimeStatus
-                       {
-                           Phase = TrainingRuntimePhase.Ready,
-                           IsRunning = false,
-                           Terminal = true,
-                           LogLines = [],
-                           LogStartSequence = 0,
-                           SanitizedError = null,
-                           Installed = null,
-                           StartedAtUtc = null,
-                           CompletedAtUtc = null
-                       });
+            _ = runtime.GetStatus().Returns(RuntimeStatus(TrainingRuntimePhase.Ready));
 
             var convertScripts = Substitute.For<IConvertScriptProvisioner>();
             _ = convertScripts.EnsureAsync(Arg.Any<CancellationToken>())
@@ -526,15 +595,16 @@ public sealed class TrainingExportServiceTests : IDisposable
             // The substitute returns null for the lease by default, which reads as "a model is loaded"; a free
             // runtime hands one out.
             var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-            _ = supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
-                          .Returns(Substitute.For<ILlamaServerRuntimeMutationLease>());
+            var lease = Substitute.For<ILlamaServerRuntimeMutationLease>();
+            _ = supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>()).Returns(lease);
 
-            var gate = new GpuWorkGate();
+            gate ??= new GpuWorkGate();
             var spawner = new ScriptedExportSpawner();
             var logger = new RecordingLogger<TrainingExportService>();
             var service = new TrainingExportService(provider.GetRequiredService<IServiceScopeFactory>(),
                 new TrainingRunEventBuffer(Options.Create(new TrainingRunEventBufferOptions())),
                 gate,
+                idlePreemption ?? NoOpGpuIdleHolderPreemption.Instance,
                 supervisor,
                 runtime,
                 spawner,
@@ -547,7 +617,11 @@ public sealed class TrainingExportServiceTests : IDisposable
                 dataDirectory,
                 logger);
 
-            var harness = new Harness(provider, service, store, spawner, gate, runId, staged, adapterDirectory, logger);
+            var harness = new Harness(provider, service, store, spawner, gate, runId, staged, adapterDirectory, logger)
+            {
+                Runtime = runtime,
+                Lease = lease
+            };
             harnessBox[0] = harness;
             return harness;
         }

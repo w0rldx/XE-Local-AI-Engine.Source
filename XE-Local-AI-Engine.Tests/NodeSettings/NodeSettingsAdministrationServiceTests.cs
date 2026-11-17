@@ -65,6 +65,31 @@ public sealed class NodeSettingsAdministrationServiceTests
     }
 
     [Test]
+    public async Task ApplyAgenticPatch_ModelLabWarmIdleSeconds_StoresZero_AndRefusesOutOfRangeWithTheRange()
+    {
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings());
+        var service = CreateService(store);
+
+        var off = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            ModelLabWarmIdleSeconds = 0
+        });
+        var refused = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            ModelLabWarmIdleSeconds = StoredNodeSettings.MaxModelLabWarmIdleSeconds + 1
+        });
+
+        AssertEx.True(off.Updated);
+        AssertEx.Equal(expected: 0, store.Current.ModelLabWarmIdleSeconds, "0 turns warming off and is stored as 0.");
+        AssertEx.Equal(expected: 0, (await service.GetAgenticViewAsync()).ModelLabWarmIdleSeconds);
+        AssertEx.False(refused.Updated);
+        var error = refused.ValidationErrors.Single();
+        AssertEx.Equal(NodeSettingsField.ModelLabWarmIdleSeconds, error.Field);
+        AssertEx.Contains(error.Message, "between 0 and 3600 seconds", StringComparison.Ordinal);
+        AssertEx.Equal(expected: 0, store.Current.ModelLabWarmIdleSeconds, "a refused patch writes nothing.");
+    }
+
+    [Test]
     public async Task ApplyAgenticPatch_WhenASiblingWriterAppendsAToolCapableModelBetweenTheLoadAndTheWrite_KeepsItsEntry()
     {
         // The patch is PARTIAL, so every field it does not name must come from the record the write lands on. Building
@@ -307,11 +332,11 @@ public sealed class NodeSettingsAdministrationServiceTests
             "LlamaMaxLoadedProcesses", "LlamaIdleTimeToLiveSeconds", "KeepModelWarmEnabled",
             "KeepModelWarmModelName", "KeepModelWarmIntervalSeconds", "MaxMessageRequestTimeoutSeconds",
             "ChatCacheReuse", "SpeculativeMode", "SpeculativeDraftModelName", "SpeculativeDraftMaxTokens",
-            "SpeculativeDraftGpuLayers", "KvCacheType", "RerankerModelName", "AutoEffortFastModelName"
+            "SpeculativeDraftGpuLayers", "KvCacheType", "RerankerModelName", "AutoEffortFastModelName", "ModelLabWarmIdleSeconds"
         ];
 
         AssertEx.Equal(approved.Length, names.Count);
-        AssertEx.True(names.SetEquals(approved), "the agentic patch must expose exactly the approved 18 fields.");
+        AssertEx.True(names.SetEquals(approved), "the agentic patch must expose exactly the approved 19 fields.");
         AssertEx.False(names.Contains(nameof(StoredNodeSettings.CustomToolsEnabled)));
         AssertEx.False(names.Contains(nameof(StoredNodeSettings.ToolRelevanceEnabled)));
         AssertEx.False(names.Contains(nameof(StoredNodeSettings.ToolApprovalPolicy)));

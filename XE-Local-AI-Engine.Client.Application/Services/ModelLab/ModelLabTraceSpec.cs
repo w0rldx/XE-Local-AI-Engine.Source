@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 public static class ModelLabTraceSpec
 {
     /// <summary>Separate from the trainer's: the two scripts change independently. Pinned by <c>modellablib.CONTRACT_VERSION</c>.</summary>
-    public const int ContractVersion = 5;
+    public const int ContractVersion = 6;
 
     public const int MaxNewTokens = 128;
 

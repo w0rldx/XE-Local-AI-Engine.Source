@@ -33,7 +33,10 @@ public enum RuntimeResidentKindDto
     Image = 0,
 
     [JsonStringEnumMemberName("transcription")]
-    Transcription = 1
+    Transcription = 1,
+
+    [JsonStringEnumMemberName("modelLab")]
+    ModelLab = 2
 }
 
 /// <summary>What the resident daemon is doing.</summary>

@@ -113,6 +113,23 @@ public sealed class NodeRuntimeSettingsTests
     }
 
     [Test]
+    public async Task ModelLabWarmIdleSeconds_HonoursStoredThenDefault_AndAStoredZeroWins()
+    {
+        var empty = new Dictionary<string, string?>(StringComparer.Ordinal);
+
+        AssertEx.Equal(StoredNodeSettings.DefaultModelLabWarmIdleSeconds,
+            await CreateSut(new StoredNodeSettings(), empty).GetModelLabWarmIdleSecondsAsync());
+        AssertEx.Equal(expected: 60, await CreateSut(new StoredNodeSettings
+        {
+            ModelLabWarmIdleSeconds = 60
+        }, empty).GetModelLabWarmIdleSecondsAsync());
+        AssertEx.Equal(expected: 0, await CreateSut(new StoredNodeSettings
+        {
+            ModelLabWarmIdleSeconds = 0
+        }, empty).GetModelLabWarmIdleSecondsAsync(), "0 turns warming off and must not read as unset.");
+    }
+
+    [Test]
     public async Task DetachedGraceSeconds_HonoursStoredThenSeedThenDefault()
     {
         // The disconnect grace is the one stream-budget knob an operator edits, so it follows the stored-node-setting

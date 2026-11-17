@@ -79,6 +79,29 @@ public sealed class AsyncSharedExclusiveGateTests
         gate.ExitShared();
     }
 
+    /// <summary>An idle GPU holder reads this to tell demand that queued before it registered, so every waiter counts until its enter returns.</summary>
+    [Test]
+    public async Task WaiterCount_CountsSharedAndExclusiveEntersUntilTheyReturn()
+    {
+        using var gate = new AsyncSharedExclusiveGate();
+        await gate.EnterExclusiveAsync(CancellationToken.None);
+        AssertEx.Equal(expected: 0, gate.WaiterCount, "The holder that got in is not waiting.");
+
+        var shared = gate.EnterSharedAsync(CancellationToken.None);
+        using var cancellation = new CancellationTokenSource();
+        var exclusive = gate.EnterExclusiveAsync(cancellation.Token);
+        AssertEx.Equal(expected: 2, gate.WaiterCount, "Both queue behind the held gate.");
+
+        await cancellation.CancelAsync();
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => exclusive);
+        AssertEx.Equal(expected: 1, gate.WaiterCount, "A cancelled enter stops counting.");
+
+        gate.ExitExclusive();
+        await shared.WaitAsync(TimeSpan.FromSeconds(3));
+        AssertEx.Equal(expected: 0, gate.WaiterCount, "An admitted enter stops counting.");
+        gate.ExitShared();
+    }
+
     [Test]
     public async Task CancelledExclusiveAcquire_DoesNotLeaveTheGateClosed()
     {

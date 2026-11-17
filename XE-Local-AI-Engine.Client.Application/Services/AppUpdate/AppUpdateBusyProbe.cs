@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
@@ -19,6 +20,7 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 public sealed class AppUpdateBusyProbe
 {
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly IGpuIdleHolderPreemption _idlePreemption;
     private readonly IInvocationRunner _invocationRunner;
     private readonly IGgufDownloadCoordinator _ggufDownloads;
     private readonly IImageModelDownloadCoordinator _imageModelDownloads;
@@ -29,6 +31,7 @@ public sealed class AppUpdateBusyProbe
     private readonly IServiceScopeFactory _scopeFactory;
 
     public AppUpdateBusyProbe(IGpuWorkGate gpuWorkGate,
+        IGpuIdleHolderPreemption idlePreemption,
         IInvocationRunner invocationRunner,
         IGgufDownloadCoordinator ggufDownloads,
         IImageModelDownloadCoordinator imageModelDownloads,
@@ -40,6 +43,8 @@ public sealed class AppUpdateBusyProbe
     {
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
         _gpuWorkGate = gpuWorkGate;
+        ArgumentNullException.ThrowIfNull(idlePreemption);
+        _idlePreemption = idlePreemption;
         ArgumentNullException.ThrowIfNull(invocationRunner);
         _invocationRunner = invocationRunner;
         ArgumentNullException.ThrowIfNull(ggufDownloads);
@@ -63,8 +68,8 @@ public sealed class AppUpdateBusyProbe
     {
         var items = new List<AppUpdateBusyItem>();
 
-        // Only the exclusive kinds: shared holders never surface through the gate's UX read.
-        AppUpdateBusyKind? gpuKind = _gpuWorkGate.ExclusiveKind switch
+        // Only the exclusive kinds: shared holders never surface through the gate's UX read. An idle Model Lab worker is evictable, not busy work.
+        AppUpdateBusyKind? gpuKind = _idlePreemption.IsIdlePreemptible ? null : _gpuWorkGate.ExclusiveKind switch
         {
             GpuWorkKind.TrainingRun => AppUpdateBusyKind.TrainingRun,
             GpuWorkKind.EvaluationRun => AppUpdateBusyKind.EvaluationRun,

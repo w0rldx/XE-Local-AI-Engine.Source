@@ -157,7 +157,8 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
                 SpeculativeDraftGpuLayers = patch.SpeculativeDraftGpuLayers ?? record.SpeculativeDraftGpuLayers,
                 KvCacheType = TrimWhenProvided(patch.KvCacheType, record.KvCacheType),
                 RerankerModelName = TrimWhenProvided(patch.RerankerModelName, record.RerankerModelName),
-                AutoEffortFastModelName = TrimWhenProvided(patch.AutoEffortFastModelName, record.AutoEffortFastModelName)
+                AutoEffortFastModelName = TrimWhenProvided(patch.AutoEffortFastModelName, record.AutoEffortFastModelName),
+                ModelLabWarmIdleSeconds = patch.ModelLabWarmIdleSeconds ?? record.ModelLabWarmIdleSeconds
             };
         }
 
@@ -431,6 +432,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
             SpeculativeDraftGpuLayers = settings.SpeculativeDraftGpuLayers,
             KvCacheType = settings.KvCacheType,
             RerankerModelName = settings.RerankerModelName,
-            AutoEffortFastModelName = settings.AutoEffortFastModelName
+            AutoEffortFastModelName = settings.AutoEffortFastModelName,
+            ModelLabWarmIdleSeconds = settings.ModelLabWarmIdleSeconds
         };
 }

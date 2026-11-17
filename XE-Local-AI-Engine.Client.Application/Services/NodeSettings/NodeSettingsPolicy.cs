@@ -27,7 +27,8 @@ public enum NodeSettingsField
     AgentHomeEnabled,
     HuggingFaceDefaultQuant,
     RerankerModelName,
-    KnowledgeEmbeddingModelName
+    KnowledgeEmbeddingModelName,
+    ModelLabWarmIdleSeconds
 }
 
 /// <summary>A single cross-field violation: the offending field plus the operator-facing message.</summary>

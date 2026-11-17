@@ -140,6 +140,7 @@ internal sealed class ModelLabScriptRunner
                 break;
             case TrainingStdioEventKind.Heartbeat:
             case TrainingStdioEventKind.Artifact:
+            case TrainingStdioEventKind.Ready:
             default:
                 break;
         }

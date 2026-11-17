@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -17,6 +18,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 internal sealed class LlamaServerRuntimeMutationGate : IDisposable
 {
     private readonly AsyncSharedExclusiveGate _gate = new();
+    private readonly IGpuIdleHolderPreemption _idlePreemption;
     private readonly Type _ownerType;
     private readonly Lock _operationSync = new();
     private readonly CancellationToken _shutdownToken;
@@ -30,15 +32,20 @@ internal sealed class LlamaServerRuntimeMutationGate : IDisposable
     ///     supervisor's name rather than this internal helper's.
     /// </param>
     /// <param name="shutdownToken">Linked into every gate wait, so a waiter is released on host shutdown.</param>
-    public LlamaServerRuntimeMutationGate(Type ownerType, CancellationToken shutdownToken)
+    /// <param name="idlePreemption">Told once per public entry, so an idle GPU holder sitting on this gate leaves; null raises nothing.</param>
+    public LlamaServerRuntimeMutationGate(Type ownerType, CancellationToken shutdownToken, IGpuIdleHolderPreemption? idlePreemption = null)
     {
         ArgumentNullException.ThrowIfNull(ownerType);
         _ownerType = ownerType;
         _shutdownToken = shutdownToken;
+        _idlePreemption = idlePreemption ?? NoOpGpuIdleHolderPreemption.Instance;
     }
 
     /// <summary>Whether an operator runtime mutation is currently in flight (keep-warm stays suppressed while it is).</summary>
     public bool IsMutationActive => Volatile.Read(ref _mutationActivityCount) > 0;
+
+    /// <summary>Whether an ensure or a mutation is waiting to enter: demand that may predate the idle holder it waits behind.</summary>
+    public bool HasWaiters => _gate.WaiterCount > 0;
 
     public void Dispose()
     {
@@ -105,6 +112,7 @@ internal sealed class LlamaServerRuntimeMutationGate : IDisposable
     /// </summary>
     public Task EnterSharedAsync(CancellationToken ct)
     {
+        _idlePreemption.RequestPreemption();
         return EnterAsync(shared: true, ct);
     }
 
@@ -115,6 +123,7 @@ internal sealed class LlamaServerRuntimeMutationGate : IDisposable
     /// </summary>
     public Task EnterExclusiveAsync(CancellationToken ct)
     {
+        _idlePreemption.RequestPreemption();
         return EnterAsync(shared: false, ct);
     }
 
@@ -144,9 +153,10 @@ internal sealed class LlamaServerRuntimeMutationGate : IDisposable
     /// <remarks>
     ///     <paramref name="mutationBlocked" /> is evaluated under the gate: when it reports live or in-flight
     ///     processes the gate is released again and no lease is issued, because a runtime swap under a loaded model
-    ///     would pull the binaries out from under it.
+    ///     would pull the binaries out from under it. <paramref name="raisesDemand" /> is false only for the idle holder's
+    ///     own admission, which must never preempt itself.
     /// </remarks>
-    public async Task<ILlamaServerRuntimeMutationLease?> AcquireLeaseOrNullAsync(Func<bool> mutationBlocked, CancellationToken ct)
+    public async Task<ILlamaServerRuntimeMutationLease?> AcquireLeaseOrNullAsync(Func<bool> mutationBlocked, bool raisesDemand, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(mutationBlocked);
         BeginOperation();
@@ -154,9 +164,14 @@ internal sealed class LlamaServerRuntimeMutationGate : IDisposable
         Interlocked.Increment(ref _mutationActivityCount);
         try
         {
+            if (raisesDemand)
+            {
+                _idlePreemption.RequestPreemption();
+            }
+
             // EXCLUSIVE: the mutation about to run replaces the runtime binaries under the supervisor, so it must see a
-            // quiet supervisor — every in-flight ensure decision has finished and no new one can start.
-            await EnterExclusiveAsync(ct).ConfigureAwait(false);
+            // quiet supervisor — every in-flight ensure decision has finished and no new one can start. The private entry, so demand is raised once.
+            await EnterAsync(shared: false, ct).ConfigureAwait(false);
 
             bool blocked;
             try

@@ -4,6 +4,7 @@ Assert-based with no framework, like test_modellablib.py. Only transformers is s
 CPU wheel in the root dev venv). Where torch is not installed, every test skips with the reason.
 """
 
+import contextlib
 import math
 import sys
 import types
@@ -78,21 +79,22 @@ def _model():
     return Model().eval()
 
 
-def _lens(modellab, model):
-    return modellab._Lens(model, model.layers, TOP, model.norm, model.head)
+def _lens(modellab, model, stack):
+    return modellab._Lens(stack, model, model.layers, TOP, model.norm, model.head)
 
 
 def test_each_block_reads_through_the_head_and_the_last_row_is_the_models_own():
     torch = _require_torch()
     modellab = _load_modellab()
     model = _model()
-    lens = _lens(modellab, model)
+    stack = contextlib.ExitStack()
+    lens = _lens(modellab, model, stack)
     ids = torch.tensor([[1, 2, 3, 4]])
     with torch.inference_mode():
         logits = model(ids).logits
         scores = logits[:, -1]
         assert lens(ids, scores) is scores
-        lens.remove()
+        stack.close()
         # Removed hooks record nothing more: this pass, by hand, is the expected readout per block.
         readouts, hidden = [], model.embed(ids)
         for block in model.layers:
@@ -127,13 +129,13 @@ def test_each_block_reads_through_the_head_and_the_last_row_is_the_models_own():
 def test_a_nan_readout_stays_nan_on_record_and_is_written_null():
     torch = _require_torch()
     modellab = _load_modellab()
-    lens = _lens(modellab, _model())
-    torch.manual_seed(1)
-    lens._stash = {0: torch.full((HIDDEN,), math.nan), 1: torch.randn(HIDDEN)}
-    lens._raw = torch.randn(VOCAB)
-    with torch.inference_mode():
-        lens(None, lens._raw.view(1, -1))
-    lens.remove()
+    with contextlib.ExitStack() as stack:
+        lens = _lens(modellab, _model(), stack)
+        torch.manual_seed(1)
+        lens._stash = {0: torch.full((HIDDEN,), math.nan), 1: torch.randn(HIDDEN)}
+        lens._raw = torch.randn(VOCAB)
+        with torch.inference_mode():
+            lens(None, lens._raw.view(1, -1))
 
     _, ids, logprobs, chosen, ranks, entropies = lens.recorded()[0]
     assert math.isnan(entropies[0])
@@ -151,17 +153,16 @@ def test_a_nan_readout_stays_nan_on_record_and_is_written_null():
 def test_a_step_without_every_block_state_is_refused():
     torch = _require_torch()
     modellab = _load_modellab()
-    lens = _lens(modellab, _model())
-    lens._stash = {0: torch.zeros(HIDDEN)}
-    lens._raw = torch.zeros(VOCAB)
-    try:
-        lens(None, torch.zeros(1, VOCAB))
-    except RuntimeError as error:
-        assert "blocks [1]" in str(error)
-    else:
-        raise AssertionError("A lens step missing block 1's state was recorded.")
-    finally:
-        lens.remove()
+    with contextlib.ExitStack() as stack:
+        lens = _lens(modellab, _model(), stack)
+        lens._stash = {0: torch.zeros(HIDDEN)}
+        lens._raw = torch.zeros(VOCAB)
+        try:
+            lens(None, torch.zeros(1, VOCAB))
+        except RuntimeError as error:
+            assert "blocks [1]" in str(error)
+        else:
+            raise AssertionError("A lens step missing block 1's state was recorded.")
     assert lens.steps == []
 
 

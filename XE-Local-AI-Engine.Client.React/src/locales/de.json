@@ -6945,6 +6945,11 @@
 					"info": "Die Speicherschätzung schlägt diesen Anteil der Modellgewichte und des KV-Caches auf, um Speicher abzudecken, den die Formel nicht erfasst. Sie fließt in Modellempfehlungen, in das Kontextfenster beim Laden eines Modells und in die Kapazitätsprüfung für zusätzliche Agenten ein. Erhöhen Sie den Wert, wenn „passende\" Modelle trotzdem zu wenig Speicher haben; senken Sie ihn für größere Modelle oder Fenster. Standard: 12 %.",
 					"label": "Sicherheitsmarge der Modellprüfung"
 				},
+				"modelLabWarmIdleSeconds": {
+					"description": "Bei 0 bleibt kein Model-Lab-Modell vorgeladen.",
+					"info": "Wie lange in Sekunden das Model Lab seinen Worker samt Modell nach einem Lauf geladen hält, damit der nächste Trace oder Vergleich ohne erneutes Laden startet. Länger spart die Ladezeit zwischen Läufen; kürzer gibt den VRAM früher an Chat- und Bildmodelle zurück. Standard: 300 (5 Minuten), erlaubt 0 bis 3600; bei 0 wird der Worker nach jedem Lauf beendet. Gilt ab dem nächsten Lauf, ohne Neustart.",
+					"label": "Vorhaltezeit im Model Lab"
+				},
 				"nodeDbBackupRetainCount": {
 					"description": "Vor jedem Datenbank-Update wird eine Sicherung angelegt; ältere über diese Anzahl hinaus werden entfernt.",
 					"label": "Aufbewahrte Datenbanksicherungen"
@@ -8576,6 +8581,8 @@
 	"runtimeResources": {
 		"ejectImageRuntime": "Bild-Laufzeit auswerfen",
 		"ejectLabel": "{{modelName}} auswerfen",
+		"ejectModelLabFailed": "Das Model-Lab-Modell konnte nicht entladen werden.",
+		"ejectModelLabRuntime": "Model-Lab-Worker auswerfen",
 		"ejectTranscriptionRuntime": "Transkriptions-Laufzeit auswerfen",
 		"gpu": "GPU {{index}} VRAM",
 		"noResidents": "Keine Modelle geladen.",
@@ -8585,6 +8592,7 @@
 		"runtime": {
 			"image": "Bilder",
 			"llamaCpp": "llama.cpp",
+			"modelLab": "Model Lab",
 			"transcription": "Transkription"
 		},
 		"startingModel": "Startet…",

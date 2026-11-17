@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
 ///     Says why a chat turn waits for a benchmark or a training job, with a <see cref="TurnNoticeKind.QueuedBehindGpuWork" />
@@ -47,15 +48,18 @@ internal static class GpuWorkHolderNotice
     }
 
     /// <summary>The notice for a turn that starts loading its model while an exclusive GPU job owns the node, or <see langword="null" />.</summary>
-    public static TurnNoticePayload? ForModelLoad(IGpuWorkGate gate, Guid invocationId) =>
-        gate.ExclusiveKind switch
-        {
-            GpuWorkKind.TrainingRun => Notice(invocationId, TrainingRunMessage),
-            GpuWorkKind.EvaluationRun => Notice(invocationId, EvaluationRunMessage),
-            GpuWorkKind.Export => Notice(invocationId, ExportMessage),
-            GpuWorkKind.ModelLabExperiment => Notice(invocationId, ModelLabExperimentMessage),
-            _ => null
-        };
+    /// <remarks>An idle Model Lab worker gives no notice: the load's own demand evicts it, so the turn does not queue behind it.</remarks>
+    public static TurnNoticePayload? ForModelLoad(IGpuWorkGate gate, IGpuIdleHolderPreemption idlePreemption, Guid invocationId) =>
+        idlePreemption.IsIdlePreemptible
+            ? null
+            : gate.ExclusiveKind switch
+            {
+                GpuWorkKind.TrainingRun => Notice(invocationId, TrainingRunMessage),
+                GpuWorkKind.EvaluationRun => Notice(invocationId, EvaluationRunMessage),
+                GpuWorkKind.Export => Notice(invocationId, ExportMessage),
+                GpuWorkKind.ModelLabExperiment => Notice(invocationId, ModelLabExperimentMessage),
+                _ => null
+            };
 
     private static TurnNoticePayload Notice(Guid invocationId, string message) =>
         new()

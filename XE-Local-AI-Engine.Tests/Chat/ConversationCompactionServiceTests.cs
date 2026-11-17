@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -900,7 +901,7 @@ public sealed class ConversationCompactionServiceTests
         providerResolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
         return new LocalRuntimeWarmer(providerResolver, cloudFactory, new FakeModelTrustResolver(), Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System,
-            new GpuWorkGate());
+            new GpuWorkGate(), NoOpGpuIdleHolderPreemption.Instance);
     }
 
     private static IModelCapabilityResolver CreateCapabilityResolver(bool supportsThinking)

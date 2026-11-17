@@ -367,6 +367,9 @@ import type {
 	EjectImageRuntimeData,
 	EjectImageRuntimeErrors,
 	EjectImageRuntimeResponses,
+	EjectModelLabWarmWorkerData,
+	EjectModelLabWarmWorkerErrors,
+	EjectModelLabWarmWorkerResponses,
 	EjectRunningModelData,
 	EjectRunningModelErrors,
 	EjectRunningModelResponses,
@@ -1562,6 +1565,7 @@ import {
 	zDraftImagePromptResponse,
 	zDraftSkillResponse,
 	zEjectImageRuntimeResponse,
+	zEjectModelLabWarmWorkerResponse,
 	zEjectRunningModelResponse,
 	zEjectTranscriptionRuntimeResponse,
 	zEnableScheduledJobResponse,
@@ -9724,6 +9728,27 @@ export const getModelLabPyTorchSource = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/model-lab/pytorch-source",
+		...options,
+	});
+
+export const ejectModelLabWarmWorker = <ThrowOnError extends boolean = true>(
+	options?: Options<EjectModelLabWarmWorkerData, ThrowOnError>,
+): RequestResult<EjectModelLabWarmWorkerResponses, EjectModelLabWarmWorkerErrors, ThrowOnError> =>
+	(options?.client ?? client).post<EjectModelLabWarmWorkerResponses, EjectModelLabWarmWorkerErrors, ThrowOnError>({
+		responseValidator: async (data) => await zEjectModelLabWarmWorkerResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/warm/eject",
 		...options,
 	});
 

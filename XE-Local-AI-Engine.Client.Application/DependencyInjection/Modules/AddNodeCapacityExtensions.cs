@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
@@ -45,6 +46,10 @@ internal static class AddNodeCapacityExtensions
         // The node's GPU-work admission gate (ADR 0005 §2), registered once here for every consumer: training runs, evaluation,
         // export, dataset generation, benchmarks and image jobs. Singleton: it is the whole point that every consumer sees the same one.
         builder.Services.AddSingleton<IGpuWorkGate, GpuWorkGate>();
+
+        // The idle-GPU-holder broker every demand path raises through. A plain AddSingleton, so it wins over the providers' no-op floor.
+        builder.Services.AddSingleton<GpuIdleHolderBroker>();
+        builder.Services.AddSingleton<IGpuIdleHolderPreemption>(static services => services.GetRequiredService<GpuIdleHolderBroker>());
 
         // Sub-agent spawn: SpawnOptions bound the per-root fan-out and cloud-spawn caps and the bounded same-model queue wait.
         // One Scoped implementation serves two deliberately separate interfaces — trusted in-process orchestration, and stricter unattended inbound MCP execution.

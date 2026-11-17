@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 // Aliased so OpenAI.Chat.ChatMessage never collides with the MEAI ChatMessage this file speaks.
@@ -42,6 +43,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
     private readonly IWorkerEventDispatcher _dispatcher;
     private readonly IGgufModelStore _ggufModelStore;
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly IGpuIdleHolderPreemption _idlePreemption;
     private readonly ILocalModelProviderResolver _localModelProviderResolver;
     private readonly IModelTrustResolver _modelTrustResolver;
     private readonly INodeSettingsStore _nodeSettingsStore;
@@ -51,6 +53,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
     public DirectInferenceService(IChatClient chatClient,
         IWorkerEventDispatcher dispatcher,
         IGpuWorkGate gpuWorkGate,
+        IGpuIdleHolderPreemption idlePreemption,
         INodeSettingsStore nodeSettingsStore,
         IGgufModelStore ggufModelStore,
         IModelTrustResolver modelTrustResolver,
@@ -61,6 +64,8 @@ public sealed class DirectInferenceService : IDirectInferenceService
         ArgumentNullException.ThrowIfNull(chatClient);
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
+        ArgumentNullException.ThrowIfNull(idlePreemption);
+        _idlePreemption = idlePreemption;
         ArgumentNullException.ThrowIfNull(nodeSettingsStore);
         ArgumentNullException.ThrowIfNull(ggufModelStore);
         ArgumentNullException.ThrowIfNull(modelTrustResolver);
@@ -146,8 +151,10 @@ public sealed class DirectInferenceService : IDirectInferenceService
         var invocationId = Guid.NewGuid();
 
         // Fail fast rather than queue silently behind a job that may hold the GPU for hours.
-        if (GpuWorkHolderNotice.ForModelLoad(_gpuWorkGate, invocationId) is { } holderNotice)
+        if (GpuWorkHolderNotice.ForModelLoad(_gpuWorkGate, _idlePreemption, invocationId) is { } holderNotice)
         {
+            // The refusal is still demand: a running Model Lab job's end then evicts its worker instead of keeping it warm.
+            _idlePreemption.RequestPreemption();
             yield return ErrorEvent(DirectInferenceErrorCodes.GpuWorkExclusive, holderNotice.Message);
             yield break;
         }

@@ -638,6 +638,15 @@ public sealed record StoredNodeSettings
     /// <summary>1 TiB, the retention validator's ceiling.</summary>
     public const long MaxAgentHomeRunRetentionMaxTotalBytes = 1024L * 1024 * 1024 * 1024;
 
+    /// <summary>Seconds an idle Model Lab worker stays warm (five minutes).</summary>
+    public const int DefaultModelLabWarmIdleSeconds = 300;
+
+    /// <summary>0 turns warming off: the worker exits after each job.</summary>
+    public const int MinModelLabWarmIdleSeconds = 0;
+
+    /// <summary>One hour: a checkpoint held longer pins its VRAM against every other GPU job.</summary>
+    public const int MaxModelLabWarmIdleSeconds = 3600;
+
     /// <summary>Node-level master flag for the client voice (TTS) feature. Default (absent) is off.</summary>
     public const bool DefaultVoiceFeatureEnabled = false;
 
@@ -1344,6 +1353,9 @@ public sealed record StoredNodeSettings
 
     /// <summary>AgentHome runs byte ceiling, 0 = no byte limit. Seed: <c>AgentHome:RunRetention:MaxTotalBytes</c> (2 GiB). Read per sweep.</summary>
     public long? AgentHomeRunRetentionMaxTotalBytes { get; init; }
+
+    /// <summary>Seconds an idle Model Lab worker stays warm, 0 = off. Default <see cref="DefaultModelLabWarmIdleSeconds" />. Read at each idle transition.</summary>
+    public int? ModelLabWarmIdleSeconds { get; init; }
 
     /// <summary>Whether Development Mode is on. Seed: <c>Development:Enabled</c> (on). Applies after a node restart.</summary>
     public bool? DevelopmentEnabled { get; init; }

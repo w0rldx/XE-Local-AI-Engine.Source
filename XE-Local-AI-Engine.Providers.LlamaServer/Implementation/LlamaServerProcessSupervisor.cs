@@ -130,7 +130,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         TaskScheduler? detachedSpawnScheduler = null,
         ProcessSpawnReceiptStore? spawnReceipts = null,
         ILlamaServerPooledLaunchAdmission? pooledLaunchAdmission = null,
-        IRuntimeResidencyChangeNotifier? residencyNotifier = null)
+        IRuntimeResidencyChangeNotifier? residencyNotifier = null,
+        IGpuIdleHolderPreemption? idlePreemption = null)
     {
         ArgumentNullException.ThrowIfNull(binaryManager);
         _binaryManager = binaryManager;
@@ -182,7 +183,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         _pooledLaunchAdmission = pooledLaunchAdmission;
         _residencyNotifier = residencyNotifier ?? NullRuntimeResidencyChangeNotifier.Instance;
 
-        _runtimeMutationGate = new LlamaServerRuntimeMutationGate(typeof(LlamaServerProcessSupervisor), _shutdownCts.Token);
+        _runtimeMutationGate = new LlamaServerRuntimeMutationGate(typeof(LlamaServerProcessSupervisor), _shutdownCts.Token, idlePreemption);
         _reaper = new LlamaServerIdleReaper(_processes,
             new LlamaServerPortAllocator(_options),
             _layerPlacementReport,
@@ -353,11 +354,12 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     }
 
     /// <inheritdoc />
-    public Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct)
+    public Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct, bool raisesDemand = true)
     {
         // A live or in-flight process blocks the mutation: swapping the runtime binaries under a loaded model would
         // pull them out from under it.
         return _runtimeMutationGate.AcquireLeaseOrNullAsync(() => _processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty,
+            raisesDemand,
             ct);
     }
 
@@ -365,6 +367,12 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     public bool IsKeepWarmSuppressed()
     {
         return _runtimeMutationGate.IsMutationActive;
+    }
+
+    /// <inheritdoc />
+    public bool HasRuntimeGateWaiters()
+    {
+        return _runtimeMutationGate.HasWaiters;
     }
 
     internal int CountInflightSpawns() =>

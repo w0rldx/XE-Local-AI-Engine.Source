@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
@@ -45,6 +47,26 @@ public sealed class GetRuntimeResidentsEndpointTests
         AssertEx.Equal("image|sd15|active|null|False", Row(items[0]));
         AssertEx.Equal("image|sdxl|exited|null|False", Row(items[1]));
         AssertEx.Equal("transcription|large-v3-turbo|idle|cuda|True", Row(items[2]));
+    }
+
+    [Test]
+    public async Task GetResidents_WithAWarmModelLabWorker_ProjectsItsRowOntoTheWire()
+    {
+        var host = new Doubles(new ImageRuntimeActivityGate());
+        host.ImageSupervisor.GetResidents().Returns([]);
+        host.WhisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Stopped, modelId: null, backend: null);
+        host.ModelLabWarm.Resident = new ModelLabWarmResident
+        {
+            State = RuntimeResidentState.Idle,
+            ModelId = "Qwen/Qwen3-0.6B"
+        };
+
+        var (status, body) = await GetAsync(host, factory => factory.AddNodeBearerToken);
+
+        AssertEx.Equal(HttpStatusCode.OK, status);
+        using var document = JsonDocument.Parse(body);
+        var rows = document.RootElement.GetProperty("items").EnumerateArray().Select(Row).ToArray();
+        AssertEx.Equal("modelLab|Qwen/Qwen3-0.6B|idle|null|True", string.Join(',', rows));
     }
 
     [Test]
@@ -173,6 +195,8 @@ public sealed class GetRuntimeResidentsEndpointTests
                 services.AddSingleton<IWhisperServerSupervisor>(host.WhisperSupervisor);
                 services.RemoveAll<IWhisperRuntimeActivityGate>();
                 services.AddSingleton<IWhisperRuntimeActivityGate>(host.WhisperGate);
+                services.RemoveAll<IModelLabWarmResidentSource>();
+                services.AddSingleton<IModelLabWarmResidentSource>(host.ModelLabWarm);
             }
         };
         if (storedSettingsJson is not null)
@@ -203,5 +227,7 @@ public sealed class GetRuntimeResidentsEndpointTests
         public WhisperRuntimeActivityGate WhisperGate { get; } = new();
 
         public FakeWhisperServerSupervisor WhisperSupervisor { get; } = new();
+
+        public FakeModelLabWarmResidentSource ModelLabWarm { get; } = new();
     }
 }

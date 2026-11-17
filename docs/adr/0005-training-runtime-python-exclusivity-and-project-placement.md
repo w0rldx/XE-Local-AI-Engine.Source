@@ -6,6 +6,7 @@
 - **Authority:** Three decisions of 2026-08-15. Python exclusivity was decided by the maintainer on that date; whole-node GPU exclusivity and the project placement were closed by review evidence and confirmed by the maintainer. This record states them precisely enough to be enforced and to be revisited; it does not reopen them.
 - **Relates to:** [ADR 0004](0004-development-mode-container-execution-docker-stopgap.md) — unchanged and unamended by this record. See "Relationship to ADR 0004" below.
 - **Amended by:** [ADR 0016](0016-managed-python-shared-uv-layer.md) (2026-09-27) — Decision §3 only: the generic uv mechanics (uv acquisition and pin, the uv environment allowlist, the scrubbed runner) move to a shared `Providers.Python` that `Providers.Training` references. The text below is unchanged.
+- **Amended:** 2026-11-17 — Decision §2: an idle Model Lab worker may keep the exclusive admission as a preemptible holder. See [the amendment](#amendment-2026-11-17-an-idle-model-lab-worker-holds-the-node-as-a-preemptible-holder).
 
 ## Context
 
@@ -69,6 +70,41 @@ Stated honestly, including the ones that are costs.
 - **Two projects means a boundary that will be pushed on.** The pressure to put "just one" queue concern into `Providers.Training`, or one subprocess detail into `Client.Application`, is constant and each individual instance looks harmless. The `LayerDependencyTests` lists catch illegal *references*; they do not catch a misplaced class within a legal reference. That one is a review responsibility.
 
 - **Revisiting this is expected.** If a maintained .NET fine-tuning path appears, or if the node grows a second GPU that makes whole-node exclusivity unnecessary, the Python-exclusivity and whole-node-exclusivity decisions respectively should be superseded rather than quietly widened.
+
+## Amendment 2026-11-17: an idle Model Lab worker holds the node as a preemptible holder
+
+Decision §2 assumed that whoever holds the exclusive admission is working. A Model Lab worker that keeps its
+checkpoint loaded between jobs breaks that assumption: between jobs it holds the exclusive `IGpuWorkGate` admission,
+the runtime-mutation lease and its ledger reservation with nothing running. That is now allowed, for this holder only,
+on these terms:
+
+- **The idle holder is preemptible.** It registers with `GpuIdleHolderBroker` (`IGpuIdleHolderPreemption`) before it
+  takes the gate. Any GPU demand (a refused gate request, a model ensure through the lease gate, a whisper GPU load, a
+  training runtime install or remove, an eject) evicts it while it is idle. A running job is never preempted: demand
+  during a job is latched and served when the job ends.
+- **The holds pass, they are not retaken.** One owner, `ModelLabGpuSession`, keeps the gate, the lease and the
+  reservation from the cold start until the eviction; a job borrows them. Releasing and reacquiring between jobs would
+  hand the gap to a queued ensure, and the lease gate is not reentrant.
+- **An eviction gives the GPU back only once the process is seen to exit.** An exit not seen keeps the reservation and
+  the worker's receipt file, so the ledger still counts the memory and Model Lab refuses new starts until a reap proves
+  the process gone.
+- **The operator bounds it.** The idle time is the node setting `ModelLabWarmIdleSeconds` (at most one hour); 0 restores
+  one process per job.
+
+Rejected alternatives:
+
+- **Hold until the idle time runs out, refusing other work meanwhile.** Every chat, image or training start would wait
+  out or fail on a worker that is doing nothing, which turns a convenience into the "multi-hour tenant" §2 reserves for
+  training.
+- **Release every hold between jobs and keep only a ledger reservation.** The model would still sit in VRAM, but the
+  gate and the lease would say the node is free: a chat could load beside it and fail for memory, and the next Model Lab
+  start would have to win the gate and the lease again against whatever arrived in the gap.
+
+Consequences: every GPU demand path must raise demand (the gate does it on refusal, the lease gate on entry, whisper
+explicitly), and a path that refuses at once retries once after the idle holder released (`GpuWorkAdmission`). A refusal
+is now a side effect, so a poller must look for work before it asks the gate, or an empty poll evicts the worker. Reads
+that show the exclusive holder as busy must tell an idle holder apart (`IsIdlePreemptible`). A first request after a
+warm period can wait up to 30 s for the eviction. The text of §2 above is unchanged.
 
 ## Relationship to ADR 0004
 

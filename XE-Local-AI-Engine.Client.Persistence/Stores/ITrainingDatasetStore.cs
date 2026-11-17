@@ -41,6 +41,9 @@ public interface ITrainingDatasetStore
     /// <summary>Refused while a non-terminal generation work item still references the dataset.</summary>
     Task DeleteDatasetAsync(Guid datasetId, long expectedVersion, CancellationToken cancellationToken = default);
 
+    /// <summary>Whether any generation work item is queued, without claiming one, so an empty poll can skip the GPU work gate.</summary>
+    Task<bool> HasQueuedWorkAsync(CancellationToken cancellationToken = default);
+
     Task<DatasetGenerationClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Terminalizes every interrupted <c>Running</c> work item as failed. Attempt is pinned to 1: never retried in place.</summary>

@@ -6945,6 +6945,11 @@
 					"info": "The model-fit estimate adds this share of a model's weights and KV cache on top, to cover memory the formula misses. It feeds model recommendations, the context window a model gets when it loads and the capacity check for extra agents. Raise it if models that \"fit\" still run out of memory; lower it to allow larger models or windows. Default 12 %.",
 					"label": "Model fit safety margin"
 				},
+				"modelLabWarmIdleSeconds": {
+					"description": "0 turns keeping a Model Lab model warm off.",
+					"info": "How long, in seconds, the Model Lab keeps its worker and model loaded after a run, so the next trace or comparison starts without reloading. Longer saves the load time between runs; shorter returns VRAM to chat and image models sooner. Default 300 (5 minutes), allowed 0 to 3600; 0 stops the worker after every run. Applies from the next run, without a restart.",
+					"label": "Model Lab warm time"
+				},
 				"nodeDbBackupRetainCount": {
 					"description": "A backup is taken before each database update; older ones beyond this count are removed.",
 					"label": "Database backups kept"
@@ -8576,6 +8581,8 @@
 	"runtimeResources": {
 		"ejectImageRuntime": "Eject image runtime",
 		"ejectLabel": "Eject {{modelName}}",
+		"ejectModelLabFailed": "Could not unload the Model Lab model.",
+		"ejectModelLabRuntime": "Eject Model Lab worker",
 		"ejectTranscriptionRuntime": "Eject transcription runtime",
 		"gpu": "GPU {{index}} VRAM",
 		"noResidents": "No models are loaded.",
@@ -8585,6 +8592,7 @@
 		"runtime": {
 			"image": "Images",
 			"llamaCpp": "llama.cpp",
+			"modelLab": "Model Lab",
 			"transcription": "Transcription"
 		},
 		"startingModel": "Starting…",

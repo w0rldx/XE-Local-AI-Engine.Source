@@ -17,7 +17,7 @@ public sealed partial class NodeAdminMcpTools
             _nodeSettingsAdministrationService.GetAgenticViewAsync(cancellationToken));
 
     [McpServerTool(Name = "update_node_settings", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Apply a partial update to the exact restricted 18-field agentic node-settings allowlist.")]
+    [Description("Apply a partial update to the exact restricted 19-field agentic node-settings allowlist.")]
     // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public async Task<McpNodeSettingsUpdateResponse> UpdateNodeSettingsAsync(CancellationToken cancellationToken,
         string? default_model_name = null,
@@ -37,7 +37,8 @@ public sealed partial class NodeAdminMcpTools
         int? speculative_draft_gpu_layers = null,
         string? kv_cache_type = null,
         string? reranker_model_name = null,
-        string? auto_effort_fast_model_name = null)
+        string? auto_effort_fast_model_name = null,
+        int? model_lab_warm_idle_seconds = null)
     {
         var arguments = AuditArguments(new("default_model_name", default_model_name),
             new("enable_tools", enable_tools),
@@ -56,7 +57,8 @@ public sealed partial class NodeAdminMcpTools
             new("speculative_draft_gpu_layers", speculative_draft_gpu_layers),
             new("kv_cache_type", kv_cache_type),
             new("reranker_model_name", reranker_model_name),
-            new("auto_effort_fast_model_name", auto_effort_fast_model_name));
+            new("auto_effort_fast_model_name", auto_effort_fast_model_name),
+            new("model_lab_warm_idle_seconds", model_lab_warm_idle_seconds));
         return await InvokeAuditedAsync("update_node_settings", arguments, async () =>
         {
             var result = await _nodeSettingsAdministrationService.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
@@ -78,7 +80,8 @@ public sealed partial class NodeAdminMcpTools
                 SpeculativeDraftGpuLayers = speculative_draft_gpu_layers,
                 KvCacheType = kv_cache_type,
                 RerankerModelName = reranker_model_name,
-                AutoEffortFastModelName = auto_effort_fast_model_name
+                AutoEffortFastModelName = auto_effort_fast_model_name,
+                ModelLabWarmIdleSeconds = model_lab_warm_idle_seconds
             }, cancellationToken);
             return result.ToResponse();
         }, static response => !response.Updated);

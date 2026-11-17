@@ -1074,7 +1074,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     {
         public Action? OnLeaseDisposed { get; set; }
 
-        public Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct) =>
+        public Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct, bool raisesDemand = true) =>
             Task.FromResult<ILlamaServerRuntimeMutationLease?>(new Lease(this));
 
         public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct) =>
@@ -1122,7 +1122,7 @@ public sealed class LlamaCppSourceBuildServiceTests
 
     private sealed class BusySupervisor : ILlamaServerProcessSupervisor
     {
-        public Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct) =>
+        public Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct, bool raisesDemand = true) =>
             Task.FromResult<ILlamaServerRuntimeMutationLease?>(null);
 
         public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct) =>

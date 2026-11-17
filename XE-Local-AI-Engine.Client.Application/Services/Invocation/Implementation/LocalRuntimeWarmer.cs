@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -25,6 +26,7 @@ using XE_Local_AI_Engine.Providers.OpenAICompat;
 public sealed class LocalRuntimeWarmer
 {
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly IGpuIdleHolderPreemption _idlePreemption;
     private readonly IActiveCloudChatClientFactory _activeCloudFactory;
     private readonly ICloudModelResolver _cloudModelResolver;
     private readonly ILogger<LocalRuntimeWarmer> _logger;
@@ -41,11 +43,14 @@ public sealed class LocalRuntimeWarmer
         ILogger<LocalRuntimeWarmer> logger,
         TimeProvider timeProvider,
         IGpuWorkGate gpuWorkGate,
+        IGpuIdleHolderPreemption idlePreemption,
         LocalModelPerfLog? perfLog = null)
     {
         _perfLog = perfLog;
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
         _gpuWorkGate = gpuWorkGate;
+        ArgumentNullException.ThrowIfNull(idlePreemption);
+        _idlePreemption = idlePreemption;
         ArgumentNullException.ThrowIfNull(activeCloudFactory);
         ArgumentNullException.ThrowIfNull(cloudModelResolver);
         ArgumentNullException.ThrowIfNull(logger);
@@ -111,7 +116,7 @@ public sealed class LocalRuntimeWarmer
         // Phase: preparing runtime → loading model. Both fire BEFORE the stream-idle watchdog is armed.
         await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.PreparingRuntime);
         await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.LoadingModel, LoadingDetail(resolvedModel));
-        if (GpuWorkHolderNotice.ForModelLoad(_gpuWorkGate, invocationId) is { } gpuWorkNotice)
+        if (GpuWorkHolderNotice.ForModelLoad(_gpuWorkGate, _idlePreemption, invocationId) is { } gpuWorkNotice)
         {
             // The load waits for the exclusive job; without this the loading state carries no reason.
             await dispatcher.ReportTurnNoticeAsync(gpuWorkNotice);

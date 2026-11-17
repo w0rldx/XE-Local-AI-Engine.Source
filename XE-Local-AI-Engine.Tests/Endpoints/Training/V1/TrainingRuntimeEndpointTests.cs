@@ -164,7 +164,7 @@ public sealed class TrainingRuntimeEndpointTests
     public async Task RuntimeInstall_WhenTheProviderFails_UsesTheInstallPrerequisitesReason()
     {
         var runtime = Substitute.For<ITrainingRuntimeService>();
-        runtime.InstallAsync(Arg.Any<CancellationToken>())
+        runtime.InstallAsync(Arg.Any<Func<CancellationToken, Task<bool>>?>(), Arg.Any<CancellationToken>())
                .Returns<Task<TrainingRuntimeInstallResult>>(_ => throw new TrainingRuntimeException("The runtime package verification failed."));
         // Private host: it replaces ITrainingRuntimeService, which would poison every sibling on the shared fixture.
         await using var factory = HostWithSubstitutes(runtime: runtime);
@@ -188,8 +188,8 @@ public sealed class TrainingRuntimeEndpointTests
     {
         var runtime = Substitute.For<ITrainingRuntimeService>();
         runtime.Cancel().Returns(false);
-        runtime.RemoveAsync(Arg.Any<CancellationToken>())
-               .Returns<Task<bool>>(_ => throw new TrainingRuntimeException("The runtime cleanup failed."));
+        runtime.RemoveAsync(Arg.Any<Func<CancellationToken, Task<bool>>?>(), Arg.Any<CancellationToken>())
+               .Returns<Task<TrainingRuntimeRemoveOutcome>>(_ => throw new TrainingRuntimeException("The runtime cleanup failed."));
         // Private host: it replaces ITrainingRuntimeService, which would poison every sibling on the shared fixture.
         await using var factory = HostWithSubstitutes(runtime: runtime);
         using var client = factory.CreateClient();

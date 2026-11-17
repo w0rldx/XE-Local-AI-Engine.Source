@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -114,7 +115,7 @@ public sealed class ExternalModelContextBudgetTests
     {
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
         _ = cloudFactory.IsCloudProviderSelected(Arg.Any<string?>()).Returns(false);
-        return new LocalRuntimeWarmer(resolver, cloudFactory, trust, Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate());
+        return new LocalRuntimeWarmer(resolver, cloudFactory, trust, Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate(), NoOpGpuIdleHolderPreemption.Instance);
     }
 
     private static async Task<LocalRuntimePreparationResult> PrepareAsync(LocalRuntimeWarmer warmer)

@@ -4,6 +4,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Tests.AppUpdate;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -22,12 +23,23 @@ public sealed class GpuWorkKindCoverageTests
             var gate = new GpuWorkGate();
             AssertEx.Succeeded(gate.TryBeginExclusive(kind, out var hold));
             using var holdScope = hold;
-            AssertEx.NotNull(GpuWorkHolderNotice.ForModelLoad(gate, Guid.NewGuid()), $"{kind} has no row in GpuWorkHolderNotice.ForModelLoad.");
+            AssertEx.NotNull(GpuWorkHolderNotice.ForModelLoad(gate, NoOpGpuIdleHolderPreemption.Instance, Guid.NewGuid()), $"{kind} has no row in GpuWorkHolderNotice.ForModelLoad.");
 
             var sources = new AppUpdateBusySources();
             sources.GpuWorkGate.ExclusiveKind.Returns(kind);
             var items = await sources.Probe().CollectAsync(CancellationToken.None);
             AssertEx.Equal(expected: 1, items.Count, $"{kind} has no row in AppUpdateBusyProbe.CollectAsync.");
         }
+    }
+
+    /// <summary>An idle Model Lab worker holds the gate as its kind but is evictable, not work an update would interrupt.</summary>
+    [Test]
+    public async Task AnIdleGpuHolder_IsNoUpdateBusyRow()
+    {
+        var sources = new AppUpdateBusySources();
+        sources.GpuWorkGate.ExclusiveKind.Returns(GpuWorkKind.ModelLabExperiment);
+        sources.IdlePreemption.IsIdlePreemptible.Returns(true);
+
+        AssertEx.Empty(await sources.Probe().CollectAsync(CancellationToken.None));
     }
 }

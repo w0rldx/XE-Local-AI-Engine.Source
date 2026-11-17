@@ -41,5 +41,8 @@ public static partial class LocalApiRoutes
 
         // A Next token run's rendered prompt as the running llama-server tokenizes it. Never loads a model.
         public const string PromptTokens = "model-lab/prompt-tokens";
+
+        // The residents widget's eject for the warm worker: frees an Idle worker's checkpoint, never a running job's.
+        public const string WarmEject = "model-lab/warm/eject";
     }
 }

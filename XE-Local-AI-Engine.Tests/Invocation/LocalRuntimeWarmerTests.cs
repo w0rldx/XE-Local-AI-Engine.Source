@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -329,7 +330,7 @@ public sealed class LocalRuntimeWarmerTests
         cloudFactory.IsCloudProviderSelected(Arg.Any<string?>()).Returns(cloudSelected);
 
         return new LocalRuntimeWarmer(resolver, cloudFactory, trust ?? new FakeModelTrustResolver(), cloudModels ?? Substitute.For<ICloudModelResolver>(),
-            NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, gate ?? new GpuWorkGate(), perfLog);
+            NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, gate ?? new GpuWorkGate(), NoOpGpuIdleHolderPreemption.Instance, perfLog);
     }
 
     private static ILocalModelProvider CreateLlamaCppProvider(int? effectiveContextTokens)

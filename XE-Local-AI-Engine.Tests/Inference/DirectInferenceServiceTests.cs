@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.Inference.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -758,7 +759,7 @@ public sealed class DirectInferenceServiceTests
             models.ExistsAsync(ModelId, Arg.Any<CancellationToken>()).Returns(true);
             Providers.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(LlamaServerProviderConstants.ProviderName);
             var trust = new FakeModelTrustResolver().Register("lan", "qwen3").Register("hosted", "qwen3", ExternalProviderLocality.Cloud);
-            Service = new DirectInferenceService(chatClient, Dispatcher, Gate, Settings, models, trust, Providers, Time, NullLogger<DirectInferenceService>.Instance);
+            Service = new DirectInferenceService(chatClient, Dispatcher, Gate, NoOpGpuIdleHolderPreemption.Instance, Settings, models, trust, Providers, Time, NullLogger<DirectInferenceService>.Instance);
         }
 
         public Func<CancellationToken, IAsyncEnumerable<ChatResponseUpdate>> Stream { get; set; }

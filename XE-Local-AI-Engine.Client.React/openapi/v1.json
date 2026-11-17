@@ -18684,6 +18684,43 @@
         ]
       }
     },
+    "/api/local/v1/model-lab/warm/eject": {
+      "post": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "ejectModelLabWarmWorker",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabStartBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/models": {
       "get": {
         "tags": [
@@ -43371,11 +43408,13 @@
         "description": "",
         "x-enumNames": [
           "Image",
-          "Transcription"
+          "Transcription",
+          "ModelLab"
         ],
         "enum": [
           "image",
-          "transcription"
+          "transcription",
+          "modelLab"
         ]
       },
       "XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeResidentResponse": {
@@ -45643,6 +45682,19 @@
           "maxAllowedAgentHomeRunRetentionMaxTotalBytes": {
             "type": "integer"
           },
+          "modelLabWarmIdleSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minModelLabWarmIdleSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedModelLabWarmIdleSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
           "developmentEnabled": {
             "type": "boolean"
           },
@@ -46261,6 +46313,11 @@
           },
           "agentHomeRunRetentionMaxTotalBytes": {
             "type": "integer",
+            "nullable": true
+          },
+          "modelLabWarmIdleSeconds": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           },
           "developmentEnabled": {
@@ -53441,7 +53498,8 @@
           "InvalidTraceLayers",
           "PinLimitReached",
           "ModelNotLoaded",
-          "AttentionUnavailable"
+          "AttentionUnavailable",
+          "OrphanWorker"
         ],
         "enum": [
           "UnsupportedPlatform",
@@ -53458,7 +53516,8 @@
           "InvalidTraceLayers",
           "PinLimitReached",
           "ModelNotLoaded",
-          "AttentionUnavailable"
+          "AttentionUnavailable",
+          "OrphanWorker"
         ]
       },
       "XE_Local_AI_EngineClientServicesModelLabModelLabSteeringArm": {
@@ -53732,6 +53791,15 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabLensSummary"
               }
             ]
+          },
+          "warm": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "loadSeconds": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
           }
         }
       },

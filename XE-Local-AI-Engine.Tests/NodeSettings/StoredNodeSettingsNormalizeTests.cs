@@ -639,6 +639,21 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    [Arguments(0, 0)]
+    [Arguments(3600, 3600)]
+    [Arguments(-1, null)]
+    [Arguments(3601, null)]
+    public async Task ModelLabWarmIdleSeconds_KeepsTheRange_AndDropsAnOutOfRangeValueToTheDefault(int stored, int? expected)
+    {
+        var reloaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            ModelLabWarmIdleSeconds = stored
+        });
+
+        AssertEx.Equal(expected, reloaded.ModelLabWarmIdleSeconds);
+    }
+
+    [Test]
     public async Task DetachedGraceSeconds_AbsentFromAnOldFile_StaysNull()
     {
         // A node-settings.json written before the field existed must deserialize to null — and then re-seed to 300 —

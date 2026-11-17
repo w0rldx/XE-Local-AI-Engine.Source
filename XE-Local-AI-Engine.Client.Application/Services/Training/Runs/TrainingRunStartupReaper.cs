@@ -66,7 +66,7 @@ public sealed class TrainingRunStartupReaper : IHostedService
         // must not be missed. Recovery does not touch the column, so the read order against it does not matter.
         foreach (var entry in await store.ListLaunchReceiptsAsync(cancellationToken))
         {
-            await TrainingProcessReaper.ReapOneAsync(_inspector,
+            _ = await TrainingProcessReaper.ReapOneAsync(_inspector,
                 entry.RunId,
                 entry.LaunchReceiptJson,
                 ct => store.SetLaunchReceiptAsync(entry.RunId, launchReceiptJson: null, ct),

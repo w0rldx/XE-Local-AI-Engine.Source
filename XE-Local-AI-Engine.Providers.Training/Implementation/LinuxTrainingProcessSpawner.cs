@@ -70,6 +70,7 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
             WorkingDirectory = request.WorkingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = request.RedirectStandardInput,
             UseShellExecute = false,
             CreateNoWindow = true
         };

@@ -3,6 +3,7 @@
 Run the checks with ``python3 tools/training/test_modellablib.py``.
 """
 
+import contextlib
 import hashlib
 import json
 import math
@@ -12,11 +13,17 @@ import struct
 from typing import Any, TypeGuard
 
 # Separate from trainlib.CONTRACT_VERSION: this script and train.py change independently.
-CONTRACT_VERSION = 5
+CONTRACT_VERSION = 6
 
 TRACE_KIND = "trace"
 STEERING_KIND = "steering"
 SOURCE_KIND = "source"
+
+# Both directions of the --serve protocol: one JSON object per line, the line at most this long.
+MAX_FRAME_BYTES = 64 * 1024
+_COMMAND_FIELDS = {"run": ("jobId", "config"), "cancel": ("jobId",), "evict": ()}
+# What a trace or steering job writes; a cancelled job leaves none of it.
+_OUTPUT_FIELDS = ("tracePath", "attentionPath", "resultPath", "vectorPath", "randomVectorPath")
 
 _SOURCE_JOB_FIELDS = frozenset(("kind", "contractVersion", "configDirectory", "resultPath", "maxResultBytes"))
 MAX_CONFIG_BYTES = 1024 * 1024
@@ -65,6 +72,52 @@ class JobError(ValueError):
     """A job file the script cannot use; modellab.py reports it as the "contract" error category."""
 
 
+class ProtocolError(ValueError):
+    """A host command the --serve worker cannot follow: the "protocol" error category, then exit 1."""
+
+
+def frame_bytes(event, token, fields):
+    """One worker frame as written: a JSON line carrying the run token, at most MAX_FRAME_BYTES. An over-long
+    ``message`` is cut to fit; any other frame that large is a bug and raises."""
+    frame = {"event": event, "token": token, **fields}
+    line = (json.dumps(frame) + "\n").encode()
+    if len(line) > MAX_FRAME_BYTES and isinstance(frame.get("message"), str):
+        # ASCII-escaped, so every character dropped takes at least one byte with it.
+        frame["message"] = frame["message"][: max(0, len(frame["message"]) - (len(line) - MAX_FRAME_BYTES))]
+        line = (json.dumps(frame) + "\n").encode()
+    if len(line) > MAX_FRAME_BYTES:
+        raise ValueError(f"A {event} frame is {len(line)} bytes, over the protocol's {MAX_FRAME_BYTES}.")
+    return line
+
+
+def parse_command(line):
+    """One host command line (bytes, as read with a limit of MAX_FRAME_BYTES + 1) as a dict with a known op."""
+    if len(line) > MAX_FRAME_BYTES:
+        raise ProtocolError(f"A command line is longer than {MAX_FRAME_BYTES} bytes.")
+    try:
+        command = json.loads(line)
+    except ValueError:
+        raise ProtocolError("A command line is not JSON.") from None
+    if not isinstance(command, dict):
+        raise ProtocolError("A command line is not a JSON object.")
+    op = command.get("op")
+    required = _COMMAND_FIELDS.get(op) if isinstance(op, str) else None
+    if required is None:
+        raise ProtocolError("A command's op is not run, cancel or evict.")
+    for name in required:
+        if not isinstance(command.get(name), str) or not command[name]:
+            raise ProtocolError(f"A {op} command has no usable '{name}'.")
+    return command
+
+
+def remove_outputs(job):
+    """Deletes what a job may have written so far; a file it never wrote is no error."""
+    for name in _OUTPUT_FIELDS:
+        if isinstance(path := job.get(name), str) and path:
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(path)
+
+
 def validate_job(job):
     """Checks every field the host fixes, before the model is loaded."""
     if not isinstance(job, dict):
@@ -72,10 +125,12 @@ def validate_job(job):
     if job.get("contractVersion") != CONTRACT_VERSION:
         raise JobError("The job's contract version is not supported by this script.")
     kind = job.get("kind")
-    if kind == STEERING_KIND:
-        return _validated_steering_job(job)
     if kind == SOURCE_KIND:
         return _validated_source_job(job)
+    # The worker holds one model under this key: a later job naming another is refused, not served the wrong one.
+    _require_strings(job, ("modelKey",))
+    if kind == STEERING_KIND:
+        return _validated_steering_job(job)
     if kind != TRACE_KIND:
         raise JobError("The job has no usable 'kind'.")
     _require_strings(job, ("checkpointPath", "prompt", "tracePath", "resultPath"))

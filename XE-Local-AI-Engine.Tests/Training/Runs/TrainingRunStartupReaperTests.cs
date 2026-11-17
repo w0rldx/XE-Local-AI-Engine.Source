@@ -92,7 +92,7 @@ public sealed class TrainingRunStartupReaperTests
     public void Matches_WhenTheRunTokenIsAbsent_IsFalse() =>
         AssertEx.False(TrainingProcessReaper.Matches(Receipt, LiveFacts() with
             {
-                RunToken = null
+                RunToken = string.Empty
             }),
             "A child whose environment carries no token is not one this host launched.");
 

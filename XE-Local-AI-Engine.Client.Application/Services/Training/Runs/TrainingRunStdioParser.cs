@@ -11,18 +11,24 @@ public enum TrainingStdioEventKind
     Heartbeat,
     Artifact,
     Done,
-    Error
+    Error,
+
+    /// <summary>A Model Lab serve worker is idle again after a job, with its VRAM after cleanup (contract 6).</summary>
+    Ready
 }
 
 /// <summary>
 ///     One parsed stdio line. Fields are shared across kinds rather than split into a type per event — the protocol is
-///     seven flat messages, and a hierarchy would cost more than it explains.
+///     eight flat messages, and a hierarchy would cost more than it explains.
 /// </summary>
 public sealed class TrainingStdioEvent
 {
     public required TrainingStdioEventKind Kind { get; init; }
 
     public int? ContractVersion { get; init; }
+
+    /// <summary>The handshake's raw <c>serve</c> field: <see langword="true" /> only from a Model Lab serve worker, null when absent or not a bool.</summary>
+    public bool? Serve { get; init; }
 
     public string? Phase { get; init; }
 
@@ -37,6 +43,14 @@ public sealed class TrainingStdioEvent
     public double? LearningRate { get; init; }
 
     public long? VramBytes { get; init; }
+
+    public long? ReservedBytes { get; init; }
+
+    /// <summary>The raw <c>token</c> field, unvalidated; only a Model Lab serve worker sends one.</summary>
+    public string? Token { get; init; }
+
+    /// <summary>The raw <c>jobId</c> field, unvalidated; only a Model Lab serve worker sends one.</summary>
+    public string? JobId { get; init; }
 
     public string? ArtifactKind { get; init; }
 
@@ -82,21 +96,30 @@ public static class TrainingRunStdioParser
                 return null;
             }
 
+            var token = ReadString(root, "token");
+            var jobId = ReadString(root, "jobId");
             return name.GetString() switch
             {
                 "handshake" => new TrainingStdioEvent
                 {
                     Kind = TrainingStdioEventKind.Handshake,
-                    ContractVersion = ReadInt(root, "contractVersion")
+                    Token = token,
+                    JobId = jobId,
+                    ContractVersion = ReadInt(root, "contractVersion"),
+                    Serve = ReadNullableBool(root, "serve")
                 },
                 "phase" => new TrainingStdioEvent
                 {
                     Kind = TrainingStdioEventKind.Phase,
+                    Token = token,
+                    JobId = jobId,
                     Phase = ReadString(root, "phase")
                 },
                 "progress" => new TrainingStdioEvent
                 {
                     Kind = TrainingStdioEventKind.Progress,
+                    Token = token,
+                    JobId = jobId,
                     Step = ReadInt(root, "step"),
                     TotalSteps = ReadInt(root, "totalSteps"),
                     Epoch = ReadDouble(root, "epoch"),
@@ -107,24 +130,40 @@ public static class TrainingRunStdioParser
                 "heartbeat" => new TrainingStdioEvent
                 {
                     Kind = TrainingStdioEventKind.Heartbeat,
+                    Token = token,
+                    JobId = jobId,
                     Phase = ReadString(root, "phase")
                 },
                 "artifact" => new TrainingStdioEvent
                 {
                     Kind = TrainingStdioEventKind.Artifact,
+                    Token = token,
+                    JobId = jobId,
                     ArtifactKind = ReadString(root, "kind"),
                     Path = ReadString(root, "path")
                 },
                 "done" => new TrainingStdioEvent
                 {
                     Kind = TrainingStdioEventKind.Done,
+                    Token = token,
+                    JobId = jobId,
                     Cancelled = ReadBool(root, "cancelled")
                 },
                 "error" => new TrainingStdioEvent
                 {
                     Kind = TrainingStdioEventKind.Error,
+                    Token = token,
+                    JobId = jobId,
                     Category = ReadString(root, "category"),
                     Message = ReadString(root, "message")
+                },
+                "ready" => new TrainingStdioEvent
+                {
+                    Kind = TrainingStdioEventKind.Ready,
+                    Token = token,
+                    JobId = jobId,
+                    VramBytes = ReadLong(root, "vramBytes"),
+                    ReservedBytes = ReadLong(root, "reservedBytes")
                 },
                 _ => null
             };
@@ -155,4 +194,7 @@ public static class TrainingRunStdioParser
 
     private static bool ReadBool(JsonElement root, string name) =>
         root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
+
+    private static bool? ReadNullableBool(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.GetBoolean() : null;
 }

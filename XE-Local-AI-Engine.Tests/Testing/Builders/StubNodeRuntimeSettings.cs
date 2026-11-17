@@ -110,6 +110,7 @@ public sealed class StubNodeRuntimeSettings
     private int _agentHomeRunRetentionDays = StoredNodeSettings.DefaultAgentHomeRunRetentionDays;
     private int _agentHomeRunRetentionMaxRuns = StoredNodeSettings.DefaultAgentHomeRunRetentionMaxRuns;
     private long _agentHomeRunRetentionMaxTotalBytes = StoredNodeSettings.DefaultAgentHomeRunRetentionMaxTotalBytes;
+    private int _modelLabWarmIdleSeconds = StoredNodeSettings.DefaultModelLabWarmIdleSeconds;
 
     // The feature switches default ON here, unlike their code defaults: a consumer test exercises the feature unless it says otherwise.
     private bool _developmentEnabled = true;
@@ -698,6 +699,12 @@ public sealed class StubNodeRuntimeSettings
         return this;
     }
 
+    public StubNodeRuntimeSettings WithModelLabWarmIdleSeconds(int value)
+    {
+        _modelLabWarmIdleSeconds = value;
+        return this;
+    }
+
     public StubNodeRuntimeSettings WithDevelopmentEnabled(bool value)
     {
         _developmentEnabled = value;
@@ -895,6 +902,7 @@ public sealed class StubNodeRuntimeSettings
         settings.GetAgentHomeRunRetentionDaysAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeRunRetentionDays);
         settings.GetAgentHomeRunRetentionMaxRunsAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeRunRetentionMaxRuns);
         settings.GetAgentHomeRunRetentionMaxTotalBytesAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeRunRetentionMaxTotalBytes);
+        settings.GetModelLabWarmIdleSecondsAsync(Arg.Any<CancellationToken>()).Returns(_ => _modelLabWarmIdleSeconds);
         settings.GetDevelopmentEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _developmentEnabled);
         settings.GetDevelopmentEnabled().Returns(_ => _developmentEnabled);
         settings.GetWorkSessionsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _workSessionsEnabled);

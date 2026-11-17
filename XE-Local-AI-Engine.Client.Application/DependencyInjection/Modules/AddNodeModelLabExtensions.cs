@@ -39,6 +39,9 @@ internal static class AddNodeModelLabExtensions
         builder.Services.AddSingleton<ModelLabExperimentService>();
         builder.Services.AddSingleton<IModelLabActiveJob>(static provider => provider.GetRequiredService<ModelLabExperimentService>());
 
+        // The experiment service owns the warm session, so it is the residents widget's Model Lab row and its eject.
+        builder.Services.AddSingleton<IModelLabWarmResidentSource>(static provider => provider.GetRequiredService<ModelLabExperimentService>());
+
         // A singleton for its single-flight flag. Its jobs run inside the request and share the work root the startup reaper sweeps.
         builder.Services.AddSingleton<ModelLabPyTorchSourceService>();
         builder.Services.AddSingleton<IModelLabPromptTokensService, ModelLabPromptTokensService>();

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Diagnostics;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
@@ -236,7 +237,8 @@ public sealed class NodeInfoServiceTests
             new ImageRuntimeActivityGate(),
             Substitute.For<IWhisperServerSupervisor>(),
             new WhisperRuntimeActivityGate(),
-            StubNodeRuntimeSettings.Create().WithTranscriptionEnabled(false).Build());
+            StubNodeRuntimeSettings.Create().WithTranscriptionEnabled(false).Build(),
+            new NullModelLabWarmResidentSource());
         return new NodeInfoService(_profiler,
             _deviceAudit,
             _sampler,

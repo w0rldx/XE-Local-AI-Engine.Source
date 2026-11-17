@@ -4679,7 +4679,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResp
 	sanitizedError?: string | null;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentKindDto = "image" | "transcription";
+export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentKindDto = "image" | "transcription" | "modelLab";
 
 export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentResponse = {
 	runtime: XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentKindDto;
@@ -5247,6 +5247,9 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	agentHomeRunRetentionMaxTotalBytes?: number | null;
 	minAgentHomeRunRetentionMaxTotalBytes?: number;
 	maxAllowedAgentHomeRunRetentionMaxTotalBytes?: number;
+	modelLabWarmIdleSeconds?: number | null;
+	minModelLabWarmIdleSeconds?: number;
+	maxAllowedModelLabWarmIdleSeconds?: number;
 	developmentEnabled?: boolean;
 	workSessionsEnabled?: boolean;
 	graphWorkflowsEnabled?: boolean;
@@ -5387,6 +5390,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	agentHomePatchApplyTimeoutSeconds?: number | null;
 	agentHomeRunRetentionMaxRuns?: number | null;
 	agentHomeRunRetentionMaxTotalBytes?: number | null;
+	modelLabWarmIdleSeconds?: number | null;
 	developmentEnabled?: boolean | null;
 	workSessionsEnabled?: boolean | null;
 	graphWorkflowsEnabled?: boolean | null;
@@ -7392,7 +7396,8 @@ export type XeLocalAiEngineClientServicesModelLabModelLabStartRefusal =
 	| "InvalidTraceLayers"
 	| "PinLimitReached"
 	| "ModelNotLoaded"
-	| "AttentionUnavailable";
+	| "AttentionUnavailable"
+	| "OrphanWorker";
 
 export type XeLocalAiEngineClientServicesModelLabModelLabSteeringArm = {
 	name: string;
@@ -7455,6 +7460,8 @@ export type XeLocalAiEngineClientServicesModelLabModelLabTraceResult = {
 	attnImplementation?: string | null;
 	attention?: XeLocalAiEngineClientServicesModelLabModelLabAttentionSummary | null;
 	lens?: XeLocalAiEngineClientServicesModelLabModelLabLensSummary | null;
+	warm?: boolean | null;
+	loadSeconds?: number | null;
 };
 
 export type XeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus = "InsufficientData" | "Improved" | "Flat" | "Regressed";
@@ -18451,6 +18458,36 @@ export type GetModelLabPyTorchSourceResponses = {
 };
 
 export type GetModelLabPyTorchSourceResponse = GetModelLabPyTorchSourceResponses[keyof GetModelLabPyTorchSourceResponses];
+
+export type EjectModelLabWarmWorkerData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-lab/warm/eject";
+};
+
+export type EjectModelLabWarmWorkerErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsModelLabV1ModelLabStartBlockedResponse;
+};
+
+export type EjectModelLabWarmWorkerError = EjectModelLabWarmWorkerErrors[keyof EjectModelLabWarmWorkerErrors];
+
+export type EjectModelLabWarmWorkerResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type EjectModelLabWarmWorkerResponse = EjectModelLabWarmWorkerResponses[keyof EjectModelLabWarmWorkerResponses];
 
 export type ListLocalModelsData = {
 	body?: never;

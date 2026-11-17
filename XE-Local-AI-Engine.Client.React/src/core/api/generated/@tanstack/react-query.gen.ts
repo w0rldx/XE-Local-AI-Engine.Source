@@ -130,6 +130,7 @@ import {
 	draftImagePrompt,
 	draftSkill,
 	ejectImageRuntime,
+	ejectModelLabWarmWorker,
 	ejectRunningModel,
 	ejectTranscriptionRuntime,
 	enableScheduledJob,
@@ -809,6 +810,9 @@ import type {
 	EjectImageRuntimeData,
 	EjectImageRuntimeError,
 	EjectImageRuntimeResponse,
+	EjectModelLabWarmWorkerData,
+	EjectModelLabWarmWorkerError,
+	EjectModelLabWarmWorkerResponse,
 	EjectRunningModelData,
 	EjectRunningModelResponse,
 	EjectTranscriptionRuntimeData,
@@ -9470,6 +9474,30 @@ export const getModelLabPyTorchSourceOptions = (options?: Options<GetModelLabPyT
 		},
 		queryKey: getModelLabPyTorchSourceQueryKey(options),
 	});
+
+export const ejectModelLabWarmWorkerMutation = (
+	options?: Partial<Options<EjectModelLabWarmWorkerData>>,
+): UseMutationOptions<
+	EjectModelLabWarmWorkerResponse,
+	AxiosError<EjectModelLabWarmWorkerError>,
+	Options<EjectModelLabWarmWorkerData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		EjectModelLabWarmWorkerResponse,
+		AxiosError<EjectModelLabWarmWorkerError>,
+		Options<EjectModelLabWarmWorkerData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await ejectModelLabWarmWorker({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const listLocalModelsQueryKey = (options?: Options<ListLocalModelsData>) =>
 	createQueryKey("listLocalModels", options, false, ["Models"]);

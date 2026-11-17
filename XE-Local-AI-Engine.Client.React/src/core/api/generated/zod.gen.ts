@@ -4729,7 +4729,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusRe
 	sanitizedError: z.string().nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentKindDto = z.enum(["image", "transcription"]);
+export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentKindDto = z.enum(["image", "transcription", "modelLab"]);
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentStateDto = z.enum(["starting", "idle", "active", "exited"]);
 
@@ -8015,6 +8015,7 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabStartRefusal = z.enum
 	"PinLimitReached",
 	"ModelNotLoaded",
 	"AttentionUnavailable",
+	"OrphanWorker",
 ]);
 
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabStartBlockedResponse = z.object({
@@ -8139,6 +8140,8 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabTraceResult = z.objec
 	attnImplementation: z.string().nullish(),
 	attention: zXeLocalAiEngineClientServicesModelLabModelLabAttentionSummary.nullish(),
 	lens: zXeLocalAiEngineClientServicesModelLabModelLabLensSummary.nullish(),
+	warm: z.boolean().nullish(),
+	loadSeconds: z.number().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse = z.object({
@@ -9260,6 +9263,21 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 	agentHomeRunRetentionMaxTotalBytes: z.int().nullish(),
 	minAgentHomeRunRetentionMaxTotalBytes: z.int().optional(),
 	maxAllowedAgentHomeRunRetentionMaxTotalBytes: z.int().optional(),
+	modelLabWarmIdleSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minModelLabWarmIdleSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedModelLabWarmIdleSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 	developmentEnabled: z.boolean().optional(),
 	workSessionsEnabled: z.boolean().optional(),
 	graphWorkflowsEnabled: z.boolean().optional(),
@@ -9678,6 +9696,11 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
 	agentHomeRunRetentionMaxTotalBytes: z.int().nullish(),
+	modelLabWarmIdleSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 	developmentEnabled: z.boolean().nullish(),
 	workSessionsEnabled: z.boolean().nullish(),
 	graphWorkflowsEnabled: z.boolean().nullish(),
@@ -13156,6 +13179,11 @@ export const zGetModelLabPyTorchSourceQuery = z.object({
  * Success
  */
 export const zGetModelLabPyTorchSourceResponse = zXeLocalAiEngineClientServicesModelLabModelLabPyTorchSourceFile;
+
+/**
+ * No Content
+ */
+export const zEjectModelLabWarmWorkerResponse = z.void();
 
 /**
  * Success

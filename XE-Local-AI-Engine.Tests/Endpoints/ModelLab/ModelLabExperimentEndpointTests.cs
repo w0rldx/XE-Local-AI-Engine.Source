@@ -424,8 +424,8 @@ public sealed class ModelLabExperimentEndpointTests
             AssertEx.Equal("gpu-job-running", body.RootElement.GetProperty("reason").GetString());
         }
 
-        await runtime.DidNotReceiveWithAnyArgs().RemoveAsync(default);
-        await runtime.DidNotReceiveWithAnyArgs().InstallAsync(default);
+        await runtime.DidNotReceiveWithAnyArgs().RemoveAsync(default, default);
+        await runtime.DidNotReceiveWithAnyArgs().InstallAsync(default, default);
     }
 
     /// <summary>An evaluation runs on llama-server, so a lease does not make it a user of this runtime. A queue peek holds the gate with no lease and runs nothing.</summary>
@@ -448,7 +448,7 @@ public sealed class ModelLabExperimentEndpointTests
             using var response = await client.SendAsync(request);
         }
 
-        await runtime.Received(1).RemoveAsync(Arg.Any<CancellationToken>());
+        await runtime.Received(1).RemoveAsync(Arg.Any<Func<CancellationToken, Task<bool>>?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

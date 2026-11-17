@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ModelLab;
 
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
@@ -788,6 +789,14 @@ public sealed class ModelLabPyTorchSourceServiceTests
 
             public void Dispose()
             {
+            }
+
+            public ConcurrentQueue<string> WrittenLines { get; } = new();
+
+            public Task WriteLineAsync(string line, CancellationToken cancellationToken)
+            {
+                WrittenLines.Enqueue(line);
+                return Task.CompletedTask;
             }
         }
     }

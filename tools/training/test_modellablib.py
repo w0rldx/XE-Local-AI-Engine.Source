@@ -3,6 +3,7 @@
 Assert-based with no framework, like test_trainlib.py, so it runs inside the training venv.
 """
 
+import contextlib
 import json
 import math
 import os
@@ -19,6 +20,7 @@ from modellablib import (
     CUT_MARK,
     FOOTER_RESERVE_BYTES,
     MAX_CONFIG_BYTES,
+    MAX_FRAME_BYTES,
     MAX_LENS_TOP_TOKENS,
     SOURCE_KIND,
     STEERING_KIND,
@@ -26,6 +28,7 @@ from modellablib import (
     TRACE_RESULT_BUDGET_BYTES,
     CappedTraceWriter,
     JobError,
+    ProtocolError,
     SourceRefusalError,
     attention_record,
     block_index_of,
@@ -37,6 +40,7 @@ from modellablib import (
     cut_written_text,
     discover_block_path,
     fitted_trace_result,
+    frame_bytes,
     heartbeat_counts,
     in_block_path,
     layer_kind,
@@ -47,10 +51,12 @@ from modellablib import (
     op_graphs,
     op_location,
     out_of_range_layers,
+    parse_command,
     read_raw_config,
     records_lens,
     register_anchors,
     relative_source_file,
+    remove_outputs,
     representatives,
     sanitized_export_error,
     scaled_to_norm,
@@ -97,6 +103,7 @@ RECORD = trace_record(3, 15, "F", 3.14159, [-0.1234, 0.0, 0.1234], [1, 2], [0.55
 VALID_JOB = {
     "contractVersion": CONTRACT_VERSION,
     "kind": TRACE_KIND,
+    "modelKey": "artifact-1:rev-2:bf16:6",
     "checkpointPath": "/checkpoint",
     "prompt": "hello",
     "tracePath": "/work/trace.jsonl",
@@ -393,6 +400,90 @@ def test_sigterm_while_tracing_exits_at_once_as_cancelled():
     exit_now.assert_called_once_with(modellab.CANCELLED_EXIT_CODE)
 
 
+def test_a_frame_is_one_json_line_with_the_token_and_its_fields():
+    run_id = "run-1"
+    line = frame_bytes("progress", run_id, {"jobId": "j1", "step": 3})
+    assert line.endswith(b"\n")
+    assert line.count(b"\n") == 1
+    assert json.loads(line) == {"event": "progress", "token": run_id, "jobId": "j1", "step": 3}
+
+
+def test_an_over_long_message_is_cut_to_the_frame_cap_and_any_other_oversize_frame_raises():
+    line = frame_bytes("error", "tok", {"jobId": "j", "category": "trace", "message": "é" * MAX_FRAME_BYTES})
+    assert len(line) <= MAX_FRAME_BYTES
+    assert json.loads(line)["category"] == "trace"
+    try:
+        frame_bytes("phase", "tok", {"phase": "x" * MAX_FRAME_BYTES})
+    except ValueError as error:
+        assert "phase" in str(error), str(error)
+    else:
+        raise AssertionError("A frame over the cap with no message to cut must not be written.")
+
+
+def test_every_command_is_parsed_with_its_fields():
+    assert parse_command(b'{"op":"run","jobId":"j","config":"/w/job.json"}\n')["config"] == "/w/job.json"
+    assert parse_command(b'{"op":"cancel","jobId":"j"}')["jobId"] == "j"
+    assert parse_command(b'{"op":"evict"}\n') == {"op": "evict"}
+
+
+def test_a_command_the_worker_cannot_follow_is_a_protocol_error():
+    bad = [
+        b"not json\n",
+        b"\n",
+        b"\xff\xfe\n",
+        b"[1]\n",
+        b'{"op":"shutdown"}\n',
+        b'{"jobId":"j"}\n',
+        b'{"op":"run","jobId":"j"}\n',
+        b'{"op":"run","jobId":"","config":"/c"}\n',
+        b'{"op":"cancel","jobId":7}\n',
+        b'{"op":"evict","pad":"' + b"x" * MAX_FRAME_BYTES + b'"}',
+    ]
+    for line in bad:
+        try:
+            parse_command(line)
+        except ProtocolError:
+            continue
+        raise AssertionError(f"{line[:40]!r} must be a protocol error.")
+
+
+def test_a_cancelled_jobs_outputs_are_removed_and_missing_ones_are_no_error():
+    with tempfile.TemporaryDirectory() as directory:
+        written = [os.path.join(directory, name) for name in ("trace.jsonl", "result.json")]
+        for path in written:
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("partial")
+        kept = os.path.join(directory, "job.json")
+        with open(kept, "w", encoding="utf-8") as handle:
+            handle.write("{}")
+        remove_outputs(
+            {
+                **VALID_JOB,
+                "tracePath": written[0],
+                "resultPath": written[1],
+                "attentionPath": os.path.join(directory, "never-written.jsonl"),
+            }
+        )
+        assert os.listdir(directory) == ["job.json"]
+
+
+def test_job_frames_carry_the_job_id_and_a_phase_boundary_is_a_cancel_point():
+    modellab = _load_modellab()
+    events = []
+    run = modellab._Run("job-7")
+    with mock.patch.object(modellab, "emit", lambda event, **fields: events.append((event, fields))):
+        run.enter("tracing")
+        run.cancel.set()
+        try:
+            run.enter("saving")
+        except modellab.JobCancelled:
+            pass
+        else:
+            raise AssertionError("A cancelled job must not enter its next phase.")
+    assert events == [("phase", {"jobId": "job-7", "phase": "tracing"})]
+    assert run.phase == "tracing"
+
+
 def _main_failing_with(error, job=None, runner="trace"):
     """Runs the script's real main with the job's runner raising, and returns its error events."""
     modellab = _load_modellab()
@@ -450,6 +541,7 @@ def test_every_unusable_field_is_refused():
     bad_values = {
         "contractVersion": [None, CONTRACT_VERSION + 1],
         "kind": [None, "other"],
+        "modelKey": [None, "", 1],
         "checkpointPath": [None, "", 1],
         "prompt": [None, ""],
         "tracePath": [None],
@@ -751,7 +843,7 @@ def _lens_with_hooks(blocks=3, width=4):
     model = mock.MagicMock()
     model.config.get_text_config.return_value.hidden_size = width
     block_modules = [mock.MagicMock() for _ in range(blocks)]
-    lens = modellab._Lens(model, block_modules, 5, mock.MagicMock(), mock.MagicMock())
+    lens = modellab._Lens(contextlib.ExitStack(), model, block_modules, 5, mock.MagicMock(), mock.MagicMock())
     hooks = [module.register_forward_hook.call_args.args[0] for module in block_modules[:-1]]
     # The last block has no hook: its readout is the model's own logits.
     assert not block_modules[-1].register_forward_hook.called
@@ -859,6 +951,7 @@ def test_layer_kinds():
 VALID_STEERING_JOB = {
     "contractVersion": CONTRACT_VERSION,
     "kind": STEERING_KIND,
+    "modelKey": "artifact-1:rev-2:bf16:6",
     "checkpointPath": "/checkpoint",
     "positivePrompts": ["good"],
     "negativePrompts": ["bad"],
@@ -876,6 +969,7 @@ def test_a_valid_steering_job_passes():
 
 def test_every_unusable_steering_field_is_refused():
     bad_values = {
+        "modelKey": [None, ""],
         "checkpointPath": [None, ""],
         "vectorPath": [None, ""],
         "randomVectorPath": [None],
@@ -977,14 +1071,23 @@ VALID_SOURCE_JOB = {
 }
 
 
-def test_the_contract_is_version_5_and_a_version_4_job_is_refused():
-    assert CONTRACT_VERSION == 5
+def test_the_contract_is_version_6_and_a_version_5_job_is_refused():
+    assert CONTRACT_VERSION == 6
     for job in (VALID_JOB, VALID_STEERING_JOB, VALID_SOURCE_JOB):
         try:
-            validate_job({**job, "contractVersion": 4})
+            validate_job({**job, "contractVersion": 5})
         except JobError:
             continue
-        raise AssertionError(f"A version 4 {job['kind']} job must be refused.")
+        raise AssertionError(f"A version 5 {job['kind']} job must be refused.")
+
+
+def test_a_source_job_carries_no_model_key():
+    try:
+        validate_job({**VALID_SOURCE_JOB, "modelKey": "k"})
+    except JobError as error:
+        assert "modelKey" in str(error), str(error)
+    else:
+        raise AssertionError("A source job loads no model, so a modelKey is a field it may not carry.")
 
 
 def test_a_valid_source_job_passes():

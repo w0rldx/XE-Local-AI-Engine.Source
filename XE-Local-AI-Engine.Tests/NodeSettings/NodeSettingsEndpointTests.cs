@@ -544,6 +544,8 @@ public sealed class NodeSettingsEndpointTests
     [Arguments("keepModelWarmIntervalSeconds", "-5", "'keepModelWarmIntervalSeconds' must be between", true)]
     [Arguments("chatCacheReuse", "8193", "'chatCacheReuse' must be between", true)]
     [Arguments("speculativeDraftMaxTokens", "17", "'speculativeDraftMaxTokens' must be between", true)]
+    [Arguments("modelLabWarmIdleSeconds", "3601", "'modelLabWarmIdleSeconds' must be between", true)]
+    [Arguments("modelLabWarmIdleSeconds", "-1", "'modelLabWarmIdleSeconds' must be between", true)]
     // Custom messages: one embedding {PropertyName}, one shared by four rules, one fixed, one over a nested double.
     [Arguments("agentHomeMaxPatchBytes", "0", "'agentHomeMaxPatchBytes' must be greater than '0'", false)]
     [Arguments("reasoningBudgetLowTokens", "1", "A reasoning budget must be from", false)]
@@ -738,6 +740,7 @@ public sealed class NodeSettingsEndpointTests
     [Arguments(nameof(SaveNodeSettingsRequest.MaxPendingToolCallAgeMinutes), 30L)]
     [Arguments(nameof(SaveNodeSettingsRequest.IntentMaxUtteranceAgeSeconds), 45L)]
     [Arguments(nameof(SaveNodeSettingsRequest.SpawnMaxCloud), 0L)]
+    [Arguments(nameof(SaveNodeSettingsRequest.ModelLabWarmIdleSeconds), 0L)]
     [Arguments(nameof(SaveNodeSettingsRequest.AgentHomeMaxPatchBytes), 1024L)]
     [Arguments(nameof(SaveNodeSettingsRequest.BenchmarkKldCacheMaxBytes), StoredNodeSettings.MinBenchmarkKldCacheMaxBytes)]
     public async Task SaveNodeSettings_Null_ClearsAStoredKnobBackToTheDefault(string knob, long value)
@@ -1983,7 +1986,8 @@ public sealed class NodeSettingsEndpointTests
             AgentHomeMaxInnerToolCalls = 12,
             AgentHomePatchApplyTimeoutSeconds = 300,
             AgentHomeRunRetentionMaxRuns = 0,
-            AgentHomeRunRetentionMaxTotalBytes = 4L * 1024 * 1024 * 1024
+            AgentHomeRunRetentionMaxTotalBytes = 4L * 1024 * 1024 * 1024,
+            ModelLabWarmIdleSeconds = 60
         });
         using var putResponse = await client.SendAsync(putRequest);
         AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
@@ -2005,6 +2009,10 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(expected: 300, settings.AgentHomePatchApplyTimeoutSeconds);
         AssertEx.Equal(expected: 0, settings.AgentHomeRunRetentionMaxRuns, "0 turns the count limit off and is a valid value.");
         AssertEx.Equal(4L * 1024 * 1024 * 1024, settings.AgentHomeRunRetentionMaxTotalBytes);
+        AssertEx.Equal(expected: 60, settings.ModelLabWarmIdleSeconds);
+        AssertEx.Equal(expected: 60, saved.ModelLabWarmIdleSeconds);
+        AssertEx.Equal(StoredNodeSettings.MinModelLabWarmIdleSeconds, settings.MinModelLabWarmIdleSeconds);
+        AssertEx.Equal(StoredNodeSettings.MaxModelLabWarmIdleSeconds, settings.MaxAllowedModelLabWarmIdleSeconds);
         // Bounds are server-authoritative for the React form.
         AssertEx.Equal(StoredNodeSettings.MaxImageMaxLoadedProcesses, settings.MaxAllowedImageMaxLoadedProcesses);
         AssertEx.Equal(StoredNodeSettings.MinGraphWorkflowDefaultNodeTimeoutSeconds, settings.MinGraphWorkflowDefaultNodeTimeoutSeconds);

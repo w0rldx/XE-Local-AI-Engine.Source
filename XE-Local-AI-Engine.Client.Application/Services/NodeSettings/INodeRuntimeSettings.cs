@@ -361,6 +361,9 @@ public interface INodeRuntimeSettings
     /// <summary>The AgentHome runs byte ceiling, 0 = off (stored &gt; <c>AgentHome:RunRetention:MaxTotalBytes</c> &gt; 2 GiB). Read per sweep.</summary>
     Task<long> GetAgentHomeRunRetentionMaxTotalBytesAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Seconds an idle Model Lab worker stays warm, 0 = off (stored &gt; 300). Read at each idle transition.</summary>
+    Task<int> GetModelLabWarmIdleSecondsAsync(CancellationToken cancellationToken = default);
+
     // Synchronous twins for the composition/startup path and for structurally synchronous request-time call sites. Prefer the async getters:
     // a sync twin on a per-TOKEN path, or a captured result in a singleton field, is NOT acceptable. Rules and reasons: docs/wiki/08-data-and-persistence.md.
 

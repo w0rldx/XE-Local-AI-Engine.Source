@@ -129,6 +129,18 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 					/>
 					<NodeSettingsNumberField
 						{...field}
+						field="modelLabWarmIdleSeconds"
+						label={t("pages.nodeSettings.fields.modelLabWarmIdleSeconds.label", "Model Lab warm time")}
+						description={t(
+							"pages.nodeSettings.fields.modelLabWarmIdleSeconds.description",
+							"0 turns keeping a Model Lab model warm off.",
+						)}
+						bounds={bounds.tunables.modelLabWarmIdleSeconds}
+						unit={seconds}
+						testId="node-settings-model-lab-warm-idle"
+					/>
+					<NodeSettingsNumberField
+						{...field}
 						field="imageMaxLoadedProcesses"
 						label={t("pages.nodeSettings.fields.imageMaxLoadedProcesses.label", "Max loaded image servers")}
 						description={t(

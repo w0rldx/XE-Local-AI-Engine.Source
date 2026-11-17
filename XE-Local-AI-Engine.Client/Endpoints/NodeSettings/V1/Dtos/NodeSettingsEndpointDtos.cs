@@ -748,6 +748,13 @@ public sealed record NodeSettingsResponse
 
     public long MaxAllowedAgentHomeRunRetentionMaxTotalBytes { get; init; }
 
+    /// <summary>Seconds an idle Model Lab worker stays warm, 0 = off. Applies at the worker's next idle transition.</summary>
+    public int? ModelLabWarmIdleSeconds { get; init; }
+
+    public int MinModelLabWarmIdleSeconds { get; init; }
+
+    public int MaxAllowedModelLabWarmIdleSeconds { get; init; }
+
     /// <summary>Whether Development Mode is on. Applies after a node restart for its endpoints, services and hub; the live switch closes them sooner. Effective value: stored, else the configuration seed.</summary>
     public bool DevelopmentEnabled { get; init; }
 
@@ -1251,6 +1258,9 @@ public sealed record SaveNodeSettingsRequest
 
     /// <summary>AgentHome runs byte ceiling, 0 = no byte limit (developer-only); null resets to the default. Applies to the next sweep.</summary>
     public long? AgentHomeRunRetentionMaxTotalBytes { get; init; }
+
+    /// <summary>Seconds an idle Model Lab worker stays warm, 0 = off; null resets to the default. Applies at the worker's next idle transition.</summary>
+    public int? ModelLabWarmIdleSeconds { get; init; }
 
     /// <summary>Whether Development Mode is on. Applies after a node restart for its endpoints, services and hub; the live switch closes them sooner.</summary>
     public bool? DevelopmentEnabled { get; init; }
