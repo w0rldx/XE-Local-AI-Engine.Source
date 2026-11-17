@@ -32,6 +32,7 @@
   <ItemGroup>
     <None Remove="Knowledge/RetrievalEval/LiveCorpus/**"/>
     <None Include="Knowledge/RetrievalEval/LiveCorpus/**" CopyToOutputDirectory="PreserveNewest"/>
+    <None Update="Knowledge/RetrievalEval/DedupPairs/**" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>
 
   <ItemGroup>

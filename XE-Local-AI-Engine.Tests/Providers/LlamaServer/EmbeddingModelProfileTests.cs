@@ -19,6 +19,7 @@ public sealed class EmbeddingModelProfileTests
         "nomic-ai/nomic-embed-text-v1.5-GGUF:F16",
         "ggml-org/embeddinggemma-2-GGUF:Q8_0",
         "CompendiumLabs/bge-m3-gguf:F16",
+        "Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0",
         "my-embed:Q8_0"
     ];
 
@@ -26,6 +27,7 @@ public sealed class EmbeddingModelProfileTests
     [Arguments("nomic-ai/nomic-embed-text-v1.5-GGUF:F16", "nomic", "search_document: ", "search_query: ", "mean", null)]
     [Arguments("ggml-org/embeddinggemma-2-GGUF:Q8_0", "embeddinggemma", "title: none | text: ", "task: search result | query: ", "mean", "prompt-embeddinggemma+pool-mean:v1")]
     [Arguments("CompendiumLabs/bge-m3-gguf:F16", "bge-m3", "", "", "cls", "prompt-none+pool-cls:v1")]
+    [Arguments("Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "qwen3-embedding", "", "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:", "last", "prompt-qwen3-embedding+pool-last:v1")]
     [Arguments("my-embed:Q8_0", "plain", "", "", "mean", "prompt-none+pool-mean:v1")]
     public void For_PinsEachProfilesPromptPoolingAndTag(string modelName, string id, string documentPrefix, string queryPrefix, string pooling, string? tag)
     {
@@ -70,8 +72,12 @@ public sealed class EmbeddingModelProfileTests
     [Arguments("EMBEDDINGGEMMA-300M:Q8_0", "embeddinggemma")]
     [Arguments("Embeddinggemma-300m:Q8_0", "embeddinggemma")]
     [Arguments("CompendiumLabs/bge-m3-gguf:Q8_0", "bge-m3")]
-    // Qwen3-Embedding stays plain until its GGUF's add_eos_token is verified for last-token pooling.
-    [Arguments("Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "plain")]
+    [Arguments("Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "qwen3-embedding")]
+    [Arguments("Qwen/Qwen3-Embedding-4B-GGUF:Q4_K_M", "qwen3-embedding")]
+    [Arguments("Qwen3-Embedding-0.6B-Q8_0", "qwen3-embedding")]
+    // A Qwen chat model and the test hosts' fake embedder carry no profile token.
+    [Arguments("qwen3.5:0.8b", "plain")]
+    [Arguments("fake-embed:test", "plain")]
     // A token only in the owner, only after the first colon, or missing from a renamed file or adapter name does not match.
     [Arguments("nomic-ai/other-model:Q8_0", "plain")]
     [Arguments("nomic-embed-text-fan/some-chat-model:Q4_K_M", "plain")]
@@ -105,9 +111,10 @@ public sealed class EmbeddingModelProfileTests
             ["nomic-embed-text-v1.5"] = "nomic",
             ["nomic-embed-text-v2-moe"] = "nomic",
             ["embeddinggemma-300m"] = "embeddinggemma",
+            ["embeddinggemma-2"] = "embeddinggemma",
             ["bge-m3"] = "bge-m3",
-            ["qwen3-embedding-0.6b"] = "plain",
-            ["qwen3-embedding-4b"] = "plain"
+            ["qwen3-embedding-0.6b"] = "qwen3-embedding",
+            ["qwen3-embedding-4b"] = "qwen3-embedding"
         };
         var embedders = ModelCatalogBundledLoader.Load(NullLogger.Instance)
                                                  .Models

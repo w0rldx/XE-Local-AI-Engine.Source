@@ -11,7 +11,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed record EmbeddingModelProfile
 {
     // First hit wins; a token is matched case-insensitively against the model segment only, never the owner.
-    // simplified: Qwen3-Embedding falls to Plain because last-token pooling needs a GGUF with add_eos_token=true; verify that, then add its row with a new tag.
+    // Qwen3-Embedding pools the last token: its 0.6B and 4B GGUFs set add_eos_token=true, so b12014 itself appends <|endoftext|> to every input.
     private static readonly IReadOnlyList<KeyValuePair<string, EmbeddingModelProfile>> Profiles =
     [
         new("nomic-embed-text",
@@ -40,6 +40,15 @@ public sealed record EmbeddingModelProfile
                 QueryPrefix = "",
                 Pooling = "cls",
                 IdentityTag = "prompt-none+pool-cls:v1"
+            }),
+        new("qwen3-embedding",
+            new EmbeddingModelProfile
+            {
+                Id = "qwen3-embedding",
+                DocumentPrefix = "",
+                QueryPrefix = "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:",
+                Pooling = "last",
+                IdentityTag = "prompt-qwen3-embedding+pool-last:v1"
             })
     ];
 

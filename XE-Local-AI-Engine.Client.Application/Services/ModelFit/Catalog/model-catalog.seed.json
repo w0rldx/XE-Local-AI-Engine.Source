@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026.11.6",
-  "updatedAt": "2026-11-06",
+  "catalogVersion": "2026.11.17",
+  "updatedAt": "2026-11-17",
   "models": [
     {
       "id": "qwen3-0.6b",
@@ -695,6 +695,23 @@
       "releaseDate": "2025-09-04"
     },
     {
+      "id": "embeddinggemma-2",
+      "family": "EmbeddingGemma",
+      "displayName": "EmbeddingGemma 2",
+      "publisher": "Google",
+      "ggufRepo": "ggml-org/embeddinggemma-2-GGUF",
+      "license": "apache-2.0",
+      "tier": "A",
+      "useCases": ["embedding"],
+      "totalParamsB": 0.27,
+      "activeParamsB": null,
+      "moe": false,
+      "contextLength": 8192,
+      "minLlamaCppTag": "b11669",
+      "releaseDate": "2026-10-06",
+      "notes": "The knowledge base's one-click embedding model."
+    },
+    {
       "id": "bge-m3",
       "family": "BGE",
       "displayName": "BGE-M3",
@@ -740,8 +757,7 @@
       "moe": false,
       "contextLength": 2048,
       "minLlamaCppTag": "b9692",
-      "releaseDate": "2024-02-10",
-      "notes": "The knowledge base's one-click embedding model."
+      "releaseDate": "2024-02-10"
     },
     {
       "id": "laya",

@@ -36,6 +36,16 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 >   `LLAMA_ARG_EMBEDDINGS`, `LLAMA_ARG_POOLING` and `LLAMA_ARG_RERANKING` are removed from the `llama-server` child
 >   environment.
 
+> **Breaking (pre-release): Qwen3-Embedding gets its own profile, and semantic memory dedup is off by default.**
+> - Qwen3-Embedding now embeds with last-token pooling over the end-of-text token the pinned llama.cpp appends, and
+>   its queries carry Qwen's search instruction. A knowledge base indexed with it reindexes once (lexical search with
+>   `EmbedderChanged` until then), and an external app that embeds with Qwen3 through the embeddings proxy must
+>   re-embed the vectors it stored.
+> - Semantic memory dedup (`MemoryExtraction:SemanticDedupEnabled`) now defaults to `false`; the lexical dedup of
+>   exact normalized duplicates always runs. A calibration over four embedders found that a one-word contradiction of a
+>   lesson scores as close as a true duplicate, so the cosine layer would drop lessons that reverse a live memory. Set
+>   `MemoryExtraction:SemanticDedupEnabled=true` to re-enable it; its threshold stays 0.92.
+
 > **Breaking (pre-release): Dev Workflows is retired (ADR 0023).** Graph Workflows runs development work through its
 > `DevTask` node instead; start from the Graph samples "Development intake" (`dev-intake`) and `research-plan-approval`.
 > - The upgrade drops every stored Dev Workflow row without export: definitions, runs, work items and rule sets, plus the
@@ -415,7 +425,7 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 - **Skipped catalog models named on the model advisor** — when a refresh could not read a catalog model's repository in time, the advisor page names those models under the snapshot status and says a later refresh may bring them back.
 - **"Gated" badge on Model Recommendations** — a model whose Hugging Face repository is gated carries a "Gated" badge; its tooltip says downloading needs the license accepted on Hugging Face and an access token in Node Settings, and that without a token the size estimate rests on the file size alone.
 - **Fit hint on the "Tested by the authors" list** — the fit badge has a tooltip: it compares the tested file's size with this machine's free memory (the Model Recommendations page does the detailed sizing), and on a "Won't fit" row it says Download opens the picker with smaller quants.
-- **Nomic Embed Text v1.5 in the curated catalog** — the knowledge base's one-click embedding model (`nomic-ai/nomic-embed-text-v1.5-GGUF`, tier A) is now listed under embedding; catalog version `2026.10.4`.
+- **Nomic Embed Text v1.5 in the curated catalog** — `nomic-ai/nomic-embed-text-v1.5-GGUF` (tier A) is now listed under embedding; catalog version `2026.10.4`.
 - **Windows sandbox boundary (Preview)** — on Windows, Sandboxed stdio MCP servers can run inside an AppContainer through
   Microsoft's MXC SDK (`Microsoft.Mxc.Sdk` 1.0.0): one writable jail, engine-granted read-only trees, no access to the user
   profile, node data or engine directory, no network. Off by default; an operator turns it on with the new **execution
@@ -438,6 +448,17 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **EmbeddingGemma 2 Q8_0 is the recommended embedding model.** The knowledge base's one-click download installs
+  `ggml-org/embeddinggemma-2-GGUF:Q8_0` (~310 MB, weights only, no image projector) instead of nomic-embed-text v1.5.
+  It changes what a fresh node downloads; a node with a pinned embedder keeps it. A node with nothing pinned now picks
+  the recommended model first, then another quant of it, then any installed embedder by name, so installing
+  EmbeddingGemma 2 there moves it (a corpus indexed before pins existed reindexes visibly). The model catalog
+  (2026.11.17) lists EmbeddingGemma 2 as the one-click embedder.
+- **A model's kind is read from the model name, not its owner.** `CompendiumLabs/bge-m3-gguf` is now an embedding
+  model: it leaves the chat picker and can be pinned or picked as the knowledge-base embedder. An unpinned,
+  never-indexed node with nomic and bge-m3 installed (and no EmbeddingGemma 2) now embeds with bge-m3.
+- **The scheduling grid script launches each embedder with its own profile** (`--pooling` and input format), not
+  nomic's.
 - **Model catalog 2026.11.6: Laya is the recommended decision model (English), Kev-4B the one for German inputs, Julia-1
   moves to tier B.**
 - **Tool catalog entries carry `isAvailableOnNode`**; the agent tool picker disables a tool this node cannot run and labels it

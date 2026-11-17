@@ -190,6 +190,7 @@ public sealed class MemorySemanticDeduplicatorTests
         var resolver = SingleProviderResolverFactory.Create(provider);
         var options = Options.Create(new MemoryExtractionOptions
         {
+            SemanticDedupEnabled = true,
             SemanticDedupEmbeddingProviderName = MapEmbeddingProvider.ProviderKey,
             SemanticDedupSimilarityThreshold = threshold,
             SemanticDedupEmbeddingCacheMaxEntries = 512

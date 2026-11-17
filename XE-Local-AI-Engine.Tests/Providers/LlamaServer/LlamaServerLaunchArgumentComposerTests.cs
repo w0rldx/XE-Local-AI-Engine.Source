@@ -132,7 +132,7 @@ public sealed class LlamaServerLaunchArgumentComposerTests
     [Test]
     [Arguments("nomic-ai/nomic-embed-text-v1.5-GGUF:F16", "mean")]
     [Arguments("ggml-org/embeddinggemma-2-GGUF:Q8_0", "mean")]
-    [Arguments("Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "mean")]
+    [Arguments("Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "last")]
     [Arguments("CompendiumLabs/bge-m3-gguf:F16", "cls")]
     [Arguments("my-embed:Q8_0", "mean")]
     public void Composer_EmbeddingRole_EmitsTheProfilesPoolingOnce(string modelName, string pooling)

@@ -192,7 +192,7 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     [Test]
     [Arguments("ggml-org/embeddinggemma-2-GGUF:Q8_0", "prompt-embeddinggemma+pool-mean:v1")]
     [Arguments("CompendiumLabs/bge-m3-gguf:F16", "prompt-none+pool-cls:v1")]
-    [Arguments("Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "prompt-none+pool-mean:v1")]
+    [Arguments("Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "prompt-qwen3-embedding+pool-last:v1")]
     [Arguments("my-embed:Q8_0", "prompt-none+pool-mean:v1")]
     public void Transform_NonNomicProfile_CarriesItsIdentityTag(string modelName, string tag)
     {

@@ -6715,7 +6715,7 @@
 					"downloadStarted": "Das empfohlene Embedding-Modell ({{model}}) wird heruntergeladen.",
 					"empty": "Keine installierten Embedding-Modelle",
 					"label": "Embedding-Modell",
-					"recommendedHelp": "Erforderlich für die Wissensdatenbank: Ohne Embedding-Modell können Dokumente nicht indexiert werden. Empfohlen: nomic-embed-text-v1.5 (~274 MB).",
+					"recommendedHelp": "Erforderlich für die Wissensdatenbank: Ohne Embedding-Modell können Dokumente nicht indexiert werden. Empfohlen: EmbeddingGemma 2 (~310 MB).",
 					"unpinned": "Noch nicht festgelegt (wird bei der ersten Indizierung gesetzt)"
 				},
 				"enableTools": {

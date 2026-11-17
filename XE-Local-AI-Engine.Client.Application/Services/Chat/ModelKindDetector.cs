@@ -37,7 +37,7 @@ public static class ModelKindDetector
         "RERANK"
     ];
 
-    /// <summary>True when the model NAME alone identifies an embedding-only model.</summary>
+    /// <summary>True when the model segment of the NAME (after the last <c>/</c>) identifies an embedding-only model.</summary>
     /// <remarks>
     ///     It is used to
     ///     keep an embedding model out of the chat surfaces and auto-resolve it for knowledge-base embedding. It
@@ -48,7 +48,7 @@ public static class ModelKindDetector
         return FromNameHeuristic(modelName) == ModelKind.Embedding;
     }
 
-    /// <summary>True when the model NAME alone identifies a reranker (cross-encoder) model.</summary>
+    /// <summary>True when the model segment of the NAME (after the last <c>/</c>) identifies a reranker (cross-encoder) model.</summary>
     /// <remarks>
     ///     It is used to keep a reranker out of the chat surfaces and tag it in the
     ///     model list, and it takes precedence over <see cref="IsEmbeddingName" />: a name that matches both, such as
@@ -80,18 +80,21 @@ public static class ModelKindDetector
             return ModelKind.Unknown;
         }
 
+        // Only the model segment (after the last '/') counts: the owner names a publisher, not the model kind. No colon
+        // cut, so a bare tag like BGE:LATEST keeps its BGE: prefix.
         var normalized = modelName.ToUpperInvariant();
+        var segment = normalized[(normalized.LastIndexOf('/') + 1)..];
 
         // Reranker wins over embedding: a name like BGE-RERANKER-… matches the BGE- embedding prefix too, and the
         // reranker classification is the correct one.
-        if (RerankerNameFragments.Any(fragment => normalized.Contains(fragment, StringComparison.Ordinal)))
+        if (RerankerNameFragments.Any(fragment => segment.Contains(fragment, StringComparison.Ordinal)))
         {
             return ModelKind.Reranker;
         }
 
         var matchesEmbeddingName =
-            EmbeddingNamePrefixes.Any(prefix => normalized.StartsWith(prefix, StringComparison.Ordinal))
-            || EmbeddingNameFragments.Any(fragment => normalized.Contains(fragment, StringComparison.Ordinal));
+            EmbeddingNamePrefixes.Any(prefix => segment.StartsWith(prefix, StringComparison.Ordinal))
+            || EmbeddingNameFragments.Any(fragment => segment.Contains(fragment, StringComparison.Ordinal));
 
         return matchesEmbeddingName ? ModelKind.Embedding : ModelKind.Unknown;
     }

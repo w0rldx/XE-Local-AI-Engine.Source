@@ -131,7 +131,7 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
             return MemorySemanticDedupResult.NotApplied;
         }
 
-        return ClassifyCandidates(existing, candidates, existingVectors, candidateVectors);
+        return ClassifyCandidates(existing, candidates, existingVectors, candidateVectors, _options.SemanticDedupSimilarityThreshold);
 
         async Task<IReadOnlyList<ReadOnlyMemory<float>>?> EmbedMissingExistingAsync(IReadOnlyList<EmbeddingCacheKey> missing,
             CancellationToken token)
@@ -171,12 +171,14 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
         }
     }
 
-    private MemorySemanticDedupResult ClassifyCandidates(IReadOnlyList<MemoryDedupExisting> existing,
+    /// <summary>Flags each candidate whose cosine to a same-scope existing memory or earlier accepted candidate is at least <paramref name="threshold" />.</summary>
+    /// <remarks>Internal so the live dedup calibration replays this exact decision over real vectors.</remarks>
+    internal static MemorySemanticDedupResult ClassifyCandidates(IReadOnlyList<MemoryDedupExisting> existing,
         IReadOnlyList<MemoryDedupCandidate> candidates,
         ReadOnlyMemory<float>[] existingVectors,
-        ReadOnlyMemory<float>[] candidateVectors)
+        ReadOnlyMemory<float>[] candidateVectors,
+        double threshold)
     {
-        var threshold = _options.SemanticDedupSimilarityThreshold;
         var duplicateIndexes = new HashSet<int>();
 
         // Indexes of the candidates accepted so far: comparing a later one against them collapses two paraphrases

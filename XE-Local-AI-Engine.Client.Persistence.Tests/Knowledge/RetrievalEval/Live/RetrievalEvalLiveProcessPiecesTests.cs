@@ -207,7 +207,7 @@ public sealed class RetrievalEvalLiveProcessPiecesTests
     [Arguments(ModelRole.Reranker, 0, null, "rank")]
     [Arguments(ModelRole.Embedding, 99, "CompendiumLabs/bge-m3-gguf:F16", "cls")]
     [Arguments(ModelRole.Embedding, 99, "embeddinggemma-2-Q8_0", "mean")]
-    [Arguments(ModelRole.Embedding, 99, "Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "mean")]
+    [Arguments(ModelRole.Embedding, 99, "Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "last")]
     public void BuildArguments_ParseBackToTheProductProjection_ExceptTheExplicitGpuLayers(ModelRole role, int gpuLayers, string? embeddingModelName, string pooling)
     {
         var variant = gpuLayers > 0 ? GpuVariant.Cuda : GpuVariant.Cpu;

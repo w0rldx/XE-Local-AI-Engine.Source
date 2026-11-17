@@ -48,15 +48,15 @@ public sealed class MemoryExtractionOptions
     public int ShutdownDrainTimeoutSeconds { get; set; } = 10;
 
     /// <summary>
-    ///     Master switch, default on, for the SEMANTIC dedup layer that runs ON TOP OF the always-on lexical dedup.
+    ///     Master switch, default off, for the SEMANTIC dedup layer that runs ON TOP OF the always-on lexical dedup.
     /// </summary>
     /// <remarks>
-    ///     When on, a candidate surviving lexical dedup is embedded and dropped if it is cosine-near a live memory;
-    ///     off, or with no confident node-local embedding model, the lexical-only behavior is byte-for-byte. The
-    ///     IsConfident gate already no-ops on a node with no embedding model, so this flag exists so an operator can
-    ///     disable semantic dedup WITHOUT unconfiguring the embedding model retrieval also shares.
+    ///     Off because the measured embedders (<c>MemoryDedupCalibrationLiveTests</c>) cannot separate a duplicate lesson
+    ///     from a one-word contradiction: near-misses often score at or above the threshold. An operator may enable it;
+    ///     a candidate surviving lexical dedup is then embedded and dropped if it is cosine-near a live memory. Off, or
+    ///     with no confident node-local embedding model, the lexical-only behavior is byte-for-byte.
     /// </remarks>
-    public bool SemanticDedupEnabled { get; set; } = true;
+    public bool SemanticDedupEnabled { get; set; }
 
     /// <summary>
     ///     Provider key for the node-local embedding model semantic dedup uses, which must match a registered
@@ -73,8 +73,8 @@ public sealed class MemoryExtractionOptions
     ///     of the same scope and is dropped.
     /// </summary>
     /// <remarks>
-    ///     It is tuned conservatively, default 0.92, so ONLY true near-duplicates collapse: a too-low threshold
-    ///     swallows distinct lessons. It is clamped to (0, 1], and any other value resets to the default.
+    ///     Applies only when <see cref="SemanticDedupEnabled" /> is on. Default 0.92; a too-low threshold swallows
+    ///     distinct lessons. It is clamped to (0, 1], and any other value resets to the default.
     /// </remarks>
     public double SemanticDedupSimilarityThreshold { get; set; } = 0.92d;
 

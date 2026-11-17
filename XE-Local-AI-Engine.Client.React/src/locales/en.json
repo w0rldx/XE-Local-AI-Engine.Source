@@ -6715,7 +6715,7 @@
 					"downloadStarted": "Downloading the recommended embedding model ({{model}}).",
 					"empty": "No installed embedding models",
 					"label": "Embedding model",
-					"recommendedHelp": "Required for the knowledge base: without an embedding model, documents cannot be indexed. Recommended: nomic-embed-text-v1.5 (~274 MB).",
+					"recommendedHelp": "Required for the knowledge base: without an embedding model, documents cannot be indexed. Recommended: EmbeddingGemma 2 (~310 MB).",
 					"unpinned": "Not pinned yet (set by the first index)"
 				},
 				"enableTools": {

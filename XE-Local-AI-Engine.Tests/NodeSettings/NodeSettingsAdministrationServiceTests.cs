@@ -361,11 +361,13 @@ public sealed class NodeSettingsAdministrationServiceTests
     [Arguments("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", true)]
     [Arguments("ggml-org/embeddinggemma-2-GGUF:BF16", false)]
     [Arguments("unsloth/Qwen3-8B-GGUF:Q4_K_M", false)]
+    [Arguments("CompendiumLabs/bge-m3-gguf:Q8_0", true)]
     public async Task SaveTrusted_KnowledgeEmbeddingPin_AcceptsOnlyAnInstalledEmbeddingModel(string pin, bool accepted)
     {
-        // Installed: the nomic embedder and a chat model. A pin naming a missing embedder or a non-embedding model is refused.
+        // Installed: the nomic and bge-m3 embedders and a chat model. A pin naming a missing embedder or a non-embedding model is refused.
         var store = new FakeNodeSettingsStore(new StoredNodeSettings());
-        var service = CreateService(store, localModelProviderResolver: EmbeddingProviderResolver("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", "unsloth/Qwen3-8B-GGUF:Q4_K_M"));
+        var service = CreateService(store,
+            localModelProviderResolver: EmbeddingProviderResolver("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", "CompendiumLabs/bge-m3-gguf:Q8_0", "unsloth/Qwen3-8B-GGUF:Q4_K_M"));
 
         var result = await service.SaveTrustedMergedAsync(current => current with
         {

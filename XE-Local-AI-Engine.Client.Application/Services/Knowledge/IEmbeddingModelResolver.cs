@@ -20,8 +20,8 @@ public interface IEmbeddingModelResolver
     /// <remarks>
     ///     (1) The stored pin, else the configured name, when an equal model (ignoring case) is installed: confident. A missing
     ///     pin stops here, NOT confident with <see cref="EmbeddingModelResolution.PinnedModelMissing" />. (2) With nothing
-    ///     pinned, the first installed <see cref="ModelKindDetector.IsEmbeddingName" /> model by ordinal-ignore-case name:
-    ///     confident. (3) Otherwise the configured name, NOT confident, so the caller's not-available path fires; a transport
+    ///     pinned, <see cref="RecommendedEmbeddingModel.PickInstalled" />: the recommended model first, then its other quants,
+    ///     then any installed <see cref="ModelKindDetector.IsEmbeddingName" /> model, each by name: confident. (3) Otherwise the configured name, NOT confident, so the caller's not-available path fires; a transport
     ///     failure while listing models also degrades to (3), never throwing.
     /// </remarks>
     Task<EmbeddingModelResolution> ResolveAsync(ILocalModelProvider provider, CancellationToken cancellationToken);

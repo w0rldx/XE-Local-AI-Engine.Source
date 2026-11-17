@@ -728,6 +728,10 @@ A judge requiring a 16,384-token window was down-tiered during one tight-VRAM ad
 
 Managed cosine outperformed sqlite-vec through the measured 100k-row corpus; sqlite-vec's default `vec0` remained brute-force. For pooled llama-server roles, ordinary ~2,000-character markdown chunks measured roughly 520–680 real tokens and failed the default 512 physical micro-batch even when `-c` was larger. Raising `-b/-ub` to effective context fixed ingestion; chat was excluded because causal decode splits normally.
 
+- 2026-11-16, embedder comparison (opt-in retrieval eval, corpus revision 2, 134 labelled queries, 81 of them German or semantic code): EmbeddingGemma 2 Q8_0 over nomic v1.5 F16, F0 nDCG@5 +0.088 (paired 95% CI +0.047 to +0.134), German +0.150, semantic code +0.049; with the reranker +0.076. BF16 vs Q8_0 Δ −0.001. Costs: about half nomic's ingest throughput, +60–180 MiB embedder VRAM, 768-d vectors (1.5× nomic's 512-d storage). An earlier "no gain" trial scored 14 reranked English queries and is not comparable.
+- 2026-11-17, Qwen3-Embedding EOS under the pinned llama.cpp (b12014), 0.6B Q8_0 and 4B Q4_K_M: the loader dump shows `tokenizer.ggml.add_eos_token = true`; `/tokenize` with special tokens ends `hello world` in `<|endoftext|>` (151643) once; the embedding reports 3 prompt tokens, matching. Retrieval eval, `qwen3-embedding` profile vs `plain` on the same 0.6B file: F0 nDCG@5 +0.079 (95% CI +0.046 to +0.116).
+- 2026-11-17, memory dedup calibration (`MemoryDedupCalibrationLiveTests`, raw lesson text, English and German): the AUC separating duplicates from near-misses (one-word contradictions) was 0.35–0.47 for nomic v1.5 F16, EmbeddingGemma 2 Q8_0, bge-m3 F16 and Qwen3-Embedding 0.6B Q8_0, i.e. no better than chance; near-misses often scored at or above 0.92 (EmbeddingGemma 2 near-miss median 0.92–0.94). No threshold passed the rule, so semantic memory dedup ships off by default.
+
 ### Training live-gate incidents
 
 The 2026-08-15 end-to-end training gate found issues unit suites did not expose:

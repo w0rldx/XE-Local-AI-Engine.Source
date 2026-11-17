@@ -351,7 +351,7 @@ describe("NodeSettingsFieldsCard — recommended embedding model download", () =
 
 		expect(screen.getByTestId("node-settings-embedding-download-recommended")).toBeTruthy();
 		// The helper names the recommended model + explains why it's required (human copy resolves — no bare i18n key).
-		expect(screen.getByText(/nomic-embed-text-v1\.5/)).toBeTruthy();
+		expect(screen.getByText(/EmbeddingGemma 2/)).toBeTruthy();
 	});
 
 	it("invokes the download handler once when the button is clicked", () => {

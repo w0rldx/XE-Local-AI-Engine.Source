@@ -860,11 +860,11 @@ public sealed record StoredNodeSettings
     ///     The knowledge-base embedding model pin: the installed embedding model NAME every chunk and query vector is built with.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" /> (default) resolves <c>KnowledgeBase:EmbeddingModelName</c>, else the first installed
-    ///     embedding-named model. The node writes it once, after the first successful index commit or at startup when the
-    ///     indexed corpus names exactly one installed model; only an operator save changes it, naming an installed embedding
-    ///     model or clearing it while nothing is Indexed. A missing pinned model never falls back: search stays lexical and
-    ///     reports <c>EmbedderChanged</c>. Read live per resolve.
+    ///     <see langword="null" /> (default) resolves <c>KnowledgeBase:EmbeddingModelName</c>, else the installed embedder
+    ///     <c>RecommendedEmbeddingModel.PickInstalled</c> chooses. The node writes it once, after the first successful index
+    ///     commit; only an operator save changes it, naming an installed embedding model or clearing it while nothing is
+    ///     Indexed. A missing pinned model never falls back: search stays lexical and reports <c>EmbedderChanged</c>. Read
+    ///     live per resolve.
     /// </remarks>
     public string? KnowledgeEmbeddingModelName { get; init; }
 

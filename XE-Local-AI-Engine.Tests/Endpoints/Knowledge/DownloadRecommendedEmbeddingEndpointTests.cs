@@ -4,11 +4,15 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.Knowledge.V1;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -42,8 +46,10 @@ public sealed class DownloadRecommendedEmbeddingEndpointTests
         AssertEx.NotNull(body);
 
         AssertEx.Equal(1, coordinator.StartCalls.Count);
-        AssertEx.Equal(RecommendedEmbeddingModel.RepoId, coordinator.StartCalls[0].RepoId);
-        AssertEx.Equal(RecommendedEmbeddingModel.Quant, coordinator.StartCalls[0].Quant);
+        AssertEx.Equal("ggml-org/embeddinggemma-2-GGUF", coordinator.StartCalls[0].RepoId);
+        AssertEx.Equal("Q8_0", coordinator.StartCalls[0].Quant);
+        // Weights only: text embedding never loads the repo's projector, which is larger than the weights.
+        AssertEx.False(coordinator.StartCalls[0].IncludeProjector);
 
         AssertEx.Equal(RecommendedEmbeddingModel.CanonicalModelName, body!.ModelName);
         AssertEx.Equal(RecommendedEmbeddingModel.RepoId, body.RepoId);
@@ -121,9 +127,8 @@ public sealed class DownloadRecommendedEmbeddingEndpointTests
     [Test]
     public async Task DownloadRecommended_WhenBothTheRecommendedAndAnotherEmbedderAreInstalled_PrefersTheRecommended()
     {
-        // Step one of the two-step fallback beats step two: the recommended repo is reported even when another
-        // embedding-named model is installed AND sorts first, so the identity the operator sees stays stable rather
-        // than drifting with whatever else happens to be on disk.
+        // The recommended model is reported even when another embedding-named model is installed AND sorts first, so
+        // the identity the operator sees stays stable rather than drifting with whatever else happens to be on disk.
         var coordinator = new RecordingDownloadCoordinator(alreadyInFlight: false);
 
         await using var factory = CreateFactory(coordinator, installed:
@@ -171,6 +176,63 @@ public sealed class DownloadRecommendedEmbeddingEndpointTests
         AssertEx.Empty(coordinator.StartCalls);
         AssertEx.True(body!.AlreadyInstalled);
         AssertEx.Equal("mixedbread-ai/mxbai-embed-large-v1-GGUF:Q4_K_M", body.ModelName);
+    }
+
+    [Test]
+    public async Task DownloadRecommended_WhenOnlyThePreviousNomicRecommendationIsInstalled_IsANoOp()
+    {
+        // A node set up with the former recommendation can already embed: no second embedder is downloaded.
+        var coordinator = new RecordingDownloadCoordinator(alreadyInFlight: false);
+
+        await using var factory = CreateFactory(coordinator, installed: [Gguf("nomic-ai/nomic-embed-text-v1.5-GGUF:F16")]);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute);
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<DownloadRecommendedEmbeddingResponse>();
+        AssertEx.NotNull(body);
+
+        AssertEx.Empty(coordinator.StartCalls);
+        AssertEx.True(body!.AlreadyInstalled);
+        AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:F16", body.ModelName);
+    }
+
+    [Test]
+    public async Task DownloadRecommended_ReportsTheSameModelTheUnpinnedResolverEmbedsWith()
+    {
+        // "Already installed: X" must name the model knowledge-base indexing will use, for the same inventory.
+        LocalModelDescriptor[] installed =
+        [
+            Gguf("nomic-ai/nomic-embed-text-v1.5-GGUF:F16"),
+            Gguf("CompendiumLabs/bge-m3-gguf:F16"),
+            Gguf("ggml-org/embeddinggemma-2-GGUF:BF16")
+        ];
+        var coordinator = new RecordingDownloadCoordinator(alreadyInFlight: false);
+
+        await using var factory = CreateFactory(coordinator, installed);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute);
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<DownloadRecommendedEmbeddingResponse>();
+        AssertEx.NotNull(body);
+
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ListModelsAsync(Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(installed));
+        var resolver = new EmbeddingModelResolver(Options.Create(new KnowledgeBaseOptions()),
+            new FakeNodeSettingsStore(new StoredNodeSettings()));
+        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);
+
+        AssertEx.True(body!.AlreadyInstalled);
+        AssertEx.Equal("ggml-org/embeddinggemma-2-GGUF:BF16", body.ModelName);
+        AssertEx.Equal(body.ModelName, resolution.Name);
     }
 
     [Test]

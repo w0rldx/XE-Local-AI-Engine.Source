@@ -29,6 +29,16 @@ CONFIGS = [
 ]
 SCENARIOS = ("short", "median", "max", "large", "concurrent")
 IGNORED_OUTPUT_KEYS = frozenset(("prompt_tokens", "total_tokens"))
+# (token, document prefix, pooling) in EmbeddingModelProfile order; first token in the file stem wins, else plain.
+# shortcut: mirrors EmbeddingModelProfile by hand (file stem only), no drift check;
+# derive it when a second script needs the table.
+EMBEDDING_PROFILES = (
+    ("nomic-embed-text", "search_document: ", "mean"),
+    ("embeddinggemma", "title: none | text: ", "mean"),
+    ("bge-m3", "", "cls"),
+    ("qwen3-embedding", "", "last"),
+)
+PLAIN_EMBEDDING_PROFILE = ("", "mean")
 
 
 def digest(path: Path) -> str:
@@ -168,11 +178,27 @@ def percentile(values: list[float], fraction: float) -> float:
     return ordered[max(0, min(len(ordered) - 1, int(len(ordered) * fraction + 0.999999) - 1))]
 
 
+def embedding_profile(model_path: str | Path) -> tuple[str, str]:
+    """(document prefix, pooling) for an embedder file, matched on its stem only, never a parent directory."""
+    stem = Path(model_path).stem.lower()
+    return next(
+        ((prefix, pooling) for token, prefix, pooling in EMBEDDING_PROFILES if token in stem),
+        PLAIN_EMBEDDING_PROFILE,
+    )
+
+
+def role_argv(role: str, model: Path) -> list[str]:
+    if role == "embedding":
+        return ["--embeddings", "--pooling", embedding_profile(model)[1]]
+    return ["--rerank", "--pooling", "rank"]
+
+
 def tokenize(port: int, content: str) -> int:
+    # parse_special matches how /v1/embeddings tokenizes, so the count is the one the server pools.
     result = post(
         port,
         "/tokenize",
-        {"content": content, "add_special": True, "with_pieces": False},
+        {"content": content, "add_special": True, "parse_special": True, "with_pieces": False},
     )
     return len(result["tokens"])
 
@@ -240,9 +266,9 @@ def _actual_request_accepted(
     return True
 
 
-def build_corpus(port: int, role: str) -> dict:
+def build_corpus(port: int, role: str, model: Path) -> dict:
     fn = role_request(role)
-    prefix = "search_document: " if role == "embedding" else ""
+    prefix = embedding_profile(model)[0] if role == "embedding" else ""
     short_text = "A concise local inference note."
     median_text = ("Scheduling affects independent request occupancy and physical batch capacity. " * 18).strip()
     short = distinct_inputs(prefix, short_text, 16, "short")
@@ -432,7 +458,7 @@ def run_config(
         str(args.cpu_threads),
     ]
     argv += ["--kv-unified" if unified else "--no-kv-unified"]
-    argv += ["--embeddings", "--pooling", "mean"] if role == "embedding" else ["--rerank", "--pooling", "rank"]
+    argv += role_argv(role, model)
     log_path = Path(args.raw_dir) / f"{backend}-{role}-{name}.log"
     with log_path.open("w+") as log:
         process = subprocess.Popen(
@@ -444,7 +470,7 @@ def run_config(
         try:
             wait_ready(process, port, log_path)
             if corpus is None:
-                corpus = build_corpus(port, role)
+                corpus = build_corpus(port, role, model)
             fn = role_request(role)
             preflight = actual_request_preflight(fn, port, corpus["max"], role)
             log.flush()

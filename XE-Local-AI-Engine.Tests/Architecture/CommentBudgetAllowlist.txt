@@ -579,7 +579,7 @@ XE-Local-AI-Engine.Tests/Endpoints/GraphWorkflows/V1/GraphWorkflowValidateEndpoi
 XE-Local-AI-Engine.Tests/Endpoints/Images/ImageModelManagementEndpointTests.cs|run|2
 XE-Local-AI-Engine.Tests/Endpoints/Images/ImageModelManagementEndpointTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationExecutionEndpointTests.cs|summary|4
-XE-Local-AI-Engine.Tests/Endpoints/Knowledge/DownloadRecommendedEmbeddingEndpointTests.cs|run|3
+XE-Local-AI-Engine.Tests/Endpoints/Knowledge/DownloadRecommendedEmbeddingEndpointTests.cs|run|2
 XE-Local-AI-Engine.Tests/Endpoints/Knowledge/DownloadRecommendedEmbeddingEndpointTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Endpoints/Knowledge/DownloadRecommendedRerankerEndpointTests.cs|run|1
 XE-Local-AI-Engine.Tests/Endpoints/Knowledge/DownloadRecommendedRerankerEndpointTests.cs|summary|1

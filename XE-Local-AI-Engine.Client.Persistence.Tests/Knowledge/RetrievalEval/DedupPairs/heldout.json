@@ -1,0 +1,276 @@
+{
+  "scenarios": [
+    {
+      "id": "ho-en-01",
+      "language": "en",
+      "existing": [
+        { "lessonId": "ho-en-npm-cache-checksum", "scope": "Procedural", "behavior": "Clear the npm cache when a package install fails with a checksum error." },
+        { "lessonId": "ho-en-bullet-lists", "scope": "UserPreference", "behavior": "The user wants answers formatted as bullet lists." },
+        { "lessonId": "ho-en-no-force-push-release", "scope": "Failure", "behavior": "Do not force-push to the shared release branch." }
+      ],
+      "candidates": [
+        { "kind": "near-miss", "lessonId": "ho-en-prose-paragraphs", "scope": "UserPreference", "behavior": "The user wants answers written as flowing paragraphs, not bullet lists." },
+        { "kind": "duplicate", "lessonId": "ho-en-npm-cache-checksum", "scope": "Procedural", "behavior": "When a package install fails with a checksum error, clear the npm cache." },
+        { "kind": "new", "lessonId": "ho-en-release-branch-name", "scope": "Project", "behavior": "The release branch in this repository is called release/stable." },
+        { "kind": "cross-scope", "lessonId": "ho-en-no-force-push-release", "scope": "Procedural", "behavior": "Never force-push to the release branch that everyone shares." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-en-release-branch-name", "scope": "Project", "behavior": "This repository's release branch is named release/stable." }
+      ],
+      "expectedDuplicateIndexes": [1, 4]
+    },
+    {
+      "id": "ho-en-02",
+      "language": "en",
+      "existing": [
+        { "lessonId": "ho-en-quote-rm-rf-variables", "scope": "Failure", "behavior": "Do not run rm -rf with an unquoted shell variable in the path." },
+        { "lessonId": "ho-en-api-port-8080", "scope": "Project", "behavior": "The local API in this project listens on port 8080." },
+        { "lessonId": "ho-en-code-before-explanation", "scope": "UserPreference", "behavior": "The user wants the code snippet first and the explanation after it." }
+      ],
+      "candidates": [
+        { "kind": "near-miss", "lessonId": "ho-en-api-port-5000", "scope": "Project", "behavior": "The local API in this project listens on port 5000." },
+        { "kind": "cross-scope", "lessonId": "ho-en-code-before-explanation", "scope": "Procedural", "behavior": "Show the code snippet before explaining it." },
+        { "kind": "duplicate", "lessonId": "ho-en-quote-rm-rf-variables", "scope": "Failure", "behavior": "Never pass an unquoted variable to rm -rf; an empty value can wipe the wrong directory." },
+        { "kind": "new", "lessonId": "ho-en-reports-as-pdf", "scope": "UserPreference", "behavior": "The user wants reports delivered as PDF files." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-en-reports-as-pdf", "scope": "UserPreference", "behavior": "Send finished reports to the user in PDF format." }
+      ],
+      "expectedDuplicateIndexes": [2, 4]
+    },
+    {
+      "id": "ho-en-03",
+      "language": "en",
+      "existing": [
+        { "lessonId": "ho-en-monday-open-tasks", "scope": "UserPreference", "behavior": "The user wants a weekly summary of open tasks every Monday morning." },
+        { "lessonId": "ho-en-project-venv", "scope": "Procedural", "behavior": "Create a virtual environment before installing Python packages for a project." },
+        { "lessonId": "ho-en-architecture-docs-folder", "scope": "Project", "behavior": "Architecture documentation for this project lives in the docs/architecture folder." }
+      ],
+      "candidates": [
+        { "kind": "new", "lessonId": "ho-en-nx-monorepo", "scope": "Project", "behavior": "This project is a monorepo managed with Nx." },
+        { "kind": "near-miss", "lessonId": "ho-en-pipx-for-tools", "scope": "Procedural", "behavior": "Install Python command-line tools globally with pipx instead of into a project virtual environment." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-en-nx-monorepo", "scope": "Project", "behavior": "The repository is an Nx-managed monorepo." },
+        { "kind": "duplicate", "lessonId": "ho-en-monday-open-tasks", "scope": "UserPreference", "behavior": "Every Monday morning, send the user a summary of the tasks that are still open." },
+        { "kind": "cross-scope", "lessonId": "ho-en-architecture-docs-folder", "scope": "Procedural", "behavior": "Look in docs/architecture for this project's architecture documentation." }
+      ],
+      "expectedDuplicateIndexes": [2, 3]
+    },
+    {
+      "id": "ho-en-04",
+      "language": "en",
+      "existing": [
+        { "lessonId": "ho-en-page-large-results", "scope": "Failure", "behavior": "Do not load an entire database table into memory; page through large result sets." },
+        { "lessonId": "ho-en-formal-email-tone", "scope": "UserPreference", "behavior": "The user prefers a formal tone in drafted emails." },
+        { "lessonId": "ho-en-screenshot-ui-bugs", "scope": "Procedural", "behavior": "Attach a screenshot when filing a UI bug report." }
+      ],
+      "candidates": [
+        { "kind": "near-miss", "lessonId": "ho-en-casual-email-tone", "scope": "UserPreference", "behavior": "The user prefers a casual, friendly tone in drafted emails." },
+        { "kind": "cross-scope", "lessonId": "ho-en-screenshot-ui-bugs", "scope": "UserPreference", "behavior": "The user wants a screenshot attached to every UI bug report." },
+        { "kind": "duplicate", "lessonId": "ho-en-page-large-results", "scope": "Failure", "behavior": "Never load an entire database table into memory; page through large results instead." },
+        { "kind": "new", "lessonId": "ho-en-io-off-ui-thread", "scope": "Failure", "behavior": "Do not run long file operations on the UI thread." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-en-io-off-ui-thread", "scope": "Failure", "behavior": "Keep slow disk work off the UI thread so the interface stays responsive." }
+      ],
+      "expectedDuplicateIndexes": [2, 4]
+    },
+    {
+      "id": "ho-en-05",
+      "language": "en",
+      "existing": [
+        { "lessonId": "ho-en-flags-json", "scope": "Project", "behavior": "Feature flags in this project are defined in flags.json at the repository root." },
+        { "lessonId": "ho-en-no-ignoring-tls-errors", "scope": "Failure", "behavior": "Do not ignore TLS certificate errors when calling external services." },
+        { "lessonId": "ho-en-explain-abbreviations", "scope": "UserPreference", "behavior": "The user dislikes unexplained abbreviations in answers." }
+      ],
+      "candidates": [
+        { "kind": "duplicate", "lessonId": "ho-en-flags-json", "scope": "Project", "behavior": "This project keeps its feature flag definitions in the flags.json file at the top of the repository." },
+        { "kind": "near-miss", "lessonId": "ho-en-ship-ca-bundle", "scope": "Failure", "behavior": "Do not rely on the system certificate store inside the container; ship the CA bundle with the image." },
+        { "kind": "new", "lessonId": "ho-en-commit-lockfile", "scope": "Procedural", "behavior": "Commit the lockfile together with any dependency change." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-en-commit-lockfile", "scope": "Procedural", "behavior": "Whenever dependencies change, include the updated lockfile in the same commit." },
+        { "kind": "cross-scope", "lessonId": "ho-en-explain-abbreviations", "scope": "Procedural", "behavior": "Spell out abbreviations in answers instead of leaving them unexplained." }
+      ],
+      "expectedDuplicateIndexes": [0, 3]
+    },
+    {
+      "id": "ho-en-06",
+      "language": "en",
+      "existing": [
+        { "lessonId": "ho-en-aisle-seat", "scope": "UserPreference", "behavior": "The user prefers aisle seats on flights." },
+        { "lessonId": "ho-en-python-312", "scope": "Project", "behavior": "This project targets Python 3.12." },
+        { "lessonId": "ho-en-binaries-in-lfs", "scope": "Failure", "behavior": "Do not commit large binary files directly to the Git repository; use Git LFS." }
+      ],
+      "candidates": [
+        { "kind": "cross-scope", "lessonId": "ho-en-binaries-in-lfs", "scope": "Procedural", "behavior": "Store large binary files in Git LFS rather than committing them to the repository directly." },
+        { "kind": "near-miss", "lessonId": "ho-en-python-39-compat", "scope": "Project", "behavior": "This project must stay compatible with Python 3.9." },
+        { "kind": "duplicate", "lessonId": "ho-en-aisle-seat", "scope": "UserPreference", "behavior": "When booking flights for the user, choose an aisle seat." },
+        { "kind": "new", "lessonId": "ho-en-no-wildcard-imports", "scope": "Failure", "behavior": "Avoid wildcard imports in Python modules." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-en-no-wildcard-imports", "scope": "Failure", "behavior": "Do not use 'from module import *' in Python code." }
+      ],
+      "expectedDuplicateIndexes": [2, 4]
+    },
+    {
+      "id": "ho-en-07",
+      "language": "en",
+      "existing": [
+        { "lessonId": "ho-en-restart-after-config", "scope": "Procedural", "behavior": "Restart the service after editing its configuration file so the change takes effect." },
+        { "lessonId": "ho-en-no-weekend-notifications", "scope": "UserPreference", "behavior": "Do not send the user notifications on weekends." },
+        { "lessonId": "ho-en-main-db-postgres", "scope": "Project", "behavior": "The main database of this project is PostgreSQL." }
+      ],
+      "candidates": [
+        { "kind": "cross-scope", "lessonId": "ho-en-main-db-postgres", "scope": "Procedural", "behavior": "Write SQL for PostgreSQL, since that is the main database of this project." },
+        { "kind": "near-miss", "lessonId": "ho-en-urgent-weekend-notifications", "scope": "UserPreference", "behavior": "Notify the user about urgent incidents even on weekends." },
+        { "kind": "duplicate", "lessonId": "ho-en-restart-after-config", "scope": "Procedural", "behavior": "After changing a service's config file, restart the service; otherwise the new settings are not loaded." },
+        { "kind": "new", "lessonId": "ho-en-api-v1-prefix", "scope": "Project", "behavior": "Public API routes in this project are versioned under /api/v1." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-en-api-v1-prefix", "scope": "Project", "behavior": "This project's public API is versioned, with every route below /api/v1." }
+      ],
+      "expectedDuplicateIndexes": [2, 4]
+    },
+    {
+      "id": "ho-en-08",
+      "language": "en",
+      "existing": [
+        { "lessonId": "ho-en-save-before-kernel-restart", "scope": "Failure", "behavior": "Do not restart a notebook kernel without saving the notebook first." },
+        { "lessonId": "ho-en-squash-wip-commits", "scope": "Procedural", "behavior": "Squash work-in-progress commits before opening a pull request." },
+        { "lessonId": "ho-en-report-week-monday-sunday", "scope": "Project", "behavior": "Weekly reports in this project cover Monday through Sunday." }
+      ],
+      "candidates": [
+        { "kind": "near-miss", "lessonId": "ho-en-keep-every-commit", "scope": "Procedural", "behavior": "Keep every individual commit when opening a pull request; do not squash them." },
+        { "kind": "cross-scope", "lessonId": "ho-en-report-week-monday-sunday", "scope": "UserPreference", "behavior": "The user wants weekly reports to run from Monday to Sunday." },
+        { "kind": "duplicate", "lessonId": "ho-en-save-before-kernel-restart", "scope": "Failure", "behavior": "Save the notebook before restarting its kernel, or unsaved cells are lost." },
+        { "kind": "new", "lessonId": "ho-en-british-spelling", "scope": "UserPreference", "behavior": "The user wants British spelling, such as colour and organise." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-en-british-spelling", "scope": "UserPreference", "behavior": "Use British English spellings like 'colour' and 'organise' for this user." }
+      ],
+      "expectedDuplicateIndexes": [2, 4]
+    },
+    {
+      "id": "ho-de-01",
+      "language": "de",
+      "existing": [
+        { "lessonId": "ho-de-git-pull-vor-arbeit", "scope": "Procedural", "behavior": "Hole vor Arbeitsbeginn mit git pull den aktuellen Stand." },
+        { "lessonId": "ho-de-mail-hoechstens-fuenf-saetze", "scope": "UserPreference", "behavior": "Der Nutzer möchte E-Mail-Entwürfe mit höchstens fünf Sätzen." },
+        { "lessonId": "ho-de-keine-lasttests-produktion", "scope": "Failure", "behavior": "Führe niemals Lasttests gegen das Produktivsystem aus." }
+      ],
+      "candidates": [
+        { "kind": "cross-scope", "lessonId": "ho-de-keine-lasttests-produktion", "scope": "Procedural", "behavior": "Lasttests laufen ausschließlich gegen die Testumgebung, nie gegen die Produktion." },
+        { "kind": "duplicate", "lessonId": "ho-de-git-pull-vor-arbeit", "scope": "Procedural", "behavior": "Bevor du mit der Arbeit anfängst, hol dir per git pull die neuesten Änderungen." },
+        { "kind": "near-miss", "lessonId": "ho-de-mail-ausfuehrlich", "scope": "UserPreference", "behavior": "Der Nutzer möchte ausführliche E-Mail-Entwürfe, die jeden Punkt genau erklären." },
+        { "kind": "new", "lessonId": "ho-de-ticket-praefix", "scope": "Project", "behavior": "Ticketnummern in diesem Projekt beginnen mit dem Präfix PRJ-." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-de-ticket-praefix", "scope": "Project", "behavior": "In diesem Projekt fangen alle Ticketnummern mit PRJ- an." }
+      ],
+      "expectedDuplicateIndexes": [1, 4]
+    },
+    {
+      "id": "ho-de-02",
+      "language": "de",
+      "existing": [
+        { "lessonId": "ho-de-erinnerung-am-vorabend", "scope": "UserPreference", "behavior": "Der Nutzer möchte Erinnerungen am Vorabend erhalten, nicht erst am selben Morgen." },
+        { "lessonId": "ho-de-backend-in-go", "scope": "Project", "behavior": "Das Backend dieses Projekts ist in Go geschrieben." },
+        { "lessonId": "ho-de-screenshots-schwaerzen", "scope": "Procedural", "behavior": "Schwärze Namen und E-Mail-Adressen auf Screenshots, bevor du sie teilst." }
+      ],
+      "candidates": [
+        { "kind": "near-miss", "lessonId": "ho-de-backend-in-rust", "scope": "Project", "behavior": "Das Backend dieses Projekts ist in Rust geschrieben." },
+        { "kind": "cross-scope", "lessonId": "ho-de-screenshots-schwaerzen", "scope": "Failure", "behavior": "Teile keine Screenshots, auf denen noch Namen oder E-Mail-Adressen zu sehen sind." },
+        { "kind": "new", "lessonId": "ho-de-textdateien-utf8", "scope": "Procedural", "behavior": "Speichere Textdateien immer in UTF-8." },
+        { "kind": "duplicate", "lessonId": "ho-de-erinnerung-am-vorabend", "scope": "UserPreference", "behavior": "Der Nutzer möchte Erinnerungen schon am Vorabend bekommen, nicht erst am Morgen selbst." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-de-textdateien-utf8", "scope": "Procedural", "behavior": "Textdateien bitte grundsätzlich mit UTF-8-Kodierung abspeichern." }
+      ],
+      "expectedDuplicateIndexes": [3, 4]
+    },
+    {
+      "id": "ho-de-03",
+      "language": "de",
+      "existing": [
+        { "lessonId": "ho-de-container-nicht-als-root", "scope": "Failure", "behavior": "Lass Container-Prozesse nicht als root laufen." },
+        { "lessonId": "ho-de-zahlen-bis-zwoelf-ausschreiben", "scope": "UserPreference", "behavior": "Der Nutzer möchte Zahlen bis zwölf in Texten ausgeschrieben haben." },
+        { "lessonId": "ho-de-freitags-kein-deployment", "scope": "Project", "behavior": "In diesem Projekt wird freitags nicht deployt." }
+      ],
+      "candidates": [
+        { "kind": "duplicate", "lessonId": "ho-de-container-nicht-als-root", "scope": "Failure", "behavior": "Lass Prozesse in Containern niemals als root laufen." },
+        { "kind": "near-miss", "lessonId": "ho-de-zahlen-als-ziffern", "scope": "UserPreference", "behavior": "Der Nutzer möchte alle Zahlen in Texten als Ziffern geschrieben haben." },
+        { "kind": "cross-scope", "lessonId": "ho-de-freitags-kein-deployment", "scope": "Failure", "behavior": "Starte freitags keine Deployments." },
+        { "kind": "new", "lessonId": "ho-de-begriffe-fett", "scope": "UserPreference", "behavior": "Der Nutzer möchte wichtige Begriffe fett hervorgehoben haben." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-de-begriffe-fett", "scope": "UserPreference", "behavior": "Heb für den Nutzer zentrale Begriffe durch Fettdruck hervor." }
+      ],
+      "expectedDuplicateIndexes": [0, 4]
+    },
+    {
+      "id": "ho-de-04",
+      "language": "de",
+      "existing": [
+        { "lessonId": "ho-de-drei-umgebungen", "scope": "Project", "behavior": "Dieses Projekt hat drei Umgebungen: Entwicklung, Test und Produktion." },
+        { "lessonId": "ho-de-kleine-pull-requests", "scope": "Procedural", "behavior": "Halte Pull Requests klein und auf ein Thema beschränkt." },
+        { "lessonId": "ho-de-kartenlink-bei-orten", "scope": "UserPreference", "behavior": "Der Nutzer möchte bei Ortsangaben einen Link zur Karte." }
+      ],
+      "candidates": [
+        { "kind": "near-miss", "lessonId": "ho-de-grosse-pull-requests", "scope": "Procedural", "behavior": "Fasse zusammengehörige Änderungen lieber in einem großen Pull Request zusammen, statt sie aufzuteilen." },
+        { "kind": "new", "lessonId": "ho-de-rote-ci-zuerst", "scope": "Procedural", "behavior": "Behebe einen roten CI-Lauf, bevor du neue Änderungen pushst." },
+        { "kind": "cross-scope", "lessonId": "ho-de-kartenlink-bei-orten", "scope": "Procedural", "behavior": "Füge bei jeder Ortsangabe einen Link zur Karte hinzu." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-de-rote-ci-zuerst", "scope": "Procedural", "behavior": "Ist die CI rot, repariere sie zuerst und pushe erst dann weitere Commits." },
+        { "kind": "duplicate", "lessonId": "ho-de-drei-umgebungen", "scope": "Project", "behavior": "Es gibt in diesem Projekt genau drei Umgebungen: Dev, Test und Prod." }
+      ],
+      "expectedDuplicateIndexes": [3, 4]
+    },
+    {
+      "id": "ho-de-05",
+      "language": "de",
+      "existing": [
+        { "lessonId": "ho-de-kalenderwoche-nennen", "scope": "UserPreference", "behavior": "Der Nutzer plant in Kalenderwochen; nenne bei Terminen die KW." },
+        { "lessonId": "ho-de-geld-keine-gleitkomma", "scope": "Failure", "behavior": "Rechne Geldbeträge nicht mit Gleitkommazahlen." },
+        { "lessonId": "ho-de-tagesordnung-vor-meeting", "scope": "Procedural", "behavior": "Verschicke vor jedem Meeting eine Tagesordnung." }
+      ],
+      "candidates": [
+        { "kind": "new", "lessonId": "ho-de-logs-als-json", "scope": "Project", "behavior": "Die Dienste dieses Projekts schreiben ihre Logs im JSON-Format." },
+        { "kind": "near-miss", "lessonId": "ho-de-betrag-mit-waehrung", "scope": "Failure", "behavior": "Speichere Geldbeträge nicht ohne die zugehörige Währung." },
+        { "kind": "duplicate", "lessonId": "ho-de-kalenderwoche-nennen", "scope": "UserPreference", "behavior": "Gib bei Terminvorschlägen für den Nutzer immer die Kalenderwoche mit an." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-de-logs-als-json", "scope": "Project", "behavior": "Alle Dienste im Projekt loggen strukturiert als JSON." },
+        { "kind": "cross-scope", "lessonId": "ho-de-tagesordnung-vor-meeting", "scope": "UserPreference", "behavior": "Der Nutzer möchte, dass vor jedem Meeting eine Tagesordnung verschickt wird." }
+      ],
+      "expectedDuplicateIndexes": [2, 3]
+    },
+    {
+      "id": "ho-de-06",
+      "language": "de",
+      "existing": [
+        { "lessonId": "ho-de-lizenz-vor-bibliothek", "scope": "Procedural", "behavior": "Prüfe vor dem Hinzufügen einer neuen Bibliothek deren Lizenz." },
+        { "lessonId": "ho-de-filme-original", "scope": "UserPreference", "behavior": "Der Nutzer schaut Filme am liebsten im Original mit Untertiteln." },
+        { "lessonId": "ho-de-upload-hoechstens-20mb", "scope": "Project", "behavior": "Hochgeladene Dateien dürfen in diesem Projekt höchstens 20 MB groß sein." }
+      ],
+      "candidates": [
+        { "kind": "near-miss", "lessonId": "ho-de-filme-synchronisiert", "scope": "UserPreference", "behavior": "Der Nutzer schaut Filme am liebsten in der deutschen Synchronfassung." },
+        { "kind": "cross-scope", "lessonId": "ho-de-upload-hoechstens-20mb", "scope": "Procedural", "behavior": "Achte darauf, dass hochgeladene Dateien höchstens 20 MB groß sind." },
+        { "kind": "duplicate", "lessonId": "ho-de-lizenz-vor-bibliothek", "scope": "Procedural", "behavior": "Bevor eine neue Bibliothek ins Projekt kommt, schau dir ihre Lizenz an." },
+        { "kind": "new", "lessonId": "ho-de-keine-festen-wartezeiten-tests", "scope": "Failure", "behavior": "Verwende in Tests keine festen Wartezeiten." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-de-keine-festen-wartezeiten-tests", "scope": "Failure", "behavior": "Tests sollen nicht mit Sleep-Aufrufen auf Ereignisse warten." }
+      ],
+      "expectedDuplicateIndexes": [2, 4]
+    },
+    {
+      "id": "ho-de-07",
+      "language": "de",
+      "existing": [
+        { "lessonId": "ho-de-grosse-anhaenge-als-link", "scope": "Failure", "behavior": "Verschicke keine Dateien über 10 MB per E-Mail, sondern teile einen Link." },
+        { "lessonId": "ho-de-zwei-freigaben", "scope": "Project", "behavior": "In diesem Projekt braucht jeder Pull Request zwei Freigaben." },
+        { "lessonId": "ho-de-erst-rueckfragen", "scope": "UserPreference", "behavior": "Der Nutzer möchte, dass du bei unklaren Aufgaben erst nachfragst." }
+      ],
+      "candidates": [
+        { "kind": "near-miss", "lessonId": "ho-de-eine-freigabe", "scope": "Project", "behavior": "In diesem Projekt reicht für einen Pull Request eine einzige Freigabe." },
+        { "kind": "new", "lessonId": "ho-de-ordner-src-tests", "scope": "Project", "behavior": "Quellcode liegt in diesem Projekt unter src/, Tests unter tests/." },
+        { "kind": "cross-scope", "lessonId": "ho-de-erst-rueckfragen", "scope": "Procedural", "behavior": "Stell bei unklaren Aufgaben zuerst eine Rückfrage, bevor du loslegst." },
+        { "kind": "duplicate", "lessonId": "ho-de-grosse-anhaenge-als-link", "scope": "Failure", "behavior": "Häng Dateien ab etwa 10 MB nicht an E-Mails an, sondern schick einen Freigabelink." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-de-ordner-src-tests", "scope": "Project", "behavior": "Im Projekt gehört der Quellcode nach src/ und die Tests nach tests/." }
+      ],
+      "expectedDuplicateIndexes": [3, 4]
+    },
+    {
+      "id": "ho-de-08",
+      "language": "de",
+      "existing": [
+        { "lessonId": "ho-de-morgens-kurzer-ueberblick", "scope": "UserPreference", "behavior": "Der Nutzer möchte morgens nur eine kurze Übersicht der wichtigsten Termine." },
+        { "lessonId": "ho-de-datum-am-dateianfang", "scope": "Procedural", "behavior": "Setze bei Exportdateien das Datum an den Anfang des Dateinamens, damit sie richtig sortiert werden." },
+        { "lessonId": "ho-de-shell-set-e", "scope": "Failure", "behavior": "Schreib keine Shell-Skripte ohne set -e, sonst laufen sie nach einem Fehler einfach weiter." }
+      ],
+      "candidates": [
+        { "kind": "cross-scope", "lessonId": "ho-de-shell-set-e", "scope": "Procedural", "behavior": "Beginne jedes Shell-Skript mit set -e, damit es beim ersten Fehler abbricht." },
+        { "kind": "duplicate", "lessonId": "ho-de-morgens-kurzer-ueberblick", "scope": "UserPreference", "behavior": "Gib dem Nutzer am Morgen nur einen knappen Überblick über die wichtigsten Termine." },
+        { "kind": "near-miss", "lessonId": "ho-de-datum-am-dateiende", "scope": "Procedural", "behavior": "Häng bei Exportdateien das Datum ans Ende des Dateinamens, damit der sprechende Name vorne steht." },
+        { "kind": "new", "lessonId": "ho-de-passwoerter-nicht-im-klartext", "scope": "Failure", "behavior": "Speichere Passwörter nie im Klartext." },
+        { "kind": "in-batch-duplicate", "lessonId": "ho-de-passwoerter-nicht-im-klartext", "scope": "Failure", "behavior": "Passwörter dürfen nicht unverschlüsselt abgelegt werden." }
+      ],
+      "expectedDuplicateIndexes": [1, 4]
+    }
+  ]
+}
