@@ -125,7 +125,9 @@ the runner clears the inherited environment before applying the result. On Windo
   under a scrubbed environment. The split is deliberate: run-scoped state — `HOME`, `TMPDIR`, the HF cache —
   lives under the run's work directory and dies with its `work/` sweep, while compiled Triton and Inductor
   kernels live under the machine-global cache root so the second run on a box does not pay the compile cost
-  again. The three **offline flags are what actually guarantee no network call**, because several
+  again. `CUDA_CACHE_PATH` puts the CUDA driver's kernel cache there too, at its documented 4 GiB maximum
+  (`CUDA_CACHE_MAXSIZE`): under the per-run `HOME` it starts empty, and every first kernel use costs seconds.
+  The three **offline flags are what actually guarantee no network call**, because several
   `huggingface_hub` paths inside unsloth never thread `local_files_only` through.
 - **The export environment** is the train environment plus the vendored `gguf-py` on `PYTHONPATH`, because the
   conversion scripts resolve that package relative to the llama.cpp repository they normally live in, which

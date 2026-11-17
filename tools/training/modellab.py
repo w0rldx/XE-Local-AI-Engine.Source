@@ -17,7 +17,7 @@ The protocol is the trainer's JSON-lines shape with its own contract version, on
     {"event": "done",      "cancelled": bool}
     {"event": "error",     "category", "message"}
 
-Exit status: 0 on success, 3 on a cooperative SIGTERM stop, 1 on any error.
+Exit status: 0 on success, 3 on SIGTERM in any phase, 1 on any error.
 """
 
 import argparse
@@ -105,7 +105,6 @@ class _Run:
     def __init__(self):
         self.phase = "loading"
         self.progress_seen = False
-        self.stop = threading.Event()
         self._finished = threading.Event()
 
     def enter(self, phase):
@@ -113,11 +112,9 @@ class _Run:
         emit("phase", phase=phase)
 
     def on_sigterm(self, _signum, _frame):
-        self.stop.set()
-        # Generation stops itself at the next token. Any other phase has no such point, and nothing worth keeping.
-        if self.phase != "tracing":
-            emit("done", cancelled=True)
-            os._exit(CANCELLED_EXIT_CODE)
+        # Exits in every phase: a job writes its result only at its end, so a cancelled one has nothing worth keeping.
+        emit("done", cancelled=True)
+        os._exit(CANCELLED_EXIT_CODE)
 
     def start_heartbeat(self):
         threading.Thread(target=self._beat, daemon=True).start()
@@ -230,7 +227,9 @@ class _AttentionRows:
         del self._functions["sdpa"]
 
 
-class _ProgressAndStop(StoppingCriteria):
+class _Progress(StoppingCriteria):
+    """Reports each token. It never stops generation: SIGTERM exits the process instead."""
+
     def __init__(self, run, prompt_tokens, total):
         self._run = run
         self._prompt_tokens = prompt_tokens
@@ -244,7 +243,7 @@ class _ProgressAndStop(StoppingCriteria):
             totalSteps=self._total,
             vramBytes=torch.cuda.memory_allocated(),
         )
-        return torch.full((input_ids.shape[0],), self._run.stop.is_set(), device=input_ids.device, dtype=torch.bool)
+        return torch.zeros((input_ids.shape[0],), device=input_ids.device, dtype=torch.bool)
 
 
 def blocks_of(model):
@@ -475,7 +474,7 @@ def trace(job, run):
                 use_cache=True,
                 eos_token_id=stop_tokens(tokenizer, model.generation_config.eos_token_id),
                 pad_token_id=tokenizer.eos_token_id,
-                stopping_criteria=StoppingCriteriaList([_ProgressAndStop(run, prompt_tokens, total)]),
+                stopping_criteria=StoppingCriteriaList([_Progress(run, prompt_tokens, total)]),
                 # A checkpoint's watermark would change the scores after every processor passed here.
                 watermarking_config=None,
                 **pinned_cache,
@@ -489,9 +488,6 @@ def trace(job, run):
             lens.remove()
         if attention:
             attention.remove()
-    if run.stop.is_set():
-        return True
-
     run.enter("saving")
     generated = sequences[0, prompt_tokens:].tolist()
     steps = candidates.recorded()
@@ -568,7 +564,6 @@ def trace(job, run):
         }
     with open(job["resultPath"], "wb") as handle:
         handle.write(fitted_trace_result(result))
-    return False
 
 
 class _ResidualReader:
@@ -660,7 +655,6 @@ def derive(job, run):
             },
         },
     )
-    return False
 
 
 def _class_location(cls, relative):
@@ -856,7 +850,6 @@ def source(job, run):
     blob = serialized_result(result, job["maxResultBytes"])
     with open(job["resultPath"], "wb") as handle:
         handle.write(blob)
-    return False
 
 
 def main():
@@ -874,7 +867,7 @@ def main():
         with open(arguments.config, encoding="utf-8") as handle:
             job = validate_job(json.load(handle))
         run_job = {STEERING_KIND: derive, SOURCE_KIND: source}.get(job["kind"], trace)
-        cancelled = run_job(job, run)
+        run_job(job, run)
     except JobError as error:
         emit("error", category="contract", message=str(error))
         return 1
@@ -890,8 +883,8 @@ def main():
     finally:
         run.finish()
 
-    emit("done", cancelled=cancelled)
-    return CANCELLED_EXIT_CODE if cancelled else 0
+    emit("done", cancelled=False)
+    return 0
 
 
 if __name__ == "__main__":

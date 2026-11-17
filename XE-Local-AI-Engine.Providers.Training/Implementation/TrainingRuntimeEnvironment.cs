@@ -57,6 +57,10 @@ internal static class TrainingRuntimeEnvironment
         scrubbed["TRITON_CACHE_DIR"] = Path.Combine(compileCaches, "triton");
         scrubbed["UNSLOTH_COMPILE_LOCATION"] = Path.Combine(compileCaches, "unsloth");
 
+        // The driver's kernel cache otherwise lives under the per-run HOME and is rebuilt every run; 4 GiB is its max.
+        scrubbed["CUDA_CACHE_PATH"] = Path.Combine(compileCaches, "nv");
+        scrubbed["CUDA_CACHE_MAXSIZE"] = "4294967296";
+
         // Offline, at all three layers that have their own flag.
         scrubbed["HF_HUB_OFFLINE"] = "1";
         scrubbed["TRANSFORMERS_OFFLINE"] = "1";

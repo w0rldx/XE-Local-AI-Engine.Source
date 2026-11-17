@@ -358,7 +358,7 @@ def test_the_heartbeat_runs_until_the_first_progress_event_then_stops_vouching_f
         return step
 
     def report_progress():
-        modellab._ProgressAndStop(run, 3, 128)(input_ids, None)
+        modellab._Progress(run, 3, 128)(input_ids, None)
 
     run._finished = _ScriptedTicks(
         [
@@ -376,6 +376,21 @@ def test_the_heartbeat_runs_until_the_first_progress_event_then_stops_vouching_f
 
     heartbeats = [phase for event, phase in beats if event == "heartbeat"]
     assert heartbeats == ["loading", "tracing", "tracing", "saving"]
+
+
+def test_sigterm_while_tracing_exits_at_once_as_cancelled():
+    modellab = _load_modellab()
+    run = modellab._Run()
+    run.phase = "tracing"
+    events = []
+    with (
+        mock.patch.object(modellab, "emit", lambda event, **fields: events.append((event, fields))),
+        mock.patch("os._exit") as exit_now,
+    ):
+        run.on_sigterm(15, None)
+
+    assert events == [("done", {"cancelled": True})]
+    exit_now.assert_called_once_with(modellab.CANCELLED_EXIT_CODE)
 
 
 def _main_failing_with(error, job=None, runner="trace"):
