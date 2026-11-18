@@ -163,8 +163,10 @@ describe("InstallDialog", () => {
 		await advanceToResources();
 		expect((screen.getByTestId("external-app-install-confirm") as HTMLButtonElement).disabled).toBe(true);
 		expect(screen.getByTestId("external-app-install-blocked").textContent).toContain("This application needs a graphics card");
-		// The resource numbers stay visible as the detail under the reason.
-		expect(screen.getByTestId("external-app-install-resources").textContent).toContain("MB needed");
+		// The resource numbers stay visible as the detail under the reason, in 1024-based MiB (1,073,741,824 B → 1024).
+		const resources = screen.getByTestId("external-app-install-resources").textContent;
+		expect(resources).toContain("Memory: 128 MiB needed, 8192 MiB free");
+		expect(resources).toContain("Disk space: 1024 MiB needed, 102400 MiB free");
 	});
 
 	it("re-fetches the preview on entering the resource step", async () => {

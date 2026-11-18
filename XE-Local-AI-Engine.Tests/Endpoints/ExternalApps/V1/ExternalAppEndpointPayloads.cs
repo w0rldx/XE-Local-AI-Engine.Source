@@ -311,7 +311,7 @@ internal static class ExternalAppEndpointPayloads
             AvailableMemoryBytes = satisfied ? 8_589_934_592L : 536_870_912L,
             RequiredDiskBytes = 2_147_483_648L,
             AvailableDiskBytes = 17_179_869_184L,
-            Message = satisfied ? "Enough memory and disk are free." : "This application needs 1 GB of memory; 512 MB is free."
+            Message = satisfied ? "Enough memory and disk are free." : "This application needs 1 GiB of memory; 512 MiB is free."
         };
 
     public static InstallPreview Preview(ApplicationManifest? manifest = null,

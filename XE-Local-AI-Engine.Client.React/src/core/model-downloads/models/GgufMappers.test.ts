@@ -183,7 +183,7 @@ describe("recommendedGgufFileName", () => {
 
 	it("never falls back to a speculative-decoding draft", () => {
 		// The live gemma-4-12b list: MTP drafters are the smallest files, so a plain files[0] fallback selected
-		// a 0.4 GB drafter by default. Only an explicit click may ever select one.
+		// a 0.4 GiB drafter by default. Only an explicit click may ever select one.
 		const files = [file("MTP/mtp-gemma-4-12b-it-Q8_0.gguf", false, true), file("gemma-4-12b-it-Q8_0.gguf", false)];
 
 		expect(recommendedGgufFileName(files)).toBe("gemma-4-12b-it-Q8_0.gguf");

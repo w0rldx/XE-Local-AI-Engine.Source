@@ -79,7 +79,7 @@ describe("GgufDownloadDialog vision-projector choice", () => {
 		const { onConfirm } = renderDialog("owner/vision");
 
 		// The label is the shipped `en` bundle string with the size interpolated by the real i18next instance.
-		const checkbox = await screen.findByRole("checkbox", { name: /Include vision projector \(1\.0 GB\)/ });
+		const checkbox = await screen.findByRole("checkbox", { name: /Include vision projector \(1\.0 GiB\)/ });
 		expect((checkbox as HTMLInputElement).checked).toBe(true);
 		expect(screen.getByText(/only a text-only model can be used as a benchmark judge/)).toBeTruthy();
 
@@ -134,7 +134,7 @@ describe("GgufDownloadDialog vision-projector choice", () => {
 
 		await waitFor(() => expect((screen.getByTestId("gguf-download-include-projector") as HTMLInputElement).checked).toBe(true));
 		// …and the new repo's own projector size is what the label now shows.
-		expect(await screen.findByRole("checkbox", { name: /Include vision projector \(2\.0 GB\)/ })).toBeTruthy();
+		expect(await screen.findByRole("checkbox", { name: /Include vision projector \(2\.0 GiB\)/ })).toBeTruthy();
 	});
 });
 

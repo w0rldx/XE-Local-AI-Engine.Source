@@ -113,7 +113,7 @@ describe("ModelInspectPanel", () => {
 		expect(await screen.findByText("token_embd.weight")).toBeTruthy();
 
 		const block0 = screen.getByTestId("model-inspect-block-0");
-		expect(within(block0).getByText("1 tensors · 1 KB")).toBeTruthy();
+		expect(within(block0).getByText("1 tensors · 1 KiB")).toBeTruthy();
 		fireEvent.click(within(block0).getByText("Block 0: Other"));
 		expect(await within(block0).findByText("attn_norm.weight")).toBeTruthy();
 
@@ -218,8 +218,8 @@ describe("ModelInspectPanel", () => {
 			within(within(section).getByTestId(`model-inspect-type-${id}`))
 				.getAllByRole("cell")
 				.map((cell) => cell.textContent);
-		expect(cells(12)).toEqual(["Q4_K", "1", "3 KB", "75.0%"]);
-		expect(cells(0)).toEqual(["F32", "2", "1 KB + 1 of unknown size", "25.0%"]);
+		expect(cells(12)).toEqual(["Q4_K", "1", "3 KiB", "75.0%"]);
+		expect(cells(0)).toEqual(["F32", "2", "1 KiB + 1 of unknown size", "25.0%"]);
 		expect(cells(99)).toEqual(["type 99", "1", "Unknown", "Unknown"]);
 	});
 
@@ -325,9 +325,9 @@ describe("ModelInspectPanel", () => {
 			const result = await screen.findByTestId("model-inspect-compare-result");
 			expect(inspectionSpy).toHaveBeenCalledWith(q3);
 			const value = (label: string) => within(result).getByText(label).nextElementSibling?.textContent;
-			expect(value("Q4_K_M")).toBe("5 KB");
-			expect(value("Q3_K_XL")).toBe("4 KB");
-			expect(value("Difference")).toBe("−1 KB");
+			expect(value("Q4_K_M")).toBe("5 KiB");
+			expect(value("Q3_K_XL")).toBe("4 KiB");
+			expect(value("Difference")).toBe("−1 KiB");
 			expect(value("Tensors that changed type")).toBe("1");
 		});
 
@@ -338,7 +338,7 @@ describe("ModelInspectPanel", () => {
 			await pick();
 
 			const block0 = await screen.findByTestId("model-inspect-compare-blk-0");
-			expect(within(block0).getByText("−1 KB · 1 changed")).toBeTruthy();
+			expect(within(block0).getByText("−1 KiB · 1 changed")).toBeTruthy();
 			expect(within(block0).queryByText("attn_q.weight")).toBeNull();
 			const block1 = screen.getByTestId("model-inspect-compare-blk-1");
 			expect(within(block1).getByText("0 B · 0 changed")).toBeTruthy();
@@ -348,7 +348,7 @@ describe("ModelInspectPanel", () => {
 
 			expect(await within(block0).findByText("attn_q.weight")).toBeTruthy();
 			expect(within(block0).getByText("Q4_K → Q3_K")).toBeTruthy();
-			expect(within(block0).getByText("2 KB → 1 KB")).toBeTruthy();
+			expect(within(block0).getByText("2 KiB → 1 KiB")).toBeTruthy();
 			expect(within(block0).queryByText("same.weight")).toBeNull();
 		});
 

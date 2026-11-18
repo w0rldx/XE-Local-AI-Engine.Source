@@ -105,6 +105,11 @@ describe("UpdateDialog", () => {
 		await waitFor(() => expect(screen.getByTestId("external-app-update-step-resources")).toBeDefined());
 		expect(screen.queryByTestId("external-app-update-step-permissions")).toBeNull();
 		expect(screen.getByTestId("external-app-update-resources").textContent).toContain("no additional access");
+		// 1024-based MiB, as in the install dialog: 1,073,741,824 B reads 1024, not the decimal 1074.
+		expect(screen.getByTestId("external-app-update-resources").textContent).toContain("Memory: 128 MiB needed, 8192 MiB free");
+		expect(screen.getByTestId("external-app-update-resources").textContent).toContain(
+			"Disk space: 1024 MiB needed, 102400 MiB free",
+		);
 	});
 
 	it("sends the target version, the preview's fingerprint, the acceptance and the row's expectedVersion", async () => {

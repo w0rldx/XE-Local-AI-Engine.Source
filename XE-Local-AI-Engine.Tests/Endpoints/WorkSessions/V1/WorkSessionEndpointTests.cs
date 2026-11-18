@@ -489,7 +489,7 @@ public sealed class WorkSessionEndpointTests
     {
         var service = Substitute.For<IWorkSessionService>();
         service.PostFollowUpAsync(SessionId, Arg.Any<string>(), Arg.Any<CancellationToken>())
-               .ThrowsAsyncForAnyArgs(new WorkSessionValidationException("That follow-up is too large (300 KB, limit 256 KB)."));
+               .ThrowsAsyncForAnyArgs(new WorkSessionValidationException("That follow-up is too large (300 KiB, limit 256 KiB)."));
         await using var factory = EnabledFactory(service);
 
         using var response = await SendAsync(factory, "POST", $"{Session}/messages", """{"text":"oversized"}""");

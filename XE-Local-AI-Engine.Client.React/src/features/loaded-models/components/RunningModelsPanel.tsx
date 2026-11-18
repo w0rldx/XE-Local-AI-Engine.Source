@@ -1,9 +1,11 @@
-import { Badge, Button, Card, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Badge, Card, Group, Loader, Stack, Text, Title } from "@mantine/core";
 import { IconPlayerEject, IconServer2 } from "@tabler/icons-react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type { RunningModel } from "@/core/loaded-models/models/RunningModelsModels";
+import { FocusableDisabledButton } from "@/core/ui/components/FocusableDisabledButton/FocusableDisabledButton";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 
@@ -11,7 +13,8 @@ interface RunningModelsPanelProps {
 	runningModels: readonly RunningModel[];
 	isLoading: boolean;
 	error: unknown;
-	onEject: (model: RunningModel) => void;
+	/** May open a confirmation first; the returned promise settles once that dialog closed. */
+	onEject: (model: RunningModel) => Promise<void> | void;
 	ejectingModelName: string | null;
 }
 
@@ -24,13 +27,50 @@ interface RunningModelsPanelProps {
 // there now).
 export function RunningModelsPanel({ runningModels, isLoading, error, onEject, ejectingModelName }: RunningModelsPanelProps) {
 	const { t, i18n } = useTranslation();
+	const headingRef = useRef<HTMLHeadingElement>(null);
+	// The control inside the card that last took focus; cleared once focus moves to another element or to the body (a
+	// click on blank page space). A removed element can also blur with no related target, so that case is told apart a
+	// frame later: a removed element is no longer connected and stays remembered.
+	const focusedRef = useRef<HTMLElement | null>(null);
+	const rowKeys = runningModels.map((model) => `${model.modelName}-${model.role}`).join("|");
+
+	// When the focused row goes away (an eject, a push), the browser drops focus to the body; hand it to the heading
+	// rather than to another row's Eject, where a repeated Enter would unload a second model.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: rowKeys is a trigger (a row removed under focus), not a value the body reads.
+	useEffect(() => {
+		const focused = focusedRef.current;
+		const active = document.activeElement;
+		if (focused !== null && !focused.isConnected && (active === null || active === document.body)) {
+			headingRef.current?.focus();
+		}
+	}, [rowKeys]);
 
 	return (
-		<Card withBorder={true} radius="md" p="lg" data-testid="loaded-models-llamacpp-card">
+		<Card
+			withBorder={true}
+			radius="md"
+			p="lg"
+			data-testid="loaded-models-llamacpp-card"
+			onFocus={(event) => {
+				focusedRef.current = event.target;
+			}}
+			onBlur={(event) => {
+				const blurred = event.target;
+				if (event.relatedTarget !== null) {
+					focusedRef.current = null;
+					return;
+				}
+				requestAnimationFrame(() => {
+					if (blurred.isConnected && focusedRef.current === blurred) {
+						focusedRef.current = null;
+					}
+				});
+			}}
+		>
 			<Stack gap="md">
 				<Group gap="xs" align="center">
 					<IconServer2 size={20} />
-					<Title order={2} size="h4">
+					<Title ref={headingRef} tabIndex={-1} order={2} size="h4">
 						{t("pages.loadedModels.llamaCpp.title", "llama.cpp runtime")}
 					</Title>
 				</Group>
@@ -126,18 +166,26 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 						]}
 						actionsHeader={t("pages.loadedModels.llamaCpp.columns.action", "Action")}
 						actions={(model) => (
-							<Button
+							<FocusableDisabledButton
 								size="xs"
 								variant="light"
 								color="red"
 								leftSection={<IconPlayerEject size={14} />}
-								loading={ejectingModelName === model.modelName}
-								disabled={ejectingModelName === model.modelName}
-								onClick={() => onEject(model)}
+								pending={ejectingModelName === model.modelName}
+								onClick={async (event) => {
+									const eject = event.currentTarget;
+									try {
+										await onEject(model);
+									} finally {
+										// A confirmation dialog hands focus back to its opener, which is detached when the row went while
+										// it was open; then the heading takes it.
+										(eject.isConnected ? eject : headingRef.current)?.focus();
+									}
+								}}
 								data-testid={`loaded-models-llamacpp-eject-${model.modelName}`}
 							>
 								{t("pages.loadedModels.llamaCpp.eject", "Eject")}
-							</Button>
+							</FocusableDisabledButton>
 						)}
 					/>
 				) : null}

@@ -800,7 +800,7 @@ describe("external access", () => {
 describe("display units", () => {
 	const bounds = toNodeSettingsFieldBounds(undefined);
 
-	it("round-trips seconds shown as minutes and bytes shown as MB back to the unchanged wire values", () => {
+	it("round-trips seconds shown as minutes and bytes shown as MiB back to the unchanged wire values", () => {
 		const response = {
 			llamaIdleTimeToLiveSeconds: 45,
 			agentHomePrepareTimeoutSeconds: 100,
@@ -1333,7 +1333,7 @@ describe("knowledge, privacy and usage knobs", () => {
 			agentExecutionLogRetentionEnabled: true,
 			agentExecutionLogRetentionDays: 30,
 			nodeDbBackupRetainCount: 3,
-			// 64 GiB, shown in GB.
+			// 64 GiB, shown in GiB.
 			benchmarkKldCacheMaxBytes: 64,
 			schedulerHistoryRetentionDays: 30,
 		});
@@ -1548,7 +1548,7 @@ describe("runtime and workspace knobs", () => {
 			agentHomeMaxInnerToolCalls: 24,
 			agentHomePatchApplyTimeoutSeconds: 120,
 			agentHomeRunRetentionMaxRuns: 200,
-			// 2 GiB, shown in GB.
+			// 2 GiB, shown in GiB.
 			agentHomeRunRetentionMaxTotalBytes: 2,
 		});
 	});

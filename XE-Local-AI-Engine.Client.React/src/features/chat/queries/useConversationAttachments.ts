@@ -165,7 +165,7 @@ export function useConversationAttachments({
 			const accepted = files.filter((file) => {
 				if (limitBytes !== undefined && file.size > limitBytes) {
 					toast.error(
-						t("pages.chat.composer.attachments.tooLarge", "{{name}} exceeds the {{limit}} MB upload limit.", {
+						t("pages.chat.composer.attachments.tooLarge", "{{name}} exceeds the {{limit}} MiB upload limit.", {
 							name: file.name,
 							limit: maxUploadFileSizeMb,
 						}),

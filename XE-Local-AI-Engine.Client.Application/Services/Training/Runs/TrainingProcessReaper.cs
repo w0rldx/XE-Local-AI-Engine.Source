@@ -6,9 +6,9 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>Finds and kills what a recorded launch receipt still describes, for every startup sweep over a Python job.</summary>
 /// <remarks>
-///     Every recorded field must match before anything is signaled; only a changed start time or run token proves a recycled pid. That is the
-///     <c>SandboxOrphanReaper</c> model; <c>StaleProcessReaper</c>'s kill-by-executable-root model would reap any Python this
-///     node runs, since the job's executable is the shared venv interpreter.
+///     Every recorded field must match before anything is signaled; only a changed start time, or a changed run token once the group the
+///     pid names is empty, proves a recycled pid. That is the <c>SandboxOrphanReaper</c> model; <c>StaleProcessReaper</c>'s
+///     kill-by-executable-root model would reap any Python this node runs, since the job's executable is the shared venv interpreter.
 /// </remarks>
 internal static class TrainingProcessReaper
 {
@@ -75,6 +75,7 @@ internal static class TrainingProcessReaper
             else if (inspector.Inspect(receipt.Pid) is not { } facts)
             {
                 presence = inspector.ProbePresence(receipt.Pid);
+                presence = presence == TrainingProcessPresence.Gone && GroupOutlivesLeader(inspector, receipt, logger) ? TrainingProcessPresence.Unknown : presence;
                 logger.LogInformation("A recorded trainer receipt for pid {Pid} has no readable live process ({Presence}); nothing was signalled.",
                     receipt.Pid, presence);
             }
@@ -82,6 +83,10 @@ internal static class TrainingProcessReaper
             {
                 // The pid exists; only a field read and found different proves it is not ours. An unreadable one leaves it unknown.
                 presence = Contradicts(receipt, facts) ? TrainingProcessPresence.Gone : TrainingProcessPresence.Unknown;
+                // Only a changed start time proves the old group empty; a token-only mismatch leaves the pid's group to be probed.
+                presence = presence == TrainingProcessPresence.Gone && facts.StartTicks == receipt.StartTicks && GroupOutlivesLeader(inspector, receipt, logger)
+                    ? TrainingProcessPresence.Unknown
+                    : presence;
                 logger.LogInformation("A recorded trainer receipt for pid {Pid} does not match a live process ({Presence}); nothing was signalled.",
                     receipt.Pid, presence);
             }
@@ -108,6 +113,19 @@ internal static class TrainingProcessReaper
                 ownerId);
             return TrainingReapOutcome.NotVerified;
         }
+    }
+
+    /// <summary>True when the group the trainer leads still has members although its leader reads gone: a pid is not reallocated while it names a group.</summary>
+    /// <remarks>The group is the pid: a trainer runs <c>setsid</c>, whatever group the receipt recorded before that.</remarks>
+    private static bool GroupOutlivesLeader(ITrainingProcessInspector inspector, TrainingLaunchReceiptV1 receipt, ILogger logger)
+    {
+        if (receipt.Pid <= 1 || receipt.Pid == inspector.HostProcessGroupId || !inspector.ProcessGroupHasMembers(receipt.Pid))
+        {
+            return false;
+        }
+
+        logger.LogWarning("The recorded trainer pid {Pid} reads gone, but the process group it leads still has members; nothing was signalled, and it is not reported gone.", receipt.Pid);
+        return true;
     }
 
     /// <summary>True when the start time, or a token that was read, disagrees with the receipt: a recycled pid. An unreadable token contradicts nothing.</summary>

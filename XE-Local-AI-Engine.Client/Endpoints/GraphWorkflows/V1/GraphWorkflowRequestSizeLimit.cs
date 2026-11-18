@@ -35,7 +35,7 @@ internal sealed class GraphWorkflowRequestSizeLimit : IRequestSizeLimitMetadata
     /// </remarks>
     public static readonly string OversizedDetail =
         string.Create(CultureInfo.InvariantCulture,
-            $"The request body is larger than the {MaxBytes / (1024 * 1024)} MB this node accepts for a graph.");
+            $"The request body is larger than the {MaxBytes / (1024 * 1024)} MiB this node accepts for a graph.");
 
     /// <summary>
     ///     Whether the request DECLARES more body than this node accepts.

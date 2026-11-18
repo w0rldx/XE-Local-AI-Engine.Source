@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.ModelLab;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -164,6 +165,43 @@ public sealed class ModelLabStartupReaperTests
 
         AssertEx.True(File.Exists(file), "A live pid whose exe and environment cannot be read is not proven gone.");
         AssertEx.Equal(expected: 0, inspector.SignalledGroups.Count);
+    }
+
+    /// <summary>
+    ///     A worker whose leader is gone while the group it led lives may still hold the GPU: its receipt stays and is handed to the service, and the
+    ///     next re-reap releases it once the group is empty. Nothing is signalled.
+    /// </summary>
+    [Test]
+    public async Task AWarmReceiptWhoseLeaderIsGoneButWhoseGroupLives_IsKeptAndAdopted_UntilTheGroupEmpties()
+    {
+        var inspector = new FakeTrainingProcessInspector(facts: null)
+        {
+            GroupHasMembers = true
+        };
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<ITrainingProcessInspector>();
+                services.AddSingleton<ITrainingProcessInspector>(inspector);
+            }
+        };
+        var file = await SeedWarmReceiptAsync(factory.Services.GetRequiredService<INodeDataDirectory>());
+        var experiments = factory.Services.GetRequiredService<ModelLabExperimentService>();
+
+        await Reaper(factory, inspector).StartAsync(CancellationToken.None);
+
+        AssertEx.True(File.Exists(file), "A missing leader is no exit while its group has members.");
+        AssertEx.Contains(inspector.ProbedGroups, Receipt.Pid);
+        AssertEx.True(await experiments.HasUnconfirmedWorkerAsync(CancellationToken.None), "The sweep hands the kept receipt to the service, and its re-reap keeps it.");
+        AssertEx.True(File.Exists(file));
+
+        inspector.GroupHasMembers = false;
+
+        AssertEx.False(await experiments.HasUnconfirmedWorkerAsync(CancellationToken.None), "The re-reap after the group emptied proves the worker gone.");
+        AssertEx.False(File.Exists(file), "Its receipt goes with it.");
+        AssertEx.Empty(inspector.SignalledGroups);
+        AssertEx.Empty(inspector.SignalledProcesses);
     }
 
     /// <summary>A receipts directory that exists and cannot be listed is a failed scan, not an empty one; the rows are swept and recovered regardless.</summary>

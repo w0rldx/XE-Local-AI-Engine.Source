@@ -199,7 +199,7 @@ public sealed partial class InvocationRunner
             stream.TotalReasoningBytes += Encoding.UTF8.GetByteCount(thinkingChunk);
             if (stream.TotalReasoningBytes > _runner._maxResponseSizeBytes)
             {
-                throw new InvalidOperationException($"Reasoning size exceeded maximum of {_runner._maxResponseSizeBytes / (1024 * 1024)}MB");
+                throw new InvalidOperationException($"Reasoning size exceeded maximum of {_runner._maxResponseSizeBytes / (1024 * 1024)} MiB");
             }
 
             stream.ReasoningSequence++;
@@ -219,7 +219,7 @@ public sealed partial class InvocationRunner
 
             if (stream.TotalResponseBytes > _runner._maxResponseSizeBytes)
             {
-                throw new InvalidOperationException($"Response size exceeded maximum of {_runner._maxResponseSizeBytes / (1024 * 1024)}MB");
+                throw new InvalidOperationException($"Response size exceeded maximum of {_runner._maxResponseSizeBytes / (1024 * 1024)} MiB");
             }
 
             stream.ResponseBuilder.Append(textChunk);

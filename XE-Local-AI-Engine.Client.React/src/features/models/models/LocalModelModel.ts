@@ -32,14 +32,14 @@ export function formatModelSize(sizeBytes: number | null | undefined): string {
 	}
 
 	if (sizeBytes >= 1_073_741_824) {
-		return `${(sizeBytes / 1_073_741_824).toFixed(1)} GB`;
+		return `${(sizeBytes / 1_073_741_824).toFixed(1)} GiB`;
 	}
 
 	if (sizeBytes >= 1_048_576) {
-		return `${(sizeBytes / 1_048_576).toFixed(1)} MB`;
+		return `${(sizeBytes / 1_048_576).toFixed(1)} MiB`;
 	}
 
-	return `${(sizeBytes / 1024).toFixed(1)} KB`;
+	return `${(sizeBytes / 1024).toFixed(1)} KiB`;
 }
 
 export function formatModelModifiedDate(modifiedAtUtc: number | null | undefined): string {

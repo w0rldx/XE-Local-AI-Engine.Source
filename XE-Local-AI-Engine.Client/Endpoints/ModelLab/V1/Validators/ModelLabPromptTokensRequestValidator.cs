@@ -30,7 +30,7 @@ public sealed class ModelLabPromptTokensRequestValidator : Validator<ModelLabPro
         var maxSizeKb = Resolve<IOptions<Configuration.SecurityOptions>>().Value.MaxMessageSizeKb;
         if (content is not null && Encoding.UTF8.GetByteCount(content) > maxSizeKb * 1024)
         {
-            context.AddFailure($"A prompt can be at most {maxSizeKb} KB.");
+            context.AddFailure($"A prompt can be at most {maxSizeKb} KiB.");
         }
     }
 }

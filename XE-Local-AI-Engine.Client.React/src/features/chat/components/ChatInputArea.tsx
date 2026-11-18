@@ -468,10 +468,10 @@ export function ChatInputArea({
 						{overSizeLimit
 							? t(
 									"pages.chat.composer.size.overLimit",
-									"This message is {{used}} KB — over the {{limit}} KB limit for a single message. Shorten it, or attach the text as a file.",
+									"This message is {{used}} KiB — over the {{limit}} KiB limit for a single message. Shorten it, or attach the text as a file.",
 									{ used: toDisplayKb(sizeState.bytes), limit: toDisplayKb(sizeState.limitBytes) },
 								)
-							: t("pages.chat.composer.size.usage", "{{used}} KB / {{limit}} KB", {
+							: t("pages.chat.composer.size.usage", "{{used}} KiB / {{limit}} KiB", {
 									used: toDisplayKb(sizeState.bytes),
 									limit: toDisplayKb(sizeState.limitBytes),
 								})}

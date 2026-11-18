@@ -211,7 +211,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
         if (capReached)
         {
-            _logger.LogWarning("Live transcription session {SessionId} buffered more than {CapMb} MB of untranscribed audio; stopping it gracefully.",
+            _logger.LogWarning("Live transcription session {SessionId} buffered more than {CapMb} MiB of untranscribed audio; stopping it gracefully.",
                 sessionId,
                 _options.MaxBufferedAudioMb);
 

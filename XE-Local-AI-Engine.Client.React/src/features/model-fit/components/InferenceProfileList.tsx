@@ -176,11 +176,11 @@ function ProfileModelCell({ profile }: { readonly profile: InferenceProfileView 
 								globalFree:
 									profile.frozenGlobalFreeVramBytes === null
 										? t("pages.modelFit.inferenceProfiles.metrics.unknown", "Unknown")
-										: `${(profile.frozenGlobalFreeVramBytes / 1024 ** 3).toFixed(1)} GB`,
+										: `${(profile.frozenGlobalFreeVramBytes / 1024 ** 3).toFixed(1)} GiB`,
 								processBudget:
 									profile.frozenProcessBudgetVramBytes === null
 										? t("pages.modelFit.inferenceProfiles.metrics.unknown", "Unknown")
-										: `${(profile.frozenProcessBudgetVramBytes / 1024 ** 3).toFixed(1)} GB`,
+										: `${(profile.frozenProcessBudgetVramBytes / 1024 ** 3).toFixed(1)} GiB`,
 							},
 						)}
 					</Text>

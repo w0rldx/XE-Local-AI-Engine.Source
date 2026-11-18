@@ -361,7 +361,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         if (declaredUncompressed > maxDeclaredUncompressedBytes)
         {
             return string.Create(CultureInfo.InvariantCulture,
-                $"Compressed document declares {declaredUncompressed / (1024 * 1024)} MB uncompressed, which exceeds the {maxDeclaredUncompressedBytes / (1024 * 1024)} MB extraction limit.");
+                $"Compressed document declares {declaredUncompressed / (1024 * 1024)} MiB uncompressed, which exceeds the {maxDeclaredUncompressedBytes / (1024 * 1024)} MiB extraction limit.");
         }
 
         // Ratio guard, overflow-safe: reject a declared total above compressed times ratio, never evaluating a product

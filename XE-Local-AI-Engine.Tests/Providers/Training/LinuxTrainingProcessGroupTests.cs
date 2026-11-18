@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.Training;
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
@@ -17,7 +18,9 @@ public sealed class LinuxTrainingProcessGroupTests
 {
     private const int Pid = 4242;
     private const int HostGroup = 777;
-    private const string Setsid = "/usr/bin/setsid";
+    private const int Esrch = 3;
+    private const int Eperm = 1;
+    internal const string Setsid = "/usr/bin/setsid";
     private const string Python = "/opt/uv/python/bin/python3.14";
 
     [Test]
@@ -172,20 +175,29 @@ public sealed class LinuxTrainingProcessGroupTests
         AssertEx.Equal(TrainingProcessPresence.Gone, presence);
     }
 
+    /// <summary>A missing leader proves nothing while the group named by its pid has members: a trainer that ran setsid late leads it.</summary>
     [Test]
     [RunOn(OS.Linux)]
-    public async Task KillProcess_WhenThePidIsMissing_SendsNoSignalAndIsGone()
+    [Arguments(false, TrainingProcessPresence.Gone)]
+    [Arguments(true, TrainingProcessPresence.Unknown)]
+    public async Task KillProcess_WhenThePidIsMissing_SendsNoSignal_AndIsGoneOnlyOnceItsGroupIsEmpty(bool groupHasMembers, TrainingProcessPresence expected)
     {
-        var kills = 0;
+        var signals = new List<SentSignal>();
+        var probes = 0;
         var inspector = new LinuxTrainingProcessInspector(TimeProvider.System,
             NullLogger<LinuxTrainingProcessInspector>.Instance,
             static _ => TrainingProcessStatRead.Missing,
-            (_, _) => ++kills);
+            RecordingKill(signals, () =>
+            {
+                probes++;
+                return groupHasMembers;
+            }));
 
         var presence = await inspector.KillProcessAsync(Pid, expectedStartTicks: 99);
 
-        AssertEx.Equal(expected: 0, kills);
-        AssertEx.Equal(TrainingProcessPresence.Gone, presence);
+        AssertEx.Empty(signals);
+        AssertEx.Equal(expected: 1, probes, "A pid-only kill probes the group once and never waits on it.");
+        AssertEx.Equal(expected, presence);
     }
 
     [Test]
@@ -236,19 +248,15 @@ public sealed class LinuxTrainingProcessGroupTests
     public async Task KillProcess_WhenTheProcessSurvivesTheTerm_KillsAndVerifiesItGone()
     {
         var time = new ManualTimeProvider();
-        var signals = new List<int>();
+        var signals = new List<SentSignal>();
         var inspector = new LinuxTrainingProcessInspector(time,
             NullLogger<LinuxTrainingProcessInspector>.Instance,
-            _ => signals.Contains(9) ? TrainingProcessStatRead.Missing : Alive(startTicks: 99),
-            (_, signal) =>
-            {
-                signals.Add(signal);
-                return 0;
-            });
+            _ => signals.Exists(static sent => sent.Signal == 9) ? TrainingProcessStatRead.Missing : Alive(startTicks: 99),
+            RecordingKill(signals, static () => false));
 
         var presence = await DriveAsync(inspector.KillProcessAsync(Pid, expectedStartTicks: 99), time);
 
-        AssertEx.Equal("15,9", string.Join(',', signals));
+        AssertEx.Equal("15,9", string.Join(',', signals.Select(static sent => sent.Signal)));
         AssertEx.Equal(TrainingProcessPresence.Gone, presence, "The post-kill re-inspection saw the pid vanish.");
     }
 
@@ -269,24 +277,122 @@ public sealed class LinuxTrainingProcessGroupTests
         AssertEx.True(time.GetUtcNow() - start >= LinuxTrainingProcessInspector.KillVerifyBound, "The re-inspection waits out its bound before giving up.");
     }
 
+    /// <summary>One verify bound covers the whole kill: a leader that dies just before it leaves its surviving group only what is left, never a fresh bound.</summary>
     [Test]
     [RunOn(OS.Linux)]
-    public async Task KillProcess_WhenTheTrainerIsAZombieAfterTheTerm_IsGoneWithoutAKill()
+    public async Task KillProcessGroup_WhenTheLeaderDiesJustBeforeTheVerifyBound_GivesTheGroupOnlyWhatIsLeftOfIt()
     {
+        var time = new ManualTimeProvider();
+        var start = time.GetUtcNow();
         var signals = new List<int>();
-        var inspector = new LinuxTrainingProcessInspector(TimeProvider.System,
+        DateTimeOffset? killedAt = null;
+        var probes = 0;
+        var inspector = new LinuxTrainingProcessInspector(time,
             NullLogger<LinuxTrainingProcessInspector>.Instance,
-            _ => signals.Count == 0 ? Alive(startTicks: 99) : ZombieStat(startTicks: 99),
+            _ => killedAt is { } kill && time.GetUtcNow() >= kill + LinuxTrainingProcessInspector.KillVerifyBound - TimeSpan.FromSeconds(2)
+                ? TrainingProcessStatRead.Missing
+                : Alive(startTicks: 99),
             (_, signal) =>
             {
+                if (signal == 0)
+                {
+                    probes++;
+                    return 0; // A member that survives every signal.
+                }
+
                 signals.Add(signal);
+                killedAt ??= signal == 9 ? time.GetUtcNow() : null;
                 return 0;
             });
 
+        var presence = await DriveAsync(inspector.KillProcessGroupAsync(Pid, expectedStartTicks: 99), time);
+
+        AssertEx.Equal(TrainingProcessPresence.Unknown, presence, "The group still has a member.");
+        AssertEx.Equal("15,9", string.Join(',', signals));
+        AssertEx.True(probes > 0, "The group was probed once the leader was gone.");
+        var elapsed = time.GetUtcNow() - start;
+        AssertEx.True(elapsed <= LinuxTrainingProcessInspector.TerminateGrace + LinuxTrainingProcessInspector.KillVerifyBound + TimeSpan.FromSeconds(1),
+            $"The whole kill stays within one verify bound after the grace (one clock step of slack); it took {elapsed}.");
+    }
+
+    /// <summary>A zombie holds nothing itself, but it still names its group, whose members may hold the GPU.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [Arguments(false, TrainingProcessPresence.Gone)]
+    [Arguments(true, TrainingProcessPresence.Unknown)]
+    public async Task KillProcess_WhenTheTrainerIsAZombieAfterTheTerm_IsGoneWithoutAKill_OnceItsGroupIsEmpty(bool groupHasMembers, TrainingProcessPresence expected)
+    {
+        var signals = new List<SentSignal>();
+        var inspector = new LinuxTrainingProcessInspector(TimeProvider.System,
+            NullLogger<LinuxTrainingProcessInspector>.Instance,
+            _ => signals.Count == 0 ? Alive(startTicks: 99) : ZombieStat(startTicks: 99),
+            RecordingKill(signals, () => groupHasMembers));
+
         var presence = await inspector.KillProcessAsync(Pid, expectedStartTicks: 99);
 
-        AssertEx.Equal("15", string.Join(',', signals), "A zombie holds nothing; only its parent's wait() is left.");
-        AssertEx.Equal(TrainingProcessPresence.Gone, presence);
+        AssertEx.Equal(new SentSignal
+        {
+            Target = Pid,
+            Signal = 15
+        }, signals.Single(), "Only the pid is signalled, and only while it is alive.");
+        AssertEx.Equal(expected, presence);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    [Arguments(0, 0, true)]
+    [Arguments(-1, Esrch, false)]
+    [Arguments(-1, Eperm, true)]
+    public void ProcessGroupHasMembers_ReadsOnlyNoSuchGroupAsEmpty(int result, int errno, bool expected)
+    {
+        var calls = new List<SentSignal>();
+        var inspector = new LinuxTrainingProcessInspector(TimeProvider.System,
+            NullLogger<LinuxTrainingProcessInspector>.Instance,
+            static _ => throw new InvalidOperationException("A group probe reads no stat."),
+            (target, signal) =>
+            {
+                calls.Add(new SentSignal
+                {
+                    Target = target,
+                    Signal = signal
+                });
+                Marshal.SetLastPInvokeError(errno);
+                return result;
+            });
+
+        AssertEx.Equal(expected, inspector.ProcessGroupHasMembers(Pid), "A refusal other than ESRCH may hide a member, so it fails closed.");
+        AssertEx.Equal(new SentSignal
+        {
+            Target = -Pid,
+            Signal = 0
+        }, calls.Single(), "Signal 0 to the negated group: a probe that sends nothing.");
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public void ProcessGroupHasMembers_ForAGroupNoProbeCanProveEmpty_IsTrueWithoutCallingKill()
+    {
+        var inspector = new LinuxTrainingProcessInspector(TimeProvider.System,
+            NullLogger<LinuxTrainingProcessInspector>.Instance,
+            static _ => throw new InvalidOperationException("A group probe reads no stat."),
+            static (_, _) => throw new InvalidOperationException("No probe may target init's, the caller's or the host's group."));
+
+        foreach (var group in new[] { -5, 0, 1, LinuxTrainingProcessInspector.HostProcessGroupId })
+        {
+            AssertEx.True(inspector.ProcessGroupHasMembers(group), $"Group {group} can never be proven empty.");
+        }
+    }
+
+    [Test]
+    [ExcludeOn(OS.Linux)]
+    public void ProcessGroupHasMembers_OffLinux_IsFalseWithoutCallingKill()
+    {
+        var inspector = new LinuxTrainingProcessInspector(TimeProvider.System,
+            NullLogger<LinuxTrainingProcessInspector>.Instance,
+            static _ => throw new InvalidOperationException("Nothing is read off Linux."),
+            static (_, _) => throw new InvalidOperationException("Nothing is signalled off Linux."));
+
+        AssertEx.False(inspector.ProcessGroupHasMembers(Pid), "Off Linux a missing pid already reads gone; the probe keeps that policy.");
     }
 
     [Test]
@@ -580,14 +686,37 @@ public sealed class LinuxTrainingProcessGroupTests
         return false;
     }
 
-    private static TrainingProcessStatRead Alive(long startTicks) =>
+    /// <summary><c>kill(2)</c> that records every real signal and answers each signal-0 group probe: a member while <paramref name="groupHasMembers" /> says so, else ESRCH.</summary>
+    internal static Func<int, int, int> RecordingKill(List<SentSignal> signals, Func<bool> groupHasMembers) =>
+        (target, signal) =>
+        {
+            if (signal != 0)
+            {
+                signals.Add(new SentSignal
+                {
+                    Target = target,
+                    Signal = signal
+                });
+                return 0;
+            }
+
+            if (groupHasMembers())
+            {
+                return 0;
+            }
+
+            Marshal.SetLastPInvokeError(Esrch);
+            return -1;
+        };
+
+    internal static TrainingProcessStatRead Alive(long startTicks) =>
         new()
         {
             Presence = TrainingProcessPresence.Alive,
             Stat = new TrainingProcessStat(Pid, startTicks)
         };
 
-    private static TrainingProcessStatRead ZombieStat(long startTicks) =>
+    internal static TrainingProcessStatRead ZombieStat(long startTicks) =>
         new()
         {
             Presence = TrainingProcessPresence.Gone,
@@ -595,7 +724,7 @@ public sealed class LinuxTrainingProcessGroupTests
         };
 
     /// <summary>Moves the clock past each poll the kill arms until it settles, so its bounds pass without real waiting.</summary>
-    private static async Task<T> DriveAsync<T>(Task<T> task, ManualTimeProvider time)
+    internal static async Task<T> DriveAsync<T>(Task<T> task, ManualTimeProvider time)
     {
         while (!task.IsCompleted)
         {
@@ -604,6 +733,14 @@ public sealed class LinuxTrainingProcessGroupTests
         }
 
         return await task;
+    }
+
+    /// <summary>One <c>kill(2)</c> call: the pid, or the negated group, and the signal.</summary>
+    internal sealed record SentSignal
+    {
+        public required int Target { get; init; }
+
+        public required int Signal { get; init; }
     }
 
     /// <summary>A process a test started, known by pid and start time, so cleanup never signals a pid another process now holds.</summary>

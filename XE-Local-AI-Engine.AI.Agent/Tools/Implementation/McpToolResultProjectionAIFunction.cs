@@ -118,13 +118,13 @@ internal sealed class McpToolResultProjectionAIFunction : DelegatingAIFunction
         return projected;
     }
 
-    // "[image image/png, 34 KB]": what the model can know about a block it cannot see.
+    // "[image image/png, 34 KiB]": what the model can know about a block it cannot see.
     private static string Placeholder(DataContent data)
     {
         var topLevelType = data.MediaType.Split('/')[0];
         var kind = topLevelType is "image" or "audio" ? topLevelType : "file";
         var kilobytes = Math.Max(1, (data.Data.Length + 1023) / 1024);
-        return string.Create(CultureInfo.InvariantCulture, $"[{kind} {data.MediaType}, {kilobytes} KB]");
+        return string.Create(CultureInfo.InvariantCulture, $"[{kind} {data.MediaType}, {kilobytes} KiB]");
     }
 
     // Verbatim, the whole text is the same JSON value spelled differently (a pretty-printed mirror), or the structured

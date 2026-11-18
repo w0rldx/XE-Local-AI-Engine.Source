@@ -15,5 +15,5 @@ public sealed class TranscriptionUploadTooLargeException : Exception
 
     /// <summary>The one refusal text for an upload past <paramref name="maxBytes" />, whichever layer refused it.</summary>
     public static string MessageFor(long maxBytes) =>
-        string.Create(CultureInfo.InvariantCulture, $"The uploaded audio is larger than the {maxBytes / (1024 * 1024)} MB this node accepts.");
+        string.Create(CultureInfo.InvariantCulture, $"The uploaded audio is larger than the {maxBytes / (1024 * 1024)} MiB this node accepts.");
 }

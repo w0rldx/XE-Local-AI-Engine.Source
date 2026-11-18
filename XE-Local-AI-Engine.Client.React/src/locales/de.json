@@ -178,7 +178,7 @@
 			"importing_other": "{{count}} Chats werden importiert. Ein großer Import kann mehrere Minuten dauern.",
 			"menuAria": "Chats exportieren oder importieren",
 			"notJson": "Diese Datei ist kein JSON.",
-			"tooLarge": "Diese Datei ist größer als die 64 MB, die ein Import annimmt.",
+			"tooLarge": "Diese Datei ist größer als die 64 MiB, die ein Import annimmt.",
 			"toolCallsOmitted_one": "{{count}} Tool-Aufruf, nicht enthalten",
 			"toolCallsOmitted_other": "{{count}} Tool-Aufrufe, nicht enthalten",
 			"unsupportedVersion": "Dieser Chat-Export hat eine Formatversion, die diese App nicht lesen kann.",
@@ -2260,7 +2260,7 @@
 						"unknown": "Unbekannt",
 						"unsupported": "Nicht unterstützt"
 					},
-					"tooLarge": "{{name}} überschreitet das Upload-Limit von {{limit}} MB.",
+					"tooLarge": "{{name}} überschreitet das Upload-Limit von {{limit}} MiB.",
 					"uploadBatchFailed": "Dateien konnten nicht hochgeladen werden.",
 					"uploadFailed": "{{name}} konnte nicht hochgeladen werden."
 				},
@@ -2269,8 +2269,8 @@
 				"moreControls": "Weitere Eingabeoptionen",
 				"samplingOptions": "Erweiterte Sampling-Optionen",
 				"size": {
-					"overLimit": "Diese Nachricht ist {{used}} KB groß — über dem Limit von {{limit}} KB pro Nachricht. Kürzen Sie sie oder hängen Sie den Text als Datei an.",
-					"usage": "{{used}} KB / {{limit}} KB"
+					"overLimit": "Diese Nachricht ist {{used}} KiB groß — über dem Limit von {{limit}} KiB pro Nachricht. Kürzen Sie sie oder hängen Sie den Text als Datei an.",
+					"usage": "{{used}} KiB / {{limit}} KiB"
 				}
 			},
 			"connecting": "Verbindung zum lokalen Chat wird hergestellt…",
@@ -3244,7 +3244,7 @@
 				"decline": "Jetzt nicht",
 				"disclosureNote": "Dieser Hinweis ist eine Offenlegung, kein Schutz. Ihre Bestätigung wird nur in diesem Browser gespeichert und ändert nichts daran, was ein Entwicklungslauf tun darf.",
 				"intro": "Im Entwicklungsmodus darf ein Modell Dateien in einem verwalteten Worktree ändern, und die Build-, Test- und Lint-Befehle Ihres Repositorys werden auf diesem Rechner ausgeführt. Lesen Sie dies einmal, bevor Sie beginnen.",
-				"processLimits": "Für diese Befehle werden Grenzen für CPU, Arbeitsspeicher und Prozessanzahl angefordert, sofern dieser Node sie durchsetzen kann (die Übersicht zur Sandbox-Isolation zeigt, ob er es tut): standardmäßig alle logischen Kerne, 75 % des Arbeitsspeichers mit 4 GB als Untergrenze und 4096 Prozesse; ein Betreiber kann sie überschreiben. Wo der Host sie nicht durchsetzen kann, also unter Windows, gilt keine Grenze, und ein außer Kontrolle geratener Befehl wird nur durch sein Zeitlimit und den Rechner selbst begrenzt.",
+				"processLimits": "Für diese Befehle werden Grenzen für CPU, Arbeitsspeicher und Prozessanzahl angefordert, sofern dieser Node sie durchsetzen kann (die Übersicht zur Sandbox-Isolation zeigt, ob er es tut): standardmäßig alle logischen Kerne, 75 % des Arbeitsspeichers mit 4 GiB als Untergrenze und 4096 Prozesse; ein Betreiber kann sie überschreiben. Wo der Host sie nicht durchsetzen kann, also unter Windows, gilt keine Grenze, und ein außer Kontrolle geratener Befehl wird nur durch sein Zeitlimit und den Rechner selbst begrenzt.",
 				"processNetwork": "Für die Sandbox, in der der Agent arbeitet, ist ausgehender Netzwerkverkehr überall dort gesperrt, wo dieser Node das durchsetzen kann: unter Linux mit funktionierender Sandbox-Netzwerkprüfung oder mit einem Container-Provider. Wo das nicht möglich ist, etwa unter Windows, erreichen diese Befehle das Netzwerk uneingeschränkt. Nur das Auflösen der Abhängigkeiten durch die Engine selbst, ausgeführt gegen Ihren Basis-Commit noch bevor der Agent startet, erhält Netzwerkzugriff. Die Übersicht zur Sandbox-Isolation zeigt, welche Isolation dieser Node tatsächlich bereitgestellt hat.",
 				"processUser": "Auf diesem Node laufen diese Befehle unter dem angemeldeten Benutzerkonto, das die Engine ausführt. Wo dieser Host eine Dateisystemgrenze bietet (Linux mit bubblewrap), sehen die Befehle des Coders und der Validierung nur den verwalteten Arbeitsbaum, ihre Laufzeitverzeichnisse und die Toolchain; sonst haben sie dessen Zugriff auf Ihre Dateien. Die Abhängigkeitswiederherstellung der Engine für Ihren Basis-Commit läuft in jedem Fall außerhalb der Grenze, mit dem Zugriff Ihres Kontos und mit Netzwerk.",
 				"title": "Bevor Sie den Entwicklungsmodus nutzen",
@@ -3800,8 +3800,8 @@
 				},
 				"resources": {
 					"blocked": "Dieser Computer hat derzeit nicht genug freie Ressourcen für diese Anwendung.",
-					"disk": "Speicherplatz: {{required}} MB benötigt, {{available}} MB frei",
-					"memory": "Arbeitsspeicher: {{required}} MB benötigt, {{available}} MB frei",
+					"disk": "Speicherplatz: {{required}} MiB benötigt, {{available}} MiB frei",
+					"memory": "Arbeitsspeicher: {{required}} MiB benötigt, {{available}} MiB frei",
 					"ok": "Dieser Computer hat genug Arbeitsspeicher und Speicherplatz."
 				},
 				"started": "{{name}} wird installiert.",
@@ -6071,11 +6071,11 @@
 				},
 				"installed": "Installiert",
 				"kvPerToken": {
-					"hint": "{{kb}} KB/Token ({{quant}} KV)",
+					"hint": "{{kb}} KiB/Token ({{quant}} KV)",
 					"tooltip": "KV-Cache-Kosten eines Tokens bei {{context}} Kontext, berechnet mit einem {{quant}}-KV-Cache (Standard beim Chat-Start) statt mit dem fp16-Cache, den die Speicherangaben oben verwenden."
 				},
 				"kvQuant": {
-					"hint": "≈ {{gb}} GB mit {{quant}} KV-Cache",
+					"hint": "≈ {{gb}} GiB mit {{quant}} KV-Cache",
 					"tooltip": "Nur eine Schätzung – die angezeigte Eignung nutzt den Standard-fp16-KV-Cache. Ein quantisierter KV-Cache erfordert Flash Attention und passende Startparameter; die Ersparnis ist eine Schätzung, keine garantierte Kompatibilität."
 				},
 				"lastRefreshed": "Zuletzt aktualisiert: {{time}}",
@@ -6083,7 +6083,7 @@
 				"modelsLink": "Modellverwaltung",
 				"moeOffload": {
 					"badge": "Experten auf CPU – langsamer, höhere Qualität",
-					"breakdown": "GPU {{gpuGb}} GB + RAM {{cpuGb}} GB"
+					"breakdown": "GPU {{gpuGb}} GiB + RAM {{cpuGb}} GiB"
 				},
 				"noCache": "Für diesen Anwendungsfall ist noch kein zwischengespeicherter Empfehlungs-Snapshot vorhanden. Führen Sie eine Empfehlungsprüfung über den Planer aus oder verwenden Sie „Jetzt aktualisieren“, falls ein Zeitplan existiert.",
 				"noJobGuidance": "Es existiert noch kein model-recommendation-check-Zeitplan. Erstellen Sie einen im Planer, um die Aktualisierung zu aktivieren.",
@@ -6933,7 +6933,7 @@
 				"maxResponseSizeMb": {
 					"label": "Maximale Antwortgröße"
 				},
-				"megabytesPositive": "Eine positive Größe in MB. Änderungen werden ohne Neustart des Nodes wirksam.",
+				"megabytesPositive": "Eine positive Größe in MiB. Änderungen werden ohne Neustart des Nodes wirksam.",
 				"memoryExtractionModelName": {
 					"description": "Gewinnt aus abgeschlossenen Agentenläufen Erkenntnisse als Erinnerungskandidaten zur Prüfung.",
 					"label": "Modell für die Erinnerungsextraktion"

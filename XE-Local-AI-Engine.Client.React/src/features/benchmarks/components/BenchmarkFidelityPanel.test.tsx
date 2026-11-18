@@ -83,14 +83,14 @@ describe("BenchmarkFidelityPanel", () => {
 		await waitFor(() => expect(estimateMock).toHaveBeenCalledOnce());
 	});
 
-	// 25 GB is not a number to discover after the write has started, so it is stated with its arithmetic rather than
+	// 25 GiB is not a number to discover after the write has started, so it is stated with its arithmetic rather than
 	// asserted: the operator can check the formula against the size.
 	it("states the cache size and the arithmetic behind it", async () => {
 		renderWithProviders(<BenchmarkFidelityPanel projectId="project-1" fidelity={fidelity} projectVersion={7} models={[]} />);
 		fireEvent.click(screen.getByTestId("benchmark-fidelity-toggle"));
 
 		const block = await screen.findByTestId("benchmark-kld-estimate");
-		expect(block.textContent).toContain("23.6 GB");
+		expect(block.textContent).toContain("23.6 GiB");
 		expect(screen.getByTestId("benchmark-kld-estimate-formula").textContent).toBe(estimate.formula);
 		expect(block.textContent).toContain("151936");
 	});

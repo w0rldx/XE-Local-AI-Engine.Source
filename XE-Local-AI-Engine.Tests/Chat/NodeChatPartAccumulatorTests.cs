@@ -168,7 +168,7 @@ public sealed class NodeChatPartAccumulatorTests
 
         var parts = acc.Snapshot();
         AssertEx.Equal(expected: 2, parts.Count, "Only the image within the size cap is persisted; audio keeps its placeholder text only.");
-        AssertEx.Equal("[image image/png, 1 KB]", parts[0].Result, "The card keeps the model's text, never a type name.");
+        AssertEx.Equal("[image image/png, 1 KiB]", parts[0].Result, "The card keeps the model's text, never a type name.");
         AssertEx.Equal(NodeChatMessagePartKinds.Image, parts[1].Kind);
         AssertEx.Equal("call-1", parts[1].ToolCallId);
         AssertEx.Equal("image/png", parts[1].Name);
@@ -208,7 +208,7 @@ public sealed class NodeChatPartAccumulatorTests
             ToolCallId = "call-1",
             ToolName = "mcp__srv__shot",
             Phase = phase,
-            Result = phase == ToolCallLifecyclePhase.Completed ? "[image image/png, 1 KB]" : null,
+            Result = phase == ToolCallLifecyclePhase.Completed ? "[image image/png, 1 KiB]" : null,
             Media = media
         };
 

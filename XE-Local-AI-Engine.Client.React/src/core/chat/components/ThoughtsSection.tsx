@@ -31,7 +31,7 @@ function words(value: string): number {
 }
 
 function formatOverflow(bytes: number): string {
-	return bytes < 1024 ? `+${bytes} B` : `+${Math.ceil(bytes / 1024)} KB`;
+	return bytes < 1024 ? `+${bytes} B` : `+${Math.ceil(bytes / 1024)} KiB`;
 }
 
 export function ThoughtsSection({

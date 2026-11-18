@@ -146,7 +146,7 @@ function MoeOffloadBadge({ recommendation }: { recommendation: ModelFitRecommend
 	}
 	return (
 		<Tooltip
-			label={t("pages.modelFit.recommendations.moeOffload.breakdown", "GPU {{gpuGb}} GB + RAM {{cpuGb}} GB", {
+			label={t("pages.modelFit.recommendations.moeOffload.breakdown", "GPU {{gpuGb}} GiB + RAM {{cpuGb}} GiB", {
 				gpuGb: recommendation.gpuGb,
 				cpuGb: recommendation.cpuGb,
 			})}
@@ -176,7 +176,7 @@ function KvQuantHint({ recommendation }: { recommendation: ModelFitRecommendatio
 			maw={280}
 		>
 			<Text size="xs" c="dimmed" data-testid={`model-fit-kv-quant-hint-${recommendation.rank}`}>
-				{t("pages.modelFit.recommendations.kvQuant.hint", "≈ {{gb}} GB with {{quant}} KV cache", {
+				{t("pages.modelFit.recommendations.kvQuant.hint", "≈ {{gb}} GiB with {{quant}} KV cache", {
 					gb: recommendation.kvQuantEstimatedGb.toFixed(1),
 					quant: recommendation.kvQuant,
 				})}
@@ -198,7 +198,7 @@ function KvPerTokenHint({ recommendation }: { recommendation: ModelFitRecommenda
 	}
 	const arch = recommendation.attentionArch ?? null;
 	const archLabel = arch === null ? null : t(`pages.modelFit.recommendations.attentionArch.${arch}`, arch.toUpperCase());
-	const perToken = t("pages.modelFit.recommendations.kvPerToken.hint", "{{kb}} KB/token ({{quant}} KV)", {
+	const perToken = t("pages.modelFit.recommendations.kvPerToken.hint", "{{kb}} KiB/token ({{quant}} KV)", {
 		kb: (bytesPerToken / 1024).toFixed(1),
 		quant: quant.toLowerCase(),
 	});

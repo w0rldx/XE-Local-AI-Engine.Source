@@ -24,7 +24,7 @@ export function utf8ByteLength(text: string): number {
 	return new TextEncoder().encode(text).length;
 }
 
-// Rounded UP, mirroring the server's rejection message, so a draft reported as "N KB" is never at or below the
+// Rounded UP, mirroring the server's rejection message, so a draft reported as "N KiB" is never at or below the
 // stated limit.
 export function toDisplayKb(bytes: number): number {
 	return Math.ceil(bytes / 1024);

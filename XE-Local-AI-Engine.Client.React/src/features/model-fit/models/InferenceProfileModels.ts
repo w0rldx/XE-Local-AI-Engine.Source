@@ -87,8 +87,8 @@ export function toInferenceProfileStatus(status: string | undefined): InferenceP
 	}
 }
 
-// Composes the compact outcome summary shown on a profile row — e.g. "42 tok/s · 6.2 GB". Pure (no i18n): the
-// numeric parts carry conventional unit symbols (tok/s, GB) exactly like the sibling ModelFitFormatters, while
+// Composes the compact outcome summary shown on a profile row — e.g. "42 tok/s · 6.2 GiB". Pure (no i18n): the
+// numeric parts carry conventional unit symbols (tok/s, GiB) exactly like the sibling ModelFitFormatters, while
 // the localized status word ("Frozen") is prepended by the component. Returns "" when no metric is available.
 export function formatProfileOutcomeSummary(tokensPerSecond: number | null, vramBytes: number | null): string {
 	const parts: string[] = [];
@@ -96,7 +96,7 @@ export function formatProfileOutcomeSummary(tokensPerSecond: number | null, vram
 		parts.push(`${tokensPerSecond.toFixed(0)} tok/s`);
 	}
 	if (vramBytes !== null) {
-		parts.push(`${(vramBytes / 1024 ** 3).toFixed(1)} GB`);
+		parts.push(`${(vramBytes / 1024 ** 3).toFixed(1)} GiB`);
 	}
 	return parts.join(" · ");
 }

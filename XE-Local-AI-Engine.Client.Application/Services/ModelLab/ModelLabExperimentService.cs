@@ -1405,8 +1405,11 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             // Its held copy is reaped instead of the file and can never be probed: only a restart drops it.
             { HeldUnprobeable: true } => Refuse(ModelLabStartRefusal.OrphanWorker, string.Create(CultureInfo.InvariantCulture,
                 $"An earlier Model Lab worker ({kept.Name}) was not confirmed stopped, and its recorded identity is too incomplete to check. Confirm that process is gone, remove its stale receipt file from {ModelLabWarmReceipts.Root(_dataDirectory)} if one exists, then restart the node to clear the copy it still holds, and start the experiment again.")),
+            // Its held copy is re-reaped by every start and released once the group is empty; a restart would lose that identity.
+            { ReceiptPath: null } => Refuse(ModelLabStartRefusal.OrphanWorker, string.Create(CultureInfo.InvariantCulture,
+                $"An earlier Model Lab worker ({kept.Name}) was not confirmed stopped, so it may still hold GPU memory. Make sure that worker and its child processes have exited, stopping only processes you confirm belong to it, then start the experiment again.")),
             _ => Refuse(ModelLabStartRefusal.OrphanWorker, string.Create(CultureInfo.InvariantCulture,
-                $"An earlier Model Lab worker ({kept.Name}) was not confirmed stopped, so it may still hold GPU memory. Stop that process, or remove its receipt file once it is gone, then start the experiment again."))
+                $"An earlier Model Lab worker ({kept.Name}) was not confirmed stopped, so it may still hold GPU memory. Check whether the process it names still belongs to a Model Lab worker: after a restart its number may belong to unrelated processes, so stop only processes you confirm belong to that worker. Once the worker and its child processes are gone, delete its receipt file {kept.ReceiptPath}, then start the experiment again."))
         };
     }
 

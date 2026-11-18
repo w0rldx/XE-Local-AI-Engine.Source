@@ -122,7 +122,7 @@ export function NodeSettingsDownloadLimitsCard({ bounds, ...field }: NodeSetting
 					"A download is refused if it would leave less free space than this.",
 				)}
 				bounds={bounds.huggingFaceDiskMarginBytes}
-				unit="GB"
+				unit="GiB"
 				wireUnit={t("pages.nodeSettings.fields.bytesShort", "B")}
 				testId="node-settings-hf-disk-margin"
 			/>
@@ -332,7 +332,7 @@ export function NodeSettingsRetentionCard({ bounds, ...field }: NodeSettingsTuna
 					"Disk space for the base-model files quality benchmarks compare against; the least recently used are removed first.",
 				)}
 				bounds={bounds.tunables.benchmarkKldCacheMaxBytes}
-				unit="GB"
+				unit="GiB"
 				wireUnit={t("pages.nodeSettings.fields.bytesShort", "B")}
 				testId="node-settings-benchmark-kld-cache"
 			/>

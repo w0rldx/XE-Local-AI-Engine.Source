@@ -58,7 +58,7 @@ public sealed class BenchmarkKldBaseCache
         var available = Gigabytes(free);
         var headroom = Gigabytes(BenchmarkFidelityPolicy.KldFreeSpaceHeadroomBytes);
         throw new BenchmarkExecutionException(string.Create(CultureInfo.InvariantCulture,
-            $"Measuring KL divergence needs about {needed} GB of base logits, only {available} GB is free, and {headroom} GB must remain afterwards. Free space, lower the chunk count, or clear the fidelity cache."));
+            $"Measuring KL divergence needs about {needed} GiB of base logits, only {available} GiB is free, and {headroom} GiB must remain afterwards. Free space, lower the chunk count, or clear the fidelity cache."));
     }
 
     /// <summary>
@@ -183,7 +183,7 @@ public sealed class BenchmarkKldBaseCache
     }
 
     private static double Gigabytes(long bytes) =>
-        Math.Round(bytes / 1_000_000_000.0, 1);
+        Math.Round(bytes / (1024.0 * 1024 * 1024), 1);
 
     /// <summary>
     ///     Under the same machine-global base the llama.cpp binaries and the compute runtime use, so one measurement

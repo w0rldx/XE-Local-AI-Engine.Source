@@ -218,7 +218,7 @@ internal sealed class WorkSessionService : IWorkSessionService
         {
             var sizeKb = (sizeBytes + 1023) / 1024;
             throw new WorkSessionValidationException(string.Create(CultureInfo.InvariantCulture,
-                $"That follow-up is too large ({sizeKb} KB, limit {_securityOptions.MaxMessageSizeKb} KB)."));
+                $"That follow-up is too large ({sizeKb} KiB, limit {_securityOptions.MaxMessageSizeKb} KiB)."));
         }
 
         var messageId = Guid.NewGuid();

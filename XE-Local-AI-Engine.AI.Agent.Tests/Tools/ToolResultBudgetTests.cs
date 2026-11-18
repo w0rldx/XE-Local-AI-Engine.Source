@@ -62,7 +62,7 @@ public sealed class ToolResultBudgetTests
     [Test]
     public void Apply_TruncatedStringKeepsTheMediaOfTheOriginal()
     {
-        var original = new string('i', 5_000) + "[image image/png, 1 KB]";
+        var original = new string('i', 5_000) + "[image image/png, 1 KiB]";
         var image = new DataContent(new byte[]
         {
             1,

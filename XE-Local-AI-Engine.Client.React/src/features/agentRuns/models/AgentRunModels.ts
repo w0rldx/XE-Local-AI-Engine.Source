@@ -65,9 +65,9 @@ export function agentRunOutcomeColor(outcome: string): string {
 	}
 }
 
-/** Bytes as KB/MB/GB, one decimal above a kilobyte. The node reports an exact count; the page shows a size. */
+/** Bytes as KiB/MiB/GiB, one decimal above a kilobyte. The node reports an exact count; the page shows a size. */
 export function formatAgentRunSize(sizeBytes: number): string {
-	const units = ["B", "KB", "MB", "GB"];
+	const units = ["B", "KiB", "MiB", "GiB"];
 	let value = Math.max(sizeBytes, 0);
 	let unit = 0;
 	while (value >= 1024 && unit < units.length - 1) {

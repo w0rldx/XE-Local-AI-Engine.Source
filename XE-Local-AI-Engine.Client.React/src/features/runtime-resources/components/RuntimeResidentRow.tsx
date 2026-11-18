@@ -1,8 +1,9 @@
-import { Badge, Button, Group, Stack, Text } from "@mantine/core";
+import { Badge, Group, Stack, Text } from "@mantine/core";
 import { IconPlayerEject } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
+import { FocusableDisabledButton } from "@/core/ui/components/FocusableDisabledButton/FocusableDisabledButton";
 import type {
 	ResidentRuntime,
 	RuntimeResident,
@@ -65,20 +66,21 @@ export function RuntimeResidentRow({ resident, ejecting, onEject }: RuntimeResid
 					</Text>
 				)}
 			</Stack>
-			<Button
+			<FocusableDisabledButton
 				size="compact-xs"
 				variant="light"
 				color="red"
 				leftSection={<IconPlayerEject size={12} />}
-				loading={ejecting}
+				loaderSize={12}
 				// A starting or exited process has nothing to unload yet (or any more); `canEject` mirrors the server's 409.
-				disabled={!resident.canEject || ejecting || resident.state === "starting" || resident.state === "exited"}
+				blocked={!resident.canEject || resident.state === "starting" || resident.state === "exited"}
+				pending={ejecting}
 				onClick={onEject}
 				aria-label={ejectLabels[resident.runtime]}
 				data-testid={`runtime-resources-eject-${resident.runtime}`}
 			>
 				{t("pages.loadedModels.llamaCpp.eject", "Eject")}
-			</Button>
+			</FocusableDisabledButton>
 		</Group>
 	);
 }

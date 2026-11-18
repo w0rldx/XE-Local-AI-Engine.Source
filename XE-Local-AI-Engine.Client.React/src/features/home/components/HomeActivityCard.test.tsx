@@ -91,7 +91,7 @@ describe("HomeActivityCard", () => {
 		const row = await screen.findByTestId("home-activity-item");
 		expect(row.getAttribute("data-state")).toBe("running");
 		expect(row.textContent).toContain("Downloading qwen3-8b");
-		expect(screen.getByTestId("home-activity-detail").textContent).toBe("2 KB of 4 KB");
+		expect(screen.getByTestId("home-activity-detail").textContent).toBe("2 KiB of 4 KiB");
 		expect(screen.getByRole("progressbar", { name: "Downloading qwen3-8b" }).getAttribute("aria-valuenow")).toBe("50");
 		expect(screen.getByTestId("home-activity-open").getAttribute("href")).toBe("/models");
 		expect(screen.queryByTestId("home-activity-retry")).toBeNull();

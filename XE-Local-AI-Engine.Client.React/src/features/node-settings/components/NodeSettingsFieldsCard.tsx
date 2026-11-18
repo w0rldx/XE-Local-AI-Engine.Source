@@ -235,8 +235,8 @@ export function NodeSettingsFieldsCard(props: NodeSettingsFieldsCardProps) {
 									"maxResponseSizeMb",
 									t("pages.nodeSettings.fields.maxResponseSizeMb.label", "Max response size"),
 								)}
-								description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.maxResponseSizeMb.min}–${bounds.maxResponseSizeMb.max} MB.`}
-								suffix=" MB"
+								description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.maxResponseSizeMb.min}–${bounds.maxResponseSizeMb.max} MiB.`}
+								suffix=" MiB"
 								min={bounds.maxResponseSizeMb.min}
 								max={bounds.maxResponseSizeMb.max}
 								clampBehavior="none"

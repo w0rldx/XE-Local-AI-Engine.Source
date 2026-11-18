@@ -180,6 +180,6 @@ internal sealed class BaseArtifactService : IBaseArtifactService
 
     internal static string FormatGigabytes(long bytes)
     {
-        return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1024 * 1024 * 1024):0.#} GB");
+        return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1024 * 1024 * 1024):0.#} GiB");
     }
 }

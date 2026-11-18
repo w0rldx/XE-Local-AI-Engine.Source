@@ -257,7 +257,7 @@ public sealed class NodeChatExportImportEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
-        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "MB this node imports at once");
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "MiB this node imports at once");
     }
 
     private static NodeChatExportDocument Document(params NodeChatExportConversation[] conversations) =>

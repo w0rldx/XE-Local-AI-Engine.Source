@@ -25,7 +25,7 @@ public sealed class RequestBodyTooLargeProblemTests
             }
         };
 
-        await RequestBodyTooLargeProblem.Result("The request body is larger than the 1 MB this node accepts for a graph.")
+        await RequestBodyTooLargeProblem.Result("The request body is larger than the 1 MiB this node accepts for a graph.")
                                         .ExecuteAsync(context);
 
         AssertEx.Equal(StatusCodes.Status413PayloadTooLarge, context.Response.StatusCode);

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useEjectImageRuntime } from "@/core/loaded-models/queries/useEjectRuntimes";
+import { FocusableDisabledButton } from "@/core/ui/components/FocusableDisabledButton/FocusableDisabledButton";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CudaBuildLogView } from "@/features/node-settings/components/CudaBuildLogView";
@@ -189,11 +190,12 @@ export function ImageRuntimeSourceBuildCard() {
 							</Button>
 						) : null}
 						{activity.residentProcessCount > 0 ? (
-							<Button
+							<FocusableDisabledButton
 								variant="light"
 								leftSection={<IconPlayerEject size={16} />}
-								disabled={!canEjectImageRuntime(activity)}
-								loading={eject.isPending}
+								loaderSize={16}
+								blocked={!canEjectImageRuntime(activity)}
+								pending={eject.isPending}
 								onClick={() =>
 									eject.mutate(undefined, {
 										onError: (error) => showError(error, "pages.nodeSettings.imageRuntime.sourceBuild.ejectError"),
@@ -201,7 +203,7 @@ export function ImageRuntimeSourceBuildCard() {
 								}
 							>
 								{t("pages.nodeSettings.imageRuntime.sourceBuild.eject")}
-							</Button>
+							</FocusableDisabledButton>
 						) : null}
 						{managed ? (
 							<Button

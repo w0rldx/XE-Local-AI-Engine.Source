@@ -818,6 +818,48 @@ public sealed class ModelLabWarmSessionTests
         AssertEx.Null(process.Request, "Nothing spawned.");
     }
 
+    /// <summary>A kept receipt read from disk names the group to wait for and the file to delete once it is empty; the start after that is admitted.</summary>
+    [Test]
+    public async Task AReceiptWhoseLeaderIsGoneButWhoseGroupLives_RefusesStartsNamingTheGroupAndTheFile_UntilTheGroupEmpties()
+    {
+        using var process = new ScriptedProcess();
+        var inspector = new FakeTrainingProcessInspector(facts: null)
+        {
+            GroupHasMembers = true
+        };
+        await using var host = await LabHost.StartAsync(process, configure: services =>
+        {
+            services.RemoveAll<ITrainingProcessInspector>();
+            services.AddSingleton<ITrainingProcessInspector>(inspector);
+        });
+        var orphan = await SeedOrphanReceiptAsync(host);
+        await new ModelLabStartupReaper(host.Services.GetRequiredService<IServiceScopeFactory>(),
+            inspector,
+            host.Services.GetRequiredService<INodeDataDirectory>(),
+            host.Service,
+            NullLogger<ModelLabStartupReaper>.Instance).StartAsync(CancellationToken.None);
+
+        var refused = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+
+        AssertEx.Equal(ModelLabStartRefusal.OrphanWorker, refused.Refusal!.Value);
+        AssertEx.Contains(refused.RefusalMessage!, "process group " + BarrierInspector.OrphanPid.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        AssertEx.Contains(refused.RefusalMessage!, "Check whether the process it names still belongs to a Model Lab worker", StringComparison.Ordinal);
+        AssertEx.Contains(refused.RefusalMessage!, orphan, StringComparison.Ordinal);
+        AssertEx.True(File.Exists(orphan));
+        AssertEx.Null(process.Request, "Nothing spawned.");
+
+        inspector.GroupHasMembers = false;
+        var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+
+        AssertEx.True(start.ExperimentId.HasValue, start.RefusalMessage ?? "Once the group is empty, the start is admitted.");
+        AssertEx.False(File.Exists(orphan));
+        await process.Spawned.WaitAsync(TestBudgets.Contended);
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+        AssertEx.Empty(inspector.SignalledGroups);
+        AssertEx.Empty(inspector.SignalledProcesses);
+    }
+
     /// <summary>A receipt that names no process is no proof the process is gone: it stays, and the refusal names the file for the operator.</summary>
     [Test]
     public async Task AMalformedWarmReceipt_IsKept_AndTheRefusalNamesItsPath()
@@ -880,6 +922,8 @@ public sealed class ModelLabWarmSessionTests
 
         AssertEx.Equal(ModelLabStartRefusal.OrphanWorker, refused.Refusal!.Value, "A missing file is no evidence of exit while the receipt is held.");
         AssertEx.Contains(refused.RefusalMessage!, "pid 4242", StringComparison.Ordinal);
+        AssertEx.Contains(refused.RefusalMessage!, "Make sure that worker and its child processes have exited", StringComparison.Ordinal);
+        AssertEx.False(refused.RefusalMessage!.Contains(receipts, StringComparison.Ordinal), "A held receipt is released by its re-reap, so no file is named for deletion.");
         AssertEx.True(host.Ledger.Reserved.GpuBytes > 0, "Its VRAM stays on the ledger.");
         AssertEx.Equal(expected: 1, spawner.SpawnCount);
 
@@ -1246,6 +1290,9 @@ public sealed class ModelLabWarmSessionTests
         public TrainingProcessPresence ProbePresence(int processId) =>
             TrainingProcessPresence.Alive;
 
+        public bool ProcessGroupHasMembers(int processGroupId) =>
+            false;
+
         public async Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default)
         {
             SignalledGroups.Enqueue(processGroupId);
@@ -1280,6 +1327,9 @@ public sealed class ModelLabWarmSessionTests
 
         public TrainingProcessPresence ProbePresence(int processId) =>
             _gone ? TrainingProcessPresence.Gone : TrainingProcessPresence.Unknown;
+
+        public bool ProcessGroupHasMembers(int processGroupId) =>
+            false;
 
         public Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default) =>
             Task.FromResult(ProbePresence(processGroupId));

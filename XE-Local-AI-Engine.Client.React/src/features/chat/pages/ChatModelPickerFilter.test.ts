@@ -50,7 +50,7 @@ describe("chat model picker filter", () => {
 	});
 
 	it("hides a speculative-decoding draft model", () => {
-		// A downloaded MTP drafter used to be classified Chat and sat in the picker as a 0.4 GB twin of the real
+		// A downloaded MTP drafter used to be classified Chat and sat in the picker as a 0.4 GiB twin of the real
 		// model it drafts for. It has no standalone chat use at all.
 		const models = [model("unsloth/gemma-4-12b-it-GGUF:MTP-Q8_0", "Draft"), model("unsloth/gemma-4-12b-it-GGUF:Q8_0", "Chat")];
 

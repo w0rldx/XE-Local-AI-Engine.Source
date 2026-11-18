@@ -270,7 +270,7 @@ describe("ModelManagement", () => {
 
 		// The table row carries the name, size, and the default badge.
 		expect((await screen.findAllByText("llama3:8b")).length).toBeGreaterThan(0);
-		expect(screen.getByText("1.0 GB")).toBeTruthy();
+		expect(screen.getByText("1.0 GiB")).toBeTruthy();
 		expect(screen.getByText("Default")).toBeTruthy();
 
 		// Details (context length) live in the dialog's Overview tab, not on the page.
@@ -593,9 +593,9 @@ describe("ModelManagement", () => {
 
 		renderWithProviders(<ModelManagement />);
 
-		expect((await screen.findByTestId("model-fit-browse-tested-quant-granite-4.1-3b")).textContent).toBe("Q4_K_M · 2.0 GB");
+		expect((await screen.findByTestId("model-fit-browse-tested-quant-granite-4.1-3b")).textContent).toBe("Q4_K_M · 2.0 GiB");
 		expect(screen.getByTestId("model-fit-browse-tested-fit-granite-4.1-3b").textContent).toBe("Fits");
-		expect(screen.getByTestId("model-fit-browse-tested-quant-qwen3.8-27b").textContent).toBe("UD-Q4_K_M · 15.3 GB");
+		expect(screen.getByTestId("model-fit-browse-tested-quant-qwen3.8-27b").textContent).toBe("UD-Q4_K_M · 15.3 GiB");
 		expect(screen.queryByTestId("model-fit-browse-tested-fit-qwen3.8-27b")).toBeNull();
 	});
 

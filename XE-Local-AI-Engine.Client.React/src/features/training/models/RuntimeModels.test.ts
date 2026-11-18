@@ -131,16 +131,16 @@ describe("formatBytes", () => {
 	it("renders whole bytes without a decimal and larger units with one", () => {
 		expect(formatBytes(0)).toBe("0 B");
 		expect(formatBytes(512)).toBe("512 B");
-		expect(formatBytes(1536)).toBe("1.5 KB");
-		expect(formatBytes(7_500_000_000)).toBe("7.0 GB");
+		expect(formatBytes(1536)).toBe("1.5 KiB");
+		expect(formatBytes(7_500_000_000)).toBe("7.0 GiB");
 	});
 
 	it("keeps its own format where core humanizeBytes reads differently", () => {
 		const rows = [
-			{ bytes: 1536, training: "1.5 KB", core: "2 KB" },
-			{ bytes: 1_572_864, training: "1.5 MB", core: "2 MB" },
-			{ bytes: 1_610_612_736, training: "1.5 GB", core: "1.5 GB" },
-			{ bytes: 1_649_267_441_664, training: "1.5 TB", core: "1536.0 GB" },
+			{ bytes: 1536, training: "1.5 KiB", core: "2 KiB" },
+			{ bytes: 1_572_864, training: "1.5 MiB", core: "2 MiB" },
+			{ bytes: 1_610_612_736, training: "1.5 GiB", core: "1.5 GiB" },
+			{ bytes: 1_649_267_441_664, training: "1.5 TiB", core: "1536.0 GiB" },
 		];
 
 		for (const row of rows) {

@@ -4,9 +4,9 @@ import { emptyModelValue, formatModelModifiedDate, formatModelSize } from "@/fea
 
 describe("local model model helpers", () => {
 	it("formats model sizes", () => {
-		expect(formatModelSize(1_073_741_824)).toBe("1.0 GB");
-		expect(formatModelSize(1_048_576)).toBe("1.0 MB");
-		expect(formatModelSize(1024)).toBe("1.0 KB");
+		expect(formatModelSize(1_073_741_824)).toBe("1.0 GiB");
+		expect(formatModelSize(1_048_576)).toBe("1.0 MiB");
+		expect(formatModelSize(1024)).toBe("1.0 KiB");
 		expect(formatModelSize(null)).toBe(emptyModelValue);
 	});
 

@@ -75,7 +75,7 @@ export function useChatExportImport() {
 	const importFile = useCallback(
 		(file: File): void => {
 			if (file.size > CHAT_IMPORT_READ_LIMIT_BYTES) {
-				toast.error(t("chat.exportImport.tooLarge", "This file is larger than the 64 MB an import accepts."));
+				toast.error(t("chat.exportImport.tooLarge", "This file is larger than the 64 MiB an import accepts."));
 				return;
 			}
 			setImporting(true);

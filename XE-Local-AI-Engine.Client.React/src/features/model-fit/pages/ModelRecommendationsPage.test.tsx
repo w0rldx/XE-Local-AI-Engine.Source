@@ -283,8 +283,8 @@ describe("ModelRecommendationsPage", () => {
 		renderPage();
 
 		expect(screen.getByTestId("model-fit-hardware-card")).toBeTruthy();
-		expect(screen.getByTestId("model-fit-hardware-total-ram").textContent).toContain("32.0 GB");
-		expect(screen.getByTestId("model-fit-hardware-vram").textContent).toContain("8.0 GB");
+		expect(screen.getByTestId("model-fit-hardware-total-ram").textContent).toContain("32.0 GiB");
+		expect(screen.getByTestId("model-fit-hardware-vram").textContent).toContain("8.0 GiB");
 		expect(screen.getByTestId("model-fit-hardware-gpu-vendor")).toBeTruthy();
 		expect(screen.getByTestId("model-fit-hardware-cpu-cores").textContent).toContain("16");
 	});

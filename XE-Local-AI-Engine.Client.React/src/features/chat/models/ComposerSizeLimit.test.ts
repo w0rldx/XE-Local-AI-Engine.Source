@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { evaluateComposerSize, toDisplayKb, utf8ByteLength } from "@/features/chat/models/ComposerSizeLimit";
 
-// 1 KB limit keeps the fixtures small; the thresholds scale linearly.
+// 1 KiB limit keeps the fixtures small; the thresholds scale linearly.
 const limitKb = 1;
 
 function ascii(byteLength: number): string {
@@ -18,7 +18,7 @@ describe("composer size measurement", () => {
 		expect(utf8ByteLength("😀")).toBe(4);
 	});
 
-	it("rounds the displayed KB up so a reported size is never at or below the limit", () => {
+	it("rounds the displayed KiB up so a reported size is never at or below the limit", () => {
 		expect(toDisplayKb(1024)).toBe(1);
 		expect(toDisplayKb(1025)).toBe(2);
 	});

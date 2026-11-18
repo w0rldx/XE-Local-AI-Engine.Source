@@ -89,6 +89,7 @@ internal static class ModelLabWarmReceipts
                     unverified ??= new ModelLabUnconfirmedWorker
                     {
                         Name = NameOf(path, parsed: null),
+                        ReceiptPath = path,
                         HeldUnprobeable = false
                     };
                 }
@@ -108,6 +109,7 @@ internal static class ModelLabWarmReceipts
                 unverified = new ModelLabUnconfirmedWorker
                 {
                     Name = NameOf(path, parsed),
+                    ReceiptPath = heldReceipt is null ? path : null,
                     HeldUnprobeable = heldReceipt is not null && (parsed is null || !TrainingProcessReaper.CanIdentify(parsed))
                 };
             }
@@ -116,9 +118,15 @@ internal static class ModelLabWarmReceipts
         return unverified;
     }
 
-    /// <summary>"pid N" for a receipt that names one; otherwise the file itself, which the operator must inspect and remove.</summary>
+    /// <summary>"pid N" for a receipt that names one, with the group it leads when it can be probed; otherwise the file itself, which the operator must inspect and remove.</summary>
     private static string NameOf(string path, TrainingLaunchReceiptV1? parsed) =>
-        parsed is not null ? string.Create(CultureInfo.InvariantCulture, $"pid {parsed.Pid}") : "receipt file " + path;
+        parsed switch
+        {
+            null => "receipt file " + path,
+            // A trainer runs setsid, so the group it leads is named by its pid, whatever group the receipt recorded before that.
+            _ when TrainingProcessReaper.CanIdentify(parsed) => string.Create(CultureInfo.InvariantCulture, $"pid {parsed.Pid}, process group {parsed.Pid}"),
+            _ => string.Create(CultureInfo.InvariantCulture, $"pid {parsed.Pid}")
+        };
 
     private static TrainingLaunchReceiptV1? ParseOrNull(byte[] receipt)
     {

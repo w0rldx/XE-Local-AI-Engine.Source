@@ -7,7 +7,10 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
+using XE_Local_AI_Engine.Providers.Training.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using static XE_Local_AI_Engine.Tests.Providers.Training.LinuxTrainingProcessGroupTests;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     The reap outcome decides whether a warm worker's receipt file may be deleted, so only a process proven gone is
@@ -90,17 +93,47 @@ public sealed class TrainingProcessReaperTests
         AssertEx.True(reap.Cleared, "The row path keeps clearing a receipt it can never match.");
     }
 
+    /// <summary>A receipt read before setsid ran records the host's group, yet the trainer leads one named by its pid: that is the group probed.</summary>
     [Test]
-    public async Task Reap_WhenTheProcessIsGone_IsVerifiedWithoutSignalling()
+    [Arguments(4242)]
+    [Arguments(777)]
+    public async Task Reap_WhenTheProcessIsGone_AndItsGroupIsEmpty_IsVerifiedWithoutSignalling(int recordedPgid)
     {
         var inspector = new FakeTrainingProcessInspector(facts: null);
 
-        var reap = await ReapAsync(inspector, Serialize(Receipt));
+        var reap = await ReapAsync(inspector, Serialize(Receipt with
+        {
+            Pgid = recordedPgid
+        }));
 
         AssertEx.Equal(TrainingReapOutcome.Verified, reap.Outcome);
         AssertEx.True(reap.Cleared);
+        AssertEx.Equal(Receipt.Pid, inspector.ProbedGroups.Single(), "The group the trainer leads is named by its pid.");
         AssertEx.Empty(inspector.SignalledGroups);
         AssertEx.Empty(inspector.SignalledProcesses);
+    }
+
+    /// <summary>A pid is not reallocated while it names a group, so members left behind by a missing leader are the trainer's.</summary>
+    [Test]
+    [Arguments(4242)]
+    [Arguments(777)]
+    public async Task Reap_WhenTheLeaderIsGone_ButItsGroupHasMembers_IsNeverVerifiedNorSignalled_ButStillClearsTheRow(int recordedPgid)
+    {
+        var inspector = new FakeTrainingProcessInspector(facts: null)
+        {
+            GroupHasMembers = true
+        };
+
+        var reap = await ReapAsync(inspector, Serialize(Receipt with
+        {
+            Pgid = recordedPgid
+        }));
+
+        AssertEx.Equal(TrainingReapOutcome.NotVerified, reap.Outcome, "A worker the trainer forked may still hold the GPU.");
+        AssertEx.Equal(Receipt.Pid, inspector.ProbedGroups.Single());
+        AssertEx.Empty(inspector.SignalledGroups);
+        AssertEx.Empty(inspector.SignalledProcesses);
+        AssertEx.True(reap.Cleared, "The row path keeps clearing as before.");
     }
 
     [Test]
@@ -117,18 +150,23 @@ public sealed class TrainingProcessReaperTests
         AssertEx.True(reap.Cleared, "The row path keeps today's behaviour: an unreadable entry still clears the row receipt.");
     }
 
+    /// <summary>A changed start time proves the old group empty too, since its pid could not have been reallocated otherwise: nothing is probed.</summary>
     [Test]
-    public async Task Reap_WhenThePidNowBelongsToAnotherProcess_IsVerifiedWithoutSignalling()
+    public async Task Reap_WhenThePidNowBelongsToAnotherProcess_IsVerifiedWithoutSignallingOrProbingTheGroup()
     {
         var inspector = new FakeTrainingProcessInspector(LiveFacts with
         {
             StartTicks = Receipt.StartTicks + 1
-        });
+        })
+        {
+            GroupHasMembers = true
+        };
 
         var reap = await ReapAsync(inspector, Serialize(Receipt));
 
         AssertEx.Equal(TrainingReapOutcome.Verified, reap.Outcome);
         AssertEx.Empty(inspector.SignalledGroups);
+        AssertEx.Empty(inspector.ProbedGroups, "The new process may lead a group of the same id; that is no member of ours.");
     }
 
     [Test]
@@ -174,19 +212,28 @@ public sealed class TrainingProcessReaperTests
         AssertEx.True(reap.Cleared, "The row path keeps clearing as before.");
     }
 
+    /// <summary>A token read and found different, with the start time unchanged, does not prove the old group empty: it is probed.</summary>
     [Test]
-    public async Task Reap_WhenAReadFieldContradictsTheReceipt_IsVerifiedEvenWithAnotherFieldUnreadable()
+    [Arguments(false, true)]
+    [Arguments(true, false)]
+    public async Task Reap_WhenOnlyTheTokenContradictsTheReceipt_IsVerifiedOnlyOnceThePidsGroupIsEmpty(bool groupHasMembers, bool verified)
     {
         var inspector = new FakeTrainingProcessInspector(LiveFacts with
         {
             ExecutablePath = null,
             RunToken = "someone-else"
-        });
+        })
+        {
+            GroupHasMembers = groupHasMembers
+        };
 
         var reap = await ReapAsync(inspector, Serialize(Receipt));
 
-        AssertEx.Equal(TrainingReapOutcome.Verified, reap.Outcome, "A token read and found different is a recycled pid.");
+        AssertEx.Equal(verified ? TrainingReapOutcome.Verified : TrainingReapOutcome.NotVerified, reap.Outcome);
+        AssertEx.Equal(Receipt.Pid, inspector.ProbedGroups.Single());
         AssertEx.Empty(inspector.SignalledGroups);
+        AssertEx.Empty(inspector.SignalledProcesses);
+        AssertEx.True(reap.Cleared, "The row path keeps clearing as before.");
     }
 
     [Test]
@@ -205,6 +252,66 @@ public sealed class TrainingProcessReaperTests
         AssertEx.Equal(verified ? TrainingReapOutcome.Verified : TrainingReapOutcome.NotVerified, reap.Outcome);
         AssertEx.Equal(expected: 1, inspector.SignalledGroups.Count, "A matching receipt is always killed first.");
         AssertEx.True(reap.Cleared, "The row receipt clears whatever the kill verified, as before.");
+    }
+
+    /// <summary>The real kill path behind scripted <c>/proc</c> facts: a leader that vanished, or is a zombie, after its SIGTERM is gone only once its group is empty.</summary>
+    /// <remarks>A group kill polls within the kill's verify bound; a pid-only kill probes once.</remarks>
+    [Test]
+    [RunOn(OS.Linux)]
+    [Arguments("group", false, 0, true)]
+    [Arguments("group", false, 3, true)]
+    [Arguments("group", false, int.MaxValue, false)]
+    [Arguments("group", true, 3, true)]
+    [Arguments("group", true, int.MaxValue, false)]
+    [Arguments("pid", false, 0, true)]
+    [Arguments("pid", false, int.MaxValue, false)]
+    [Arguments("pid", true, int.MaxValue, false)]
+    public async Task Reap_WhenAKilledLeaderIsGone_IsVerifiedOnlyOnceItsGroupIsEmpty(string kill, bool zombie, int probesWithMembers, bool verified)
+    {
+        var time = new ManualTimeProvider();
+        var signals = new List<SentSignal>();
+        var probes = 0;
+        var gone = zombie ? ZombieStat(Receipt.StartTicks) : TrainingProcessStatRead.Missing;
+        var real = new LinuxTrainingProcessInspector(time,
+            NullLogger<LinuxTrainingProcessInspector>.Instance,
+            _ => signals.Count == 0 ? Alive(Receipt.StartTicks) : gone,
+            RecordingKill(signals, () => probes++ < probesWithMembers));
+        // A trainer still in the host's group is signalled by pid alone.
+        var receipt = kill == "pid"
+            ? Receipt with
+            {
+                Pgid = KillPathInspector.HostGroup
+            }
+            : Receipt;
+        var inspector = new KillPathInspector(LiveFacts with
+        {
+            Pgid = receipt.Pgid
+        }, real);
+
+        var reap = await DriveAsync(ReapAsync(inspector, Serialize(receipt)), time);
+
+        AssertEx.Equal(verified ? TrainingReapOutcome.Verified : TrainingReapOutcome.NotVerified, reap.Outcome);
+        AssertEx.Equal(new SentSignal
+        {
+            Target = kill == "pid" ? Receipt.Pid : -Receipt.Pid,
+            Signal = 15
+        }, signals.Single(), "Only the SIGTERM went out; a gone leader is never signalled again.");
+        AssertEx.True(probes > 0, "The group named by the gone leader's pid was probed.");
+        AssertEx.True(reap.Cleared, "The row path keeps clearing as before.");
+    }
+
+    /// <summary>Off Linux nothing can be read or probed, so a receipt follows today's policy: its pid reads gone and the group probe answers empty.</summary>
+    [Test]
+    [ExcludeOn(OS.Linux)]
+    public async Task Reap_OffLinux_KeepsTodaysPolicy_WithoutThrowing()
+    {
+        var inspector = new LinuxTrainingProcessInspector(TimeProvider.System, NullLogger<LinuxTrainingProcessInspector>.Instance);
+
+        var reap = await ReapAsync(inspector, Serialize(Receipt));
+
+        AssertEx.False(inspector.ProcessGroupHasMembers(Receipt.Pid));
+        AssertEx.Equal(TrainingReapOutcome.Verified, reap.Outcome);
+        AssertEx.True(reap.Cleared);
     }
 
     [Test]
@@ -241,6 +348,38 @@ public sealed class TrainingProcessReaperTests
 
     private static ReadOnlyMemory<byte> Serialize(TrainingLaunchReceiptV1 receipt) =>
         JsonSerializer.SerializeToUtf8Bytes(receipt, TrainingJson.Options);
+
+    /// <summary>Scripted <c>/proc</c> facts in front of the real inspector's kill path and group probe, whose stat and <c>kill(2)</c> the test scripts.</summary>
+    private sealed class KillPathInspector : ITrainingProcessInspector
+    {
+        public const int HostGroup = 777;
+
+        private readonly TrainingProcessFacts _facts;
+        private readonly LinuxTrainingProcessInspector _real;
+
+        public KillPathInspector(TrainingProcessFacts facts, LinuxTrainingProcessInspector real)
+        {
+            _facts = facts;
+            _real = real;
+        }
+
+        public int HostProcessGroupId => HostGroup;
+
+        public TrainingProcessFacts? Inspect(int processId) =>
+            _facts;
+
+        public TrainingProcessPresence ProbePresence(int processId) =>
+            TrainingProcessPresence.Alive;
+
+        public bool ProcessGroupHasMembers(int processGroupId) =>
+            _real.ProcessGroupHasMembers(processGroupId);
+
+        public Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default) =>
+            _real.KillProcessGroupAsync(processGroupId, expectedStartTicks, cancellationToken);
+
+        public Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, CancellationToken cancellationToken = default) =>
+            _real.KillProcessAsync(processId, expectedStartTicks, cancellationToken);
+    }
 
     private sealed class ReapResult
     {

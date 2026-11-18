@@ -1,8 +1,9 @@
-import { Alert, Badge, Button, Group, Loader, Stack, Text } from "@mantine/core";
+import { Alert, Badge, Group, Loader, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useEjectTranscriptionRuntime } from "@/core/loaded-models/queries/useEjectRuntimes";
+import { FocusableDisabledButton } from "@/core/ui/components/FocusableDisabledButton/FocusableDisabledButton";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -105,11 +106,11 @@ export function TranscriptionRuntimeCard() {
 			</Stack>
 			<TranscriptionModelManager />
 			<Group justify="flex-end">
-				<Button
+				<FocusableDisabledButton
 					size="xs"
 					variant="light"
-					disabled={runtime.state !== "ready"}
-					loading={ejectMutation.isPending}
+					blocked={runtime.state !== "ready"}
+					pending={ejectMutation.isPending}
 					onClick={() => {
 						ejectMutation.mutate(undefined, {
 							onError: (error) => toast.error(apiErrorMessage(error, t("pages.transcription.runtime.ejectFailed"))),
@@ -118,7 +119,7 @@ export function TranscriptionRuntimeCard() {
 					data-testid="transcription-runtime-eject"
 				>
 					{t("pages.transcription.runtime.eject")}
-				</Button>
+				</FocusableDisabledButton>
 			</Group>
 		</SectionCard>
 	);

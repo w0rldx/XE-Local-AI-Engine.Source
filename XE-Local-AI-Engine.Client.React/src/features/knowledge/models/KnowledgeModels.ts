@@ -141,9 +141,9 @@ export function knowledgeStatusDescriptor(status: KnowledgeDocumentStatus): Know
 	return STATUS_DESCRIPTORS[status];
 }
 
-const BYTE_UNITS: readonly string[] = ["B", "KB", "MB", "GB", "TB"];
+const BYTE_UNITS: readonly string[] = ["B", "KiB", "MiB", "GiB", "TiB"];
 
-// Human-readable byte size (e.g. "1.4 MB"). Whole bytes for the B unit, one decimal above it.
+// Human-readable byte size (e.g. "1.4 MiB"). Whole bytes for the B unit, one decimal above it.
 export function formatKnowledgeBytes(bytes: number): string {
 	if (!Number.isFinite(bytes) || bytes <= 0) {
 		return "0 B";

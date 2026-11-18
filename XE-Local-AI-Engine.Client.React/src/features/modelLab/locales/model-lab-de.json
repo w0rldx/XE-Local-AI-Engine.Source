@@ -848,7 +848,7 @@
 				"progress": "Token {{step}} von höchstens {{total}}, {{vram}} auf der GPU.",
 				"prompt": "Prompt",
 				"recordAttention": {
-					"help": "Speichert zusätzlich für jedes generierte Token, wo jeder Head der Full-Attention-Blöcke gelesen hat: die größten Keys seiner Zeile und das Gewicht des Rests. Die Ausgabe des Modells bleibt unverändert.\n\nDas kostet einige MB Speicher pro Lauf und macht den Trace etwas langsamer. Schalten Sie es ein, um die Attention eines Laufs schrittweise anzusehen; lassen Sie es aus, wenn Sie nur Normen und Kandidaten brauchen oder Läufe klein halten möchten.",
+					"help": "Speichert zusätzlich für jedes generierte Token, wo jeder Head der Full-Attention-Blöcke gelesen hat: die größten Keys seiner Zeile und das Gewicht des Rests. Die Ausgabe des Modells bleibt unverändert.\n\nDas kostet einige MiB Speicher pro Lauf und macht den Trace etwas langsamer. Schalten Sie es ein, um die Attention eines Laufs schrittweise anzusehen; lassen Sie es aus, wenn Sie nur Normen und Kandidaten brauchen oder Läufe klein halten möchten.",
 					"label": "Attention aufzeichnen",
 					"unavailable": "Dieser Checkpoint hat keinen Full-Attention-Block, daher gibt es keine Attention aufzuzeichnen."
 				},
@@ -859,7 +859,7 @@
 				"saved": "Checkpoint auf diesem Node",
 				"savedFailed": "Die Checkpoints auf diesem Node konnten nicht gelesen werden.",
 				"savedHint": "Bereits heruntergeladen, wird daher ohne Verbindung zu Hugging Face geprüft und getraced.",
-				"scope": "Der Trace lädt den Checkpoint in voller Präzision auf die GPU und braucht daher dessen Gewichte plus etwa 2 GB Kartenspeicher. Ein größeres Modell wird abgelehnt, bevor etwas heruntergeladen wird, egal wie es für den Chat quantisiert ist.",
+				"scope": "Der Trace lädt den Checkpoint in voller Präzision auf die GPU und braucht daher dessen Gewichte plus etwa 2 GiB Kartenspeicher. Ein größeres Modell wird abgelehnt, bevor etwas heruntergeladen wird, egal wie es für den Chat quantisiert ist.",
 				"select": "{{repo}} vom {{date}} zum Vergleichen auswählen",
 				"showInArchitecture": "Block {{index}} unter Architektur zeigen",
 				"spec": "Bis zu 128 Tokens, greedy. Der Trace ist je nach Anzahl der Blöcke in der Größe begrenzt und wird mit Prompt und Ausgabe verschlüsselt auf diesem Node gespeichert.",

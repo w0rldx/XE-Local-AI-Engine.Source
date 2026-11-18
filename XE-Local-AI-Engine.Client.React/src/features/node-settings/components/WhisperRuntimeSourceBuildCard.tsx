@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useEjectTranscriptionRuntime } from "@/core/loaded-models/queries/useEjectRuntimes";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { FocusableDisabledButton } from "@/core/ui/components/FocusableDisabledButton/FocusableDisabledButton";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CudaBuildLogView } from "@/features/node-settings/components/CudaBuildLogView";
@@ -206,11 +207,12 @@ export function WhisperRuntimeSourceBuildCard() {
 							</Button>
 						) : null}
 						{activity.residentProcessCount > 0 ? (
-							<Button
+							<FocusableDisabledButton
 								variant="light"
 								leftSection={<IconPlayerEject size={16} />}
-								disabled={!canEjectWhisperRuntime(activity)}
-								loading={eject.isPending}
+								loaderSize={16}
+								blocked={!canEjectWhisperRuntime(activity)}
+								pending={eject.isPending}
 								onClick={() =>
 									eject.mutate(undefined, {
 										onError: (error) => showError(error, `${translationPrefix}.ejectError`),
@@ -218,7 +220,7 @@ export function WhisperRuntimeSourceBuildCard() {
 								}
 							>
 								{t(`${translationPrefix}.eject`)}
-							</Button>
+							</FocusableDisabledButton>
 						) : null}
 						{managed ? (
 							<Button

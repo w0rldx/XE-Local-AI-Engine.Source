@@ -19,8 +19,9 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
 
     private const int Sigterm = 15;
     private const int Sigkill = 9;
+    private const int Esrch = 3;
 
-    private static readonly TimeSpan TerminateGrace = TimeSpan.FromSeconds(5);
+    internal static readonly TimeSpan TerminateGrace = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ExitPollInterval = TimeSpan.FromMilliseconds(50);
 
     /// <summary>How long the post-SIGKILL re-inspection waits for the pid to be provably gone.</summary>
@@ -81,6 +82,15 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
 
     int ITrainingProcessInspector.HostProcessGroupId => HostProcessGroupId;
 
+    public bool ProcessGroupHasMembers(int processGroupId) =>
+        OperatingSystem.IsLinux() && (processGroupId <= 1 || processGroupId == HostProcessGroupId || GroupHasMembers(_kill, processGroupId));
+
+    /// <summary>Signal 0 checks without sending anything; only ESRCH proves the group empty, so a refusal (EPERM) still counts as a member.</summary>
+    /// <param name="kill"><c>kill(2)</c>, leaving its errno in <see cref="Marshal.GetLastPInvokeError" />.</param>
+    /// <param name="processGroupId">The group, not negated.</param>
+    internal static bool GroupHasMembers(Func<int, int, int> kill, int processGroupId) =>
+        kill(-processGroupId, 0) == 0 || Marshal.GetLastPInvokeError() != Esrch;
+
     public Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default)
     {
         // 0 is the CALLER's group, -1 every process this user owns, and the host's own group is the node itself.
@@ -89,7 +99,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
             return Task.FromResult(TrainingProcessPresence.Unknown);
         }
 
-        return TerminateAsync(-processGroupId, processGroupId, expectedStartTicks, cancellationToken);
+        return TerminateAsync(-processGroupId, processGroupId, expectedStartTicks, waitForGroup: true, cancellationToken);
     }
 
     public Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, CancellationToken cancellationToken = default)
@@ -99,71 +109,128 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
             return Task.FromResult(TrainingProcessPresence.Unknown);
         }
 
-        return TerminateAsync(processId, processId, expectedStartTicks, cancellationToken);
+        // One probe, no wait: a trainer that ran setsid after its receipt was read leads a group named by its pid, which this never signals.
+        return TerminateAsync(processId, processId, expectedStartTicks, waitForGroup: false, cancellationToken);
     }
 
     /// <summary>
     ///     SIGTERM <paramref name="target" />, wait for <paramref name="identityPid" /> to vanish, SIGKILL, then re-inspect until it
     ///     is provably gone or <see cref="KillVerifyBound" /> passes. A signal is sent only while the pid is provably ours.
     /// </summary>
-    private async Task<TrainingProcessPresence> TerminateAsync(int target, int identityPid, long expectedStartTicks, CancellationToken cancellationToken)
+    /// <param name="waitForGroup">Whether a leader that vanished waits, within the same bound, for the group named by its pid to empty, or probes it once.</param>
+    private async Task<TrainingProcessPresence> TerminateAsync(int target,
+        int identityPid,
+        long expectedStartTicks,
+        bool waitForGroup,
+        CancellationToken cancellationToken)
     {
-        var presence = SignalIfSameProcess(target, identityPid, expectedStartTicks, Sigterm);
-        if (presence != TrainingProcessPresence.Alive)
+        // One verify bound for the whole kill, restarted only by the SIGKILL: a leader that dies late leaves its group what is left of it.
+        var deadline = _timeProvider.GetUtcNow() + KillVerifyBound;
+        var leader = SignalIfSameProcess(target, identityPid, expectedStartTicks, Sigterm);
+        if (leader.Presence == TrainingProcessPresence.Alive)
         {
-            return presence;
+            leader = await WaitUntilGoneAsync(identityPid, expectedStartTicks, _timeProvider.GetUtcNow() + TerminateGrace, cancellationToken).ConfigureAwait(false);
+            if (leader.Presence != TrainingProcessPresence.Gone)
+            {
+                leader = SignalIfSameProcess(target, identityPid, expectedStartTicks, Sigkill);
+                if (leader.Presence == TrainingProcessPresence.Alive)
+                {
+                    deadline = _timeProvider.GetUtcNow() + KillVerifyBound;
+                    leader = await WaitUntilGoneAsync(identityPid, expectedStartTicks, deadline, cancellationToken).ConfigureAwait(false);
+                }
+            }
         }
 
-        if (await WaitUntilGoneAsync(identityPid, expectedStartTicks, TerminateGrace, cancellationToken).ConfigureAwait(false) == TrainingProcessPresence.Gone)
+        // A changed start time proves the group empty too: a pid is not reallocated while it still names a group.
+        if (leader.Presence != TrainingProcessPresence.Gone || leader.Recycled)
         {
-            return TrainingProcessPresence.Gone;
+            return leader.Presence;
         }
 
-        presence = SignalIfSameProcess(target, identityPid, expectedStartTicks, Sigkill);
-        return presence != TrainingProcessPresence.Alive
-            ? presence
-            : await WaitUntilGoneAsync(identityPid, expectedStartTicks, KillVerifyBound, cancellationToken).ConfigureAwait(false);
+        return await GroupPresenceAsync(identityPid, waitForGroup ? deadline : _timeProvider.GetUtcNow(), cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Polls until the pid is provably gone or <paramref name="bound" /> passes; returns the last presence read.</summary>
-    private async Task<TrainingProcessPresence> WaitUntilGoneAsync(int processId, long expectedStartTicks, TimeSpan bound, CancellationToken cancellationToken)
+    /// <summary>Gone once the group a vanished leader named is empty, polling until <paramref name="deadline" />; unknown while members are left.</summary>
+    private async Task<TrainingProcessPresence> GroupPresenceAsync(int processGroupId, DateTimeOffset deadline, CancellationToken cancellationToken)
     {
-        var deadline = _timeProvider.GetUtcNow() + bound;
+        while (ProcessGroupHasMembers(processGroupId))
+        {
+            if (_timeProvider.GetUtcNow() >= deadline)
+            {
+                _logger.LogWarning("The leader of process group {Pgid} is gone, but the group still has members; it is not reported gone.", processGroupId);
+                return TrainingProcessPresence.Unknown;
+            }
+
+            await Task.Delay(ExitPollInterval, _timeProvider, cancellationToken).ConfigureAwait(false);
+        }
+
+        return TrainingProcessPresence.Gone;
+    }
+
+    /// <summary>Polls until the pid is provably gone or <paramref name="deadline" /> passes; returns the last presence read and whether a changed start time proved it.</summary>
+    private async Task<LeaderPresence> WaitUntilGoneAsync(int processId,
+        long expectedStartTicks,
+        DateTimeOffset deadline,
+        CancellationToken cancellationToken)
+    {
         while (true)
         {
-            var presence = PresenceOf(_readStat(processId), expectedStartTicks);
-            if (presence == TrainingProcessPresence.Gone || _timeProvider.GetUtcNow() >= deadline)
+            var leader = PresenceOf(_readStat(processId), expectedStartTicks);
+            if (leader.Presence == TrainingProcessPresence.Gone || _timeProvider.GetUtcNow() >= deadline)
             {
-                return presence;
+                return leader;
             }
 
             await Task.Delay(ExitPollInterval, _timeProvider, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    /// <summary>Signals only on a fresh stat read that matches; otherwise returns what the read proves: gone, or unknown.</summary>
+    /// <summary>Signals only on a fresh stat read that matches; otherwise returns what the read proves: gone (recycled or vanished), or unknown.</summary>
     /// <returns><see cref="TrainingProcessPresence.Alive" /> once the signal was sent.</returns>
-    private TrainingProcessPresence SignalIfSameProcess(int target, int identityPid, long expectedStartTicks, int signal)
+    private LeaderPresence SignalIfSameProcess(int target, int identityPid, long expectedStartTicks, int signal)
     {
         var read = _readStat(identityPid);
         if (!MaySignal(read, expectedStartTicks))
         {
-            var presence = PresenceOf(read, expectedStartTicks);
-            _logger.LogWarning("Pid {Pid} is not provably the recorded process ({Presence}); signal {Signal} was not sent.", identityPid, presence, signal);
-            return presence;
+            var leader = PresenceOf(read, expectedStartTicks);
+            _logger.LogWarning("Pid {Pid} is not provably the recorded process ({Presence}); signal {Signal} was not sent.", identityPid, leader.Presence, signal);
+            return leader;
         }
 
         // Read-then-signal still leaves a microsecond window; pidfd_open + pidfd_send_signal is the upgrade that closes it.
         _ = _kill(target, signal);
-        return TrainingProcessPresence.Alive;
+        return new LeaderPresence
+        {
+            Presence = TrainingProcessPresence.Alive,
+            Recycled = false
+        };
     }
 
     /// <summary>True only when the stat was read now and carries the recorded start time: an unreadable pid may have been reused.</summary>
     internal static bool MaySignal(TrainingProcessStatRead read, long expectedStartTicks) =>
         read.Stat is { } stat && stat.StartTicks == expectedStartTicks;
 
-    private static TrainingProcessPresence PresenceOf(TrainingProcessStatRead read, long expectedStartTicks) =>
-        read.Stat is { } stat && stat.StartTicks != expectedStartTicks ? TrainingProcessPresence.Gone : read.Presence;
+    /// <summary>A changed start time reads gone and recycled; anything else is what the read says, a missing pid or a zombie gone but not recycled.</summary>
+    private static LeaderPresence PresenceOf(TrainingProcessStatRead read, long expectedStartTicks) =>
+        read.Stat is { } stat && stat.StartTicks != expectedStartTicks
+            ? new LeaderPresence
+            {
+                Presence = TrainingProcessPresence.Gone,
+                Recycled = true
+            }
+            : new LeaderPresence
+            {
+                Presence = read.Presence,
+                Recycled = false
+            };
+
+    /// <summary>A leader's presence, and whether a changed start time proved it gone (recycled) rather than a missing pid or a zombie.</summary>
+    private sealed class LeaderPresence
+    {
+        public required TrainingProcessPresence Presence { get; init; }
+
+        public required bool Recycled { get; init; }
+    }
 
     /// <summary>Process-group id (field 5) and start time (field 22) of <c>/proc/[pid]/stat</c>, or null when gone or unreadable.</summary>
     public static TrainingProcessStat? ReadStatOrNull(int processId) =>

@@ -50,12 +50,12 @@ export function formatModelFitMetric(value: number | null, unit = "", fractionDi
 	return unit ? `${formatted} ${unit}` : formatted;
 }
 
-// Formats a memory figure in megabytes to a compact GB string, or a dash when absent.
+// Formats a memory figure in megabytes to a compact GiB string, or a dash when absent.
 export function formatMemoryMb(megabytes: number | null): string {
 	if (megabytes === null) {
 		return "—";
 	}
-	return `${(megabytes / 1024).toFixed(1)} GB`;
+	return `${(megabytes / 1024).toFixed(1)} GiB`;
 }
 
 // Formats a context-window token count with thousands separators, or a dash when absent.

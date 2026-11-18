@@ -19,5 +19,5 @@ internal static class NodeChatExportFile
     public const int MaxTitleLength = 200;
 
     public static readonly string TooLargeDetail =
-        string.Create(CultureInfo.InvariantCulture, $"The chat export is larger than the {MaxImportBytes / (1024 * 1024)} MB this node imports at once.");
+        string.Create(CultureInfo.InvariantCulture, $"The chat export is larger than the {MaxImportBytes / (1024 * 1024)} MiB this node imports at once.");
 }

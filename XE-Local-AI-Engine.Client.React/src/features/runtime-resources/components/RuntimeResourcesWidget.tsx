@@ -1,4 +1,4 @@
-import { Anchor, Badge, Button, Group, Popover, Progress, Stack, Text, UnstyledButton } from "@mantine/core";
+import { Anchor, Badge, Group, Popover, Progress, Stack, Text, UnstyledButton } from "@mantine/core";
 import { IconPlayerEject, IconStack2 } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -15,6 +15,7 @@ import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import type { RunningModel } from "@/core/loaded-models/models/RunningModelsModels";
 import { useEjectImageRuntime, useEjectTranscriptionRuntime } from "@/core/loaded-models/queries/useEjectRuntimes";
 import { useEjectRunningModel, useRunningModels } from "@/core/loaded-models/queries/useRunningModels";
+import { FocusableDisabledButton } from "@/core/ui/components/FocusableDisabledButton/FocusableDisabledButton";
 import { toast } from "@/core/ui/notifications/Toast";
 import { RuntimeResidentRow } from "@/features/runtime-resources/components/RuntimeResidentRow";
 import {
@@ -103,7 +104,7 @@ export function RuntimeResourcesWidget() {
 	const queryClient = useQueryClient();
 	const [opened, setOpened] = useState(false);
 	const dropdownRef = useRef<HTMLDivElement>(null);
-	const residentsHeadingRef = useRef<HTMLParagraphElement>(null);
+	const residentsHeadingRef = useRef<HTMLHeadingElement>(null);
 
 	const residents = runningModelsQuery.data ?? [];
 	const shownRuntimes: Record<ResidentRuntime, boolean> = {
@@ -118,8 +119,8 @@ export function RuntimeResourcesWidget() {
 		ejectImageMutation.isPending ||
 		ejectTranscriptionMutation.isPending ||
 		ejectModelLabMutation.isPending;
-	// The control that had focus when an eject started. The pending eject disables it, and the browser then drops focus
-	// to the body, even when the row stays (a busy model left running, a refused eject).
+	// The control that had focus when an eject started. The Eject buttons stay focusable while pending, so focus is lost
+	// only when the focused row goes away; a remembered control that is still mounted gets focus back.
 	const focusBeforeEjectRef = useRef<HTMLElement | null>(null);
 	const rememberFocus = () => {
 		const active = document.activeElement;
@@ -277,7 +278,7 @@ export function RuntimeResourcesWidget() {
 						))
 					)}
 
-					<Text ref={residentsHeadingRef} tabIndex={-1} size="sm" fw={500}>
+					<Text component="h3" ref={residentsHeadingRef} tabIndex={-1} size="sm" fw={500}>
 						{t("runtimeResources.residents", "Loaded models")}
 					</Text>
 					{residentCount === 0 ? (
@@ -313,19 +314,20 @@ export function RuntimeResourcesWidget() {
 											</Badge>
 										</Group>
 									</Stack>
-									<Button
+									<FocusableDisabledButton
 										size="compact-xs"
 										variant="light"
 										color="red"
 										leftSection={<IconPlayerEject size={12} />}
-										loading={isEjecting(model)}
-										disabled={model.isBusy || isEjecting(model)}
+										loaderSize={12}
+										blocked={model.isBusy}
+										pending={isEjecting(model)}
 										onClick={() => handleEject(model)}
 										aria-label={t("runtimeResources.ejectLabel", "Eject {{modelName}}", { modelName: model.modelName })}
 										data-testid={`runtime-resources-eject-${model.modelName}`}
 									>
 										{t("pages.loadedModels.llamaCpp.eject", "Eject")}
-									</Button>
+									</FocusableDisabledButton>
 								</Group>
 							);
 						})

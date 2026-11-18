@@ -67,13 +67,13 @@ describe("browserFamily", () => {
 describe("describeHardware", () => {
 	it("joins CPU, GPU with VRAM and RAM", () => {
 		expect(describeHardware(nodeInfo)).toBe(
-			"CPU: AMD Ryzen 9 7950X (16 cores) / GPU: NVIDIA GeForce RTX 5090 (32 GB) / RAM: 64 GB",
+			"CPU: AMD Ryzen 9 7950X (16 cores) / GPU: NVIDIA GeForce RTX 5090 (32 GiB) / RAM: 64 GiB",
 		);
 	});
 
 	it("leaves out what the node could not read", () => {
 		expect(describeHardware({ ...nodeInfo, cpuModel: null, cpuCores: null, totalRamBytes: 16 * GIB, gpus: null })).toBe(
-			"RAM: 16 GB",
+			"RAM: 16 GiB",
 		);
 	});
 });

@@ -110,10 +110,10 @@ public sealed class LocalChatHub : Hub
             return;
         }
 
-        // Rounded UP so a message reported as "N KB" is never at or below the stated limit.
+        // Rounded UP so a message reported as "N KiB" is never at or below the stated limit.
         var sizeKb = (sizeBytes + 1023) / 1024;
         throw new HubException(string.Format(CultureInfo.InvariantCulture,
-            "Your message is too large ({0} KB, limit {1} KB). Attach large documents as files instead.",
+            "Your message is too large ({0} KiB, limit {1} KiB). Attach large documents as files instead.",
             sizeKb,
             maxSizeKb));
     }

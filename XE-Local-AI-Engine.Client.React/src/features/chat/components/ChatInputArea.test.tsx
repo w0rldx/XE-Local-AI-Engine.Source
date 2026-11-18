@@ -500,7 +500,7 @@ describe("ChatInputArea Enter-key send gating", () => {
 });
 
 describe("ChatInputArea message-size pre-check", () => {
-	// 10 KB cap keeps the fixtures small; the component only ever sees the resolved limit.
+	// 10 KiB cap keeps the fixtures small; the component only ever sees the resolved limit.
 	const limitKb = 10;
 
 	beforeEach(() => {
@@ -516,7 +516,7 @@ describe("ChatInputArea message-size pre-check", () => {
 	}
 
 	// The suite runs without an initialized i18next, so `t` yields the inline default with its `{{...}}`
-	// placeholders intact — assertions below key off the static parts of each string, and the byte/KB arithmetic
+	// placeholders intact — assertions below key off the static parts of each string, and the byte/KiB arithmetic
 	// itself is covered by ComposerSizeLimit.test.ts.
 	function noticeText(): string {
 		return screen.getByTestId("composer-size-notice").textContent ?? "";
@@ -533,7 +533,7 @@ describe("ChatInputArea message-size pre-check", () => {
 		renderWithProviders(<ChatInputArea {...baseProps()} maxMessageSizeKb={limitKb} />);
 		typeDraft("a".repeat(9000));
 
-		expect(noticeText()).toContain("KB /");
+		expect(noticeText()).toContain("KiB /");
 		expect(noticeText()).not.toContain("attach the text as a file");
 		expect(screen.getByTestId<HTMLButtonElement>("chat-send-button").disabled).toBe(false);
 	});

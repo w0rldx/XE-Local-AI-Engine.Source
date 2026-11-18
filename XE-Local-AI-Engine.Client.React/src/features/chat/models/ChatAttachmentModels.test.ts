@@ -56,9 +56,9 @@ describe("toChatAttachment", () => {
 });
 
 describe("formatAttachmentSize", () => {
-	it("formats bytes, KB, and MB with the expected granularity", () => {
+	it("formats bytes, KiB, and MiB with the expected granularity", () => {
 		expect(formatAttachmentSize(512)).toBe("512 B");
-		expect(formatAttachmentSize(2048)).toBe("2.0 KB");
-		expect(formatAttachmentSize(5 * 1024 * 1024)).toBe("5.0 MB");
+		expect(formatAttachmentSize(2048)).toBe("2.0 KiB");
+		expect(formatAttachmentSize(5 * 1024 * 1024)).toBe("5.0 MiB");
 	});
 });

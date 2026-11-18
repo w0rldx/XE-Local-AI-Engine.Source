@@ -118,7 +118,7 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 				<Text size="sm" c="dimmed">
 					{t(
 						"pages.modelLab.trace.scope",
-						"Tracing loads the full-precision checkpoint on the GPU, so it needs the checkpoint's weights plus about 2 GB of the card's memory. A model above that is refused before anything is downloaded, however it was quantized for chat.",
+						"Tracing loads the full-precision checkpoint on the GPU, so it needs the checkpoint's weights plus about 2 GiB of the card's memory. A model above that is refused before anything is downloaded, however it was quantized for chat.",
 					)}
 				</Text>
 				<Select
@@ -300,7 +300,7 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 									label={recordAttentionLabel}
 									text={t(
 										"pages.modelLab.trace.recordAttention.help",
-										"Also stores, for every generated token, where each head of the full-attention blocks read from: the top keys of its row and the weight of the rest. The model's output is unchanged.\n\nIt costs a few MB of storage per run and makes the trace slightly slower. Turn it on to step through a run's attention; leave it off when you only need norms and candidates, or to keep runs small.",
+										"Also stores, for every generated token, where each head of the full-attention blocks read from: the top keys of its row and the weight of the rest. The model's output is unchanged.\n\nIt costs a few MiB of storage per run and makes the trace slightly slower. Turn it on to step through a run's attention; leave it off when you only need norms and candidates, or to keep runs small.",
 									)}
 									testId="model-lab-record-attention-info"
 								>

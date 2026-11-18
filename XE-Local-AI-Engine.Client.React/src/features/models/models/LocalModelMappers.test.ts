@@ -26,7 +26,7 @@ describe("local model mappers", () => {
 			modelName: "llama3:8b",
 			provider: "llamacpp",
 			origin: "imported",
-			sizeLabel: "1.0 GB",
+			sizeLabel: "1.0 GiB",
 			modifiedDateLabel: "2026-05-24",
 			familyLabel: "llama",
 			parameterSizeLabel: "8B",

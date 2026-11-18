@@ -53,7 +53,7 @@ describe("fromGgufAcquisitions", () => {
 			label: "Downloading qwen3-8b",
 			state: "running",
 			progress: { kind: "known", pct: 25 },
-			detail: "1 KB of 4 KB",
+			detail: "1 KiB of 4 KiB",
 			href: { to: "/models" },
 		});
 	});
@@ -110,11 +110,11 @@ describe("fromRuntimeAcquisition", () => {
 			state: "running",
 			label: "Setting up the local AI runtime",
 			progress: { kind: "known", pct: 25 },
-			detail: "Downloading the llama.cpp runtime… · 1 KB of 4 KB",
+			detail: "Downloading the llama.cpp runtime… · 1 KiB of 4 KiB",
 			href: { to: "/node-settings", search: { section: "runtimes" } },
 		});
 		expect(noTotal?.progress).toEqual({ kind: "indeterminate" });
-		expect(noTotal?.detail).toBe("Downloading the llama.cpp runtime… · 1 KB downloaded");
+		expect(noTotal?.detail).toBe("Downloading the llama.cpp runtime… · 1 KiB downloaded");
 	});
 
 	it("names the step only on the multi-archive path", () => {

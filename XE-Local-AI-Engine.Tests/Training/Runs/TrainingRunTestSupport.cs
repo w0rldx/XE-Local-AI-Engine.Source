@@ -213,6 +213,17 @@ internal sealed class FakeTrainingProcessInspector : ITrainingProcessInspector
     public TrainingProcessPresence ProbePresence(int processId) =>
         _facts is null ? AbsentPresence : TrainingProcessPresence.Alive;
 
+    /// <summary>What every group probe answers; empty by default, as a group whose leader is gone usually is.</summary>
+    public bool GroupHasMembers { get; set; }
+
+    public List<int> ProbedGroups { get; } = [];
+
+    public bool ProcessGroupHasMembers(int processGroupId)
+    {
+        ProbedGroups.Add(processGroupId);
+        return GroupHasMembers;
+    }
+
     public List<long> SignalledStartTicks { get; } = [];
 
     public Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default)
