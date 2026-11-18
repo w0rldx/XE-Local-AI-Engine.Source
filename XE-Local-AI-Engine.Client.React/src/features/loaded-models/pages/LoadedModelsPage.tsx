@@ -3,17 +3,19 @@ import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { MAIN_CONTENT_ID } from "@/core/layout/constants/LayoutElementIds";
 import type { EjectRunningModelResult, RunningModel } from "@/core/loaded-models/models/RunningModelsModels";
 import { useEjectRunningModel, useRunningModels } from "@/core/loaded-models/queries/useRunningModels";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import { CONFIRM_DIALOG_ATTRIBUTE } from "@/core/ui/models/Confirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { RunningModelsPanel } from "@/features/loaded-models/components/RunningModelsPanel";
 
 export function LoadedModelsPage() {
 	const { t } = useTranslation();
-	const { confirm } = useConfirm();
+	const { confirm, hasPending } = useConfirm();
 
 	const runningModelsQuery = useRunningModels();
 	const ejectRunningMutation = useEjectRunningModel();
@@ -29,6 +31,15 @@ export function LoadedModelsPage() {
 		// The flow outlives the page, and the one ConfirmProvider above the routes holds a single resolver: after an unmount
 		// or a newer eject, no dialog opens and no answer to a still-open one sends a request.
 		const stale = () => pageRef.current === null || ejectNumber !== latestEjectRef.current;
+		// Once the page has gone, nothing on it can take focus back; the shell's main landmark does, so focus never rests
+		// on the body.
+		const onClosed = () => {
+			restoreFocus();
+			const active = document.activeElement;
+			if (pageRef.current === null && (active === null || active === document.body)) {
+				document.getElementById(MAIN_CONTENT_ID)?.focus();
+			}
+		};
 		if (!force) {
 			const confirmed = await confirm({
 				title: t("pages.loadedModels.llamaCpp.ejectConfirm.title", "Eject model"),
@@ -39,7 +50,7 @@ export function LoadedModelsPage() {
 				),
 				confirmationText: t("pages.loadedModels.llamaCpp.ejectConfirm.action", "Eject"),
 				cancellationText: t("common.cancel", "Cancel"),
-				onClosed: restoreFocus,
+				onClosed,
 			});
 
 			if (!confirmed || stale()) {
@@ -75,7 +86,11 @@ export function LoadedModelsPage() {
 						{ modelName: model.modelName },
 					),
 				);
-				if (stale()) {
+				// A late prompt must not take over: not another flow's pending confirmation (opening one replaces its
+				// resolver), not a dialog the user moved to meanwhile. The confirmation dialog itself may still hold focus
+				// while it closes; that is this flow's own first answer. Re-Eject offers force again.
+				const focusedDialog = document.activeElement?.closest('[role="dialog"]');
+				if (stale() || hasPending?.() || (focusedDialog && !focusedDialog.hasAttribute(CONFIRM_DIALOG_ATTRIBUTE))) {
 					return;
 				}
 				const forceConfirmed = await confirm({
@@ -87,7 +102,7 @@ export function LoadedModelsPage() {
 					),
 					confirmationText: t("pages.loadedModels.llamaCpp.forceConfirm.action", "Force eject"),
 					cancellationText: t("common.cancel", "Cancel"),
-					onClosed: restoreFocus,
+					onClosed,
 				});
 				if (forceConfirmed && !stale()) {
 					await handleEjectRunning(model, restoreFocus, true);

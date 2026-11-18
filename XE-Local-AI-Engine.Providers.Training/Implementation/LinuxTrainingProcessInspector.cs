@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>Reads trainer-process identity out of <c>/proc</c> and signals process groups.</summary>
@@ -29,19 +30,22 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
 
     private readonly Func<int, int, int> _kill;
     private readonly ILogger<LinuxTrainingProcessInspector> _logger;
+    private readonly TrainerPidFdOps _pidFd;
     private readonly Func<int, TrainingProcessStatRead> _readStat;
     private readonly TimeProvider _timeProvider;
 
     public LinuxTrainingProcessInspector(TimeProvider timeProvider, ILogger<LinuxTrainingProcessInspector> logger)
-        : this(timeProvider, logger, ReadStat, Kill)
+        : this(timeProvider, logger, ReadStat, Kill, TrainerPidFdOps.Real)
     {
     }
 
-    /// <summary>Seam for the identity check: the stat reader and <c>kill(2)</c> are swapped out by tests.</summary>
+    /// <summary>Seam for the identity check: the stat reader, <c>kill(2)</c> and the pidfd calls are swapped out by tests.</summary>
+    /// <param name="pidFd">The pidfd calls; unsupported when omitted, so a test that scripts only <c>kill(2)</c> keeps the numeric path.</param>
     internal LinuxTrainingProcessInspector(TimeProvider timeProvider,
         ILogger<LinuxTrainingProcessInspector> logger,
         Func<int, TrainingProcessStatRead> readStat,
-        Func<int, int, int> kill)
+        Func<int, int, int> kill,
+        TrainerPidFdOps? pidFd = null)
     {
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(logger);
@@ -51,6 +55,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
         _logger = logger;
         _readStat = readStat;
         _kill = kill;
+        _pidFd = pidFd ?? TrainerPidFdOps.Unsupported;
     }
 
     public TrainingProcessFacts? Inspect(int processId)
@@ -91,7 +96,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
     internal static bool GroupHasMembers(Func<int, int, int> kill, int processGroupId) =>
         kill(-processGroupId, 0) == 0 || Marshal.GetLastPInvokeError() != Esrch;
 
-    public Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default)
+    public Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default)
     {
         // 0 is the CALLER's group, -1 every process this user owns, and the host's own group is the node itself.
         if (processGroupId <= 1 || processGroupId == HostProcessGroupId || !OperatingSystem.IsLinux())
@@ -99,10 +104,10 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
             return Task.FromResult(TrainingProcessPresence.Unknown);
         }
 
-        return TerminateAsync(-processGroupId, processGroupId, expectedStartTicks, waitForGroup: true, cancellationToken);
+        return TerminateAsync(-processGroupId, processGroupId, new ExpectedIdentity(expectedStartTicks, expectedRunToken), waitForGroup: true, cancellationToken);
     }
 
-    public Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, CancellationToken cancellationToken = default)
+    public Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default)
     {
         if (processId <= 1 || processId == Environment.ProcessId || !OperatingSystem.IsLinux())
         {
@@ -110,7 +115,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
         }
 
         // One probe, no wait: a trainer that ran setsid after its receipt was read leads a group named by its pid, which this never signals.
-        return TerminateAsync(processId, processId, expectedStartTicks, waitForGroup: false, cancellationToken);
+        return TerminateAsync(processId, processId, new ExpectedIdentity(expectedStartTicks, expectedRunToken), waitForGroup: false, cancellationToken);
     }
 
     /// <summary>
@@ -120,19 +125,20 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
     /// <param name="waitForGroup">Whether a leader that vanished waits, within the same bound, for the group named by its pid to empty, or probes it once.</param>
     private async Task<TrainingProcessPresence> TerminateAsync(int target,
         int identityPid,
-        long expectedStartTicks,
+        ExpectedIdentity expected,
         bool waitForGroup,
         CancellationToken cancellationToken)
     {
+        var expectedStartTicks = expected.StartTicks;
         // One verify bound for the whole kill, restarted only by the SIGKILL: a leader that dies late leaves its group what is left of it.
         var deadline = _timeProvider.GetUtcNow() + KillVerifyBound;
-        var leader = SignalIfSameProcess(target, identityPid, expectedStartTicks, Sigterm);
+        var leader = SignalIfSameProcess(target, identityPid, expected, Sigterm);
         if (leader.Presence == TrainingProcessPresence.Alive)
         {
             leader = await WaitUntilGoneAsync(identityPid, expectedStartTicks, _timeProvider.GetUtcNow() + TerminateGrace, cancellationToken).ConfigureAwait(false);
             if (leader.Presence != TrainingProcessPresence.Gone)
             {
-                leader = SignalIfSameProcess(target, identityPid, expectedStartTicks, Sigkill);
+                leader = SignalIfSameProcess(target, identityPid, expected, Sigkill);
                 if (leader.Presence == TrainingProcessPresence.Alive)
                 {
                     deadline = _timeProvider.GetUtcNow() + KillVerifyBound;
@@ -185,25 +191,125 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
         }
     }
 
-    /// <summary>Signals only on a fresh stat read that matches; otherwise returns what the read proves: gone (recycled or vanished), or unknown.</summary>
+    /// <summary>Signals only a process proven to be the recorded one; otherwise returns what the reads prove: gone (recycled or vanished), unknown or deferred.</summary>
     /// <returns><see cref="TrainingProcessPresence.Alive" /> once the signal was sent.</returns>
-    private LeaderPresence SignalIfSameProcess(int target, int identityPid, long expectedStartTicks, int signal)
+    private LeaderPresence SignalIfSameProcess(int target, int identityPid, ExpectedIdentity expected, int signal)
     {
-        var read = _readStat(identityPid);
-        if (!MaySignal(read, expectedStartTicks))
+        if (SignalThroughPidFd(target, identityPid, expected, signal, _readStat, _pidFd, _kill, _logger) is { } pinned)
         {
-            var leader = PresenceOf(read, expectedStartTicks);
+            return pinned;
+        }
+
+        _logger.LogDebug("pidfd is unsupported here; pid {Pid} is verified by its stat alone before signal {Signal}.", identityPid, signal);
+        var read = _readStat(identityPid);
+        if (!MaySignal(read, expected.StartTicks))
+        {
+            var leader = PresenceOf(read, expected.StartTicks);
             _logger.LogWarning("Pid {Pid} is not provably the recorded process ({Presence}); signal {Signal} was not sent.", identityPid, leader.Presence, signal);
             return leader;
         }
 
-        // Read-then-signal still leaves a microsecond window; pidfd_open + pidfd_send_signal is the upgrade that closes it.
+        // Read-then-signal leaves a microsecond window: the residual where the kernel offers no pidfd.
         _ = _kill(target, signal);
-        return new LeaderPresence
+        return LeaderPresence.Sent;
+    }
+
+    /// <summary>
+    ///     Opens a pidfd on <paramref name="identityPid" />, re-verifies the recorded start time and run token after the open, then signals
+    ///     <paramref name="target" /> (a negative one is the group the pid names) through the fd.
+    /// </summary>
+    /// <returns>Alive once sent; what the reads prove when the process is not the recorded one; deferred on an operational failure; null when pidfd is unsupported.</returns>
+    /// <remarks>
+    ///     The fd names whoever held the pid at the open, so a match read after it binds the fd to the recorded process, and a later reuse of the
+    ///     pid only makes the send fail. An operational failure never falls back to a numeric signal.
+    /// </remarks>
+    internal static LeaderPresence? SignalThroughPidFd(int target,
+        int identityPid,
+        ExpectedIdentity expected,
+        int signal,
+        Func<int, TrainingProcessStatRead> readStat,
+        TrainerPidFdOps ops,
+        Func<int, int, int> kill,
+        ILogger logger)
+    {
+        using var pidFd = ops.Open(identityPid);
+        switch (pidFd.OpenStatus)
         {
-            Presence = TrainingProcessPresence.Alive,
-            Recycled = false
-        };
+            case LinuxPidFdOpenStatus.Unsupported:
+                return null;
+            case LinuxPidFdOpenStatus.Gone:
+                return LeaderPresence.Vanished;
+            case LinuxPidFdOpenStatus.Failed:
+                logger.LogWarning("A pidfd on pid {Pid} could not be opened (errno {Errno}); signal {Signal} was not sent.", identityPid, pidFd.OpenErrno, signal);
+                return LeaderPresence.Deferred;
+        }
+
+        var read = readStat(identityPid);
+        if (read.Stat is null && read.Presence == TrainingProcessPresence.Unknown)
+        {
+            // A failed read after the open (EMFILE: the fd may have taken the last descriptor) learned nothing, so the receipt is kept.
+            logger.LogWarning("Pid {Pid}'s stat could not be read after its pidfd was opened; signal {Signal} was not sent.", identityPid, signal);
+            return LeaderPresence.Deferred;
+        }
+
+        if (!MaySignal(read, expected.StartTicks))
+        {
+            var leader = PresenceOf(read, expected.StartTicks);
+            logger.LogWarning("Pid {Pid} is not provably the recorded process ({Presence}); signal {Signal} was not sent.", identityPid, leader.Presence, signal);
+            return leader;
+        }
+
+        // Only a token read and found different, or absent from a non-empty environment, contradicts the receipt. A zombie's environment, or one
+        // past exit_mm, went with its memory: there the start time and the open fd are the evidence, as a kill(-pgid) to its group always had.
+        if (read.Presence == TrainingProcessPresence.Alive
+            && ops.ReadRunToken(identityPid) is { } token
+            && !string.Equals(token, expected.RunToken, StringComparison.Ordinal))
+        {
+            logger.LogWarning("Pid {Pid} does not provably carry the recorded run token; signal {Signal} was not sent.", identityPid, signal);
+            return LeaderPresence.Deferred;
+        }
+
+        var sent = SendThroughPidFd(pidFd, target, signal, ops, kill);
+        switch (sent.Status)
+        {
+            case LinuxPidFdSendStatus.Sent:
+                return LeaderPresence.Sent;
+            case LinuxPidFdSendStatus.Gone:
+                // A group ESRCH means no member is left, not that the leader exited: only a fresh read says what the leader did.
+                return target < 0 ? PresenceOf(readStat(identityPid), expected.StartTicks) : LeaderPresence.Vanished;
+            default:
+                logger.LogWarning("Signal {Signal} to pid {Pid} through its pidfd failed ({Status}, errno {Errno}); nothing was sent.", signal, identityPid, sent.Status, sent.Errno);
+                return LeaderPresence.Deferred;
+        }
+    }
+
+    /// <summary>Sends through <paramref name="pidFd" /> to the pid, or to the group it names when <paramref name="target" /> is negative.</summary>
+    /// <remarks>
+    ///     A group flag the kernel refuses (before 6.9, or filtered) gets a probe through the fd, then the numeric <c>kill(-pgid)</c>: the documented
+    ///     residual, where the leader can die and its emptied group be reused between the two calls, which takes a full pid wrap. The outcome is
+    ///     then the numeric kill's: ESRCH is an empty group, and any other errno a refusal, never the probe's success.
+    /// </remarks>
+    internal static LinuxPidFdSendResult SendThroughPidFd(LinuxPidFd pidFd, int target, int signal, TrainerPidFdOps ops, Func<int, int, int> kill)
+    {
+        var sent = ops.Send(pidFd, signal, target < 0);
+        if (sent.Status != LinuxPidFdSendStatus.GroupFlagUnsupported)
+        {
+            return sent;
+        }
+
+        sent = ops.Send(pidFd, 0, false);
+        if (sent.Status != LinuxPidFdSendStatus.Sent)
+        {
+            return sent;
+        }
+
+        if (kill(target, signal) == 0)
+        {
+            return new LinuxPidFdSendResult(LinuxPidFdSendStatus.Sent, Errno: 0);
+        }
+
+        var errno = Marshal.GetLastPInvokeError();
+        return new LinuxPidFdSendResult(errno == Esrch ? LinuxPidFdSendStatus.Gone : LinuxPidFdSendStatus.Failed, errno);
     }
 
     /// <summary>True only when the stat was read now and carries the recorded start time: an unreadable pid may have been reused.</summary>
@@ -225,12 +331,33 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
             };
 
     /// <summary>A leader's presence, and whether a changed start time proved it gone (recycled) rather than a missing pid or a zombie.</summary>
-    private sealed class LeaderPresence
+    internal sealed class LeaderPresence
     {
+        public static readonly LeaderPresence Sent = new()
+        {
+            Presence = TrainingProcessPresence.Alive,
+            Recycled = false
+        };
+
+        public static readonly LeaderPresence Vanished = new()
+        {
+            Presence = TrainingProcessPresence.Gone,
+            Recycled = false
+        };
+
+        public static readonly LeaderPresence Deferred = new()
+        {
+            Presence = TrainingProcessPresence.Deferred,
+            Recycled = false
+        };
+
         public required TrainingProcessPresence Presence { get; init; }
 
         public required bool Recycled { get; init; }
     }
+
+    /// <summary>What a receipt records about its process, which every signal re-verifies.</summary>
+    internal readonly record struct ExpectedIdentity(long StartTicks, string RunToken);
 
     /// <summary>Process-group id (field 5) and start time (field 22) of <c>/proc/[pid]/stat</c>, or null when gone or unreadable.</summary>
     public static TrainingProcessStat? ReadStatOrNull(int processId) =>
@@ -300,7 +427,9 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
         }
     }
 
-    private static string? ReadRunToken(int processId)
+    /// <summary>The run token in <c>/proc/[pid]/environ</c>: null when unreadable or empty (a process without memory: a zombie, or one past exit_mm), an empty string when absent from a non-empty one.</summary>
+    /// <remarks>Which of the two a memoryless process gives depends on the kernel; neither contradicts a receipt.</remarks>
+    internal static string? ReadRunToken(int processId)
     {
         byte[] raw;
         try
@@ -311,6 +440,17 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
 #pragma warning restore MA0045
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        return RunTokenIn(raw);
+    }
+
+    /// <summary>The run token in a raw environment block: null when the block is empty, an empty string when the variable is absent from it.</summary>
+    internal static string? RunTokenIn(byte[] raw)
+    {
+        if (raw.Length == 0)
         {
             return null;
         }

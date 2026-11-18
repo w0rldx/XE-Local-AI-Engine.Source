@@ -5,9 +5,11 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
+using XE_Local_AI_Engine.Tests.Providers.Training;
 using XE_Local_AI_Engine.Tests.Testing;
 using static XE_Local_AI_Engine.Tests.Providers.Training.LinuxTrainingProcessGroupTests;
 using OS = TUnit.Core.Enums.OS;
@@ -300,6 +302,69 @@ public sealed class TrainingProcessReaperTests
         AssertEx.True(reap.Cleared, "The row path keeps clearing as before.");
     }
 
+    [Test]
+    public async Task Reap_WhenTheKillIsDeferred_IsNotVerifiedAndKeepsTheReceipt()
+    {
+        var inspector = new FakeTrainingProcessInspector(LiveFacts)
+        {
+            PresenceAfterKill = TrainingProcessPresence.Deferred
+        };
+
+        var reap = await ReapAsync(inspector, Serialize(Receipt));
+
+        AssertEx.Equal(Receipt.RunToken, inspector.SignalledRunTokens.Single(), "The kill re-verifies the recorded run token.");
+        AssertEx.Equal(TrainingReapOutcome.NotVerified, reap.Outcome);
+        AssertEx.False(reap.Cleared, "An operational failure learned nothing about the process; the receipt is all that identifies it.");
+    }
+
+    /// <summary>Where the group flag is refused, a successful probe is followed by the numeric kill; a refused one learns nothing, so the receipt stays.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Reap_WhenTheProbeSucceedsButTheNumericGroupKillIsRefused_KeepsTheReceipt()
+    {
+        const int eperm = 1;
+        var time = new ManualTimeProvider();
+        var calls = new FakePidFdCalls
+        {
+            SendResult = static (_, group) => group ? LinuxPidFdSendStatus.GroupFlagUnsupported : LinuxPidFdSendStatus.Sent,
+            KillErrno = eperm,
+            ReadRunToken = static _ => Receipt.RunToken
+        };
+        var real = new LinuxTrainingProcessInspector(time,
+            NullLogger<LinuxTrainingProcessInspector>.Instance,
+            static _ => Alive(Receipt.StartTicks),
+            calls.Kill,
+            calls.Ops);
+
+        var reap = await DriveAsync(ReapAsync(new KillPathInspector(LiveFacts, real), Serialize(Receipt)), time);
+
+        AssertEx.Equal(TrainingReapOutcome.NotVerified, reap.Outcome);
+        AssertEx.False(reap.Cleared, "A refused SIGTERM left the trainer running; the receipt is all that identifies it.");
+        AssertEx.Equal($"open {Receipt.Pid},send 15 group,send 0,kill {-Receipt.Pid} 15", string.Join(',', calls.Calls));
+    }
+
+    /// <summary>The receipt matched, but the stat read after the pidfd open failed (EMFILE: the fd took the last descriptor): nothing is sent and the receipt stays.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Reap_WhenTheStatIsUnreadableAfterThePidFdOpen_SendsNothingAndKeepsTheReceipt()
+    {
+        var calls = new FakePidFdCalls
+        {
+            ReadRunToken = static _ => Receipt.RunToken
+        };
+        var real = new LinuxTrainingProcessInspector(TimeProvider.System,
+            NullLogger<LinuxTrainingProcessInspector>.Instance,
+            static _ => TrainingProcessStatRead.Unreadable,
+            calls.Kill,
+            calls.Ops);
+
+        var reap = await ReapAsync(new KillPathInspector(LiveFacts, real), Serialize(Receipt));
+
+        AssertEx.Equal(TrainingReapOutcome.NotVerified, reap.Outcome);
+        AssertEx.False(reap.Cleared, "A failed read learned nothing; the receipt is all that identifies the trainer.");
+        AssertEx.Equal($"open {Receipt.Pid}", string.Join(',', calls.Calls));
+    }
+
     /// <summary>Off Linux nothing can be read or probed, so a receipt follows today's policy: its pid reads gone and the group probe answers empty.</summary>
     [Test]
     [ExcludeOn(OS.Linux)]
@@ -374,11 +439,11 @@ public sealed class TrainingProcessReaperTests
         public bool ProcessGroupHasMembers(int processGroupId) =>
             _real.ProcessGroupHasMembers(processGroupId);
 
-        public Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default) =>
-            _real.KillProcessGroupAsync(processGroupId, expectedStartTicks, cancellationToken);
+        public Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default) =>
+            _real.KillProcessGroupAsync(processGroupId, expectedStartTicks, expectedRunToken, cancellationToken);
 
-        public Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, CancellationToken cancellationToken = default) =>
-            _real.KillProcessAsync(processId, expectedStartTicks, cancellationToken);
+        public Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default) =>
+            _real.KillProcessAsync(processId, expectedStartTicks, expectedRunToken, cancellationToken);
     }
 
     private sealed class ReapResult

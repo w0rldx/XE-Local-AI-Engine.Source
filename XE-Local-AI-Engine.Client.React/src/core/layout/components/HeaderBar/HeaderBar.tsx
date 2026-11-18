@@ -10,6 +10,7 @@ import { HubConnectionStatusChip } from "@/core/layout/components/HubConnectionS
 import { MobileNavigationBar } from "@/core/layout/components/MobileNavigationBar/MobileNavigationBar";
 import type { IMobileNavigationDrawerActions } from "@/core/layout/components/MobileNavigationBar/MobileNavigationBar.types";
 import { isDesktopShell } from "@/core/layout/constants/LayoutBreakpoints";
+import { DRAWER_TOGGLE_ID } from "@/core/layout/constants/LayoutElementIds";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMenu";
 import { ThemeModeToggle } from "@/core/theme/components/ThemeModeToggle/ThemeModeToggle";
@@ -39,6 +40,7 @@ export function HeaderBar({ headerStatus, headerIndicator, headerActions, drawer
 				{isDesktop ? null : (
 					<div className="flex flex-row items-center pl-2">
 						<ActionIcon
+							id={DRAWER_TOGGLE_ID}
 							className="flex flex-row items-center"
 							aria-label={t("components.headerBar.openDrawer")}
 							onClick={() => setDrawerOpen(true)}

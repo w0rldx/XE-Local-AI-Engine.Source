@@ -1293,7 +1293,7 @@ public sealed class ModelLabWarmSessionTests
         public bool ProcessGroupHasMembers(int processGroupId) =>
             false;
 
-        public async Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default)
+        public async Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default)
         {
             SignalledGroups.Enqueue(processGroupId);
             if (Interlocked.Increment(ref _kills) == 1)
@@ -1305,7 +1305,7 @@ public sealed class ModelLabWarmSessionTests
             return TrainingProcessPresence.Gone;
         }
 
-        public Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, CancellationToken cancellationToken = default)
+        public Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default)
         {
             SignalledGroups.Enqueue(processId);
             return Task.FromResult(TrainingProcessPresence.Gone);
@@ -1331,10 +1331,10 @@ public sealed class ModelLabWarmSessionTests
         public bool ProcessGroupHasMembers(int processGroupId) =>
             false;
 
-        public Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default) =>
+        public Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default) =>
             Task.FromResult(ProbePresence(processGroupId));
 
-        public Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, CancellationToken cancellationToken = default) =>
+        public Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default) =>
             Task.FromResult(ProbePresence(processId));
     }
 

@@ -86,10 +86,10 @@ public sealed class ProcessSpawnReceiptStore
         return new ReceiptedProcessTreeHandle(handle, path, this);
     }
 
-    /// <summary>Every receipt on disk, keyed by its file; an unparseable one reads as <see langword="null" />.</summary>
-    internal IReadOnlyList<KeyValuePair<string, ProcessSpawnReceipt?>> ReadAll()
+    /// <summary>Every receipt file on disk, with what it held: a receipt, nothing valid, or no answer because it could not be read.</summary>
+    internal IReadOnlyList<StoredSpawnReceipt> ReadAll()
     {
-        var receipts = new List<KeyValuePair<string, ProcessSpawnReceipt?>>();
+        var receipts = new List<StoredSpawnReceipt>();
         if (_directory is null || !Directory.Exists(_directory))
         {
             return receipts;
@@ -97,7 +97,7 @@ public sealed class ProcessSpawnReceiptStore
 
         foreach (var file in Directory.EnumerateFiles(_directory, "*.json"))
         {
-            receipts.Add(new KeyValuePair<string, ProcessSpawnReceipt?>(file, ReadOrNull(file)));
+            receipts.Add(Read(file));
         }
 
         return receipts;
@@ -116,19 +116,53 @@ public sealed class ProcessSpawnReceiptStore
         }
     }
 
-    private static ProcessSpawnReceipt? ReadOrNull(string file)
+    /// <summary>Only a file that was read and failed to parse is malformed; a read failure (EMFILE, EACCES) says nothing about its content.</summary>
+    private static StoredSpawnReceipt Read(string file)
     {
+        byte[] raw;
         try
         {
             // Forced sync: read from the synchronous startup reaper; a receipt is a few hundred bytes on local disk.
 #pragma warning disable MA0045 // Contract-forced: sync startup reaper.
-            return JsonSerializer.Deserialize<ProcessSpawnReceipt>(File.ReadAllBytes(file), SerializerOptions);
+            raw = File.ReadAllBytes(file);
 #pragma warning restore MA0045
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            return null;
+            return new StoredSpawnReceipt
+            {
+                File = file,
+                Receipt = null,
+                Unreadable = true
+            };
         }
+
+        ProcessSpawnReceipt? receipt;
+        try
+        {
+            receipt = JsonSerializer.Deserialize<ProcessSpawnReceipt>(raw, SerializerOptions);
+        }
+        catch (JsonException)
+        {
+            receipt = null;
+        }
+
+        return new StoredSpawnReceipt
+        {
+            File = file,
+            Receipt = receipt,
+            Unreadable = false
+        };
+    }
+
+    /// <summary>One receipt file: the receipt it held, null when it held none that parses, and whether it could not be read at all.</summary>
+    internal sealed class StoredSpawnReceipt
+    {
+        public required string File { get; init; }
+
+        public required ProcessSpawnReceipt? Receipt { get; init; }
+
+        public required bool Unreadable { get; init; }
     }
 
     /// <summary>Delegates to the launched handle and removes the receipt once the child has been torn down.</summary>

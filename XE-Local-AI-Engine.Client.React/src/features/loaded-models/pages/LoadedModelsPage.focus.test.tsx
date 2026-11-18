@@ -3,6 +3,7 @@
 import { MantineProvider, Modal } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { type ReactNode, use } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RunningModel } from "@/core/loaded-models/models/RunningModelsModels";
@@ -22,6 +23,8 @@ vi.mock("@/core/ui/notifications/Toast", () => ({
 }));
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
+import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
+import type { ConfirmContextType } from "@/core/ui/models/Confirm";
 import { LoadedModelsPage } from "@/features/loaded-models/pages/LoadedModelsPage";
 import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
@@ -46,15 +49,27 @@ const queryClient = new QueryClient();
 // window in which ConfirmProvider has already resolved but the dialog still holds focus.
 const slowModalTheme = { components: { Modal: { defaultProps: { transitionProps: { duration: 30, exitDuration: 30 } } } } };
 
-// withPage=false unmounts the page under a ConfirmProvider that stays mounted, as a route change does.
-function page(slowModal = false, withPage = true) {
+// withPage=false unmounts the page under a ConfirmProvider that stays mounted, as a route change does; the shell's
+// focusable main landmark stays around the swap, as Layout's does. `beside` renders next to the page, under the provider.
+function page(slowModal = false, withPage = true, beside: ReactNode = null) {
 	return (
 		<MantineProvider env={slowModal ? "default" : "test"} theme={slowModal ? slowModalTheme : testMantineTheme}>
 			<QueryClientProvider client={queryClient}>
-				<ConfirmProvider>{withPage ? <LoadedModelsPage /> : null}</ConfirmProvider>
+				<ConfirmProvider>
+					<main id="main-content" tabIndex={-1}>
+						{withPage ? <LoadedModelsPage /> : null}
+					</main>
+					{beside}
+				</ConfirmProvider>
 			</QueryClientProvider>
 		</MantineProvider>
 	);
+}
+
+// Hands the test the provider's confirm, as another flow on another part of the app would call it.
+function CaptureConfirm({ into }: { readonly into: { confirm?: ConfirmContextType["confirm"] } }) {
+	into.confirm = use(ConfirmContext)?.confirm;
+	return null;
 }
 
 function result(modelName: string, outcome: string) {
@@ -311,5 +326,83 @@ describe("LoadedModelsPage eject confirmation focus", () => {
 		} finally {
 			observe.mockRestore();
 		}
+	});
+
+	it("opens no force prompt while another confirmation is pending, and that confirmation still gets its answer", async () => {
+		const request = held();
+		runningState.mutateAsync.mockReturnValueOnce(request.promise);
+		const captured: { confirm?: ConfirmContextType["confirm"] } = {};
+		render(page(false, true, <CaptureConfirm into={captured} />));
+		await openConfirmFrom("alpha");
+		fireEvent.click(screen.getByTestId("confirm-accept"));
+		await waitFor(() => expect(screen.queryByTestId("confirm-accept")).toBeNull());
+
+		let other: Promise<boolean> | undefined;
+		act(() => {
+			other = captured.confirm?.({ title: "Other question" });
+		});
+		await act(async () => request.answer(result("alpha", "timed_out_still_busy")));
+
+		expect(screen.queryByText("Force eject?")).toBeNull();
+		expect(screen.getByText("Other question")).toBeTruthy();
+		fireEvent.click(screen.getByTestId("confirm-accept"));
+		await expect(other).resolves.toBe(true);
+	});
+
+	it("opens no force prompt while another dialog holds focus, and leaves focus there", async () => {
+		const request = held();
+		runningState.mutateAsync.mockReturnValueOnce(request.promise);
+		render(page());
+		await openConfirmFrom("alpha");
+		fireEvent.click(screen.getByTestId("confirm-accept"));
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		render(
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<Modal opened={true} onClose={() => undefined} title="About">
+					<button type="button">Close about</button>
+				</Modal>
+			</MantineProvider>,
+		);
+		const about = await screen.findByRole("dialog", { name: "About" });
+		await waitFor(() => expect(about.contains(document.activeElement)).toBe(true));
+
+		await act(async () => request.answer(result("alpha", "timed_out_still_busy")));
+
+		expect(screen.queryByText("Force eject?")).toBeNull();
+		expect(about.contains(document.activeElement)).toBe(true);
+	});
+
+	it("shows the force prompt for an immediate busy result while the first confirmation still holds focus", async () => {
+		runningState.mutateAsync.mockResolvedValueOnce(result("alpha", "timed_out_still_busy"));
+		render(page(true));
+		await openConfirmFrom("alpha");
+		await waitFor(() => expect(document.activeElement?.closest('[role="dialog"]')).not.toBeNull());
+
+		fireEvent.click(screen.getByTestId("confirm-accept"));
+
+		expect(await screen.findByText("Force eject?")).toBeTruthy();
+	});
+
+	it.each([
+		["the eject confirmation", "confirm-accept", false],
+		["the eject confirmation", "confirm-cancel", false],
+		["the force confirmation", "confirm-accept", true],
+		["the force confirmation", "confirm-cancel", true],
+	])("hands focus to the main landmark when %s closes after the page has gone (%s)", async (_case, closeWith, force) => {
+		runningState.mutateAsync.mockResolvedValueOnce(result("alpha", "timed_out_still_busy"));
+		const { rerender } = render(page(true));
+		await openConfirmFrom("alpha");
+		if (force) {
+			fireEvent.click(screen.getByTestId("confirm-accept"));
+			await screen.findByText("Force eject?");
+		}
+
+		rerender(page(true, false));
+		expect(screen.queryByTestId("loaded-models-llamacpp-card")).toBeNull();
+		fireEvent.click(screen.getByTestId(closeWith));
+
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("main")));
+		expect(runningState.mutateAsync).toHaveBeenCalledTimes(force ? 1 : 0);
 	});
 });

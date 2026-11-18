@@ -109,14 +109,26 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
 #pragma warning disable CA2000 // Ownership transfers to the handle, which disposes the process; Start disposes on failure.
         var process = StartStreaming(startInfo, output.Writer);
 #pragma warning restore CA2000
+        TrainerPin pin = default;
         try
         {
+            // First: a child the runtime has not reaped still holds its pid, so an fd opened now names this child.
+            pin = PinTrainer(process.Id,
+                request.RunToken,
+                TrainerPidFdOps.Real.Open,
+                TrainerPidFdOps.Real.ReadRunToken,
+                timeout => process.WaitForExit(timeout),
+                _timeProvider,
+                _logger);
+
             // Process.Start returns once setsid is exec'd, before it has called setsid(2): until then the child sits in
             // THIS host's group, so the pgid is only trusted once the child leads its own group.
             var launcherPath = ResolveFinalPath(startInfo.FileName);
             var (stat, leadsGroup, executablePath) = AwaitTrainerIdentity(process.Id,
                 LinuxTrainingProcessInspector.ReadStatOrNull,
                 LinuxTrainingProcessInspector.ResolveExecutablePath,
+                TrainerPidFdOps.Real.ReadRunToken,
+                request.RunToken,
                 launcherPath,
                 timeout => process.WaitForExit(timeout),
                 _timeProvider);
@@ -138,24 +150,98 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
                 StartTicks = stat?.StartTicks ?? 0,
                 RunToken = request.RunToken
             };
-            return new LinuxTrainingProcessHandle(process, receipt, output, _logger, _timeProvider);
+            return new LinuxTrainingProcessHandle(process, receipt, output, _logger, _timeProvider, pin);
         }
         catch
         {
+            pin.PidFd?.Dispose();
             process.Dispose();
             throw;
         }
     }
+
+    /// <summary>Opens a pidfd on the just-started child and keeps it only while the runtime still reports the child running and its environment carries the run token.</summary>
+    /// <param name="waitForExit">Blocks up to the given interval and returns true once the child has exited.</param>
+    /// <returns>The handle's pidfd state, and the fd it then owns when pinned.</returns>
+    /// <remarks>
+    ///     The token is in the environment from the first exec, which .NET waits for best-effort, so an empty read is retried within
+    ///     <see cref="GroupLeaderTimeout" />. A token still unreadable then pins with a warning: there the runtime's exit status is the evidence.
+    /// </remarks>
+    internal static TrainerPin PinTrainer(int pid,
+        string runToken,
+        Func<int, LinuxPidFd> open,
+        Func<int, string?> readRunToken,
+        Func<TimeSpan, bool> waitForExit,
+        TimeProvider timeProvider,
+        ILogger logger)
+    {
+        var pidFd = open(pid);
+        try
+        {
+            switch (pidFd.OpenStatus)
+            {
+                case LinuxPidFdOpenStatus.Unsupported:
+                    pidFd.Dispose();
+                    return new TrainerPin(TrainerPidFdState.Legacy, PidFd: null);
+                case LinuxPidFdOpenStatus.Failed:
+                    logger.LogWarning("A pidfd on trainer pid {Pid} could not be opened (errno {Errno}); each signal will open and verify its own.", pid, pidFd.OpenErrno);
+                    pidFd.Dispose();
+                    return new TrainerPin(TrainerPidFdState.Unpinned, PidFd: null);
+                case LinuxPidFdOpenStatus.Gone:
+                    pidFd.Dispose();
+                    return new TrainerPin(TrainerPidFdState.Refused, PidFd: null);
+            }
+
+            var deadline = timeProvider.GetUtcNow() + GroupLeaderTimeout;
+            var token = readRunToken(pid);
+            while (string.IsNullOrEmpty(token) && timeProvider.GetUtcNow() < deadline && !waitForExit(GroupLeaderPollInterval))
+            {
+                token = readRunToken(pid);
+            }
+
+            // Checked last, so it covers every read: an exited child may already be reaped, and its pid reused by the process the fd names.
+            if (waitForExit(TimeSpan.Zero))
+            {
+                pidFd.Dispose();
+                return new TrainerPin(TrainerPidFdState.Refused, PidFd: null);
+            }
+
+            if (token is null)
+            {
+                logger.LogWarning("Trainer pid {Pid}'s environment could not be read; its pidfd is kept on the runtime's word that it is still running.", pid);
+                return new TrainerPin(TrainerPidFdState.Pinned, pidFd);
+            }
+
+            if (string.Equals(token, runToken, StringComparison.Ordinal))
+            {
+                return new TrainerPin(TrainerPidFdState.Pinned, pidFd);
+            }
+
+            logger.LogError("Trainer pid {Pid} does not carry this run's token; it will never be signalled.", pid);
+            pidFd.Dispose();
+            return new TrainerPin(TrainerPidFdState.Refused, PidFd: null);
+        }
+        catch
+        {
+            pidFd.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>The pidfd state a spawn proved, and the fd the handle owns when <see cref="TrainerPidFdState.Pinned" />.</summary>
+    internal readonly record struct TrainerPin(TrainerPidFdState State, LinuxPidFd? PidFd);
 
     /// <summary>
     ///     Polls <c>/proc</c> until <paramref name="pid" /> leads its own group AND has exec'd past the launcher, the child
     ///     exits, or the timeout passes. setsid(2) runs before the exec, so group leadership alone still reads setsid's path.
     /// </summary>
     /// <param name="waitForExit">Blocks up to the given interval and returns true once the child has exited.</param>
-    /// <returns>The last stat the child outlived, kept across passes so a failed read never discards a known start time.</returns>
+    /// <returns>The last stat the child outlived, read in a pass whose run token did not contradict <paramref name="runToken" />, kept so a failed read never discards it.</returns>
     internal static TrainerIdentity AwaitTrainerIdentity(int pid,
         Func<int, TrainingProcessStat?> readStat,
         Func<int, string?> readExecutable,
+        Func<int, string?> readRunToken,
+        string runToken,
         string launcherPath,
         Func<TimeSpan, bool> waitForExit,
         TimeProvider timeProvider)
@@ -167,13 +253,16 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
         {
             var sample = readStat(pid);
             var executable = readExecutable(pid);
+            // As PinTrainer: an unreadable or empty environment contradicts nothing; only a token read and found different, or absent, does.
+            var ownToken = readRunToken(pid) is not { } token || string.Equals(token, runToken, StringComparison.Ordinal);
             // The runtime reaps on SIGCHLD, so a read after the child exited may describe a replacement: only a read it outlived counts.
             if (waitForExit(TimeSpan.Zero))
             {
                 return Unconfirmed(trusted);
             }
 
-            if (sample is { } current)
+            // In reap-all mode the exit can be published late: a run token read in the same pass that names another run discards the sample.
+            if (sample is { } current && ownToken)
             {
                 trusted = current;
                 if (current.Pgid == pid && executable is not null && !string.Equals(executable, launcherPath, StringComparison.Ordinal))
@@ -181,7 +270,7 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
                     return new TrainerIdentity(current, LeadsGroup: true, executable);
                 }
             }
-            else if (++unreadableReads > UnreadableStatRetries)
+            else if (sample is null && ++unreadableReads > UnreadableStatRetries)
             {
                 return Unconfirmed(trusted);
             }

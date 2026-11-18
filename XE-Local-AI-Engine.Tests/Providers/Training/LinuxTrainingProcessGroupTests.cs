@@ -21,6 +21,7 @@ public sealed class LinuxTrainingProcessGroupTests
     private const int Esrch = 3;
     private const int Eperm = 1;
     internal const string Setsid = "/usr/bin/setsid";
+    internal const string RunToken = "token";
     private const string Python = "/opt/uv/python/bin/python3.14";
 
     [Test]
@@ -32,6 +33,8 @@ public sealed class LinuxTrainingProcessGroupTests
         var (stat, leadsGroup, _) = LinuxTrainingProcessSpawner.AwaitTrainerIdentity(Pid,
             _ => new TrainingProcessStat(++reads < 4 ? HostGroup : Pid, StartTicks: 99),
             static _ => Python,
+            static _ => RunToken,
+            RunToken,
             Setsid,
             interval => Tick(time, interval),
             time);
@@ -50,6 +53,8 @@ public sealed class LinuxTrainingProcessGroupTests
         var (stat, leadsGroup, _) = LinuxTrainingProcessSpawner.AwaitTrainerIdentity(Pid,
             static _ => new TrainingProcessStat(HostGroup, StartTicks: 99),
             static _ => Python,
+            static _ => RunToken,
+            RunToken,
             Setsid,
             interval => Tick(time, interval),
             time);
@@ -72,6 +77,8 @@ public sealed class LinuxTrainingProcessGroupTests
                 return new TrainingProcessStat(HostGroup, StartTicks: 99);
             },
             static _ => Python,
+            static _ => RunToken,
+            RunToken,
             Setsid,
             static _ => true,
             time);
@@ -93,6 +100,8 @@ public sealed class LinuxTrainingProcessGroupTests
                 return null;
             },
             static _ => null,
+            static _ => RunToken,
+            RunToken,
             Setsid,
             interval => Tick(time, interval),
             time);
@@ -111,6 +120,8 @@ public sealed class LinuxTrainingProcessGroupTests
         var (stat, leadsGroup, executable) = LinuxTrainingProcessSpawner.AwaitTrainerIdentity(Pid,
             _ => ++reads == 1 ? new TrainingProcessStat(Pid, StartTicks: 99) : null,
             static _ => Setsid,
+            static _ => RunToken,
+            RunToken,
             Setsid,
             interval => Tick(time, interval),
             time);
@@ -130,6 +141,8 @@ public sealed class LinuxTrainingProcessGroupTests
             // The second read may describe a process that took the reaped pid.
             _ => new TrainingProcessStat(++reads == 1 ? HostGroup : Pid, StartTicks: reads == 1 ? 99 : 100),
             static _ => Python,
+            static _ => RunToken,
+            RunToken,
             Setsid,
             _ => reads >= 2,
             time);
@@ -149,6 +162,8 @@ public sealed class LinuxTrainingProcessGroupTests
         var (stat, leadsGroup, executable) = LinuxTrainingProcessSpawner.AwaitTrainerIdentity(Pid,
             _ => new TrainingProcessStat(sequence[Math.Min(reads++, sequence.Length - 1)].Pgid, StartTicks: 99),
             _ => sequence[Math.Min(reads - 1, sequence.Length - 1)].Exe,
+            static _ => RunToken,
+            RunToken,
             Setsid,
             interval => Tick(time, interval),
             time);
@@ -167,6 +182,8 @@ public sealed class LinuxTrainingProcessGroupTests
         var (stat, leadsGroup, executable) = LinuxTrainingProcessSpawner.AwaitTrainerIdentity(Pid,
             static _ => new TrainingProcessStat(Pid, StartTicks: 99),
             static _ => Setsid,
+            static _ => RunToken,
+            RunToken,
             Setsid,
             interval => Tick(time, interval),
             time);
@@ -190,8 +207,8 @@ public sealed class LinuxTrainingProcessGroupTests
                 return 0;
             });
 
-        var single = await inspector.KillProcessAsync(Pid, expectedStartTicks: 99);
-        var group = await inspector.KillProcessGroupAsync(Pid, expectedStartTicks: 99);
+        var single = await inspector.KillProcessAsync(Pid, expectedStartTicks: 99, RunToken);
+        var group = await inspector.KillProcessGroupAsync(Pid, expectedStartTicks: 99, RunToken);
 
         AssertEx.Empty(kills, "A pid whose start time changed belongs to a stranger now.");
         AssertEx.Equal(TrainingProcessPresence.Gone, single, "The recorded process itself is gone.");
@@ -213,7 +230,7 @@ public sealed class LinuxTrainingProcessGroupTests
                 return 0;
             });
 
-        var presence = await inspector.KillProcessAsync(Pid, expectedStartTicks: 99);
+        var presence = await inspector.KillProcessAsync(Pid, expectedStartTicks: 99, RunToken);
 
         AssertEx.Equal(expected: 1, kills.Count, "Only the SIGTERM went to the validated process.");
         AssertEx.Equal((Pid, 15), kills[0]);
@@ -238,7 +255,7 @@ public sealed class LinuxTrainingProcessGroupTests
                 return groupHasMembers;
             }));
 
-        var presence = await inspector.KillProcessAsync(Pid, expectedStartTicks: 99);
+        var presence = await inspector.KillProcessAsync(Pid, expectedStartTicks: 99, RunToken);
 
         AssertEx.Empty(signals);
         AssertEx.Equal(expected: 1, probes, "A pid-only kill probes the group once and never waits on it.");
@@ -259,8 +276,8 @@ public sealed class LinuxTrainingProcessGroupTests
                 return 0;
             });
 
-        var single = await inspector.KillProcessAsync(Pid, expectedStartTicks: 99);
-        var group = await inspector.KillProcessGroupAsync(Pid, expectedStartTicks: 99);
+        var single = await inspector.KillProcessAsync(Pid, expectedStartTicks: 99, RunToken);
+        var group = await inspector.KillProcessGroupAsync(Pid, expectedStartTicks: 99, RunToken);
 
         AssertEx.Empty(signals, "An unreadable entry may be a reused pid: only a stat read now and matching may be signalled.");
         AssertEx.Equal(TrainingProcessPresence.Unknown, single, "Unreadable is never reported as gone.");
@@ -282,7 +299,7 @@ public sealed class LinuxTrainingProcessGroupTests
                 return 0;
             });
 
-        var presence = await DriveAsync(inspector.KillProcessAsync(Pid, expectedStartTicks: 99), time);
+        var presence = await DriveAsync(inspector.KillProcessAsync(Pid, expectedStartTicks: 99, RunToken), time);
 
         AssertEx.Equal("15", string.Join(',', signals), "The SIGKILL needs its own matching read.");
         AssertEx.Equal(TrainingProcessPresence.Unknown, presence);
@@ -299,7 +316,7 @@ public sealed class LinuxTrainingProcessGroupTests
             _ => signals.Exists(static sent => sent.Signal == 9) ? TrainingProcessStatRead.Missing : Alive(startTicks: 99),
             RecordingKill(signals, static () => false));
 
-        var presence = await DriveAsync(inspector.KillProcessAsync(Pid, expectedStartTicks: 99), time);
+        var presence = await DriveAsync(inspector.KillProcessAsync(Pid, expectedStartTicks: 99, RunToken), time);
 
         AssertEx.Equal("15,9", string.Join(',', signals.Select(static sent => sent.Signal)));
         AssertEx.Equal(TrainingProcessPresence.Gone, presence, "The post-kill re-inspection saw the pid vanish.");
@@ -316,7 +333,7 @@ public sealed class LinuxTrainingProcessGroupTests
             static _ => Alive(startTicks: 99),
             static (_, _) => 0);
 
-        var presence = await DriveAsync(inspector.KillProcessAsync(Pid, expectedStartTicks: 99), time);
+        var presence = await DriveAsync(inspector.KillProcessAsync(Pid, expectedStartTicks: 99, RunToken), time);
 
         AssertEx.Equal(TrainingProcessPresence.Alive, presence);
         AssertEx.True(time.GetUtcNow() - start >= LinuxTrainingProcessInspector.KillVerifyBound, "The re-inspection waits out its bound before giving up.");
@@ -350,7 +367,7 @@ public sealed class LinuxTrainingProcessGroupTests
                 return 0;
             });
 
-        var presence = await DriveAsync(inspector.KillProcessGroupAsync(Pid, expectedStartTicks: 99), time);
+        var presence = await DriveAsync(inspector.KillProcessGroupAsync(Pid, expectedStartTicks: 99, RunToken), time);
 
         AssertEx.Equal(TrainingProcessPresence.Unknown, presence, "The group still has a member.");
         AssertEx.Equal("15,9", string.Join(',', signals));
@@ -373,7 +390,7 @@ public sealed class LinuxTrainingProcessGroupTests
             _ => signals.Count == 0 ? Alive(startTicks: 99) : ZombieStat(startTicks: 99),
             RecordingKill(signals, () => groupHasMembers));
 
-        var presence = await inspector.KillProcessAsync(Pid, expectedStartTicks: 99);
+        var presence = await inspector.KillProcessAsync(Pid, expectedStartTicks: 99, RunToken);
 
         AssertEx.Equal(new SentSignal
         {

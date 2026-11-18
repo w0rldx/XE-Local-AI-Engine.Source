@@ -47,7 +47,8 @@ internal static class TrainingProcessReaper
     /// <remarks>
     ///     A receipt whose inspect or kill THREW is left in place and retried on the next startup: dropping it there would strand a
     ///     live process with nothing left to identify it by. Failures are per-receipt: one unreadable <c>/proc</c> entry must not
-    ///     abandon the rest. A row is still cleared on an unreadable entry, as before; the outcome is for callers that must not.
+    ///     abandon the rest. A row is still cleared on an unreadable entry, as before; the outcome is for callers that must not. A kill
+    ///     deferred by an operational failure (EPERM, EMFILE) keeps the receipt too: nothing about the process was learned.
     /// </remarks>
     public static async Task<TrainingReapOutcome> ReapOneAsync(ITrainingProcessInspector inspector,
         Guid ownerId,
@@ -93,14 +94,21 @@ internal static class TrainingProcessReaper
             else if (TrainingProcessGroupGuard.MaySignalGroup(receipt.Pid, facts.Pgid, inspector.HostProcessGroupId))
             {
                 logger.LogWarning("Reaping a trainer process group {Pgid} left behind by a previous host process.", facts.Pgid);
-                presence = await inspector.KillProcessGroupAsync(facts.Pgid, receipt.StartTicks, cancellationToken);
+                presence = await inspector.KillProcessGroupAsync(facts.Pgid, receipt.StartTicks, receipt.RunToken, cancellationToken);
             }
             else
             {
                 // A trainer that never led its own group shares one with a host or launcher; only its pid is safe.
                 logger.LogWarning("Reaping trainer pid {Pid} left behind by a previous host process; its group {Pgid} is not its own, so only the pid is signalled.",
                     receipt.Pid, receipt.Pgid);
-                presence = await inspector.KillProcessAsync(receipt.Pid, receipt.StartTicks, cancellationToken);
+                presence = await inspector.KillProcessAsync(receipt.Pid, receipt.StartTicks, receipt.RunToken, cancellationToken);
+            }
+
+            if (presence == TrainingProcessPresence.Deferred)
+            {
+                logger.LogWarning("The trainer recorded for run {RunId} could not be signalled for an operational reason; its receipt was kept so the next startup retries it.",
+                    ownerId);
+                return TrainingReapOutcome.NotVerified;
             }
 
             await clearReceipt(cancellationToken);

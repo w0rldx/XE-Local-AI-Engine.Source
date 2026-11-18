@@ -8,7 +8,9 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 /// <remarks>Every member is Linux-only and returns null / false on a read failure rather than throwing.</remarks>
 internal static partial class LinuxProcFs
 {
-    /// <summary>Parent pid (field 4), process group (field 5) and start time (field 22) of <c>/proc/[pid]/stat</c>, or null when unreadable.</summary>
+    private const int Enosys = 38;
+
+    /// <summary>State (field 3), parent pid (field 4), process group (field 5) and start time (field 22) of <c>/proc/[pid]/stat</c>, or null when unreadable.</summary>
     public static ProcessStat? ReadStatOrNull(int processId)
     {
         if (processId <= 0 || !OperatingSystem.IsLinux())
@@ -30,7 +32,7 @@ internal static partial class LinuxProcFs
         }
 
         // Field 2 (comm) is parenthesized and may contain spaces and parentheses, so the rest is located from the LAST ')'. Tokens then start at
-        // field 3 (state), putting ppid at index 1, pgrp at index 2 and starttime at index 19.
+        // field 3 (state), putting state at index 0, ppid at index 1, pgrp at index 2 and starttime at index 19.
         var commEnd = raw.LastIndexOf(')');
         if (commEnd < 0 || commEnd + 2 >= raw.Length)
         {
@@ -49,7 +51,7 @@ internal static partial class LinuxProcFs
             return null;
         }
 
-        return new ProcessStat(parent, group, startTicks);
+        return new ProcessStat(parent, group, startTicks, Exited: fields[0] is "Z" or "X");
     }
 
     /// <summary>
@@ -101,9 +103,16 @@ internal static partial class LinuxProcFs
         }
     }
 
-    /// <summary>Sends <paramref name="signal" /> to <paramref name="pid" /> (a negative pid is the process group). Returns true when the kernel accepted it.</summary>
-    public static bool Signal(int pid, int signal) =>
-        OperatingSystem.IsLinux() && Kill(pid, signal) == 0;
+    /// <summary>Sends <paramref name="signal" /> to <paramref name="pid" /> (a negative pid is the process group). Returns 0 when the kernel accepted it, else the errno (ENOSYS off Linux).</summary>
+    public static int Signal(int pid, int signal)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return Enosys;
+        }
+
+        return Kill(pid, signal) == 0 ? 0 : Marshal.GetLastPInvokeError();
+    }
 
     // char *realpath(const char *path, char *resolved_path); — a null resolved_path makes libc allocate the result.
     [LibraryImport("libc", EntryPoint = "realpath", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]

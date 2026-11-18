@@ -1,6 +1,5 @@
 import { Badge, Card, Group, Loader, Stack, Text, Title } from "@mantine/core";
 import { IconPlayerEject, IconServer2 } from "@tabler/icons-react";
-import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -8,6 +7,7 @@ import type { RunningModel } from "@/core/loaded-models/models/RunningModelsMode
 import { FocusableDisabledButton } from "@/core/ui/components/FocusableDisabledButton/FocusableDisabledButton";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
+import { useEjectFocusRestore } from "@/features/loaded-models/hooks/useEjectFocusRestore";
 
 interface RunningModelsPanelProps {
 	runningModels: readonly RunningModel[];
@@ -30,47 +30,11 @@ interface RunningModelsPanelProps {
 // there now).
 export function RunningModelsPanel({ runningModels, isLoading, error, onEject, ejectingModelName }: RunningModelsPanelProps) {
 	const { t, i18n } = useTranslation();
-	const headingRef = useRef<HTMLHeadingElement>(null);
-	// The control inside the card that last took focus; cleared once focus moves to another element or to the body (a
-	// click on blank page space). A removed element can also blur with no related target, so that case is told apart a
-	// frame later: a removed element is no longer connected and stays remembered.
-	const focusedRef = useRef<HTMLElement | null>(null);
-	const ejectClicksRef = useRef(0);
 	const rowKeys = runningModels.map((model) => `${model.modelName}-${model.role}`).join("|");
-
-	// When the focused row goes away (an eject, a push), the browser drops focus to the body; hand it to the heading
-	// rather than to another row's Eject, where a repeated Enter would unload a second model.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: rowKeys is a trigger (a row removed under focus), not a value the body reads.
-	useEffect(() => {
-		const focused = focusedRef.current;
-		const active = document.activeElement;
-		if (focused !== null && !focused.isConnected && (active === null || active === document.body)) {
-			headingRef.current?.focus();
-		}
-	}, [rowKeys]);
+	const { headingRef, cardFocusHandlers, restoreFocusTo } = useEjectFocusRestore(rowKeys);
 
 	return (
-		<Card
-			withBorder={true}
-			radius="md"
-			p="lg"
-			data-testid="loaded-models-llamacpp-card"
-			onFocus={(event) => {
-				focusedRef.current = event.target;
-			}}
-			onBlur={(event) => {
-				const blurred = event.target;
-				if (event.relatedTarget !== null) {
-					focusedRef.current = null;
-					return;
-				}
-				requestAnimationFrame(() => {
-					if (blurred.isConnected && focusedRef.current === blurred) {
-						focusedRef.current = null;
-					}
-				});
-			}}
-		>
+		<Card withBorder={true} radius="md" p="lg" data-testid="loaded-models-llamacpp-card" {...cardFocusHandlers}>
 			<Stack gap="md">
 				<Group gap="xs" align="center">
 					<IconServer2 size={20} />
@@ -177,20 +141,7 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 								leftSection={<IconPlayerEject size={14} />}
 								pending={ejectingModelName === model.modelName}
 								onClick={async (event) => {
-									const eject = event.currentTarget;
-									ejectClicksRef.current += 1;
-									const click = ejectClicksRef.current;
-									// Each confirmation runs this once it has closed: only lost focus comes back, and only to the newest
-									// flow. A dialog hands focus back to its opener, which is detached when the row went while it was
-									// open; then the heading takes it. Nothing restores when the request ends, so a user who moved
-									// focus away meanwhile keeps it there; a row removed later is the rowKeys effect's.
-									const restore = () => {
-										const active = document.activeElement;
-										if (click === ejectClicksRef.current && (active === null || active === document.body)) {
-											(eject.isConnected ? eject : headingRef.current)?.focus();
-										}
-									};
-									await onEject(model, restore);
+									await onEject(model, restoreFocusTo(event.currentTarget));
 								}}
 								data-testid={`loaded-models-llamacpp-eject-${model.modelName}`}
 							>

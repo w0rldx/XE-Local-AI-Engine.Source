@@ -95,18 +95,21 @@ public sealed class SpawnReceiptReapLinuxTests : IDisposable
     }
 
     [Test]
-    public async Task KillIfSameProcess_WithAStaleStartTime_SignalsNothing()
+    public async Task KillIfSameProcess_WithAStaleStartTimeOrAnotherBinary_SignalsNothing()
     {
         var pid = await StartOrphanAsync(SleepPath());
         var scanner = new OsStaleProcessScanner("sleep");
         var stat = scanner.ReadStat(pid);
         AssertEx.True(stat.HasValue, "A live orphan's stat must be readable.");
         var startTicks = stat!.Value.StartTicks;
+        var executable = File.ResolveLinkTarget($"/proc/{pid}/exe", returnFinalTarget: true)?.FullName;
+        AssertEx.NotNull(executable);
 
-        AssertEx.False(scanner.KillIfSameProcess(pid, startTicks + 1), "A start-time mismatch is a recycled pid.");
+        AssertEx.Equal(StaleProcessKillResult.Mismatch, scanner.KillIfSameProcess(pid, executable!, startTicks + 1), "A start-time mismatch is a recycled pid.");
+        AssertEx.Equal(StaleProcessKillResult.Mismatch, scanner.KillIfSameProcess(pid, "/opt/other-build/sleep", startTicks), "Another binary is not the recorded server.");
         AssertEx.True(IsAlive(pid));
 
-        AssertEx.True(scanner.KillIfSameProcess(pid, startTicks));
+        AssertEx.Equal(StaleProcessKillResult.Killed, scanner.KillIfSameProcess(pid, executable!, startTicks));
         await AssertEx.EventuallyAsync(() => !IsAlive(pid), TimeSpan.FromSeconds(5), "The exact process was not signalled.");
     }
 

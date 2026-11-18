@@ -128,6 +128,30 @@ public sealed class TrainingRunStartupReaperTests
             Arg.Any<CancellationToken>());
     }
 
+    /// <summary>A kill deferred by an operational failure learned nothing about the process, so its receipt stays for the next startup.</summary>
+    [Test]
+    public async Task Reap_WhenTheKillIsDeferred_KeepsTheReceiptAndStillRecovers()
+    {
+        var runId = Guid.NewGuid();
+        var store = StoreWith([
+            new TrainingRunLaunchReceipt
+            {
+                RunId = runId,
+                LaunchReceiptJson = Serialize(Receipt)
+            }
+        ]);
+        var inspector = new FakeTrainingProcessInspector(LiveFacts())
+        {
+            PresenceAfterKill = TrainingProcessPresence.Deferred
+        };
+
+        await Reaper(store, inspector).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(Receipt.RunToken, inspector.SignalledRunTokens.Single(), "Each signal re-verifies the recorded run token.");
+        await store.DidNotReceive().SetLaunchReceiptAsync(runId, Arg.Any<ReadOnlyMemory<byte>?>(), Arg.Any<CancellationToken>());
+        _ = await store.Received(1).RecoverOnStartupAsync(Arg.Any<CancellationToken>());
+    }
+
     /// <summary>
     ///     The sweep reads receipts through a dedicated unpaged query, never a page of the run list. A trainer that
     ///     outlived its host while 200+ newer runs piled up behind it would otherwise fall off the first page — and

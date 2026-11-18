@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
-import type { ConfirmOptions } from "@/core/ui/models/Confirm";
+import { CONFIRM_DIALOG_ATTRIBUTE, type ConfirmOptions } from "@/core/ui/models/Confirm";
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
 	const { t } = useTranslation();
@@ -54,7 +54,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 		}
 	}, []);
 
-	const contextValue = useMemo(() => ({ confirm }), [confirm]);
+	// Read at call time, not captured at render: a flow resuming after an await must see a confirmation opened meanwhile.
+	const hasPending = useCallback(() => resolveRejectRef.current !== null, []);
+
+	const contextValue = useMemo(() => ({ confirm, hasPending }), [confirm, hasPending]);
 
 	return (
 		<ConfirmContext.Provider value={contextValue}>
@@ -68,6 +71,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 				showCloseButton={false}
 				enableFullScreenToggle={false}
 				raised={true}
+				attributes={{ content: { [CONFIRM_DIALOG_ATTRIBUTE]: "" } }}
 			>
 				<Stack gap="md">
 					{options.description && (

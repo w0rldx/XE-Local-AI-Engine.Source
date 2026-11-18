@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -362,6 +362,125 @@ describe("RuntimeResourcesWidget", () => {
 				expect(document.activeElement).toBe(within(dropdown).getByRole("heading", { level: 3, name: "Loaded models" }));
 			} finally {
 				answer();
+			}
+		});
+
+		// Focus moved on after the eject started; that control's row is the one a push removes.
+		it("moves focus to the list heading when a push removes the row focus moved to while an eject is pending", async () => {
+			let answer!: () => void;
+			const answered = new Promise<void>((resolve) => {
+				answer = resolve;
+			});
+			let llama = ["alpha", "beta"];
+			server.use(
+				jsonRoute("get", "model-fit/resources", { totalRamBytes: 16 * gib, availableRamBytes: 4 * gib, gpus: [] }),
+				http.get(localApiPath("model-fit/running"), () =>
+					HttpResponse.json({ items: llama.map((modelName) => resident({ modelName })) }),
+				),
+				jsonRoute("get", "model-fit/runtime-residents", { items: [] }),
+				http.post(localApiPath("model-fit/running/eject"), async () => {
+					await answered;
+					return HttpResponse.json({ modelName: "alpha", role: "chat", outcome: "ejected" });
+				}),
+			);
+
+			try {
+				const { dropdown, queryClient } = await openPopoverWithClient();
+				const alpha = await within(dropdown).findByRole("button", { name: "Eject alpha" });
+				focusAndClick(alpha);
+				await waitFor(() => expect(alpha.getAttribute("aria-busy")).toBe("true"));
+				const beta = within(dropdown).getByRole("button", { name: "Eject beta" });
+				beta.focus();
+				llama = ["alpha"];
+				await queryClient.invalidateQueries({ queryKey: listRunningModelsQueryKey() });
+
+				await waitFor(() => expect(beta.isConnected).toBe(false));
+				expect(document.activeElement).toBe(within(dropdown).getByRole("heading", { level: 3, name: "Loaded models" }));
+				expect(alpha.getAttribute("aria-busy")).toBe("true");
+			} finally {
+				answer();
+			}
+		});
+
+		// Focus moved to another Eject, then to the body (a click on blank dropdown space); that Eject must not get it back.
+		it("hands lost focus to the list heading, not to an Eject focus left for the body, when the eject settles", async () => {
+			let answer!: () => void;
+			const answered = new Promise<void>((resolve) => {
+				answer = resolve;
+			});
+			let llama = ["alpha", "beta"];
+			server.use(
+				jsonRoute("get", "model-fit/resources", { totalRamBytes: 16 * gib, availableRamBytes: 4 * gib, gpus: [] }),
+				http.get(localApiPath("model-fit/running"), () =>
+					HttpResponse.json({ items: llama.map((modelName) => resident({ modelName })) }),
+				),
+				jsonRoute("get", "model-fit/runtime-residents", { items: [] }),
+				http.post(localApiPath("model-fit/running/eject"), async () => {
+					await answered;
+					return HttpResponse.json({ modelName: "alpha", role: "chat", outcome: "ejected" });
+				}),
+			);
+
+			try {
+				const { dropdown, queryClient } = await openPopoverWithClient();
+				const alpha = await within(dropdown).findByRole("button", { name: "Eject alpha" });
+				focusAndClick(alpha);
+				await waitFor(() => expect(alpha.getAttribute("aria-busy")).toBe("true"));
+				const beta = within(dropdown).getByRole("button", { name: "Eject beta" });
+				beta.focus();
+				beta.blur();
+				// A blur to nothing is told apart from a removal a frame later; a frame queued now runs after that check.
+				await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+				llama = ["beta"];
+				await queryClient.invalidateQueries({ queryKey: listRunningModelsQueryKey() });
+				await waitFor(() => expect(alpha.isConnected).toBe(false));
+				answer();
+
+				const heading = within(dropdown).getByRole("heading", { level: 3, name: "Loaded models" });
+				await waitFor(() => expect(document.activeElement).toBe(heading));
+				expect(beta.isConnected).toBe(true);
+			} finally {
+				answer();
+			}
+		});
+
+		// The eject settles before the next frame, so nothing may wait a frame to tell a blur to the body from a removal.
+		it("never hands focus back to an Eject focus left for the body when the eject settles within the same frame", async () => {
+			let answer!: () => void;
+			const answered = new Promise<void>((resolve) => {
+				answer = resolve;
+			});
+			server.use(
+				jsonRoute("get", "model-fit/resources", { totalRamBytes: 16 * gib, availableRamBytes: 4 * gib, gpus: [] }),
+				jsonRoute("get", "model-fit/running", { items: [resident({ modelName: "alpha" }), resident({ modelName: "beta" })] }),
+				jsonRoute("get", "model-fit/runtime-residents", { items: [] }),
+				http.post(localApiPath("model-fit/running/eject"), async () => {
+					await answered;
+					return HttpResponse.json({ modelName: "alpha", role: "chat", outcome: "timed_out_still_busy" });
+				}),
+			);
+			const heldFrames: FrameRequestCallback[] = [];
+			const frames = vi.spyOn(window, "requestAnimationFrame");
+
+			try {
+				const dropdown = await openPopover();
+				const alpha = await within(dropdown).findByRole("button", { name: "Eject alpha" });
+				focusAndClick(alpha);
+				await waitFor(() => expect(alpha.getAttribute("aria-busy")).toBe("true"));
+				const beta = within(dropdown).getByRole("button", { name: "Eject beta" });
+				beta.focus();
+				frames.mockImplementation((callback) => heldFrames.push(callback));
+				beta.blur();
+				answer();
+
+				await waitFor(() => expect(alpha.hasAttribute("aria-busy")).toBe(false));
+				expect(document.activeElement).not.toBe(beta);
+			} finally {
+				answer();
+				frames.mockRestore();
+				for (const callback of heldFrames) {
+					callback(performance.now());
+				}
 			}
 		});
 

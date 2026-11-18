@@ -15,5 +15,8 @@ public enum TrainingProcessPresence
     Alive,
 
     /// <summary>No such process, a zombie, or a different process now holding the pid.</summary>
-    Gone
+    Gone,
+
+    /// <summary>A kill only: a signal could not be sent or verified for an operational reason (EPERM, EMFILE), so the receipt must be kept.</summary>
+    Deferred
 }

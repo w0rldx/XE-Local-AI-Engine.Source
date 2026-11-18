@@ -224,7 +224,6 @@ XE-Local-AI-Engine.Tests/Providers/LlamaServer/SourceBuildRecoveryTests.cs|4
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/SupervisorTestDoubles.cs|9
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/TransientLlamaServerEvaluationHarnessTests.cs|2
 XE-Local-AI-Engine.Tests/Providers/ProcessSupervision/ProviderLauncherSharedHandleTests.cs|3
-XE-Local-AI-Engine.Tests/Providers/ProcessSupervision/StaleProcessReaperTests.cs|5
 XE-Local-AI-Engine.Tests/Providers/Python/ManagedPythonToolchainLiveTests.cs|1
 XE-Local-AI-Engine.Tests/Providers/Python/UvBinaryAcquirerTests.cs|8
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/GenerationProgressTrackerTests.cs|2

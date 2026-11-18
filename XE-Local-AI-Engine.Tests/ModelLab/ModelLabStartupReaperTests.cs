@@ -85,12 +85,46 @@ public sealed class ModelLabStartupReaperTests
         var inspector = Substitute.For<ITrainingProcessInspector>();
         inspector.Inspect(Receipt.Pid).Returns(Live);
         inspector.HostProcessGroupId.Returns(777);
-        inspector.KillProcessGroupAsync(Arg.Any<int>(), Arg.Any<long>(), Arg.Any<CancellationToken>()).ThrowsAsync(new IOException("no"));
+        inspector.KillProcessGroupAsync(Arg.Any<int>(), Arg.Any<long>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).ThrowsAsync(new IOException("no"));
 
         await Reaper(factory, inspector).StartAsync(CancellationToken.None);
 
         AssertEx.Equal(expected: 1, (await ReceiptsAsync(factory)).Count, "Dropping it would strand a live job with nothing to identify it by.");
         AssertEx.Equal(ModelLabExperimentStatus.Failed, (await ReadAsync(factory, id)).Status);
+    }
+
+    [Test]
+    public async Task AKillDeferredByAnOperationalFailure_KeepsTheReceiptForTheNextStartup()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        var id = await SeedRunningAsync(factory);
+        var inspector = new FakeTrainingProcessInspector(Live)
+        {
+            PresenceAfterKill = TrainingProcessPresence.Deferred
+        };
+
+        await Reaper(factory, inspector).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, inspector.SignalledGroups.Count);
+        AssertEx.Equal(expected: 1, (await ReceiptsAsync(factory)).Count, "A refused signal proves nothing about the job's process.");
+        AssertEx.Equal(ModelLabExperimentStatus.Failed, (await ReadAsync(factory, id)).Status);
+    }
+
+    [Test]
+    public async Task AWarmReceiptWhoseKillIsDeferred_IsKept()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        var dataDirectory = factory.Services.GetRequiredService<INodeDataDirectory>();
+        var file = await SeedWarmReceiptAsync(dataDirectory);
+        var inspector = new FakeTrainingProcessInspector(Live)
+        {
+            PresenceAfterKill = TrainingProcessPresence.Deferred
+        };
+
+        await Reaper(factory, inspector).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(4242, inspector.SignalledGroups.Single());
+        AssertEx.True(File.Exists(file), "The warm receipt is deleted only once its process is proven gone.");
     }
 
     [Test]

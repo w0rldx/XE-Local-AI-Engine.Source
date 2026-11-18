@@ -119,9 +119,12 @@ export function RuntimeResourcesWidget() {
 		ejectImageMutation.isPending ||
 		ejectTranscriptionMutation.isPending ||
 		ejectModelLabMutation.isPending;
-	// The control that had focus when an eject started. The Eject buttons stay focusable while pending, so focus is lost
-	// only when the focused row goes away; a remembered control that is still mounted gets focus back.
+	// The control that had focus when an eject started, then whichever control in the dropdown took focus after it. The
+	// Eject buttons stay focusable while pending, so focus is lost only when the focused row goes away; a remembered
+	// control that is still mounted gets focus back, unless focus left it for the body (a click on blank space): that
+	// control is kept only to tell its removal, and the heading takes focus either way.
 	const focusBeforeEjectRef = useRef<HTMLElement | null>(null);
+	const leftForBodyRef = useRef<HTMLElement | null>(null);
 	const rememberFocus = () => {
 		const active = document.activeElement;
 		focusBeforeEjectRef.current = active instanceof HTMLElement && dropdownRef.current?.contains(active) ? active : null;
@@ -129,8 +132,8 @@ export function RuntimeResourcesWidget() {
 
 	// Once no eject is pending, give lost focus back: to the same Eject when its row stayed (React keeps a kept row's
 	// element), else to the list heading. Never onto another Eject: a repeated Enter must not unload a second model.
-	// A pushed removal can detach the remembered Eject while the eject's refetches still keep it pending; the heading
-	// takes focus then rather than after them.
+	// A pushed removal can detach the remembered control (the Eject, or one focus moved to) while the eject's refetches
+	// still keep it pending; the heading takes focus then rather than after them.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: rowKeys is a trigger (a row removed under focus), not a value the body reads.
 	useEffect(() => {
 		if (ejectPending && focusBeforeEjectRef.current?.isConnected !== false) {
@@ -139,18 +142,20 @@ export function RuntimeResourcesWidget() {
 		const active = document.activeElement;
 		if (dropdownRef.current !== null && (active === null || active === document.body)) {
 			const before = focusBeforeEjectRef.current;
-			(before?.isConnected ? before : residentsHeadingRef.current)?.focus();
+			(before?.isConnected && before !== leftForBodyRef.current ? before : residentsHeadingRef.current)?.focus();
 		}
 		if (!ejectPending) {
 			focusBeforeEjectRef.current = null;
 		}
 	}, [ejectPending, rowKeys]);
 
-	useEffect(() => {
-		if (!opened) {
+	// Every close path goes through here, so a reopened dropdown never restores to a control of the closed one.
+	const setOpen = (next: boolean) => {
+		if (!next) {
 			focusBeforeEjectRef.current = null;
 		}
-	}, [opened]);
+		setOpened(next);
+	};
 
 	const resources = resourcesQuery.data;
 	if (!enabled || !resources) {
@@ -223,7 +228,7 @@ export function RuntimeResourcesWidget() {
 	return (
 		<Popover
 			opened={opened}
-			onChange={setOpened}
+			onChange={setOpen}
 			position="bottom-start"
 			shadow="md"
 			width={360}
@@ -236,7 +241,7 @@ export function RuntimeResourcesWidget() {
 					className="flex flex-row items-center gap-3 px-2 py-1"
 					aria-label={t("runtimeResources.trigger", "Memory usage and loaded models")}
 					aria-expanded={opened}
-					onClick={() => setOpened((previous) => !previous)}
+					onClick={() => setOpen(!opened)}
 					data-testid="runtime-resources-trigger"
 				>
 					<Group gap={6} wrap="nowrap">
@@ -265,7 +270,21 @@ export function RuntimeResourcesWidget() {
 					</Group>
 				</UnstyledButton>
 			</Popover.Target>
-			<Popover.Dropdown ref={dropdownRef} data-testid="runtime-resources-dropdown">
+			<Popover.Dropdown
+				ref={dropdownRef}
+				onFocus={(event) => {
+					focusBeforeEjectRef.current = event.target;
+					leftForBodyRef.current = null;
+				}}
+				// Marked at once, not a frame later: an eject settling in between would otherwise hand focus back to another
+				// Eject.
+				onBlur={(event) => {
+					if (event.relatedTarget === null) {
+						leftForBodyRef.current = event.target;
+					}
+				}}
+				data-testid="runtime-resources-dropdown"
+			>
 				<Stack gap="sm">
 					<UsageRow label={t("runtimeResources.ram", "RAM")} usage={resources.ram} />
 					{resources.gpus.length === 0 ? (
@@ -345,7 +364,7 @@ export function RuntimeResourcesWidget() {
 						/>
 					))}
 
-					<Anchor component={Link} to="/loaded-models" size="sm" onClick={() => setOpened(false)}>
+					<Anchor component={Link} to="/loaded-models" size="sm" onClick={() => setOpen(false)}>
 						{t("runtimeResources.openLoadedModels", "Manage loaded models")}
 					</Anchor>
 				</Stack>

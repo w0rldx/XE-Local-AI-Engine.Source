@@ -85,6 +85,32 @@ describe("ConfirmProvider", () => {
 		expect(onClosed).toHaveBeenCalledTimes(1);
 	});
 
+	// A flow resuming after an await reads this at that moment; a value captured at render would still say "none".
+	it("reports a pending confirmation from the moment it opens until it is answered", async () => {
+		const captured: { context?: ConfirmContextType } = {};
+		function Capture() {
+			captured.context = use(ConfirmContext);
+			return null;
+		}
+		renderWithProviders(
+			<ConfirmProvider>
+				<Capture />
+			</ConfirmProvider>,
+		);
+		const context = captured.context;
+		expect(context?.hasPending?.()).toBe(false);
+
+		let answer: Promise<boolean> | undefined;
+		act(() => {
+			answer = context?.confirm({ title: "Pending" });
+		});
+		expect(context?.hasPending?.()).toBe(true);
+		fireEvent.click(await screen.findByTestId("confirm-cancel"));
+
+		await expect(answer).resolves.toBe(false);
+		expect(context?.hasPending?.()).toBe(false);
+	});
+
 	it("never runs the onClosed of a confirm a newer one replaced", async () => {
 		const { confirm } = renderWithSlowModal();
 		const superseded = vi.fn();

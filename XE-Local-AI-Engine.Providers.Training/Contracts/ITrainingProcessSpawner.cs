@@ -142,13 +142,13 @@ public interface ITrainingProcessInspector
     bool ProcessGroupHasMembers(int processGroupId);
 
     /// <summary>
-    ///     SIGTERM then SIGKILL to <paramref name="processGroupId" />, each skipped only once its leader provably no longer has
-    ///     <paramref name="expectedStartTicks" />. Only ever called after a full receipt match.
+    ///     SIGTERM then SIGKILL to <paramref name="processGroupId" />, each sent only while its leader still has <paramref name="expectedStartTicks" />
+    ///     and <paramref name="expectedRunToken" />. Only ever called after a full receipt match.
     /// </summary>
-    /// <returns>The leader's presence re-inspected after the kill; a leader that vanished reads gone only once its group is empty too.</returns>
-    Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default);
+    /// <returns>The leader's presence after the kill; a vanished leader reads gone only once its group is empty, and an operational failure reads deferred.</returns>
+    Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default);
 
-    /// <summary>SIGTERM then SIGKILL to <paramref name="processId" /> alone while it may still have <paramref name="expectedStartTicks" />.</summary>
+    /// <summary>SIGTERM then SIGKILL to <paramref name="processId" /> alone while it still has <paramref name="expectedStartTicks" /> and <paramref name="expectedRunToken" />.</summary>
     /// <returns>Its presence afterwards; a pid that vanished reads gone only once the group it may have started is empty.</returns>
-    Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, CancellationToken cancellationToken = default);
+    Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default);
 }

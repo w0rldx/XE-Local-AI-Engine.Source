@@ -4,6 +4,7 @@ import { lazy, Suspense } from "react";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { Layout } from "@/core/layout/components/Layout/Layout";
+import { DRAWER_TOGGLE_ID } from "@/core/layout/constants/LayoutElementIds";
 import { ActiveOperationsIndicator } from "@/core/operations/components/ActiveOperationsIndicator";
 import { OperationToastCoordinator } from "@/core/operations/components/OperationToastCoordinator";
 import { AboutDialogButton } from "@/features/about/components/AboutDialogButton/AboutDialogButton";
@@ -30,6 +31,17 @@ export function AppLayout() {
 	};
 	const { report, pending } = useReportProblem(openDiagnostics);
 	const [aboutOpened, { open: openAbout, close: closeAbout }] = useDisclosure(false);
+	// Only the drawer opens this About, and its item is gone by the time About closes, so Mantine's focus return finds
+	// nothing; the drawer's toggle takes focus instead. The frame runs after the unmount commit.
+	const closeAboutToDrawerToggle = () => {
+		closeAbout();
+		requestAnimationFrame(() => {
+			const active = document.activeElement;
+			if (active === null || active === document.body || !active.isConnected) {
+				document.getElementById(DRAWER_TOGGLE_ID)?.focus();
+			}
+		});
+	};
 
 	return (
 		<Layout
@@ -61,7 +73,7 @@ export function AppLayout() {
 					{/* Outside the mobile drawer so the dialog survives the drawer closing when About is opened. */}
 					{aboutOpened ? (
 						<Suspense fallback={null}>
-							<AboutDialog opened={aboutOpened} onClose={closeAbout} />
+							<AboutDialog opened={aboutOpened} onClose={closeAboutToDrawerToggle} />
 						</Suspense>
 					) : null}
 				</>
