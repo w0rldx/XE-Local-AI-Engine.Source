@@ -60,6 +60,9 @@ export interface RuntimeResident {
 	readonly state: RuntimeResidentState;
 	readonly backend: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto | null;
 	readonly canEject: boolean;
+	// GPU memory the Model Lab worker's model allocated at load (torch's own count, not the driver's); null for the other
+	// runtimes and before the worker's first Ready.
+	readonly vramBytes: number | null;
 }
 
 export function toRuntimeResidents(dto: XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentsResponse): RuntimeResident[] {
@@ -69,5 +72,6 @@ export function toRuntimeResidents(dto: XeLocalAiEngineClientEndpointsModelFitV1
 		state: item.state,
 		backend: item.backend ?? null,
 		canEject: item.canEject,
+		vramBytes: item.vramBytes ?? null,
 	}));
 }

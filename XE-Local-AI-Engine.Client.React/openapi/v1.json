@@ -43446,6 +43446,10 @@
           },
           "canEject": {
             "type": "boolean"
+          },
+          "vramBytes": {
+            "type": "integer",
+            "nullable": true
           }
         }
       },

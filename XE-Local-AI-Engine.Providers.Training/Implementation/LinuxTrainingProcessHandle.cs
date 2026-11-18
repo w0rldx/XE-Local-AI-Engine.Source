@@ -21,22 +21,27 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
 {
     private const int Sigterm = 15;
     private const int Sigkill = 9;
+    private const int Esrch = 3;
+    private static readonly TimeSpan ExitPollInterval = TimeSpan.FromMilliseconds(50);
     private readonly ILogger _logger;
     private readonly Process _process;
     private readonly Channel<string> _output;
     private readonly SemaphoreSlim _stdinGate = new(1, 1);
+    private readonly TimeProvider _timeProvider;
 
     private int _disposed;
 
     public LinuxTrainingProcessHandle(Process process,
         TrainingLaunchReceipt receipt,
         Channel<string> output,
-        ILogger logger)
+        ILogger logger,
+        TimeProvider timeProvider)
     {
         _logger = logger;
         _process = process;
         Receipt = receipt;
         _output = output;
+        _timeProvider = timeProvider;
     }
 
     public TrainingLaunchReceipt Receipt { get; }
@@ -48,6 +53,39 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
     {
         await _process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
         return _process.ExitCode;
+    }
+
+    public async Task<int?> WaitForGroupExitAsync(CancellationToken cancellationToken)
+    {
+        // A pgid is not reused while any member lives, and a reuse of an empty one only reads as non-empty: both fail closed.
+        var group = TrainingProcessGroupGuard.MaySignalGroup(Receipt.Pid, Receipt.Pgid, LinuxTrainingProcessInspector.HostProcessGroupId) ? -Receipt.Pgid : 0;
+        try
+        {
+            if (group == 0)
+            {
+                // No group to probe: the pipe EOF is the only sign the trainer's children are gone, so keep waiting for it.
+                return await WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            // HasExited reads the wait status only; Process.WaitForExitAsync would also wait for pipes a descendant may hold open.
+            while (!HasExited() || GroupHasMembers(group))
+            {
+                await Task.Delay(ExitPollInterval, _timeProvider, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+
+        try
+        {
+            return _process.ExitCode;
+        }
+        catch (InvalidOperationException)
+        {
+            return -1; // Disposed: HasExited already reads it as exited, and its code is gone.
+        }
     }
 
     public async Task WriteLineAsync(string line, CancellationToken cancellationToken)
@@ -145,6 +183,10 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
 
         _ = Kill(target, signal);
     }
+
+    /// <summary>Signal 0 checks without sending anything; only ESRCH proves the group empty, so a refusal (EPERM) still counts as a member.</summary>
+    private static bool GroupHasMembers(int negatedGroup) =>
+        Kill(negatedGroup, 0) == 0 || Marshal.GetLastPInvokeError() != Esrch;
 
     private bool HasExited()
     {

@@ -65,7 +65,8 @@ public sealed class RuntimeResidentsService
                 ModelId = warm.ModelId,
                 State = warm.State,
                 Backend = null,
-                CanEject = warm.State == RuntimeResidentState.Idle
+                CanEject = warm.State == RuntimeResidentState.Idle,
+                VramBytes = warm.VramBytes
             });
         }
 

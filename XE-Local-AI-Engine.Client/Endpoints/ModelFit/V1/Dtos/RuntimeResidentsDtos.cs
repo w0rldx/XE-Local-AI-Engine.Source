@@ -24,6 +24,9 @@ public sealed class RuntimeResidentResponse
 
     /// <summary>False while that runtime's eject endpoint would answer 409.</summary>
     public required bool CanEject { get; init; }
+
+    /// <summary>Bytes the Model Lab worker's model allocated at its last ready, below what the driver reports; null for other rows and before it.</summary>
+    public long? VramBytes { get; init; }
 }
 
 /// <summary>Which runtime holds the resident.</summary>

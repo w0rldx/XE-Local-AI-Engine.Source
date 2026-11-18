@@ -8608,6 +8608,7 @@
 		"trigger": "Memory usage and loaded models",
 		"usage": "{{used}} used of {{total}}, {{available}} available",
 		"vram": "VRAM",
+		"vramAllocated": "{{size}} GPU memory allocated",
 		"vramUnavailable": "VRAM usage unavailable"
 	},
 	"theme": {

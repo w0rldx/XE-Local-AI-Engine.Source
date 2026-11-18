@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.Training;
 
+using System.Diagnostics;
+using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
@@ -398,6 +400,93 @@ public sealed class LinuxTrainingProcessGroupTests
         }
     }
 
+    /// <summary>A grandchild that left the group (setsid) may hold the output pipe; the exit-only wait still sees the trainer's exit.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task WaitForGroupExit_WhenAGrandchildOutsideTheGroupHoldsThePipe_ReturnsTheExitCode()
+    {
+        if (!File.Exists(Setsid))
+        {
+            Skip.Test($"BLOCKED: {Setsid} is absent, so the script cannot move its grandchild out of the group.");
+        }
+
+        var root = Path.Combine(Path.GetTempPath(), "xe-spawn-" + Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(root);
+        OwnedProcess? grandchild = null;
+        try
+        {
+            var spawner = new LinuxTrainingProcessSpawner(TimeProvider.System, NullLogger<LinuxTrainingProcessSpawner>.Instance, root);
+            using var handle = spawner.Spawn(new TrainingSpawnRequest
+            {
+                ExecutablePath = "/bin/sh",
+                Arguments = ["-c", ExitOnInput("/usr/bin/setsid /bin/sleep 30 &")],
+                WorkingDirectory = root,
+                RunToken = "token",
+                RedirectStandardInput = true
+            });
+            AssertEx.Equal(handle.Receipt.Pid, handle.Receipt.Pgid, "The trainer leads its group, so the group is checked too.");
+            using var budget = new CancellationTokenSource(TestBudgets.Contended);
+            grandchild = await ReadChildAsync(handle, budget.Token);
+            await handle.WriteLineAsync("exit", budget.Token);
+
+            var exitCode = await handle.WaitForGroupExitAsync(budget.Token);
+
+            AssertEx.Equal<int?>(0, exitCode);
+            AssertEx.Equal(TrainingProcessPresence.Alive, LinuxTrainingProcessInspector.ReadStat(grandchild.ProcessId).Presence, "The grandchild still holds the pipe.");
+        }
+        finally
+        {
+            grandchild?.KillIfStillOurs();
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>A child left in the trainer's group may still hold the GPU: the trainer's exit alone is not a verified exit.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task WaitForGroupExit_WhileAChildInTheGroupOutlivesTheTrainer_IsNotVerified_UntilTheChildIsGone()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "xe-spawn-" + Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(root);
+        OwnedProcess? child = null;
+        try
+        {
+            var spawner = new LinuxTrainingProcessSpawner(TimeProvider.System, NullLogger<LinuxTrainingProcessSpawner>.Instance, root);
+            using var handle = spawner.Spawn(new TrainingSpawnRequest
+            {
+                ExecutablePath = "/bin/sh",
+                // The child ignores SIGTERM, so the group's cooperative stop would not end it either.
+                Arguments = ["-c", "trap '' TERM; " + ExitOnInput("/bin/sleep 30 &")],
+                WorkingDirectory = root,
+                RunToken = "token",
+                RedirectStandardInput = true
+            });
+            AssertEx.Equal(handle.Receipt.Pid, handle.Receipt.Pgid, "The trainer leads its group, so the group is checked too.");
+            using var budget = new CancellationTokenSource(TestBudgets.Contended);
+            child = await ReadChildAsync(handle, budget.Token);
+            await handle.WriteLineAsync("exit", budget.Token);
+            AssertEx.Equal(handle.Receipt.Pgid, LinuxTrainingProcessInspector.ReadStatOrNull(child.ProcessId)?.Pgid, "The child shares the trainer's group.");
+            await AssertEx.EventuallyAsync(() => LinuxTrainingProcessInspector.ReadStat(handle.Receipt.Pid).Presence == TrainingProcessPresence.Gone,
+                TestBudgets.Contended,
+                "The trainer itself exits at once.");
+            using var bound = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+
+            var exitCode = await handle.WaitForGroupExitAsync(bound.Token);
+
+            AssertEx.Null(exitCode, "A group with a live member stays unverified for the whole bound.");
+
+            // Positive control: once the last member is gone, the same wait verifies the exit.
+            child.KillIfStillOurs();
+            using var verified = new CancellationTokenSource(TestBudgets.Contended);
+            AssertEx.Equal<int?>(0, await handle.WaitForGroupExitAsync(verified.Token), "The emptied group verifies the trainer's exit.");
+        }
+        finally
+        {
+            child?.KillIfStillOurs();
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Test]
     [RunOn(OS.Linux)]
     public async Task WriteLine_WhenStdinWasNotRequested_Throws()
@@ -466,6 +555,25 @@ public sealed class LinuxTrainingProcessGroupTests
         }
     }
 
+    /// <summary>Starts <paramref name="background" />, prints its pid, and exits 0 on the first stdin line: the spawn confirms the trainer's group before it exits.</summary>
+    private static string ExitOnInput(string background) =>
+        background + " echo $!; read line; exit 0";
+
+    /// <summary>The background child whose pid the test's shell script prints first, with its start time read at once.</summary>
+    internal static async Task<OwnedProcess> ReadChildAsync(ITrainingProcessHandle handle, CancellationToken ct)
+    {
+        await using var lines = handle.ReadOutputAsync(ct).GetAsyncEnumerator(ct);
+        AssertEx.True(await lines.MoveNextAsync(), "The script prints its child's pid.");
+        var pid = int.Parse(lines.Current, CultureInfo.InvariantCulture);
+        var stat = LinuxTrainingProcessInspector.ReadStatOrNull(pid)
+                   ?? throw new InvalidOperationException("The child exited before its start time could be read.");
+        return new OwnedProcess
+        {
+            ProcessId = pid,
+            StartTicks = stat.StartTicks
+        };
+    }
+
     private static bool Tick(ManualClock time, TimeSpan interval)
     {
         time.Advance(interval);
@@ -496,6 +604,33 @@ public sealed class LinuxTrainingProcessGroupTests
         }
 
         return await task;
+    }
+
+    /// <summary>A process a test started, known by pid and start time, so cleanup never signals a pid another process now holds.</summary>
+    internal sealed class OwnedProcess
+    {
+        public required int ProcessId { get; init; }
+
+        public required long StartTicks { get; init; }
+
+        /// <summary>SIGKILL only while the pid still carries the recorded start time, as the product's own signals are guarded.</summary>
+        public void KillIfStillOurs()
+        {
+            if (!LinuxTrainingProcessInspector.MaySignal(LinuxTrainingProcessInspector.ReadStat(ProcessId), StartTicks))
+            {
+                return;
+            }
+
+            try
+            {
+                using var process = Process.GetProcessById(ProcessId);
+                process.Kill();
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                // Gone in between.
+            }
+        }
     }
 
     private sealed class ManualClock : TimeProvider

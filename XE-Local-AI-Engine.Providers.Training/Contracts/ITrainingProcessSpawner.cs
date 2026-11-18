@@ -64,7 +64,27 @@ public interface ITrainingProcessHandle : IDisposable
     /// <summary>Merged stdout + stderr, line by line, completing when the child closes both streams.</summary>
     IAsyncEnumerable<string> ReadOutputAsync(CancellationToken cancellationToken);
 
+    /// <summary>The exit code once the child exited and its output closed; a descendant holding the pipe keeps this waiting.</summary>
     Task<int> WaitForExitAsync(CancellationToken cancellationToken);
+
+    /// <summary>The exit code once the child exited and no process is left in the group it leads, without waiting for its output to close.</summary>
+    /// <remarks>
+    ///     A child that does not provably lead its own group is waited on as <see cref="WaitForExitAsync" /> does, output included,
+    ///     since no group can be probed. A descendant that left the group is not waited on.
+    ///     <see langword="null" /> once <paramref name="cancellationToken" /> is cancelled. This default keeps the output wait of
+    ///     <see cref="WaitForExitAsync" />, so a handle that does not override it only ever waits longer.
+    /// </remarks>
+    async Task<int?> WaitForGroupExitAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     ///     SIGTERM to the process GROUP. Cooperative by contract: <c>train.py</c> latches

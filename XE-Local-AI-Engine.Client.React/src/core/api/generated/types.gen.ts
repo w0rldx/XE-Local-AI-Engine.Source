@@ -4687,6 +4687,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentResponse = {
 	state: XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentStateDto;
 	backend?: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto | null;
 	canEject: boolean;
+	vramBytes?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentStateDto = "starting" | "idle" | "active" | "exited";

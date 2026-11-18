@@ -44,7 +44,7 @@ public sealed class RemoveTrainingRuntimeEndpoint : EndpointWithoutRequest<Train
             return;
         }
 
-        if (_runtime.RefusesForRunningGpuJob())
+        if (await _runtime.RefusesForRunningGpuJobAsync(ct))
         {
             await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked(TrainingRuntimeBlockedEndpointSupport.GpuJobRunningReason, GpuJobRunningMessage));
             return;

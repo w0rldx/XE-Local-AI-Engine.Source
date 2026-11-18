@@ -437,6 +437,26 @@ public sealed class TrainingRuntimeServiceTests
         AssertEx.Equal(nameof(TrainingRuntimePhase.Ready), harness.Publisher.Events[^1].Phase, "The prior phase is re-published.");
     }
 
+    /// <summary>A cancelled admission is a refusal too: the prior phase is restored and re-published, and the cancellation still reaches the caller.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Remove_WhenTheAdmissionIsCancelled_RepublishesThePriorPhase_AndRethrows()
+    {
+        using var harness = new Harness(SucceedingRunner());
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
+        await harness.Service.DrainAsync(CancellationToken.None);
+        var published = harness.Publisher.Events.Count;
+
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() =>
+            harness.Service.RemoveAsync(static _ => Task.FromException<bool>(new OperationCanceledException()), CancellationToken.None));
+
+        AssertEx.Equal(TrainingRuntimePhase.Ready, harness.Service.GetStatus().Phase);
+        var events = harness.Publisher.Events;
+        AssertEx.Equal(published + 1, events.Count, "The restore is published before the throw leaves, so no page keeps showing Removing.");
+        AssertEx.Equal(nameof(TrainingRuntimePhase.Ready), events[^1].Phase);
+        AssertEx.True(events[^1].Terminal);
+    }
+
     [Test]
     [RunOn(OS.Linux)]
     public async Task Remove_WhenTheAdmissionRefuses_DeletesNothing()

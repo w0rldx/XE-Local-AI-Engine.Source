@@ -37,7 +37,7 @@ public sealed class StartTrainingRuntimeInstallEndpoint : EndpointWithoutRequest
             return;
         }
 
-        if (_runtime.RefusesForRunningGpuJob())
+        if (await _runtime.RefusesForRunningGpuJobAsync(ct))
         {
             await BlockAsync(TrainingRuntimeBlockedEndpointSupport.GpuJobRunningReason, GpuJobRunningMessage, prerequisites: null);
             return;

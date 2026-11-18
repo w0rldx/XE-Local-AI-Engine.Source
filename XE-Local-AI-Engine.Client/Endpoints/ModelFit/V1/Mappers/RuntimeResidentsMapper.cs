@@ -19,7 +19,8 @@ internal static class RuntimeResidentsMapper
                     ModelId = resident.ModelId,
                     State = resident.State.ToDto(),
                     Backend = resident.Backend?.ToDto(),
-                    CanEject = resident.CanEject
+                    CanEject = resident.CanEject,
+                    VramBytes = resident.VramBytes
                 })
             ]
         };

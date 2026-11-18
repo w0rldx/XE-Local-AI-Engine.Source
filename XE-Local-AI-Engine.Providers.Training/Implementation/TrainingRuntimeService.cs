@@ -324,7 +324,6 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         }
 
         var admitted = false;
-        string? priorError = null;
         try
         {
             admitted = admitAsync is null || await admitAsync(ct).ConfigureAwait(false);
@@ -333,17 +332,16 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         {
             if (!admitted)
             {
+                string? priorError;
                 lock (_stateLock)
                 {
                     _phase = prior;
                     priorError = _sanitizedError;
                 }
-            }
-        }
 
-        if (!admitted)
-        {
-            await PublishPhaseAsync(prior, terminal: true, priorError).ConfigureAwait(false);
+                // In the finally, so a throwing or cancelled admission re-publishes too; the publish never throws over its exception.
+                await PublishPhaseAsync(prior, terminal: true, priorError).ConfigureAwait(false);
+            }
         }
 
         return admitted;

@@ -20,6 +20,7 @@ internal sealed class ModelLabServeWorker : IDisposable
     private readonly TaskCompletionSource<string?> _handshake = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly ModelLabScriptRunner.StreamState _idleOutput = new();
     private readonly ModelLabJobOptions _options;
+    private readonly CancellationTokenSource _pumpStop = new();
     private readonly Lock _sync = new();
     private readonly TimeProvider _timeProvider;
     private string? _brokenReason;
@@ -27,6 +28,7 @@ internal sealed class ModelLabServeWorker : IDisposable
     private ServeJob? _job;
     private bool _outputClosed;
     private Task _pump = Task.CompletedTask;
+    private long? _vramBytes;
 
     private ModelLabServeWorker(ITrainingProcessHandle handle, string runToken, string workingDirectory, ModelLabJobOptions options, TimeProvider timeProvider)
     {
@@ -56,6 +58,18 @@ internal sealed class ModelLabServeWorker : IDisposable
 
     /// <summary>Called once, outside every lock, when the worker can no longer take a job: a protocol break, a kill or its exit.</summary>
     public Action? OnBroken { get; set; }
+
+    /// <summary>The GPU memory the model's tensors held at the last ready (allocated, not reserved); <see langword="null" /> before the first.</summary>
+    public long? VramBytes
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _vramBytes;
+            }
+        }
+    }
 
     /// <param name="workRoot">The Model Lab work root; the spawn gets a directory of its own under it, so no file it leaves reaches a later worker.</param>
     public static ModelLabServeWorker Spawn(ITrainingProcessSpawner spawner,
@@ -94,8 +108,11 @@ internal sealed class ModelLabServeWorker : IDisposable
     }
 
     /// <summary>Starts reading the output. Called once the receipt is durable, so no line is read before a dead host could find the process.</summary>
-    public void StartPump() =>
-        _pump = Task.Run(PumpAsync, CancellationToken.None);
+    public void StartPump()
+    {
+        var stop = _pumpStop.Token;
+        _pump = Task.Run(() => PumpAsync(stop), CancellationToken.None);
+    }
 
     /// <summary>Waits for the handshake; <see langword="null" /> once it came, otherwise what the job ends with. A cancel kills the worker.</summary>
     public async Task<ModelLabScriptRunner.ScriptRun?> WaitForHandshakeAsync(CancellationToken ct)
@@ -257,6 +274,7 @@ internal sealed class ModelLabServeWorker : IDisposable
         Break(reason: null);
 
     /// <summary>Evicts: asks the worker to exit, kills its group after the grace, and says whether the exit was seen within the verify bound.</summary>
+    /// <remarks>The output pump is retired before this returns, so no line from a pipe a descendant still holds reaches a worker being torn down.</remarks>
     public async Task<bool> StopAsync()
     {
         if (!IsOutputClosed)
@@ -274,24 +292,16 @@ internal sealed class ModelLabServeWorker : IDisposable
             exited = await ExitedWithinAsync(_options.ExitVerifyTimeout);
         }
 
-        if (exited)
-        {
-            // The output closes with the exit; the bound only guards a pipe some stray descendant still holds.
-            try
-            {
-                await _pump.WaitAsync(_options.ExitVerifyTimeout, _timeProvider, CancellationToken.None);
-            }
-            catch (TimeoutException)
-            {
-                // The process is gone; a pipe left open by a descendant does not change that.
-            }
-        }
-
+        await _pumpStop.CancelAsync();
+        await _pump;
         return exited;
     }
 
-    public void Dispose() =>
+    public void Dispose()
+    {
         _handle.Dispose();
+        _pumpStop.Dispose();
+    }
 
     private bool IsOutputClosed
     {
@@ -315,18 +325,24 @@ internal sealed class ModelLabServeWorker : IDisposable
         }
     }
 
-    private async Task PumpAsync()
+    private async Task PumpAsync(CancellationToken stop)
     {
         try
         {
-            await foreach (var line in _handle.ReadOutputAsync(CancellationToken.None))
+            await foreach (var line in _handle.ReadOutputAsync(stop))
             {
+                // A reader may keep yielding buffered lines after the cancel, so a stop is checked per line.
+                if (stop.IsCancellationRequested)
+                {
+                    break;
+                }
+
                 Dispatch(line);
             }
         }
-        catch (Exception exception) when (exception is IOException or InvalidOperationException or ObjectDisposedException)
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or ObjectDisposedException or OperationCanceledException)
         {
-            // A torn-down pipe ends the output like a closed one.
+            // A torn-down pipe, or the pump retired by a stop, ends the output like a closed one.
         }
 
         ServeJob? job;
@@ -442,11 +458,12 @@ internal sealed class ModelLabServeWorker : IDisposable
                 return $"The Model Lab worker failed ({parsed.Category}) and was terminated.";
             case TrainingStdioEventKind.Ready when _expect == Expect.Ready && _job is not null:
                 // A ready is the process's, never a job's, and always says what VRAM the cleanup left.
-                if (parsed.JobId is not null || parsed.VramBytes is null)
+                if (parsed.JobId is not null || parsed.VramBytes is not >= 0)
                 {
                     return "The Model Lab worker broke its protocol with a malformed ready frame and was terminated.";
                 }
 
+                _vramBytes = parsed.VramBytes;
                 _job.ReadySeen = true;
                 _job.Ready.TrySetResult();
                 _job = null;
@@ -500,32 +517,23 @@ internal sealed class ModelLabServeWorker : IDisposable
         }
     }
 
+    /// <summary>The exit counts once the worker and every process in its group are gone; an output pipe a descendant holds does not keep it waiting.</summary>
     private async Task<bool> ExitedWithinAsync(TimeSpan bound)
     {
         using var timeout = new CancellationTokenSource(bound, _timeProvider);
-        try
-        {
-            _ = await _handle.WaitForExitAsync(timeout.Token);
-            return true;
-        }
-        catch (OperationCanceledException)
-        {
-            return false;
-        }
+        return await _handle.WaitForGroupExitAsync(timeout.Token) is not null;
     }
 
     private async Task<int> ExitCodeOrKilledAsync()
     {
         using var timeout = new CancellationTokenSource(_options.CancelAcknowledgementTimeout, _timeProvider);
-        try
+        if (await _handle.WaitForGroupExitAsync(timeout.Token) is { } exitCode)
         {
-            return await _handle.WaitForExitAsync(timeout.Token);
+            return exitCode;
         }
-        catch (OperationCanceledException)
-        {
-            _handle.KillGroup();
-            return -1;
-        }
+
+        _handle.KillGroup();
+        return -1;
     }
 
     private sealed class ServeJob

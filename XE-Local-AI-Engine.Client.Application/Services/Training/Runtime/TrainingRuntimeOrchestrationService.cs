@@ -57,10 +57,20 @@ public sealed class TrainingRuntimeOrchestrationService
         && _supervisor.IsKeepWarmSuppressed()
         && !_idlePreemption.IsIdlePreemptible;
 
-    /// <summary>The routes' cheap pre-check: <see cref="IsGpuJobRunning" />, and when it refuses, the demand is latched first.</summary>
-    /// <remarks>A refusal that raised no demand would let an active Model Lab worker go idle and keep running from the directory the retry swaps.</remarks>
-    public bool RefusesForRunningGpuJob()
+    /// <summary>The routes' pre-check: <see cref="IsGpuJobRunning" />, after joining a Model Lab eviction already under way; a refusal latches the demand first.</summary>
+    /// <remarks>
+    ///     The wait returns at once for a busy holder. The check is read again after it, since another holder may own the gate by
+    ///     then. A refusal that raised no demand would let an active Model Lab worker go idle and keep running from the directory the
+    ///     retry swaps.
+    /// </remarks>
+    public async Task<bool> RefusesForRunningGpuJobAsync(CancellationToken ct)
     {
+        if (!IsGpuJobRunning)
+        {
+            return false;
+        }
+
+        _ = await _idlePreemption.WaitForReleaseAsync(GpuWorkAdmission.IdleHolderReleaseBound, ct);
         if (!IsGpuJobRunning)
         {
             return false;

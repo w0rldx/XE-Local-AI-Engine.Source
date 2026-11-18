@@ -8608,6 +8608,7 @@
 		"trigger": "Speicherauslastung und geladene Modelle",
 		"usage": "{{used}} von {{total}} belegt, {{available}} frei",
 		"vram": "VRAM",
+		"vramAllocated": "{{size}} GPU-Speicher zugewiesen",
 		"vramUnavailable": "VRAM-Auslastung nicht verfügbar"
 	},
 	"theme": {

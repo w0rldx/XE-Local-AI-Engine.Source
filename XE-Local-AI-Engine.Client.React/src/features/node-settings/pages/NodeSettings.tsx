@@ -80,6 +80,10 @@ import { invalidateAfterNodeSettingsSave } from "@/features/node-settings/querie
 import { useEffectiveToolCapableModels } from "@/features/node-settings/queries/useEffectiveToolCapableModels";
 import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard";
 
+// One id for every save outcome (validation error, save error, saved), so a corrected save replaces the earlier error
+// toast instead of stacking beside it.
+const SAVE_TOAST_ID = "node-settings-save";
+
 interface NodeSettingsProps {
 	// The active section, from the route's `?section=` search param. Absent means the page keeps its own selection,
 	// starting at General.
@@ -253,6 +257,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 							"Node settings saved. Some changes wait for a node restart; the banner at the top lists them.",
 						)
 					: t("pages.nodeSettings.saved", "Node settings saved."),
+				{ id: SAVE_TOAST_ID },
 			);
 			seedDraft(updatedSettings);
 			setFieldErrors({});
@@ -261,13 +266,15 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 			queryClient.setQueryData(getNodeSettingsQueryKey(), updatedSettings);
 			await invalidateAfterNodeSettingsSave(queryClient, variables.body);
 		},
-		onError: (error) => toast.error(nodeSettingsErrorMessage(error)),
+		onError: (error) => toast.error(nodeSettingsErrorMessage(error), { id: SAVE_TOAST_ID }),
 	});
 
 	// A validation failure can sit in a section the operator is not looking at; take them to the first one.
 	const showErrors = (errors: Readonly<Record<string, string>>): void => {
 		setFieldErrors(errors);
-		toast.error(t("pages.nodeSettings.fields.validationError", "Some settings are invalid. Fix the highlighted fields."));
+		toast.error(t("pages.nodeSettings.fields.validationError", "Some settings are invalid. Fix the highlighted fields."), {
+			id: SAVE_TOAST_ID,
+		});
 		const firstSection = Object.keys(errors)
 			.map(nodeSettingsSectionOf)
 			.find((candidate) => candidate !== undefined);

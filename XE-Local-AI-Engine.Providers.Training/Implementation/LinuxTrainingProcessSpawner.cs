@@ -135,7 +135,7 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
                 StartTicks = stat?.StartTicks ?? 0,
                 RunToken = request.RunToken
             };
-            return new LinuxTrainingProcessHandle(process, receipt, output, _logger);
+            return new LinuxTrainingProcessHandle(process, receipt, output, _logger, _timeProvider);
         }
         catch
         {
@@ -191,7 +191,8 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
         }
     }
 
-    private static Process StartStreaming(ProcessStartInfo startInfo, ChannelWriter<string> writer)
+    /// <summary>Starts <paramref name="startInfo" /> with its stdout and stderr merged into <paramref name="writer" />, which completes once both close.</summary>
+    internal static Process StartStreaming(ProcessStartInfo startInfo, ChannelWriter<string> writer)
     {
         var process = new Process
         {

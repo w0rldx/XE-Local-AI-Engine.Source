@@ -154,20 +154,24 @@ public sealed class ModelLabServeWorkerTests
         AssertEx.Empty(process.WrittenLines);
     }
 
-    /// <summary>A ready belongs to the process: one stamped with a job, or one without its VRAM, breaks the worker and fails the job.</summary>
+    /// <summary>A ready belongs to the process: one stamped with a job, or one without a VRAM count of zero or more, breaks the worker and fails the job.</summary>
     [Test]
-    [Arguments(true)]
-    [Arguments(false)]
-    public async Task AMalformedReady_BreaksTheWorker_AndFailsTheJob(bool withJobId)
+    [Arguments("jobId")]
+    [Arguments("missing")]
+    [Arguments("negative")]
+    public async Task AMalformedReady_BreaksTheWorker_AndFailsTheJob(string fault)
     {
         using var process = new ScriptedProcess
         {
             OnRun = script =>
             {
                 script.Say("""{"event":"done","cancelled":false}""");
-                script.Say(withJobId
-                    ? $"{{\"event\":\"ready\",\"jobId\":\"{script.JobId}\",\"vramBytes\":1000,\"reservedBytes\":2000}}"
-                    : """{"event":"ready","reservedBytes":2000}""");
+                script.Say(fault switch
+                {
+                    "jobId" => $"{{\"event\":\"ready\",\"jobId\":\"{script.JobId}\",\"vramBytes\":1000,\"reservedBytes\":2000}}",
+                    "missing" => """{"event":"ready","reservedBytes":2000}""",
+                    _ => """{"event":"ready","vramBytes":-1,"reservedBytes":2000}"""
+                });
             }
         };
         using var workRoot = new TempDirectory("modellab-worker");
@@ -179,6 +183,77 @@ public sealed class ModelLabServeWorkerTests
         AssertEx.Equal(ModelLabExperimentStatus.Failed, outcome.Run.FailureOrNull(cancelRequested: false)!.Status);
         AssertEx.False(outcome.Reusable);
         AssertEx.True(process.Killed);
+        AssertEx.Null(worker.VramBytes, "A rejected ready leaves no sample behind.");
+    }
+
+    /// <summary>The ready's allocated VRAM is kept for the residents row, from the first ready on and replaced by each later one.</summary>
+    [Test]
+    public async Task EachReady_KeepsItsAllocatedVram()
+    {
+        var ready = 0;
+        using var process = new ScriptedProcess
+        {
+            OnRun = script =>
+            {
+                script.Say("""{"event":"done","cancelled":false}""");
+                script.Say($"{{\"event\":\"ready\",\"vramBytes\":{++ready * 1000},\"reservedBytes\":4000}}");
+            }
+        };
+        using var workRoot = new TempDirectory("modellab-worker");
+        using var worker = await SpawnReadyAsync(process, workRoot.Path, new ModelLabJobOptions());
+        AssertEx.Null(worker.VramBytes, "No ready has come yet.");
+
+        _ = await worker.RunJobAsync(Guid.NewGuid(), "job.json", static _ => { }, CancellationToken.None).WaitAsync(TestBudgets.Contended);
+        AssertEx.Equal<long?>(1000, worker.VramBytes);
+        var second = await worker.RunJobAsync(Guid.NewGuid(), "job.json", static _ => { }, CancellationToken.None).WaitAsync(TestBudgets.Contended);
+
+        AssertEx.True(second.Reusable);
+        AssertEx.Equal<long?>(2000, worker.VramBytes, "The allocated count, never the reserved one.");
+    }
+
+    /// <summary>A descendant holding the output pipe neither hides the worker's exit nor keeps feeding lines to the worker being torn down.</summary>
+    [Test]
+    public async Task Stop_WhenTheOutputOutlivesTheExit_IsVerified_AndRetiresThePumpBeforeReturning()
+    {
+        using var process = new ScriptedProcess
+        {
+            OutputOutlivesExit = true
+        };
+        using var workRoot = new TempDirectory("modellab-worker");
+        using var worker = await SpawnReadyAsync(process, workRoot.Path, new ModelLabJobOptions
+        {
+            EvictGrace = TestBudgets.Contended,
+            ExitVerifyTimeout = TestBudgets.Contended
+        });
+
+        var exited = await worker.StopAsync().WaitAsync(TestBudgets.Contended);
+
+        AssertEx.True(exited, "The worker exited on its evict; the open pipe does not hide that.");
+        AssertEx.True(process.EvictRequested);
+        AssertEx.False(process.Killed, "Seen within the grace, so no kill was needed.");
+        AssertEx.True(process.OutputReadEnded, "The pump stopped reading before the stop returned.");
+    }
+
+    /// <summary>A descendant that never stops writing cannot hold the stop open: the pump checks the stop before each line.</summary>
+    [Test]
+    public async Task Stop_WhenTheOutputNeverRunsDryAfterTheExit_StillReturns_AndRetiresThePump()
+    {
+        using var process = new ScriptedProcess
+        {
+            OutputFloodsAfterExit = true
+        };
+        using var workRoot = new TempDirectory("modellab-worker");
+        using var worker = await SpawnReadyAsync(process, workRoot.Path, new ModelLabJobOptions
+        {
+            EvictGrace = TestBudgets.Contended,
+            ExitVerifyTimeout = TestBudgets.Contended
+        });
+
+        var exited = await worker.StopAsync().WaitAsync(TestBudgets.Contended);
+
+        AssertEx.True(exited);
+        AssertEx.False(process.Killed, "Seen within the grace, so no kill was needed.");
+        AssertEx.True(process.OutputReadEnded, "The pump stopped reading before the stop returned.");
     }
 
     /// <summary>The spawn's own directory is made before the process; a spawn that throws leaves nothing behind.</summary>

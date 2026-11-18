@@ -150,13 +150,18 @@ public sealed class DirectInferenceService : IDirectInferenceService
     {
         var invocationId = Guid.NewGuid();
 
-        // Fail fast rather than queue silently behind a job that may hold the GPU for hours.
-        if (GpuWorkHolderNotice.ForModelLoad(_gpuWorkGate, _idlePreemption, invocationId) is { } holderNotice)
+        // Fail fast rather than queue silently behind a job that may hold the GPU for hours; an eviction already under way is
+        // joined instead (the wait returns at once for a busy holder), then the gate is read again, since another holder may own it now.
+        if (GpuWorkHolderNotice.ForModelLoad(_gpuWorkGate, _idlePreemption, invocationId) is not null)
         {
-            // The refusal is still demand: a running Model Lab job's end then evicts its worker instead of keeping it warm.
-            _idlePreemption.RequestPreemption();
-            yield return ErrorEvent(DirectInferenceErrorCodes.GpuWorkExclusive, holderNotice.Message);
-            yield break;
+            _ = await _idlePreemption.WaitForReleaseAsync(GpuWorkAdmission.IdleHolderReleaseBound, cancellationToken);
+            if (GpuWorkHolderNotice.ForModelLoad(_gpuWorkGate, _idlePreemption, invocationId) is { } holderNotice)
+            {
+                // The refusal is still demand on the holder now present: a running Model Lab job's end then evicts its worker instead of keeping it warm.
+                _idlePreemption.RequestPreemption();
+                yield return ErrorEvent(DirectInferenceErrorCodes.GpuWorkExclusive, holderNotice.Message);
+                yield break;
+            }
         }
 
         // Read before admission: past it, a failed read would leave the live entry open.

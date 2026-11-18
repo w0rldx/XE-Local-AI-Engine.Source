@@ -71,6 +71,76 @@ public sealed class TrainingRuntimeOrchestrationServiceTests
         AssertEx.Equal(expected: 1, holder.EvictionCount);
     }
 
+    /// <summary>The routes' pre-check joins a Model Lab eviction already under way instead of answering 409 for it.</summary>
+    [Test]
+    public async Task PreCheck_MeetingAnEvictionInProgress_JoinsIt_AndDoesNotRefuse()
+    {
+        await using var holders = new IdleHolderHarness();
+        var evictionMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var holder = await holders.AdmitIdleAsync(evictionMayFinish.Task);
+        holder.RequestPreemption();
+        var orchestration = Orchestration(holders);
+        AssertEx.True(orchestration.IsGpuJobRunning, "A leaving worker still holds the gate and the lease.");
+
+        var checking = orchestration.RefusesForRunningGpuJobAsync(CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => holder.PreemptionRequestCount >= 2, TestBudgets.Contended, "The pre-check's wait reached the leaving holder.");
+        evictionMayFinish.SetResult();
+
+        AssertEx.False(await checking.WaitAsync(TestBudgets.Contended));
+        AssertEx.Equal(expected: 1, holder.EvictionCount);
+    }
+
+    /// <summary>A running Model Lab job is never waited on: the pre-check refuses at once and latches the demand.</summary>
+    [Test]
+    public async Task PreCheck_WhileAModelLabJobIsActive_RefusesAtOnce_AndLatchesTheDemand()
+    {
+        await using var holders = new IdleHolderHarness();
+        var holder = await holders.AdmitAsync();
+        var orchestration = Orchestration(holders);
+
+        AssertEx.True(await orchestration.RefusesForRunningGpuJobAsync(CancellationToken.None).WaitAsync(TestBudgets.Contended));
+        AssertEx.Equal(FakeGpuIdleHolder.HolderState.Active, holder.State);
+        AssertEx.True(holder.PreemptionPending);
+    }
+
+    /// <summary>A steering hand-off ends the worker's session while its arms keep the gate and the lease: the re-check still refuses.</summary>
+    [Test]
+    public async Task PreCheck_WhenTheLeavingWorkerHandsItsHoldsToSteeringArms_Refuses()
+    {
+        await using var holders = new IdleHolderHarness();
+        var evictionMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        FakeGpuIdleHolder? holder = null;
+        holder = new FakeGpuIdleHolder(async () =>
+        {
+            await evictionMayFinish.Task;
+            holders.Broker.Deregister(holder!);
+        });
+        holders.Broker.Register(holder);
+#pragma warning disable CA2000 // Given back in the finally below, as the arms would at their end.
+        AssertEx.Succeeded(holders.Gate.TryBeginExclusive(GpuWorkKind.ModelLabExperiment, out var gate));
+#pragma warning restore CA2000
+        var lease = AssertEx.NotNull(await holders.Supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None, raisesDemand: false));
+        try
+        {
+            holder.EnterActive();
+            holder.ExitActive();
+            holder.RequestPreemption();
+            var orchestration = Orchestration(holders);
+
+            var checking = orchestration.RefusesForRunningGpuJobAsync(CancellationToken.None);
+            await AssertEx.EventuallyAsync(() => holder.PreemptionRequestCount >= 2, TestBudgets.Contended, "The pre-check's wait reached the leaving holder.");
+            evictionMayFinish.SetResult();
+
+            AssertEx.True(await checking.WaitAsync(TestBudgets.Contended));
+            AssertEx.Equal(FakeGpuIdleHolder.HolderState.Released, holder.State);
+        }
+        finally
+        {
+            await lease.DisposeAsync();
+            gate.Dispose();
+        }
+    }
+
     /// <summary>No Model Lab worker is left unconfirmed, so admission is the gate's and the lease's alone.</summary>
     private static TrainingRuntimeOrchestrationService Orchestration(IdleHolderHarness holders) =>
         Orchestration(holders.Gate, holders.Broker, holders.Supervisor, Substitute.For<IModelLabActiveJob>());

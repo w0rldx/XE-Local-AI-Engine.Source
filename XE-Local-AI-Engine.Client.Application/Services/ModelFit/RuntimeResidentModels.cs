@@ -36,4 +36,7 @@ public sealed class RuntimeResident
 
     /// <summary>Whether that runtime's eject would be admitted now: the same gate fields its eviction reservation refuses on.</summary>
     public required bool CanEject { get; init; }
+
+    /// <summary>The Model Lab worker's allocated GPU memory at its last ready; <see langword="null" /> for image and whisper rows and before that ready.</summary>
+    public long? VramBytes { get; init; }
 }

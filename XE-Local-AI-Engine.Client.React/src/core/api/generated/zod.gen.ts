@@ -5975,6 +5975,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentResponse = 
 	state: zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentStateDto,
 	backend: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto.nullish(),
 	canEject: z.boolean(),
+	vramBytes: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentsResponse = z.object({

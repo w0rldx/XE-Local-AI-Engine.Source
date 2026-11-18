@@ -725,6 +725,26 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		expect(generatedMock.saveFn).not.toHaveBeenCalled();
 	});
 
+	// One save outcome, one toast: the corrected save replaces the validation error instead of stacking beside it.
+	it("shows the validation error and the later saved notice under one toast id", async () => {
+		renderPage("runtime");
+		const maxProcesses = (await screen.findByTestId("node-settings-llama-max-processes")) as HTMLInputElement;
+		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
+
+		fireEvent.change(maxProcesses, { target: { value: "17" } });
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+		await waitFor(() =>
+			expect(toastMock.error).toHaveBeenCalledWith("Some settings are invalid. Fix the highlighted fields.", {
+				id: "node-settings-save",
+			}),
+		);
+
+		fireEvent.change(maxProcesses, { target: { value: "5" } });
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.any(String), { id: "node-settings-save" }));
+		expect(toastMock.error).toHaveBeenCalledTimes(1);
+	});
+
 	it("keeps an out-of-range timeout as typed and shows its range error", async () => {
 		renderPage("chat");
 		await screen.findByDisplayValue(/600/);
@@ -1114,6 +1134,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		await waitFor(() =>
 			expect(toastMock.success).toHaveBeenCalledWith(
 				"Node settings saved. Some changes wait for a node restart; the banner at the top lists them.",
+				{ id: "node-settings-save" },
 			),
 		);
 	});
@@ -1131,7 +1152,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		fireEvent.change(screen.getByTestId("node-settings-hf-default-quant"), { target: { value: "Q5_K_M" } });
 		fireEvent.click(screen.getByTestId("node-settings-save-button"));
 
-		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Node settings saved."));
+		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Node settings saved.", { id: "node-settings-save" }));
 	});
 
 	it("saves a feature switch from the General Features card and says a restart is needed", async () => {
@@ -1155,6 +1176,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		await waitFor(() =>
 			expect(toastMock.success).toHaveBeenCalledWith(
 				"Node settings saved. Some changes wait for a node restart; the banner at the top lists them.",
+				{ id: "node-settings-save" },
 			),
 		);
 	});
@@ -1224,7 +1246,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 				body: { enableTools: false, maxMessageRequestTimeoutSeconds: 600 },
 			}),
 		);
-		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Node settings saved."));
+		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Node settings saved.", { id: "node-settings-save" }));
 	});
 
 	it("saves the web-access switch and a cleared SearXNG URL", async () => {

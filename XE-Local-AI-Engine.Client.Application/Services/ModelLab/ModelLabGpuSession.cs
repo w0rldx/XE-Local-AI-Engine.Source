@@ -96,6 +96,7 @@ internal sealed class ModelLabGpuSession : IGpuIdleHolder
         get
         {
             RuntimeResidentState? state;
+            ModelLabServeWorker? worker;
             lock (_sync)
             {
                 state = _state switch
@@ -105,13 +106,16 @@ internal sealed class ModelLabGpuSession : IGpuIdleHolder
                     ModelLabSessionState.Idle => RuntimeResidentState.Idle,
                     _ => null
                 };
+                worker = _worker;
             }
 
+            // Read outside the session's lock, so the worker's lock never nests inside it.
             return state is { } shown
                 ? new ModelLabWarmResident
                 {
                     State = shown,
-                    ModelId = RepoId
+                    ModelId = RepoId,
+                    VramBytes = worker?.VramBytes
                 }
                 : null;
         }

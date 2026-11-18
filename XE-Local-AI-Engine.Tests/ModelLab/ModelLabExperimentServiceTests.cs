@@ -1855,6 +1855,21 @@ public sealed class ModelLabExperimentServiceTests
         /// <summary>Throws from the spawn, as a spawner that cannot start the process does.</summary>
         public bool FailsToSpawn { get; init; }
 
+        /// <summary>
+        ///     An exit leaves the output open, as a descendant holding the pipe would; <see cref="WaitForExitAsync" /> then waits for
+        ///     that pipe too, as <c>Process.WaitForExitAsync</c> does, while <see cref="WaitForGroupExitAsync" /> does not.
+        /// </summary>
+        public bool OutputOutlivesExit { get; init; }
+
+        /// <summary>
+        ///     After the exit the output never runs dry, as a descendant writing without pause would: the reader keeps yielding lines
+        ///     whatever its token says, as <c>ChannelReader.ReadAllAsync</c> does while its buffer holds lines.
+        /// </summary>
+        public bool OutputFloodsAfterExit { get; init; }
+
+        /// <summary>The reader of the output stopped: the stream ended, or its reader was cancelled.</summary>
+        public volatile bool OutputReadEnded;
+
         /// <summary>The script has a job: the spawn, or under <c>--serve</c> the first <c>run</c> command.</summary>
         public Task Spawned => _spawned.Task;
 
@@ -2015,10 +2030,30 @@ public sealed class ModelLabExperimentServiceTests
                 TestBudgets.Contended, $"Run command {ordinal} reached the script.");
 
         public IAsyncEnumerable<string> ReadOutputAsync(CancellationToken cancellationToken) =>
-            ReadAsync(cancellationToken);
+            OutputFloodsAfterExit ? FloodAfterExitAsync(cancellationToken) : ReadAsync(cancellationToken);
 
-        public Task<int> WaitForExitAsync(CancellationToken cancellationToken) =>
-            _exit.Task.WaitAsync(cancellationToken);
+        public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)
+        {
+            var exitCode = await _exit.Task.WaitAsync(cancellationToken);
+            if (OutputOutlivesExit)
+            {
+                await _output.Reader.Completion.WaitAsync(cancellationToken);
+            }
+
+            return exitCode;
+        }
+
+        public async Task<int?> WaitForGroupExitAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await _exit.Task.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return null;
+            }
+        }
 
         public void RequestStop()
         {
@@ -2133,15 +2168,55 @@ public sealed class ModelLabExperimentServiceTests
 
         private void End(int exitCode)
         {
-            _output.Writer.TryComplete();
+            if (!OutputOutlivesExit)
+            {
+                _output.Writer.TryComplete();
+            }
+
             _exit.TrySetResult(exitCode);
         }
 
         private async IAsyncEnumerable<string> ReadAsync([EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            await foreach (var line in _output.Reader.ReadAllAsync(cancellationToken))
+            try
             {
-                yield return line;
+                await foreach (var line in _output.Reader.ReadAllAsync(cancellationToken))
+                {
+                    yield return line;
+                }
+            }
+            finally
+            {
+                OutputReadEnded = true;
+            }
+        }
+
+        private async IAsyncEnumerable<string> FloodAfterExitAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            try
+            {
+                while (!_exit.Task.IsCompleted)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (_output.Reader.TryRead(out var line))
+                    {
+                        yield return line;
+                        continue;
+                    }
+
+                    _ = await Task.WhenAny(_output.Reader.WaitToReadAsync(cancellationToken).AsTask(), _exit.Task);
+                }
+
+                // Never dry and never checking the token: only the consumer, or a kill, stops it.
+                while (!Killed)
+                {
+                    yield return "stray output from a descendant";
+                    await Task.Yield();
+                }
+            }
+            finally
+            {
+                OutputReadEnded = true;
             }
         }
 

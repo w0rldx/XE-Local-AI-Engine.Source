@@ -1330,6 +1330,13 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
 
         var outcome = await worker.RunJobAsync(id, jobPath, parsed => Publish(id, parsed), active.Cancellation.Token);
+        // A reusable outcome came back with this job's ready, so the sample is this job's.
+        if (outcome.Reusable && worker.VramBytes is { } vramBytes)
+        {
+            _logger.LogInformation("The Model Lab worker for {RepoId} is ready after experiment {ExperimentId}, holding {VramBytes} bytes of allocated GPU memory.",
+                active.Session.RepoId, id, vramBytes);
+        }
+
         // The receipt file still names the worker; the row lets go so it can be deleted and trimmed.
         await SetReceiptAsync(id, receipt: null);
         active.WorkerReusable = active.KeepsWorker && outcome.Reusable;

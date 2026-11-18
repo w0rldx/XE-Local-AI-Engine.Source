@@ -217,6 +217,94 @@ describe("RuntimeResourcesWidget", () => {
 		);
 	});
 
+	// A keyboard Eject unmounts the focused button with its row; focus must land on the list heading, never on another
+	// Eject, where a repeated Enter would unload a second model.
+	describe("focus after an eject", () => {
+		// The running list answers `before` until the eject, then `after`, as the supervisor would.
+		function serveEject(
+			before: string[],
+			after: string[],
+			outcome = "ejected",
+			answered: Promise<void> = Promise.resolve(),
+		): { readonly reads: () => number } {
+			let items = before;
+			let reads = 0;
+			server.use(
+				jsonRoute("get", "model-fit/resources", { totalRamBytes: 16 * gib, availableRamBytes: 4 * gib, gpus: [] }),
+				http.get(localApiPath("model-fit/running"), () => {
+					reads += 1;
+					return HttpResponse.json({ items: items.map((modelName) => resident({ modelName })) });
+				}),
+				jsonRoute("get", "model-fit/runtime-residents", { items: [] }),
+				http.post(localApiPath("model-fit/running/eject"), async () => {
+					await answered;
+					items = after;
+					return HttpResponse.json({ modelName: "ejected", role: "chat", outcome });
+				}),
+			);
+			return { reads: () => reads };
+		}
+
+		function focusAndClick(element: HTMLElement): void {
+			element.focus();
+			fireEvent.click(element);
+		}
+
+		it.each([
+			["the only row", ["alpha"], [], "alpha"],
+			["the last row", ["alpha", "beta"], ["alpha"], "beta"],
+			["a middle row", ["alpha", "beta", "gamma"], ["alpha", "gamma"], "beta"],
+			["a row the next list replaces at the same count", ["alpha", "beta"], ["alpha", "gamma"], "beta"],
+		])("moves focus to the list heading after ejecting %s", async (_case, before, after, ejected) => {
+			serveEject(before, after);
+
+			const dropdown = await openPopover();
+			focusAndClick(await within(dropdown).findByRole("button", { name: `Eject ${ejected}` }));
+
+			const heading = within(dropdown).getByText("Loaded models");
+			await waitFor(() => expect(document.activeElement).toBe(heading));
+			expect(within(dropdown).queryByTestId(`runtime-resources-row-${ejected}`)).toBeNull();
+			expect(heading.getAttribute("tabindex")).toBe("-1");
+		});
+
+		it("leaves focus alone when it sits on another control in the popover", async () => {
+			serveEject(["alpha", "beta"], ["beta"]);
+
+			const dropdown = await openPopover();
+			const link = within(dropdown).getByRole("link", { name: "Manage loaded models" });
+			link.focus();
+			fireEvent.click(await within(dropdown).findByRole("button", { name: "Eject alpha" }));
+
+			await waitFor(() => expect(within(dropdown).queryByTestId("runtime-resources-row-alpha")).toBeNull());
+			expect(document.activeElement).toBe(link);
+		});
+
+		it("gives focus back to the same Eject button when a busy model was left running", async () => {
+			let answer!: () => void;
+			const answered = new Promise<void>((resolve) => {
+				answer = resolve;
+			});
+			const running = serveEject(["alpha", "beta"], ["alpha", "beta"], "timed_out_still_busy", answered);
+
+			const dropdown = await openPopover();
+			const button = await within(dropdown).findByRole("button", { name: "Eject alpha" });
+			focusAndClick(button);
+			await waitFor(() => expect(button).toHaveProperty("disabled", true));
+			// jsdom keeps focus on a disabled button (and ignores its blur()); a browser drops it to the body, which is what
+			// focusing the body simulates.
+			document.body.tabIndex = -1;
+			document.body.focus();
+			document.body.removeAttribute("tabindex");
+			expect(document.activeElement).toBe(document.body);
+			answer();
+
+			await waitFor(() => expect(toastMock.warning).toHaveBeenCalled());
+			await waitFor(() => expect(running.reads()).toBe(2));
+			await waitFor(() => expect(button).toHaveProperty("disabled", false));
+			expect(document.activeElement).toBe(button);
+		});
+	});
+
 	it("lists image and transcription residents with their runtime, state and backend", async () => {
 		serve(
 			[gpu(0, 32, 8)],
@@ -307,6 +395,24 @@ describe("RuntimeResourcesWidget", () => {
 		expect(within(row).getByText(modelId ?? "Starting…")).toBeTruthy();
 		expect(within(row).getByText(badge)).toBeTruthy();
 		expect(within(row).getByRole("button", { name: "Eject Model Lab worker" })).toHaveProperty("disabled", !canEject);
+	});
+
+	it("shows the GPU memory a Model Lab worker allocated, and nothing for a row without a reading", async () => {
+		serve(
+			[gpu(0, 32, 8)],
+			[],
+			[
+				runtimeResident({ runtime: "modelLab", modelId: "Qwen/Qwen3-0.6B", vramBytes: 1.5 * gib }),
+				runtimeResident({ vramBytes: null }),
+			],
+		);
+
+		const dropdown = await openPopover();
+
+		const modelLab = await within(dropdown).findByTestId("runtime-resources-row-modelLab-Qwen/Qwen3-0.6B");
+		expect(within(modelLab).getByText("1.5 GB GPU memory allocated")).toBeTruthy();
+		const image = within(dropdown).getByTestId("runtime-resources-row-image-sdxl-turbo");
+		expect(within(image).queryByText(/GPU memory allocated/)).toBeNull();
 	});
 
 	it("ejects the idle Model Lab worker through its own endpoint and refreshes the residents", async () => {

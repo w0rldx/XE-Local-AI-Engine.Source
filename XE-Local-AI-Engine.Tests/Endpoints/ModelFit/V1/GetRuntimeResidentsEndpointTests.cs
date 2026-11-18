@@ -43,10 +43,11 @@ public sealed class GetRuntimeResidentsEndpointTests
         AssertEx.Equal("items", PropertyNames(document.RootElement));
         var items = document.RootElement.GetProperty("items").EnumerateArray().ToArray();
         AssertEx.Equal(expected: 3, items.Length);
-        AssertEx.Equal("backend,canEject,modelId,runtime,state", PropertyNames(items[0]));
+        AssertEx.Equal("backend,canEject,modelId,runtime,state,vramBytes", PropertyNames(items[0]));
         AssertEx.Equal("image|sd15|active|null|False", Row(items[0]));
         AssertEx.Equal("image|sdxl|exited|null|False", Row(items[1]));
         AssertEx.Equal("transcription|large-v3-turbo|idle|cuda|True", Row(items[2]));
+        AssertEx.True(items.All(static item => item.GetProperty("vramBytes").ValueKind == JsonValueKind.Null), "Only a Model Lab row reports allocated VRAM.");
     }
 
     [Test]
@@ -58,15 +59,17 @@ public sealed class GetRuntimeResidentsEndpointTests
         host.ModelLabWarm.Resident = new ModelLabWarmResident
         {
             State = RuntimeResidentState.Idle,
-            ModelId = "Qwen/Qwen3-0.6B"
+            ModelId = "Qwen/Qwen3-0.6B",
+            VramBytes = 1_234_567_890
         };
 
         var (status, body) = await GetAsync(host, factory => factory.AddNodeBearerToken);
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         using var document = JsonDocument.Parse(body);
-        var rows = document.RootElement.GetProperty("items").EnumerateArray().Select(Row).ToArray();
-        AssertEx.Equal("modelLab|Qwen/Qwen3-0.6B|idle|null|True", string.Join(',', rows));
+        var items = document.RootElement.GetProperty("items").EnumerateArray().ToArray();
+        AssertEx.Equal("modelLab|Qwen/Qwen3-0.6B|idle|null|True", string.Join(',', items.Select(Row)));
+        AssertEx.Equal(1_234_567_890L, items.Single().GetProperty("vramBytes").GetInt64(), "The allocated count reaches the wire as a number.");
     }
 
     [Test]

@@ -243,7 +243,8 @@ public sealed class RuntimeResidentsServiceTests
             Resident = new ModelLabWarmResident
             {
                 State = state,
-                ModelId = "Qwen/Qwen3-0.6B"
+                ModelId = "Qwen/Qwen3-0.6B",
+                VramBytes = 1_234_567_890
             }
         };
 
@@ -254,6 +255,7 @@ public sealed class RuntimeResidentsServiceTests
         AssertEx.Equal(state, row.State);
         AssertEx.Null(row.Backend);
         AssertEx.Equal(canEject, row.CanEject);
+        AssertEx.Equal<long?>(1_234_567_890, row.VramBytes);
     }
 
     [Test]

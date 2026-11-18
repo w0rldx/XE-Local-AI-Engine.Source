@@ -10,4 +10,7 @@ public sealed class ModelLabWarmResident
 
     /// <summary>The Hugging Face repository id of the checkpoint the worker loads or holds.</summary>
     public required string ModelId { get; init; }
+
+    /// <summary>The GPU memory the model's tensors held at the worker's last ready (allocated, not reserved); <see langword="null" /> before its first.</summary>
+    public long? VramBytes { get; init; }
 }

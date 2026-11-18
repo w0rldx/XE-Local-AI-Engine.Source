@@ -2,6 +2,7 @@ import { Badge, Button, Group, Stack, Text } from "@mantine/core";
 import { IconPlayerEject } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { humanizeBytes } from "@/core/formatting/BytesFormatting";
 import type {
 	ResidentRuntime,
 	RuntimeResident,
@@ -56,6 +57,13 @@ export function RuntimeResidentRow({ resident, ejecting, onEject }: RuntimeResid
 						{t(`runtimeResources.state.${resident.state}`)}
 					</Badge>
 				</Group>
+				{resident.vramBytes === null ? null : (
+					<Text size="xs" c="dimmed">
+						{t("runtimeResources.vramAllocated", "{{size}} GPU memory allocated", {
+							size: humanizeBytes(resident.vramBytes),
+						})}
+					</Text>
+				)}
 			</Stack>
 			<Button
 				size="compact-xs"

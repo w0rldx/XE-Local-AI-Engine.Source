@@ -48,6 +48,7 @@ public sealed class ModelLabWarmSessionTests
 
         AssertEx.Equal(RuntimeResidentState.Idle, host.Service.GetResident()!.State);
         AssertEx.Equal("Qwen/Qwen3.5-0.8B", host.Service.GetResident()!.ModelId);
+        AssertEx.Equal<long?>(1000, host.Service.GetResident()!.VramBytes, "The row carries the allocated count of the worker's ready.");
         AssertEx.Equal(GpuWorkKind.ModelLabExperiment, host.Gate.ExclusiveKind!.Value, "An idle worker keeps the gate.");
         AssertEx.True(host.Supervisor.IsKeepWarmSuppressed(), "And the lease.");
         AssertEx.True(host.Ledger.Reserved.GpuBytes > 0, "And its reservation, so no VRAM is unaccounted.");

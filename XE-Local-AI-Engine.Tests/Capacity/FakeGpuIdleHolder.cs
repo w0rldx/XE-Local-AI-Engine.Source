@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 internal sealed class FakeGpuIdleHolder : IGpuIdleHolder
 {
     private readonly Lock _sync = new();
+    private readonly TimeProvider _clock;
     private readonly Func<Task> _release;
     private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private HolderState _state = HolderState.Admitting;
@@ -18,9 +19,12 @@ internal sealed class FakeGpuIdleHolder : IGpuIdleHolder
     private int _requests;
     private Task _eviction = Task.CompletedTask;
 
-    public FakeGpuIdleHolder(Func<Task> release)
+    /// <param name="release">Gives back what the holder holds; its eviction runs it, then reports the release.</param>
+    /// <param name="clock">Bounds <see cref="WaitForReleaseAsync" />, as the session's own clock does; the system clock when null.</param>
+    public FakeGpuIdleHolder(Func<Task> release, TimeProvider? clock = null)
     {
         _release = release;
+        _clock = clock ?? TimeProvider.System;
     }
 
     public enum HolderState
@@ -141,7 +145,7 @@ internal sealed class FakeGpuIdleHolder : IGpuIdleHolder
 
         try
         {
-            await _released.Task.WaitAsync(bound, ct);
+            await _released.Task.WaitAsync(bound, _clock, ct);
             return true;
         }
         catch (TimeoutException)
