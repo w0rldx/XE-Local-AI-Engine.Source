@@ -504,7 +504,7 @@ jobs:
             'ProcessAudioCaptureTests', 'ProviderLauncherSharedHandleTests', 'PathContainmentTests',
             'SecureFilePermissionsTests', 'DockerDaemonEndpointResolverTests', 'SingleInstanceLeaseTests',
             'WindowsLauncherApplicationTests', 'FrameworkDependentVelopackBootstrapTests', 'DesktopLifecycleTests',
-            'DesktopParentLifetimeTests', 'DesktopPortStoreTests',
+            'DesktopParentLifetimeTests', 'DesktopPortStoreTests', 'TrainingProcessReaperTests', 'LinuxTrainingProcessGroupTests',
             # MXC sandbox mechanism. The execution test skips here (no host prep on this runner); the windows-sandbox
             # job preps the host and requires it to run.
             'MxcSandboxRuntimeWindowsTests', 'MxcAclResidueSweeperWindowsTests', 'ProcessSandboxAppContainerWindowsTests'

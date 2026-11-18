@@ -13,8 +13,11 @@ interface RunningModelsPanelProps {
 	runningModels: readonly RunningModel[];
 	isLoading: boolean;
 	error: unknown;
-	/** May open a confirmation first; the returned promise settles once that dialog closed. */
-	onEject: (model: RunningModel) => Promise<void> | void;
+	/**
+	 * Opens a confirmation first and may await the request. `restoreFocus` gives lost focus back (the Eject, else the
+	 * heading); pass it as each dialog's `onClosed`, the only point the panel restores focus.
+	 */
+	onEject: (model: RunningModel, restoreFocus: () => void) => Promise<void> | void;
 	ejectingModelName: string | null;
 }
 
@@ -32,6 +35,7 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 	// click on blank page space). A removed element can also blur with no related target, so that case is told apart a
 	// frame later: a removed element is no longer connected and stays remembered.
 	const focusedRef = useRef<HTMLElement | null>(null);
+	const ejectClicksRef = useRef(0);
 	const rowKeys = runningModels.map((model) => `${model.modelName}-${model.role}`).join("|");
 
 	// When the focused row goes away (an eject, a push), the browser drops focus to the body; hand it to the heading
@@ -174,13 +178,19 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 								pending={ejectingModelName === model.modelName}
 								onClick={async (event) => {
 									const eject = event.currentTarget;
-									try {
-										await onEject(model);
-									} finally {
-										// A confirmation dialog hands focus back to its opener, which is detached when the row went while
-										// it was open; then the heading takes it.
-										(eject.isConnected ? eject : headingRef.current)?.focus();
-									}
+									ejectClicksRef.current += 1;
+									const click = ejectClicksRef.current;
+									// Each confirmation runs this once it has closed: only lost focus comes back, and only to the newest
+									// flow. A dialog hands focus back to its opener, which is detached when the row went while it was
+									// open; then the heading takes it. Nothing restores when the request ends, so a user who moved
+									// focus away meanwhile keeps it there; a row removed later is the rowKeys effect's.
+									const restore = () => {
+										const active = document.activeElement;
+										if (click === ejectClicksRef.current && (active === null || active === document.body)) {
+											(eject.isConnected ? eject : headingRef.current)?.focus();
+										}
+									};
+									await onEject(model, restore);
 								}}
 								data-testid={`loaded-models-llamacpp-eject-${model.modelName}`}
 							>

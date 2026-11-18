@@ -15,11 +15,14 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 		resolve: (value: boolean) => void;
 		reject: () => void;
 	} | null>(null);
+	// The open dialog's onClosed; a newer confirm replaces it, so a superseded dialog's callback never runs.
+	const onClosedRef = useRef<(() => void) | undefined>(undefined);
 
 	const confirm = useCallback(
 		(newOptions: ConfirmOptions = {}) =>
 			new Promise<boolean>((resolve, reject) => {
 				setOptions(newOptions);
+				onClosedRef.current = newOptions.onClosed;
 				resolveRejectRef.current = { resolve, reject };
 				setIsOpen(true);
 			}),
@@ -41,6 +44,16 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 		handleClose();
 	}, [handleClose]);
 
+	// Mantine reports the exit transition's end just before the update that unmounts the dialog; a frame later that
+	// commit is done and focus inside it has fallen to the body. Taking the callback runs it once.
+	const handleExitTransitionEnd = useCallback(() => {
+		const onClosed = onClosedRef.current;
+		onClosedRef.current = undefined;
+		if (onClosed !== undefined) {
+			requestAnimationFrame(onClosed);
+		}
+	}, []);
+
 	const contextValue = useMemo(() => ({ confirm }), [confirm]);
 
 	return (
@@ -49,6 +62,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 			<DialogShell
 				opened={isOpen}
 				onClose={handleCancel}
+				onExitTransitionEnd={handleExitTransitionEnd}
 				title={options.title || t("common.confirmation", "Confirmation")}
 				size="sm"
 				showCloseButton={false}

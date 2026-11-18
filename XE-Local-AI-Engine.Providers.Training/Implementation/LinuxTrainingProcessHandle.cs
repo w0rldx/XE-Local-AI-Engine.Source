@@ -22,11 +22,14 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
     private const int Sigterm = 15;
     private const int Sigkill = 9;
     private static readonly TimeSpan ExitPollInterval = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan KillGrace = TimeSpan.FromSeconds(2);
+    private readonly Func<int, int, int> _kill;
     private readonly ILogger _logger;
     private readonly Process _process;
     private readonly Channel<string> _output;
     private readonly SemaphoreSlim _stdinGate = new(1, 1);
     private readonly TimeProvider _timeProvider;
+    private readonly Func<TimeSpan, bool> _waitForExit;
 
     private int _disposed;
 
@@ -35,12 +38,27 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
         Channel<string> output,
         ILogger logger,
         TimeProvider timeProvider)
+        : this(process, receipt, output, logger, timeProvider, Kill, process.WaitForExit)
+    {
+    }
+
+    /// <param name="kill"><c>kill(2)</c>.</param>
+    /// <param name="waitForExit">The wait between the SIGTERM and the SIGKILL in <see cref="KillGroup" />; true once the trainer exited.</param>
+    internal LinuxTrainingProcessHandle(Process process,
+        TrainingLaunchReceipt receipt,
+        Channel<string> output,
+        ILogger logger,
+        TimeProvider timeProvider,
+        Func<int, int, int> kill,
+        Func<TimeSpan, bool> waitForExit)
     {
         _logger = logger;
         _process = process;
         Receipt = receipt;
         _output = output;
         _timeProvider = timeProvider;
+        _kill = kill;
+        _waitForExit = waitForExit;
     }
 
     public TrainingLaunchReceipt Receipt { get; }
@@ -141,7 +159,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
 
         var target = SignalTarget();
         SignalIfSameProcess(target, Sigterm);
-        if (!_process.WaitForExit(2000))
+        if (!_waitForExit(KillGrace))
         {
             SignalIfSameProcess(target, Sigkill);
         }
@@ -178,20 +196,33 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
         return Receipt.Pid;
     }
 
-    /// <summary>Sends <paramref name="signal" /> only while the trainer pid still has the receipt's start time.</summary>
+    /// <summary>Sends <paramref name="signal" /> only while the trainer pid still has the receipt's start time; with none recorded, to the bare pid while it lives.</summary>
     private void SignalIfSameProcess(int target, int signal)
     {
-        if (Receipt.StartTicks > 0 && !LinuxTrainingProcessInspector.MaySignal(LinuxTrainingProcessInspector.ReadStat(Receipt.Pid), Receipt.StartTicks))
+        if (Receipt.StartTicks <= 0)
+        {
+            // The runtime reaps on SIGCHLD, so a pid it saw exit may name a stranger. Check-then-kill leaves the window Process.Kill
+            // has; pidfd_open + pidfd_send_signal is the upgrade that closes it.
+            if (!HasExited())
+            {
+                _ = _kill(Receipt.Pid, signal);
+                _logger.LogWarning("Trainer pid {Pid} has no recorded start time; signal {Signal} was sent to the pid only, unverified.", Receipt.Pid, signal);
+            }
+
+            return;
+        }
+
+        if (!LinuxTrainingProcessInspector.MaySignal(LinuxTrainingProcessInspector.ReadStat(Receipt.Pid), Receipt.StartTicks))
         {
             _logger.LogWarning("Trainer pid {Pid} no longer carries its recorded start time; signal {Signal} was not sent.", Receipt.Pid, signal);
             return;
         }
 
-        _ = Kill(target, signal);
+        _ = _kill(target, signal);
     }
 
-    private static bool GroupHasMembers(int processGroupId) =>
-        LinuxTrainingProcessInspector.GroupHasMembers(Kill, processGroupId);
+    private bool GroupHasMembers(int processGroupId) =>
+        LinuxTrainingProcessInspector.GroupHasMembers(_kill, processGroupId);
 
     private bool HasExited()
     {

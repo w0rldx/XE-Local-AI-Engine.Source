@@ -129,9 +129,11 @@ export function RuntimeResourcesWidget() {
 
 	// Once no eject is pending, give lost focus back: to the same Eject when its row stayed (React keeps a kept row's
 	// element), else to the list heading. Never onto another Eject: a repeated Enter must not unload a second model.
+	// A pushed removal can detach the remembered Eject while the eject's refetches still keep it pending; the heading
+	// takes focus then rather than after them.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: rowKeys is a trigger (a row removed under focus), not a value the body reads.
 	useEffect(() => {
-		if (ejectPending) {
+		if (ejectPending && focusBeforeEjectRef.current?.isConnected !== false) {
 			return;
 		}
 		const active = document.activeElement;
@@ -139,7 +141,9 @@ export function RuntimeResourcesWidget() {
 			const before = focusBeforeEjectRef.current;
 			(before?.isConnected ? before : residentsHeadingRef.current)?.focus();
 		}
-		focusBeforeEjectRef.current = null;
+		if (!ejectPending) {
+			focusBeforeEjectRef.current = null;
+		}
 	}, [ejectPending, rowKeys]);
 
 	useEffect(() => {

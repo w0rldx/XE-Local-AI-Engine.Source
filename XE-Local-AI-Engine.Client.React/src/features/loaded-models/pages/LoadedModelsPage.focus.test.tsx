@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
+import { MantineProvider, Modal } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RunningModel } from "@/core/loaded-models/models/RunningModelsModels";
@@ -10,12 +10,15 @@ import type { RunningModel } from "@/core/loaded-models/models/RunningModelsMode
 // The running list is a mutable value the test swaps to stand in for a residency push; the confirmation dialog is the
 // real ConfirmProvider, because its focus return is what this file pins.
 const { runningState } = vi.hoisted(() => ({
-	runningState: { models: [] as RunningModel[], mutate: vi.fn() },
+	runningState: { models: [] as RunningModel[], mutateAsync: vi.fn() },
 }));
 
 vi.mock("@/core/loaded-models/queries/useRunningModels", () => ({
 	useRunningModels: () => ({ data: runningState.models, isLoading: false, error: null }),
-	useEjectRunningModel: () => ({ mutate: runningState.mutate, isPending: false, variables: undefined }),
+	useEjectRunningModel: () => ({ mutateAsync: runningState.mutateAsync, isPending: false, variables: undefined }),
+}));
+vi.mock("@/core/ui/notifications/Toast", () => ({
+	toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
@@ -39,16 +42,31 @@ function running(modelName: string): RunningModel {
 
 const queryClient = new QueryClient();
 
-function page() {
+// The real modal timing: testMantineTheme and env="test" both make a closed dialog unmount at once, which hides the
+// window in which ConfirmProvider has already resolved but the dialog still holds focus.
+const slowModalTheme = { components: { Modal: { defaultProps: { transitionProps: { duration: 30, exitDuration: 30 } } } } };
+
+// withPage=false unmounts the page under a ConfirmProvider that stays mounted, as a route change does.
+function page(slowModal = false, withPage = true) {
 	return (
-		<MantineProvider env="test" theme={testMantineTheme}>
+		<MantineProvider env={slowModal ? "default" : "test"} theme={slowModal ? slowModalTheme : testMantineTheme}>
 			<QueryClientProvider client={queryClient}>
-				<ConfirmProvider>
-					<LoadedModelsPage />
-				</ConfirmProvider>
+				<ConfirmProvider>{withPage ? <LoadedModelsPage /> : null}</ConfirmProvider>
 			</QueryClientProvider>
 		</MantineProvider>
 	);
+}
+
+function result(modelName: string, outcome: string) {
+	return { modelName, role: "chat", outcome };
+}
+
+function held(): { readonly promise: Promise<unknown>; readonly answer: (value: unknown) => void } {
+	let answer!: (value: unknown) => void;
+	const promise = new Promise((resolve) => {
+		answer = resolve;
+	});
+	return { promise, answer };
 }
 
 // Opens the eject confirmation from a focused Eject, as a keyboard user would.
@@ -64,6 +82,7 @@ describe("LoadedModelsPage eject confirmation focus", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
 		runningState.models = [running("alpha"), running("beta")];
+		runningState.mutateAsync.mockReset().mockResolvedValue(result("alpha", "ejected"));
 	});
 
 	afterEach(() => {
@@ -96,6 +115,201 @@ describe("LoadedModelsPage eject confirmation focus", () => {
 		fireEvent.click(screen.getByTestId("confirm-cancel"));
 
 		await waitFor(() => expect(document.activeElement).toBe(eject));
-		expect(runningState.mutate).not.toHaveBeenCalled();
+		expect(runningState.mutateAsync).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		["cancelled", "confirm-cancel"],
+		["confirmed", "confirm-accept"],
+	])(
+		"hands focus to the heading after the force dialog's exit transition when the row went while it was open (%s)",
+		async (_case, closeWith) => {
+			runningState.mutateAsync
+				.mockResolvedValueOnce(result("alpha", "timed_out_still_busy"))
+				.mockResolvedValueOnce(result("alpha", "forced"));
+			const { rerender } = render(page(true));
+			await openConfirmFrom("alpha");
+			fireEvent.click(screen.getByTestId("confirm-accept"));
+			await screen.findByText("Force eject?");
+
+			runningState.models = [running("beta")];
+			rerender(page(true));
+			fireEvent.click(screen.getByTestId(closeWith));
+
+			const heading = screen.getByRole("heading", { name: "llama.cpp runtime" });
+			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+			await waitFor(() => expect(document.activeElement).toBe(heading));
+			expect(runningState.mutateAsync).toHaveBeenCalledTimes(closeWith === "confirm-accept" ? 2 : 1);
+		},
+	);
+
+	it("leaves focus on the control the user moved to while the eject request is pending", async () => {
+		const request = held();
+		runningState.mutateAsync.mockReturnValueOnce(request.promise);
+		render(page());
+		const eject = await openConfirmFrom("alpha");
+		fireEvent.click(screen.getByTestId("confirm-accept"));
+		await waitFor(() => expect(document.activeElement).toBe(eject));
+
+		const other = screen.getByTestId("loaded-models-llamacpp-eject-beta");
+		other.focus();
+		await act(async () => request.answer(result("alpha", "ejected")));
+
+		expect(document.activeElement).toBe(other);
+	});
+
+	it("opens no force dialog for an eject a newer one overtook, and keeps the newer confirmation actionable", async () => {
+		const first = held();
+		runningState.mutateAsync.mockReturnValueOnce(first.promise).mockResolvedValueOnce(result("beta", "ejected"));
+		render(page());
+		await openConfirmFrom("alpha");
+		fireEvent.click(screen.getByTestId("confirm-accept"));
+		await waitFor(() => expect(screen.queryByTestId("confirm-accept")).toBeNull());
+
+		await openConfirmFrom("beta");
+		await act(async () => first.answer(result("alpha", "timed_out_still_busy")));
+		expect(screen.queryByText("Force eject?")).toBeNull();
+		expect(screen.getByText("Eject model")).toBeTruthy();
+		fireEvent.click(screen.getByTestId("confirm-accept"));
+
+		await waitFor(() => expect(runningState.mutateAsync).toHaveBeenCalledTimes(2));
+		expect(runningState.mutateAsync).toHaveBeenLastCalledWith({ modelName: "beta", role: "chat", force: false });
+	});
+
+	it("lets the newer eject's dialog decide where focus goes, never the overtaken eject's button", async () => {
+		const first = held();
+		runningState.mutateAsync.mockReturnValueOnce(first.promise);
+		const { rerender } = render(page(true));
+		await openConfirmFrom("alpha");
+		fireEvent.click(screen.getByTestId("confirm-accept"));
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+		await openConfirmFrom("beta");
+		await act(async () => first.answer(result("alpha", "timed_out_still_busy")));
+		runningState.models = [running("alpha")];
+		rerender(page(true));
+		fireEvent.click(screen.getByTestId("confirm-cancel"));
+
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "llama.cpp runtime" })));
+	});
+
+	it("sends no eject when the first confirmation is accepted after the page has gone", async () => {
+		const { rerender } = render(page());
+		await openConfirmFrom("alpha");
+
+		rerender(page(false, false));
+		expect(screen.queryByTestId("loaded-models-llamacpp-card")).toBeNull();
+		await act(async () => fireEvent.click(screen.getByTestId("confirm-accept")));
+
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(runningState.mutateAsync).not.toHaveBeenCalled();
+	});
+
+	it("sends no force eject when the force dialog is accepted after the page has gone", async () => {
+		runningState.mutateAsync.mockResolvedValueOnce(result("alpha", "timed_out_still_busy"));
+		const { rerender } = render(page());
+		await openConfirmFrom("alpha");
+		fireEvent.click(screen.getByTestId("confirm-accept"));
+		await screen.findByText("Force eject?");
+
+		rerender(page(false, false));
+		expect(screen.queryByTestId("loaded-models-llamacpp-card")).toBeNull();
+		await act(async () => fireEvent.click(screen.getByTestId("confirm-accept")));
+
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(runningState.mutateAsync).toHaveBeenCalledTimes(1);
+	});
+
+	it.each([
+		["accepted", "confirm-accept"],
+		["cancelled", "confirm-cancel"],
+	])("hands focus to the heading once the dialog has closed, before the request settles (%s)", async (_case, closeWith) => {
+		const request = held();
+		runningState.mutateAsync.mockReturnValueOnce(request.promise);
+		const { rerender } = render(page(true));
+		await openConfirmFrom("alpha");
+		runningState.models = [running("beta")];
+		rerender(page(true));
+
+		try {
+			fireEvent.click(screen.getByTestId(closeWith));
+
+			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+			await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "llama.cpp runtime" })));
+			expect(runningState.mutateAsync).toHaveBeenCalledTimes(closeWith === "confirm-accept" ? 1 : 0);
+		} finally {
+			await act(async () => request.answer(result("alpha", "ejected")));
+		}
+	});
+
+	it("keeps focus on the body the user moved it to while the request was pending", async () => {
+		const request = held();
+		runningState.mutateAsync.mockReturnValueOnce(request.promise);
+		render(page(true));
+		const eject = await openConfirmFrom("alpha");
+		fireEvent.click(screen.getByTestId("confirm-accept"));
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		// The dialog's onClosed runs a frame after it unmounts; a frame queued now runs after it.
+		await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+		expect(document.activeElement).toBe(eject);
+
+		// A click on blank page space: the Eject stays mounted.
+		eject.blur();
+		expect(eject.isConnected).toBe(true);
+		await act(async () => request.answer(result("alpha", "ejected")));
+
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	it("leaves lost focus alone when an overtaken eject settles", async () => {
+		const first = held();
+		const second = held();
+		runningState.mutateAsync.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+		render(page());
+		await openConfirmFrom("alpha");
+		fireEvent.click(screen.getByTestId("confirm-accept"));
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		const beta = await openConfirmFrom("beta");
+		fireEvent.click(screen.getByTestId("confirm-accept"));
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		// Beta's onClosed runs a frame after its dialog unmounts; a frame queued now runs after it, so the blur comes last.
+		await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+		expect(document.activeElement).toBe(beta);
+		// A click on blank page space while beta's request is still pending.
+		beta.blur();
+
+		try {
+			await act(async () => first.answer(result("alpha", "ejected")));
+			expect(document.activeElement).toBe(document.body);
+		} finally {
+			await act(async () => second.answer(result("beta", "ejected")));
+		}
+	});
+
+	// A keepMounted dialog never leaves the DOM, so nothing may wait for it to.
+	it("watches nothing when the request settles while another dialog holds focus", async () => {
+		const request = held();
+		runningState.mutateAsync.mockReturnValueOnce(request.promise);
+		render(page());
+		await openConfirmFrom("alpha");
+		fireEvent.click(screen.getByTestId("confirm-accept"));
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		render(
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<Modal opened={true} keepMounted={true} onClose={() => undefined} title="About">
+					<button type="button">Close about</button>
+				</Modal>
+			</MantineProvider>,
+		);
+		await waitFor(() => expect(document.activeElement?.closest('[role="dialog"]')).not.toBeNull());
+		const observe = vi.spyOn(MutationObserver.prototype, "observe");
+
+		try {
+			await act(async () => request.answer(result("alpha", "ejected")));
+			expect(observe).not.toHaveBeenCalled();
+		} finally {
+			observe.mockRestore();
+		}
 	});
 });

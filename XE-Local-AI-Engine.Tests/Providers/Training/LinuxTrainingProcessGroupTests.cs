@@ -81,17 +81,62 @@ public sealed class LinuxTrainingProcessGroupTests
     }
 
     [Test]
-    public void AwaitTrainerIdentity_WhenStatIsUnreadable_StopsWithoutConfirming()
+    public void AwaitTrainerIdentity_WhenStatStaysUnreadable_RetriesABoundedNumberOfTimesWithoutConfirming()
     {
+        var time = new ManualClock();
+        var reads = 0;
+
         var (stat, leadsGroup, _) = LinuxTrainingProcessSpawner.AwaitTrainerIdentity(Pid,
-            static _ => null,
+            _ =>
+            {
+                reads++;
+                return null;
+            },
             static _ => null,
             Setsid,
-            static _ => throw new InvalidOperationException("An unreadable stat must not be waited on."),
-            new ManualClock());
+            interval => Tick(time, interval),
+            time);
 
         AssertEx.False(leadsGroup);
         AssertEx.Null(stat);
+        AssertEx.Equal(LinuxTrainingProcessSpawner.UnreadableStatRetries + 1, reads, "A live child's unreadable stat is retried, but not until the timeout.");
+    }
+
+    [Test]
+    public void AwaitTrainerIdentity_WhenALaterReadFails_KeepsTheEarlierTrustedStat()
+    {
+        var time = new ManualClock();
+        var reads = 0;
+
+        var (stat, leadsGroup, executable) = LinuxTrainingProcessSpawner.AwaitTrainerIdentity(Pid,
+            _ => ++reads == 1 ? new TrainingProcessStat(Pid, StartTicks: 99) : null,
+            static _ => Setsid,
+            Setsid,
+            interval => Tick(time, interval),
+            time);
+
+        AssertEx.Equal(new TrainingProcessStat(Pid, StartTicks: 99), stat, "A start time read once must not be thrown away by a failed read after it.");
+        AssertEx.True(leadsGroup, "Group leadership comes from the kept stat.");
+        AssertEx.Null(executable);
+    }
+
+    [Test]
+    public void AwaitTrainerIdentity_WhenTheChildExitsAfterARead_DiscardsThatRead()
+    {
+        var time = new ManualClock();
+        var reads = 0;
+
+        var (stat, leadsGroup, _) = LinuxTrainingProcessSpawner.AwaitTrainerIdentity(Pid,
+            // The second read may describe a process that took the reaped pid.
+            _ => new TrainingProcessStat(++reads == 1 ? HostGroup : Pid, StartTicks: reads == 1 ? 99 : 100),
+            static _ => Python,
+            Setsid,
+            _ => reads >= 2,
+            time);
+
+        AssertEx.Equal(new TrainingProcessStat(HostGroup, StartTicks: 99), stat, "Only the read the child outlived is trusted.");
+        AssertEx.False(leadsGroup, "The discarded read's group is not the child's.");
+        AssertEx.Equal(expected: 2, reads);
     }
 
     [Test]
@@ -583,6 +628,7 @@ public sealed class LinuxTrainingProcessGroupTests
 
             // Positive control: once the last member is gone, the same wait verifies the exit.
             child.KillIfStillOurs();
+            await child.SkipIfLeftUnreapedAsync();
             using var verified = new CancellationTokenSource(TestBudgets.Contended);
             AssertEx.Equal<int?>(0, await handle.WaitForGroupExitAsync(verified.Token), "The emptied group verifies the trainer's exit.");
         }
@@ -746,6 +792,8 @@ public sealed class LinuxTrainingProcessGroupTests
     /// <summary>A process a test started, known by pid and start time, so cleanup never signals a pid another process now holds.</summary>
     internal sealed class OwnedProcess
     {
+        private static readonly TimeSpan ReapBound = TimeSpan.FromSeconds(10);
+
         public required int ProcessId { get; init; }
 
         public required long StartTicks { get; init; }
@@ -766,6 +814,36 @@ public sealed class LinuxTrainingProcessGroupTests
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
                 // Gone in between.
+            }
+        }
+
+        /// <summary>
+        ///     After <see cref="KillIfStillOurs" />, skips the test while the process stays an unreaped zombie: it was orphaned when the
+        ///     trainer exited, so only pid 1 or a subreaper can reap it, and until then it still counts as a member of its group.
+        /// </summary>
+        public async Task SkipIfLeftUnreapedAsync()
+        {
+            try
+            {
+                await AssertEx.EventuallyAsync(() => !LinuxTrainingProcessInspector.MaySignal(LinuxTrainingProcessInspector.ReadStat(ProcessId), StartTicks),
+                    ReapBound,
+                    $"Killed pid {ProcessId} is still alive.");
+            }
+            catch (AssertionException)
+            {
+                // One read decides: the reaper may run between the poll's last check and this one.
+                var read = LinuxTrainingProcessInspector.ReadStat(ProcessId);
+                if (!LinuxTrainingProcessInspector.MaySignal(read, StartTicks))
+                {
+                    return; // Reaped after all: missing, or the pid already names another process.
+                }
+
+                if (read.Presence == TrainingProcessPresence.Gone)
+                {
+                    Skip.Test($"BLOCKED: nothing reaps orphaned children on this host; killed pid {ProcessId} stayed a zombie in its group for {ReapBound}.");
+                }
+
+                throw;
             }
         }
     }

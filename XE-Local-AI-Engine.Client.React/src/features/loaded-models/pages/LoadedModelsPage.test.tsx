@@ -2,7 +2,7 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react-i18next", () => ({
@@ -40,7 +40,12 @@ function makeQuery<T>(data: T, overrides: Record<string, unknown> = {}) {
 }
 
 function makeEjectMutation(overrides: Record<string, unknown> = {}) {
-	return { mutate: vi.fn(), isPending: false, variables: undefined, ...overrides };
+	return {
+		mutateAsync: vi.fn().mockResolvedValue({ modelName: "running-a", role: "chat", outcome: "ejected" }),
+		isPending: false,
+		variables: undefined,
+		...overrides,
+	};
 }
 
 function installJsdomEnvironmentMocks(): void {
@@ -127,59 +132,72 @@ describe("LoadedModelsPage", () => {
 
 		fireEvent.click(screen.getByTestId("loaded-models-llamacpp-eject-running-a"));
 
-		// The eject now confirms first (async), then dispatches a graceful (force=false) eject.
-		await waitFor(() => expect(ejectRunning.mutate).toHaveBeenCalled());
+		// The eject confirms first (async), then dispatches a graceful (force=false) eject.
+		await waitFor(() => expect(ejectRunning.mutateAsync).toHaveBeenCalled());
 		expect(confirmMock).toHaveBeenCalled();
-		expect(ejectRunning.mutate).toHaveBeenCalledWith(
-			{ modelName: "running-a", role: "chat", force: false },
-			expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
-		);
+		expect(ejectRunning.mutateAsync).toHaveBeenCalledWith({ modelName: "running-a", role: "chat", force: false });
 	});
 
 	it("surfaces a success toast when the graceful eject reports 'ejected'", async () => {
-		const ejectRunning = makeEjectMutation();
+		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
+
+		renderPage();
+		fireEvent.click(screen.getByTestId("loaded-models-llamacpp-eject-running-a"));
+
+		await waitFor(() => expect(toastMock.success).toHaveBeenCalled());
+	});
+
+	it("toasts a failed eject and lets no rejection escape the click", async () => {
+		const ejectRunning = makeEjectMutation({ mutateAsync: vi.fn().mockRejectedValue(new Error("boom")) });
 		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
 		runningMock.useEjectRunningModel.mockReturnValue(ejectRunning);
 
 		renderPage();
 		fireEvent.click(screen.getByTestId("loaded-models-llamacpp-eject-running-a"));
-		await waitFor(() => expect(ejectRunning.mutate).toHaveBeenCalled());
 
-		// Drive the mutation's onSuccess callback with the backend outcome the page maps to a toast.
-		const onSuccess = ejectRunning.mutate.mock.calls[0]?.[1]?.onSuccess as (result: {
-			modelName: string;
-			role: string;
-			outcome: string;
-		}) => void;
-		onSuccess({ modelName: "running-a", role: "chat", outcome: "ejected" });
-
-		expect(toastMock.success).toHaveBeenCalled();
+		await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
 	});
 
 	it("warns and offers a force eject when the graceful eject times out still busy", async () => {
-		const ejectRunning = makeEjectMutation();
+		const mutateAsync = vi
+			.fn()
+			.mockResolvedValueOnce({ modelName: "running-a", role: "chat", outcome: "timed_out_still_busy" })
+			.mockResolvedValueOnce({ modelName: "running-a", role: "chat", outcome: "forced" });
 		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
-		runningMock.useEjectRunningModel.mockReturnValue(ejectRunning);
+		runningMock.useEjectRunningModel.mockReturnValue(makeEjectMutation({ mutateAsync }));
 
 		renderPage();
 		fireEvent.click(screen.getByTestId("loaded-models-llamacpp-eject-running-a"));
-		await waitFor(() => expect(ejectRunning.mutate).toHaveBeenCalled());
-		confirmMock.mockClear();
-
-		const onSuccess = ejectRunning.mutate.mock.calls[0]?.[1]?.onSuccess as (result: {
-			modelName: string;
-			role: string;
-			outcome: string;
-		}) => Promise<void>;
-		await onSuccess({ modelName: "running-a", role: "chat", outcome: "timed_out_still_busy" });
 
 		// A warning toast fires and the force-eject confirm is offered; confirming it re-ejects with force=true.
+		await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
 		expect(toastMock.warning).toHaveBeenCalled();
-		await waitFor(() =>
-			expect(ejectRunning.mutate).toHaveBeenCalledWith(
-				{ modelName: "running-a", role: "chat", force: true },
-				expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
-			),
-		);
+		expect(confirmMock).toHaveBeenCalledTimes(2);
+		expect(mutateAsync).toHaveBeenNthCalledWith(2, { modelName: "running-a", role: "chat", force: true });
+		await waitFor(() => expect(toastMock.info).toHaveBeenCalled());
+	});
+
+	it("opens no force confirmation once the page has gone", async () => {
+		let answer!: (result: unknown) => void;
+		const mutateAsync = vi
+			.fn()
+			.mockReturnValueOnce(
+				new Promise((resolve) => {
+					answer = resolve;
+				}),
+			)
+			.mockResolvedValue({ modelName: "running-a", role: "chat", outcome: "forced" });
+		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
+		runningMock.useEjectRunningModel.mockReturnValue(makeEjectMutation({ mutateAsync }));
+
+		const { unmount } = renderPage();
+		fireEvent.click(screen.getByTestId("loaded-models-llamacpp-eject-running-a"));
+		await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+		unmount();
+		await act(async () => answer({ modelName: "running-a", role: "chat", outcome: "timed_out_still_busy" }));
+
+		// The warning proves the continuation ran; only the dialog is skipped.
+		await waitFor(() => expect(toastMock.warning).toHaveBeenCalled());
+		expect(confirmMock).toHaveBeenCalledTimes(1);
 	});
 });

@@ -323,6 +323,48 @@ describe("RuntimeResourcesWidget", () => {
 			expect(heading.getAttribute("tabindex")).toBe("-1");
 		});
 
+		// A push can remove the row before the eject answers; the eject stays pending, and focus must not wait for it.
+		it.each([
+			["a llama.cpp row", "Eject alpha", "model-fit/running/eject"],
+			["the Model Lab row", "Eject Model Lab worker", "model-lab/warm/eject"],
+		])("moves focus to the list heading when a push removes %s while its eject is pending", async (_case, name, ejectPath) => {
+			let answer!: () => void;
+			const answered = new Promise<void>((resolve) => {
+				answer = resolve;
+			});
+			let llama = ["alpha"];
+			let modelLab = [runtimeResident({ runtime: "modelLab", modelId: "m" })];
+			server.use(
+				jsonRoute("get", "model-fit/resources", { totalRamBytes: 16 * gib, availableRamBytes: 4 * gib, gpus: [] }),
+				http.get(localApiPath("model-fit/running"), () =>
+					HttpResponse.json({ items: llama.map((modelName) => resident({ modelName })) }),
+				),
+				http.get(localApiPath("model-fit/runtime-residents"), () => HttpResponse.json({ items: modelLab })),
+				http.post(localApiPath(ejectPath), async () => {
+					await answered;
+					return ejectPath === "model-lab/warm/eject"
+						? new HttpResponse(null, { status: 204 })
+						: HttpResponse.json({ modelName: "alpha", role: "chat", outcome: "ejected" });
+				}),
+			);
+
+			try {
+				const { dropdown, queryClient } = await openPopoverWithClient();
+				const button = await within(dropdown).findByRole("button", { name });
+				focusAndClick(button);
+				await waitFor(() => expect(button.getAttribute("aria-busy")).toBe("true"));
+				llama = [];
+				modelLab = [];
+				await queryClient.invalidateQueries({ queryKey: listRunningModelsQueryKey() });
+				await queryClient.invalidateQueries({ queryKey: getRuntimeResidentsQueryKey() });
+
+				await waitFor(() => expect(button.isConnected).toBe(false));
+				expect(document.activeElement).toBe(within(dropdown).getByRole("heading", { level: 3, name: "Loaded models" }));
+			} finally {
+				answer();
+			}
+		});
+
 		it("leaves focus alone when it sits on another control in the popover", async () => {
 			serveEject(["alpha", "beta"], ["beta"]);
 

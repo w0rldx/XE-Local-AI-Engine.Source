@@ -17,6 +17,9 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
 {
     internal static readonly TimeSpan GroupLeaderTimeout = TimeSpan.FromSeconds(2);
+    /// <summary>How many unreadable stat reads a live child gets before the spawn settles for the last trusted one.</summary>
+    internal const int UnreadableStatRetries = 3;
+
     private static readonly TimeSpan GroupLeaderPollInterval = TimeSpan.FromMilliseconds(10);
 
     private readonly string _cacheRoot;
@@ -149,6 +152,7 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
     ///     exits, or the timeout passes. setsid(2) runs before the exec, so group leadership alone still reads setsid's path.
     /// </summary>
     /// <param name="waitForExit">Blocks up to the given interval and returns true once the child has exited.</param>
+    /// <returns>The last stat the child outlived, kept across passes so a failed read never discards a known start time.</returns>
     internal static TrainerIdentity AwaitTrainerIdentity(int pid,
         Func<int, TrainingProcessStat?> readStat,
         Func<int, string?> readExecutable,
@@ -157,22 +161,40 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
         TimeProvider timeProvider)
     {
         var deadline = timeProvider.GetUtcNow() + GroupLeaderTimeout;
+        TrainingProcessStat? trusted = null;
+        var unreadableReads = 0;
         while (true)
         {
-            var stat = readStat(pid);
-            var leadsGroup = stat is { } current && current.Pgid == pid;
+            var sample = readStat(pid);
             var executable = readExecutable(pid);
-            if (leadsGroup && executable is not null && !string.Equals(executable, launcherPath, StringComparison.Ordinal))
+            // The runtime reaps on SIGCHLD, so a read after the child exited may describe a replacement: only a read it outlived counts.
+            if (waitForExit(TimeSpan.Zero))
             {
-                return new TrainerIdentity(stat, LeadsGroup: true, executable);
+                return Unconfirmed(trusted);
             }
 
-            // Unconfirmed: a path read now may still be setsid's, and pinning it would make the reaper reject the trainer.
-            if (stat is null || timeProvider.GetUtcNow() >= deadline || waitForExit(GroupLeaderPollInterval))
+            if (sample is { } current)
             {
-                return new TrainerIdentity(stat, leadsGroup, null);
+                trusted = current;
+                if (current.Pgid == pid && executable is not null && !string.Equals(executable, launcherPath, StringComparison.Ordinal))
+                {
+                    return new TrainerIdentity(current, LeadsGroup: true, executable);
+                }
+            }
+            else if (++unreadableReads > UnreadableStatRetries)
+            {
+                return Unconfirmed(trusted);
+            }
+
+            if (timeProvider.GetUtcNow() >= deadline || waitForExit(GroupLeaderPollInterval))
+            {
+                return Unconfirmed(trusted);
             }
         }
+
+        // Unconfirmed: a path read now may still be setsid's, and pinning it would make the reaper reject the trainer.
+        TrainerIdentity Unconfirmed(TrainingProcessStat? stat) =>
+            new(stat, stat is { } kept && kept.Pgid == pid, null);
     }
 
     /// <summary>The trainer's last stat read, whether it leads its own group, and its confirmed executable path, if any.</summary>
