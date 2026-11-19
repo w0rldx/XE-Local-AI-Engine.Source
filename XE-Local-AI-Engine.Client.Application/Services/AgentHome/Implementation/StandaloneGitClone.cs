@@ -134,13 +134,15 @@ internal static class StandaloneGitClone
         }
     }
 
-    private static void TryClearReadOnly(FileSystemInfo entry)
+    internal static void TryClearReadOnly(FileSystemInfo entry)
     {
         try
         {
-            if ((entry.Attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
+            // An entry that vanished after the enumeration reads as -1 (every flag set) on Unix, and writing that back throws.
+            var attributes = entry.Attributes;
+            if ((int)attributes != -1 && (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
             {
-                entry.Attributes &= ~FileAttributes.ReadOnly;
+                entry.Attributes = attributes & ~FileAttributes.ReadOnly;
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
