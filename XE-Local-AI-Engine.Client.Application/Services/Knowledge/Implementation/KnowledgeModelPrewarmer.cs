@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -109,13 +110,15 @@ public sealed partial class KnowledgeModelPrewarmer : IKnowledgeModelPrewarmer
 
         if (!string.IsNullOrWhiteSpace(rerankerModelName))
         {
-            failed |= !await TryEnsureAsync(rerankerModelName, ModelRole.Reranker, cancellationToken);
+            // Interactive: nothing else cold-loads the reranker, so an operator eject must not keep it out of searches.
+            failed |= !await TryEnsureAsync(rerankerModelName, ModelRole.Reranker, ModelResidencyIntent.Interactive, cancellationToken);
         }
 
         var embedder = await ResolveLlamaCppEmbedderOrNullAsync(cancellationToken);
         if (embedder is not null)
         {
-            failed |= !await TryEnsureAsync(embedder, ModelRole.Embedding, cancellationToken);
+            // Background: an operator's eject keeps the embedder out until a search or a user reloads it.
+            failed |= !await TryEnsureAsync(embedder, ModelRole.Embedding, ModelResidencyIntent.Background, cancellationToken);
         }
 
         if (failed)
@@ -149,16 +152,30 @@ public sealed partial class KnowledgeModelPrewarmer : IKnowledgeModelPrewarmer
         }
     }
 
-    private async Task<bool> TryEnsureAsync(string modelName, ModelRole role, CancellationToken cancellationToken)
+    private async Task<bool> TryEnsureAsync(string modelName, ModelRole role, ModelResidencyIntent intent, CancellationToken cancellationToken)
     {
         try
         {
-            await _supervisor.EnsureRunningAsync(modelName, role, cancellationToken);
+            if (intent == ModelResidencyIntent.Interactive)
+            {
+                await _supervisor.EnsureRunningAsync(modelName, role, cancellationToken);
+            }
+            else
+            {
+                await _supervisor.EnsureRunningAsync(modelName, role, intent, cancellationToken);
+            }
+
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Host shutdown: nothing to report and no cooldown worth setting.
+            return true;
+        }
+        catch (OperatorEjectedException) when (intent == ModelResidencyIntent.Background)
+        {
+            // The operator's eject held, as asked: not a failed warm, so no Warning and no cooldown.
+            WarmVetoed(_logger, modelName, role);
             return true;
         }
         catch (Exception exception)
@@ -171,4 +188,7 @@ public sealed partial class KnowledgeModelPrewarmer : IKnowledgeModelPrewarmer
     [LoggerMessage(EventId = WarmFailedEventId, Level = LogLevel.Warning,
         Message = "Knowledge companion warm for {ModelName} ({Role}) failed or was refused; searches use fusion order until it runs. Exception type: {ExceptionType}.")]
     private static partial void WarmFailed(ILogger logger, string modelName, ModelRole role, string exceptionType);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Knowledge companion warm for {ModelName} ({Role}) skipped: the operator ejected it.")]
+    private static partial void WarmVetoed(ILogger logger, string modelName, ModelRole role);
 }

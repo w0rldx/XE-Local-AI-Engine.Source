@@ -310,11 +310,376 @@ public sealed class KnowledgeIngestionWorkerTests
         await worker.StopAsync(CancellationToken.None);
     }
 
+    [Test]
+    public async Task Wake_WhileTheEmbedderStaysEjected_DoesNoDocumentWorkAndDoublesOneArmedWindowToTheCap()
+    {
+        var time = new ManualTimeProvider();
+        var checks = 0;
+        var embedder = Substitute.For<IKnowledgeChunkEmbedder>();
+        embedder.IsEmbeddingModelBlockedAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            Interlocked.Increment(ref checks);
+            return Task.FromResult(true);
+        });
+        var ingestion = new FakeIngestionService((_, _) => Task.CompletedTask);
+        var catalog = NoRecovery();
+        await using var provider = BuildProvider(ingestion, catalog);
+        using var worker = CreateWorker(provider, new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier()), embedder: embedder, timeProvider: time);
+        await worker.StartAsync(CancellationToken.None);
+
+        var expectedChecks = 0;
+        foreach (var seconds in new[] { 60, 120, 240, 300, 300 })
+        {
+            await AssertEx.EventuallyAsync(() => Volatile.Read(ref checks) == expectedChecks && time.ArmedTimerCount == 1, PollTimeout, "exactly one wake is armed");
+            time.Advance(TimeSpan.FromSeconds(seconds - 1));
+
+            // An early fire either leaves no timer armed yet or has already checked again: both conditions catch it.
+            AssertEx.Equal(1, time.ArmedTimerCount, $"the {seconds} s window must not have elapsed one second early");
+            AssertEx.Equal(expectedChecks, Volatile.Read(ref checks), $"the {seconds} s window must not have checked one second early");
+            time.Advance(TimeSpan.FromSeconds(1));
+            expectedChecks++;
+        }
+
+        await AssertEx.EventuallyAsync(() => Volatile.Read(ref checks) == expectedChecks && time.ArmedTimerCount == 1, PollTimeout, "the capped window re-arms");
+        AssertEx.Empty(ingestion.Started);
+        await catalog.DidNotReceive().ClearEmbeddingModelWaitAsync(Arg.Any<CancellationToken>());
+        await catalog.DidNotReceive().ListPendingDocumentIdsAsync(Arg.Any<CancellationToken>());
+        await worker.StopAsync(CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Wake_OnceTheEmbedderIsBack_ClearsTheWaitNotifiesAndSweepsTheWaitingRowIn()
+    {
+        var time = new ManualTimeProvider();
+        var waiting = Guid.NewGuid();
+        var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
+        var embedder = Substitute.For<IKnowledgeChunkEmbedder>();
+        embedder.IsEmbeddingModelBlockedAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(true), Task.FromResult(false));
+        var runs = 0;
+        var ingestion = new FakeIngestionService((_, _) => Task.CompletedTask)
+        {
+            Outcome = id => id == waiting && Interlocked.Increment(ref runs) == 1 ? KnowledgeIngestionRunOutcome.Deferred : KnowledgeIngestionRunOutcome.Completed
+        };
+        var catalog = WaitingRowCatalog(ingestion, waiting);
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
+        await using var provider = BuildProvider(ingestion, catalog);
+        using var worker = CreateWorker(provider, dispatcher, embedder: embedder, timeProvider: time, notifier: notifier);
+        await worker.StartAsync(CancellationToken.None);
+
+        _ = await dispatcher.EnqueueAsync(waiting, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => ingestion.Completed.Contains(waiting) && time.ArmedTimerCount == 1, PollTimeout, "the deferred row leaves one wake armed");
+
+        time.Advance(KnowledgeIngestionWorker.FirstWakeWindow);
+        await AssertEx.EventuallyAsync(() => embedder.ReceivedCalls().Count() == 1 && time.ArmedTimerCount == 1, PollTimeout, "still blocked: the next window is armed");
+        AssertEx.Equal(1, ingestion.Started.Count(id => id == waiting), "a blocked wake does no document work");
+        await notifier.DidNotReceiveWithAnyArgs().NotifyDocumentChangedAsync(Guid.Empty, default, default);
+
+        time.Advance(KnowledgeIngestionWorker.FirstWakeWindow * 2);
+        await AssertEx.EventuallyAsync(() => ingestion.Started.Count(id => id == waiting) == 2, PollTimeout, "the unblocked wake sweeps the cleared row in");
+        await catalog.Received(1).ClearEmbeddingModelWaitAsync(Arg.Any<CancellationToken>());
+        await notifier.Received(1).NotifyDocumentChangedAsync(waiting, KnowledgeDocumentStatus.Pending, Arg.Any<CancellationToken>());
+        await worker.StopAsync(CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Wake_WhenTheSweepFailsAfterTheClear_ReArmsAndRunsTheClearedRowAtTheNextWindow()
+    {
+        var time = new ManualTimeProvider();
+        var cleared = Guid.NewGuid();
+        var lists = 0;
+        var ingestion = new FakeIngestionService((_, _) => Task.CompletedTask);
+        var catalog = NoRecovery();
+        catalog.ClearEmbeddingModelWaitAsync(Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<IReadOnlyList<Guid>>([cleared]), Task.FromResult<IReadOnlyList<Guid>>([]));
+
+        // After the clear no row carries the waiting reason, so the retry wake must sweep without that reason to find.
+        catalog.HasEmbeddingModelWaitAsync(Arg.Any<CancellationToken>()).Returns(true, false);
+
+        // The first listing fails after the clear landed, so the row is plain Pending with no waiting reason left.
+        catalog.ListPendingDocumentIdsAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            if (Interlocked.Increment(ref lists) == 1)
+            {
+                return Task.FromException<IReadOnlyList<Guid>>(new InvalidOperationException("The database is not available."));
+            }
+
+            return Task.FromResult<IReadOnlyList<Guid>>(ingestion.Started.Contains(cleared) ? [] : [cleared]);
+        });
+        await using var provider = BuildProvider(ingestion, catalog);
+        using var worker = CreateWorker(provider, new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier()), timeProvider: time);
+        await worker.StartAsync(CancellationToken.None);
+
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "the startup wake is armed");
+        time.Advance(KnowledgeIngestionWorker.FirstWakeWindow);
+        await AssertEx.EventuallyAsync(() => Volatile.Read(ref lists) == 1 && time.ArmedTimerCount == 1, PollTimeout, "a failed sweep re-arms the wake");
+        AssertEx.Empty(ingestion.Started);
+
+        time.Advance(KnowledgeIngestionWorker.FirstWakeWindow * 2);
+        await AssertEx.EventuallyAsync(() => ingestion.Completed.Contains(cleared), PollTimeout, "the next wake sweeps the cleared row in");
+        await worker.StopAsync(CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Wake_WhenNoRowWaits_NeverProbesStaysUnarmedAndTheNextDeferralArmsAgain()
+    {
+        var time = new ManualTimeProvider();
+        var embedder = Substitute.For<IKnowledgeChunkEmbedder>();
+        embedder.IsEmbeddingModelBlockedAsync(Arg.Any<CancellationToken>()).Returns(true);
+        var ingestion = new FakeIngestionService((_, _) => Task.CompletedTask)
+        {
+            Outcome = _ => KnowledgeIngestionRunOutcome.Deferred
+        };
+        var catalog = NoRecovery();
+        catalog.HasEmbeddingModelWaitAsync(Arg.Any<CancellationToken>()).Returns(false);
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
+        await using var provider = BuildProvider(ingestion, catalog);
+        using var worker = CreateWorker(provider, dispatcher, embedder: embedder, timeProvider: time);
+        await worker.StartAsync(CancellationToken.None);
+
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "the startup wake is armed");
+        time.Advance(KnowledgeIngestionWorker.FirstWakeWindow);
+        await AssertEx.EventuallyAsync(() => catalog.ReceivedCalls().Any(call => call.GetMethodInfo().Name == nameof(IKnowledgeDocumentCatalogService.HasEmbeddingModelWaitAsync)),
+            PollTimeout,
+            "the wake asked whether any row waits");
+        await AssertEx.SettleAsync();
+        AssertEx.Equal(0, time.ArmedTimerCount, "a wake with nothing waiting must not re-arm");
+        _ = await embedder.DidNotReceive().IsEmbeddingModelBlockedAsync(Arg.Any<CancellationToken>());
+
+        _ = await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "a later deferral arms the wake again");
+        await worker.StopAsync(CancellationToken.None);
+    }
+
+    [Test]
+    public async Task StopAsync_WhileTheWakeSweepReadsTheCatalog_CancelsTheReadAndCompletesPromptly()
+    {
+        var time = new ManualTimeProvider();
+        var listEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var never = new TaskCompletionSource<IReadOnlyList<Guid>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var catalog = NoRecovery();
+        catalog.ListPendingDocumentIdsAsync(Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            listEntered.TrySetResult();
+            return never.Task.WaitAsync(call.Arg<CancellationToken>());
+        });
+        await using var provider = BuildProvider(new FakeIngestionService((_, _) => Task.CompletedTask), catalog);
+        using var worker = CreateWorker(provider, new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier()), timeProvider: time);
+        await worker.StartAsync(CancellationToken.None);
+
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "the startup wake is armed");
+        time.Advance(KnowledgeIngestionWorker.FirstWakeWindow);
+        await listEntered.Task.WaitAsync(PollTimeout);
+
+        await AssertEx.CompletesAsync(worker.StopAsync(CancellationToken.None), PollTimeout, "the stop cancels the wake's catalog read");
+    }
+
+    [Test]
+    public async Task Dispose_WhileTheWakeLoopWaitsForItsNextSignal_EndsTheWakeLoop()
+    {
+        var time = new ManualTimeProvider();
+        var catalog = NoRecovery();
+        await using var provider = BuildProvider(new FakeIngestionService((_, _) => Task.CompletedTask), catalog);
+        var worker = CreateWorker(provider, new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier()), timeProvider: time);
+        try
+        {
+            await worker.StartAsync(CancellationToken.None);
+            await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "the startup wake is armed");
+            time.Advance(KnowledgeIngestionWorker.FirstWakeWindow);
+
+            // The unblocked wake sweeps, then the loop goes back to waiting for a signal nobody sends.
+            await AssertEx.EventuallyAsync(() => catalog.ReceivedCalls().Any(call => call.GetMethodInfo().Name == nameof(IKnowledgeDocumentCatalogService.ListPendingDocumentIdsAsync)),
+                PollTimeout,
+                "the first wake swept");
+            await AssertEx.SettleAsync();
+        }
+        finally
+        {
+            // A host whose stop timed out disposes the worker without StopAsync.
+            worker.Dispose();
+        }
+
+        await AssertEx.CompletesAsync(AssertEx.NotNull(worker.ExecuteTask), PollTimeout, "the idle wake loop ends once the worker is disposed");
+    }
+
+    [Test]
+    public async Task Dispose_WhileAWakeIsChecking_EndsTheWakeLoopWithoutFaulting()
+    {
+        var time = new ManualTimeProvider();
+        var checkEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var checkResult = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var embedder = Substitute.For<IKnowledgeChunkEmbedder>();
+        embedder.IsEmbeddingModelBlockedAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            checkEntered.TrySetResult();
+            return checkResult.Task;
+        });
+        await using var provider = BuildProvider(new FakeIngestionService((_, _) => Task.CompletedTask), NoRecovery());
+        var worker = CreateWorker(provider, new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier()), embedder: embedder, timeProvider: time);
+        try
+        {
+            await worker.StartAsync(CancellationToken.None);
+            await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "the startup wake is armed");
+            time.Advance(KnowledgeIngestionWorker.FirstWakeWindow);
+            await checkEntered.Task.WaitAsync(PollTimeout);
+        }
+        finally
+        {
+            // A host whose stop timed out disposes the worker while a wake is still out.
+            worker.Dispose();
+        }
+
+        // The blocked answer would re-arm the wake on the disposed worker.
+        checkResult.SetResult(true);
+
+        await AssertEx.CompletesAsync(AssertEx.NotNull(worker.ExecuteTask), PollTimeout, "the wake loop ends once the worker is disposed");
+    }
+
+    [Test]
+    public async Task Wake_WhenTheCheckThrows_RetriesAtTheNextWindowAndThenSweeps()
+    {
+        var time = new ManualTimeProvider();
+        var embedder = Substitute.For<IKnowledgeChunkEmbedder>();
+        embedder.IsEmbeddingModelBlockedAsync(Arg.Any<CancellationToken>())
+                .Returns(_ => Task.FromException<bool>(new InvalidOperationException("The embedding provider is not registered.")), _ => Task.FromResult(false));
+        var ingestion = new FakeIngestionService((_, _) => Task.CompletedTask);
+        var catalog = NoRecovery();
+        await using var provider = BuildProvider(ingestion, catalog);
+        using var worker = CreateWorker(provider, new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier()), embedder: embedder, timeProvider: time);
+        await worker.StartAsync(CancellationToken.None);
+
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "the startup wake is armed");
+        time.Advance(KnowledgeIngestionWorker.FirstWakeWindow);
+        await AssertEx.EventuallyAsync(() => embedder.ReceivedCalls().Count() == 1 && time.ArmedTimerCount == 1, PollTimeout, "a failed check re-arms");
+        await catalog.DidNotReceive().ClearEmbeddingModelWaitAsync(Arg.Any<CancellationToken>());
+
+        time.Advance(KnowledgeIngestionWorker.FirstWakeWindow * 2);
+        await AssertEx.EventuallyAsync(() => catalog.ReceivedCalls().Any(call => call.GetMethodInfo().Name == nameof(IKnowledgeDocumentCatalogService.ClearEmbeddingModelWaitAsync)),
+            PollTimeout,
+            "the next window clears the wait");
+        await worker.StopAsync(CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Wake_WhenARowDefersInsideTheUnblockedBranch_ArmsASuccessor()
+    {
+        var time = new ManualTimeProvider();
+        var deferred = Guid.NewGuid();
+        var clearEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var clearRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ingestion = new FakeIngestionService((_, _) => Task.CompletedTask)
+        {
+            Outcome = _ => KnowledgeIngestionRunOutcome.Deferred
+        };
+        var catalog = NoRecovery();
+        catalog.ClearEmbeddingModelWaitAsync(Arg.Any<CancellationToken>()).Returns(async _ =>
+        {
+            clearEntered.TrySetResult();
+            await clearRelease.Task;
+            return (IReadOnlyList<Guid>)[];
+        });
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
+        await using var provider = BuildProvider(ingestion, catalog);
+        using var worker = CreateWorker(provider, dispatcher, timeProvider: time);
+        await worker.StartAsync(CancellationToken.None);
+
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "the startup wake is armed");
+        time.Advance(KnowledgeIngestionWorker.FirstWakeWindow);
+        await clearEntered.Task.WaitAsync(PollTimeout);
+
+        // The wake is past its armed flag and inside the clear: this deferral must arm the next wake itself.
+        _ = await dispatcher.EnqueueAsync(deferred, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => ingestion.Completed.Contains(deferred), PollTimeout, "the deferring run finished");
+        clearRelease.SetResult();
+
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "a waiting row always has an armed wake");
+        await worker.StopAsync(CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Wake_AfterAFailedStartupRecovery_StillSweepsAPersistedWaitingRowIn()
+    {
+        var time = new ManualTimeProvider();
+        var waiting = Guid.NewGuid();
+        var ingestion = new FakeIngestionService((_, _) => Task.CompletedTask);
+        var catalog = WaitingRowCatalog(ingestion, waiting);
+        catalog.ResetNonTerminalToPendingAsync(Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<IReadOnlyList<Guid>>(new InvalidOperationException("The database is not available.")));
+        await using var provider = BuildProvider(ingestion, catalog);
+        using var worker = CreateWorker(provider, new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier()), timeProvider: time);
+        await worker.StartAsync(CancellationToken.None);
+
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "the startup wake is armed even after a failed recovery");
+        time.Advance(KnowledgeIngestionWorker.FirstWakeWindow);
+
+        await AssertEx.EventuallyAsync(() => ingestion.Completed.Contains(waiting), PollTimeout, "the persisted waiting row was swept in");
+        await worker.StopAsync(CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Wake_ExplicitReEnqueueOfAWaitingRow_RunsWithoutWaitingForTheWake()
+    {
+        var time = new ManualTimeProvider();
+        var waiting = Guid.NewGuid();
+        var ingestion = new FakeIngestionService((_, _) => Task.CompletedTask)
+        {
+            Outcome = _ => KnowledgeIngestionRunOutcome.Deferred
+        };
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
+        await using var provider = BuildProvider(ingestion, NoRecovery());
+        using var worker = CreateWorker(provider, dispatcher, timeProvider: time);
+        await worker.StartAsync(CancellationToken.None);
+
+        _ = await dispatcher.EnqueueAsync(waiting, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => ingestion.Completed.Contains(waiting), PollTimeout, "the first run deferred");
+        _ = await dispatcher.EnqueueAsync(waiting, CancellationToken.None);
+
+        await AssertEx.EventuallyAsync(() => ingestion.Completed.Count(id => id == waiting) == 2, PollTimeout, "an upload or retry runs at once");
+        AssertEx.Equal(1, time.ArmedTimerCount, "both deferrals share the one armed wake");
+        await worker.StopAsync(CancellationToken.None);
+    }
+
+    [Test]
+    public async Task StopAsync_WhenIdle_CompletesWithoutTheClockAndLeavesNothingArmed()
+    {
+        var time = new ManualTimeProvider();
+        var embedder = Substitute.For<IKnowledgeChunkEmbedder>();
+        await using var provider = BuildProvider(new FakeIngestionService((_, _) => Task.CompletedTask), NoRecovery());
+        using var worker = CreateWorker(provider, new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier()), embedder: embedder, timeProvider: time);
+        await worker.StartAsync(CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "the startup wake is armed");
+
+        await worker.StopAsync(CancellationToken.None).WaitAsync(PollTimeout);
+
+        AssertEx.Equal(0, time.ArmedTimerCount);
+        _ = await embedder.DidNotReceive().IsEmbeddingModelBlockedAsync(Arg.Any<CancellationToken>());
+    }
+
+    // A catalog whose one waiting row is listed only once its wait was cleared, and only until its next run starts.
+    private static IKnowledgeDocumentCatalogService WaitingRowCatalog(FakeIngestionService ingestion, Guid waiting)
+    {
+        var catalog = NoRecovery();
+        var cleared = 0;
+        var startsAtClear = 0;
+        catalog.ClearEmbeddingModelWaitAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            Volatile.Write(ref startsAtClear, ingestion.Started.Count(id => id == waiting));
+            Volatile.Write(ref cleared, 1);
+            return Task.FromResult<IReadOnlyList<Guid>>([waiting]);
+        });
+        catalog.ListPendingDocumentIdsAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+            Task.FromResult<IReadOnlyList<Guid>>(Volatile.Read(ref cleared) == 1 && ingestion.Started.Count(id => id == waiting) == Volatile.Read(ref startsAtClear)
+                ? [waiting]
+                : []));
+        return catalog;
+    }
+
+    // Nothing to recover; a waiting row exists unless a test says otherwise, so every wake probes the embedder.
     private static IKnowledgeDocumentCatalogService NoRecovery()
     {
         var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();
         catalog.ResetNonTerminalToPendingAsync(Arg.Any<CancellationToken>())
                .Returns((IReadOnlyList<Guid>)[]);
+        catalog.HasEmbeddingModelWaitAsync(Arg.Any<CancellationToken>()).Returns(true);
         return catalog;
     }
 
@@ -328,16 +693,24 @@ public sealed class KnowledgeIngestionWorkerTests
 
     private static KnowledgeIngestionWorker CreateWorker(ServiceProvider provider,
         KnowledgeIngestionDispatcher dispatcher,
-        int drainTimeoutSeconds = 30)
+        int drainTimeoutSeconds = 30,
+        IKnowledgeChunkEmbedder? embedder = null,
+        TimeProvider? timeProvider = null,
+        IKnowledgeIndexingNotifier? notifier = null)
     {
         var options = Options.Create(new KnowledgeBaseOptions
         {
             MaxConcurrentIngestions = 1,
             ShutdownDrainTimeoutSeconds = drainTimeoutSeconds
         });
+
+        // A manual clock nobody advances keeps the startup wake armed and silent in every test that is not about it.
         return new KnowledgeIngestionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
             dispatcher,
+            embedder ?? Substitute.For<IKnowledgeChunkEmbedder>(),
+            notifier ?? new NullKnowledgeIndexingNotifier(),
             options,
+            timeProvider ?? new ManualTimeProvider(),
             NullLogger<KnowledgeIngestionWorker>.Instance);
     }
 
@@ -370,11 +743,15 @@ public sealed class KnowledgeIngestionWorkerTests
 
         public ConcurrentBag<Guid> Completed { get; } = [];
 
-        public async Task RunAsync(Guid documentId, CancellationToken cancellationToken)
+        /// <summary>How each run ends; every run completes unless a test defers it.</summary>
+        public Func<Guid, KnowledgeIngestionRunOutcome> Outcome { get; init; } = static _ => KnowledgeIngestionRunOutcome.Completed;
+
+        public async Task<KnowledgeIngestionRunOutcome> RunAsync(Guid documentId, CancellationToken cancellationToken)
         {
             Started.Add(documentId);
             await _behavior(documentId, cancellationToken);
             Completed.Add(documentId);
+            return Outcome(documentId);
         }
     }
 }

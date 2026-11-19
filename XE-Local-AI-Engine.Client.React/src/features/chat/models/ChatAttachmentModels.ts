@@ -57,14 +57,3 @@ export interface PendingAttachmentUpload {
 	readonly sizeBytes: number;
 	readonly percent: number;
 }
-
-// Formats a byte count for the attachment chip: bytes / KiB / MiB with one decimal above the KiB threshold.
-export function formatAttachmentSize(bytes: number): string {
-	if (bytes < 1024) {
-		return `${bytes} B`;
-	}
-	if (bytes < 1024 * 1024) {
-		return `${(bytes / 1024).toFixed(1)} KiB`;
-	}
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
-}

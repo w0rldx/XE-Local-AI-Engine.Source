@@ -279,8 +279,8 @@ public sealed record NodeChatPersistedMessageDto : ISelectedPathMessage
     // column). Null for legacy turns, user messages and providers that report no timings.
     public NodeChatThroughputDto? Throughput { get; init; }
 
-    // The category of a failed assistant turn, surfaced from the metadata blob (no DB column). Null for a legacy turn,
-    // a turn that did not fail, and a stored name this build does not know.
+    // The category of a failed assistant turn, or of a cancelled one whose reason is shown, from the metadata blob (no DB column).
+    // Null for a legacy turn, any other turn, and a stored name this build does not know.
     public FailureCategory? FailureCategory { get; init; }
 }
 

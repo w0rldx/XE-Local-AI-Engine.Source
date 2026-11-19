@@ -173,8 +173,8 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
                 Sources = TurnKnowledgeSourceCollector.Merge(sources, TurnKnowledgeSourceCollector.Snapshot()),
                 ContextWindow = state.ContextSnapshot is { } snapshot ? MapContextWindow(snapshot, state) : null,
                 Throughput = NodeChatThroughputDto.From(state.Throughput),
-                // Only a failed turn keeps its category on the row; a cancel is an outcome, not a failure, as with Error above.
-                FailureCategory = terminalStatus == NodeChatMessageStatusValues.Failed ? state.FailureCategory : null
+                // A failed turn, or a cancel with a shown reason, keeps its category on the row; a plain cancel stores none, as with Error above.
+                FailureCategory = ChatTerminalProjection.ChatFailureCategory(state)
             },
             CancellationToken.None);
 

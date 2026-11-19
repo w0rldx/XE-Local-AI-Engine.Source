@@ -391,14 +391,14 @@ public static class NodeMetrics
 
     /// <summary>Incremented once per cancelled invocation, tagged by <c>category</c>.</summary>
     /// <remarks>
-    ///     <c>user</c> (an explicit user cancel), <c>watchdog</c> (the invocation-level timeout fired), <c>operator_eject</c> (the model was
-    ///     force-ejected out from under the turn), or <c>shutdown</c> (host shutdown cancelled the run). Distinct from
-    ///     <see cref="InvocationFailedTotal" />, which deliberately EXCLUDES cancellations: a cancel is an outcome, not a failure, so it is
-    ///     counted here with its cause. Content-free (a count only), bounded cardinality.
+    ///     <c>user</c>, <c>watchdog</c> (the invocation-level timeout), <c>provider_timeout</c>, <c>detached_grace</c> (no client came back in
+    ///     the disconnect grace), <c>shutdown</c> (the host or caller token, or a disconnect), <c>operator_eject</c> (an operator mark refused
+    ///     the load) or <c>model_eject</c> (the model was unloaded under the turn). Distinct from <see cref="InvocationFailedTotal" />, which
+    ///     EXCLUDES cancellations: a cancel is an outcome, not a failure. Content-free (a count only), bounded cardinality.
     /// </remarks>
     public static readonly Counter<long> InvocationCancelledTotal =
         Meter.CreateCounter<long>("invocation_cancelled_total",
-            description: "Number of cancelled invocations by category (user | watchdog | operator_eject | shutdown).");
+            description: "Number of cancelled invocations by category (user | watchdog | provider_timeout | detached_grace | shutdown | operator_eject | model_eject).");
 
     /// <summary>
     ///     Incremented (by the reported token count) at the terminal usage-finalize of an invocation turn.

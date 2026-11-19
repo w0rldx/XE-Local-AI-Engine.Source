@@ -277,6 +277,56 @@ public sealed class SupervisorOperatorEjectMarkTests
         AssertEx.Equal(expected: 2, launcher.LaunchCount);
     }
 
+    [Test]
+    [Arguments(LlamaServerEjectOutcome.Ejected)]
+    [Arguments(LlamaServerEjectOutcome.ForcedWhileBusy)]
+    [Arguments(LlamaServerEjectOutcome.NotRunning)]
+    [Arguments(LlamaServerEjectOutcome.TimedOutStillBusy)]
+    public async Task IsBackgroundLaunchBlocked_IsTrueWhileTheAttemptIsOpen_AndAfterAnEjectThatMarks(LlamaServerEjectOutcome expected)
+    {
+        await using var supervisor = SupervisorFactory.Create(options: WithDrain(TimeSpan.FromMilliseconds(50)));
+        IDisposable? lease = null;
+        if (expected != LlamaServerEjectOutcome.NotRunning)
+        {
+            await supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None);
+        }
+
+        if (expected is LlamaServerEjectOutcome.ForcedWhileBusy or LlamaServerEjectOutcome.TimedOutStillBusy)
+        {
+            lease = AssertEx.NotNull(supervisor.TryAcquireInferenceLease(Model, ModelRole.Chat).Lease);
+        }
+
+        AssertEx.False(supervisor.IsBackgroundLaunchBlocked(Model, ModelRole.Chat), "No eject has opened yet.");
+        var blockedWhileOpen = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        supervisor.OperatorEjectAttemptOpenedForTesting = () =>
+        {
+            blockedWhileOpen.TrySetResult(supervisor.IsBackgroundLaunchBlocked(Model, ModelRole.Chat));
+            return Task.CompletedTask;
+        };
+
+        var outcome = await supervisor.EjectAsync(Model, ModelRole.Chat, expected == LlamaServerEjectOutcome.ForcedWhileBusy, CancellationToken.None,
+            operatorRequested: true);
+        lease?.Dispose();
+
+        AssertEx.Equal(expected, outcome);
+        AssertEx.True(await blockedWhileOpen.Task.WaitAsync(TestBudgets.Contended), "An open eject attempt blocks a Background launch during its drain.");
+        AssertEx.Equal(expected != LlamaServerEjectOutcome.TimedOutStillBusy, supervisor.IsBackgroundLaunchBlocked(Model, ModelRole.Chat));
+        AssertEx.False(supervisor.IsBackgroundLaunchBlocked(Model, ModelRole.Embedding), "A sibling role is never marked.");
+        AssertEx.False(supervisor.IsBackgroundLaunchBlocked("model-b", ModelRole.Chat), "A sibling model is never marked.");
+    }
+
+    [Test]
+    public async Task IsBackgroundLaunchBlocked_TurnsFalse_OnceAnInteractiveLoadClearsTheMark()
+    {
+        await using var supervisor = SupervisorFactory.Create();
+        await OperatorEjectAsync(supervisor);
+        AssertEx.True(supervisor.IsBackgroundLaunchBlocked(Model.ToUpperInvariant(), ModelRole.Chat), "The key matches case-insensitively.");
+
+        await supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.False(supervisor.IsBackgroundLaunchBlocked(Model, ModelRole.Chat));
+    }
+
     private static Task<LlamaServerEjectOutcome> OperatorEjectAsync(LlamaServerProcessSupervisor supervisor) =>
         supervisor.EjectAsync(Model, ModelRole.Chat, force: false, CancellationToken.None, operatorRequested: true);
 

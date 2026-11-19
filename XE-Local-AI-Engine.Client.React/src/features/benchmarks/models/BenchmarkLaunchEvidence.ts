@@ -1,4 +1,4 @@
-import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
+import { formatBytes } from "@/core/formatting/BytesFormatting";
 import { isPlainRecord } from "@/core/models/JsonRecord";
 import type { BenchmarkEvidenceObject, BenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
 
@@ -111,12 +111,9 @@ export function formatEvidenceValue(key: string, value: unknown, truncateHashes 
 		return "—";
 	}
 	if (typeof value === "number" && lastSegment(key).endsWith("Bytes")) {
-		// RAM and VRAM are GiB-scale but the runtime-bundle file list is not, and a small file is not "0.0 GiB": pick the
-		// unit from the magnitude so every recorded size stays readable as itself.
-		if (value >= 1024 ** 3) {
-			return formatBytesAsGb(value);
-		}
-		return value >= 1024 ** 2 ? `${(value / 1024 ** 2).toFixed(1)} MiB` : `${value} B`;
+		// RAM and VRAM are GiB-scale but the runtime-bundle file list is not, and a small file is not "0.0 GiB": the
+		// unit follows the magnitude so every recorded size stays readable as itself.
+		return formatBytes(value);
 	}
 	const rendered = String(value);
 	return truncateHashes && isEvidenceHashKey(key) && rendered.length > 20 ? `${rendered.slice(0, 12)}…` : rendered;

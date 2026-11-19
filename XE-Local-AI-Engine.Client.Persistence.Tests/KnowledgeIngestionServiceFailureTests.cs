@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Ingestion failure path on a real database: an unresolvable embedding model (a resolver throwing
@@ -346,7 +347,8 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
         var embedder = new KnowledgeChunkEmbedder(new ThrowingProviderResolver(),
             new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
             new KnowledgeEmbeddingPrefixer(),
-            options);
+            options,
+            Substitute.For<ILlamaServerProcessSupervisor>());
 
         return new KnowledgeIngestionService(context,
             blobStore,

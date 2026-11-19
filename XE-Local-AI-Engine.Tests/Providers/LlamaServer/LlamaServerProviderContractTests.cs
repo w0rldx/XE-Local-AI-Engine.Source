@@ -232,6 +232,24 @@ public sealed class LlamaServerProviderContractTests
     }
 
     [Test]
+    public async Task CreateEmbeddingGenerator_BackgroundSelection_EnsuresWithTheBackgroundIntent()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.EnsureRunningAsync(Model, ModelRole.Embedding, ModelResidencyIntent.Background, Arg.Any<CancellationToken>())
+                  .Returns<LlamaServerEndpoint>(_ => throw new TimeoutException("sentinel"));
+        using var generator = CreateProvider(supervisor).CreateEmbeddingGenerator(new LocalModelSelection
+        {
+            ModelName = Model,
+            ProviderName = Provider,
+            ResidencyIntent = ModelResidencyIntent.Background
+        });
+
+        await AssertEx.ThrowsAsync<TimeoutException>(() => generator.GenerateAsync(["text"], options: null, CancellationToken.None));
+
+        await supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task CreateEmbeddingGenerator_ProcessUnavailable_WrapsToIOException_ForLexicalFallback()
     {
         // EmbeddingPlaybookRetrievalRanker degrades to lexical only on HttpRequestException/IOException. The

@@ -51683,7 +51683,8 @@
           "ProviderAuthFailed",
           "ProviderRateLimited",
           "CallBudgetReached",
-          "InsufficientCapacity"
+          "InsufficientCapacity",
+          "ModelEjected"
         ],
         "enum": [
           "Cancelled",
@@ -51701,7 +51702,8 @@
           "ProviderAuthFailed",
           "ProviderRateLimited",
           "CallBudgetReached",
-          "InsufficientCapacity"
+          "InsufficientCapacity",
+          "ModelEjected"
         ]
       },
       "XE_Local_AI_EngineClientPersistenceAgentDefinitionKind": {

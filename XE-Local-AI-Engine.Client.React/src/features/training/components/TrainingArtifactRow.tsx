@@ -1,6 +1,7 @@
 import { Badge, Button, Group, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { formatBytes } from "@/core/formatting/BytesFormatting";
 import type { TrainingArtifactRowActions } from "@/features/training/models/TrainingArtifactModels";
 import type { TrainingArtifactView } from "@/features/training/models/TrainingModels";
 import {
@@ -9,7 +10,6 @@ import {
 	canPromote,
 	canRetryArtifactDiscardCleanup,
 	canValidateArtifact,
-	formatBytes,
 	shortDigest,
 } from "@/features/training/models/TrainingModels";
 

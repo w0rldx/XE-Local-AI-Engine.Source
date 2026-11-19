@@ -141,18 +141,6 @@ export function knowledgeStatusDescriptor(status: KnowledgeDocumentStatus): Know
 	return STATUS_DESCRIPTORS[status];
 }
 
-const BYTE_UNITS: readonly string[] = ["B", "KiB", "MiB", "GiB", "TiB"];
-
-// Human-readable byte size (e.g. "1.4 MiB"). Whole bytes for the B unit, one decimal above it.
-export function formatKnowledgeBytes(bytes: number): string {
-	if (!Number.isFinite(bytes) || bytes <= 0) {
-		return "0 B";
-	}
-	const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), BYTE_UNITS.length - 1);
-	const value = bytes / 1024 ** exponent;
-	return `${value.toFixed(exponent === 0 ? 0 : 1)} ${BYTE_UNITS[exponent]}`;
-}
-
 // createdAtUtc / updatedAtUtc ride the wire as epoch MILLISECONDS (matches the agent-execution-log convention).
 export function formatKnowledgeTimestamp(epochMs: number): string {
 	return Number.isFinite(epochMs) && epochMs > 0 ? formatTimestamp(epochMs) : "—";

@@ -199,7 +199,9 @@ public sealed partial class WorkerEventDispatcher
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(failureMessage);
 
-        if (failureCategory != FailureCategory.Cancelled)
+        // An unloaded model is an outcome like a cancel: it ends Cancelled and stays out of the failure count, but keeps its own category.
+        var cancelled = failureCategory is FailureCategory.Cancelled or FailureCategory.ModelEjected;
+        if (!cancelled)
         {
             NodeMetrics.InvocationFailedTotal.Add(delta: 1, new KeyValuePair<string, object?>("source", failureCategory.ToString()));
         }
@@ -207,7 +209,7 @@ public sealed partial class WorkerEventDispatcher
         UpdateInvocation(invocationId,
             state =>
             {
-                state.Status = failureCategory == FailureCategory.Cancelled ? InvocationStatus.Cancelled : InvocationStatus.Failed;
+                state.Status = cancelled ? InvocationStatus.Cancelled : InvocationStatus.Failed;
                 state.Error = failureMessage;
                 state.FailureCategory = failureCategory;
                 state.ShowCancelReason = showCancelReason;

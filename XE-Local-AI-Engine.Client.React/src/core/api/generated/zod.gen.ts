@@ -6475,6 +6475,7 @@ export const zXeLocalAiEngineClientModelsEnumsFailureCategory = z.enum([
 	"ProviderRateLimited",
 	"CallBudgetReached",
 	"InsufficientCapacity",
+	"ModelEjected",
 ]);
 
 export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse = z.object({

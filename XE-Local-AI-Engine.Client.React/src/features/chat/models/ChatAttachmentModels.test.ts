@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { XeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse as ConversationUploadedFileDto } from "@/core/api/generated";
-import { formatAttachmentSize, toChatAttachment } from "@/features/chat/models/ChatAttachmentModels";
+import { toChatAttachment } from "@/features/chat/models/ChatAttachmentModels";
 
 // Fills the required wire fields so a test can override only what it exercises. sizeBytes defaults to 0 and
 // extractedChars stays omitted (optional) so the coalescing assertions below still observe the mapper defaults.
@@ -52,13 +52,5 @@ describe("toChatAttachment", () => {
 		expect(toChatAttachment(fileDto({ extractionStatus: "weird-value" })).status).toBe("unknown");
 		expect(toChatAttachment(fileDto()).extractedChars).toBeNull();
 		expect(toChatAttachment(fileDto()).sizeBytes).toBe(0);
-	});
-});
-
-describe("formatAttachmentSize", () => {
-	it("formats bytes, KiB, and MiB with the expected granularity", () => {
-		expect(formatAttachmentSize(512)).toBe("512 B");
-		expect(formatAttachmentSize(2048)).toBe("2.0 KiB");
-		expect(formatAttachmentSize(5 * 1024 * 1024)).toBe("5.0 MiB");
 	});
 });

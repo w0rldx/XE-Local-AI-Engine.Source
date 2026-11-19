@@ -76,8 +76,8 @@ public interface IKnowledgeDocumentCatalogService
     Task<IReadOnlyList<Guid>> ResetNonTerminalToPendingAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Lists the ids of every document currently in <see cref="KnowledgeDocumentStatus.Pending" /> WITHOUT mutating
-    ///     any row.
+    ///     Lists the ids of every document currently in <see cref="KnowledgeDocumentStatus.Pending" />, except one waiting
+    ///     for an operator-ejected embedding model, WITHOUT mutating any row.
     /// </summary>
     /// <remarks>
     ///     The pipeline flips a document out of Pending the instant ingestion starts, so a Pending row has not begun
@@ -86,6 +86,15 @@ public interface IKnowledgeDocumentCatalogService
     ///     semantics — and in-progress clobbering — of <see cref="ResetNonTerminalToPendingAsync" />.
     /// </remarks>
     Task<IReadOnlyList<Guid>> ListPendingDocumentIdsAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Clears the waiting-for-the-embedding-model reason from every Pending row that carries it, so the next
+    ///     <see cref="ListPendingDocumentIdsAsync" /> re-admits them; returns the ids of the rows it cleared.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> ClearEmbeddingModelWaitAsync(CancellationToken cancellationToken);
+
+    /// <summary>Whether any Pending row carries the waiting-for-the-embedding-model reason, without changing a row.</summary>
+    Task<bool> HasEmbeddingModelWaitAsync(CancellationToken cancellationToken);
 
     /// <summary>Up to <paramref name="limit" /> distinct embedding model names the Indexed documents were built with.</summary>
     Task<IReadOnlyList<string>> ListIndexedEmbeddingModelsAsync(int limit, CancellationToken cancellationToken);

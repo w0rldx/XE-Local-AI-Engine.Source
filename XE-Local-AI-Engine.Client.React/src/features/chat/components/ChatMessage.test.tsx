@@ -649,6 +649,20 @@ describe("ChatMessage actions", () => {
 		expect(screen.queryByTestId("chat-message-error-assistant-1")).toBeNull();
 	});
 
+	it("localizes an ejected model's cancelled turn from its category over the raw English reason", () => {
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ content: "", status: "cancelled", error: "The model was unloaded." })}
+				failureCategory="ModelEjected"
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-message-stopped-assistant-1").textContent).toBe(
+			"This reply stopped because the model was being unloaded. You can try again.",
+		);
+		expect(screen.queryByTestId("chat-message-error-assistant-1")).toBeNull();
+	});
+
 	it("labels a turn stopped before any answer text, with reasoning, as 'Stopped while thinking'", () => {
 		renderWithProviders(
 			<ChatMessage message={assistantMessage({ content: "", reasoning: "Let me work out", status: "cancelled" })} />,

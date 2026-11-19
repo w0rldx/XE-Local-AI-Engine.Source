@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Hermetic, model-free retrieval-eval fixture. It ingests a small labeled corpus of synthetic markdown
@@ -167,7 +168,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
             var chunkingService = new HeaderBoundaryChunkingService(optionsWrapper);
             var providerResolver = new SingleProviderResolver(embeddingProvider);
             var embedder = new KnowledgeChunkEmbedder(providerResolver, new EmbeddingModelResolver(optionsWrapper, new FakeNodeSettingsStore(new StoredNodeSettings())),
-                new KnowledgeEmbeddingPrefixer(), optionsWrapper);
+                new KnowledgeEmbeddingPrefixer(), optionsWrapper, Substitute.For<ILlamaServerProcessSupervisor>());
             var indexWriter = new KnowledgeIndexWriter(ingestionContext, TimeProvider.System);
             var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
             var ingestionService = new KnowledgeIngestionService(ingestionContext,

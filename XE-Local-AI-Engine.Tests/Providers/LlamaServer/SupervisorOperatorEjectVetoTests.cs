@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
+using NSubstitute;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -383,6 +384,333 @@ public sealed class SupervisorOperatorEjectVetoTests
         AssertEx.Empty(logger.Entries.Where(static entry => entry.Level >= LogLevel.Error), "An expected veto must not log a failed start.");
     }
 
+    [Test]
+    public async Task VetoedSafeRetry_StillRecordsItsVerdict_OnceForItsBackendAndKvType()
+    {
+        var launcher = new FakeProcessLauncher();
+        var probe = new SafeRetryPublicationGatedHealthProbe();
+        var fallbackStore = new FakeLaunchFallbackStore();
+        var telemetry = new FakeLlamaServerLoadTelemetry();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: probe,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            launchFallbackStore: fallbackStore,
+            loadTelemetry: telemetry);
+        var background = EnsureBackgroundAsync(supervisor);
+        await probe.Entered;
+
+        await OperatorEjectAsync(supervisor);
+        probe.Release();
+
+        await AssertEx.ThrowsAsync<OperatorEjectedException>(() => background);
+        AssertEx.Equal(expected: 2, launcher.LaunchCount, "The optimized attempt failed and the safe retry reached readiness.");
+        var (variant, kvCacheType) = fallbackStore.Disabled.Single();
+        AssertEx.Equal(GpuVariant.Cuda, variant);
+        AssertEx.Equal(LlamaServerKvCacheTypes.Q8_0, kvCacheType);
+        AssertEx.Equal("Primary:Failed,SafeRetry:Cancelled",
+            string.Join(",", telemetry.Observations.Select(static observation => $"{observation.AttemptKind}:{observation.Outcome}")),
+            "A vetoed safe retry publishes no Ready observation.");
+    }
+
+    [Test]
+    public async Task VetoedExpertOffloadSafeRetry_RecordsNothing()
+    {
+        var probe = new SafeRetryPublicationGatedHealthProbe();
+        var fallbackStore = new FakeLaunchFallbackStore();
+        await using var supervisor = SupervisorFactory.Create(new FakeProcessLauncher(),
+            healthProbe: probe,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            launchFallbackStore: fallbackStore,
+            allocationResolver: ExpertOffloadAllocationResolver());
+        var background = EnsureBackgroundAsync(supervisor);
+        await probe.Entered;
+
+        await OperatorEjectAsync(supervisor);
+        probe.Release();
+
+        await AssertEx.ThrowsAsync<OperatorEjectedException>(() => background);
+        AssertEx.Empty(fallbackStore.Disabled, "An expert-offload safe retry is inconclusive about KV, vetoed or not.");
+    }
+
+    [Test]
+    public async Task VetoedSafeRetry_WhoseVerdictStoreThrows_IsStillTornDown_AndTheWaiterGetsTheVeto()
+    {
+        var launcher = new FakeProcessLauncher();
+        var probe = new SafeRetryPublicationGatedHealthProbe();
+        var logger = new RecordingLogger<LlamaServerProcessSupervisor>();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: probe,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            launchFallbackStore: new HeldOrThrowingFallbackStore(hold: false),
+            logger: logger);
+        var background = EnsureBackgroundAsync(supervisor);
+        await probe.Entered;
+
+        await OperatorEjectAsync(supervisor);
+        probe.Release();
+
+        var refusal = await AssertEx.ThrowsAsync<OperatorEjectedException>(() => background);
+        AssertEx.Null(refusal.InnerException, "The waiter gets the original veto, never the store's fault.");
+        var safeChild = launcher.Handles.Last();
+        AssertEx.True(safeChild.WasTreeKilled && safeChild.WasDisposed, "The vetoed safe retry must be killed and disposed.");
+        AssertEx.Equal(expected: 0, supervisor.CountRunningProcesses());
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "safe-retry verdict for vetoed model"), "A lost verdict is said out loud.");
+    }
+
+    [Test]
+    public async Task VetoedSafeRetry_WhoseVerdictStoreHangs_SettlesItsWaitersAndTicketWithinTheBudget()
+    {
+        var launcher = new FakeProcessLauncher();
+        var probe = new SafeRetryPublicationGatedHealthProbe();
+        var store = new HeldOrThrowingFallbackStore(hold: true);
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: probe,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            launchFallbackStore: store);
+        supervisor.VetoedSafeRetryVerdictBudget = TimeSpan.FromMilliseconds(100);
+        try
+        {
+            var background = EnsureBackgroundAsync(supervisor);
+            await probe.Entered;
+            await OperatorEjectAsync(supervisor);
+            probe.Release();
+
+            await store.Entered.WaitAsync(TestBudgets.Contended);
+            AssertEx.True(launcher.Handles.Last().WasTreeKilled, "The teardown runs before the verdict write.");
+            await AssertEx.ThrowsAsync<OperatorEjectedException>(() => background.WaitAsync(TestBudgets.Contended),
+                "A store that never returns must not hold the waiters past the budget.");
+            AssertEx.Equal(expected: 0, supervisor.CountInflightSpawns(), "The settled spawn released its record and ticket.");
+
+            AssertEx.NotNull(await supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None));
+            AssertEx.Equal(expected: 3, launcher.LaunchCount, "A fresh Interactive ensure launches without a ticket conflict.");
+        }
+        finally
+        {
+            store.Release();
+        }
+    }
+
+    [Test]
+    public async Task VetoedSafeRetry_WhoseVerdictStoreBlocksSynchronously_SettlesItsWaitersAndTicketWhileTheStoreIsStillBlocked()
+    {
+        using var storeGate = new ManualResetEventSlim(initialState: false);
+        var launcher = new FakeProcessLauncher();
+        var probe = new SafeRetryPublicationGatedHealthProbe();
+        var store = new SynchronouslyBlockingFallbackStore(storeGate);
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: probe,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            launchFallbackStore: store);
+        supervisor.VetoedSafeRetryVerdictBudget = TimeSpan.FromMilliseconds(100);
+        try
+        {
+            var background = EnsureBackgroundAsync(supervisor);
+            await probe.Entered;
+            await OperatorEjectAsync(supervisor);
+            probe.Release();
+
+            await store.Entered.WaitAsync(TestBudgets.Contended);
+            await AssertEx.ThrowsAsync<OperatorEjectedException>(() => background.WaitAsync(TestBudgets.Contended),
+                "A store that blocks before returning its task must not hold the waiters past the budget.");
+            AssertEx.Equal(expected: 0, supervisor.CountInflightSpawns(), "The settled spawn released its record and ticket.");
+            AssertEx.False(store.Returned, "The waiters settled while the store was still blocked.");
+        }
+        finally
+        {
+            storeGate.Set();
+        }
+    }
+
+    [Test]
+    public async Task VetoedSafeRetry_WhoseVerdictIsCutShortByShutdown_LogsAtDebug_NotWarning()
+    {
+        var probe = new SafeRetryPublicationGatedHealthProbe();
+        var store = new HeldOrThrowingFallbackStore(hold: true);
+        var logger = new RecordingLogger<LlamaServerProcessSupervisor>();
+        await using var supervisor = SupervisorFactory.Create(new FakeProcessLauncher(),
+            healthProbe: probe,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            launchFallbackStore: store,
+            logger: logger);
+        supervisor.VetoedSafeRetryVerdictBudget = TestBudgets.Contended;
+        try
+        {
+            var background = EnsureBackgroundAsync(supervisor);
+            await probe.Entered;
+            await OperatorEjectAsync(supervisor);
+            probe.Release();
+            await store.Entered.WaitAsync(TestBudgets.Contended);
+
+            await supervisor.DisposeAsync().AsTask().WaitAsync(TestBudgets.Contended);
+
+            await AssertEx.ThrowsAsync<OperatorEjectedException>(() => background);
+            AssertEx.True(logger.HasEntry(LogLevel.Debug, "the supervisor is shutting down"), "A shutdown that cuts the verdict short is logged at Debug.");
+            AssertEx.False(logger.HasEntry(LogLevel.Warning, "safe-retry verdict for vetoed model"), "A shutdown is not a lost-verdict Warning.");
+        }
+        finally
+        {
+            store.Release();
+        }
+    }
+
+    [Test]
+    public async Task FailedSpawn_StillHoldingItsTicket_HandsALateEnsureTheSameFailure_ThenAFreshEnsureLaunches()
+    {
+        using var ticketGate = new ManualResetEventSlim(initialState: false);
+        var ticketDisposing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var launcher = new FakeProcessLauncher();
+        var probe = new FakeHealthProbe(ready: false);
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: probe,
+            options: OneAttempt(),
+            launchAdmissions: new FirstTicketHeldRegistry(ticketGate, ticketDisposing));
+        try
+        {
+            var initiator = supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None);
+            await ticketDisposing.Task;
+            AssertEx.Equal(expected: 1, supervisor.CountInflightSpawns(), "A failed record stays until its ticket is released.");
+
+            var late = supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None);
+            await AssertEx.StaysIncompleteAsync(late, "The late ensure must join the failed spawn, not conflict with its held ticket.");
+            ticketGate.Set();
+
+            var first = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => initiator);
+            var second = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => late);
+            AssertEx.True(ReferenceEquals(first, second), "The late caller gets the same failure as the initiator.");
+            var launchesAfterFailure = launcher.LaunchCount;
+
+            probe.Ready = true;
+            AssertEx.NotNull(await supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None));
+            AssertEx.Equal(launchesAfterFailure + 1, launcher.LaunchCount, "Once released, a fresh ensure launches.");
+        }
+        finally
+        {
+            ticketGate.Set();
+        }
+    }
+
+    [Test]
+    public async Task FailedSpawn_WhoseTicketDisposalThrows_StillReleasesItsReservation_AndTheWaiterGetsTheOriginalFailure()
+    {
+        using var ticketGate = new ManualResetEventSlim(initialState: true);
+        var reservation = Substitute.For<IDisposable>();
+        var hook = Substitute.For<ILlamaServerPooledLaunchAdmission>();
+        hook.AdmitChatAsync(Arg.Any<string>(),
+                Arg.Any<bool>(),
+                Arg.Any<Func<IReadOnlyCollection<string>, CancellationToken, Task<IdleChatEvictionResult>>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IDisposable?>(reservation));
+        var logger = new RecordingLogger<LlamaServerProcessSupervisor>();
+        await using var supervisor = SupervisorFactory.Create(healthProbe: new FakeHealthProbe(ready: false),
+            options: OneAttempt(),
+            launchAdmissions: new FirstTicketHeldRegistry(ticketGate, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously), throwOnDispose: true),
+            pooledLaunchAdmission: hook,
+            logger: logger);
+
+        var failure = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None).WaitAsync(TestBudgets.Contended));
+
+        AssertEx.False(failure.Message.Contains("disposal failed", StringComparison.Ordinal), "A cleanup fault never replaces the spawn's failure.");
+        reservation.Received(1).Dispose();
+        AssertEx.Equal(expected: 0, supervisor.CountInflightSpawns());
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "Releasing the launch admission"), "The cleanup fault is logged on its own.");
+    }
+
+    [Test]
+    public async Task Dispose_WithAFailedSpawnStillHoldingItsTicket_Completes()
+    {
+        using var ticketGate = new ManualResetEventSlim(initialState: false);
+        var ticketDisposing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var supervisor = SupervisorFactory.Create(healthProbe: new FakeHealthProbe(ready: false),
+            options: OneAttempt(),
+            launchAdmissions: new FirstTicketHeldRegistry(ticketGate, ticketDisposing));
+        try
+        {
+            var initiator = supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None);
+            await ticketDisposing.Task;
+
+            var dispose = supervisor.DisposeAsync().AsTask();
+            await AssertEx.StaysIncompleteAsync(dispose, "Disposal waits out the failed spawn's held ticket.");
+            ticketGate.Set();
+
+            await dispose.WaitAsync(TestBudgets.Contended);
+            await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => initiator);
+        }
+        finally
+        {
+            ticketGate.Set();
+        }
+    }
+
+    /// <summary>Disposal makes one last kill of a held survivor: a child that still lives keeps its handle (and receipt), one that exits is reclaimed.</summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Dispose_WithAHeldVetoedSurvivor_KillsItOnceMore(bool exitsOnTheFinalKill)
+    {
+        var kills = 0;
+        FakeProcessTreeHandle? child = null;
+        var launcher = new FakeProcessLauncher(_ =>
+        {
+#pragma warning disable CA2000 // Ownership transfers to the supervisor through the launcher fake.
+            child = new FakeProcessTreeHandle(7001,
+                exitOnTreeKill: false,
+                onTreeKill: () =>
+                {
+                    if (Interlocked.Increment(ref kills) > 1 && exitsOnTheFinalKill)
+                    {
+                        child!.SimulateExit();
+                    }
+                });
+#pragma warning restore CA2000
+            return child;
+        });
+        var probe = new PublicationGatedHealthProbe();
+        await using var supervisor = SupervisorFactory.Create(launcher, healthProbe: probe, options: OneSlot());
+        supervisor.VetoedKillExitWait = TimeSpan.Zero;
+        var background = EnsureBackgroundAsync(supervisor);
+        await probe.Entered;
+        await OperatorEjectAsync(supervisor);
+        probe.Release();
+        await AssertEx.ThrowsAsync<OperatorEjectedException>(() => background);
+        var survivor = AssertEx.NotNull(child);
+        AssertEx.False(survivor.HasExited || survivor.WasDisposed, "The vetoed child is a held survivor before disposal.");
+        var killsBeforeDispose = Volatile.Read(ref kills);
+
+        await supervisor.DisposeAsync();
+
+        AssertEx.Equal(killsBeforeDispose + 1, Volatile.Read(ref kills), "Disposal retries the kill exactly once.");
+        AssertEx.Equal(exitsOnTheFinalKill, survivor.WasDisposed,
+            exitsOnTheFinalKill ? "A survivor that exits on the final kill is reclaimed." : "A survivor that still lives keeps its handle, and so its receipt.");
+    }
+
+    private static LlamaServerSupervisorOptions OneAttempt() =>
+        new()
+        {
+            IdleTimeToLive = TimeSpan.FromHours(1),
+            MaxLoadedProcesses = 3,
+            MaxRestartAttempts = 1
+        };
+
+    /// <summary>An allocation resolver that always places the experts in system RAM.</summary>
+    private static IProcessContextAllocationResolver ExpertOffloadAllocationResolver()
+    {
+        var allocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 8192,
+            ModelTrainContextTokens = null,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.ExpertOffload,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = $"{Model}:0",
+            CacheKey = "moe-cache"
+        };
+        var resolver = Substitute.For<IProcessContextAllocationResolver>();
+        resolver.ResolveAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<GpuVariant>(), Arg.Any<ResolvedLaunchArguments>(), Arg.Any<CancellationToken>())
+                .Returns(_ => Task.FromResult<ProcessContextAllocation?>(allocation));
+        return resolver;
+    }
+
     /// <summary>One chat slot, so a port reservation that was never released refuses the next cold launch at the cap.</summary>
     private static LlamaServerSupervisorOptions OneSlot() =>
         new()
@@ -405,18 +733,23 @@ public sealed class SupervisorOperatorEjectVetoTests
     private static Task<LlamaServerEndpoint> EnsureBackgroundAsync(LlamaServerProcessSupervisor supervisor) =>
         supervisor.EnsureRunningAsync(Model, ModelRole.Chat, ModelResidencyIntent.Background, CancellationToken.None);
 
-    /// <summary>The real registry, except that the FIRST launch ticket signals, then holds its disposal on a gate the test releases.</summary>
+    /// <summary>
+    ///     The real registry, except that the FIRST launch ticket signals, then holds its disposal on a gate the test
+    ///     releases, and with <c>throwOnDispose</c> throws once it has released the real ticket.
+    /// </summary>
     private sealed class FirstTicketHeldRegistry : IProcessLaunchAdmissionRegistry
     {
         private readonly TaskCompletionSource _disposing;
         private readonly ManualResetEventSlim _gate;
         private readonly ProcessLaunchAdmissionRegistry _inner = new();
+        private readonly bool _throwOnDispose;
         private int _tickets;
 
-        public FirstTicketHeldRegistry(ManualResetEventSlim gate, TaskCompletionSource disposing)
+        public FirstTicketHeldRegistry(ManualResetEventSlim gate, TaskCompletionSource disposing, bool throwOnDispose = false)
         {
             _gate = gate;
             _disposing = disposing;
+            _throwOnDispose = throwOnDispose;
         }
 
         public ProcessLaunchAdmissionSnapshot Snapshot(string modelName, ModelRole role) => _inner.Snapshot(modelName, role);
@@ -433,7 +766,7 @@ public sealed class SupervisorOperatorEjectVetoTests
                 return false;
             }
 
-            ticket = Interlocked.Increment(ref _tickets) == 1 ? new HeldTicket(inner, _gate, _disposing) : inner;
+            ticket = Interlocked.Increment(ref _tickets) == 1 ? new HeldTicket(inner, _gate, _disposing, _throwOnDispose) : inner;
             return true;
         }
 
@@ -442,22 +775,121 @@ public sealed class SupervisorOperatorEjectVetoTests
             private readonly TaskCompletionSource _disposing;
             private readonly ManualResetEventSlim _gate;
             private readonly IProcessLaunchTicket _inner;
+            private readonly bool _throwOnDispose;
 
-            public HeldTicket(IProcessLaunchTicket inner, ManualResetEventSlim gate, TaskCompletionSource disposing)
+            public HeldTicket(IProcessLaunchTicket inner, ManualResetEventSlim gate, TaskCompletionSource disposing, bool throwOnDispose)
             {
                 _inner = inner;
                 _gate = gate;
                 _disposing = disposing;
+                _throwOnDispose = throwOnDispose;
             }
 
             public void Dispose()
             {
                 _disposing.TrySetResult();
 
-                // A dispose must not throw; a test that never releases the gate fails on its own assertions after the budget.
+                // A test that never releases the gate fails on its own assertions after the budget.
                 _ = _gate.Wait(TestBudgets.Contended);
                 _inner.Dispose();
+                if (_throwOnDispose)
+                {
+#pragma warning disable S3877 // A throwing disposal is the fault under test.
+                    throw new InvalidOperationException("The launch ticket's disposal failed.");
+#pragma warning restore S3877
+                }
             }
+        }
+    }
+
+    /// <summary>Fails the first (optimized) readiness wait, then parks the ready safe retry at its publication point until released.</summary>
+    private sealed class SafeRetryPublicationGatedHealthProbe : ILlamaServerHealthProbe
+    {
+        private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _readinessCalls;
+
+        public Task Entered => _entered.Task;
+
+        public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct) =>
+            Task.FromResult(Interlocked.Increment(ref _readinessCalls) > 1);
+
+        public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct) =>
+            Task.FromResult(true);
+
+        public async Task<int?> ReadEffectiveContextTokensOrNullAsync(Uri baseAddress, CancellationToken ct)
+        {
+            _entered.TrySetResult();
+            await _release.Task.WaitAsync(ct);
+            return null;
+        }
+
+        public void Release()
+        {
+            _release.TrySetResult();
+        }
+    }
+
+    /// <summary>Reads as never-disabled; the verdict write either throws a fault the policy does not absorb, or holds, ignoring its token, until released.</summary>
+    private sealed class HeldOrThrowingFallbackStore : ILlamaServerLaunchFallbackStore
+    {
+        private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly bool _hold;
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public HeldOrThrowingFallbackStore(bool hold)
+        {
+            _hold = hold;
+        }
+
+        public Task Entered => _entered.Task;
+
+        public Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, string kvCacheType, CancellationToken ct) =>
+            Task.FromResult(false);
+
+        public async Task DisableOptimizedConfigAsync(GpuVariant variant, string kvCacheType, CancellationToken ct)
+        {
+            _entered.TrySetResult();
+            if (!_hold)
+            {
+                throw new InvalidOperationException("The launch-fallback store is broken.");
+            }
+
+            await _release.Task;
+        }
+
+        public void Release()
+        {
+            _release.TrySetResult();
+        }
+    }
+
+    /// <summary>Reads as never-disabled; the verdict write blocks its calling thread on a gate BEFORE it returns a task, as stalled synchronous file I/O does.</summary>
+    private sealed class SynchronouslyBlockingFallbackStore : ILlamaServerLaunchFallbackStore
+    {
+        private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly ManualResetEventSlim _gate;
+        private int _returned;
+
+        public SynchronouslyBlockingFallbackStore(ManualResetEventSlim gate)
+        {
+            _gate = gate;
+        }
+
+        public Task Entered => _entered.Task;
+
+        public bool Returned => Volatile.Read(ref _returned) != 0;
+
+        public Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, string kvCacheType, CancellationToken ct) =>
+            Task.FromResult(false);
+
+        public Task DisableOptimizedConfigAsync(GpuVariant variant, string kvCacheType, CancellationToken ct)
+        {
+            _entered.TrySetResult();
+            // Ignores its token, as stalled synchronous file I/O does.
+            _ = _gate.Wait(TestBudgets.Contended, CancellationToken.None);
+            Volatile.Write(ref _returned, value: 1);
+            return Task.CompletedTask;
         }
     }
 

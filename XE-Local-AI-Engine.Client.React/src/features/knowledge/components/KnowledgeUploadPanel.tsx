@@ -3,7 +3,8 @@ import { IconCloudUpload, IconFileText } from "@tabler/icons-react";
 import { type ChangeEvent, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { KNOWLEDGE_ACCEPT_ATTRIBUTE, formatKnowledgeBytes } from "@/features/knowledge/models/KnowledgeModels";
+import { formatBytes } from "@/core/formatting/BytesFormatting";
+import { KNOWLEDGE_ACCEPT_ATTRIBUTE } from "@/features/knowledge/models/KnowledgeModels";
 import type { KnowledgePendingUpload } from "@/features/knowledge/queries/useKnowledgeUpload";
 
 interface KnowledgeUploadPanelProps {
@@ -135,7 +136,7 @@ export function KnowledgeUploadPanel({ pendingUploads, disabled = false, onUploa
 										</Text>
 									</Group>
 									<Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-										{formatKnowledgeBytes(upload.sizeBytes)} · {Math.round(upload.percent)}%
+										{formatBytes(upload.sizeBytes)} · {Math.round(upload.percent)}%
 									</Text>
 								</Group>
 								<Progress value={upload.percent} size="sm" radius="xl" animated={true} />

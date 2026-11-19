@@ -4,16 +4,12 @@ import { type FormEvent, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/core/api/errors/ApiError";
+import { formatBytes } from "@/core/formatting/BytesFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
-import {
-	type BaseArtifactView,
-	downloadPercent,
-	formatBytes,
-	isArtifactDownloading,
-} from "@/features/training/models/TrainingModels";
+import { type BaseArtifactView, downloadPercent, isArtifactDownloading } from "@/features/training/models/TrainingModels";
 import {
 	useBaseArtifacts,
 	useCancelBaseArtifact,

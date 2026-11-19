@@ -796,7 +796,7 @@ XE-Local-AI-Engine.Tests/Invocation/HeuristicTokenEstimatorTests.cs|run|3
 XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerApprovalTests.cs|run|9
 XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerContextBudgetTests.cs|run|5
 XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerEffortDispatchTests.cs|run|12
-XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerFailureTests.cs|run|4
+XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerFailureTests.cs|run|3
 XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerTestSupport.cs|run|12
 XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerTestSupport.cs|summary|5
 XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerTests.cs|run|21

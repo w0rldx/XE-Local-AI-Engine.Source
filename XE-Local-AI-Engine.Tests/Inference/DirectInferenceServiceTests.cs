@@ -312,6 +312,28 @@ public sealed class DirectInferenceServiceTests
         AssertEx.Equal(expected: 1, harness.Recorded.Select(static state => state.InvocationId).Distinct().Count(), "The cancelled one never took the slot.");
     }
 
+    // A model unloaded under the request reaches an API client as ModelEjected with the neutral text, which names no actor (an image
+    // job unloads a model the same way an operator does), and the live entry ends Cancelled rather than failed.
+    [Test]
+    public async Task StreamAsync_AnEjectedModel_EndsWithTheModelEjectedCodeAndTheNeutralText()
+    {
+        var harness = new Harness(Failing(new LlamaServerModelEjectedException(DeferredLlamaServerChatClient.ModelEjectedMessage)));
+
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi"
+        }, CancellationToken.None).ToListAsync();
+
+        var error = events.Single();
+        AssertEx.Equal(DirectInferenceEventTypes.Error, error.Type);
+        AssertEx.Equal(nameof(FailureCategory.ModelEjected), error.ErrorCode);
+        AssertEx.Equal(DeferredLlamaServerChatClient.ModelEjectedMessage, error.ErrorMessage);
+        AssertEx.False(DeferredLlamaServerChatClient.ModelEjectedMessage.Contains("operator", StringComparison.OrdinalIgnoreCase));
+        AssertEx.False(DeferredLlamaServerChatClient.ModelEjectingMessage.Contains("operator", StringComparison.OrdinalIgnoreCase));
+        AssertEx.Equal(InvocationStatus.Cancelled, AssertEx.NotNull(harness.Dispatcher.CurrentInvocation).Status);
+    }
+
     [Test]
     public async Task StreamAsync_AProviderFailure_EndsWithAClassifiedErrorEvent_AndFreesTheSlot()
     {

@@ -130,6 +130,18 @@ public interface ILlamaServerProcessSupervisor
     Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct, bool operatorRequested = false);
 
     /// <summary>
+    ///     Whether an operator eject currently blocks a <see cref="ModelResidencyIntent.Background" /> launch of the
+    ///     <c>(model, role)</c> key. A synchronous in-memory read; it never spawns.
+    /// </summary>
+    /// <remarks>
+    ///     True from the moment an operator eject attempt opens (its drain included) and after it ends Ejected, ForcedWhileBusy
+    ///     or NotRunning; a TimedOutStillBusy or cancelled attempt leaves no mark. It clears only when a spawn a non-Background
+    ///     caller qualified publishes at or after the latest eject attempt (an operator Start is such a caller); reusing a
+    ///     surviving process never clears it.
+    /// </remarks>
+    bool IsBackgroundLaunchBlocked(string modelName, ModelRole role);
+
+    /// <summary>
     ///     Acquires a reference-counted inference lease against the running <c>(model, role)</c> process, so a graceful
     ///     <see cref="EjectAsync" /> waits for the request to finish before teardown.
     /// </summary>

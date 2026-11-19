@@ -21,7 +21,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <remarks>
 ///     Pure functions with no invocation state, so the switch-arm ORDER in <see cref="MapFailure" /> is the whole contract
 ///     and <c>InvocationRunnerTests</c> pins it. An arm whose type derives from a later arm's type comes first; a new
-///     <see cref="FailureCategory" /> drifts the generated OpenAPI/zod client, so prefer the closest existing one; only a
+///     <see cref="FailureCategory" /> changes the generated OpenAPI/zod client, which is regenerated with it; only a
 ///     sanitized message is surfaced, a provider body only through <see cref="ExternalProviderErrorDetail" />.
 /// </remarks>
 internal static class InvocationFailureClassifier
@@ -133,12 +133,12 @@ internal static class InvocationFailureClassifier
             // Matches BEFORE the generic InvalidOperationException arms below (both derive from InvalidOperationException):
             // a local-default send with no installed GGUF chat model surfaces ModelNotInstalled, not ProviderUnreachable.
             NoChatModelInstalledException => new FailureClassification(FailureCategory.ModelNotInstalled, NoChatModelInstalledMessage),
-            // An operator force-ejected the model out from under an in-flight turn: an operator action, not a provider outage, so Cancelled keeps it out of
-            // the failure count and its already user-safe message truthful. The OUTER type matches first, ahead of the transport arms its inner would hit.
-            LlamaServerModelEjectedException modelEjected => new FailureClassification(FailureCategory.Cancelled, modelEjected.Message),
-            // A load refused, or a finished load not published, because the operator ejected the model since this caller arrived: also an operator action,
-            // so Cancelled with its user-safe message. A LlamaRuntimeException, so it matches before any arm a runtime failure would reach.
-            OperatorEjectedException operatorEjected => new FailureClassification(FailureCategory.Cancelled, operatorEjected.Message),
+            // The model was unloaded out from under an in-flight turn, or was draining for an unload when it arrived: not a provider outage, so ModelEjected
+            // (status Cancelled, outside the failure count) with its user-safe message. The OUTER type matches first, ahead of the transport arms its inner would hit.
+            LlamaServerModelEjectedException modelEjected => new FailureClassification(FailureCategory.ModelEjected, modelEjected.Message),
+            // A load refused, or a finished load not published, because the operator ejected the model since this caller arrived: also ModelEjected with its
+            // user-safe message. A LlamaRuntimeException, so it matches before any arm a runtime failure would reach.
+            OperatorEjectedException operatorEjected => new FailureClassification(FailureCategory.ModelEjected, operatorEjected.Message),
             // The budgeter's hard-stop — history still over budget after truncation — is a clean, classified pre-inference failure whose own
             // message IS the fixed, path-free ContextBudgetExceededMessage, so it is surfaced verbatim.
             ContextBudgetExceededException contextBudgetExceeded => new FailureClassification(FailureCategory.ContextWindowExceeded, contextBudgetExceeded.Message),

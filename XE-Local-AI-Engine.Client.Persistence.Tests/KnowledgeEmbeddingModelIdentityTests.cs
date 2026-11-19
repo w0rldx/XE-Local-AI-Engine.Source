@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     The RESOLVED embedding model name (from <see cref="IEmbeddingModelResolver" />) — not the configured name — is the
@@ -1044,7 +1045,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         return new KnowledgeChunkEmbedder(providerResolver ?? CreateResolvingProviderResolver(),
             new EmbeddingModelResolver(options, resolverStore ?? new FakeNodeSettingsStore(new StoredNodeSettings())),
             new KnowledgeEmbeddingPrefixer(),
-            options);
+            options,
+            Substitute.For<ILlamaServerProcessSupervisor>());
     }
 
     // A provider resolver whose provider installs the GGUF embedding model (so the resolver picks the GGUF name, which

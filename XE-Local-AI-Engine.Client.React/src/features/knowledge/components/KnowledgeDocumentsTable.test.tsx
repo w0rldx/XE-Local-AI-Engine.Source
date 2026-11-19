@@ -97,6 +97,48 @@ describe("KnowledgeDocumentsTable", () => {
 		expect(screen.getByTestId("knowledge-failure-doc-1").textContent).toBe("Document text exceeds the cap.");
 	});
 
+	it("says why a Pending row parked for an unloaded embedding model waits, without a failure line", () => {
+		renderTable([
+			knowledgeDocument({
+				status: "Pending",
+				chunkCount: 0,
+				failureReason: "Waiting for the embedding model.",
+				failureReasonCode: "embedding-model-ejected",
+			}),
+		]);
+
+		expect(screen.getByTestId("knowledge-waiting-doc-1").textContent).toBe(
+			"Waiting for the embedding model, which was unloaded. Ingestion continues once it is loaded again.",
+		);
+		expect(screen.queryByTestId("knowledge-failure-doc-1")).toBeNull();
+	});
+
+	it.each([
+		["a Pending row without a reason", knowledgeDocument({ status: "Pending", chunkCount: 0 })],
+		[
+			"a row past Pending",
+			knowledgeDocument({
+				status: "Extracting",
+				chunkCount: 0,
+				failureReason: "Waiting for the embedding model.",
+				failureReasonCode: "embedding-model-ejected",
+			}),
+		],
+		[
+			"a Failed row",
+			knowledgeDocument({
+				status: "Failed",
+				chunkCount: 0,
+				failureReason: "Extraction failed (FileFormatException).",
+				failureReasonCode: "unreadable-file",
+			}),
+		],
+	])("shows no waiting hint for %s", (_, document) => {
+		renderTable([document]);
+
+		expect(screen.queryByTestId("knowledge-waiting-doc-1")).toBeNull();
+	});
+
 	it("floors the status badge at its full label width so a squeezed column cannot clip it", () => {
 		renderTable([knowledgeDocument()]);
 

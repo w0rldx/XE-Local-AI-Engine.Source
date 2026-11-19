@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Knowledge;
 
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -10,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -32,7 +34,7 @@ public sealed class KnowledgeModelPrewarmerTests
         await prewarmer.StartWarm();
 
         await _supervisor.Received(1).EnsureRunningAsync(Reranker, ModelRole.Reranker, Arg.Any<CancellationToken>());
-        await _supervisor.Received(1).EnsureRunningAsync(Embedder, ModelRole.Embedding, Arg.Any<CancellationToken>());
+        await _supervisor.Received(1).EnsureRunningAsync(Embedder, ModelRole.Embedding, ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
         AssertEx.Equal(2, _supervisor.ReceivedCalls().Count());
     }
 
@@ -43,7 +45,7 @@ public sealed class KnowledgeModelPrewarmerTests
 
         await prewarmer.StartWarm();
 
-        await _supervisor.Received(1).EnsureRunningAsync(Embedder, ModelRole.Embedding, Arg.Any<CancellationToken>());
+        await _supervisor.Received(1).EnsureRunningAsync(Embedder, ModelRole.Embedding, ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
         await _supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), ModelRole.Reranker, Arg.Any<CancellationToken>());
     }
 
@@ -55,7 +57,7 @@ public sealed class KnowledgeModelPrewarmerTests
         await prewarmer.StartWarm();
 
         await _supervisor.Received(1).EnsureRunningAsync(Reranker, ModelRole.Reranker, Arg.Any<CancellationToken>());
-        await _supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), ModelRole.Embedding, Arg.Any<CancellationToken>());
+        await _supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), ModelRole.Embedding, Arg.Any<ModelResidencyIntent>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -66,7 +68,7 @@ public sealed class KnowledgeModelPrewarmerTests
         await prewarmer.StartWarm();
 
         await _supervisor.Received(1).EnsureRunningAsync(Reranker, ModelRole.Reranker, Arg.Any<CancellationToken>());
-        await _supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), ModelRole.Embedding, Arg.Any<CancellationToken>());
+        await _supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), ModelRole.Embedding, Arg.Any<ModelResidencyIntent>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -134,14 +136,47 @@ public sealed class KnowledgeModelPrewarmerTests
         _time.Advance(KnowledgeModelPrewarmer.RetryCooldown - TimeSpan.FromSeconds(1));
         await prewarmer.StartWarm();
 
-        await _supervisor.Received(1).EnsureRunningAsync(Embedder, ModelRole.Embedding, Arg.Any<CancellationToken>());
+        await _supervisor.Received(1).EnsureRunningAsync(Embedder, ModelRole.Embedding, ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
         await _supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), ModelRole.Reranker, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task StartWarm_WhenTheOperatorEjectedTheEmbedder_LogsNoWarningAndSetsNoCooldown()
+    {
+        _supervisor.EnsureRunningAsync(Embedder, ModelRole.Embedding, ModelResidencyIntent.Background, Arg.Any<CancellationToken>())
+                   .ThrowsAsync(new OperatorEjectedException("The model was ejected by the operator."));
+        var logger = new RecordingLogger<KnowledgeModelPrewarmer>();
+        var prewarmer = CreatePrewarmer(rerankerModelName: string.Empty, logger: logger);
+
+        await prewarmer.StartWarm();
+        await prewarmer.StartWarm();
+
+        await _supervisor.Received(2).EnsureRunningAsync(Embedder, ModelRole.Embedding, ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
+        AssertEx.False(logger.Entries.Any(entry => entry.Level >= LogLevel.Warning), "An eject the operator asked for is not a failed warm.");
+        AssertEx.True(logger.HasEntry(LogLevel.Debug, "the operator ejected it"));
+    }
+
+    [Test]
+    public async Task StartWarm_WhenTheRerankerFailsBesideAVetoedEmbedder_KeepsTheRerankerCooldown()
+    {
+        _supervisor.EnsureRunningAsync(Reranker, ModelRole.Reranker, Arg.Any<CancellationToken>())
+                   .ThrowsAsync(new LlamaRuntimeException("Not enough memory to load the reranker."));
+        _supervisor.EnsureRunningAsync(Embedder, ModelRole.Embedding, ModelResidencyIntent.Background, Arg.Any<CancellationToken>())
+                   .ThrowsAsync(new OperatorEjectedException("The model was ejected by the operator."));
+        var prewarmer = CreatePrewarmer(Reranker);
+
+        await prewarmer.StartWarm();
+        await prewarmer.StartWarm();
+
+        await _supervisor.Received(1).EnsureRunningAsync(Reranker, ModelRole.Reranker, Arg.Any<CancellationToken>());
+        await _supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), ModelRole.Reranker, Arg.Any<ModelResidencyIntent>(), Arg.Any<CancellationToken>());
     }
 
     private KnowledgeModelPrewarmer CreatePrewarmer(string rerankerModelName,
         string embeddingProviderName = LlamaServerProviderConstants.ProviderName,
         bool embedderResolved = true,
-        INodeRuntimeSettings? runtimeSettings = null)
+        INodeRuntimeSettings? runtimeSettings = null,
+        ILogger<KnowledgeModelPrewarmer>? logger = null)
     {
         var provider = Substitute.For<ILocalModelProvider>();
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
@@ -169,6 +204,6 @@ public sealed class KnowledgeModelPrewarmerTests
             runtimeSettings ?? new StubNodeRuntimeSettings().WithRerankerModelName(rerankerModelName).Build(),
             lifetime,
             _time,
-            NullLogger<KnowledgeModelPrewarmer>.Instance);
+            logger ?? NullLogger<KnowledgeModelPrewarmer>.Instance);
     }
 }

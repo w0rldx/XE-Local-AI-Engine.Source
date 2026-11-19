@@ -1103,8 +1103,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                                       UpdatedAtUtc = NowUnixMilliseconds(),
                                       Content = state.StreamedContent,
                                       Reasoning = null,
-                                      // A cancelled turn persists NO error text: a cancel is an outcome, not a failure.
-                                      Error = terminalStatus == NodeChatMessageStatusValues.Cancelled ? null : state.Error,
+                                      // A plain cancel persists NO error text, a cancel the user did not ask for keeps its reason, as the chat pump does.
+                                      Error = state.ChatError,
                                       Model = state.ModelUsed ?? effectiveModel,
                                       InputCount = state.InputTokens,
                                       OutputCount = state.OutputTokens,
@@ -1113,8 +1113,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                                       Parts = parts.HasParts ? parts.Snapshot() : null,
                                       GenerationDurationMs = state.GenerationDurationMs,
                                       Envelope = envelope,
-                                      // Only a failed turn keeps its category on the row, as the chat pump does.
-                                      FailureCategory = terminalStatus == NodeChatMessageStatusValues.Failed ? state.FailureCategory : null
+                                      FailureCategory = ChatTerminalProjection.ChatFailureCategory(state)
                                   },
                                   CancellationToken.None);
         }

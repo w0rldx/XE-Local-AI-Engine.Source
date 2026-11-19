@@ -188,7 +188,7 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
     {
         ValidateSelection(selection);
-        return new DeferredLlamaServerEmbeddingGenerator(_supervisor, selection.ModelName, _embeddingNetworkTimeout);
+        return new DeferredLlamaServerEmbeddingGenerator(_supervisor, selection.ModelName, _embeddingNetworkTimeout, selection.ResidencyIntent);
     }
 
     private void ValidateSelection(LocalModelSelection selection)

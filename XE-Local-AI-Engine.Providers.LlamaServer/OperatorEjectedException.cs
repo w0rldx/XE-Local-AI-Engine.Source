@@ -9,4 +9,10 @@ public sealed class OperatorEjectedException : LlamaRuntimeException
         : base(sanitizedMessage)
     {
     }
+
+    /// <summary>Creates the refusal with a user-safe message, keeping the failure that revealed the eject as the inner exception.</summary>
+    public OperatorEjectedException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
 }

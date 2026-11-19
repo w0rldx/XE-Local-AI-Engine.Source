@@ -22,8 +22,21 @@ public sealed partial class LlamaServerProcessSupervisor
     /// <summary>How long a vetoed child's teardown waits to see it exit before the reaper holds it; settable so a test can make it immediate.</summary>
     internal TimeSpan VetoedKillExitWait { get; set; } = TimeSpan.FromSeconds(5);
 
+    /// <summary>How long a vetoed safe retry may spend recording its verdict before its waiters get the veto; settable so a test can shorten it.</summary>
+    internal TimeSpan VetoedSafeRetryVerdictBudget { get; set; } = TimeSpan.FromSeconds(5);
+
     /// <summary>Awaited by an eject right after it opened its attempt and read the table. Test seam for publication races; null in production.</summary>
     internal Func<Task>? OperatorEjectAttemptOpenedForTesting { get; set; }
+
+    /// <inheritdoc />
+    public bool IsBackgroundLaunchBlocked(string modelName, ModelRole role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        lock (_ejectMarkLock)
+        {
+            return _ejectMarks.TryGetValue(new ProcessKey(modelName, role), out var mark) && mark.IsBlocked;
+        }
+    }
 
     /// <summary>
     ///     Opens an operator eject attempt for <paramref name="key" /> and returns its generation token, with the process

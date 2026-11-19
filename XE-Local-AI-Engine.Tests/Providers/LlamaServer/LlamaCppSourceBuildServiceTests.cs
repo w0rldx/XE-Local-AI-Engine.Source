@@ -1103,6 +1103,9 @@ public sealed class LlamaCppSourceBuildServiceTests
         public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role) =>
             null;
 
+        public bool IsBackgroundLaunchBlocked(string modelName, ModelRole role) =>
+            false;
+
         private sealed class Lease : ILlamaServerRuntimeMutationLease
         {
             private readonly LeaseOnlySupervisor _owner;
@@ -1150,6 +1153,9 @@ public sealed class LlamaCppSourceBuildServiceTests
 
         public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role) =>
             null;
+
+        public bool IsBackgroundLaunchBlocked(string modelName, ModelRole role) =>
+            false;
     }
 
     private sealed class OrderedFailingPublisher : ILlamaCppSourceBuildEventPublisher

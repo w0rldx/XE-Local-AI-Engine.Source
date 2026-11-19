@@ -580,18 +580,29 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                 }
                 finally
                 {
-                    // Remove THIS record (key+value). A published or failed one leaves first, so a caller finding its process gone decides afresh; a refused
-                    // one stays until its ticket and reservation are released, so a caller meeting it waits instead of tripping TryBeginLaunch's conflict.
+                    // Remove THIS record (key+value). A published one leaves first, so a caller finding its process gone decides afresh; a failed or refused
+                    // one stays until its ticket and reservation are released, so a caller meeting it joins or waits instead of tripping TryBeginLaunch's conflict.
                     var record = new KeyValuePair<ProcessKey, InflightSpawn>(key, inflight);
-                    if (!inflight.IsRefused)
+                    if (failure is null && !inflight.IsRefused)
                     {
                         _inflightSpawns.TryRemove(record);
                     }
 
                     try
                     {
-                        inflight.LaunchTicket.Dispose();
-                        inflight.CapacityReservation?.Dispose();
+                        try
+                        {
+                            inflight.LaunchTicket.Dispose();
+                        }
+                        finally
+                        {
+                            inflight.CapacityReservation?.Dispose();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Logged on its own: the waiters get the spawn's own outcome, never this cleanup fault.
+                        _logger.LogWarning(ex, "Releasing the launch admission of model {ModelName} role {Role} failed.", key.ModelName, key.Role);
                     }
                     finally
                     {

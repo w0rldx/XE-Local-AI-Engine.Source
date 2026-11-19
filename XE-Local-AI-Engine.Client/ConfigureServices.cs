@@ -76,6 +76,8 @@ public static class ConfigureServices
     // send on purpose (a run or instance that is already gone). Only those are dropped; any other exception still logs.
     private static readonly Func<LogEvent, bool> FromHubDispatcher = Matching.FromSource("Microsoft.AspNetCore.SignalR.Internal.DefaultHubDispatcher");
 
+    private static readonly Func<LogEvent, bool> FromOpenTelemetryChatClient = Matching.FromSource("Microsoft.Extensions.AI.OpenTelemetryChatClient");
+
     private static readonly Lock SerializerOptionsLock = new();
 
     public static void AddServices(this IHostApplicationBuilder builder, IConfiguration configuration, NodeStartupSettings startupSettings)
@@ -97,6 +99,7 @@ public static class ConfigureServices
                       .Enrich.FromLogContext()
                       .Enrich.With<SensitiveQueryLogEnricher>()
                       .Filter.ByExcluding(static logEvent => logEvent.Exception is HubException && FromHubDispatcher(logEvent))
+                      .Filter.ByExcluding(IsCancelledGenAiOperation)
                       .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate);
 
                 if (logFileDirectory is not null)
@@ -535,6 +538,21 @@ public static class ConfigureServices
         builder.Services.AddHealthChecks()
                .AddCheck<NodeSqliteHealthCheck>("node_sqlite", tags: ["ready"]);
     }
+
+    /// <summary>
+    ///     True for MEAI's <c>gen_ai.client.operation.exception</c> event from <c>OpenTelemetryChatClient</c> when its exception is a
+    ///     cancellation: a user Stop is an outcome, not a Warning with a stack trace.
+    /// </summary>
+    /// <remarks>
+    ///     A type filter, because the event carries no cancel origin: a watchdog or timeout cancellation is dropped too, and the invocation
+    ///     layer still logs that one. Any other exception, event or source still logs.
+    /// </remarks>
+    internal static bool IsCancelledGenAiOperation(LogEvent logEvent) =>
+        logEvent.Exception is OperationCanceledException
+        && FromOpenTelemetryChatClient(logEvent)
+        && logEvent.Properties.TryGetValue("EventId", out var eventId)
+        && eventId is StructureValue structure
+        && structure.Properties.Any(static property => property is { Name: "Name", Value: ScalarValue { Value: "gen_ai.client.operation.exception" } });
 
     /// <summary>
     ///     The SignalR receive ceiling for a message cap: twice the content for JSON escaping plus 64 KB of envelope, never below 512 KB.

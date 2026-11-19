@@ -400,13 +400,17 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
 
-        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "cancelled" && request.Error == null),
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "cancelled" && request.Error == null && request.FailureCategory == null),
             Arg.Any<CancellationToken>());
     }
 
-    /// <summary>A cancel the user did not ask for (an operator eject vetoed the load) keeps its reason, which the chat shows in place of the stopped label.</summary>
+    /// <summary>
+    ///     A cancel the user did not ask for (an eject) keeps its reason and category, which the chat shows in place of the stopped
+    ///     label.
+    /// </summary>
     [Test]
-    public async Task TerminalizeAsync_CancelWithAShownReason_PersistsTheReason()
+    public async Task TerminalizeAsync_CancelWithAShownReason_PersistsTheReasonAndCategory()
     {
         const string Reason = "The model was ejected by the operator; it reloads when it is next used directly.";
         var persistence = CreatePersistence();
@@ -422,7 +426,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
             InvocationId = Guid.NewGuid(),
             ConversationId = correlation.ConversationId,
             Status = InvocationStatus.Cancelled,
-            FailureCategory = FailureCategory.Cancelled,
+            FailureCategory = FailureCategory.ModelEjected,
             Error = Reason,
             ShowCancelReason = true,
             ModelUsed = "llama-3.1"
@@ -431,7 +435,8 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
 
         await persistence.Received(1).TerminalizeAssistantMessageAsync(
-            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "cancelled" && request.Error == Reason && request.FailureCategory == null),
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Status == "cancelled" && request.Error == Reason && request.FailureCategory == FailureCategory.ModelEjected),
             Arg.Any<CancellationToken>());
     }
 

@@ -174,6 +174,7 @@ public sealed partial class LlamaServerProcessSupervisor
             IProcessTreeHandle? handle = null;
             long? readinessStartedTimestamp = null;
             var readinessRecorded = false;
+            var reachedReadiness = false;
             var automaticCapture = applyLaunchPolicy ? new LlamaServerBoundedStartupCapture() : null;
 
             // Latches llama.cpp's layer-placement banner out of the streamed startup output. Deliberately NOT read off automaticCapture: that buffer is bounded and
@@ -214,6 +215,7 @@ public sealed partial class LlamaServerProcessSupervisor
                     key.ModelName, key.Role, handle.ProcessId, port, LlamaServerLaunchArgumentComposer.DescribeLaunchPlan(candidate.Plan));
 
                 await WaitForReadyOrExitAsync(handle, spec.BaseAddress, inputs.ReadinessTimeout, ct).ConfigureAwait(false);
+                reachedReadiness = true;
                 var readinessDuration = _timeProvider.GetElapsedTime(readinessStartedTimestamp.Value);
                 _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms (readiness budget {BudgetSeconds:F0}s).",
                     key.ModelName, key.Role, handle.ProcessId, readinessDuration.TotalMilliseconds, inputs.ReadinessTimeout.TotalSeconds);
@@ -244,6 +246,13 @@ public sealed partial class LlamaServerProcessSupervisor
                 // Publication was vetoed by an operator eject: clean up and propagate, with no port-race check, safe fallback or down-tier.
                 RecordIncompleteReadinessAttempt(LlamaServerReadinessOutcome.Cancelled);
                 await TearDownRefusedAttemptAsync(key, handle, port).ConfigureAwait(false);
+
+                // The safe config still reached readiness where the optimized one failed: that verdict holds whether or not the eject let the process publish.
+                if (isSafeRetry && reachedReadiness)
+                {
+                    await RecordVetoedSafeRetryVerdictAsync(key, variant, candidate, ct).ConfigureAwait(false);
+                }
+
                 throw;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -749,7 +758,7 @@ public sealed partial class LlamaServerProcessSupervisor
     ///     optimized config is the culprit for THIS backend; records it, keyed on the node's CURRENT KV selection.
     /// </summary>
     /// <remarks>
-    ///     Runs after the <c>_processes</c> registration, and is safe there because the policy absorbs a verdict it
+    ///     Runs after the <c>_processes</c> registration (or a vetoed publication's teardown), safe because the policy absorbs a verdict it
     ///     cannot persist (see <see cref="ILlamaServerLaunchPolicy" />). On why, see wiki 03, section Spawn attempt
     ///     sequencing, under the safe-retry verdict.
     /// </remarks>
@@ -776,6 +785,34 @@ public sealed partial class LlamaServerProcessSupervisor
             _logger.LogWarning("Safe-retry readiness for model {ModelName} role {Role} carried no launch plan; the optimized-config failure was not recorded.",
                 key.ModelName,
                 key.Role);
+        }
+    }
+
+    /// <summary>
+    ///     Records the safe-retry verdict of a candidate whose publication an operator eject vetoed, within
+    ///     <see cref="VetoedSafeRetryVerdictBudget" />, so a slow or failing store never holds or replaces the veto.
+    /// </summary>
+    private async Task RecordVetoedSafeRetryVerdictAsync(ProcessKey key, GpuVariant variant, LlamaServerLaunchCandidate candidate, CancellationToken ct)
+    {
+        // On its own task, so a store that blocks synchronously before its first await is bounded too; an abandoned write finishes or fails on its own.
+        var verdict = Task.Run(() => RecordSafeRetryVerdictAsync(key, variant, candidate, ct), CancellationToken.None);
+        _ = verdict.ContinueWith(static faulted => _ = faulted.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        try
+        {
+            await verdict.WaitAsync(VetoedSafeRetryVerdictBudget, _timeProvider, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (ct.IsCancellationRequested)
+        {
+            _logger.LogDebug(ex, "The safe-retry verdict for vetoed model {ModelName} role {Role} was not recorded: the supervisor is shutting down.",
+                key.ModelName, key.Role);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "The safe-retry verdict for vetoed model {ModelName} role {Role} was not recorded for backend {Variant}.",
+                key.ModelName, key.Role, variant);
         }
     }
 

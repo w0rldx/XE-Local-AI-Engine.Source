@@ -140,8 +140,8 @@ public interface IWorkerEventDispatcher
         InvocationThroughput? throughput = null);
 
     /// <summary>
-    ///     Ends the invocation as failed, or cancelled for the Cancelled category; <c>showCancelReason</c> marks a cancel the user did not ask
-    ///     for, whose message the chat shows.
+    ///     Ends the invocation as failed, or cancelled for the Cancelled and ModelEjected categories (neither counts as a failure);
+    ///     <c>showCancelReason</c> marks a cancel the user did not ask for, whose message and category the chat shows.
     /// </summary>
     Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory, bool showCancelReason = false);
 

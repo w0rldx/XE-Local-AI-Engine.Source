@@ -172,6 +172,7 @@ describe("formatEvidenceValue", () => {
 		expect(formatEvidenceValue("environment.hardware.ramBytes", 68_719_476_736)).toBe("64.0 GiB");
 		expect(formatEvidenceValue("environment.runtimeBundle.files.0.sizeBytes", 10_485_760)).toBe("10.0 MiB");
 		expect(formatEvidenceValue("environment.runtimeBundle.files.0.sizeBytes", 512)).toBe("512 B");
+		expect(formatEvidenceValue("environment.runtimeBundle.files.0.sizeBytes", 4096)).toBe("4.0 KiB");
 		expect(formatEvidenceValue("receipt.executableSha256", "a".repeat(64))).toBe(`${"a".repeat(12)}…`);
 		expect(formatEvidenceValue("receipt.launchProjection.contextTokens", 4096)).toBe("4096");
 	});

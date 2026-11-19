@@ -951,12 +951,15 @@ public sealed class InvocationResumeRegistryTests
         });
     }
 
-    // The resumed terminal carries the category name of a failed turn, and none for a cancelled one.
+    // The resumed terminal carries the category name and text of a failed turn and of a cancel with a shown reason (an eject),
+    // and neither for a plain Stop.
     [Test]
-    [Arguments(InvocationStatus.Failed, FailureCategory.InsufficientCapacity, ChatStreamEventTypes.AssistantFailed, "InsufficientCapacity")]
-    [Arguments(InvocationStatus.Cancelled, FailureCategory.Cancelled, ChatStreamEventTypes.AssistantCancelled, null)]
-    public async Task ResumeAsync_TerminalCarriesTheFailureCategoryOfAFailedTurnOnly(InvocationStatus terminalStatus,
+    [Arguments(InvocationStatus.Failed, FailureCategory.InsufficientCapacity, false, ChatStreamEventTypes.AssistantFailed, "InsufficientCapacity")]
+    [Arguments(InvocationStatus.Cancelled, FailureCategory.ModelEjected, true, ChatStreamEventTypes.AssistantCancelled, "ModelEjected")]
+    [Arguments(InvocationStatus.Cancelled, FailureCategory.Cancelled, false, ChatStreamEventTypes.AssistantCancelled, null)]
+    public async Task ResumeAsync_TerminalCarriesTheFailureCategoryOfAFailedTurnOrAShownCancel(InvocationStatus terminalStatus,
         FailureCategory category,
+        bool showCancelReason,
         string expectedType,
         string? expectedCategory)
     {
@@ -979,6 +982,7 @@ public sealed class InvocationResumeRegistryTests
         var terminalState = NewState(invocationId, conversationId, terminalStatus, "Hello");
         terminalState.FailureCategory = category;
         terminalState.Error = "the reason";
+        terminalState.ShowCancelReason = showCancelReason;
         RaiseState(dispatcher, terminalState);
         await consumer;
 
@@ -986,6 +990,8 @@ public sealed class InvocationResumeRegistryTests
         AssertEx.Equal(expectedType, terminal.Type);
         AssertEx.True(string.Equals(expectedCategory, terminal.FailureCategory, StringComparison.Ordinal),
             $"expected category {expectedCategory ?? "null"}, got {terminal.FailureCategory ?? "null"}.");
+        AssertEx.True(string.Equals(expectedCategory is null ? null : "the reason", terminal.Error, StringComparison.Ordinal),
+            $"the text rides with the category, got {terminal.Error ?? "null"}.");
         AssertEx.True(events.Take(events.Count - 1).All(streamEvent => streamEvent.FailureCategory is null), "only the terminal carries a category.");
     }
 

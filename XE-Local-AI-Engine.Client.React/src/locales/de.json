@@ -2405,6 +2405,7 @@
 			"error": {
 				"categories": {
 					"InsufficientCapacity": "Derzeit ist nicht genug freier Speicher vorhanden, um dieses Modell zu laden.",
+					"ModelEjected": "Diese Antwort wurde beendet, weil das Modell gerade entladen wurde. Sie können es erneut versuchen.",
 					"ModelLoadFailed": "Das Modell konnte nicht geladen werden.",
 					"ModelNotInstalled": "Das angeforderte Chat-Modell ist nicht installiert. Installieren Sie es oder wählen Sie ein anderes Modell.",
 					"ModelUnavailable": "Das ausgewählte Modell ist nicht installiert oder nicht erreichbar.",
@@ -2412,6 +2413,7 @@
 				},
 				"categoryLabels": {
 					"InsufficientCapacity": "Kapazität nicht ausreichend",
+					"ModelEjected": "Modell entladen",
 					"ModelLoadFailed": "Laden des Modells fehlgeschlagen",
 					"ModelNotInstalled": "Modell nicht installiert",
 					"ModelUnavailable": "Modell nicht verfügbar",
@@ -5573,6 +5575,7 @@
 				"content-missing": "Der Dokumentinhalt wurde nicht gefunden.",
 				"embedding-incomplete": "Das Embedding-Modell hat ein unvollständiges Ergebnis geliefert. Stellen Sie sicher, dass das konfigurierte Embedding-Modell geladen ist, und versuchen Sie es erneut.",
 				"embedding-model-changed": "Das Embedding-Modell hat sich während der Indizierung geändert. Wiederholen Sie das Dokument.",
+				"embedding-model-ejected": "Wartet auf das Embedding-Modell, das entladen wurde. Die Aufnahme wird fortgesetzt, sobald es wieder geladen ist.",
 				"embedding-rejected": "Das Embedding-Modell ist installiert, hat die Anfrage aber abgelehnt. Prüfen Sie die Node-Protokolle auf die Antwort des Servers und versuchen Sie es dann erneut.",
 				"embedding-unavailable": "Es ist kein Embedding-Modell installiert, daher können keine Dokumente indiziert werden. Verwenden Sie in den Node-Einstellungen „Empfohlenes Embedding-Modell herunterladen“ oder installieren Sie ein Embedding-GGUF unter Modelle → Hugging Face durchsuchen und versuchen Sie es dann erneut.",
 				"embedding-unreachable": "Das Embedding-Modell ist installiert, aber sein Prozess wurde beendet oder ist nicht erreichbar. Prüfen Sie die Node-Protokolle und wiederholen Sie dann das Dokument.",

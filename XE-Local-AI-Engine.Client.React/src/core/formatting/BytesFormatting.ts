@@ -10,15 +10,42 @@ import i18next from "i18next";
 // No grouping, so a size reads exactly as the old `toFixed(1)` did in English ("1234.5 GiB", never "1,234.5 GiB").
 const oneDecimal: Intl.NumberFormatOptions = { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false };
 
-// The GiB figure's decimal separator follows the ACTIVE UI LANGUAGE ("3.6 GiB" / "3,6 GiB"), read from the i18next
-// singleton for the same reasons `TimeFormatting` gives: the requested `language` first, and a malformed stored tag
-// (`en_US`) is a RangeError that falls back to the environment default instead of throwing once per table row.
-function formatGb(gigabytes: number): string {
+/**
+ * One decimal in the ACTIVE UI LANGUAGE ("3.6" / "3,6"), read from the i18next singleton for the same reasons
+ * `TimeFormatting` gives: the requested `language` first, and a malformed stored tag (`en_US`) is a RangeError that
+ * falls back to the environment default instead of throwing once per table row. Exported for fixed-unit labels whose
+ * unit lives in a translation key ("{{kb}} KiB/token").
+ */
+export function formatOneDecimal(value: number): string {
 	try {
-		return `${gigabytes.toLocaleString(i18next.language ?? i18next.resolvedLanguage, oneDecimal)} GiB`;
+		return value.toLocaleString(i18next.language ?? i18next.resolvedLanguage, oneDecimal);
 	} catch {
-		return `${gigabytes.toLocaleString(undefined, oneDecimal)} GiB`;
+		return value.toLocaleString(undefined, oneDecimal);
 	}
+}
+
+function formatGb(gigabytes: number): string {
+	return `${formatOneDecimal(gigabytes)} GiB`;
+}
+
+const byteUnits = ["B", "KiB", "MiB", "GiB", "TiB"] as const;
+
+/**
+ * Formats a byte count in the largest unit it reaches: whole bytes below a KiB, then one decimal in the UI language
+ * ("512 B", "1.5 KiB", "7.0 GiB"; "7,0 GiB" in German). A non-finite or non-positive count reads "0 B"; a caller that
+ * shows a placeholder for a missing size checks for it first.
+ */
+export function formatBytes(bytes: number): string {
+	if (!Number.isFinite(bytes) || bytes <= 0) {
+		return "0 B";
+	}
+	let value = bytes;
+	let unit = 0;
+	while (value >= 1024 && unit < byteUnits.length - 1) {
+		value /= 1024;
+		unit += 1;
+	}
+	return unit === 0 ? `${Math.round(value)} B` : `${formatOneDecimal(value)} ${byteUnits[unit]}`;
 }
 
 // Formats a raw byte count as a compact GiB string (one decimal, in the UI language), or a dash when absent.

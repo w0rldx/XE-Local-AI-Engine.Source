@@ -414,7 +414,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             OutputTokens = outputTokens,
             TotalTokens = totalTokens,
             ReasoningTokens = reasoningTokens,
-            FailureCategory = state.Status == InvocationStatus.Failed ? state.FailureCategory?.ToString() : null
+            FailureCategory = ChatTerminalProjection.ChatFailureCategory(state)?.ToString()
         };
     }
 

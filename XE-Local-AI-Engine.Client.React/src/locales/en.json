@@ -2405,6 +2405,7 @@
 			"error": {
 				"categories": {
 					"InsufficientCapacity": "Not enough free memory to load this model right now.",
+					"ModelEjected": "This reply stopped because the model was being unloaded. You can try again.",
 					"ModelLoadFailed": "The model could not be loaded.",
 					"ModelNotInstalled": "The requested chat model is not installed. Install it or choose another model.",
 					"ModelUnavailable": "The selected model is not installed or not reachable.",
@@ -2412,6 +2413,7 @@
 				},
 				"categoryLabels": {
 					"InsufficientCapacity": "Insufficient capacity",
+					"ModelEjected": "Model unloaded",
 					"ModelLoadFailed": "Model load failed",
 					"ModelNotInstalled": "Model not installed",
 					"ModelUnavailable": "Model unavailable",
@@ -5573,6 +5575,7 @@
 				"content-missing": "The document content could not be found.",
 				"embedding-incomplete": "The embedding model returned an incomplete result. Ensure the configured embedding model is loaded and retry.",
 				"embedding-model-changed": "The embedding model changed while the document was being indexed. Retry the document.",
+				"embedding-model-ejected": "Waiting for the embedding model, which was unloaded. Ingestion continues once it is loaded again.",
 				"embedding-rejected": "The embedding model is installed but rejected the request. Check the node logs for the server's response, then retry.",
 				"embedding-unavailable": "No embedding model is installed, so documents cannot be indexed. Use \"Download recommended embedding model\" in Node Settings, or install an embedding GGUF from Models → Browse Hugging Face, then retry.",
 				"embedding-unreachable": "The embedding model is installed but its process stopped or became unreachable. Check the node logs, then retry the document.",

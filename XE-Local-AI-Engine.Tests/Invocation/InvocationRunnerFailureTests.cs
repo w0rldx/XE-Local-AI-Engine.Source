@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using static InvocationRunnerTestSupport;
@@ -431,20 +432,24 @@ public sealed class InvocationRunnerFailureTests
     [Test]
     public async Task RunAsync_WhenModelForceEjectedMidRequest_MapsCancelledWithTruthfulMessage()
     {
-        // An operator FORCE-eject surfaces as LlamaServerModelEjectedException, which must classify as
-        // Cancelled (an operator action, not a generic provider failure) and surface the truthful "ejected" message
-        // rather than a generic "provider unreachable".
+        // A FORCE-eject surfaces as LlamaServerModelEjectedException, which must classify as ModelEjected (an outcome the
+        // dispatcher ends Cancelled, not a generic provider failure) with its own message shown, rather than "provider unreachable".
         var factory = Substitute.For<IInvocationAgentFactory>();
-        const string EjectMessage = "The model was ejected by the operator while this request was running.";
+        const string EjectMessage = DeferredLlamaServerChatClient.ModelEjectedMessage;
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
                .Returns(_ => Task.FromException<InvocationAgentContext>(new LlamaServerModelEjectedException(EjectMessage)));
 
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+        var logger = new RecordingLogger<InvocationRunner>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, logger: logger);
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == EjectMessage), FailureCategory.Cancelled);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == EjectMessage), FailureCategory.ModelEjected,
+            showCancelReason: true);
+        // An outcome, not a failure: one Information line naming the reason, never an Error with a stack trace.
+        AssertEx.False(logger.Entries.Any(static entry => entry.Level >= LogLevel.Warning), logger.AllText);
+        AssertEx.Contains(logger.Entries, static entry => entry.Level == LogLevel.Information && entry.Message.Contains(EjectMessage, StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -463,7 +468,7 @@ public sealed class InvocationRunnerFailureTests
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == VetoMessage), FailureCategory.Cancelled, showCancelReason: true);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == VetoMessage), FailureCategory.ModelEjected, showCancelReason: true);
         await factory.DidNotReceiveWithAnyArgs().CreateAsync(default!, default);
         // An operator action, not a failure: one Information line naming the reason, never an Error with a stack trace.
         AssertEx.False(logger.Entries.Any(static entry => entry.Level >= LogLevel.Warning), logger.AllText);

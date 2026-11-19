@@ -170,6 +170,9 @@ internal sealed class LiveEndpointSupervisor : ILlamaServerProcessSupervisor, IA
     public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role) =>
         throw new NotSupportedException();
 
+    public bool IsBackgroundLaunchBlocked(string modelName, ModelRole role) =>
+        false;
+
     private sealed class LeaseCounter
     {
         private readonly Lock _gate = new();

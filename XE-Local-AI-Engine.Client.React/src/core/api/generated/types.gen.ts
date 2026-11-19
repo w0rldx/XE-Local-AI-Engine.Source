@@ -6908,7 +6908,8 @@ export type XeLocalAiEngineClientModelsEnumsFailureCategory =
 	| "ProviderAuthFailed"
 	| "ProviderRateLimited"
 	| "CallBudgetReached"
-	| "InsufficientCapacity";
+	| "InsufficientCapacity"
+	| "ModelEjected";
 
 export type XeLocalAiEngineClientPersistenceAgentDefinitionKind = "Single" | "Orchestrator";
 

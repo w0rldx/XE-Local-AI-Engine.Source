@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatBytes } from "@/core/formatting/BytesFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { AgentHomePatchApplyDialog } from "@/core/ui/components/AgentHomePatchApplyDialog/AgentHomePatchApplyDialog";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
@@ -24,7 +25,6 @@ import {
 	agentRunOutcomeColor,
 	agentRunPageSize,
 	agentRunPageSizeOptions,
-	formatAgentRunSize,
 } from "@/features/agentRuns/models/AgentRunModels";
 import { useAgentRuns } from "@/features/agentRuns/queries/useAgentRuns";
 
@@ -156,7 +156,7 @@ function AgentRunTable({
 			),
 		},
 		{ key: "changes", header: t("pages.agentRuns.columns.changes", "Changes"), cell: (run) => <ChangesCell run={run} /> },
-		{ key: "size", header: t("pages.agentRuns.columns.size", "Size"), cell: (run) => formatAgentRunSize(run.sizeBytes) },
+		{ key: "size", header: t("pages.agentRuns.columns.size", "Size"), cell: (run) => formatBytes(run.sizeBytes) },
 	];
 
 	return (

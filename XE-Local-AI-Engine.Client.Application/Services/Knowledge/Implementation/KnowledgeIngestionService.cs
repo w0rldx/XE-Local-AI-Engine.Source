@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
@@ -28,6 +29,15 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     internal const string EmbeddingModelChangedReason = "The embedding model changed while the document was being indexed. Retry the document.";
     internal const string TimedOutReason = "The document took too long to process and was stopped.";
 
+    // Stored on a Pending row, not a Failed one: the stranded sweep skips it until the worker's wake clears it.
+    internal const string WaitingForEmbeddingModelReason = "Waiting for the embedding model, which was unloaded. Ingestion continues once it is loaded again.";
+
+    /// <summary>How many times a vetoed run tries to hand its row back before leaving it to startup recovery.</summary>
+    internal const int MaxVetoReleaseAttempts = 3;
+
+    /// <summary>The pause between two attempts to hand a vetoed run's row back.</summary>
+    internal static readonly TimeSpan VetoReleaseRetryDelay = TimeSpan.FromMilliseconds(250);
+
     private readonly NodeChatDbContext _dbContext;
     private readonly IKnowledgeDocumentBlobStore _blobStore;
     private readonly IDocumentTextExtractor _extractor;
@@ -38,6 +48,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     private readonly IKnowledgeChunkEmbeddingCache? _embeddingCache;
     private readonly INodeSettingsStore? _settingsStore;
     private readonly TimeSpan _documentTimeout;
+    private readonly int _maxCoalescedRetries;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<KnowledgeIngestionService> _logger;
 
@@ -55,7 +66,9 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         INodeSettingsStore? settingsStore = null)
     {
         _settingsStore = settingsStore;
-        _documentTimeout = TimeSpan.FromMinutes(Math.Max(1, (options?.Value ?? new KnowledgeBaseOptions()).IngestionDocumentTimeoutMinutes));
+        var knowledgeOptions = options?.Value ?? new KnowledgeBaseOptions();
+        _documentTimeout = TimeSpan.FromMinutes(Math.Max(1, knowledgeOptions.IngestionDocumentTimeoutMinutes));
+        _maxCoalescedRetries = Math.Max(1, knowledgeOptions.MaxConcurrentIngestions);
         ArgumentNullException.ThrowIfNull(dbContext);
         _dbContext = dbContext;
         ArgumentNullException.ThrowIfNull(blobStore);
@@ -77,7 +90,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         _logger = logger;
     }
 
-    public async Task RunAsync(Guid documentId, CancellationToken cancellationToken)
+    public async Task<KnowledgeIngestionRunOutcome> RunAsync(Guid documentId, CancellationToken cancellationToken)
     {
         DocumentRevision? revision = null;
         using var budget = new CancellationTokenSource(_documentTimeout, _timeProvider);
@@ -90,7 +103,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
             // the current content: re-running it would only drop it out of search, or flip it to Failed if the run fails.
             if (revision is null || revision.Value.Status == nameof(KnowledgeDocumentStatus.Indexed))
             {
-                return;
+                return KnowledgeIngestionRunOutcome.Completed;
             }
 
             await IngestAsync(documentId, revision.Value, run.Token);
@@ -106,6 +119,12 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
             LogIngestionFailure(documentId, exception);
             await SafeFailAsync(documentId, revision?.ContentHash, TimedOutReason);
         }
+        catch (OperatorEjectedException)
+        {
+            // Not a failure: the embedder waits for a user to load it again, and the worker's wake re-admits the row.
+            _logger.LogInformation("Knowledge ingestion of document {DocumentId} waits for the embedding model, which the operator ejected.", documentId);
+            return await ReleaseVetoedAsync(documentId, revision?.ContentHash);
+        }
         catch (KnowledgeIngestionException exception)
         {
             LogIngestionFailure(documentId, exception);
@@ -116,6 +135,8 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
             LogIngestionFailure(documentId, exception);
             await SafeFailAsync(documentId, revision?.ContentHash, UnexpectedReason);
         }
+
+        return KnowledgeIngestionRunOutcome.Completed;
     }
 
     /// <summary>
@@ -328,21 +349,23 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
             textByKey.TryAdd(key, chunk.ContextualContent);
         }
 
-        var vectors = await _embeddingCache.GetOrCreateManyAsync(keys,
-            async (missing, token) =>
+        IReadOnlyList<byte[]> vectors;
+        var retries = 0;
+        while (true)
+        {
+            try
             {
-                var texts = missing.Select(key => textByKey[key]).ToList();
-                var generated = await _embedder.EmbedAsync(texts, token);
-                if (!string.Equals(generated.ResolvedModel, descriptor.ResolvedModel, StringComparison.Ordinal)
-                    || !string.Equals(generated.VectorIdentity, descriptor.VectorIdentity, StringComparison.Ordinal)
-                    || generated.Dimension != descriptor.Dimension)
-                {
-                    throw new KnowledgeIngestionException(EmbeddingModelChangedReason);
-                }
+                vectors = await _embeddingCache.GetOrCreateManyAsync(keys, EmbedMissingAsync, cancellationToken);
+                break;
+            }
+            catch (InvalidOperationException exception) when (retries < (exception is KnowledgeChunkEmbeddingUnresolvedException ? _maxCoalescedRetries : 1))
+            {
+                // Another run's shared-chunk embed failed, cause unseen: retry as owner (each round one run meets the real cause,
+                // so at most one round per concurrent run). Any other failure gets one retry; a repeat propagates.
+                retries++;
+            }
+        }
 
-                return generated.Vectors;
-            },
-            cancellationToken);
         return new KnowledgeEmbeddingResult
         {
             Vectors = vectors,
@@ -350,6 +373,20 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
             VectorIdentity = descriptor.VectorIdentity,
             Dimension = descriptor.Dimension
         };
+
+        async Task<IReadOnlyList<byte[]>> EmbedMissingAsync(IReadOnlyList<KnowledgeChunkEmbeddingCacheKey> missing, CancellationToken token)
+        {
+            var texts = missing.Select(key => textByKey[key]).ToList();
+            var generated = await _embedder.EmbedAsync(texts, token);
+            if (!string.Equals(generated.ResolvedModel, descriptor.ResolvedModel, StringComparison.Ordinal)
+                || !string.Equals(generated.VectorIdentity, descriptor.VectorIdentity, StringComparison.Ordinal)
+                || generated.Dimension != descriptor.Dimension)
+            {
+                throw new KnowledgeIngestionException(EmbeddingModelChangedReason);
+            }
+
+            return generated.Vectors;
+        }
     }
 
     private static List<KnowledgeIndexChunk> BuildIndexChunks(IReadOnlyList<KnowledgeChunk> chunks, IReadOnlyList<byte[]> embeddings, int dimension)
@@ -591,6 +628,80 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
             // Never replaces the caller's cancellation. The row then keeps its counted attempt; startup recovery bounds it.
             _logger.LogWarning("Could not release the interrupted run of document {DocumentId} ({ErrorClass}).", documentId, exception.GetType().Name);
         }
+    }
+
+    /// <summary>
+    ///     Hands a run the operator's embedder eject vetoed back to Pending with <see cref="WaitingForEmbeddingModelReason" />,
+    ///     and refunds the attempt its start counted.
+    /// </summary>
+    /// <remarks>
+    ///     One UPDATE guarded on this run's content hash and an in-progress status, so a row deleted, replaced or reset
+    ///     meanwhile is left alone. A write that keeps failing leaves the row in progress for startup recovery (or a
+    ///     reindex); it is never marked Failed, because nothing failed.
+    /// </remarks>
+    private async Task<KnowledgeIngestionRunOutcome> ReleaseVetoedAsync(Guid documentId, string? contentHash)
+    {
+        if (contentHash is null)
+        {
+            return KnowledgeIngestionRunOutcome.Completed;
+        }
+
+        bool released;
+        var attempt = 0;
+        while (true)
+        {
+            attempt++;
+            try
+            {
+                released = await TryReleaseVetoedAsync(documentId, contentHash);
+                break;
+            }
+            catch (Exception exception) when (exception is DbException or InvalidOperationException)
+            {
+                if (attempt >= MaxVetoReleaseAttempts)
+                {
+                    _logger.LogError("Could not hand document {DocumentId} back to wait for the embedding model ({ErrorClass}); it stays in progress until the next start or a reindex.",
+                        documentId,
+                        exception.GetType().Name);
+                    return KnowledgeIngestionRunOutcome.Completed;
+                }
+            }
+
+            await Task.Delay(VetoReleaseRetryDelay, _timeProvider, CancellationToken.None);
+        }
+
+        if (!released)
+        {
+            return KnowledgeIngestionRunOutcome.Completed;
+        }
+
+        await _notifier.NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Pending, CancellationToken.None);
+        return KnowledgeIngestionRunOutcome.Deferred;
+    }
+
+    private async Task<bool> TryReleaseVetoedAsync(Guid documentId, string contentHash)
+    {
+        var connection = _dbContext.Database.GetDbConnection();
+        await OpenIfNeededAsync(connection, CancellationToken.None);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+                              UPDATE knowledge_documents
+                              SET status = $pending, failure_reason = $reason, updated_at_utc = $updated_at_utc,
+                                  ingestion_attempts = MAX(ingestion_attempts - 1, 0)
+                              WHERE document_id = $document_id
+                                AND content_hash = $content_hash
+                                AND status IN ($extracting, $chunking, $embedding);
+                              """;
+        AddParameter(command, "$pending", nameof(KnowledgeDocumentStatus.Pending));
+        AddParameter(command, "$reason", WaitingForEmbeddingModelReason);
+        AddParameter(command, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+        AddParameter(command, "$document_id", documentId);
+        AddParameter(command, "$content_hash", contentHash);
+        AddParameter(command, "$extracting", nameof(KnowledgeDocumentStatus.Extracting));
+        AddParameter(command, "$chunking", nameof(KnowledgeDocumentStatus.Chunking));
+        AddParameter(command, "$embedding", nameof(KnowledgeDocumentStatus.Embedding));
+        return await command.ExecuteNonQueryAsync(CancellationToken.None) == 1;
     }
 
     private readonly record struct DocumentRevision(string Extension, string? SourcePath, string ContentHash, string Status);

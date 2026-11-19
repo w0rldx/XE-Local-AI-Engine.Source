@@ -340,8 +340,8 @@ public sealed class InvocationLifecycleTracker
     /// <summary>The fixed, path-free sentence surfaced and persisted for a cancelled turn, naming WHICH bound ended it.</summary>
     /// <remarks>
     ///     <see cref="FailureCategory" /> alone cannot carry this: it collapses the invocation watchdog, the stream-idle
-    ///     watchdog and an HTTP timeout into one <see cref="FailureCategory.Timeout" /> value, and adding a category
-    ///     would drift the generated OpenAPI/zod client, so the message is the breadcrumb channel — as it already is for
+    ///     watchdog and an HTTP timeout into one <see cref="FailureCategory.Timeout" /> value, and a category per bound
+    ///     would change the generated OpenAPI/zod client for no UI branch, so the message is the breadcrumb channel — as for
     ///     <c>StreamIdleTimeoutException</c>, whose message names the stream-idle bound and its seconds. Only the
     ///     resolved origin and the turn's configured ceiling are interpolated; no host, path or model name can ride it.
     /// </remarks>

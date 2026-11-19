@@ -662,6 +662,9 @@ public sealed class SourceBuildRecoveryTests
 
         public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role) =>
             null;
+
+        public bool IsBackgroundLaunchBlocked(string modelName, ModelRole role) =>
+            false;
     }
 
     private sealed class ThrowingStore : IInstalledRuntimeStore

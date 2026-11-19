@@ -3,10 +3,13 @@ namespace XE_Local_AI_Engine.Tests.Configuration;
 using System.Globalization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Serilog.Core;
 using Serilog.Events;
 using XE_Local_AI_Engine.Client;
@@ -89,6 +92,48 @@ public sealed class SerilogProviderForwardingTests : IDisposable
         AssertEx.Contains(messages, "other-source-probe");
     }
 
+    // MEAI's chat telemetry hop logs every failed provider call as gen_ai.client.operation.exception, a user Stop included. Only that
+    // event with a cancellation is dropped: a provider failure, the same event from another source and another event still reach the sinks.
+    [Test]
+    public async Task AddServices_DropsOnlyTheCancelledGenAiOperationEvent()
+    {
+        var sink = new CapturingSink();
+        var builder = CreateBuilder();
+        builder.Logging.ClearProviders();
+        builder.Services.AddSingleton<ILogEventSink>(sink);
+        builder.AddServices(builder.Configuration, NodeStartupSettings.Read(builder.Configuration, builder.Environment));
+
+        using var provider = builder.Services.BuildServiceProvider();
+        var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
+        var stop = new OperationCanceledException("stop-probe");
+        var failure = new HttpRequestException("provider-failure-probe");
+
+        // The real hop emits the event, so the filter is checked against MEAI's own category, event id and exception argument.
+        await CallThroughTelemetryAsync(loggerFactory, stop);
+        await CallThroughTelemetryAsync(loggerFactory, failure);
+        loggerFactory.CreateLogger("gen_ai.filter.probe")
+                     .LogWarning(new EventId(id: 1, "gen_ai.client.operation.exception"), new OperationCanceledException(), "other-source-probe");
+        loggerFactory.CreateLogger<OpenTelemetryChatClient>()
+                     .LogWarning(new EventId(id: 2, "other.event"), new OperationCanceledException(), "other-event-probe");
+
+        var exceptions = sink.Exceptions();
+        AssertEx.False(exceptions.Contains(stop), "A cancelled provider call must not reach the sinks.");
+        AssertEx.True(exceptions.Contains(failure), "A provider failure must still log.");
+        var messages = sink.Messages();
+        AssertEx.Contains(messages, "other-source-probe");
+        AssertEx.Contains(messages, "other-event-probe");
+    }
+
+    private static async Task CallThroughTelemetryAsync(ILoggerFactory loggerFactory, Exception thrown)
+    {
+        var inner = Substitute.For<IChatClient>();
+        inner.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>()).ThrowsAsync(thrown);
+        using var client = inner.AsBuilder().UseOpenTelemetry(loggerFactory, sourceName: "Microsoft.Extensions.AI").Build();
+
+        var caught = await AssertEx.ThrowsAsync<Exception>(() => client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+        AssertEx.Equal(thrown, caught);
+    }
+
     // With Hosting.Diagnostics at Information the framework's "Request finished" line carried the SignalR JWT from the query:
     // logged here in its own template, category and QueryString property through the real pipeline, no copy may keep the token.
     [Test]
@@ -145,6 +190,7 @@ public sealed class SerilogProviderForwardingTests : IDisposable
     {
         private readonly List<string> _messages = [];
         private readonly List<string> _rendered = [];
+        private readonly List<Exception> _exceptions = [];
 
         public void Emit(LogEvent logEvent)
         {
@@ -152,6 +198,18 @@ public sealed class SerilogProviderForwardingTests : IDisposable
             {
                 _messages.Add(logEvent.MessageTemplate.Text);
                 _rendered.Add(logEvent.RenderMessage(CultureInfo.InvariantCulture));
+                if (logEvent.Exception is { } exception)
+                {
+                    _exceptions.Add(exception);
+                }
+            }
+        }
+
+        public List<Exception> Exceptions()
+        {
+            lock (_messages)
+            {
+                return [.. _exceptions];
             }
         }
 

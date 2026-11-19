@@ -26,12 +26,13 @@ using OpenAIChatResponseFormat = OpenAI.Chat.ChatResponseFormat;
 /// </remarks>
 internal sealed class DeferredLlamaServerChatClient : IChatClient
 {
-    // User-safe terminal message when an operator force-ejected this model mid-request. Carries no paths/ports/internals.
-    private const string ModelEjectedMessage = "The model was ejected by the operator while this request was running.";
+    // User-safe terminal message when this model was force-ejected mid-request. Carries no paths/ports/internals, and names no actor: an image job's
+    // eject makes room the same way an operator's does.
+    internal const string ModelEjectedMessage = "The model was unloaded while this request was running.";
 
-    // User-safe terminal message when a request arrives while a graceful operator eject is draining this model: the
-    // request is refused up front (never started) instead of running untracked under the drain.
-    private const string ModelEjectingMessage = "The model is being ejected by the operator; this request was not started.";
+    // User-safe terminal message when a request arrives while a graceful eject is draining this model: the request is refused up front (never started)
+    // instead of running untracked under the drain. It promises no reload, which a drain that times out or a later load may not deliver.
+    internal const string ModelEjectingMessage = "The model is being unloaded; this request was not started.";
 
     // User-safe terminal message when back-to-back measurement spawns keep owning this model's key past the bounded
     // re-ensure. Retryable by nature — the measurement ends on its own.

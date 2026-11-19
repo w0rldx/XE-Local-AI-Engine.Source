@@ -473,6 +473,14 @@ internal sealed class FakeProcessSupervisor : ILlamaServerProcessSupervisor
         return null;
     }
 
+    /// <summary>What <see cref="IsBackgroundLaunchBlocked" /> answers for every key (default false: no operator eject mark).</summary>
+    public bool BackgroundLaunchBlocked { get; set; }
+
+    public bool IsBackgroundLaunchBlocked(string modelName, ModelRole role)
+    {
+        return BackgroundLaunchBlocked;
+    }
+
     /// <summary>One responsive chat process health entry — a convenience for "a model is running" gate tests.</summary>
     public static LlamaServerProcessHealth RunningChat(string modelName = "demo-model")
     {

@@ -268,10 +268,13 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Null(legacyPart.LastCommandLabel);
     }
 
+    // A failed turn and an ejected (cancelled, reason shown) turn both read back with their category and text after a reload.
     [Test]
-    public async Task TerminalizeAssistantMessageAsync_WithAFailureCategory_RoundTripsItThroughTheEncryptedBlob()
+    [Arguments(NodeChatMessageStatusValues.Failed, FailureCategory.InsufficientCapacity, "Insufficient capacity for 'big' (Chat).")]
+    [Arguments(NodeChatMessageStatusValues.Cancelled, FailureCategory.ModelEjected, "The model was unloaded while this request was running.")]
+    public async Task TerminalizeAssistantMessageAsync_WithAFailureCategory_RoundTripsItThroughTheEncryptedBlob(string status, FailureCategory category, string error)
     {
-        await using var provider = await BuildProviderAsync("failure-category-roundtrip.sqlite");
+        await using var provider = await BuildProviderAsync($"failure-category-roundtrip-{status}.sqlite");
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
@@ -296,18 +299,19 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var returned = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
             Correlation = correlation,
-            Status = NodeChatMessageStatusValues.Failed,
+            Status = status,
             UpdatedAtUtc = 2002,
-            Error = "Insufficient capacity for 'big' (Chat).",
-            FailureCategory = FailureCategory.InsufficientCapacity
+            Error = error,
+            FailureCategory = category
         });
 
         // The returned row is what the pump builds the LIVE terminal event from, so it must carry the category too.
-        AssertEx.Equal(FailureCategory.InsufficientCapacity, returned.FailureCategory);
+        AssertEx.Equal(category, returned.FailureCategory);
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId));
         var assistant = loaded.Messages.Single(message => message.MessageId == correlation.MessageId);
-        AssertEx.Equal(FailureCategory.InsufficientCapacity, assistant.FailureCategory);
-        AssertEx.Equal("Insufficient capacity for 'big' (Chat).", assistant.Error);
+        AssertEx.Equal(status, assistant.Status);
+        AssertEx.Equal(category, assistant.FailureCategory);
+        AssertEx.Equal(error, assistant.Error);
     }
 
     [Test]

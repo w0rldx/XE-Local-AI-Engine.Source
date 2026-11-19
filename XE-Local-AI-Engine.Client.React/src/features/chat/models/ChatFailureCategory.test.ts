@@ -3,9 +3,17 @@ import { describe, expect, it } from "vitest";
 import de from "@/locales/de.json";
 import en from "@/locales/en.json";
 
-const headlineCategories = ["InsufficientCapacity", "ModelLoadFailed", "ModelNotInstalled", "ModelUnavailable", "Timeout"];
+const headlineCategories = [
+	"InsufficientCapacity",
+	"ModelEjected",
+	"ModelLoadFailed",
+	"ModelNotInstalled",
+	"ModelUnavailable",
+	"Timeout",
+];
 const labelCategories = [
 	"InsufficientCapacity",
+	"ModelEjected",
 	"ModelLoadFailed",
 	"ModelNotInstalled",
 	"ModelUnavailable",

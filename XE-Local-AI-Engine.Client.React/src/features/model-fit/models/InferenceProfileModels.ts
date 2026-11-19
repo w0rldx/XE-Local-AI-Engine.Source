@@ -5,6 +5,8 @@
 // DTO but are intentionally dropped by the mapper so they can never reach the UI. No machine key is present on
 // the wire (local-only by design); the view-model has no slot for one either.
 
+import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
+
 // The three terminal states a profile can be in. Discriminated union (lowercase) narrowed from the backend's
 // PascalCase status string by the mapper, so an unknown future status normalizes to "explored" rather than
 // smuggling an out-of-union value into a badge map.
@@ -87,16 +89,16 @@ export function toInferenceProfileStatus(status: string | undefined): InferenceP
 	}
 }
 
-// Composes the compact outcome summary shown on a profile row — e.g. "42 tok/s · 6.2 GiB". Pure (no i18n): the
-// numeric parts carry conventional unit symbols (tok/s, GiB) exactly like the sibling ModelFitFormatters, while
-// the localized status word ("Frozen") is prepended by the component. Returns "" when no metric is available.
+// Composes the compact outcome summary shown on a profile row — e.g. "42 tok/s · 6.2 GiB". The numeric parts carry
+// conventional unit symbols (tok/s, GiB) exactly like the sibling ModelFitFormatters, the GiB decimal in the UI
+// language, while the localized status word ("Frozen") is prepended by the component. Returns "" when no metric is available.
 export function formatProfileOutcomeSummary(tokensPerSecond: number | null, vramBytes: number | null): string {
 	const parts: string[] = [];
 	if (tokensPerSecond !== null) {
 		parts.push(`${tokensPerSecond.toFixed(0)} tok/s`);
 	}
 	if (vramBytes !== null) {
-		parts.push(`${(vramBytes / 1024 ** 3).toFixed(1)} GiB`);
+		parts.push(formatBytesAsGb(vramBytes));
 	}
 	return parts.join(" · ");
 }
