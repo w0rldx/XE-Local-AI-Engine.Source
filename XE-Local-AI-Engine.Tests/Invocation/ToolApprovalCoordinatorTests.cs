@@ -917,8 +917,8 @@ public sealed class ToolApprovalCoordinatorTests
             InvocationThroughput? throughput = null) =>
             _inner.ReportInvocationCompletedAsync(invocationId, inputTokens, outputTokens, totalTokens, reasoningTokens, generationDurationMs, finishReason, throughput);
 
-        public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory) =>
-            _inner.ReportInvocationFailedAsync(invocationId, failureMessage, failureCategory);
+        public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory, bool showCancelReason = false) =>
+            _inner.ReportInvocationFailedAsync(invocationId, failureMessage, failureCategory, showCancelReason);
 
         public Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens) =>
             _inner.ReportToolSchemaTokensAsync(invocationId, toolSchemaTokens, maxToolSchemaTokens);

@@ -20,6 +20,7 @@ internal sealed class ModelUnloadCoordinator : IModelUnloadCoordinator
     ///     resident.
     /// </summary>
     /// <remarks>
+    ///     Every role is an operator eject, even a role that is not running, so Background work cannot reload any of them.
     ///     A role that is not running reports <c>NotRunning</c>, which is success — the whole operation is idempotent. Only a process still
     ///     busy after the drain window (left running on purpose, because force is not set here) makes the unload unsuccessful.
     /// </remarks>
@@ -28,7 +29,7 @@ internal sealed class ModelUnloadCoordinator : IModelUnloadCoordinator
         var unloaded = true;
         foreach (var role in Enum.GetValues<ModelRole>())
         {
-            var outcome = await _supervisor.EjectAsync(modelName, role, force: false, cancellationToken);
+            var outcome = await _supervisor.EjectAsync(modelName, role, force: false, cancellationToken, operatorRequested: true);
             unloaded &= outcome is not LlamaServerEjectOutcome.TimedOutStillBusy;
         }
 

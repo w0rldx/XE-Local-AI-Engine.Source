@@ -77,8 +77,9 @@ public sealed partial class LlamaServerProcessSupervisor
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperatorEjectedException)
             {
+                // An operator-eject veto propagates as-is: an expected skip, never restarted, wrapped or logged as a failed start.
                 lastError = ex;
             }
         }
@@ -237,6 +238,13 @@ public sealed partial class LlamaServerProcessSupervisor
                 // RegisterReadyProcessAsync published the Ready observation as its last step; latch it, which is what keeps the catch paths from recording a second one.
                 readinessRecorded = true;
                 return running;
+            }
+            catch (OperatorEjectedException)
+            {
+                // Publication was vetoed by an operator eject: clean up and propagate, with no port-race check, safe fallback or down-tier.
+                RecordIncompleteReadinessAttempt(LlamaServerReadinessOutcome.Cancelled);
+                await TearDownRefusedAttemptAsync(key, handle, port).ConfigureAwait(false);
+                throw;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -630,6 +638,7 @@ public sealed partial class LlamaServerProcessSupervisor
         CancellationToken ct)
     {
         var variant = inputs.Variant;
+        var inflight = profilingOwned ? null : _inflightSpawns.GetValueOrDefault(key);
         var expertsOffloaded = PinsExpertsToCpu(spec.Arguments);
         var placement = RecordObservedLayerPlacement(key, variant, placementSniffer, expertsOffloaded);
 
@@ -706,9 +715,19 @@ public sealed partial class LlamaServerProcessSupervisor
             AwaitingFirstLease = true,
 
             // The spawn's in-flight record is still registered here; it carries the mark past a transient caller that cancelled its wait.
-            IsTransient = !profilingOwned && _inflightSpawns.TryGetValue(key, out var inflight) && inflight.IsTransient
+            IsTransient = inflight is { IsTransient: true }
         };
-        _processes[key] = running;
+
+        // Profiling neither consults nor clears an operator-eject mark; every other spawn publishes through the veto, before any residency notification.
+        if (profilingOwned)
+        {
+            _processes[key] = running;
+        }
+        else
+        {
+            PublishOrVeto(key, running, inflight);
+        }
+
         _residencyNotifier.NotifyChanged();
         _ = ResidencyExitNotification.TickOnExitAsync(handle.WaitForExitAsync(Timeout.InfiniteTimeSpan, _shutdownCts.Token),
             _residencyNotifier,
@@ -766,6 +785,83 @@ public sealed partial class LlamaServerProcessSupervisor
         handle?.TreeKill();
         handle?.Dispose();
         await _reaper.ReleaseReservedPortAsync(port).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Tears down an attempt whose publication was vetoed, each step on its own, so a failing step never skips the rest
+    ///     or replaces the refusal with a retryable start failure.
+    /// </summary>
+    /// <remarks>
+    ///     The kill counts only once the child is seen to exit within <see cref="VetoedKillExitWait" />: a kill can throw,
+    ///     or return while the child lives. Until then the reaper holds the handle and its port, so the child still counts
+    ///     against the cap, and every reap retries the kill.
+    /// </remarks>
+    private async Task TearDownRefusedAttemptAsync(ProcessKey key, IProcessTreeHandle? handle, int port)
+    {
+        if (handle is not null && !await KillAndConfirmExitAsync(key, handle).ConfigureAwait(false))
+        {
+            _logger.LogWarning("The vetoed llama-server for model {ModelName} role {Role} (pid {ProcessId}) did not exit after its kill; it keeps its slot until it does.",
+                key.ModelName, key.Role, handle.ProcessId);
+            await _reaper.HoldUntilExitedAsync(key, handle, port).ConfigureAwait(false);
+        }
+        else
+        {
+            try
+            {
+                handle?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                LogRefusedTeardownFailure(ex, key, "dispose");
+            }
+
+            try
+            {
+                await _reaper.ReleaseReservedPortAsync(port).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                LogRefusedTeardownFailure(ex, key, "port release");
+            }
+        }
+
+        try
+        {
+            _layerPlacementReport.Remove(key.Role, key.ModelName);
+        }
+        catch (Exception ex)
+        {
+            LogRefusedTeardownFailure(ex, key, "layer placement removal");
+        }
+    }
+
+    /// <summary>Kills <paramref name="handle" /> and reports whether its exit was seen; a throwing kill or exit wait reads as not seen.</summary>
+    private async Task<bool> KillAndConfirmExitAsync(ProcessKey key, IProcessTreeHandle handle)
+    {
+        try
+        {
+            handle.TreeKill();
+        }
+        catch (Exception ex)
+        {
+            LogRefusedTeardownFailure(ex, key, "kill");
+        }
+
+        try
+        {
+            return handle.HasExited || await handle.WaitForExitAsync(VetoedKillExitWait, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            LogRefusedTeardownFailure(ex, key, "exit wait");
+            return false;
+        }
+    }
+
+    private void LogRefusedTeardownFailure(Exception ex, ProcessKey key, string step)
+    {
+        _logger.LogWarning(ex, "Tearing down the vetoed llama-server load for model {ModelName} role {Role} failed at the {Step} step; the refusal still stands.",
+            key.ModelName, key.Role, step);
     }
 
     /// <summary>

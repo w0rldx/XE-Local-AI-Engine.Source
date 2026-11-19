@@ -408,7 +408,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             OccurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
             Content = content ?? state.StreamedContent,
             Reasoning = string.IsNullOrEmpty(state.StreamedThinkingContent) ? null : state.StreamedThinkingContent,
-            Error = state.Error,
+            Error = state.ChatError,
             Model = state.ModelUsed,
             InputTokens = inputTokens,
             OutputTokens = outputTokens,

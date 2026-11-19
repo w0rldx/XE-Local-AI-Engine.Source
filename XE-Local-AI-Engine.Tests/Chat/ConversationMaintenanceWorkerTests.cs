@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -108,6 +109,68 @@ public sealed class ConversationMaintenanceWorkerTests
         AssertEx.False(harness.Logger.Entries.Any(static entry => entry.Level >= LogLevel.Warning), harness.Logger.AllText);
         AssertEx.False(harness.Logger.AllText.Contains("interrupted", StringComparison.Ordinal), "A yield is neither a failure nor a shutdown.");
         AssertEx.Contains(harness.Logger.AllText, "automatic compaction reported Compacted");
+    }
+
+    /// <summary>
+    ///     The refusal lands only after a turn took the slot and cancelled the fold, the order in which the yield's own catch
+    ///     would rerun it: the job must complete instead, and the next idle window serves the next job.
+    /// </summary>
+    [Test]
+    [Arguments("refused")]
+    [Arguments("draining")]
+    public async Task Worker_WhenTheOperatorEjectLandsAfterATurnTookTheSlot_SkipsTheJobAtDebugWithoutARerun(string refusal)
+    {
+        var slot = new WorkerEventDispatcher(Substitute.For<IInvocationRunner>(),
+            Substitute.For<IInvocationHistory>(),
+            NullLogger<WorkerEventDispatcher>.Instance,
+            TimeProvider.System);
+        var clock = new ManualTimeProvider();
+        await using var harness = new ConversationMaintenanceHarness(invocationYield: new BackgroundInvocationYield(slot, clock, NullLogger<BackgroundInvocationYield>.Instance));
+        var ejected = Guid.NewGuid();
+        var next = Guid.NewGuid();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.OnCompact = async (conversationId, token) =>
+        {
+            if (conversationId != ejected)
+            {
+                return;
+            }
+
+            entered.TrySetResult();
+            // The barrier: the yield cancels this token only once the slot change has won, so the fault arrives after it.
+            try
+            {
+                await new TaskCompletionSource().Task.WaitAsync(token);
+            }
+            catch (OperationCanceledException)
+            {
+                // The slot change won; deliver the refusal now.
+            }
+
+            throw refusal == "refused"
+                ? new OperatorEjectedException("The model was ejected by the operator; it reloads when it is next used directly.")
+                : new LlamaServerModelEjectedException("The model is being ejected by the operator; this request was not started.");
+        };
+        await harness.Worker.StartAsync(CancellationToken.None);
+
+        harness.Dispatcher.Dispatch(ConversationMaintenanceHarness.Job(ejected));
+        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == 1, Wait, "The job should wait out the idle window.");
+        clock.Advance(BackgroundInvocationYield.IdleWindow);
+        await entered.Task.WaitAsync(Wait);
+        var lease = await slot.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).WithConversationId(Guid.NewGuid()).Build());
+        await AssertEx.EventuallyAsync(() => harness.Logger.Entries.Any(static entry => entry.Level == LogLevel.Debug && entry.Message.Contains("the operator ejected", StringComparison.Ordinal)),
+            Wait, "The refusal should be logged as a skip.");
+        await lease.DisposeAsync();
+
+        // A rerun of the skipped job would be the next to take the idle window; the next job must take it instead.
+        harness.Dispatcher.Dispatch(ConversationMaintenanceHarness.Job(next));
+        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == 1, Wait, "The next job should wait out the idle window.");
+        clock.Advance(BackgroundInvocationYield.IdleWindow);
+        await AssertEx.EventuallyAsync(() => harness.Compactions.Count == 2, Wait, "The next job should compact.");
+        await harness.Worker.StopAsync(CancellationToken.None);
+
+        AssertEx.Equal($"{ejected},{next}", string.Join(",", harness.Compactions.Select(static call => call.ConversationId)), "The ejected job ran once and was not rerun.");
+        AssertEx.False(harness.Logger.Entries.Any(static entry => entry.Level >= LogLevel.Warning), harness.Logger.AllText);
     }
 
     [Test]

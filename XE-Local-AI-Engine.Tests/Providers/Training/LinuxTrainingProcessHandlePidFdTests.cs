@@ -27,7 +27,8 @@ public sealed class LinuxTrainingProcessHandlePidFdTests
         using var child = new TokenChild();
         var pidFd = calls.Open(child.Process.Id);
         calls.Calls.Clear();
-        var handle = child.Handle(calls, new LinuxTrainingProcessSpawner.TrainerPin(TrainerPidFdState.Pinned, pidFd));
+        // The group reads empty at once, so the Dispose after the child ends spends no real grace in the poll.
+        var handle = child.Handle(calls, new LinuxTrainingProcessSpawner.TrainerPin(TrainerPidFdState.Pinned, pidFd), waitForGroupEmpty: static _ => GroupWaitResult.Empty);
 
         handle.RequestStop();
         handle.KillGroup();
@@ -144,7 +145,7 @@ public sealed class LinuxTrainingProcessHandlePidFdTests
     }
 
     /// <summary>A setsid sleep whose environment carries a run token, so the real <c>/proc</c> reads verify it, ended by its own process handle.</summary>
-    private sealed class TokenChild : IDisposable
+    internal sealed class TokenChild : IDisposable
     {
         private readonly Channel<string> _output = Channel.CreateUnbounded<string>();
         private readonly OwnedProcess _owned;
@@ -180,23 +181,27 @@ public sealed class LinuxTrainingProcessHandlePidFdTests
         public LinuxTrainingProcessHandle Handle(FakePidFdCalls calls,
             LinuxTrainingProcessSpawner.TrainerPin pin,
             Func<TimeSpan, bool>? waitForExit = null,
-            long startTicksOffset = 0) =>
+            long startTicksOffset = 0,
+            TimeProvider? timeProvider = null,
+            Func<TimeSpan, GroupWaitResult>? waitForGroupEmpty = null,
+            int? pgid = null) =>
             new(Process,
                 new TrainingLaunchReceipt
                 {
                     Pid = Process.Id,
-                    Pgid = Process.Id,
+                    Pgid = pgid ?? Process.Id,
                     ExecutablePath = null,
                     StartTicks = _owned.StartTicks + startTicksOffset,
                     RunToken = RunToken
                 },
                 _output,
                 NullLogger.Instance,
-                TimeProvider.System,
+                timeProvider ?? TimeProvider.System,
                 calls.Kill,
                 waitForExit ?? (static _ => false),
                 pin,
-                calls.Ops);
+                calls.Ops,
+                waitForGroupEmpty);
 
         /// <summary>Ends the child through its own process handle, or by its recorded start time once the handle under test disposed that.</summary>
         public void End()

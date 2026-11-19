@@ -95,7 +95,7 @@ public sealed class ListRunningModelsEndpointTests
     public async Task Eject_ProjectsTheSupervisorOutcomeOntoTheWireContract(LlamaServerEjectOutcome outcome, string expectedOutcome)
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.EjectAsync("model-a", ModelRole.Embedding, force: true, Arg.Any<CancellationToken>()).Returns(outcome);
+        supervisor.EjectAsync("model-a", ModelRole.Embedding, force: true, Arg.Any<CancellationToken>(), operatorRequested: true).Returns(outcome);
 
         var (status, body) = await EjectAsync(supervisor,
             new EjectRunningModelRequest
@@ -110,9 +110,9 @@ public sealed class ListRunningModelsEndpointTests
         AssertEx.Equal("model-a", response.ModelName);
         AssertEx.Equal("embedding", response.Role);
         AssertEx.Equal(expectedOutcome, response.Outcome);
-        // The trimmed name, the parsed role and the force flag reach the supervisor — a NotRunning default from an
-        // unmatched call would otherwise read as a pass on the not_running row.
-        await supervisor.Received(1).EjectAsync("model-a", ModelRole.Embedding, force: true, Arg.Any<CancellationToken>());
+        // The trimmed name, the parsed role, the force flag and the operator mark reach the supervisor — a NotRunning default
+        // from an unmatched call would otherwise read as a pass on the not_running row.
+        await supervisor.Received(1).EjectAsync("model-a", ModelRole.Embedding, force: true, Arg.Any<CancellationToken>(), operatorRequested: true);
     }
 
     [Test]

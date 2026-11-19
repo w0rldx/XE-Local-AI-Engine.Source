@@ -331,7 +331,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         {
             invocationOutcome = exception switch
             {
-                LlamaServerModelEjectedException => "cancelled",
+                LlamaServerModelEjectedException or OperatorEjectedException => "cancelled",
                 ProviderCallBudgetExceededException => "stopped",
                 _ => "failed"
             };
@@ -339,6 +339,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
             {
                 // A designed bound: the budget already logged its own warning with the round count, so no stack trace here.
                 _logger.LogInformation("Invocation {InvocationId} stopped at its provider-call budget.", package.InvocationId);
+            }
+            else if (exception is OperatorEjectedException)
+            {
+                // The operator ejected the model while this turn's load was starting: an operator action, classified Cancelled, so no stack trace.
+                _logger.LogInformation("Invocation {InvocationId} cancelled: {Reason}", package.InvocationId, exception.Message);
             }
             else if (exception is ApprovalExpiredException)
             {
@@ -353,13 +358,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
             var (failureCategory, message) = InvocationFailureClassifier.MapFailure(exception);
             // An operator force-eject surfaces as a Cancelled-category LlamaServerModelEjectedException here (not the OCE
             // path). Count it as a cancellation cause rather than a failure, mirroring the OCE branch above.
-            if (exception is LlamaServerModelEjectedException)
+            if (exception is LlamaServerModelEjectedException or OperatorEjectedException)
             {
                 NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", "operator_eject"));
             }
 
             await ReportTerminalTelemetryAsync(turn, package.InvocationId);
-            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, message, failureCategory);
+            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, message, failureCategory, showCancelReason: exception is OperatorEjectedException);
         }
         finally
         {

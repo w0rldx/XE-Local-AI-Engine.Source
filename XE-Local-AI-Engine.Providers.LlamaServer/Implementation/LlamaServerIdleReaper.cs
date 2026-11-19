@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using ProcessKey = LlamaServerProcessSupervisor.ProcessKey;
 using RunningProcess = LlamaServerProcessSupervisor.RunningProcess;
 
@@ -27,6 +28,8 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     /// <summary>How long after readiness a never-leased chat process is spared by memory eviction, so its spawning request can lease it first.</summary>
     internal static readonly TimeSpan FirstLeaseGracePeriod = TimeSpan.FromSeconds(30);
 
+    private static readonly TimeSpan HeldSurvivorWarningInterval = TimeSpan.FromMinutes(1);
+
     // Guards the loaded-cap admission decision + port-set mutation so the cap can never be exceeded by a race.
     private readonly SemaphoreSlim _admissionGate = new(initialCount: 1, maxCount: 1);
 
@@ -34,6 +37,10 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     // supervisor still hands out (and miss one it registered), so this is never snapshotted into a field.
     private readonly ConcurrentDictionary<ProcessKey, RunningProcess> _processes;
     private readonly LlamaServerPortAllocator _ports;
+
+    // Vetoed children whose exit was never confirmed. Each keeps its port reserved, so it still counts against the cap, until it is seen to exit. Under the gate.
+    private readonly List<UnconfirmedKill> _unconfirmedKills = [];
+    private int _unconfirmedKillCount;
     private readonly ILlamaLayerPlacementReport _layerPlacementReport;
     private readonly LlamaServerSupervisorOptions _options;
     private readonly TimeProvider _timeProvider;
@@ -87,15 +94,17 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         var cap = companion ? _options.MaxLoadedCompanionProcesses : _options.MaxLoadedProcesses;
         // Processes detached from the table under the gate, tree-killed after it is released (see KillDetachedProcesses).
         var detached = new List<RunningProcess>();
+        var exitedSurvivors = new List<IProcessTreeHandle>();
         await _admissionGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             // Drop any process that has already exited so its slot/port is reclaimed before the cap check.
             PruneExitedProcesses(detached);
+            ReclaimExitedUnconfirmedKills(exitedSurvivors);
 
             if (_ports.ReservedCountOf(companion) >= cap && !TryEvictIdleLeastRecentlyUsed(intent, companion, cap, detached))
             {
-                throw CapReached();
+                throw CapReached(_unconfirmedKills.Count > 0);
             }
 
             return _ports.Allocate(companion);
@@ -107,6 +116,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             // The gate is free BEFORE any child is killed, because a multi-GB tree-kill under it serializes every unrelated model's port allocation and release.
             // This spawn still waits for its own victim to die before it launches, so the VRAM the victim held is genuinely released first.
             KillDetachedProcesses(detached);
+            DisposeExited(exitedSurvivors);
         }
     }
 
@@ -120,6 +130,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
 
     internal async Task ReapIdleOnceAsync()
     {
+        await RetryUnconfirmedKillsAsync().ConfigureAwait(false);
         var now = _timeProvider.GetUtcNow();
         foreach (var (key, running) in _processes.ToArray())
         {
@@ -457,6 +468,118 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         }
     }
 
+    /// <summary>Whether a vetoed child not yet seen to exit is held; read without the gate by the runtime-mutation check.</summary>
+    internal bool HasUnconfirmedKills => Volatile.Read(ref _unconfirmedKillCount) > 0;
+
+    /// <summary>
+    ///     Takes over a vetoed child whose kill was not confirmed: its port stays reserved, so the cap still counts it, until a
+    ///     reap or an admission sees it exit.
+    /// </summary>
+    internal async Task HoldUntilExitedAsync(ProcessKey key, IProcessTreeHandle handle, int port)
+    {
+        await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            _unconfirmedKills.Add(new UnconfirmedKill(key, handle, port) { LastWarnedUtc = _timeProvider.GetUtcNow() });
+            Volatile.Write(ref _unconfirmedKillCount, _unconfirmedKills.Count);
+        }
+        finally
+        {
+            _admissionGate.Release();
+        }
+    }
+
+    /// <summary>Kills every held survivor again, outside the gate, then reclaims the ones that exited. Never throws.</summary>
+    internal async Task RetryUnconfirmedKillsAsync()
+    {
+        UnconfirmedKill[] pending;
+        await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            pending = [.. _unconfirmedKills];
+        }
+        finally
+        {
+            _admissionGate.Release();
+        }
+
+        if (pending.Length == 0)
+        {
+            return;
+        }
+
+        // A retry kills only where the handle can: on Windows the job is already closed, so only the wait for the exit remains.
+        foreach (var handle in pending.Select(static kill => kill.Handle))
+        {
+            try
+            {
+                handle.TreeKill();
+            }
+            catch (Exception exception)
+            {
+                _logger.LogDebug(exception, "Killing a vetoed llama-server (pid {ProcessId}) failed again.", handle.ProcessId);
+            }
+        }
+
+        var exited = new List<IProcessTreeHandle>();
+        await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            ReclaimExitedUnconfirmedKills(exited);
+            WarnHeldSurvivors();
+        }
+        finally
+        {
+            _admissionGate.Release();
+        }
+
+        DisposeExited(exited);
+    }
+
+    /// <summary>Releases the port of every held survivor that has exited and hands its handle back for disposal outside the gate; the caller holds the gate.</summary>
+    private void ReclaimExitedUnconfirmedKills(List<IProcessTreeHandle> exited)
+    {
+        for (var i = _unconfirmedKills.Count - 1; i >= 0; i--)
+        {
+            var kill = _unconfirmedKills[i];
+            if (kill.Handle.HasExited)
+            {
+                _ports.Release(kill.Port);
+                _unconfirmedKills.RemoveAt(i);
+                exited.Add(kill.Handle);
+            }
+        }
+
+        Volatile.Write(ref _unconfirmedKillCount, _unconfirmedKills.Count);
+    }
+
+    /// <summary>Names each held survivor at Warning, at most once per <see cref="HeldSurvivorWarningInterval" />; the caller holds the gate.</summary>
+    private void WarnHeldSurvivors()
+    {
+        var now = _timeProvider.GetUtcNow();
+        foreach (var kill in _unconfirmedKills.Where(kill => now - kill.LastWarnedUtc >= HeldSurvivorWarningInterval))
+        {
+            kill.LastWarnedUtc = now;
+            _logger.LogWarning("A vetoed llama-server for model {ModelName} role {Role} (pid {ProcessId}) has still not exited after its kill; it occupies a loaded-model slot until it does.",
+                kill.Key.ModelName, kill.Key.Role, kill.Handle.ProcessId);
+        }
+    }
+
+    private void DisposeExited(List<IProcessTreeHandle> exited)
+    {
+        foreach (var handle in exited)
+        {
+            try
+            {
+                handle.Dispose();
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Disposing an exited vetoed llama-server (pid {ProcessId}) failed.", handle.ProcessId);
+            }
+        }
+    }
+
     /// <summary>
     ///     Releases a reserved port for a spawn that never registered (launch/readiness failure), taking the admission
     ///     gate so the reserved-port set (which backs the cap count) is mutated under the same lock as allocation.
@@ -477,8 +600,29 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     private static bool IsCompanion(ModelRole role) =>
         role is ModelRole.Embedding or ModelRole.Reranker or ModelRole.Decision;
 
-    private static LlamaRuntimeException CapReached()
+    /// <summary>A vetoed child the supervisor still owns, with the port it keeps reserved and when it was last named in a warning.</summary>
+    private sealed class UnconfirmedKill
     {
-        return LlamaServerProcessSupervisor.NonRetryable("The maximum number of local models are already loaded. Unload a model or raise the limit, then try again.");
+        public UnconfirmedKill(ProcessKey key, IProcessTreeHandle handle, int port)
+        {
+            Key = key;
+            Handle = handle;
+            Port = port;
+        }
+
+        public ProcessKey Key { get; }
+
+        public IProcessTreeHandle Handle { get; }
+
+        public int Port { get; }
+
+        public DateTimeOffset LastWarnedUtc { get; set; }
+    }
+
+    private static LlamaRuntimeException CapReached(bool survivorHeld)
+    {
+        return LlamaServerProcessSupervisor.NonRetryable(survivorHeld
+            ? "The maximum number of local models are already loaded, and one slot is held by an ejected model that is still shutting down. Unload a model, raise the limit, or wait, then try again."
+            : "The maximum number of local models are already loaded. Unload a model or raise the limit, then try again.");
     }
 }

@@ -1083,7 +1083,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         public Task EvictAsync(string modelName, ModelRole role, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct) =>
+        public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct, bool operatorRequested = false) =>
             throw new NotSupportedException();
 
         public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role) =>
@@ -1131,7 +1131,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         public Task EvictAsync(string modelName, ModelRole role, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct) =>
+        public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct, bool operatorRequested = false) =>
             throw new NotSupportedException();
 
         public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role) =>

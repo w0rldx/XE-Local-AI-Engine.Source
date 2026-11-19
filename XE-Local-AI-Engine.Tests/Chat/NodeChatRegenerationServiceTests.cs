@@ -4580,7 +4580,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
-        public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory)
+        public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory, bool showCancelReason = false)
         {
             if (CurrentInvocation is not null)
             {

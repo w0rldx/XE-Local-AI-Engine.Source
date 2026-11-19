@@ -1,16 +1,23 @@
 namespace XE_Local_AI_Engine.Tests.Memory;
 
+using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Events.Implementation;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.Memory.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Tests for the bounded background memory extraction pipeline: <see cref="MemoryExtractionDispatcher" /> TRY-enqueues
@@ -441,6 +448,86 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         await resumed.Task.WaitAsync(TimeSpan.FromSeconds(5));
         AssertEx.False(logger.AllText.Contains("ObjectDisposed", StringComparison.Ordinal),
             "Releasing the abandoned job after Dispose must be swallowed silently — no ObjectDisposedException may surface.");
+    }
+
+    /// <summary>
+    ///     The refusal lands only after a turn took the slot and cancelled the extraction, the order in which the yield's own
+    ///     catch would rerun it: the job must complete instead, and the next idle window serves the next job.
+    /// </summary>
+    [Test]
+    [Arguments("refused")]
+    [Arguments("draining")]
+    public async Task Worker_WhenTheOperatorEjectLandsAfterATurnTookTheSlot_SkipsTheJobAtDebugWithoutARerun(string refusal)
+    {
+        var agentId = Guid.NewGuid();
+        var ejected = Guid.NewGuid();
+        var next = Guid.NewGuid();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = new ConcurrentQueue<Guid>();
+        var extraction = Substitute.For<IMemoryExtractionService>();
+        extraction.ExtractAsync(Arg.Any<MemoryExtractionRunInput>(), Arg.Any<CancellationToken>())
+                  .Returns(async call =>
+                  {
+                      var run = call.Arg<MemoryExtractionRunInput>();
+                      calls.Enqueue(run.ConversationId);
+                      if (run.ConversationId == ejected)
+                      {
+                          entered.TrySetResult();
+                          try
+                          {
+                              await new TaskCompletionSource().Task.WaitAsync(call.Arg<CancellationToken>());
+                          }
+                          catch (OperationCanceledException)
+                          {
+                              // The barrier: the yield cancels this token only once the slot change has won, so the fault arrives after it.
+                          }
+
+                          throw refusal == "refused"
+                              ? new OperatorEjectedException("The model was ejected by the operator; it reloads when it is next used directly.")
+                              : new LlamaServerModelEjectedException("The model is being ejected by the operator; this request was not started.");
+                      }
+
+                      return MemoryExtractionOutcome.NoModelConfigured();
+                  });
+        await using var provider = await BuildProviderAsync("exec-log-operator-eject.sqlite", extraction);
+        var slot = new WorkerEventDispatcher(Substitute.For<IInvocationRunner>(),
+            Substitute.For<IInvocationHistory>(),
+            NullLogger<WorkerEventDispatcher>.Instance,
+            TimeProvider.System);
+        var clock = new ManualTimeProvider();
+        var logger = new RecordingLogger<MemoryExtractionWorker>();
+        var optionsAccessor = Options.Create(new MemoryExtractionOptions());
+        var dispatcher = new MemoryExtractionDispatcher(optionsAccessor, NullLogger<MemoryExtractionDispatcher>.Instance);
+        using var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
+            dispatcher,
+            optionsAccessor,
+            new BackgroundInvocationYield(slot, clock, NullLogger<BackgroundInvocationYield>.Instance),
+            logger);
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            dispatcher.Dispatch(Telemetry(agentId), Run(agentId, ejected, Guid.NewGuid()));
+            await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == 1, TimeSpan.FromSeconds(10), "The job should wait out the idle window.");
+            clock.Advance(BackgroundInvocationYield.IdleWindow);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var lease = await slot.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).WithConversationId(Guid.NewGuid()).Build());
+            await AssertEx.EventuallyAsync(() => logger.Entries.Any(static entry => entry.Level == LogLevel.Debug && entry.Message.Contains("the operator ejected", StringComparison.Ordinal)),
+                TimeSpan.FromSeconds(10), "The refusal should be logged as a skip.");
+            await lease.DisposeAsync();
+
+            // A rerun of the skipped job would be the next to take the idle window; the next job must take it instead.
+            dispatcher.Dispatch(Telemetry(agentId), Run(agentId, next, Guid.NewGuid()));
+            await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == 1, TimeSpan.FromSeconds(10), "The next job should wait out the idle window.");
+            clock.Advance(BackgroundInvocationYield.IdleWindow);
+            await AssertEx.EventuallyAsync(() => calls.Count == 2, TimeSpan.FromSeconds(10), "The next job should extract.");
+        }
+        finally
+        {
+            await worker.StopAsync(CancellationToken.None);
+        }
+
+        AssertEx.Equal($"{ejected},{next}", string.Join(",", calls), "The ejected job ran once and was not rerun.");
+        AssertEx.False(logger.Entries.Any(static entry => entry.Level >= LogLevel.Warning), logger.AllText);
     }
 
     [Test]

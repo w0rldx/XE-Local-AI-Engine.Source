@@ -117,17 +117,17 @@ public interface ILlamaServerProcessSupervisor
     ///     leases, then waits out the bounded drain window before tearing it down.
     /// </summary>
     /// <remarks>
-    ///     In-flight inference is tracked through <see cref="TryAcquireInferenceLease(string, ModelRole)" />, and an idle process is torn
-    ///     down immediately. When the window elapses with work still in flight the process is left RUNNING and the
-    ///     outcome reports that it could not complete safely — unless <paramref name="force" /> is set, in which case
-    ///     it is torn down anyway and the interrupted run is marked operator-ejected rather than a generic failure.
+    ///     In-flight inference is tracked through <see cref="TryAcquireInferenceLease(string, ModelRole)" />, and an idle process is torn down immediately.
+    ///     When the window elapses with work still in flight the process is left RUNNING and the outcome reports that it could not complete
+    ///     safely — unless <paramref name="force" /> is set: then it is torn down anyway and the interrupted run is marked operator-ejected.
     /// </remarks>
     /// <param name="modelName">Model whose process to eject.</param>
     /// <param name="role">Role of the process to eject (chat / embedding / reranker).</param>
     /// <param name="force">When set, tear the process down even if in-flight work has not drained.</param>
     /// <param name="ct">Cancellation for the (bounded) drain wait.</param>
+    /// <param name="operatorRequested">An operator's eject: it marks the key so a Background load cannot respawn it until a user-waited load does.</param>
     /// <returns>The eject outcome (idempotent no-op when nothing is running).</returns>
-    Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct);
+    Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct, bool operatorRequested = false);
 
     /// <summary>
     ///     Acquires a reference-counted inference lease against the running <c>(model, role)</c> process, so a graceful

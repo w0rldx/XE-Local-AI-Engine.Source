@@ -25,6 +25,19 @@ internal enum TrainerPidFdState
     Refused
 }
 
+/// <summary>What a poll of a pinned trainer's group through its fd learned by the deadline.</summary>
+internal enum GroupWaitResult
+{
+    /// <summary>The group probe read gone: no member is left.</summary>
+    Empty,
+
+    /// <summary>A member still answered the last probe, taken at the deadline.</summary>
+    PresentAtDeadline,
+
+    /// <summary>The probe failed or the kernel refused the group flag, so nothing is known and nothing is killed.</summary>
+    ProbeUnavailable
+}
+
 /// <summary>
 ///     A running trainer. Signals target the process GROUP, so the dataloader workers and compile subprocesses the
 ///     trainer forked die with it.
@@ -40,6 +53,11 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
     private const int Sigkill = 9;
     private static readonly TimeSpan ExitPollInterval = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan KillGrace = TimeSpan.FromSeconds(2);
+
+    // KillGroup is synchronous (Dispose runs it), and the leader's exit wait returns at once after the leader is gone, so only a sleep paces a group poll.
+#pragma warning disable RS0030
+    private static readonly Action<TimeSpan> BlockingSleep = Thread.Sleep;
+#pragma warning restore RS0030
     private readonly Func<int, int, int> _kill;
     private readonly ILogger _logger;
     private readonly Process _process;
@@ -49,6 +67,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
     private readonly TrainerPidFdState _pidFdState;
     private readonly SemaphoreSlim _stdinGate = new(1, 1);
     private readonly TimeProvider _timeProvider;
+    private readonly Func<TimeSpan, GroupWaitResult> _waitForGroupEmpty;
     private readonly Func<TimeSpan, bool> _waitForExit;
 
     private int _disposed;
@@ -77,6 +96,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
     /// <param name="waitForExit">The wait between the SIGTERM and the SIGKILL in <see cref="KillGroup" />; true once the trainer exited.</param>
     /// <param name="pin">What the spawn proved, and the fd the handle then owns; omitted, the numeric path.</param>
     /// <param name="pidFdOps">The pidfd calls behind <paramref name="pin" />; unsupported when omitted.</param>
+    /// <param name="waitForGroupEmpty">The wait for a pinned group's survivors to leave after the SIGTERM; <see cref="PollGroupUntilEmpty" /> when omitted.</param>
     internal LinuxTrainingProcessHandle(Process process,
         TrainingLaunchReceipt receipt,
         Channel<string> output,
@@ -85,7 +105,8 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
         Func<int, int, int> kill,
         Func<TimeSpan, bool> waitForExit,
         LinuxTrainingProcessSpawner.TrainerPin pin = default,
-        TrainerPidFdOps? pidFdOps = null)
+        TrainerPidFdOps? pidFdOps = null,
+        Func<TimeSpan, GroupWaitResult>? waitForGroupEmpty = null)
     {
         _logger = logger;
         _process = process;
@@ -97,6 +118,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
         _pidFdState = pin.State;
         _pidFd = pin.PidFd;
         _pidFdOps = pidFdOps ?? TrainerPidFdOps.Unsupported;
+        _waitForGroupEmpty = waitForGroupEmpty ?? (timeout => PollGroupUntilEmpty(_pidFd!, _pidFdOps, timeProvider, BlockingSleep, timeout, logger));
     }
 
     public TrainingLaunchReceipt Receipt { get; }
@@ -192,14 +214,61 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
     {
         if (HasExited())
         {
+            KillSurvivingGroup();
             return;
         }
 
         var target = SignalTarget();
+        var pinnedGroup = _pidFdState == TrainerPidFdState.Pinned && target < 0;
+        var start = _timeProvider.GetTimestamp();
         SignalIfSameProcess(target, Sigterm);
-        if (!_waitForExit(KillGrace))
+        // A pinned group runs one grace from the SIGTERM, so a slow send does not stretch the leader's wait.
+        if (!_waitForExit(pinnedGroup ? RemainingGrace(start) : KillGrace))
         {
             SignalIfSameProcess(target, Sigkill);
+            return;
+        }
+
+        // The leader left within the grace; members that ignored the SIGTERM are reached only through the pinned fd.
+        if (pinnedGroup)
+        {
+            KillGroupIfPresentAtDeadline(start);
+        }
+    }
+
+    /// <summary>
+    ///     Polls the group the pinned fd names until it reads gone, the probe stops answering, or <paramref name="timeout" /> passes;
+    ///     the last sleep is capped to the deadline, and a zero timeout is one probe.
+    /// </summary>
+    internal static GroupWaitResult PollGroupUntilEmpty(LinuxPidFd pidFd,
+        TrainerPidFdOps ops,
+        TimeProvider timeProvider,
+        Action<TimeSpan> sleep,
+        TimeSpan timeout,
+        ILogger logger)
+    {
+        var start = timeProvider.GetTimestamp();
+        while (true)
+        {
+            var probe = ops.Send(pidFd, 0, true);
+            if (probe.Status == LinuxPidFdSendStatus.Gone)
+            {
+                return GroupWaitResult.Empty;
+            }
+
+            if (probe.Status != LinuxPidFdSendStatus.Sent)
+            {
+                logger.LogWarning("The trainer group probe through its pidfd failed ({Status}, errno {Errno}); its survivors get no SIGKILL.", probe.Status, probe.Errno);
+                return GroupWaitResult.ProbeUnavailable;
+            }
+
+            var remaining = timeout - timeProvider.GetElapsedTime(start);
+            if (remaining <= TimeSpan.Zero)
+            {
+                return GroupWaitResult.PresentAtDeadline;
+            }
+
+            sleep(remaining < ExitPollInterval ? remaining : ExitPollInterval);
         }
     }
 
@@ -212,6 +281,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
 
         try
         {
+            // Runs before the fd closes; a concurrent KillGroup then reads Gone from the closed fd and stops.
             KillGroup();
         }
         finally
@@ -221,6 +291,56 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
             _process.Dispose();
             _stdinGate.Dispose();
         }
+    }
+
+    /// <summary>
+    ///     The leader has exited, but members it left in its group may ignore SIGTERM. Only a pinned fd still names that group, so only it
+    ///     is signalled, and never the number: an emptied group's pgid may be reused.
+    /// </summary>
+    private void KillSurvivingGroup()
+    {
+        // The state first, and the guard without SignalTarget's warning, which would otherwise log on every Dispose.
+        if (_pidFdState != TrainerPidFdState.Pinned
+            || !TrainingProcessGroupGuard.MaySignalGroup(Receipt.Pid, Receipt.Pgid, LinuxTrainingProcessInspector.HostProcessGroupId))
+        {
+            return;
+        }
+
+        var probe = _pidFdOps.Send(_pidFd!, 0, true);
+        if (probe.Status != LinuxPidFdSendStatus.Sent)
+        {
+            _logger.LogDebug("Trainer group {Pgid} left by exited pid {Pid} probes {Status} (errno {Errno}); nothing is signalled.", Receipt.Pgid, Receipt.Pid, probe.Status, probe.Errno);
+            return;
+        }
+
+        var start = _timeProvider.GetTimestamp();
+        var term = _pidFdOps.Send(_pidFd!, Sigterm, true);
+        if (term.Status != LinuxPidFdSendStatus.Sent)
+        {
+            _logger.LogWarning("SIGTERM to trainer group {Pgid} through its pidfd read {Status} (errno {Errno}); no SIGKILL follows.", Receipt.Pgid, term.Status, term.Errno);
+            return;
+        }
+
+        KillGroupIfPresentAtDeadline(start);
+    }
+
+    /// <summary>Waits out what is left of the grace that started at <paramref name="start" />, and sends SIGKILL through the fd only to a group still present then.</summary>
+    private void KillGroupIfPresentAtDeadline(long start)
+    {
+        if (_waitForGroupEmpty(RemainingGrace(start)) != GroupWaitResult.PresentAtDeadline)
+        {
+            return;
+        }
+
+        var kill = _pidFdOps.Send(_pidFd!, Sigkill, true);
+        _logger.LogInformation("Trainer group {Pgid} outlived the SIGTERM grace; SIGKILL through its pidfd read {Status} (errno {Errno}).", Receipt.Pgid, kill.Status, kill.Errno);
+    }
+
+    /// <summary>What is left of the SIGTERM grace that started at <paramref name="start" />, never below zero.</summary>
+    private TimeSpan RemainingGrace(long start)
+    {
+        var remaining = KillGrace - _timeProvider.GetElapsedTime(start);
+        return remaining < TimeSpan.Zero ? TimeSpan.Zero : remaining;
     }
 
     /// <summary>The negated group when the receipt proves the trainer leads a group of its own, else the bare pid.</summary>

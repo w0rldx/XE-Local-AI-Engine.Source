@@ -73,7 +73,7 @@ public sealed class LocalRuntimeWarmer
     ///     Cloud and external models route elsewhere, so they are a no-op. It surfaces the phase
     ///     into the invocation state and records readiness on <see cref="NodeMetrics" />. INVARIANT: this wait is
     ///     decoupled from the load's lifetime — a cancellation abandons the WAIT and rethrows while the load keeps
-    ///     going, leaving the model warm for the next send. A warm FAILURE is swallowed so the streaming send surfaces
+    ///     going, leaving the model warm for the next send. An operator-eject veto rethrows too. A warm FAILURE is swallowed so the streaming send surfaces
     ///     the classified error, but an admission-gated caller is handed it first, or a null-context refusal masks it.
     /// </remarks>
     internal async Task<LocalRuntimePreparationResult> PrepareLocalRuntimeAsync(string resolvedModel,
@@ -130,10 +130,10 @@ public sealed class LocalRuntimeWarmer
         {
             await provider.WarmModelAsync(resolvedModel, cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (Exception exception) when (exception is OperationCanceledException or OperatorEjectedException)
         {
             // The caller cancelled its WAIT (the detached load continues in the supervisor and warms the model for the
-            // next send). Record the abandoned readiness and rethrow so the turn terminates as cancelled.
+            // next send), or an operator eject vetoed the load: a send would re-ensure and undo the eject. Rethrow so the turn ends cancelled.
             stream.AddModelReadiness(RecordReadiness(startedUtc, "cancelled"));
             readinessActivity?.SetTag("outcome", "cancelled");
             throw;

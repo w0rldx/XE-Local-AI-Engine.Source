@@ -195,7 +195,7 @@ public sealed partial class WorkerEventDispatcher
         return Task.CompletedTask;
     }
 
-    public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory)
+    public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory, bool showCancelReason = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(failureMessage);
 
@@ -210,6 +210,7 @@ public sealed partial class WorkerEventDispatcher
                 state.Status = failureCategory == FailureCategory.Cancelled ? InvocationStatus.Cancelled : InvocationStatus.Failed;
                 state.Error = failureMessage;
                 state.FailureCategory = failureCategory;
+                state.ShowCancelReason = showCancelReason;
                 state.CompletedAt = _timeProvider.GetUtcNow();
                 state.PendingApproval = null;
                 state.PendingQuestion = null;

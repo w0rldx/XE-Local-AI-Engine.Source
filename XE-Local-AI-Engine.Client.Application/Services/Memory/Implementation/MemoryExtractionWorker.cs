@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     Background worker draining the <see cref="MemoryExtractionDispatcher" /> queue, running each job in its own
@@ -146,7 +147,20 @@ public sealed class MemoryExtractionWorker : BackgroundService
 
             // The model call yields to any turn; a yielded run reruns whole, and the lexical dedup absorbs a partial earlier write.
             var extractionService = scope.ServiceProvider.GetRequiredService<IMemoryExtractionService>();
-            await _invocationYield.RunWhenIdleAsync("memory extraction", token => extractionService.ExtractAsync(job.Run, token), cancellationToken);
+            await _invocationYield.RunWhenIdleAsync("memory extraction",
+                async token =>
+                {
+                    // Inside the yielded work, so a refusal that lands after a turn took the slot completes the job instead of rerunning it.
+                    try
+                    {
+                        await extractionService.ExtractAsync(job.Run, token);
+                    }
+                    catch (Exception exception) when (exception is OperatorEjectedException or LlamaServerModelEjectedException)
+                    {
+                        _logger.LogDebug("Background memory extraction for agent {AgentId} skipped: the operator ejected its model.", job.Telemetry.AgentDefinitionId);
+                    }
+                },
+                cancellationToken);
         }
         catch (OperationCanceledException) when (_drainDeadline.IsCancellationRequested)
         {

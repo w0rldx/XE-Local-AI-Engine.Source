@@ -10,8 +10,10 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Capacity;
+using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -146,6 +148,49 @@ public sealed class KeepModelWarmBackgroundServiceTests
         AssertEx.Equal(expected: 0, harness.Logger.Entries.Count(entry => entry.Level == LogLevel.Warning));
         AssertEx.Equal(expected: 1, harness.Logger.Entries.Count(entry =>
             entry.Level == LogLevel.Debug && entry.Message.Contains("llama.cpp model", StringComparison.Ordinal)));
+    }
+
+    /// <summary>
+    ///     Through the real provider and supervisor: an operator-ejected model is refused at every due iteration, the supervisor
+    ///     owns the one Information line, and keep-warm stays at Debug on its cadence.
+    /// </summary>
+    [Test]
+    public async Task RunIterationAsync_AfterAnOperatorEject_SkipsEveryDueIterationAtDebug_AndTheSupervisorLogsOnce()
+    {
+        var supervisorLogger = new RecordingLogger<LlamaServerProcessSupervisor>();
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher, logger: supervisorLogger);
+        AssertEx.Equal(LlamaServerEjectOutcome.NotRunning, await supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, CancellationToken.None, operatorRequested: true));
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+        runtimeSettings.GetKeepModelWarmEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        runtimeSettings.GetKeepModelWarmModelNameAsync(Arg.Any<CancellationToken>()).Returns("model-a");
+        runtimeSettings.GetKeepModelWarmIntervalAsync(Arg.Any<CancellationToken>()).Returns(TimeSpan.FromSeconds(60));
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderForModelAsync("model-a", Arg.Any<CancellationToken>())
+                .Returns(new LlamaServerLocalModelProvider(supervisor, new FakeModelStore(), TimeProvider.System));
+        var clock = new ManualTimeProvider();
+        var logger = new RecordingLogger<KeepModelWarmBackgroundService>();
+        using var service = new KeepModelWarmBackgroundService(runtimeSettings,
+            resolver,
+            supervisor,
+            Substitute.For<ILlamaCppSourceBuildActivity>(),
+            new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 3,
+                IdleTimeToLive = TimeSpan.FromMinutes(15)
+            },
+            clock,
+            logger);
+
+        await service.RunIterationAsync(CancellationToken.None);
+        clock.Advance(TimeSpan.FromSeconds(60));
+        await service.RunIterationAsync(CancellationToken.None);
+
+        var refusals = supervisorLogger.Entries.Where(static entry => entry.Message.Contains("the operator ejected it", StringComparison.Ordinal)).Select(static entry => entry.Level);
+        AssertEx.Equal("Information,Debug", string.Join(",", refusals), "Both due iterations reach the supervisor; only the first refusal is at Information.");
+        AssertEx.Equal(expected: 2, logger.Entries.Count(static entry => entry.Level == LogLevel.Debug && entry.Message.Contains("llama.cpp model", StringComparison.Ordinal)));
+        AssertEx.False(logger.Entries.Any(static entry => entry.Level >= LogLevel.Information), logger.AllText);
+        AssertEx.Equal(expected: 0, launcher.LaunchCount);
     }
 
     [Test]

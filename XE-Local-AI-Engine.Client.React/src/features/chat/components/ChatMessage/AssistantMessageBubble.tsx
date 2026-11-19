@@ -131,9 +131,11 @@ export function AssistantMessageBubble({
 					<Group gap={6} align="center" data-testid={`chat-message-stopped-${message.id}`} role="status">
 						<IconPlayerStop size={14} color="var(--mantine-color-dimmed)" />
 						<Text size="sm" c="dimmed">
-							{stoppedWhileThinking
-								? t("pages.chat.stoppedWhileThinking", "Stopped while thinking")
-								: t("pages.chat.stopped", "Generation stopped")}
+							{/* A cancel the user did not ask for (an operator eject) carries its reason; a plain stop carries none. */}
+							{display.errorText ??
+								(stoppedWhileThinking
+									? t("pages.chat.stoppedWhileThinking", "Stopped while thinking")
+									: t("pages.chat.stopped", "Generation stopped"))}
 						</Text>
 					</Group>
 				) : null}

@@ -125,6 +125,18 @@ public sealed class InvocationFailureClassifierTests
         AssertEx.Equal(refusal, classification.Message);
     }
 
+    // A user-waited load the supervisor vetoed because the operator ejected the model after it began: an operator action, not a load failure.
+    [Test]
+    public void MapFailure_OperatorEjected_IsCancelledWithItsMessage()
+    {
+        const string refusal = "The model was ejected by the operator; it reloads when it is next used directly.";
+
+        var classification = InvocationFailureClassifier.MapFailure(new OperatorEjectedException(refusal));
+
+        AssertEx.Equal(FailureCategory.Cancelled, classification.Category);
+        AssertEx.Equal(refusal, classification.Message);
+    }
+
     // A launch naming a missing model is not a capacity problem: it gets the not-installed category and the shared fixed sentence.
     [Test]
     public void MapFailure_ModelNotInstalled_IsModelNotInstalledWithTheSharedSentence()

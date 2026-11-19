@@ -136,6 +136,9 @@ internal static class InvocationFailureClassifier
             // An operator force-ejected the model out from under an in-flight turn: an operator action, not a provider outage, so Cancelled keeps it out of
             // the failure count and its already user-safe message truthful. The OUTER type matches first, ahead of the transport arms its inner would hit.
             LlamaServerModelEjectedException modelEjected => new FailureClassification(FailureCategory.Cancelled, modelEjected.Message),
+            // A load refused, or a finished load not published, because the operator ejected the model since this caller arrived: also an operator action,
+            // so Cancelled with its user-safe message. A LlamaRuntimeException, so it matches before any arm a runtime failure would reach.
+            OperatorEjectedException operatorEjected => new FailureClassification(FailureCategory.Cancelled, operatorEjected.Message),
             // The budgeter's hard-stop — history still over budget after truncation — is a clean, classified pre-inference failure whose own
             // message IS the fixed, path-free ContextBudgetExceededMessage, so it is surfaced verbatim.
             ContextBudgetExceededException contextBudgetExceeded => new FailureClassification(FailureCategory.ContextWindowExceeded, contextBudgetExceeded.Message),

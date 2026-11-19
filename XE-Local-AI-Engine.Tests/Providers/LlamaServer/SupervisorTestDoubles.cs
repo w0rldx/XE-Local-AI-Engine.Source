@@ -148,6 +148,42 @@ internal sealed class GatedHealthProbe : ILlamaServerHealthProbe
     }
 }
 
+/// <summary>
+///     Health probe that reports ready at once but parks the effective-context read, the last await before a spawn
+///     publishes its process, so a test can hold a READY spawn at its publication point.
+/// </summary>
+internal sealed class PublicationGatedHealthProbe : ILlamaServerHealthProbe
+{
+    private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Completes once a spawn reached readiness and parked before publication.</summary>
+    public Task Entered => _entered.Task;
+
+    public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
+    {
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)
+    {
+        return Task.FromResult(true);
+    }
+
+    public async Task<int?> ReadEffectiveContextTokensOrNullAsync(Uri baseAddress, CancellationToken ct)
+    {
+        _entered.TrySetResult();
+        await _release.Task.WaitAsync(ct);
+        return null;
+    }
+
+    /// <summary>Releases the parked (and every future) publication.</summary>
+    public void Release()
+    {
+        _release.TrySetResult();
+    }
+}
+
 /// <summary>Binary manager returning a fixed fake server path for whatever variant is requested; never downloads.</summary>
 internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
 {
@@ -400,7 +436,7 @@ internal sealed class FakeProcessSupervisor : ILlamaServerProcessSupervisor
         return Task.CompletedTask;
     }
 
-    public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct)
+    public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct, bool operatorRequested = false)
     {
         return Task.FromResult(LlamaServerEjectOutcome.NotRunning);
     }

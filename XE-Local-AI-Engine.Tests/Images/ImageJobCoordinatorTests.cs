@@ -114,7 +114,7 @@ public sealed class ImageJobCoordinatorTests
         supervisor.ListRunningProcesses().Returns([Resident("chat-27b", ModelRole.Chat), Resident("embedder", ModelRole.Embedding)]);
         using var harness = Harness.Create(blockRuntime: false, llamaSupervisor: supervisor);
         var callsBeforeEject = new ConcurrentBag<int>();
-        supervisor.EjectAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        supervisor.EjectAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<bool>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
                   .Returns(_ =>
                   {
                       callsBeforeEject.Add(harness.Runtime.CallCount);
@@ -124,8 +124,9 @@ public sealed class ImageJobCoordinatorTests
         var jobId = await harness.Coordinator.EnqueueAsync(NewInput("free the vram"), CancellationToken.None);
 
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
-        await supervisor.Received(1).EjectAsync("chat-27b", ModelRole.Chat, false, Arg.Any<CancellationToken>());
-        await supervisor.Received(1).EjectAsync("embedder", ModelRole.Embedding, false, Arg.Any<CancellationToken>());
+        // Not an operator eject: freeing VRAM for an image must not stop background work from reloading the model.
+        await supervisor.Received(1).EjectAsync("chat-27b", ModelRole.Chat, false, Arg.Any<CancellationToken>(), operatorRequested: false);
+        await supervisor.Received(1).EjectAsync("embedder", ModelRole.Embedding, false, Arg.Any<CancellationToken>(), operatorRequested: false);
         AssertEx.Equal(expected: 2, callsBeforeEject.Count);
         AssertEx.True(callsBeforeEject.All(static calls => calls == 0), "Both residents must be ejected before the runtime is called.");
     }

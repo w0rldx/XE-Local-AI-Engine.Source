@@ -245,6 +245,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             }
         }
 
+        // One last kill for a vetoed child never seen to exit; one that still lives stays undisposed, so its spawn receipt lets the next start reap it.
+        await _reaper.RetryUnconfirmedKillsAsync().ConfigureAwait(false);
         _reaper.Dispose();
         foreach (var gate in _ensureGates.Values)
         {
@@ -356,9 +358,9 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     /// <inheritdoc />
     public Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct, bool raisesDemand = true)
     {
-        // A live or in-flight process blocks the mutation: swapping the runtime binaries under a loaded model would
+        // A live, in-flight or held vetoed process blocks the mutation: swapping the runtime binaries under a loaded model would
         // pull them out from under it.
-        return _runtimeMutationGate.AcquireLeaseOrNullAsync(() => _processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty,
+        return _runtimeMutationGate.AcquireLeaseOrNullAsync(() => _processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty || _reaper.HasUnconfirmedKills,
             raisesDemand,
             ct);
     }
@@ -422,75 +424,16 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            // Re-check under the gate — a detached spawn may have registered a live process while we waited (it
-            // registers into _processes before removing itself from _inflightSpawns, so a reuse here never misses it).
-            _processes.TryGetValue(key, out var existing);
-
-            // Profiling holds this same gate through its own teardown, so a profiling-owned entry cannot be seen here. The reuse arm is guarded anyway; the reap
-            // below deliberately is NOT, so that if the invariant ever breaks a lingering entry is still torn down rather than orphaning its child process.
-            var profilingOwned = existing is { IsProfilingOwned: true };
-
-            if (existing is not null && !existing.Handle.HasExited && !profilingOwned)
+            while (true)
             {
-                var reused = await ReuseOrNullAsync(key, existing, intent, ct).ConfigureAwait(false);
-                if (reused is not null)
+                var decision = await TryDecideEnsureUnderGateAsync(key, intent, ct).ConfigureAwait(false);
+                if (decision.Refused is not { } refused)
                 {
-                    return new EnsureDecision(reused, SpawnTask: null);
-                }
-            }
-
-            // A crashed/exited/wedged process lingering under this key is reaped before respawn (a wedged one was already
-            // torn down by ReuseOrNullAsync; RemoveProcessAsync is idempotent on the instance so the extra call is a no-op).
-            if (existing is not null)
-            {
-                await _reaper.RemoveProcessAsync(key, existing).ConfigureAwait(false);
-            }
-
-            // Join the in-flight detached spawn or start one. GetOrAdd runs its factory at most once here because we hold
-            // the gate, so two callers never start two spawns for the same key.
-            if (_inflightSpawns.TryGetValue(key, out var inflight))
-            {
-                return JoinInflightSpawn(inflight, intent);
-            }
-
-            // Cold launches pass the capacity gate here, after the reuse and join arms, so N concurrent cold ensures decide once and a resident model never does.
-            var capacityReservation = await AdmitPooledLaunchAsync(key, intent, ct).ConfigureAwait(false);
-            IProcessLaunchTicket? launchTicket = null;
-            try
-            {
-                if (!_launchAdmissions.TryBeginLaunch(key.ModelName, key.Role, out var admission, out launchTicket))
-                {
-                    throw NonRetryable("The requested local model launch conflicts with another in-flight admission.");
+                    return decision;
                 }
 
-                var started = CreateDetachedSpawn(admission, launchTicket, capacityReservation, intent);
-                if (!_inflightSpawns.TryAdd(key, started))
-                {
-                    return JoinInflightSpawn(_inflightSpawns[key], intent);
-                }
-
-                // The published immutable in-flight record now owns the ticket and the reservation. Clear the locals before starting the
-                // detached work so the finally below cannot release a successfully transferred reference.
-                launchTicket = null;
-                capacityReservation = null;
-                try
-                {
-                    StartDetachedSpawn(key, started);
-                    return new EnsureDecision(Reused: null, started.Task);
-                }
-                catch
-                {
-                    _inflightSpawns.TryRemove(new KeyValuePair<ProcessKey, InflightSpawn>(key, started));
-                    started.LaunchTicket.Dispose();
-                    started.CapacityReservation?.Dispose();
-                    throw;
-                }
-            }
-            finally
-            {
-                // Ticket first, reservation second: the reverse order transiently leaves an orphaned registry entry, a global blocker.
-                launchTicket?.Dispose();
-                capacityReservation?.Dispose();
+                // Publication refused that spawn: never join it, wait for its cleanup and decide afresh.
+                await WaitForRefusedSpawnAsync(refused.Task, ct).ConfigureAwait(false);
             }
         }
         finally
@@ -499,16 +442,88 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         }
     }
 
-    /// <summary>Joins a spawn another caller started; a non-transient joiner takes the transient mark off the process it will register.</summary>
-    /// <remarks>The spawn's admission was decided once, by the caller that started it; a joiner never re-admits it.</remarks>
-    private static EnsureDecision JoinInflightSpawn(InflightSpawn inflight, ModelResidencyIntent intent)
+    /// <summary>One pass of <see cref="DecideEnsureAsync" />, under the per-key gate; a spawn whose publication was refused comes back for the caller to wait out.</summary>
+    private async Task<EnsureDecision> TryDecideEnsureUnderGateAsync(ProcessKey key, ModelResidencyIntent intent, CancellationToken ct)
     {
-        if (intent != ModelResidencyIntent.Transient)
+        // Re-check under the gate — a detached spawn may have registered a live process while we waited (it
+        // registers into _processes before removing itself from _inflightSpawns, so a reuse here never misses it).
+        _processes.TryGetValue(key, out var existing);
+
+        // Profiling holds this same gate through its own teardown, so a profiling-owned entry cannot be seen here. The reuse arm is guarded anyway; the reap
+        // below deliberately is NOT, so that if the invariant ever breaks a lingering entry is still torn down rather than orphaning its child process.
+        var profilingOwned = existing is { IsProfilingOwned: true };
+
+        if (existing is not null && !existing.Handle.HasExited && !profilingOwned)
         {
-            inflight.ClearTransient();
+            var reused = await ReuseOrNullAsync(key, existing, intent, ct).ConfigureAwait(false);
+            if (reused is not null)
+            {
+                return new EnsureDecision(reused, SpawnTask: null);
+            }
         }
 
-        return new EnsureDecision(Reused: null, inflight.Task);
+        // A crashed/exited/wedged process lingering under this key is reaped before respawn (a wedged one was already
+        // torn down by ReuseOrNullAsync; RemoveProcessAsync is idempotent on the instance so the extra call is a no-op).
+        if (existing is not null)
+        {
+            await _reaper.RemoveProcessAsync(key, existing).ConfigureAwait(false);
+        }
+
+        // Join the in-flight detached spawn or start one. The gate is held, so two callers never start two spawns for
+        // the same key.
+        if (_inflightSpawns.TryGetValue(key, out var inflight))
+        {
+            return Join(inflight);
+        }
+
+        // Above capacity admission and both of its early returns: a Background launch of an operator-ejected key is refused before anything is booked.
+        var qualifiedAtGeneration = QualifyNewLaunch(key, intent);
+
+        // Cold launches pass the capacity gate here, after the reuse and join arms, so N concurrent cold ensures decide once and a resident model never does.
+        var capacityReservation = await AdmitPooledLaunchAsync(key, intent, ct).ConfigureAwait(false);
+        IProcessLaunchTicket? launchTicket = null;
+        try
+        {
+            if (!_launchAdmissions.TryBeginLaunch(key.ModelName, key.Role, out var admission, out launchTicket))
+            {
+                throw NonRetryable("The requested local model launch conflicts with another in-flight admission.");
+            }
+
+            var started = CreateDetachedSpawn(admission, launchTicket, capacityReservation, intent, qualifiedAtGeneration);
+            if (!_inflightSpawns.TryAdd(key, started))
+            {
+                return Join(_inflightSpawns[key]);
+            }
+
+            // The published immutable in-flight record now owns the ticket and the reservation. Clear the locals before starting the
+            // detached work so the finally below cannot release a successfully transferred reference.
+            launchTicket = null;
+            capacityReservation = null;
+            try
+            {
+                StartDetachedSpawn(key, started);
+                return new EnsureDecision(Reused: null, started.Task);
+            }
+            catch
+            {
+                _inflightSpawns.TryRemove(new KeyValuePair<ProcessKey, InflightSpawn>(key, started));
+                started.LaunchTicket.Dispose();
+                started.CapacityReservation?.Dispose();
+                throw;
+            }
+        }
+        finally
+        {
+            // Ticket first, reservation second: the reverse order transiently leaves an orphaned registry entry, a global blocker.
+            launchTicket?.Dispose();
+            capacityReservation?.Dispose();
+        }
+
+        // The spawn's admission was decided once, by the caller that started it; a joiner never re-admits it.
+        EnsureDecision Join(InflightSpawn joined) =>
+            TryJoinInflightSpawn(key, joined, intent)
+                ? new EnsureDecision(Reused: null, joined.Task)
+                : new EnsureDecision(Reused: null, SpawnTask: null) { Refused = joined };
     }
 
     /// <summary>
@@ -524,7 +539,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     private static InflightSpawn CreateDetachedSpawn(ProcessLaunchAdmission? admission,
         IProcessLaunchTicket launchTicket,
         IDisposable? capacityReservation,
-        ModelResidencyIntent intent)
+        ModelResidencyIntent intent,
+        long? qualifiedAtGeneration)
     {
         var completion = new TaskCompletionSource<RunningProcess>(TaskCreationOptions.RunContinuationsAsynchronously);
         var task = completion.Task;
@@ -543,7 +559,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             LaunchTicket = launchTicket,
             CapacityReservation = capacityReservation,
             Intent = intent,
-            IsTransient = intent == ModelResidencyIntent.Transient
+            IsTransient = intent == ModelResidencyIntent.Transient,
+            QualifiedAtGeneration = qualifiedAtGeneration
         };
     }
 
@@ -563,10 +580,23 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                 }
                 finally
                 {
-                    // Remove THIS immutable in-flight record (key+value) so a newer record under the same key is untouched.
-                    _inflightSpawns.TryRemove(new KeyValuePair<ProcessKey, InflightSpawn>(key, inflight));
-                    inflight.LaunchTicket.Dispose();
-                    inflight.CapacityReservation?.Dispose();
+                    // Remove THIS record (key+value). A published or failed one leaves first, so a caller finding its process gone decides afresh; a refused
+                    // one stays until its ticket and reservation are released, so a caller meeting it waits instead of tripping TryBeginLaunch's conflict.
+                    var record = new KeyValuePair<ProcessKey, InflightSpawn>(key, inflight);
+                    if (!inflight.IsRefused)
+                    {
+                        _inflightSpawns.TryRemove(record);
+                    }
+
+                    try
+                    {
+                        inflight.LaunchTicket.Dispose();
+                        inflight.CapacityReservation?.Dispose();
+                    }
+                    finally
+                    {
+                        _inflightSpawns.TryRemove(record);
+                    }
                 }
 
                 if (failure is not null)
@@ -648,8 +678,15 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             key is { } k ? $"'{k.ModelName}' ({k.Role})" : null;
     }
 
-    /// <summary>The outcome of <see cref="DecideEnsureAsync" />: a reused endpoint XOR the shared detached spawn task.</summary>
-    private readonly record struct EnsureDecision(LlamaServerEndpoint? Reused, Task<RunningProcess>? SpawnTask);
+    /// <summary>
+    ///     The outcome of one decision pass: a reused endpoint, the shared detached spawn task, or (both null) a spawn whose
+    ///     publication was refused, which <see cref="DecideEnsureAsync" /> waits out and decides again.
+    /// </summary>
+    private readonly record struct EnsureDecision(LlamaServerEndpoint? Reused, Task<RunningProcess>? SpawnTask)
+    {
+        /// <summary>The in-flight spawn whose publication was refused, for the caller to wait out before deciding again; otherwise null.</summary>
+        public InflightSpawn? Refused { get; init; }
+    }
 
     /// <summary>
     ///     Marks the caller's flow as the exclusive profiling operation that pinned <see cref="Process" /> for
@@ -707,6 +744,12 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             get => Volatile.Read(ref _transient) != 0;
             init => _transient = value ? 1 : 0;
         }
+
+        /// <summary>The eject generation the latest user-waited initiator or joiner saw; null while only Background callers wait. Under the eject-mark lock.</summary>
+        public long? QualifiedAtGeneration { get; set; }
+
+        /// <summary>Set when publication was refused, after which the record accepts no joins. Under the eject-mark lock.</summary>
+        public bool IsRefused { get; set; }
 
         public Task<RunningProcess> Task => Completion.Task;
 

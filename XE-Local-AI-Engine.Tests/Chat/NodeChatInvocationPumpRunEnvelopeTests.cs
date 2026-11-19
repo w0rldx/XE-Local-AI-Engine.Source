@@ -377,8 +377,8 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
     [Test]
     public async Task TerminalizeAsync_CancelledRun_PersistsNullErrorSoNoBannerShows()
     {
-        // A user cancel (or operator eject, also Cancelled-category) is an outcome, not a failure: the terminal row
-        // must carry NO error text, so the chat never shows a red error banner for a cancelled turn.
+        // A user cancel is an outcome, not a failure: the terminal row must carry NO error text, so the chat shows only its
+        // stopped label for a cancelled turn.
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence);
 
@@ -401,6 +401,37 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
 
         await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "cancelled" && request.Error == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>A cancel the user did not ask for (an operator eject vetoed the load) keeps its reason, which the chat shows in place of the stopped label.</summary>
+    [Test]
+    public async Task TerminalizeAsync_CancelWithAShownReason_PersistsTheReason()
+    {
+        const string Reason = "The model was ejected by the operator; it reloads when it is next used directly.";
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence);
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Cancelled,
+            FailureCategory = FailureCategory.Cancelled,
+            Error = Reason,
+            ShowCancelReason = true,
+            ModelUsed = "llama-3.1"
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "cancelled" && request.Error == Reason && request.FailureCategory == null),
             Arg.Any<CancellationToken>());
     }
 

@@ -491,8 +491,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     ///     <see langword="false" /> when one is serving a request: the job is refused rather than launched into an out-of-memory.
     /// </summary>
     /// <remarks>
-    ///     Uses the operator eject (graceful, never forced), the path the top-bar eject takes. Busy is read first so a busy process is
-    ///     never marked evicting, which would refuse new chat requests for the whole drain window.
+    ///     Uses the graceful eject the top-bar eject takes, but not as an operator: it leaves no mark, so background work may reload the model.
+    ///     Busy is read first so a busy process is never marked evicting, which would refuse new chat requests for the whole drain window.
     /// </remarks>
     private async Task<bool> FreeLlamaServerVramAsync(Guid jobId, CancellationToken token)
     {
@@ -506,7 +506,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         foreach (var process in residents)
         {
             // A request starting between the list and this eject is drained for EjectDrainTimeout, then refuses the job; a non-draining try-evict on the supervisor if that bites.
-            var outcome = await _llamaSupervisor.EjectAsync(process.ModelName, process.Role, force: false, token);
+            var outcome = await _llamaSupervisor.EjectAsync(process.ModelName, process.Role, force: false, token, operatorRequested: false);
             if (outcome == LlamaServerEjectOutcome.TimedOutStillBusy)
             {
                 return false;

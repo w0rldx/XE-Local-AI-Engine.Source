@@ -141,13 +141,13 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <inheritdoc />
-    public async Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct)
+    public async Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct, bool operatorRequested = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         _runtimeMutationGate.BeginOperation();
         try
         {
-            return await EjectCoreAsync(modelName, role, force, ct).ConfigureAwait(false);
+            return await EjectCoreAsync(new ProcessKey(modelName, role), force, operatorRequested, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -155,10 +155,47 @@ public sealed partial class LlamaServerProcessSupervisor
         }
     }
 
-    private async Task<LlamaServerEjectOutcome> EjectCoreAsync(string modelName, ModelRole role, bool force, CancellationToken ct)
+    /// <summary>
+    ///     Runs one eject; an operator's attempt opens together with its one table read and stays open until it ends, and only a completed eject leaves the
+    ///     key marked.
+    /// </summary>
+    private async Task<LlamaServerEjectOutcome> EjectCoreAsync(ProcessKey key, bool force, bool operatorRequested, CancellationToken ct)
     {
-        var key = new ProcessKey(modelName, role);
-        if (!_processes.TryGetValue(key, out var target) || target.Handle.HasExited)
+        long? attempt = null;
+        RunningProcess? target;
+        if (operatorRequested)
+        {
+            attempt = BeginOperatorEjectAttempt(key, out target);
+        }
+        else
+        {
+            _processes.TryGetValue(key, out target);
+        }
+
+        LlamaServerEjectOutcome? outcome = null;
+        try
+        {
+            if (OperatorEjectAttemptOpenedForTesting is { } opened)
+            {
+                await opened().ConfigureAwait(false);
+            }
+
+            outcome = await EjectProcessAsync(key, target, force, ct).ConfigureAwait(false);
+            return outcome.Value;
+        }
+        finally
+        {
+            if (attempt is { } token)
+            {
+                EndOperatorEjectAttempt(key, token, marks: outcome is LlamaServerEjectOutcome.Ejected or LlamaServerEjectOutcome.ForcedWhileBusy or LlamaServerEjectOutcome.NotRunning);
+            }
+        }
+    }
+
+    /// <summary>Drains and tears down <paramref name="target" />, the instance the eject read, never a process published under the key after that read.</summary>
+    private async Task<LlamaServerEjectOutcome> EjectProcessAsync(ProcessKey key, RunningProcess? target, bool force, CancellationToken ct)
+    {
+        if (target is null || target.Handle.HasExited)
         {
             // Nothing live to eject. Reap a lingering dead entry so its slot/port frees, then report an idempotent no-op.
             if (target is not null)
