@@ -180,19 +180,14 @@ internal sealed class NodeChatReadModel
         };
     }
 
-    /// <summary>
-    ///     Indexes every stored chat conversation not yet indexed, newest first, in batches that each hold the refresh
-    ///     gate briefly. Returns the ids of the conversations it could not read; the rest of the pass still completes.
-    /// </summary>
-    public async Task<IReadOnlyList<Guid>> BackfillSearchIndexAsync(int batchSize, CancellationToken cancellationToken)
+    /// <summary>The ids of every stored chat, archived ones included, pinned first and then newest first, as the list orders them.</summary>
+    public Task<IReadOnlyList<Guid>> ListChatConversationIdsAsync(CancellationToken cancellationToken = default)
     {
-        var index = _writer.SearchIndex;
-        var skipped = new List<Guid>();
-        var conversationIds = await _writer.ExecuteConversationSharedAsync(Guid.Empty,
+        return _writer.ExecuteConversationSharedAsync<IReadOnlyList<Guid>>(Guid.Empty,
             async (dbContext, token) =>
             {
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-                command.CommandText = "SELECT conversation_id FROM conversations WHERE purged = 0 AND kind = 'chat' ORDER BY last_seen_utc DESC;";
+                command.CommandText = "SELECT conversation_id FROM conversations WHERE purged = 0 AND kind = 'chat' ORDER BY is_pinned DESC, last_seen_utc DESC;";
                 await OpenIfNeededAsync(command.Connection, token);
                 await using var reader = await command.ExecuteReaderAsync(token);
                 var ids = new List<Guid>();
@@ -204,6 +199,17 @@ internal sealed class NodeChatReadModel
                 return ids;
             },
             cancellationToken);
+    }
+
+    /// <summary>
+    ///     Indexes every stored chat conversation not yet indexed, in list order, in batches that each hold the refresh
+    ///     gate briefly. Returns the ids of the conversations it could not read; the rest of the pass still completes.
+    /// </summary>
+    public async Task<IReadOnlyList<Guid>> BackfillSearchIndexAsync(int batchSize, CancellationToken cancellationToken)
+    {
+        var index = _writer.SearchIndex;
+        var skipped = new List<Guid>();
+        var conversationIds = await ListChatConversationIdsAsync(cancellationToken);
 
         foreach (var batch in conversationIds.Chunk(batchSize))
         {

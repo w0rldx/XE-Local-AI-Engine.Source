@@ -85,8 +85,7 @@ export function deriveModelIdDisplay(rawId: string): ModelDisplay {
  * otherwise shortens the id; `secondary` says where the turn runs for a cloud or external model and what the weights
  * are for a local one; `full` is the untruncated identity for a tooltip.
  *
- * Takes the same `(option, fallback)` shape the picker's old `display()` did, so a call site with no selection yet
- * still renders its placeholder.
+ * Takes `(option, fallback)` so a call site with no selection yet still renders its placeholder.
  */
 export function deriveModelDisplay(option: ModelOption | undefined, fallback: string): ModelDisplay {
 	if (option === undefined) {

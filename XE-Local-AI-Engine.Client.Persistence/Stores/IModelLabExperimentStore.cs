@@ -90,6 +90,16 @@ public sealed record ModelLabExperimentCompletion
     public string? AttentionSha256 { get; init; }
 
     public long? AttentionByteCount { get; init; }
+
+    public static ModelLabExperimentCompletion Cancelled() =>
+        Finished(ModelLabExperimentStatus.Cancelled, "The experiment was cancelled.");
+
+    public static ModelLabExperimentCompletion Finished(ModelLabExperimentStatus status, string message) =>
+        new()
+        {
+            Status = status,
+            ErrorMessage = message
+        };
 }
 
 /// <summary>A blob written to the Model Lab store, as a row refers to it.</summary>

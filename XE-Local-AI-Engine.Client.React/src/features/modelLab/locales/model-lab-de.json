@@ -629,6 +629,7 @@
 				}
 			},
 			"noModels": "Es ist kein installiertes llama.cpp-Modell verfügbar. Bitte installieren Sie zuerst eines unter Modelle.",
+			"openModels": "Modelle öffnen",
 			"pytorch": {
 				"blockRoot": "(Block)",
 				"build": "PyTorch-Index erstellen",
@@ -684,6 +685,7 @@
 				"sourceCheckpoint": "Heruntergeladener Checkpoint",
 				"sourceFailed": "Die Quelldatei konnte nicht geladen werden.",
 				"sourceHuggingFace": "config.json von Hugging Face",
+				"sourceLabel": "Architektur lesen aus",
 				"title": "PyTorch"
 			},
 			"savedCompare": {
@@ -749,6 +751,7 @@
 				"caveatStrength": "Gleiche relative Stärke in Checkpoint und GGUF ist eine Annahme.",
 				"facts": "Schicht {{layer}} ({{kind}}), Skala {{scale}}, Vektorlänge {{norm}}, Vektor {{hash}}. Abgeleitet in {{seconds}} s, Spitze {{vram}} auf {{device}}.",
 				"intro": "Leitet aus den beiden Sätzen einen Vektor ab und führt das GGUF dreimal mit denselben Prompts und demselben Seed aus: ohne Vektor, mit diesem und mit einem Zufallsvektor gleicher Länge. Ein Prompt pro Zeile.",
+				"jobKindLabel": "Art des Laufs",
 				"jobSteering": "Steering",
 				"jobTrace": "Trace",
 				"kindFull": "volle Attention",
@@ -784,6 +787,11 @@
 				"basisRaw": "Rohe Logits",
 				"basisRawNote": "Von PyTorch aus den rohen Logits des Modells über das gesamte Vokabular berechnet",
 				"cancel": "Experiment abbrechen",
+				"cancelConfirm": {
+					"description": "Das laufende Experiment wird beendet, bevor es fertig ist.",
+					"keep": "Weiterlaufen lassen",
+					"title": "Dieses Experiment abbrechen?"
+				},
 				"chatWait": "Chats, die ein lokales Modell brauchen, warten, bis dies fertig ist oder du es abbrichst.",
 				"check": "Prüfen",
 				"checkFailed": "Die Prüfung konnte nicht laufen.",
@@ -793,6 +801,10 @@
 				"compareKind": "Vergleichen Sie Traces nur mit Traces und Steering-Läufe nur mit Steering-Läufen.",
 				"compareUnfinished": "Nur abgeschlossene Läufe lassen sich vergleichen.",
 				"delete": "Löschen",
+				"deleteConfirm": {
+					"description": "Der gespeicherte Lauf und seine Aufzeichnungen werden von diesem Node gelöscht, ob angeheftet oder nicht. Dies kann nicht rückgängig gemacht werden.",
+					"title": "Dieses Experiment löschen?"
+				},
 				"deleteFailed": "Das Experiment konnte nicht gelöscht werden.",
 				"download": "Checkpoint holen",
 				"downloadFailed": "Der Download konnte nicht starten.",

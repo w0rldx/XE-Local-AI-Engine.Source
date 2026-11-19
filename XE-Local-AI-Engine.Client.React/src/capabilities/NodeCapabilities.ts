@@ -239,7 +239,6 @@ export const nodeRoutePaths = {
 } as const;
 
 export type NodeRouteId = keyof typeof nodeRoutePaths;
-export type NodeRoutePath = (typeof nodeRoutePaths)[NodeRouteId];
 
 // The two navigation modes the operator picks between, stored server-side as `uiMode` on the node settings. `simple`
 // shows the everyday surfaces only; `advanced` shows everything this build offers, and is what an absent server value

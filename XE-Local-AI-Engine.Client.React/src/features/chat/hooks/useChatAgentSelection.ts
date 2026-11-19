@@ -68,7 +68,7 @@ export function useChatAgentSelection(
 		return agentOptions.find((agent) => agent.id === selectedAgentId)?.playbookEnabled ?? false;
 	}, [agentModeEnabled, agentOptions, selectedAgentId]);
 	// Single merged agent control wiring: picking an agent enables agent mode and stamps it; picking the Default
-	// Assistant row (empty id) disables agent mode and clears the selection. Replaces the old separate toggle.
+	// Assistant row (empty id) disables agent mode and clears the selection.
 	const handleSelectAgent = useCallback(
 		(agentId: string) => {
 			if (agentId) {

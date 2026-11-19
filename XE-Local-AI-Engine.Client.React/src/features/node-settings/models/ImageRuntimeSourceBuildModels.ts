@@ -1,15 +1,11 @@
 import type {
 	LlamaCppSourceBackend,
-	LlamaCppSourceBuildDescriptor,
-	LlamaCppSourceBuildPrerequisiteItem,
 	LlamaCppSourceBuildPrerequisites,
 	LlamaCppSourceBuildStatus,
 	SourceBuildDraft,
 } from "@/features/node-settings/models/SourceBuildModels";
 
 export type ImageRuntimeSourceBackend = LlamaCppSourceBackend;
-export type ImageRuntimeSourceBuildDescriptor = LlamaCppSourceBuildDescriptor;
-export type ImageRuntimeSourceBuildPrerequisiteItem = LlamaCppSourceBuildPrerequisiteItem;
 export type ImageRuntimeSourceBuildPrerequisites = LlamaCppSourceBuildPrerequisites;
 export type ImageRuntimeSourceBuildStatus = LlamaCppSourceBuildStatus;
 export type ImageRuntimeSourceBuildDraft = SourceBuildDraft;

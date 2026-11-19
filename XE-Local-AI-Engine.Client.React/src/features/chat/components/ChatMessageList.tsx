@@ -1,6 +1,7 @@
-import { Button, Loader, ScrollArea, Stack, Text } from "@mantine/core";
+import { Button, Loader, ScrollArea, Stack, Text, VisuallyHidden } from "@mantine/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { type ReactNode, use, useMemo, useRef } from "react";
+import type { TFunction } from "i18next";
+import { type ReactNode, use, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ChatNoticeContinueContext } from "@/core/chat/models/ChatNoticeContinueContext";
@@ -15,9 +16,11 @@ import type {
 	ChatMessageModel,
 	ChatStreamingState,
 	ChatTimelineEntry,
+	MessageStatus,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
 import { groupMessageRevisions } from "@/features/chat/models/MessageRevisionGrouping";
+import { modelLoadingPhases } from "@/features/chat/models/NodeChatStreamTypes";
 
 const EMPTY_TIMELINE_ENTRIES: ChatTimelineEntry[] = [];
 // Above this many turns the list windows its rows (@tanstack/react-virtual) so a long thread does not keep
@@ -72,6 +75,34 @@ function bySortOrder(left: ChatMessageModel, right: ChatMessageModel): number {
 
 function hasText(value?: string): boolean {
 	return typeof value === "string" && value.trim().length > 0;
+}
+
+// The sentence the status region holds for a stream: one static string per phase, so it changes only on a transition.
+// `turnStatus` is the turn's row in the conversation, which a stop marks cancelled in the same update that ends the
+// stream. A failed or interrupted turn holds none, because its error renders as an alert that announces itself.
+function announceStreamPhase(
+	stream: ChatStreamingState | undefined,
+	turnStatus: MessageStatus | undefined,
+	t: TFunction,
+): string {
+	if (!stream) {
+		return "";
+	}
+	if (!stream.isActive) {
+		if (turnStatus === "cancelled") {
+			return t("pages.chat.stopped", "Generation stopped");
+		}
+		return stream.error || turnStatus === "failed" || turnStatus === "interrupted"
+			? ""
+			: t("pages.chat.responseFinished", "Response finished");
+	}
+	if (stream.isQueued) {
+		return t("pages.chat.queued", "Queued — starts after the node's current chat, work session step, benchmark or training run");
+	}
+	if (!hasText(stream.content) && stream.runtimePhase !== undefined && modelLoadingPhases.has(stream.runtimePhase)) {
+		return t("pages.chat.loadingModel", "Loading model…");
+	}
+	return t("pages.chat.streaming", "Receiving response");
 }
 
 export function ChatMessageList({
@@ -155,6 +186,29 @@ export function ChatMessageList({
 	// which tracks the latest mutation (the just-sent user message) and would mislabel the reply.
 	const streamingStartedAt = scopedStreamingMessage?.startedAt ?? streamingAssistantMessage?.createdAt;
 	const isStreamingActive = scopedStreamingMessage?.isActive ?? false;
+	const showMessagesLoading =
+		conversation !== undefined &&
+		normalizedMessages.length === 0 &&
+		!scopedStreamingMessage &&
+		!messagesLoadFailed &&
+		isLoadingMessages;
+	const streamPhase = announceStreamPhase(scopedStreamingMessage, streamingAssistantMessage?.status, t);
+	const streamPhaseKey = scopedStreamingMessage ? `${scopedStreamingMessage.messageId}:${streamPhase}` : "";
+	// Only a transition seen while this conversation is on screen is spoken. The phase it shows on mount or on a switch
+	// is adopted silently (adjusted during render, not in an effect) and stays silent until the phase first changes.
+	const [shownPhase, setShownPhase] = useState<{ conversationId?: string; silentKey?: string }>({
+		conversationId: conversation?.id,
+		silentKey: streamPhaseKey,
+	});
+	let silentKey = shownPhase.silentKey;
+	if (shownPhase.conversationId !== conversation?.id) {
+		silentKey = streamPhaseKey;
+		setShownPhase({ conversationId: conversation?.id, silentKey });
+	} else if (silentKey !== undefined && silentKey !== streamPhaseKey) {
+		silentKey = undefined;
+		setShownPhase({ conversationId: conversation?.id, silentKey });
+	}
+	const streamPhaseAnnouncement = silentKey === streamPhaseKey ? "" : streamPhase;
 	const streamingTurnId = scopedStreamingMessage?.messageId;
 	const scrollKey = `${revisionGroups.length}:${timelineEntries.length}:${streamingContent.length}:${isStreamingActive}`;
 	const showSyntheticStreamingTurn = Boolean(conversation && scopedStreamingMessage && !hasPersistedStreamingMessage);
@@ -286,19 +340,6 @@ export function ChatMessageList({
 				normalizedMessages.length === 0 &&
 				!scopedStreamingMessage &&
 				!messagesLoadFailed &&
-				isLoadingMessages ? (
-					<Stack align="center" py="md" gap="xs" role="status" aria-busy={true} aria-live="polite">
-						<Loader size="sm" />
-						<Text size="sm" c="dimmed">
-							{t("pages.chat.loadingMessages", "Loading messages…")}
-						</Text>
-					</Stack>
-				) : null}
-
-				{conversation &&
-				normalizedMessages.length === 0 &&
-				!scopedStreamingMessage &&
-				!messagesLoadFailed &&
 				!isLoadingMessages ? (
 					<Text size="sm" c="dimmed">
 						{t("pages.chat.noMessages", "No messages yet.")}
@@ -307,6 +348,21 @@ export function ChatMessageList({
 
 				<div ref={endRef} />
 			</Stack>
+			{/* The list's one polite status region: always mounted so a change is spoken, it carries the loading
+			    spinner or, otherwise, one static sentence per stream phase, so each transition is spoken once and
+			    no token ever is. */}
+			<div role="status" aria-live="polite" aria-busy={showMessagesLoading || undefined}>
+				{showMessagesLoading ? (
+					<Stack align="center" py="md" gap="xs">
+						<Loader size="sm" />
+						<Text size="sm" c="dimmed">
+							{t("pages.chat.loadingMessages", "Loading messages…")}
+						</Text>
+					</Stack>
+				) : (
+					<VisuallyHidden data-testid="chat-stream-phase-announcement">{streamPhaseAnnouncement}</VisuallyHidden>
+				)}
+			</div>
 		</ScrollArea>
 	);
 }

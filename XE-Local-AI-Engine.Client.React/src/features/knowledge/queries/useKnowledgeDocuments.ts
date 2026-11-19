@@ -10,6 +10,7 @@ import {
 	reindexCorpusMutation,
 	reindexKnowledgeDocumentMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { keepPreviousPageOf } from "@/core/ui/components/TablePagination/useTablePagination";
 import type { KnowledgeDocumentDetail } from "@/features/knowledge/models/KnowledgeModels";
 
@@ -26,11 +27,6 @@ export const knowledgeQueryIds = {
 	getDocument: "getKnowledgeDocument",
 	listCollections: "listKnowledgeCollections",
 } as const;
-
-/** Builds the partial generated-query-key filter that matches every cached variant of one KB endpoint. */
-export function knowledgeInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
 
 /**
  * One page of the document list, newest first, plus the facts about the whole collection a page alone cannot answer
@@ -133,9 +129,9 @@ function useInvalidateKnowledge(): () => Promise<void> {
 	return useCallback(
 		() =>
 			Promise.all([
-				queryClient.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listDocuments) }),
-				queryClient.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.getDocument) }),
-				queryClient.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listCollections) }),
+				queryClient.invalidateQueries({ queryKey: operationInvalidationKey(knowledgeQueryIds.listDocuments) }),
+				queryClient.invalidateQueries({ queryKey: operationInvalidationKey(knowledgeQueryIds.getDocument) }),
+				queryClient.invalidateQueries({ queryKey: operationInvalidationKey(knowledgeQueryIds.listCollections) }),
 			]).then(() => undefined),
 		[queryClient],
 	);

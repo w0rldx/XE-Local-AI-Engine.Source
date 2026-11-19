@@ -73,7 +73,6 @@ import {
 	createMcpServer,
 	createNodeBackup,
 	createNodeChatConversation,
-	createNodeChatMessageRevision,
 	createPlaybookAction,
 	createScheduledJob,
 	createSkill,
@@ -655,9 +654,6 @@ import type {
 	CreateNodeChatConversationData,
 	CreateNodeChatConversationError,
 	CreateNodeChatConversationResponse,
-	CreateNodeChatMessageRevisionData,
-	CreateNodeChatMessageRevisionError,
-	CreateNodeChatMessageRevisionResponse,
 	CreatePlaybookActionData,
 	CreatePlaybookActionResponse,
 	CreateScheduledJobData,
@@ -4313,30 +4309,6 @@ export const listNodeChatMessageRevisionsOptions = (options: Options<ListNodeCha
 		},
 		queryKey: listNodeChatMessageRevisionsQueryKey(options),
 	});
-
-export const createNodeChatMessageRevisionMutation = (
-	options?: Partial<Options<CreateNodeChatMessageRevisionData>>,
-): UseMutationOptions<
-	CreateNodeChatMessageRevisionResponse,
-	AxiosError<CreateNodeChatMessageRevisionError>,
-	Options<CreateNodeChatMessageRevisionData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		CreateNodeChatMessageRevisionResponse,
-		AxiosError<CreateNodeChatMessageRevisionError>,
-		Options<CreateNodeChatMessageRevisionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createNodeChatMessageRevision({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
 
 export const pinNodeChatConversationMutation = (
 	options?: Partial<Options<PinNodeChatConversationData>>,

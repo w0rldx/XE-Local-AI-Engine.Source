@@ -3,6 +3,8 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
+
 // Mock generated query/mutation factories to isolate the hook while retaining validation and mapping.
 const { listMock, createMutationFn, deleteMutationFn, harvestMutationFn, approveMutationFn } = vi.hoisted(() => ({
 	listMock: vi.fn(),
@@ -21,7 +23,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 }));
 
 import {
-	goldenConversationsInvalidationKey,
 	goldenConversationsQueryIds,
 	useApproveGolden,
 	useCreateGoldenConversation,
@@ -32,7 +33,7 @@ import {
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 // The generated query key the mutations invalidate (partial `_id` match), built via the production helper.
-const LIST_KEY = goldenConversationsInvalidationKey(goldenConversationsQueryIds.list);
+const LIST_KEY = operationInvalidationKey(goldenConversationsQueryIds.list);
 
 // A generated-shaped list response (every field optional on the wire) the mocked options' queryFn resolves.
 const generatedListResponse = {

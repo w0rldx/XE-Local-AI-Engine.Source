@@ -13,6 +13,7 @@ import {
 	useServerDisabledNavigationCapabilities,
 } from "@/core/layout/models/NavigationMenuData";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { isImeComposing } from "@/core/ui/models/ImeComposition";
 
 interface PalettePage {
 	readonly to: string;
@@ -82,7 +83,7 @@ function PageSwitcher({ onClose }: { readonly onClose: () => void }) {
 					setActive(0);
 				}}
 				onKeyDown={(event) => {
-					if (event.nativeEvent.isComposing || matches.length === 0) {
+					if (isImeComposing(event) || matches.length === 0) {
 						return;
 					}
 					if (event.key === "ArrowDown" || event.key === "ArrowUp") {

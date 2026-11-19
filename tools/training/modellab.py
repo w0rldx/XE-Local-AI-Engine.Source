@@ -19,7 +19,9 @@ The protocol is the trainer's JSON-lines shape with its own contract version, on
     {"event": "error",     "category", "message"}
     {"event": "ready",     "vramBytes", "reservedBytes"}             --serve only
 
-``--config job.json`` runs one job of any kind and exits: 0 on success, 3 on SIGTERM in any phase, 1 on any error.
+``--config job.json`` runs one source job and exits: 0 on success, 3 on SIGTERM in any phase, 1 on any error. A trace
+or steering job there is refused as a contract error: they run only under ``--serve``, which checks what a job leaves
+behind.
 
 ``--serve`` keeps one model loaded across trace and steering jobs (not source jobs) and reads commands from stdin,
 one JSON object per line: ``{"op": "run", "jobId", "config"}`` (only while idle), ``{"op": "cancel", "jobId"}`` and
@@ -109,6 +111,10 @@ HEARTBEAT_SECONDS = 20
 TOP_DIMENSIONS = 8
 PERCENTILES = (0.01, 0.5, 0.99)
 TOP_CANDIDATES = 20
+# The length of the source job's dummy export input; on the meta device it allocates nothing.
+EXPORT_PROBE_TOKENS = 8
+# How many of the still-hooked modules a worker-poisoned reason names; the rest are left out of the error frame.
+HOOKED_MODULES_NAMED = 4
 
 
 # Reentrant: the one-shot SIGTERM handler emits on the main thread, possibly between this lock and its write.
@@ -383,7 +389,7 @@ def measured_facts(model, blocks):
 
 def write_result(job, result):
     with open(job["resultPath"], "w", encoding="utf-8") as handle:
-        json.dump(result, handle, ensure_ascii=False)
+        json.dump(result, handle, ensure_ascii=False, allow_nan=False)
 
 
 class _Candidates(LogitsProcessor):
@@ -865,7 +871,7 @@ def source(job, run):
 
     graphs, graph_of, export_error = [], {}, None
     try:
-        ids = torch.zeros((1, 8), dtype=torch.long, device="meta")
+        ids = torch.zeros((1, EXPORT_PROBE_TOKENS), dtype=torch.long, device="meta")
         program = torch.export.export(model, (ids,), kwargs={"use_cache": False}, strict=False)
     except Exception as error:  # degrades to the module index, with the reason
         export_error = sanitized_export_error(error)
@@ -939,7 +945,7 @@ def _left_behind(model, original_sdpa):
     if model is not None and (
         hooked := [name or "<model>" for name, m in model.named_modules() if m._forward_hooks or m._forward_pre_hooks]
     ):
-        return f"Forward hooks remain on {hooked[:4]} after the job."
+        return f"Forward hooks remain on {hooked[:HOOKED_MODULES_NAMED]} after the job."
     if _attention_functions()["sdpa"] is not original_sdpa:
         return "The sdpa attention kernel is still wrapped after the job."
     return None
@@ -1050,8 +1056,9 @@ def main():
     try:
         with open(arguments.config, encoding="utf-8") as handle:
             job = validate_job(json.load(handle))
-        run_job = {STEERING_KIND: derive, SOURCE_KIND: source}.get(job["kind"], trace)
-        run_job(job, run)
+        if job["kind"] != SOURCE_KIND:
+            raise JobError("A trace or steering job runs in a serving worker (--serve), not with --config.")
+        source(job, run)
     except Exception as error:
         run.finish()
         category, message = _failure(error)

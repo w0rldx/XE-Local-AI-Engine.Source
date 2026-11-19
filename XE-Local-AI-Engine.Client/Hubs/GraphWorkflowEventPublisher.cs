@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Hubs;
 
 using Microsoft.AspNetCore.SignalR;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>
@@ -23,6 +24,14 @@ internal sealed class GraphWorkflowEventPublisher : IGraphWorkflowEventPublisher
                        RunId = runId,
                        Seq = sequence,
                        Kind = ToWireKind(kind)
+                   }, cancellationToken);
+
+    public Task PublishRunStatusAsync(Guid runId, GraphWorkflowRunStatus status, CancellationToken cancellationToken = default) =>
+        _hubContext.Clients.All
+                   .SendAsync(GraphWorkflowHubEvents.RunStatusChanged, new GraphWorkflowRunStatusChanged
+                   {
+                       RunId = runId,
+                       Status = status.ToString()
                    }, cancellationToken);
 
     /// <summary>

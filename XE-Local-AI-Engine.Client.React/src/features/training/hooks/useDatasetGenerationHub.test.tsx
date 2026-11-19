@@ -14,7 +14,14 @@ const hubMock = vi.hoisted(() => {
 		off: vi.fn((event: string) => handlers.delete(event)),
 		invoke: vi.fn(async (): Promise<unknown> => undefined),
 	};
-	const handle = { connection, whenStarted: Promise.resolve(), onReconnected: vi.fn(() => () => undefined), release: vi.fn() };
+	const handle = {
+		connection,
+		whenStarted: Promise.resolve(),
+		onReconnected: vi.fn(() => () => undefined),
+		onReconnecting: vi.fn(() => () => undefined),
+		onClosed: vi.fn(() => () => undefined),
+		release: vi.fn(),
+	};
 	return { acquire: vi.fn(() => handle), connection, handlers };
 });
 

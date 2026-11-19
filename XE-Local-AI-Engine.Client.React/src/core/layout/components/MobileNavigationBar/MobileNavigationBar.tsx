@@ -3,6 +3,7 @@ import "./MobileNavigationBar.css";
 import { ActionIcon, Divider, Drawer, Text } from "@mantine/core";
 import { IconBug, IconInfoCircle, IconLogout, IconX } from "@tabler/icons-react";
 import { useRouterState } from "@tanstack/react-router";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useNodeLogout } from "@/core/auth/hooks/useNodeLogout";
@@ -27,6 +28,8 @@ import type { MenuItemStyles } from "@/core/layout/models/Sidebar";
 
 export function MobileNavigationBar({ drawerOpen, setDrawerOpen, drawerActions }: IMobileNavigationBarProperties) {
 	const { width } = useWindowDimensions();
+	// While a sub-panel is open, Escape belongs to it: both Drawers listen on the window.
+	const [panelOpen, setPanelOpen] = useState(false);
 	const { t } = useTranslation();
 	const pathname = useRouterState({ select: (state) => state.location.pathname });
 	const { logout, logoutPending } = useNodeLogout();
@@ -91,6 +94,7 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen, drawerActions }
 			position="left"
 			opened={drawerOpen}
 			onClose={() => setDrawerOpen(false)}
+			closeOnEscape={!panelOpen}
 			withCloseButton={false}
 			withOverlay={true}
 			overlayProps={{ backgroundOpacity: 0.5, blur: 0 }}
@@ -122,6 +126,7 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen, drawerActions }
 						key={menu.menuId}
 						menuItemStyle={menuItemStyle}
 						setDrawerOpen={setDrawerOpen}
+						onPanelOpenChange={setPanelOpen}
 						menuItem={menu.menuItem}
 						drawerTitle={menu.drawerTitle}
 						links={menu.links}
@@ -131,9 +136,19 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen, drawerActions }
 
 				<div className="flex-grow" />
 
-				<MobileNavigationThemeMenu menuItemStyle={menuItemStyle} setDrawerOpen={setDrawerOpen} width={width} />
+				<MobileNavigationThemeMenu
+					menuItemStyle={menuItemStyle}
+					setDrawerOpen={setDrawerOpen}
+					onPanelOpenChange={setPanelOpen}
+					width={width}
+				/>
 
-				<MobileNavigationLanguageMenu menuItemStyle={menuItemStyle} setDrawerOpen={setDrawerOpen} width={width} />
+				<MobileNavigationLanguageMenu
+					menuItemStyle={menuItemStyle}
+					setDrawerOpen={setDrawerOpen}
+					onPanelOpenChange={setPanelOpen}
+					width={width}
+				/>
 
 				{/* Report problem + About + Logout live in the desktop HeaderBar; on mobile the drawer is the
 				    only chrome, so it must offer them too. */}

@@ -344,7 +344,7 @@ public sealed class ModelLabWarmSessionTests
         using var first = new ScriptedProcess();
         using var second = new ScriptedProcess();
         await using var host = await LabHost.StartAsync(new ScriptedSpawner(first, second), warmIdleSeconds: WarmSeconds);
-        var workRoot = ModelLabExperimentService.WorkRoot(host.Services.GetRequiredService<INodeDataDirectory>());
+        var workRoot = ModelLabScriptRunner.WorkRoot(host.Services.GetRequiredService<INodeDataDirectory>());
         _ = await TraceAsync(host, first);
         var firstFile = ReceiptFiles(host).Single();
         var firstScratch = first.Request!.WorkingDirectory;

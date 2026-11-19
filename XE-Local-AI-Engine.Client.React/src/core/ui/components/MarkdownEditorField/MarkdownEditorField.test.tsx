@@ -88,6 +88,7 @@ describe("MarkdownEditorField", () => {
 	it("renders a textarea in edit mode by default", () => {
 		renderWithProviders(<MarkdownEditorField value="hello" onChange={vi.fn()} data-testid="mef" />);
 		expect(screen.getByTestId("mef-textarea")).toBeTruthy();
+		expect(screen.getByRole("radiogroup", { name: "Editor view" })).toBeTruthy();
 	});
 
 	it("calls onChange when the textarea value changes", () => {

@@ -22,6 +22,7 @@ import {
 import { GRAPH_WORKFLOW_MAX_NODES, type GraphWorkflowGraph } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import type { GraphWorkflowGraphIssue } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 import { designerChanges, designerProposal, eightNodeGraph } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
+import en from "@/locales/en.json";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // `dropPosition` is what the mocked `screenToFlowPosition` answers: jsdom has no layout and its synthetic drop event
@@ -274,6 +275,28 @@ describe("GraphWorkflowEditorCanvas connecting", () => {
 	});
 });
 
+/** What React Flow reports when a pointer click or Enter / Space on a focused element selects `id` alone. */
+function selectNode(id: string, deselected?: string): void {
+	act(() => {
+		flowProps().onNodesChange?.([
+			{ type: "select", id, selected: true },
+			...(deselected === undefined ? [] : [{ type: "select" as const, id: deselected, selected: false }]),
+		]);
+	});
+}
+
+/** As {@link selectNode}, in React Flow's order for an edge: the edge's select first, then the node's deselect. */
+function selectEdge(id: string, deselectedNode?: string): void {
+	act(() => {
+		flowProps().onEdgesChange?.([{ type: "select", id, selected: true }]);
+	});
+	if (deselectedNode !== undefined) {
+		act(() => {
+			flowProps().onNodesChange?.([{ type: "select", id: deselectedNode, selected: false }]);
+		});
+	}
+}
+
 describe("GraphWorkflowEditorCanvas selection and issues", () => {
 	it("selects a node, selects an edge, and clears both on a pane click", () => {
 		const onSelectNode = vi.fn();
@@ -281,16 +304,12 @@ describe("GraphWorkflowEditorCanvas selection and issues", () => {
 		renderWithProviders(<Harness initial={eightNodeGraph} onSelectNode={onSelectNode} onSelectEdge={onSelectEdge} />);
 
 		const event = new MouseEvent("click") as unknown as React.MouseEvent;
-		act(() => {
-			flowProps().onNodeClick?.(event, { id: "analyze" } as Node);
-		});
+		selectNode("analyze");
 		expect(onSelectNode).toHaveBeenLastCalledWith("analyze");
 		expect(screen.getByTestId("harness-selection").textContent).toBe("analyze|");
 		expect(flowNodes().find((node) => node.id === "analyze")?.selected).toBe(true);
 
-		act(() => {
-			flowProps().onEdgeClick?.(event, { id: "e3", source: "check", target: "review" } as Edge);
-		});
+		selectEdge("e3", "analyze");
 		expect(onSelectEdge).toHaveBeenLastCalledWith("e3");
 		expect(screen.getByTestId("harness-selection").textContent).toBe("|e3");
 		expect(flowEdges().find((edge) => edge.id === "e3")?.selected).toBe(true);
@@ -301,6 +320,36 @@ describe("GraphWorkflowEditorCanvas selection and issues", () => {
 		expect(onSelectNode).toHaveBeenLastCalledWith(undefined);
 		expect(onSelectEdge).toHaveBeenLastCalledWith(undefined);
 		expect(screen.getByTestId("harness-selection").textContent).toBe("|");
+	});
+
+	it("selects from the keyboard and lets Delete remove what it selected", () => {
+		renderWithProviders(<Harness initial={eightNodeGraph} />);
+
+		// Enter on a focused card while another one is selected: React Flow reports the new select and the old deselect.
+		selectNode("check");
+		selectNode("analyze", "check");
+		expect(screen.getByTestId("harness-selection").textContent).toBe("analyze|");
+		// The selection reaches React Flow's own nodes, which is what its Delete key acts on.
+		expect(
+			flowNodes()
+				.filter((node) => node.selected === true)
+				.map((node) => node.id),
+		).toEqual(["analyze"]);
+		expect(flowProps().deleteKeyCode).toEqual(["Delete", "Backspace"]);
+
+		act(() => {
+			flowProps().onNodesChange?.([{ type: "remove", id: "analyze" }]);
+		});
+		expect(flowNodes().some((node) => node.id === "analyze")).toBe(false);
+	});
+
+	it("describes the keyboard gestures in the page's language", () => {
+		renderWithProviders(<Harness initial={eightNodeGraph} />);
+
+		const labels = flowProps().ariaLabelConfig;
+		expect(labels?.["node.a11yDescription.default"]).toBe(en.pages.graphWorkflows.editor.a11yNode);
+		expect(labels?.["node.a11yDescription.keyboardDisabled"]).toBe(en.pages.graphWorkflows.editor.a11yNode);
+		expect(labels?.["edge.a11yDescription.default"]).toBe(en.pages.graphWorkflows.editor.a11yEdge);
 	});
 
 	it("rings the node and the edge a keyed issue names, and nothing else", () => {
@@ -335,6 +384,13 @@ describe("GraphWorkflowEditorCanvas selection and issues", () => {
 		expect(flowNodes()).toHaveLength(8);
 	});
 
+	it("selects on a click, not when a drag starts", () => {
+		renderWithProviders(<Harness initial={eightNodeGraph} />);
+
+		// React Flow's default selects a card on the mousedown that starts a drag; off, it selects on the click instead.
+		expect(flowProps().selectNodesOnDrag).toBe(false);
+	});
+
 	it("widens the connection snap radius so an edge need not land on the dot itself", () => {
 		renderWithProviders(<Harness initial={eightNodeGraph} />);
 
@@ -345,6 +401,8 @@ describe("GraphWorkflowEditorCanvas selection and issues", () => {
 /** The editor with two buttons that drive it into a designer turn and into review of the fixture proposal. */
 function DesignerHarness() {
 	const editor = useGraphWorkflowEditor(eightNodeGraph);
+	const [selectedNodeKey, setSelectedNodeKey] = useState<string | undefined>(undefined);
+	const [selectedEdgeId, setSelectedEdgeId] = useState<string | undefined>(undefined);
 	return (
 		<>
 			<button type="button" data-testid="harness-generate" onClick={() => editor.beginGenerating()} />
@@ -364,7 +422,16 @@ function DesignerHarness() {
 			<button type="button" data-testid="harness-accept" onClick={() => editor.acceptProposal()} />
 			<button type="button" data-testid="harness-undo" onClick={editor.undoAccept} />
 			<button type="button" data-testid="harness-edit" onClick={() => editor.updateNodeData("start", { label: "Begin" })} />
-			<GraphWorkflowEditorCanvas editor={editor} issues={[]} onSelectNode={() => undefined} onSelectEdge={() => undefined} />
+			<div data-testid="harness-selection">{selectedNodeKey ?? ""}</div>
+			<div data-testid="harness-edge-selection">{selectedEdgeId ?? ""}</div>
+			<GraphWorkflowEditorCanvas
+				editor={editor}
+				issues={[]}
+				selectedNodeKey={selectedNodeKey}
+				selectedEdgeId={selectedEdgeId}
+				onSelectNode={setSelectedNodeKey}
+				onSelectEdge={setSelectedEdgeId}
+			/>
 		</>
 	);
 }
@@ -392,6 +459,51 @@ describe("GraphWorkflowEditorCanvas designer states", () => {
 		expect(flowProps().elementsSelectable).toBe(true);
 		expect(flowProps().nodesDraggable).toBe(false);
 		expect(flowProps().deleteKeyCode).toBeNull();
+	});
+
+	it("still opens a node or an edge on a click while a turn is generating, and moves nothing", () => {
+		renderWithProviders(<DesignerHarness />);
+		fireEvent.click(screen.getByTestId("harness-generate"));
+		// Nothing is selectable now, so React Flow reports no select change: the click handlers are the only path.
+		expect(flowProps().onNodesChange).toBeUndefined();
+		const before = flowNodes().map((node) => ({ id: node.id, position: node.position }));
+
+		const event = new MouseEvent("click") as unknown as React.MouseEvent;
+		act(() => {
+			flowProps().onNodeClick?.(event, { id: "analyze" } as Node);
+		});
+		expect(screen.getByTestId("harness-selection").textContent).toBe("analyze");
+		expect(flowNodes().find((node) => node.id === "analyze")?.selected).toBe(true);
+
+		act(() => {
+			flowProps().onEdgeClick?.(event, { id: "e3", source: "check", target: "review" } as Edge);
+		});
+		expect(screen.getByTestId("harness-selection").textContent).toBe("");
+		expect(screen.getByTestId("harness-edge-selection").textContent).toBe("e3");
+		expect(flowNodes().map((node) => ({ id: node.id, position: node.position }))).toEqual(before);
+
+		// Once selectable again, the select changes carry every click, so the click handlers step aside.
+		fireEvent.click(screen.getByTestId("harness-propose"));
+		expect(flowProps().onNodeClick).toBeUndefined();
+		expect(flowProps().onEdgeClick).toBeUndefined();
+	});
+
+	it("selects a proposal's node from the keyboard under review and edits nothing", () => {
+		renderWithProviders(<DesignerHarness />);
+		fireEvent.click(screen.getByTestId("harness-generate"));
+		fireEvent.click(screen.getByTestId("harness-propose"));
+		const before = flowNodes().map((node) => ({ id: node.id, position: node.position }));
+
+		selectNode("note");
+		act(() => {
+			flowProps().onNodesChange?.([{ type: "remove", id: "note" }]);
+		});
+
+		expect(screen.getByTestId("harness-selection").textContent).toBe("note");
+		expect(flowNodes().find((node) => node.id === "note")?.selected).toBe(true);
+		expect(flowNodes().map((node) => ({ id: node.id, position: node.position }))).toEqual(before);
+		expect(flowProps().onConnect).toBeUndefined();
+		expect(flowProps().ariaLabelConfig?.["node.a11yDescription.default"]).toBe(en.pages.graphWorkflows.editor.a11yNodeReadOnly);
 	});
 
 	it("re-frames the viewport when a proposal is shown, accepted and undone, and never on an ordinary edit", () => {

@@ -12,7 +12,7 @@ import {
 	TextInput,
 } from "@mantine/core";
 import { IconAlertTriangle, IconArrowBackUp, IconDeviceFloppy, IconTrash, IconX } from "@tabler/icons-react";
-import type { Dispatch } from "react";
+import { type Dispatch, useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -60,6 +60,7 @@ const segmentedControlStyles = { label: { whiteSpace: "normal" as const } };
 
 export function ExternalProviderConnectionEditor(props: ExternalProviderConnectionEditorProps) {
 	const { t } = useTranslation();
+	const labelId = useId();
 	const { values, visibleErrors, modelRowIds, probe, dispatch, connection, status, template } = props;
 	const templateHint = template === "azureOpenAi" ? t("pages.cloudProviders.templates.azureOpenAi.editorHint") : null;
 	const isActionPending = status.isSaving || status.isDeleting;
@@ -147,10 +148,11 @@ export function ExternalProviderConnectionEditor(props: ExternalProviderConnecti
 			) : null}
 
 			<Stack gap={4}>
-				<Text size="sm" fw={500}>
+				<Text size="sm" fw={500} id={`${labelId}-locality`}>
 					{t("pages.externalProviders.locality.label", "Trust")}
 				</Text>
 				<SegmentedControl
+					aria-labelledby={`${labelId}-locality`}
 					fullWidth={true}
 					styles={segmentedControlStyles}
 					data-testid="external-provider-locality"

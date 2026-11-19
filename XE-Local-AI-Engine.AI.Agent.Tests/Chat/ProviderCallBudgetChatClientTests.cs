@@ -854,8 +854,8 @@ public sealed class ProviderCallBudgetChatClientTests
     [Test]
     public async Task ChatClientAgent_ForwardsTheTurnsModelIdDownToTheBudgetBoundary()
     {
-        // FOLLOWUPS #5 suspected options.ModelId was null at this hop for a llama.cpp turn — which would have meant the
-        // calibrated divisor never applied during the two recorded overflows, a cheaper root cause than any of this.
+        // A suspected cause was that options.ModelId is null at this hop for a llama.cpp turn — which would have meant
+        // the calibrated divisor never applied during the two recorded overflows, a cheaper root cause than any of this.
         // It is NOT null. InvocationAgentFactory sets ChatOptions.ModelId = definition.ModelId on the per-turn run
         // options, and MAF's ChatClientAgent CLONES those options and never clears ModelId (verified at
         // Microsoft.Agents.AI 1.20.0: CreateConfiguredChatOptions merges the agent-level options INTO the clone and

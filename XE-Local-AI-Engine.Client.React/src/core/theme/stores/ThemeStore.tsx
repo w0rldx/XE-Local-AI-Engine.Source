@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { isRecord } from "@/core/models/JsonRecord";
+
 interface ThemeState {
 	accentColor: string | null;
 	setAccentColor: (_hex: string | null) => void;
@@ -41,8 +43,7 @@ export const useThemeStore = create<ThemeState>()(
 		{
 			name: "theme-storage",
 			merge: (persistedState, currentState) => {
-				const persistedRecord =
-					typeof persistedState === "object" && persistedState !== null ? (persistedState as Record<string, unknown>) : {};
+				const persistedRecord = isRecord(persistedState) ? persistedState : {};
 
 				migratePersistedMode(persistedRecord["mode"]);
 

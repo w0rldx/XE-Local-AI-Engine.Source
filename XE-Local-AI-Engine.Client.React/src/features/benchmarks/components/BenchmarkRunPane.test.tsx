@@ -10,7 +10,7 @@ vi.mock("@/features/benchmarks/components/BenchmarkSceneViewer", () => ({
 
 import { BenchmarkRunPane } from "@/features/benchmarks/components/BenchmarkRunPane";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkJudgeFixture, benchmarkRunDetailFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkJudgeFixture, benchmarkRunDetailFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 import { createProvidersWrapper, renderWithProviders } from "@/test/RenderWithProviders";
 
 afterEach(cleanup);

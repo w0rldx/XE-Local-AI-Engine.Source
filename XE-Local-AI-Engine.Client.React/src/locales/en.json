@@ -239,7 +239,6 @@
 			"toolsWithheld": "Tools not offered"
 		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting.",
-		"reasoningMode": "Reasoning Mode",
 		"search": {
 			"indexing": "Still indexing older conversations; results may be incomplete.",
 			"titleMatch": "Matches the title"
@@ -258,7 +257,6 @@
 			"stop": "Stop the running answer",
 			"title": "Keyboard shortcuts"
 		},
-		"thinking": "thinking…",
 		"thoughts": "Thoughts",
 		"toolCall": {
 			"approvalPrompt": "This tool needs your approval to run.",
@@ -362,37 +360,27 @@
 		"confirmation": "Confirmation",
 		"copied": "Copied",
 		"copy": "Copy",
-		"create": "Create",
 		"delete": "Delete",
-		"density": "Density",
-		"densityComfortable": "Comfortable",
-		"densityCompact": "Compact",
-		"densitySpacious": "Spacious",
 		"discard": "Discard",
 		"edit": "Edit",
-		"entries": "entries",
-		"error": "Error",
-		"fetchError": "There was a problem loading table data.",
 		"fieldInfo": {
 			"open": "About {{field}}"
 		},
-		"filterReset": "Reset Filters",
-		"filters": "Filters",
 		"hide": "Hide",
 		"keepEditing": "Keep editing",
 		"loading": "Loading…",
 		"loadingRateLimited": "Too many requests to the node. Retrying in {{seconds}} s.",
-		"noData": "No records found",
-		"ok": "Ok",
 		"pagination": {
+			"first": "First page",
+			"last": "Last page",
+			"next": "Next page",
+			"previous": "Previous page",
 			"rowsPerPage": "Rows per page",
 			"showingRange": "Showing {{from}}–{{to}} of {{total}}"
 		},
 		"refresh": "Refresh",
-		"refreshing": "Refreshing…",
 		"retry": "Retry",
 		"save": "Save",
-		"search": "Search",
 		"togglePasswordVisibility": "Toggle password visibility",
 		"unknown": "Unknown",
 		"view": "View",
@@ -452,6 +440,7 @@
 		},
 		"markdownEditor": {
 			"edit": "Edit",
+			"modeLabel": "Editor view",
 			"preview": "Preview"
 		},
 		"markdownView": {
@@ -465,7 +454,6 @@
 			"ariaExpand": "Expand sidebar",
 			"ariaLabel": "Main navigation",
 			"tooltip": {
-				"collapse": "Collapse",
 				"expand": "Expand"
 			}
 		},
@@ -617,22 +605,9 @@
 	},
 	"errorMessages": {
 		"defaultErrorMessage": "An error occurred",
-		"emailAlreadyInUse": "Email is already taken",
-		"invalidEmail": "Invalid email address",
-		"invalidEmailOrPassword": "Invalid email or password",
-		"invalidName": "Only letters, spaces, hyphens and apostrophes allowed",
-		"loginWithDisabledUser": "User is disabled. If you think this is a mistake, please contact the administrator.",
-		"minLength": "This field must be at least {{min}} characters long",
 		"nodeUnreachable": "Can't reach the node. Check that it's running and try again.",
-		"onlyAlphanumeric": "Only alphanumeric characters are allowed",
-		"passwordIncorrect": "Password is incorrect",
-		"passwordsDoNotMatch": "Passwords do not match",
-		"requiredField": "This field is required",
-		"roleNameAlreadyExists": "Role with name already exists",
 		"tooManyRequests": "Too many requests. Please try again later.",
-		"unexpectedResponseShape": "The server returned a response in an unexpected shape.",
-		"userNameNotMatchCriteria": "Username can only contain letters, numbers, dots, underscores, and hyphens and cannot be empty",
-		"usernameAlreadyInUse": "Username is already taken"
+		"unexpectedResponseShape": "The server returned a response in an unexpected shape."
 	},
 	"navigation": {
 		"agentRuns": "Agent runs",
@@ -663,7 +638,6 @@
 		"loadedModels": "Loaded",
 		"mcp": "MCP",
 		"modelLab": "Model Lab",
-		"modelRecommendations": "Model Recommendations",
 		"models": "Models",
 		"modelsInstalled": "Installed",
 		"nodeSettings": "Node Settings",
@@ -680,7 +654,6 @@
 		"trainingGroup": "Training",
 		"transcription": "Transcription",
 		"usage": "Usage",
-		"user": "User",
 		"workSessions": "Work Sessions"
 	},
 	"notifications": {
@@ -830,6 +803,11 @@
 		}
 	},
 	"operations": {
+		"baseArtifactDownload": {
+			"failed": "The base checkpoint {{repo}} could not be downloaded",
+			"running": "Downloading the base checkpoint {{repo}}",
+			"succeeded": "The base checkpoint {{repo}} is downloaded"
+		},
 		"datasetBuild": {
 			"failed": "Dataset {{name}} could not be built",
 			"running": "Building dataset {{name}}",
@@ -845,6 +823,9 @@
 			"running": "Importing {{model}}",
 			"succeeded": "{{model}} is imported"
 		},
+		"graphRun": {
+			"waiting": "A workflow waits for your decision"
+		},
 		"imageJob": {
 			"failed": "The image could not be generated",
 			"running": "Generating an image",
@@ -859,7 +840,9 @@
 			"actionRequired": "Action required",
 			"runningPercent": "1 running · {{pct}}%",
 			"running_one": "{{count}} running",
-			"running_other": "{{count}} running"
+			"running_other": "{{count}} running",
+			"waiting_one": "{{count}} waiting for you",
+			"waiting_other": "{{count}} waiting for you"
 		},
 		"knowledgeIndexing": {
 			"failed": "Some documents could not be indexed",
@@ -867,6 +850,11 @@
 			"progress": "{{done}} of {{count}} done",
 			"running": "Indexing documents for the knowledge base",
 			"succeeded": "The knowledge base is up to date"
+		},
+		"modelLabExperiment": {
+			"failed": "The Model Lab experiment on {{model}} failed",
+			"running": "Running a Model Lab experiment on {{model}}",
+			"succeeded": "The Model Lab experiment on {{model}} finished"
 		},
 		"notifications": {
 			"blocked": "This browser blocks notifications from this app. Allow them in the browser's site settings, then turn this on.",
@@ -902,6 +890,10 @@
 			"failed": "The transcription model {{model}} could not be downloaded",
 			"running": "Downloading the transcription model {{model}}",
 			"succeeded": "The transcription model {{model}} is downloaded"
+		},
+		"workSession": {
+			"waitingForApproval": "Work session {{title}} waits for your approval",
+			"waitingForInput": "Work session {{title}} waits for your input"
 		}
 	},
 	"pages": {
@@ -1402,7 +1394,8 @@
 					"UserPreference": "User preference"
 				},
 				"scopeFilter": {
-					"all": "All"
+					"all": "All",
+					"label": "Filter by scope"
 				},
 				"source": {
 					"Analysis": "Analysis",
@@ -1465,7 +1458,8 @@
 				"selectRun": "Show this item's run in the detail view",
 				"unknownItem": "item {{index}}",
 				"unranked": "Not ranked.",
-				"view": "Combinations"
+				"view": "Combinations",
+				"viewLabel": "Show results as"
 			},
 			"charts": {
 				"cohortsHidden": "Showing {{shown}} of {{total}} repeat cohorts.",
@@ -1490,15 +1484,16 @@
 				"live": "Live updates connected",
 				"reconnecting": "Reconnecting and reconciling…"
 			},
+			"deleteRunConfirm": {
+				"description": "The run, its answers and its scores are deleted. This cannot be undone.",
+				"title": "Delete this run?"
+			},
 			"errors": {
 				"artifact": "Could not download this evidence file.",
 				"artifactCorrupt": "This evidence file failed its integrity check and was not downloaded.",
 				"cancel": "Could not cancel this run phase.",
-				"contextRefused": "The model could not provide the requested context.",
 				"delete": "Could not delete this terminal run.",
-				"fingerprintChanged": "The installed model changed after this run was frozen.",
 				"judgeAttemptsActive": "A judging of this project is still running. Wait for it or cancel it first.",
-				"judgeFailed": "The automated judge failed; the primary result is still available.",
 				"kvUnsupportedHint": "Pick f16 explicitly to run this model on this runtime.",
 				"measureFidelity": "Could not queue a fidelity measurement.",
 				"notReviewable": "This run cannot be reviewed yet. Re-judge it under the current judge policy first.",
@@ -1506,7 +1501,6 @@
 				"projectsLoad": "Could not load benchmark projects.",
 				"rejudgeProject": "Could not re-judge this project.",
 				"rejudgeRun": "Could not re-judge this run.",
-				"restartInterrupted": "This running phase was interrupted by a node restart.",
 				"review": "Could not save the review.",
 				"reviewConflict": "The run changed before the review was saved. It has been refreshed.",
 				"reviewRequired": "This project requires review. Score the run through its review instead.",
@@ -1538,7 +1532,6 @@
 				"explanation": "Perplexity and KL divergence measure how far a quantized build drifted from the weights it was made from. Both are display only and neither ever ranks a run.",
 				"kldLine": "KLD {{mean}} · p99 {{p99}} · {{agreement}}",
 				"kldStale": "kld-stale",
-				"kldStaleHint": "Measured against a different base model, corpus or chunk count than this project now expects. Re-measure this run to get a comparable number.",
 				"kldTooltip": "KL divergence mean {{mean}}, p99 {{p99}}, top-token agreement {{agreement}}",
 				"measure": "Measure fidelity",
 				"measureExisting": "Also measure the runs this project already has",
@@ -1787,14 +1780,9 @@
 					"delete": "Could not delete this benchmark project."
 				},
 				"fidelityChunks": "Chunks to score",
-				"fidelityChunksHelp": "{{min}}–{{max}}; empty uses {{fallback}}.",
 				"fidelityEnabled": "Measure perplexity beside each run",
-				"fidelityEnabledHelp": "Scores a fixed corpus with the run's own frozen placement. Display only — it never ranks a run.",
 				"fidelityKldBase": "KL-divergence base model",
-				"fidelityKldBaseHelp": "The reference the quants are measured against — normally the unquantized build.",
 				"fidelityKldEnabled": "Also measure KL divergence",
-				"fidelityKldEnabledHelp": "Needs a cached logit file for the base model — tens of gigabytes. Check the estimate on the project before enabling it.",
-				"fidelitySection": "Quant fidelity",
 				"frozen": "Frozen",
 				"frozenExplanation": "This project is frozen while runs exist. Delete its terminal runs to edit it again.",
 				"invocationTimeout": "Generation timeout (s)",
@@ -1949,6 +1937,7 @@
 				"notes": "Notes",
 				"overall": "Overall score, 0 to 100",
 				"reject": "Reject",
+				"stateFilter": "Show reviews that are",
 				"states": {
 					"approved": "approved",
 					"pending": "pending",
@@ -2067,7 +2056,6 @@
 			"validation": {
 				"agent": "Select an agent.",
 				"context": "Context must be positive.",
-				"fidelityChunks": "Chunks must be between {{min}} and {{max}}.",
 				"fidelityKldBase": "KL divergence requires a base model.",
 				"invocationTimeout": "The generation timeout must be between 60 and 7200 seconds.",
 				"judgeContext": "Judge context must be positive.",
@@ -2170,37 +2158,12 @@
 		"chat": {
 			"actions": {
 				"branch": "Branch conversation",
-				"branchSuccess": "Branched conversation created.",
 				"copy": "Copy message",
 				"copyCode": "Copy code",
 				"copyCodeSuccess": "Copied",
 				"copySuccess": "Message copied to clipboard.",
-				"feedback": "Give feedback",
 				"regenerate": "Regenerate response",
 				"regenerateUnavailable": "Unable to regenerate this message."
-			},
-			"activeNode": {
-				"label": "Active node",
-				"release": "Release active node",
-				"rememberDefault": "Remember as default",
-				"sessionHint": "Active for this browser tab/session. Release to switch."
-			},
-			"activityDetails": {
-				"arguments": "Arguments",
-				"result": "Result"
-			},
-			"activityTimeline": "Activity timeline",
-			"activityTimelineTypes": {
-				"AgentHandoff": "Agent handoff",
-				"ContentGeneration": "Content generation",
-				"ContextRetrieval": "Context retrieval",
-				"Error": "Error",
-				"ToolCall": "Tool call",
-				"ToolResult": "Tool result",
-				"Unknown": "Type {{type}}",
-				"WorkflowStepCompleted": "Workflow step completed",
-				"WorkflowStepFailed": "Workflow step failed",
-				"WorkflowStepStarted": "Workflow step started"
 			},
 			"agentSelector": {
 				"hint": "Choose an agent defined on this node.",
@@ -2216,17 +2179,6 @@
 			"answerNow": "Answer now",
 			"answerNowHint": "Stop thinking and answer with what the model has so far",
 			"answerNowUnavailable": "The model can't be asked to answer early right now.",
-			"clientSelector": {
-				"activeOnceChosen": "Active for this tab",
-				"activeSessionHint": "Selecting a node makes it active for this browser session. Release to switch.",
-				"label": "Client node",
-				"placeholder": "Select an online client"
-			},
-			"cloudToolsDisabled": "Cloud tools disabled",
-			"cloudToolsEnabled": "Cloud tools enabled",
-			"cloudToolsLabel": "Cloud tools",
-			"cloudToolsPrivacyHint": "Cloud tools may send data to the provider",
-			"cloudToolsUnavailable": "Cloud tools are unavailable for the selected model",
 			"commands": {
 				"menuLabel": "Slash commands"
 			},
@@ -2265,7 +2217,6 @@
 					"uploadFailed": "Failed to upload {{name}}."
 				},
 				"dropToAttach": "Drop files to attach",
-				"image": "Attach image",
 				"moreControls": "More composer options",
 				"samplingOptions": "Advanced sampling options",
 				"size": {
@@ -2363,11 +2314,9 @@
 				"delete": "Delete",
 				"deleteConfirm": "Delete this conversation? This cannot be undone.",
 				"deleteShiftHint": "Shift+Click to skip confirm",
-				"deleteSuccess": "Conversation deleted.",
 				"empty": "No conversations yet.",
 				"expandAria": "Expand sidebar",
 				"hide": "Minimize sidebar",
-				"noClientAssigned": "No client assigned",
 				"noMatches": "No conversations match your search.",
 				"noMessages": "No messages",
 				"pin": "Pin",
@@ -2382,7 +2331,6 @@
 				"show": "Expand sidebar",
 				"showAll": "Show all",
 				"showArchived": "Show archived",
-				"title": "Conversations",
 				"truncatedNotice": "Showing the 100 most recent",
 				"unarchive": "Unarchive",
 				"unpin": "Unpin",
@@ -2390,18 +2338,7 @@
 			},
 			"conversations": "Conversations",
 			"defaultAgentName": "Default Assistant",
-			"disconnect": {
-				"button": "Disconnect",
-				"confirm": "Disconnect",
-				"descriptionWithName": "Disconnect \"{{name}}\"? Any in-flight work may stop.",
-				"descriptionWithoutName": "Disconnect the selected client node? Any in-flight work may stop.",
-				"title": "Disconnect client node"
-			},
 			"emptyState": "Create or select a conversation to start chatting.",
-			"encryptedConversation": {
-				"lockedDescription": "Enter your encrypted-sync password to unlock encrypted chats.",
-				"lockedTitle": "Encrypted chat locked"
-			},
 			"error": {
 				"categories": {
 					"InsufficientCapacity": "Not enough free memory to load this model right now.",
@@ -2429,22 +2366,14 @@
 				"title": "Response failed"
 			},
 			"feedback": {
-				"additionalFeedback": "Additional feedback",
-				"additionalFeedbackPlaceholder": "What worked well or what should be improved?",
 				"commentAria": "Feedback comment",
 				"commentPlaceholder": "Add a comment (optional)",
 				"commentTitleDown": "What went wrong?",
 				"commentTitleUp": "What was helpful?",
-				"description": "Help improve future responses by rating this assistant message.",
 				"down": "Bad response",
-				"negative": "Negative",
-				"positive": "Positive",
 				"submit": "Submit feedback",
-				"success": "Feedback submitted successfully.",
-				"title": "Message feedback",
 				"up": "Good response"
 			},
-			"followUpTitle": "Suggested follow-ups",
 			"historyLoadFailedTitle": "Unable to load local chat history.",
 			"inputPlaceholder": "Type your message",
 			"knowledgeBaseDisabled": "Knowledge base disabled",
@@ -2477,17 +2406,13 @@
 			"localToolsDisabled": "Local tools disabled",
 			"localToolsEnabled": "Local tools enabled",
 			"localToolsLabel": "Local tools",
-			"localToolsUnavailable": "Local tools are unavailable for the selected model",
-			"lockedState": "This conversation is locked. Unlock it to view messages.",
 			"menu": {
 				"label": "Message options",
 				"showTokensPerSecond": "Show tokens/sec"
 			},
 			"messageModelLabel": "Model: {{model}}",
 			"modelAvailable": "Available",
-			"modelExpired": "Not loaded",
 			"modelLabel": "Model",
-			"modelLoaded": "Currently loaded",
 			"modelPlaceholder": "Select model",
 			"modelSelector": {
 				"availableModels": "Available models",
@@ -2503,10 +2428,8 @@
 				"noResults": "No models found",
 				"search": "Search models…"
 			},
-			"modelUnloadingIn": "Unloading in {{time}}",
 			"nativeReasoningLabel": "Native reasoning",
 			"newConversation": "New chat",
-			"newEncryptedConversation": "New encrypted chat",
 			"noMessages": "No messages yet.",
 			"noModelGuidance": {
 				"body": "Install a GGUF model to start chatting locally.",
@@ -2515,10 +2438,8 @@
 				"setupTitle": "Setting up your first model…",
 				"title": "No chat model installed yet"
 			},
-			"noOnlineClientNodes": "No online client nodes are available. Pair and connect a worker node before creating conversations.",
 			"nodeDefaultModel": "Node default",
 			"nodeReply": "Node reply",
-			"pendingApprovalLabel": "Pending approval",
 			"plainMode": {
 				"editPrompt": "Edit system prompt",
 				"label": "Plain",
@@ -2550,33 +2471,20 @@
 				"on": "On",
 				"xhigh": "Highest"
 			},
-			"reasoningEffortUnavailable": "Reasoning is unavailable for the selected model",
 			"reasoningLabel": "Reasoning",
-			"reasoningMode": "Reasoning Mode",
-			"release": {
-				"button": "Release",
-				"confirm": "Release",
-				"descriptionWithName": "Release \"{{name}}\" from your active session? The node will stay online and become available for selection again.",
-				"descriptionWithoutName": "Release this node from your active session? The node will stay online.",
-				"title": "Release node"
-			},
 			"remoteImage": {
 				"load": "Load remote image"
 			},
 			"remoteViewOnly": "This conversation was started from a paired client and is view-only on this node.",
 			"remoteViewOnlyTitle": "Remote conversation",
+			"responseFinished": "Response finished",
 			"retryConnection": "Retry",
 			"revisions": {
 				"next": "Next revision",
-				"position": "Revision {{current}} of {{total}}",
 				"previous": "Previous revision"
 			},
 			"roles": {
 				"assistant": "Assistant",
-				"system": "System",
-				"tool": "Tool",
-				"unknown": "Role {{role}}",
-				"user": "User",
 				"you": "You"
 			},
 			"samplingOptions": {
@@ -2640,46 +2548,13 @@
 			"stop": "Stop",
 			"stopped": "Generation stopped",
 			"stoppedWhileThinking": "Stopped while thinking",
-			"storageMode": {
-				"encrypted": "Encrypted",
-				"encryptedTooltip": "Stored encrypted. Unlock with your encrypted-sync password.",
-				"plain": "Plain",
-				"plainTooltip": "Stored as readable chat history for your account."
-			},
-			"streamErrors": {
-				"epochKeyMissing": "Encryption keys are still syncing — please retry.",
-				"eventHandlerError": "A local chat update failed. Please retry or refresh the conversation."
-			},
 			"streamFailedTitle": "Local chat stream failed.",
 			"streaming": "Receiving response",
-			"sync": {
-				"confirm": {
-					"continue": "Continue",
-					"enableEncryptedTitle": "Enable encrypted sync?",
-					"enableStandardTitle": "Enable standard sync?",
-					"enableSync": "Enable sync",
-					"encryptedDescription": "This will convert this TrustedLocal conversation to encrypted sync. You must confirm this change before any encrypted upload can happen.",
-					"keepLocalOnly": "Keep local only",
-					"standardDescription": "This will allow this TrustedLocal conversation to sync to the platform. Continue only if you want this conversation uploaded from this device."
-				},
-				"enableEncrypted": "Enable encrypted sync",
-				"enableStandard": "Enable sync",
-				"encryptedEnabledSuccess": "Encrypted sync enabled for this conversation.",
-				"standardEnabledSuccess": "Standard sync enabled for this conversation."
-			},
 			"temporaryChat": {
 				"label": "Temporary chat",
 				"tooltip": "This chat won't teach the agent new memory; it still uses existing memory."
 			},
-			"thinking": "thinking…",
-			"thoughts": "Thoughts",
 			"tokensPerSecond": "{{value}} tok/s",
-			"toolApproval": {
-				"approve": "Approve",
-				"description": "A worker is requesting approval before continuing.",
-				"reject": "Reject",
-				"title": "Tool approval required"
-			},
 			"turnParked": "A reply in this conversation is waiting for your answer. Answer the waiting card, then send again.",
 			"turnThroughput": {
 				"cached": "{{value}} cached",
@@ -2688,7 +2563,6 @@
 			},
 			"unknownError": "Unknown error",
 			"waitingForResponse": "Waiting for response",
-			"waitingForStreamedResponse": "Waiting for streamed response",
 			"webAutoAccept": {
 				"confirm": "Enable auto-accept",
 				"label": "Auto-accept web content",
@@ -2700,8 +2574,6 @@
 				"on": "Web content reaches the model without review"
 			},
 			"windowTitle": "Chat window",
-			"words_one": "word",
-			"words_other": "words",
 			"workflow": {
 				"activity": {
 					"attachmentsSkipped": "Skipped attachments: {{names}}",
@@ -2747,8 +2619,7 @@
 					"empty": "No chat workflows yet. Create one on the Graph Workflows page.",
 					"none": "No workflow",
 					"noneHint": "Messages go to the model or agent as usual",
-					"triggerCurrent": "Workflow: {{name}}",
-					"triggerLabel": "Workflow"
+					"triggerCurrent": "Workflow: {{name}}"
 				},
 				"showActivity": "Show workflow activity",
 				"status": {
@@ -2945,10 +2816,6 @@
 				"verificationUriLabel": "Verification URL"
 			},
 			"loading": "Loading cloud settings…",
-			"placeholder": {
-				"description": "Provider configuration will use secret-safe local API responses.",
-				"title": "Cloud settings"
-			},
 			"provider": {
 				"activeEgressBanner": "Cloud (OpenAI) active — your messages leave your device. Use the sign-out button to return to local."
 			},
@@ -4129,6 +3996,9 @@
 				"cloudModelHelp": "Cloud models run only when “Let cloud models run unattended” is on in Node Settings → Privacy & updates, or when the model's external connection grants unattended runs.",
 				"cloudModelLabel": "{{label}} · {{provider}} (cloud)",
 				"conditionPathHelp": "Outgoing edges with no path of their own compare this one.",
+				"connectBranch": "From branch",
+				"connectSubmit": "Connect",
+				"connectTo": "Connect to",
 				"criterionPlaceholder": "Optional description of this label",
 				"criterionValue": "Description of label {{index}}",
 				"decisionModelHelp": "Only installed models of type Decision run here. Import one from Model Management.",
@@ -4158,7 +4028,8 @@
 				"devTaskTaskHelp": "Lands the patch of that node's Development task. Every edge into this node must be a Pause's Approve.",
 				"devTaskTaskPlaceholder": "Pick an implement node",
 				"devTaskTitle": "Task title",
-				"devTaskTitlePlaceholder": "The node label",
+				"devTaskTitleHelp": "Leave it empty to title the task with the first line of the requirements.",
+				"devTaskTitlePlaceholder": "The first line of the requirements",
 				"effort": {
 					"high": "High",
 					"low": "Low",
@@ -4402,6 +4273,10 @@
 				"valueHelp": "JSON — a string is quoted, like “Approve”. Anything that is not JSON is saved as text."
 			},
 			"editor": {
+				"a11yEdge": "Press Enter or Space to select this connection and open its settings. Delete removes it.",
+				"a11yEdgeReadOnly": "Press Enter or Space to select this connection and inspect its settings.",
+				"a11yNode": "Press Enter or Space to select this node and open its settings. The arrow keys move it, Delete removes it, and Connect to in its settings adds a connection.",
+				"a11yNodeReadOnly": "Press Enter or Space to select this node and inspect its settings.",
 				"autoArrange": "Auto-arrange",
 				"deleteHint": "Drag a node onto the canvas, or click one in the palette. Select a node or a connection and press Delete to remove it.",
 				"notice": {
@@ -4851,6 +4726,7 @@
 				"editedFrom": "Edited from",
 				"editingFrom": "Editing from",
 				"label": "Edit",
+				"modeLabel": "Edit mode",
 				"modes": {
 					"img2img": "Variation",
 					"reference": "Instruction edit"
@@ -4998,7 +4874,6 @@
 					"searchPlaceholder": "e.g. flux schnell",
 					"searching": "Searching…",
 					"select": "Open",
-					"title": "Browse Hugging Face",
 					"untrustedPublisher": "Unverified publisher",
 					"untrustedPublisherHint": "This publisher is not a known packager — review the repository before downloading."
 				},
@@ -5023,8 +4898,7 @@
 					"parts_one": "{{count}} file",
 					"parts_other": "{{count}} files",
 					"recommended": "Recommended",
-					"researchLicense": "Non-commercial research license",
-					"title": "Recommended image models"
+					"researchLicense": "Non-commercial research license"
 				},
 				"delete": {
 					"action": "Delete model",
@@ -5087,7 +4961,6 @@
 					"started": "Download started. The model will appear once ready.",
 					"starting": "Starting…",
 					"submit": "Download",
-					"title": "Download a model",
 					"transferred": "{{completed}} transferred"
 				},
 				"empty": "No image models installed yet.",
@@ -5128,6 +5001,10 @@
 			"subtitle": "Generate images locally with stable-diffusion.cpp. Jobs run one at a time and stream coarse status as they progress.",
 			"title": "Image Generation",
 			"uploads": {
+				"deleteConfirm": {
+					"description": "The image is deleted from this node. This cannot be undone.",
+					"title": "Delete this uploaded image?"
+				},
 				"deleteError": "Could not delete the uploaded image.",
 				"empty": "Upload a PNG or JPEG to start an edit from your own picture.",
 				"error": "Could not upload the image.",
@@ -5524,10 +5401,6 @@
 					"copy": "Copy trace id",
 					"label": "Trace: {{traceId}}"
 				}
-			},
-			"placeholder": {
-				"description": "Current and historical invocation monitoring will be ported here.",
-				"title": "Invocations"
 			}
 		},
 		"knowledgeBase": {
@@ -5697,7 +5570,6 @@
 					"notRunning": "That model was not running.",
 					"timedOutStillBusy": "'{{modelName}}' is still finishing a response, so it was left running."
 				},
-				"ejected": "Model ejected.",
 				"empty": "No models are currently running.",
 				"error": "Could not load running models.",
 				"expertsOffloaded": "Experts in system RAM",
@@ -6215,6 +6087,20 @@
 					"draftHint": "Speculative-decoding drafter — not a chat model",
 					"dynamic": "Dynamic",
 					"error": "Could not start the download.",
+					"errors": {
+						"DestinationConflict": "The download destination is already in use.",
+						"DiskFull": "The volume ran out of space during the download. The partial file was kept so the download can resume.",
+						"DownloadCompensationFailed": "The download failed and its cleanup needs manual recovery. Contact support before retrying.",
+						"DownloadFailed": "The model could not be downloaded.",
+						"Gated": "This model is gated and requires a Hugging Face access token. Configure a token and try again.",
+						"HashMismatch": "The downloaded model file failed its integrity check and was discarded. Please try again.",
+						"InsufficientStorage": "There is not enough free storage for this download.",
+						"Interrupted": "This download did not finish. Start it again to resume from the part already downloaded.",
+						"ModelConflict": "A model with this name is already mapped to another provider.",
+						"Network": "A network error stopped the download.",
+						"NotFound": "The requested model file, repository, or revision was not found.",
+						"Unauthorized": "The configured Hugging Face token does not have access to this gated model."
+					},
 					"eta": "~{{duration}} left",
 					"failedTitle": "Download failed",
 					"fit": {
@@ -6401,10 +6287,6 @@
 				"setDefaultSuccess": "Default local model set to {{name}}.",
 				"subtitle": "List, select, and delete installed local models.",
 				"title": "Model management"
-			},
-			"placeholder": {
-				"description": "Local model listing, selection, pull, and delete controls will be added here.",
-				"title": "Models"
 			},
 			"type": {
 				"capability": {
@@ -7238,6 +7120,9 @@
 					},
 					"rebuild": "Rebuild",
 					"remove": "Remove",
+					"removeConfirm": "Remove runtime",
+					"removeConfirmBody": "The stable-diffusion.cpp runtime built on this node and its record are deleted. This cannot be undone.",
+					"removeConfirmTitle": "Remove the managed runtime?",
 					"removeError": "Could not remove the managed image runtime.",
 					"repository": "GitHub repository",
 					"repositoryPlaceholder": "https://github.com/owner/stable-diffusion.cpp",
@@ -7318,6 +7203,9 @@
 					},
 					"rebuild": "Rebuild",
 					"remove": "Remove",
+					"removeConfirm": "Remove runtime",
+					"removeConfirmBody": "The llama.cpp runtime built on this node and its record are deleted. This cannot be undone.",
+					"removeConfirmTitle": "Remove the managed runtime?",
 					"removeError": "Could not remove the source runtime.",
 					"repository": "GitHub repository",
 					"repositoryPlaceholder": "https://github.com/owner/llama.cpp",
@@ -7558,10 +7446,6 @@
 				"timedOut": "The node did not come back within a minute. Check that the app is running, then reload this page.",
 				"title_one": "{{count}} setting waits for a node restart",
 				"title_other": "{{count}} settings wait for a node restart"
-			},
-			"placeholder": {
-				"description": "Local node settings will be backed by the node FastEndpoints API.",
-				"title": "Node settings"
 			},
 			"sandboxProfile": {
 				"description": "Decides whether the boundaries a workload asks for are preferences or requirements. A change applies to the next sandbox.",
@@ -8629,6 +8513,10 @@
 			"cleanupPending": "Cleanup pending",
 			"confirmDiscard": "Confirm discard",
 			"delete": "Delete",
+			"deleteConfirm": {
+				"description": "'{{name}}' is deleted from this node. This cannot be undone.",
+				"title": "Delete this artifact?"
+			},
 			"discard": "Discard staged file",
 			"discardReason": "Discard reason",
 			"discardTitle": "Discard staged artifact",
@@ -8678,14 +8566,11 @@
 			"create": {
 				"baseBenchmark": "Base benchmark run",
 				"baseEvaluation": "Base evaluation",
-				"baseModel": "Base model",
-				"benchmarkNone": "None",
 				"benchmarkPairing": "Optional benchmark pairing",
 				"benchmarkProject": "Benchmark project",
 				"cancel": "Cancel",
 				"evaluate": "Evaluate",
 				"evaluateFailed": "Could not start the evaluation.",
-				"evaluating": "Scoring {{scored}} of {{total}}",
 				"failed": "Could not create the comparison report.",
 				"missing": "Not evaluated yet",
 				"name": "Report name",
@@ -8695,8 +8580,7 @@
 				"submit": "Create report",
 				"title": "New comparison",
 				"tunedBenchmark": "Tuned benchmark run",
-				"tunedEvaluation": "Tuned evaluation",
-				"tunedModel": "Tuned model"
+				"tunedEvaluation": "Tuned evaluation"
 			},
 			"evaluation": {
 				"cancel": "Cancel evaluation",
@@ -8723,6 +8607,10 @@
 			"list": {
 				"create": "New comparison",
 				"delete": "Delete",
+				"deleteConfirm": {
+					"description": "'{{name}}' is deleted. This cannot be undone.",
+					"title": "Delete this comparison report?"
+				},
 				"deleteFailed": "Could not delete the comparison report.",
 				"empty": "No comparison reports yet. Create one from a finished training run.",
 				"title": "Comparison reports"
@@ -8748,12 +8636,20 @@
 			"cancel": "Cancel",
 			"counts": "{{total}} samples · {{good}} good · {{bad}} bad · {{rejected}} rejected · {{duplicate}} duplicate",
 			"delete": "Delete",
+			"deleteConfirm": {
+				"description": "'{{name}}' and its samples are deleted. This cannot be undone.",
+				"title": "Delete this dataset?"
+			},
 			"empty": "No datasets yet. Generate one from a definition.",
 			"revision": "Revision {{revision}}",
 			"title": "Datasets"
 		},
 		"definitions": {
 			"delete": "Delete",
+			"deleteConfirm": {
+				"description": "'{{name}}' is deleted. This cannot be undone.",
+				"title": "Delete this dataset definition?"
+			},
 			"edit": "Edit",
 			"editor": {
 				"addKind": "Add kind",

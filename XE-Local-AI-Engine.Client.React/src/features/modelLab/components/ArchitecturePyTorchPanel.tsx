@@ -135,6 +135,7 @@ function PyTorchBuildForm({
 	return (
 		<Stack gap="xs">
 			<SegmentedControl
+				aria-label={t("pages.modelLab.pytorch.sourceLabel", "Read the architecture from")}
 				value={source}
 				onChange={setSource}
 				fullWidth={true}

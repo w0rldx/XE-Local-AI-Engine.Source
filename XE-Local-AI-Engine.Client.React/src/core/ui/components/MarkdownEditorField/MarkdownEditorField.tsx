@@ -3,7 +3,6 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
-
 import { MarkdownView } from "@/core/ui/components/MarkdownView/MarkdownView";
 
 type EditMode = "edit" | "preview";
@@ -58,6 +57,7 @@ export function MarkdownEditorField({
 		<Stack gap="xs" data-testid={testId}>
 			<Box style={{ display: "flex", justifyContent: "flex-end" }}>
 				<SegmentedControl
+					aria-label={t("components.markdownEditor.modeLabel", "Editor view")}
 					size="xs"
 					value={mode}
 					onChange={(v) => setMode(v as EditMode)}

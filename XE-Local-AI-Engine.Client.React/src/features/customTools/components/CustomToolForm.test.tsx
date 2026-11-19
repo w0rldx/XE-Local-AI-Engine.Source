@@ -54,6 +54,13 @@ describe("CustomToolForm", () => {
 		expect(screen.getByTestId("custom-tool-form-danger-note")).toBeTruthy();
 	});
 
+	it("names the kind and mode choices after their visible labels", () => {
+		renderForm();
+
+		expect(screen.getByRole("radiogroup", { name: "Kind" })).toBe(screen.getByTestId("custom-tool-form-kind"));
+		expect(screen.getByRole("radiogroup", { name: "Mode" })).toBe(screen.getByTestId("custom-tool-form-mode"));
+	});
+
 	// A blank create form must not reach the server; the name error is the one the operator sees first.
 	it("blocks submit on an invalid form and surfaces the field error", () => {
 		const { ref, onSubmit } = renderForm();

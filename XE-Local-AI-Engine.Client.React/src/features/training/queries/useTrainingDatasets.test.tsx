@@ -6,6 +6,7 @@
 
 import { QueryClient } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
+import { t } from "i18next";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
@@ -15,7 +16,8 @@ import {
 	listTrainingDefinitionsQueryKey,
 	listTrainingSamplesQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { useCancelTrainingDataset } from "@/features/training/queries/useTrainingDatasets";
+import { useDatasetBuildOperations } from "@/core/operations/hooks/useJobOperations";
+import { useCancelTrainingDataset, useTrainingDatasets } from "@/features/training/queries/useTrainingDatasets";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
@@ -58,5 +60,53 @@ describe("training dataset invalidation", () => {
 		for (const key of Object.values(kept)) {
 			expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
 		}
+	});
+});
+
+describe("training dataset list cache", () => {
+	it("serves the datasets page and the operations feed from one request and one raw cache entry", async () => {
+		let requests = 0;
+		const raw = {
+			items: [
+				{
+					id: datasetId,
+					definitionId: "cccccccc-0000-4000-8000-000000000003",
+					definitionVersion: 1,
+					name: "Support",
+					status: "Generating",
+					revision: 1,
+					totalSampleCount: 0,
+					goodSampleCount: 0,
+					badSampleCount: 0,
+					rejectedSampleCount: 0,
+					duplicateSampleCount: 0,
+					workStatus: "Running",
+					version: 1,
+					createdAtUtc: 1,
+					updatedAtUtc: 1,
+				},
+			],
+		};
+		server.use(
+			http.get(localApiPath("training/datasets"), () => {
+				requests += 1;
+				return HttpResponse.json(raw);
+			}),
+		);
+		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		const { wrapper } = createProvidersWrapper({ queryClient });
+
+		const { result } = renderHook(
+			() => ({ page: useTrainingDatasets(), feed: useDatasetBuildOperations({ enabled: true, watch: false, t }) }),
+			{ wrapper },
+		);
+
+		await waitFor(() => expect(result.current.page.data).toHaveLength(1));
+		expect(result.current.page.data?.[0]).toMatchObject({ id: datasetId, name: "Support", status: "Generating" });
+		expect(result.current.feed).toEqual([expect.objectContaining({ id: `dataset-build:${datasetId}`, state: "running" })]);
+		expect(requests).toBe(1);
+		const entries = queryClient.getQueryCache().findAll({ queryKey: listTrainingDatasetsQueryKey() });
+		expect(entries).toHaveLength(1);
+		expect(entries[0]?.state.data).toMatchObject({ items: [expect.objectContaining({ id: datasetId, workStatus: "Running" })] });
 	});
 });

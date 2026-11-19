@@ -120,8 +120,8 @@ public abstract class ManagedRuntimeStore<TBackend> : IManagedRuntimeStore<TBack
                 state.InstalledAtUtc);
 
             // Desired first: a crash between the two writes must leave the selection recoverable, not the other way round.
-            await WriteAtomicAsync(_desiredPath, desired, ct).ConfigureAwait(false);
-            await WriteAtomicAsync(_statePath, state, ct).ConfigureAwait(false);
+            await SecureFilePermissions.WriteJsonAtomicAsync(_desiredPath, desired, SerializerOptions, ct).ConfigureAwait(false);
+            await SecureFilePermissions.WriteJsonAtomicAsync(_statePath, state, SerializerOptions, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -270,40 +270,6 @@ public abstract class ManagedRuntimeStore<TBackend> : IManagedRuntimeStore<TBack
         return value is { Length: > 0 }
                && value.Length == expectedLength
                && value.All(Uri.IsHexDigit);
-    }
-
-    private static async Task WriteAtomicAsync<T>(string path, T value, CancellationToken ct)
-    {
-        var tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            await using (var stream = CreateOwnerOnly(tempPath))
-            {
-                await JsonSerializer.SerializeAsync(stream, value, SerializerOptions, ct).ConfigureAwait(false);
-            }
-
-            File.Move(tempPath, path, overwrite: true);
-        }
-        finally
-        {
-            BestEffortFile.TryDeleteFile(tempPath);
-        }
-    }
-
-    private static FileStream CreateOwnerOnly(string path)
-    {
-        var options = new FileStreamOptions
-        {
-            Mode = FileMode.CreateNew,
-            Access = FileAccess.Write,
-            Share = FileShare.None
-        };
-        if (!OperatingSystem.IsWindows())
-        {
-            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        }
-
-        return new FileStream(path, options);
     }
 
     private static void EnsureOwnerOnlyDirectory(string path)

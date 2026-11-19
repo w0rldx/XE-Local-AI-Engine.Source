@@ -5,6 +5,18 @@ using XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1;
 public static class GraphWorkflowHubEvents
 {
     public const string Changed = "graphWorkflowChanged";
+
+    /// <summary>Broadcast to every connection, not a run group: the operations feed watches no run.</summary>
+    public const string RunStatusChanged = "graphWorkflowRunStatusChanged";
+}
+
+/// <summary>A run's new status, for the operations feed's list of runs waiting for a decision.</summary>
+/// <remarks><see cref="Status" /> is the <c>GraphWorkflowRunStatus</c> name, the spelling the run list's filter and rows use.</remarks>
+public sealed class GraphWorkflowRunStatusChanged
+{
+    public required Guid RunId { get; init; }
+
+    public required string Status { get; init; }
 }
 
 /// <summary>

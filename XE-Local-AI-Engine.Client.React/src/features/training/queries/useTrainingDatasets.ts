@@ -1,6 +1,9 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { XeLocalAiEngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1 as DatasetDefinitionBody } from "@/core/api/generated";
+import type {
+	XeLocalAiEngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1 as DatasetDefinitionBody,
+	XeLocalAiEngineClientEndpointsTrainingV1TrainingDatasetResponse as DatasetResponse,
+} from "@/core/api/generated";
 import {
 	cancelTrainingDataset,
 	createTrainingDefinition,
@@ -9,7 +12,6 @@ import {
 	exportTrainingDataset,
 	generateTrainingDataset,
 	listToolMocks,
-	listTrainingDatasets,
 	listTrainingDefinitions,
 	listTrainingSamples,
 	reviewTrainingSample,
@@ -20,6 +22,7 @@ import {
 	getToolCapableModelsOptions,
 	listLocalModelsOptions,
 	listToolMocksQueryKey,
+	listTrainingDatasetsOptions,
 	listTrainingDatasetsQueryKey,
 	listTrainingDefinitionsQueryKey,
 	listTrainingSamplesQueryKey,
@@ -34,9 +37,9 @@ import type {
 } from "@/features/training/models/TrainingModels";
 import { toToolMock, toTrainingDataset, toTrainingDefinition, toTrainingSample } from "@/features/training/models/TrainingModels";
 
-// Server state for the training dataset surface. Calls the generated hey-api SDK directly (the benchmarks
-// pattern) so a hook can derive its poll cadence from the
-// already-mapped domain data. Cache keys are the generated `*QueryKey` ones.
+// Server state for the training dataset surface. Most hooks call the generated hey-api SDK directly (the benchmarks
+// pattern) and cache the mapped domain data; cache keys are the generated `*QueryKey` ones. The dataset list instead
+// caches the raw response and maps it in `select`, because the operations feed reads the same entry.
 
 const generatingPollIntervalMs = 2_000;
 
@@ -50,16 +53,17 @@ export function useTrainingDefinitions() {
 	});
 }
 
+// Module-level so `select` keeps one identity and runs only when the cached response changes.
+const selectDatasets = (data: { readonly items?: readonly DatasetResponse[] | null }): TrainingDataset[] =>
+	(data.items ?? []).map(toTrainingDataset);
+
 export function useTrainingDatasets() {
-	return useQuery<TrainingDataset[]>({
-		queryKey: listTrainingDatasetsQueryKey(),
+	return useQuery({
+		...listTrainingDatasetsOptions(),
 		// A generating dataset is the only reason to poll; the hub carries the fine-grained progress.
 		refetchInterval: (query) =>
-			query.state.data?.some((dataset) => dataset.status === "Generating") ? generatingPollIntervalMs : false,
-		queryFn: async ({ signal }) => {
-			const { data } = await listTrainingDatasets({ signal });
-			return (data.items ?? []).map(toTrainingDataset);
-		},
+			query.state.data?.items?.some((dataset) => dataset.status === "Generating") ? generatingPollIntervalMs : false,
+		select: selectDatasets,
 	});
 }
 
@@ -86,8 +90,7 @@ export function useToolMocks() {
 }
 
 /**
- * The dataset list plus every dataset's sample pages (all pages and filters): the old `["training", "datasets"]` prefix
- * scope. The sample review does not poll, so a cancel or generate that changes a dataset's samples must reach it here.
+ * The dataset list plus every dataset's sample pages (all pages and filters). The sample review does not poll, so a cancel or generate that changes a dataset's samples must reach it here.
  */
 function invalidateDatasets(queryClient: QueryClient): Promise<unknown> {
 	return Promise.all([

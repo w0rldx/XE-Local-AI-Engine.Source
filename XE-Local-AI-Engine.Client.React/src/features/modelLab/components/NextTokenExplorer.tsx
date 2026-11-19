@@ -13,7 +13,7 @@ import {
 	Title,
 } from "@mantine/core";
 import { useMutation } from "@tanstack/react-query";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { tokenizeModelLabPromptMutation } from "@/core/api/generated/@tanstack/react-query.gen";
@@ -29,8 +29,10 @@ import {
 import { DirectInferenceErrorAlert, DirectInferenceOutput } from "@/core/directInference/DirectInferenceOutput";
 import { DirectInferenceSamplingFields } from "@/core/directInference/DirectInferenceSamplingFields";
 import { DirectInferenceThinkingSwitch } from "@/core/directInference/DirectInferenceThinkingSwitch";
+import { useAbortableRun } from "@/core/directInference/useAbortableRun";
 import { useDirectInferenceModels } from "@/core/directInference/useDirectInferenceModels";
 import { type ChatSamplingOptions, toWireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
+import { useStreamCommitScheduler } from "@/core/streaming/useStreamCommitScheduler";
 import { ExplanationLevelSwitch, ExplanationList } from "@/features/modelLab/components/ArchitectureExplanation";
 import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNotice";
 import { NextTokenPromptTokens } from "@/features/modelLab/components/NextTokenPromptTokens";
@@ -56,7 +58,7 @@ interface StepButtonsProps {
 }
 
 // Native buttons, so Enter and Space select; the arrow keys move between them instead of tabbing through every step.
-// Memoized: every streamed event re-renders the tab, and up to a thousand buttons only change when an entry was kept.
+// Memoized: every streamed frame re-renders the tab, and up to a thousand buttons only change when an entry was kept.
 const StepButtons = memo(function StepButtons({ label, steps, selected, onSelect, color }: StepButtonsProps) {
 	return (
 		<Stack gap={4}>
@@ -107,7 +109,8 @@ export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextTok
 	const [sampling, setSampling] = useState<ChatSamplingOptions>({});
 	const [disableThinking, setDisableThinking] = useState(false);
 	const [result, setResult] = useState<DirectInferenceResult | undefined>();
-	const [running, setRunning] = useState(false);
+	const { running, start, stop } = useAbortableRun();
+	const resultCommits = useStreamCommitScheduler<DirectInferenceResult>(setResult);
 	const [showThinking, setShowThinking] = useState(false);
 	// A position in result.logprobs: the stream only appends, so it stays the same entry.
 	const [selected, setSelected] = useState<number | null>(null);
@@ -126,16 +129,6 @@ export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextTok
 	}
 	// Read once per run, after it ends; never on a render.
 	const promptTokens = useMutation(tokenizeModelLabPromptMutation());
-	const abortRef = useRef<AbortController | undefined>(undefined);
-	// Leaving mid-run cancels it, or it keeps holding the node's invocation slot.
-	useEffect(
-		() => () => {
-			abortRef.current?.abort();
-			// A run that ends after this reads no tokens for a page that is gone.
-			abortRef.current = undefined;
-		},
-		[],
-	);
 
 	const isReasoningModel = model !== null && reasoningLlamaCppModels.has(model);
 	// Another model starts from its own default again.
@@ -149,49 +142,41 @@ export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextTok
 		if (model === null || prompt.trim().length === 0) {
 			return;
 		}
-		const controller = new AbortController();
-		abortRef.current = controller;
+		// A stopped run's frame that never painted must not merge into this one.
+		resultCommits.cancel();
 		setSelected(null);
-		setRunning(true);
 		promptTokens.reset();
 		const sentSystemPrompt = systemPrompt.trim().length > 0 ? systemPrompt : undefined;
 		const sentDisableThinking = isReasoningModel && disableThinking;
-		let last = emptyDirectInferenceResult;
-		await runDirectInference(
-			{
-				modelId: model,
-				prompt,
-				systemPrompt: sentSystemPrompt,
-				samplingOptions: toWireSamplingOptions(sampling),
-				topLogprobs: directInferenceMaxTopLogprobs,
-				disableThinking: sentDisableThinking ? true : undefined,
-			},
-			(next) => {
-				last = next;
-				setResult(next);
-			},
-			controller.signal,
-		);
-		// The tokens of exactly what this run sent, once it completed or was stopped with output. Not after a failure, and
-		// not for a run a newer one replaced.
-		const failed = last.errorCode !== undefined || last.errorMessage !== undefined;
-		const hasOutput = last.text !== "" || last.reasoning !== "";
-		if (abortRef.current === controller && !failed && (!controller.signal.aborted || hasOutput)) {
-			promptTokens.mutate({
-				body: { modelName: model, systemPrompt: sentSystemPrompt, prompt, disableThinking: sentDisableThinking },
-			});
-		}
-		// A stopped attempt already went idle, and by now the panel may belong to a newer run.
-		if (!controller.signal.aborted) {
-			setRunning(false);
-			abortRef.current = undefined;
-		}
-	};
-
-	// Idle at once: while the hub is still connecting, the attempt only settles when the connection does.
-	const stop = (): void => {
-		abortRef.current?.abort();
-		setRunning(false);
+		await start(async (signal, isCurrent) => {
+			let last = emptyDirectInferenceResult;
+			await runDirectInference(
+				{
+					modelId: model,
+					prompt,
+					systemPrompt: sentSystemPrompt,
+					samplingOptions: toWireSamplingOptions(sampling),
+					topLogprobs: directInferenceMaxTopLogprobs,
+					disableThinking: sentDisableThinking ? true : undefined,
+				},
+				(next) => {
+					last = next;
+					resultCommits.schedule(next);
+				},
+				signal,
+			);
+			// A finished or stopped run shows its last events at once, not on the next frame.
+			resultCommits.flush();
+			// The tokens of exactly what this run sent, once it completed or was stopped with output. Not after a failure,
+			// not for a run a newer one replaced, and not for a page that is gone.
+			const failed = last.errorCode !== undefined || last.errorMessage !== undefined;
+			const hasOutput = last.text !== "" || last.reasoning !== "";
+			if (isCurrent() && !failed && (!signal.aborted || hasOutput)) {
+				promptTokens.mutate({
+					body: { modelName: model, systemPrompt: sentSystemPrompt, prompt, disableThinking: sentDisableThinking },
+				});
+			}
+		});
 	};
 
 	const logprobs = result?.logprobs;

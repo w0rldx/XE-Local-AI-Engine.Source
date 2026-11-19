@@ -9,6 +9,7 @@ import {
 	removeWhisperCppSourceBuildMutation,
 	startWhisperCppSourceBuildMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { sourceBuildPrerequisiteStaleTime, sourceBuildRequest } from "@/features/node-settings/models/SourceBuildModels";
 import {
 	toWhisperRuntimeStatus,
@@ -19,7 +20,6 @@ import type {
 	WhisperSourceBackend,
 	WhisperSourceBuildDraft,
 } from "@/features/node-settings/models/WhisperRuntimeSourceBuildModels";
-import { localRuntimeInvalidationKey } from "@/features/node-settings/queries/useLocalRuntime";
 
 // Server state for the managed whisper.cpp source build. The runtime-status operation is the SAME one the
 // transcription page reads; only the `select` differs, so an invalidation from either surface refreshes both.
@@ -31,7 +31,7 @@ const whisperRuntimeQueryIds = {
 } as const;
 
 function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId: string): Promise<void> {
-	return queryClient.invalidateQueries({ queryKey: localRuntimeInvalidationKey(operationId) });
+	return queryClient.invalidateQueries({ queryKey: operationInvalidationKey(operationId) });
 }
 
 export function useWhisperRuntimeStatus(enabled = true) {

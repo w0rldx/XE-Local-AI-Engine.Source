@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Development;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -110,7 +111,8 @@ public sealed class DevelopmentAttemptFailureReportingTests
             Options.Create(new DevelopmentOptions()),
             time,
             maxOutputTokens: 1024,
-            maxToolCalls: 16);
+            maxToolCalls: 16,
+            NullLogger.Instance);
 
         progress.Output(ReasoningUpdate("thinking about the loop bound"));
         AssertEx.Equal(expected: 1, broker.Updates.Count);

@@ -8,6 +8,7 @@ import {
 	removeStableDiffusionCppSourceBuildMutation,
 	startStableDiffusionCppSourceBuildMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import {
 	toImageRuntimeSourceBuildPrerequisites,
 	toImageRuntimeSourceBuildStatus,
@@ -18,7 +19,6 @@ import type {
 	ImageRuntimeSourceBuildDraft,
 } from "@/features/node-settings/models/ImageRuntimeSourceBuildModels";
 import { sourceBuildPrerequisiteStaleTime, sourceBuildRequest } from "@/features/node-settings/models/SourceBuildModels";
-import { localRuntimeInvalidationKey } from "@/features/node-settings/queries/useLocalRuntime";
 
 export const imageRuntimeQueryIds = {
 	runtime: "getImageRuntimeStatus",
@@ -27,7 +27,7 @@ export const imageRuntimeQueryIds = {
 } as const;
 
 function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId: string): Promise<void> {
-	return queryClient.invalidateQueries({ queryKey: localRuntimeInvalidationKey(operationId) });
+	return queryClient.invalidateQueries({ queryKey: operationInvalidationKey(operationId) });
 }
 
 export function useImageRuntimeStatus(enabled = true) {

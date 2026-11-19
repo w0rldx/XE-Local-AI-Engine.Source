@@ -8,6 +8,7 @@ import {
 	getIntegrationExecutionOptions,
 	listIntegrationExecutionsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import {
 	toIntegrationExecution,
 	toIntegrationExecutionDetail,
@@ -18,7 +19,7 @@ import {
 	integrationEventLimit,
 	integrationPageSize,
 } from "@/features/integrations/models/IntegrationModels";
-import { integrationInvalidationKey, integrationQueryIds } from "@/features/integrations/queries/useIntegrationTriggers";
+import { integrationQueryIds } from "@/features/integrations/queries/useIntegrationTriggers";
 
 // Server state for integration executions. Every filter is a QUERY PARAMETER the backend accepts, so it rides in the
 // generated query key too: changing a filter refetches against the whole table rather than narrowing the window the
@@ -139,6 +140,6 @@ export function useCancelIntegrationExecution() {
 
 	return useMutation({
 		...cancelIntegrationExecutionMutation(),
-		onSettled: () => queryClient.invalidateQueries({ queryKey: integrationInvalidationKey(integrationQueryIds.listExecutions) }),
+		onSettled: () => queryClient.invalidateQueries({ queryKey: operationInvalidationKey(integrationQueryIds.listExecutions) }),
 	});
 }

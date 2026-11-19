@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
+using XE_Local_AI_Engine.Client.Common;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
@@ -306,7 +307,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
 
         // Guard against a runaway synopsis larger than the span it replaces. Shares the summarizer's rune-safe cut so this
         // second clamp can never split a surrogate pair, whatever IConversationSummarizer implementation produced the text.
-        summary = ConversationSummarizer.TruncateAtRuneBoundary(summary, Math.Max(1, _options.MaxSummaryChars));
+        summary = TextTruncation.TruncateAtRuneBoundary(summary, Math.Max(1, _options.MaxSummaryChars));
 
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         return new ConversationCompactionResult

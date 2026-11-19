@@ -65,6 +65,7 @@ describe("BenchmarkReviewInbox", () => {
 
 		expect((await screen.findByTestId("benchmark-review-row-r1")).textContent).toContain("Coding");
 		expect(lastQuery()).toEqual({ state: "pending", page: 1, take: 50 });
+		expect(screen.getByRole("radiogroup", { name: "Show reviews that are" })).toBeTruthy();
 	});
 
 	it("filters by state and by project, starting again on the first page", async () => {

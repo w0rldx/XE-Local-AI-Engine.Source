@@ -9,7 +9,7 @@ import {
 	hasFidelityNumbers,
 	isKldComparable,
 } from "@/features/benchmarks/models/BenchmarkFidelity";
-import { benchmarkFidelityFixture, benchmarkRunSummaryFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkFidelityFixture, benchmarkRunSummaryFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 
 // Fidelity's whole job is separating two quants of one model by a number, so these tests are mostly about the two ways
 // that can go wrong: rounding a real difference away, and showing a figure that was measured against something else.

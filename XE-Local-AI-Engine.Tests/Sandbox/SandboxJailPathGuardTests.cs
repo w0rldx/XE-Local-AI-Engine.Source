@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
 using System.Text;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
@@ -98,12 +99,12 @@ public sealed class SandboxJailPathGuardTests : IDisposable
 
         var content = Encoding.UTF8.GetBytes("jail bytes");
         await SandboxJailPathGuard.WriteJailFileNoFollowAsync(target, content, CancellationToken.None);
-        var readBack = await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(target, int.MaxValue, CancellationToken.None);
+        var readBack = await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(_jailRoot, target, int.MaxValue, CancellationToken.None);
         AssertEx.Equal("jail bytes", Encoding.UTF8.GetString(readBack));
 
         // The requested read bound is enforced on the sized length.
         await AssertEx.ThrowsAsync<InvalidDataException>(() =>
-            SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(target, maxBytes: 2, CancellationToken.None));
+            SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(_jailRoot, target, maxBytes: 2, CancellationToken.None));
     }
 
     [Test]
@@ -123,10 +124,73 @@ public sealed class SandboxJailPathGuardTests : IDisposable
         var swapped = Path.Combine(_jailRoot, "workspace", "swapped.txt");
         File.CreateSymbolicLink(swapped, outsideFile);
         await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() =>
-            SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(swapped, int.MaxValue, CancellationToken.None));
+            SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(_jailRoot, swapped, int.MaxValue, CancellationToken.None));
         await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() =>
             SandboxJailPathGuard.WriteJailFileNoFollowAsync(swapped, content, CancellationToken.None));
         AssertEx.Equal("OUTSIDE-THE-JAIL", await File.ReadAllTextAsync(outsideFile));
+    }
+
+    [Test]
+    // /proc/self/fd is the Linux handle check under test; the Windows branch is pinned by PathContainmentTests.
+    [RunOn(OS.Linux)]
+    public async Task ReadJailFileBytesNoFollow_RefusesADirectorySwappedForALinkAfterTheComponentWalk()
+    {
+        var workspace = Path.Combine(_jailRoot, "workspace");
+        Directory.CreateDirectory(workspace);
+        await File.WriteAllTextAsync(Path.Combine(workspace, "secret.txt"), "in-jail");
+        var target = Path.Combine(workspace, "secret.txt");
+
+        // In-root control: the same path reads while its directory is real.
+        AssertEx.Equal("in-jail", Encoding.UTF8.GetString(
+            await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(_jailRoot, target, int.MaxValue, CancellationToken.None)));
+
+        using var outside = new TempDir();
+        await File.WriteAllTextAsync(Path.Combine(outside.Path, "secret.txt"), "OUTSIDE-THE-JAIL");
+
+        // The directory is swapped for a link AFTER the component walk would have passed it: calling the post-walk read directly is that
+        // interleaving. O_NOFOLLOW guards only the leaf, a regular file here, so the open succeeds through the link.
+        Directory.Delete(workspace, recursive: true);
+        Directory.CreateSymbolicLink(workspace, outside.Path);
+
+        var refused = await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() =>
+            SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(_jailRoot, target, int.MaxValue, CancellationToken.None));
+        AssertEx.Contains(refused.Message, "outside its trusted root", message: "The refusal must come from the opened-handle check, not the open.");
+    }
+
+    [Test]
+    // A jail under a linked temp directory is a Linux symlink case; Windows root spelling is pinned by PathContainmentTests.
+    [RunOn(OS.Linux)]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task ReadFileAndCopyOut_ThroughASymlinkedJailRoot_StillRead(bool rootItselfIsTheLink)
+    {
+        using var scratch = new TempDir();
+        var realJail = Path.Combine(scratch.Path, "real", "jail");
+        Directory.CreateDirectory(Path.Combine(realJail, "workspace"));
+        await File.WriteAllTextAsync(Path.Combine(realJail, "workspace", "file.txt"), "in-jail");
+        string jailRoot;
+        if (rootItselfIsTheLink)
+        {
+            jailRoot = Path.Combine(scratch.Path, "jail-link");
+            Directory.CreateSymbolicLink(jailRoot, realJail);
+        }
+        else
+        {
+            Directory.CreateSymbolicLink(Path.Combine(scratch.Path, "alias"), Path.Combine(scratch.Path, "real"));
+            jailRoot = Path.Combine(scratch.Path, "alias", "jail");
+        }
+
+        AssertEx.Equal("in-jail", await SandboxFileSurveyOperations.ReadFileAsync(jailRoot, "/workspace/file.txt", maxBytes: 1024, CancellationToken.None));
+
+        var destination = Path.Combine(scratch.Path, "copied.txt");
+        await SandboxFileSurveyOperations.CopyOutAsync(jailRoot,
+            new SandboxCopyRequest
+            {
+                SourcePath = "/workspace/file.txt",
+                DestinationPath = destination
+            },
+            CancellationToken.None);
+        AssertEx.Equal("in-jail", await File.ReadAllTextAsync(destination));
     }
 
     [Test]
@@ -159,7 +223,7 @@ public sealed class SandboxJailPathGuardTests : IDisposable
     public async Task BothReadLegs_RefuseAFileThatGrewAfterItWasSized_RatherThanReturningAStaleCopy()
     {
         await AssertGrowthAfterSizingIsRefusedAsync("jail-growing.bin",
-            path => SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(path, int.MaxValue, CancellationToken.None));
+            path => SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(_jailRoot, path, int.MaxValue, CancellationToken.None));
 
         await AssertGrowthAfterSizingIsRefusedAsync("host-growing.bin",
             path => Task.Run(() => SandboxJailPathGuard.ReadHostFileUnderGuard(path, long.MaxValue)));

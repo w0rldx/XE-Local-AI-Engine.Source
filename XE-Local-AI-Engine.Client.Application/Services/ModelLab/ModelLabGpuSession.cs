@@ -424,7 +424,7 @@ internal sealed class ModelLabGpuSession : IGpuIdleHolder
     private void StartEviction() =>
         _ = Task.Run(EvictCoreAsync, CancellationToken.None);
 
-    /// <summary>The D2.4 order: stop the worker; once its exit is seen, the receipt file, the reservation, the lease, then the gate.</summary>
+    /// <summary>The order: stop the worker; once its exit is seen, the receipt file, the reservation, the lease, then the gate.</summary>
     private async Task EvictCoreAsync()
     {
         ModelLabServeWorker? worker;

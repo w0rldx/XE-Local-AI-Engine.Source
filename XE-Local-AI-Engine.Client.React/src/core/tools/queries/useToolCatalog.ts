@@ -7,8 +7,8 @@ import { toToolCatalogEntry } from "@/core/tools/models/ToolCatalogMappers";
 // MCP servers. The read uses the generated hey-api `getToolCatalogOptions()` (which wires the shared axios instance +
 // TanStack Query AbortSignal automatically), plus a TanStack `select` that maps the
 // optional-field generated response into the stricter domain view-model. This hook is the single catalog source the
-// tool pickers (agent form, chat overview, tools page) consume. Mutating the MCP server set (the run gateway CRUD)
-// invalidates this query (via toolCatalogQueryKeys.all(), the generated query-key matcher) so the pickers re-fetch.
+// tool pickers (agent form, chat overview, tools page) consume. Mutating the MCP server set invalidates this
+// query (via toolCatalogQueryKeys.all(), the generated query-key matcher) so the pickers re-fetch.
 export function useToolCatalog() {
 	return useQuery({
 		...getToolCatalogOptions(),

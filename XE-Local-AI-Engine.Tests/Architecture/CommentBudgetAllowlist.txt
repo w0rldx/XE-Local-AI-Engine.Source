@@ -390,7 +390,7 @@ XE-Local-AI-Engine.Tests/Chat/NodeChatEnvelopeTransactionTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatHubTests.cs|run|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatInvocationPumpRunEnvelopeTests.cs|run|7
 XE-Local-AI-Engine.Tests/Chat/NodeChatPersistenceServiceTests.cs|run|5
-XE-Local-AI-Engine.Tests/Chat/NodeChatReadOnlyEndpointTests.cs|run|2
+XE-Local-AI-Engine.Tests/Chat/NodeChatReadOnlyEndpointTests.cs|run|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatReadOnlyEndpointTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatRegenerationServiceTests.cs|run|18
 XE-Local-AI-Engine.Tests/Chat/NodeChatRegenerationServiceTests.cs|summary|1

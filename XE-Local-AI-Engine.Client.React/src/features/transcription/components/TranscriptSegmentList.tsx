@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { isImeComposing } from "@/core/ui/models/ImeComposition";
 import { toast } from "@/core/ui/notifications/Toast";
 import {
 	isSessionTranscribingRefusal,
@@ -125,6 +126,9 @@ function TranscriptSegmentEditor({ sessionId, segment, onDone }: TranscriptSegme
 				value={draft}
 				onChange={(event) => setDraft(event.currentTarget.value)}
 				onKeyDown={(event) => {
+					if (isImeComposing(event)) {
+						return;
+					}
 					if (event.key === "Escape") {
 						onDone();
 					} else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {

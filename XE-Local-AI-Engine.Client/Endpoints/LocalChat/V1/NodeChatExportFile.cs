@@ -18,6 +18,9 @@ internal static class NodeChatExportFile
 
     public const int MaxTitleLength = 200;
 
+    /// <summary>A model id with room for a repository path and file name; an assistant message stores it in plaintext on its run envelope, so it is bounded.</summary>
+    public const int MaxModelLength = 256;
+
     public static readonly string TooLargeDetail =
         string.Create(CultureInfo.InvariantCulture, $"The chat export is larger than the {MaxImportBytes / (1024 * 1024)} MiB this node imports at once.");
 }

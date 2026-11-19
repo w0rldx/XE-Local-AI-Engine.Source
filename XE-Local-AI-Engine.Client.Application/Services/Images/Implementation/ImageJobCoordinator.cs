@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Images.Implementation;
 
 using System.Collections.Concurrent;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
@@ -423,7 +424,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
             // Deliberately NOT Progress<T>: with no SynchronizationContext it queues callbacks to the thread pool, so ordered step reports arrive out of order and, since seq is
             // assigned here on the delivery side, a reordered pair gets ASCENDING seqs — the client's monotonic dedupe then accepts a stale step and the bar walks backwards.
-            var progress = new SynchronousProgress(update => OnRuntimeProgress(jobId, update));
+            var progress = new SynchronousProgress<ImageGenProgress>(update => OnRuntimeProgress(jobId, update));
             var result = await _runtime.GenerateAsync(request, progress, token);
 
             // Persist the image encrypted-at-rest BEFORE marking the job succeeded.
@@ -865,25 +866,6 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             SecondsPerIteration = null,
             EstimatedRemainingMs = null
         };
-    }
-
-    /// <summary>
-    ///     An <see cref="IProgress{T}" /> that invokes its handler inline on the reporting thread. See the comment at
-    ///     its only construction site for why <see cref="Progress{T}" /> is unusable here.
-    /// </summary>
-    private sealed class SynchronousProgress : IProgress<ImageGenProgress>
-    {
-        private readonly Action<ImageGenProgress> _handler;
-
-        public SynchronousProgress(Action<ImageGenProgress> handler)
-        {
-            _handler = handler;
-        }
-
-        public void Report(ImageGenProgress value)
-        {
-            _handler(value);
-        }
     }
 
     /// <summary>A per-job ordered, bounded event log for late-subscriber replay.</summary>

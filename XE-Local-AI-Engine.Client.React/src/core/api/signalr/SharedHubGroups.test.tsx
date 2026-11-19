@@ -59,7 +59,7 @@ const server = vi.hoisted(() => {
 vi.mock("@/core/api/signalr/SharedHubConnection", () => ({ acquireHubConnection: server.acquire }));
 
 import { listTrainingRunsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { useRunStreamSubscription } from "@/core/api/signalr/useRunStreamSubscription";
+import { trainingRunStream, useRunStreamSubscription } from "@/core/api/signalr/useRunStreamSubscription";
 import { useTrainingRunOperations } from "@/core/operations/hooks/useJobOperations";
 
 // The feed's active-only read.
@@ -87,7 +87,7 @@ afterEach(cleanup);
 function renderFeedAndPage() {
 	const feed = renderHook(() => useTrainingRunOperations({ enabled: true, watch: true, t }), { wrapper });
 	const page = renderHook(
-		() => useRunStreamSubscription("run-1", { onEvent: vi.fn(), onResync: vi.fn(), onLiveChange: vi.fn() }),
+		() => useRunStreamSubscription(trainingRunStream, "run-1", { onEvent: vi.fn(), onResync: vi.fn(), onLiveChange: vi.fn() }),
 		{ wrapper },
 	);
 	return { feed, page };

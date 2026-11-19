@@ -234,6 +234,36 @@ public sealed class NodeChatExportImportEndpointTests
     }
 
     [Test]
+    public async Task Import_KeepsAModelNameAtItsLengthCap()
+    {
+        var document = ModelCapDocument(NodeChatExportFile.MaxModelLength);
+        var title = document.Conversations[0].Title;
+        using var client = Factory.CreateClient();
+
+        using var request = JsonRequest(HttpMethod.Post, "/api/local/v1/chat/import", document);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var imported = (await ExportAsync(client, conversationId: null)).Conversations.Single(conversation => conversation.Title == title);
+        AssertEx.Equal(AssertEx.NotNull(document.Conversations[0].Messages[^1].Model), imported.Messages[^1].Model, "A model name at the cap is imported whole.");
+    }
+
+    [Test]
+    public async Task Import_RefusesAModelNamePastItsLengthCap_AndWritesNothing()
+    {
+        var document = ModelCapDocument(NodeChatExportFile.MaxModelLength + 1);
+        var title = document.Conversations[0].Title;
+        using var client = Factory.CreateClient();
+
+        using var request = JsonRequest(HttpMethod.Post, "/api/local/v1/chat/import", document);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), $"at most {NodeChatExportFile.MaxModelLength} characters");
+        AssertEx.False((await ExportAsync(client, conversationId: null)).Conversations.Any(conversation => conversation.Title == title), "A refused file writes nothing.");
+    }
+
+    [Test]
     public async Task Import_RefusesMoreMessagesThanTheCap()
     {
         var messages = Enumerable.Range(0, NodeChatExportFile.MaxMessages + 1).Select(static _ => Message("user", "x")).ToArray();
@@ -267,6 +297,19 @@ public sealed class NodeChatExportImportEndpointTests
             FormatVersion = NodeChatExportFile.FormatVersion,
             Conversations = conversations
         };
+
+    // One chat, uniquely titled, whose assistant reply names a model of the given length.
+    private static NodeChatExportDocument ModelCapDocument(int modelLength)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        return Document(Chat($"Model cap {marker}", Message("user", "question"), new NodeChatExportMessage
+        {
+            Role = "assistant",
+            Content = "answer",
+            CreatedAtUtc = 12,
+            Model = (marker + new string('m', modelLength))[..modelLength]
+        }));
+    }
 
     private static NodeChatExportConversation Chat(string title, params NodeChatExportMessage[] messages) =>
         new()

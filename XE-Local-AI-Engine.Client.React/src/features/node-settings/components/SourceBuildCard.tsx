@@ -1,16 +1,17 @@
 import { Alert, Badge, Button, Card, Checkbox, Group, Select, Stack, Text, TextInput, Title } from "@mantine/core";
 import { IconPlayerStop, IconReload, IconTrash } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CudaBuildLogView } from "@/features/node-settings/components/CudaBuildLogView";
 import { SourceBuildFormDisclosure } from "@/features/node-settings/components/SourceBuildFormDisclosure";
 import { SourceBuildPrerequisiteList } from "@/features/node-settings/components/SourceBuildPrerequisiteList";
 import { useSourceBuildFormDisclosure } from "@/features/node-settings/hooks/useSourceBuildFormDisclosure";
-import { useSourceBuildHub } from "@/features/node-settings/hooks/useSourceBuildHub";
+import { llamaCppSourceBuildStream, useSourceBuildHub } from "@/features/node-settings/hooks/useSourceBuildHub";
 import type {
 	LlamaCppSourceBackend,
 	LlamaCppSourceSelection,
@@ -34,6 +35,7 @@ import {
 
 export function SourceBuildCard() {
 	const { t } = useTranslation();
+	const { confirm } = useConfirm();
 	// The operator's pick, else the backend the node's GPU vendor points at (an NVIDIA host defaults to CUDA, not CPU).
 	const [backendChoice, setBackend] = useState<LlamaCppSourceBackend | null>(null);
 	const defaultBackend = useDefaultSourceBuildBackend();
@@ -47,13 +49,16 @@ export function SourceBuildCard() {
 	const start = useStartSourceBuild();
 	const cancel = useCancelSourceBuild();
 	const remove = useRemoveSourceBuild();
-	const hub = useSourceBuildHub();
+	const hub = useSourceBuildHub(llamaCppSourceBuildStream);
 
 	const installed = runtime.data?.installed;
-	useEffect(() => {
-		if (!installed?.isSourceBuild) {
-			return;
-		}
+	// Seeded once per installed source build, keyed on `installedAtUtc`, which moves only when a build installs a new
+	// runtime: a refetch whose payload differs in any other field keeps what the operator typed. Adjusted during render
+	// so the seeded values are on the first paint. `undefined` means nothing has been seeded yet.
+	const installedIdentity = installed?.installedAtUtc ?? null;
+	const [seededIdentity, setSeededIdentity] = useState<number | null | undefined>(undefined);
+	if (installed?.isSourceBuild && installedIdentity !== seededIdentity) {
+		setSeededIdentity(installedIdentity);
 		if (installed.variant === "cpu" || installed.variant === "vulkan" || installed.variant === "cuda") {
 			setBackend(installed.variant);
 		}
@@ -71,7 +76,7 @@ export function SourceBuildCard() {
 			setRepository("");
 		}
 		setCommit(installed.sourceRevisionMode === "explicitCommit" ? (installed.sourceRequestedCommit ?? "") : "");
-	}, [installed]);
+	}
 
 	const draft: SourceBuildDraft = { backend, source, repository, commit, acknowledgeCustomSourceRisk: acknowledged };
 	const validationIssue = sourceBuildValidationIssue(draft);
@@ -167,12 +172,21 @@ export function SourceBuildCard() {
 								variant="light"
 								leftSection={<IconTrash size={16} />}
 								disabled={isBuilding || runningProcesses > 0}
-								onClick={() =>
+								onClick={async () => {
+									const confirmed = await confirm({
+										title: t("pages.nodeSettings.llamaCpp.sourceBuild.removeConfirmTitle"),
+										description: t("pages.nodeSettings.llamaCpp.sourceBuild.removeConfirmBody"),
+										confirmationText: t("pages.nodeSettings.llamaCpp.sourceBuild.removeConfirm"),
+										cancellationText: t("common.cancel"),
+									});
+									if (!confirmed) {
+										return;
+									}
 									remove.mutate(undefined, {
 										onError: (error) =>
 											toast.error(apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.sourceBuild.removeError"))),
-									})
-								}
+									});
+								}}
 							>
 								{t("pages.nodeSettings.llamaCpp.sourceBuild.remove")}
 							</Button>

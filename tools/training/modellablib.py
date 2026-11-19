@@ -311,6 +311,10 @@ def _gguf_string(text):
     return struct.pack("<Q", len(encoded)) + encoded
 
 
+# How much of a failure's own text the row's reason keeps, after its type name.
+FAILURE_MESSAGE_CHARACTERS = 400
+
+
 def describe_failure(error):
     """The row's reason. Triton's text for a missing compiler offers remedies a user cannot reach, so it is replaced."""
     if "Failed to find C compiler" in str(error):
@@ -319,7 +323,7 @@ def describe_failure(error):
             "Install one or make it visible to the node, then start the trace again."
         )
     # Shortened, and the type kept: str(error) can be empty.
-    return f"{type(error).__name__}: {str(error)[:400]}"
+    return f"{type(error).__name__}: {str(error)[:FAILURE_MESSAGE_CHARACTERS]}"
 
 
 def _rounded(value):
@@ -397,7 +401,8 @@ def check_aligned(chosen, generated, steps="candidate"):
 
 
 def _trace_result_bytes(result):
-    return json.dumps(result, ensure_ascii=False).encode()
+    # Strict JSON, like every other writer here: the host's parser refuses NaN and infinity.
+    return json.dumps(result, ensure_ascii=False, allow_nan=False).encode()
 
 
 def _cut_candidate_texts(result):
@@ -472,6 +477,8 @@ def lens_record(step, ids, logprobs, chosen, ranks, entropies, texts):
 
 
 def _scaled_down(weight):
+    if not math.isfinite(weight):
+        raise JobError("An attention weight was not a finite number, so the trace's attention rows cannot be stored.")
     return math.floor(weight * ATTENTION_WEIGHT_SCALE)
 
 

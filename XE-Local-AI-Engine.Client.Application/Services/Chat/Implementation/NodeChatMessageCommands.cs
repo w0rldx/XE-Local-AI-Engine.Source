@@ -164,16 +164,7 @@ internal sealed class NodeChatMessageCommands
     public Task<NodeChatInsertMessageIfAbsentResult> InsertMessageIfAbsentAsync(NodeChatInsertMessageIfAbsentRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (string.IsNullOrWhiteSpace(request.Content))
-        {
-            throw new ArgumentException("Message content must be provided.", nameof(request));
-        }
-
-        var isAssistant = string.Equals(request.Role, AssistantRole, StringComparison.Ordinal);
-        if (!isAssistant && !string.Equals(request.Role, UserRole, StringComparison.Ordinal))
-        {
-            throw new ArgumentException($"Role '{request.Role}' is neither '{UserRole}' nor '{AssistantRole}'.", nameof(request));
-        }
+        var isAssistant = IsCompletedAssistantMessage(request.Role, request.Content, nameof(request));
 
         return InsertMessageCoreAsync(request.ConversationId,
             request.MessageId,
@@ -202,6 +193,88 @@ internal sealed class NodeChatMessageCommands
                     TraceId = CurrentTraceId()
                 }
                 : null);
+    }
+
+    /// <summary>Writes one imported chat as a new conversation in ONE transaction and returns its id.</summary>
+    /// <remarks>
+    ///     Row for row what <see cref="NodeChatConversationCommands.CreateConversationAsync" />, an
+    ///     <see cref="InsertMessageIfAbsentAsync" /> per message and an archive write produce, except that an assistant
+    ///     message gets no run envelope, only the imported flag in its metadata. A failure anywhere rolls the chat back.
+    /// </remarks>
+    public async Task<Guid> ImportConversationAsync(NodeChatImportConversationRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var assistant = request.Messages.Select(message => IsCompletedAssistantMessage(message.Role, message.Content, nameof(request))).ToArray();
+
+        var conversationId = Guid.NewGuid();
+        return await _writer.ExecuteConversationExclusiveAsync(conversationId,
+            async (dbContext, token) =>
+            {
+                // Encrypted under each row's own ids before the transaction opens, so the database write lock covers the inserts only.
+                var messageIds = new Guid[request.Messages.Count];
+                var contents = new byte[request.Messages.Count][];
+                var metadata = new byte[]?[request.Messages.Count];
+                for (var index = 0; index < request.Messages.Count; index++)
+                {
+                    var message = request.Messages[index];
+                    messageIds[index] = Guid.NewGuid();
+                    contents[index] = dbContext.EncryptMessageContent(assistant[index] ? message.Content : message.Content.Trim(), conversationId, messageIds[index]);
+                    metadata[index] = dbContext.EncryptMessageMetadata(
+                        SerializeMetadata(metadataJson: null, reasoning: null, assistant[index] ? message.Model : null, inputTokens: null, outputTokens: null, totalTokens: null,
+                            reasoningTokens: null, parts: null, agentDefinitionId: null, agentName: null, reasoningEffort: null, imported: assistant[index]),
+                        conversationId,
+                        messageIds[index]);
+                }
+
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(token);
+                var dbTransaction = transaction.GetDbTransaction();
+                // An imported chat binds no agent, so it inherits no default-temporary-chat flag.
+                await NodeChatConversationCommands.InsertConversationRowAsync(dbContext,
+                    dbTransaction,
+                    conversationId,
+                    new NodeChatCreateConversationRequest
+                    {
+                        Title = request.Title,
+                        UserId = null,
+                        CreatedAtUtc = request.CreatedAtUtc
+                    },
+                    memoryExcluded: false,
+                    token);
+
+                var lastSeenUtc = request.CreatedAtUtc;
+                for (var sequence = 0; sequence < request.Messages.Count; sequence++)
+                {
+                    var message = request.Messages[sequence];
+                    await InsertMessageRowAsync(dbContext,
+                        dbTransaction,
+                        conversationId,
+                        messageIds[sequence],
+                        sequence,
+                        message.Role,
+                        contents[sequence],
+                        metadata[sequence],
+                        NodeChatMessageStatusValues.Completed,
+                        message.CreatedAtUtc,
+                        message.CreatedAtUtc,
+                        requestId: null,
+                        error: null,
+                        NodeChatOriginValues.Local,
+                        parentMessageId: null,
+                        variantGroupId: null,
+                        agentDefinitionId: null,
+                        token);
+
+                    lastSeenUtc = message.CreatedAtUtc;
+                }
+
+                // Last seen at the newest message, as each insert's touch leaves it, then the archive flag.
+                _ = await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET archived = {0}, last_seen_utc = {1} WHERE conversation_id = {2};",
+                    [request.Archived, lastSeenUtc, conversationId],
+                    token);
+                await transaction.CommitAsync(token);
+                return conversationId;
+            },
+            cancellationToken);
     }
 
     /// <summary>Removes one message the caller itself inserted, with any run envelope it carries — a compensating write, never a chat delete.</summary>
@@ -479,31 +552,9 @@ internal sealed class NodeChatMessageCommands
                     var sequence = await NextSequenceAsync(dbContext, conversationId, dbTransaction, token);
                     try
                     {
-                        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-                        command.Transaction = dbTransaction;
-                        command.CommandText = """
-                                              INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id, agent_definition_id)
-                                              VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error, $origin, $parent_message_id, $variant_group_id, $agent_definition_id);
-                                              """;
-                        AddParameter(command, "$message_id", messageId);
-                        AddParameter(command, "$conversation_id", conversationId);
-                        AddParameter(command, "$sequence", sequence);
-                        AddParameter(command, "$role", role);
-                        AddParameter(command, "$content", dbContext.EncryptMessageContent(content, conversationId, messageId));
-                        AddParameter(command, "$metadata_json", dbContext.EncryptMessageMetadata(metadata, conversationId, messageId));
-                        AddParameter(command, "$created_at_utc", createdAtUtc);
-                        AddParameter(command, "$updated_at_utc", updatedAtUtc);
-                        AddParameter(command, "$status", status);
-                        AddParameter(command, "$request_id", requestId);
-                        AddParameter(command, "$error", error);
-                        AddParameter(command, "$origin", origin);
-                        AddParameter(command, "$parent_message_id", parentMessageId);
-                        AddParameter(command, "$variant_group_id", variantGroupId);
-                        // Plaintext per-message agent attribution: lets feedback aggregate by the resolved agent without
-                        // decrypting the metadata blob. Stamped once at insert; later flush/terminalize never touch it.
-                        AddParameter(command, "$agent_definition_id", agentDefinitionId);
-                        await OpenIfNeededAsync(command.Connection, token);
-                        await command.ExecuteNonQueryAsync(token);
+                        await InsertMessageRowAsync(dbContext, dbTransaction, conversationId, messageId, sequence, role, dbContext.EncryptMessageContent(content, conversationId, messageId),
+                            dbContext.EncryptMessageMetadata(metadata, conversationId, messageId), status, createdAtUtc, updatedAtUtc,
+                            requestId, error, origin, parentMessageId, variantGroupId, agentDefinitionId, token);
 
                         if (envelope is not null)
                         {
@@ -550,6 +601,70 @@ internal sealed class NodeChatMessageCommands
                 }
             },
             cancellationToken);
+    }
+
+    // The message row insert on the caller's transaction; the caller encrypts content and metadata under this row's own ids.
+    private static async Task InsertMessageRowAsync(NodeChatDbContext dbContext,
+        DbTransaction transaction,
+        Guid conversationId,
+        Guid messageId,
+        int sequence,
+        string role,
+        byte[] encryptedContent,
+        byte[]? encryptedMetadata,
+        string status,
+        long createdAtUtc,
+        long updatedAtUtc,
+        Guid? requestId,
+        string? error,
+        string origin,
+        Guid? parentMessageId,
+        Guid? variantGroupId,
+        Guid? agentDefinitionId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+                              INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id, agent_definition_id)
+                              VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error, $origin, $parent_message_id, $variant_group_id, $agent_definition_id);
+                              """;
+        AddParameter(command, "$message_id", messageId);
+        AddParameter(command, "$conversation_id", conversationId);
+        AddParameter(command, "$sequence", sequence);
+        AddParameter(command, "$role", role);
+        AddParameter(command, "$content", encryptedContent);
+        AddParameter(command, "$metadata_json", encryptedMetadata);
+        AddParameter(command, "$created_at_utc", createdAtUtc);
+        AddParameter(command, "$updated_at_utc", updatedAtUtc);
+        AddParameter(command, "$status", status);
+        AddParameter(command, "$request_id", requestId);
+        AddParameter(command, "$error", error);
+        AddParameter(command, "$origin", origin);
+        AddParameter(command, "$parent_message_id", parentMessageId);
+        AddParameter(command, "$variant_group_id", variantGroupId);
+        // Plaintext per-message agent attribution: lets feedback aggregate by the resolved agent without
+        // decrypting the metadata blob. Stamped once at insert; later flush/terminalize never touch it.
+        AddParameter(command, "$agent_definition_id", agentDefinitionId);
+        await OpenIfNeededAsync(command.Connection, cancellationToken);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    // A Completed insert's guard: non-blank content and a user or assistant role. True for an assistant message.
+    private static bool IsCompletedAssistantMessage(string role, string content, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            throw new ArgumentException("Message content must be provided.", parameterName);
+        }
+
+        var isAssistant = string.Equals(role, AssistantRole, StringComparison.Ordinal);
+        if (!isAssistant && !string.Equals(role, UserRole, StringComparison.Ordinal))
+        {
+            throw new ArgumentException($"Role '{role}' is neither '{UserRole}' nor '{AssistantRole}'.", parameterName);
+        }
+
+        return isAssistant;
     }
 
     private async Task<NodeChatPersistedMessageDto> UpdateCorrelatedMessageAsync(NodeChatMessageCorrelation correlation,

@@ -196,9 +196,6 @@ import type {
 	CreateNodeChatConversationData,
 	CreateNodeChatConversationErrors,
 	CreateNodeChatConversationResponses,
-	CreateNodeChatMessageRevisionData,
-	CreateNodeChatMessageRevisionErrors,
-	CreateNodeChatMessageRevisionResponses,
 	CreatePlaybookActionData,
 	CreatePlaybookActionErrors,
 	CreatePlaybookActionResponses,
@@ -1508,7 +1505,6 @@ import {
 	zCreateMcpServerResponse,
 	zCreateNodeBackupResponse,
 	zCreateNodeChatConversationResponse,
-	zCreateNodeChatMessageRevisionResponse,
 	zCreatePlaybookActionResponse,
 	zCreateScheduledJobResponse,
 	zCreateSkillResponse,
@@ -4408,28 +4404,6 @@ export const listNodeChatMessageRevisions = <ThrowOnError extends boolean = true
 	(options.client ?? client).get<ListNodeChatMessageRevisionsResponses, ListNodeChatMessageRevisionsErrors, ThrowOnError>({
 		responseType: "json",
 		responseValidator: async (data) => await zListNodeChatMessageRevisionsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/revisions",
-		...options,
-	});
-
-export const createNodeChatMessageRevision = <ThrowOnError extends boolean = true>(
-	options: Options<CreateNodeChatMessageRevisionData, ThrowOnError>,
-): RequestResult<CreateNodeChatMessageRevisionResponses, CreateNodeChatMessageRevisionErrors, ThrowOnError> =>
-	(options.client ?? client).post<CreateNodeChatMessageRevisionResponses, CreateNodeChatMessageRevisionErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zCreateNodeChatMessageRevisionResponse.parseAsync(data),
 		security: [
 			{
 				key: "JWTBearerAuth",

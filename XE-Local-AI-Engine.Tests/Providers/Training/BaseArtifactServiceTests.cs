@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -24,6 +25,7 @@ public sealed class BaseArtifactServiceTests : IDisposable
     private readonly BaseArtifactDownloadCoordinator _coordinator;
     private readonly IBaseCheckpointStore _checkpointStore = Substitute.For<IBaseCheckpointStore>();
     private readonly IFreeSpaceProbe _freeSpaceProbe = Substitute.For<IFreeSpaceProbe>();
+    private readonly IJobCreatedPublisher _jobs = Substitute.For<IJobCreatedPublisher>();
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-base-svc-" + Guid.NewGuid().ToString("N"));
     private readonly ITrainingBaseArtifactStore _store = Substitute.For<ITrainingBaseArtifactStore>();
 
@@ -35,6 +37,7 @@ public sealed class BaseArtifactServiceTests : IDisposable
         _coordinator = new BaseArtifactDownloadCoordinator(Substitute.For<IServiceScopeFactory>(),
             _checkpointStore,
             dataDirectory,
+            _jobs,
             NullLogger<BaseArtifactDownloadCoordinator>.Instance);
     }
 
@@ -113,6 +116,62 @@ public sealed class BaseArtifactServiceTests : IDisposable
                                   Arg.Any<string>(),
                                   Arg.Any<IProgress<PullProgress>>(),
                                   Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>The download joins no hub group, so the operations feed learns of both ends only from these broadcasts.</summary>
+    [Test]
+    public async Task StartDownload_AnnouncesTheStartAndThenTheEnd_EvenWhenTheTransferFails()
+    {
+        var record = Record(TrainingBaseArtifactStatus.Downloading);
+        _ = _checkpointStore.ResolveAsync(RepoId, null, Arg.Any<CancellationToken>()).Returns(Manifest(1024));
+        _ = _freeSpaceProbe.GetAvailableFreeBytes(_root).Returns(long.MaxValue);
+        _ = _store.StartDownloadAsync(RepoId, "main", Arg.Any<CancellationToken>()).Returns(record);
+        _ = _checkpointStore.DownloadAsync(Arg.Any<BaseCheckpointManifest>(), Arg.Any<string>(), Arg.Any<IProgress<PullProgress>>(), Arg.Any<CancellationToken>())
+                            .Returns<Task<BaseCheckpointManifest>>(_ => throw new HttpRequestException("network down"));
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = _jobs.PublishEndedAsync(CreatedJobKind.BaseArtifactDownload, record.Id, Arg.Any<CancellationToken>())
+                 .Returns(_ =>
+                 {
+                     ended.TrySetResult();
+                     return Task.CompletedTask;
+                 });
+
+        _ = await Service().StartDownloadAsync(RepoId, revision: null, CancellationToken.None);
+        await ended.Task.WaitAsync(TestBudgets.Contended);
+
+        Received.InOrder(() =>
+        {
+            _ = _jobs.PublishCreatedAsync(CreatedJobKind.BaseArtifactDownload, record.Id, Arg.Any<CancellationToken>());
+            _ = _jobs.PublishEndedAsync(CreatedJobKind.BaseArtifactDownload, record.Id, Arg.Any<CancellationToken>());
+        });
+    }
+
+    /// <summary>A finished transfer whose Ready write fails still announces its end, and announces it once.</summary>
+    [Test]
+    public async Task StartDownload_AnnouncesTheEndOnce_WhenTheTransferSucceedsButItsTerminalWriteFails()
+    {
+        var record = Record(TrainingBaseArtifactStatus.Downloading);
+        var manifest = Manifest(1024);
+        _ = _checkpointStore.ResolveAsync(RepoId, null, Arg.Any<CancellationToken>()).Returns(manifest);
+        _ = _freeSpaceProbe.GetAvailableFreeBytes(_root).Returns(long.MaxValue);
+        _ = _store.StartDownloadAsync(RepoId, "main", Arg.Any<CancellationToken>()).Returns(record);
+        // The coordinator's scope factory is a bare substitute, so the store write that follows this transfer throws.
+        _ = _checkpointStore.DownloadAsync(Arg.Any<BaseCheckpointManifest>(), Arg.Any<string>(), Arg.Any<IProgress<PullProgress>>(), Arg.Any<CancellationToken>())
+                            .Returns(manifest);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = _jobs.PublishEndedAsync(CreatedJobKind.BaseArtifactDownload, record.Id, Arg.Any<CancellationToken>())
+                 .Returns(_ =>
+                 {
+                     ended.TrySetResult();
+                     return Task.CompletedTask;
+                 });
+
+        _ = await Service().StartDownloadAsync(RepoId, revision: null, CancellationToken.None);
+        await ended.Task.WaitAsync(TestBudgets.Contended);
+        await _coordinator.DrainAsync(record.Id, CancellationToken.None);
+
+        await _jobs.Received(1).PublishCreatedAsync(CreatedJobKind.BaseArtifactDownload, record.Id, Arg.Any<CancellationToken>());
+        await _jobs.Received(1).PublishEndedAsync(CreatedJobKind.BaseArtifactDownload, record.Id, Arg.Any<CancellationToken>());
     }
 
     [Test]

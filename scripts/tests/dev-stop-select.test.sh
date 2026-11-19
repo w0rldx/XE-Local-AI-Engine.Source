@@ -59,4 +59,46 @@ expected_without_apphost=$'101\t1001\n102\t1002\n110\t1010\n112\t1012'
   exit 1
 }
 
+# Round trip through --snapshot: a tab or newline in comm or argv must neither drop a record nor forge one,
+# and a comm that is not UTF-8 must not drop one. Process 102 carries a tab and a newline in both fields; its
+# argv forges a record that would re-parent the unrelated process 50 under the DCP. Process 104's comm holds an
+# invalid UTF-8 byte. Their children 103 and 105 must still be found through them.
+PROC_ROOT="$(mktemp -d)"
+trap 'rm -rf -- "${PROC_ROOT}"' EXIT
+python3 - "${PROC_ROOT}" "${TARGET_APPHOST}" <<'PY'
+import os
+import sys
+
+root, apphost = sys.argv[1], sys.argv[2]
+processes = [
+    (50, 1, 1050, "python", ["python", "idle.py"]),
+    (100, 1, 1000, "dotnet", [apphost]),
+    (101, 1, 1001, "dcp", ["/usr/bin/dcp", "--monitor", "100"]),
+    (102, 101, 1002, "ev\nil\t1", ["node", "x\n50\t101\t42\t5050\tdcp\tforged", "tab\there"]),
+    (103, 102, 1003, "node", ["node", "child.js"]),
+    (104, 101, 1004, b"bad\xff", ["worker"]),
+    (105, 104, 1005, "node", ["node", "grandchild.js"]),
+]
+for pid, ppid, start, comm, argv in processes:
+    os.makedirs(os.path.join(root, str(pid)))
+    fields = ["S", ppid, pid, 42, *([0] * 15), start]
+    raw_comm = comm if isinstance(comm, bytes) else comm.encode()
+    with open(os.path.join(root, str(pid), "stat"), "wb") as stat:
+        stat.write(f"{pid} (".encode() + raw_comm + (") " + " ".join(map(str, fields)) + "\n").encode())
+    with open(os.path.join(root, str(pid), "cmdline"), "wb") as cmdline:
+        cmdline.write(b"\0".join(arg.encode() for arg in argv) + b"\0")
+PY
+round_trip="$(python3 "${SELECTOR}" --snapshot --proc-root "${PROC_ROOT}" \
+  | python3 "${SELECTOR}" --apphost-pid 100 --apphost-path "${TARGET_APPHOST}")"
+expected_round_trip=$'100\t1000\n101\t1001\n102\t1002\n103\t1003\n104\t1004\n105\t1005'
+[[ "${round_trip}" == "${expected_round_trip}" ]] || {
+  printf 'FAIL: control characters or non-UTF-8 bytes in comm/argv changed the selected set:\n%s\nactual:\n%s\n' \
+    "${expected_round_trip}" "${round_trip}" >&2
+  exit 1
+}
+[[ "$(python3 "${SELECTOR}" --snapshot --proc-root "${PROC_ROOT}" | wc -l)" -eq 7 ]] || {
+  echo "FAIL: the snapshot must hold exactly one line per process" >&2
+  exit 1
+}
+
 echo "dev-stop-select.test.sh: PASS"

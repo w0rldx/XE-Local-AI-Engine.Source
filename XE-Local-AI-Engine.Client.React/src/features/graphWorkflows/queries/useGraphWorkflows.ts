@@ -30,6 +30,7 @@ import {
 	updateGraphWorkflowDefinitionMutation,
 	validateGraphWorkflowDefinitionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { type FeedOptions, feedQuerySettings } from "@/core/api/QueryKeys";
 import { readGraphWorkflowConflict } from "@/features/graphWorkflows/api/GraphWorkflowConflict";
 
 /** Generated operationIds, which are also the generated SDK fn names and the `_id` of every generated query key. */
@@ -44,8 +45,6 @@ export const graphWorkflowQueryIds = {
 	tools: "listGraphWorkflowTools",
 	conversationRuns: "listGraphWorkflowConversationRuns",
 } as const;
-
-export type GraphWorkflowQueryId = (typeof graphWorkflowQueryIds)[keyof typeof graphWorkflowQueryIds];
 
 /**
  * Partial generated-query-key filter. Without a `path` it matches every cached variant of that endpoint (what a list
@@ -67,19 +66,6 @@ export const GRAPH_WORKFLOW_RUN_PAGE_SIZE = 200;
 
 /** The chat reads a conversation's newest bound runs only; the endpoint's own default page. Older runs show no activity. */
 export const GRAPH_WORKFLOW_CONVERSATION_RUN_PAGE_SIZE = 20;
-
-export interface FeedOptions {
-	/** Polling cadence while the hub is unavailable. `undefined` (the live case) means no polling at all. */
-	readonly pollIntervalMs?: number;
-	readonly enabled?: boolean;
-}
-
-export function feedQuerySettings(id: string | undefined, options: FeedOptions) {
-	return {
-		enabled: (options.enabled ?? true) && Boolean(id),
-		refetchInterval: options.pollIntervalMs ?? false,
-	} as const;
-}
 
 /** The picker's definition list. Summaries only — the `graph` itself rides the single-definition read. */
 export function useGraphWorkflowDefinitions(options: FeedOptions = {}) {
@@ -167,12 +153,16 @@ export function useSettledGraphWorkflowNodeRuns(
 function useDefinitionRefresh(): (definitionId?: string) => Promise<void> {
 	const queryClient = useQueryClient();
 	return async (definitionId?: string): Promise<void> => {
-		await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.definitions) });
-		if (definitionId) {
-			await queryClient.invalidateQueries({
-				queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.definition, { definitionId }),
-			});
-		}
+		await Promise.all([
+			queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.definitions) }),
+			...(definitionId
+				? [
+						queryClient.invalidateQueries({
+							queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.definition, { definitionId }),
+						}),
+					]
+				: []),
+		]);
 	};
 }
 
@@ -255,12 +245,16 @@ export function useStartGraphWorkflowRun() {
 	return useMutation({
 		...startGraphWorkflowRunMutation(),
 		onSuccess: async (data) => {
-			if (data.runId) {
-				await queryClient.invalidateQueries({
-					queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.run, { runId: data.runId }),
-				});
-			}
-			await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.runs) });
+			await Promise.all([
+				...(data.runId
+					? [
+							queryClient.invalidateQueries({
+								queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.run, { runId: data.runId }),
+							}),
+						]
+					: []),
+				queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.runs) }),
+			]);
 		},
 	});
 }
@@ -307,12 +301,16 @@ export function useSendGraphWorkflowChatMessage() {
 		...sendGraphWorkflowChatMessageMutation(),
 		onSuccess: async (_data, variables) => {
 			const conversationId = variables.path?.conversationId;
-			if (conversationId) {
-				await queryClient.invalidateQueries({
-					queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.conversationRuns, { conversationId }),
-				});
-			}
-			await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.runs) });
+			await Promise.all([
+				...(conversationId
+					? [
+							queryClient.invalidateQueries({
+								queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.conversationRuns, { conversationId }),
+							}),
+						]
+					: []),
+				queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.runs) }),
+			]);
 		},
 	});
 }
@@ -327,10 +325,12 @@ export function useCancelGraphWorkflowRun() {
 		...cancelGraphWorkflowRunMutation(),
 		onSuccess: async (_data, variables) => {
 			const runId = variables.path?.runId;
-			if (runId) {
-				await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.run, { runId }) });
-			}
-			await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.runs) });
+			await Promise.all([
+				...(runId
+					? [queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.run, { runId }) })]
+					: []),
+				queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.runs) }),
+			]);
 		},
 	});
 }
@@ -350,8 +350,10 @@ export function useDeleteGraphWorkflowRun() {
 					queryClient.removeQueries({ queryKey: graphWorkflowInvalidationKey(id, { runId }) });
 				}
 			}
-			await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.runs) });
-			await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.conversationRuns) });
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.runs) }),
+				queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.conversationRuns) }),
+			]);
 		},
 	});
 }
@@ -367,13 +369,17 @@ export function useDecideGraphWorkflowNodeRun() {
 		if (!runId) {
 			return;
 		}
-		await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.run, { runId }) });
-		await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.events, { runId }) });
-		if (nodeKey) {
-			await queryClient.invalidateQueries({
-				queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.node, { runId, nodeKey }),
-			});
-		}
+		await Promise.all([
+			queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.run, { runId }) }),
+			queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.events, { runId }) }),
+			...(nodeKey
+				? [
+						queryClient.invalidateQueries({
+							queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.node, { runId, nodeKey }),
+						}),
+					]
+				: []),
+		]);
 	};
 
 	return useMutation({

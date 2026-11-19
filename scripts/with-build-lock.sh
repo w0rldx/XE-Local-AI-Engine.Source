@@ -34,11 +34,6 @@
 #   dies to the OOM killer — or merely swaps through a timing-sensitive test — is contaminated in a
 #   way the assembly guard cannot see. Cross-worktree builds therefore serialize BY DESIGN.
 #
-#   Three sibling scripts already resolved the lock this way — run-agent-framework-validation.sh,
-#   run-agent-framework-hardware-compat.sh and capture-agent-framework-dependencies.sh all compute
-#   SHARED_REPO_ROOT from --git-common-dir. This script was the odd one out, so the four disagreed
-#   about where the lock file lives; they now agree.
-#
 #   To get per-worktree parallelism back on purpose, point each lane at its own file:
 #
 #     export BUILD_LOCK_FILE="$(git rev-parse --show-toplevel)/.tmp/build.lock"

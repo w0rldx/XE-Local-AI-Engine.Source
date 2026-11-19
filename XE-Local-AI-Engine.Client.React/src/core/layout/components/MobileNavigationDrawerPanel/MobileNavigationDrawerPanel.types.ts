@@ -1,9 +1,10 @@
-import type { PropsWithChildren, RefObject } from "react";
+import type { PropsWithChildren } from "react";
 
 export interface MobileNavigationDrawerPanelProperties extends PropsWithChildren {
 	isOpen: boolean;
 	width: number;
 	title: string;
 	onClose: () => void;
-	drawerReference: RefObject<HTMLDivElement | null>;
+	/** Told when the panel's content mounts (true) and unmounts (false), whatever closed or removed it. */
+	onPanelOpenChange: (open: boolean) => void;
 }

@@ -63,6 +63,11 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         return _readModel.ListConversationsAsync(request, cancellationToken);
     }
 
+    public Task<IReadOnlyList<Guid>> ListChatConversationIdsAsync(CancellationToken cancellationToken = default)
+    {
+        return _readModel.ListChatConversationIdsAsync(cancellationToken);
+    }
+
     public Task<NodeChatConversationSearchResultDto> SearchConversationsAsync(NodeChatSearchConversationsRequest request, CancellationToken cancellationToken = default)
     {
         return _readModel.SearchConversationsAsync(request, cancellationToken);
@@ -113,6 +118,11 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
     public Task<NodeChatInsertMessageIfAbsentResult> InsertMessageIfAbsentAsync(NodeChatInsertMessageIfAbsentRequest request, CancellationToken cancellationToken = default)
     {
         return _messages.InsertMessageIfAbsentAsync(request, cancellationToken);
+    }
+
+    public Task<Guid> ImportConversationAsync(NodeChatImportConversationRequest request, CancellationToken cancellationToken = default)
+    {
+        return _messages.ImportConversationAsync(request, cancellationToken);
     }
 
     public Task DeleteMessageAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default)

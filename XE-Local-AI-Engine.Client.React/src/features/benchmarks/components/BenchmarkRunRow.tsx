@@ -1,5 +1,6 @@
 import { ActionIcon, Checkbox, Group, Menu, Stack, Table, Text } from "@mantine/core";
 import { IconDots, IconRefresh, IconRuler2, IconTrash } from "@tabler/icons-react";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatDurationSeconds, formatTimestamp } from "@/core/formatting/TimeFormatting";
@@ -42,7 +43,8 @@ export interface BenchmarkRunRowProps {
 	onToggleRun: (runId: string) => void;
 	onRejudgeRun: (run: BenchmarkRunSummary) => void;
 	onMeasureFidelity: (run: BenchmarkRunSummary) => void;
-	onDeleteRun: (run: BenchmarkRunSummary) => void;
+	/** `menuButton` is the row's actions button, which takes the focus back once the confirmation closes. */
+	onDeleteRun: (run: BenchmarkRunSummary, menuButton: HTMLElement | null) => void;
 }
 
 export function BenchmarkRunRow({
@@ -61,6 +63,7 @@ export function BenchmarkRunRow({
 	onDeleteRun,
 }: BenchmarkRunRowProps) {
 	const { t } = useTranslation();
+	const actionsRef = useRef<HTMLButtonElement>(null);
 	const quant = benchmarkQuantTag(run.primaryModelName);
 	return (
 		<Table.Tr data-testid={`benchmark-run-row-${run.id}`}>
@@ -156,6 +159,7 @@ export function BenchmarkRunRow({
 				<Menu position="bottom-end" withinPortal={true}>
 					<Menu.Target>
 						<ActionIcon
+							ref={actionsRef}
 							variant="subtle"
 							aria-label={t("pages.benchmarks.run.actions", "Run actions")}
 							data-testid={`benchmark-run-actions-${run.id}`}
@@ -185,7 +189,7 @@ export function BenchmarkRunRow({
 							color="red"
 							leftSection={<IconTrash size={14} />}
 							disabled={isActionPending || !isRunTerminal(run)}
-							onClick={() => onDeleteRun(run)}
+							onClick={() => onDeleteRun(run, actionsRef.current)}
 						>
 							{t("pages.benchmarks.run.delete", "Delete terminal run")}
 						</Menu.Item>

@@ -1,12 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
-using Microsoft.Win32.SafeHandles;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -52,12 +50,6 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
 
     /// <summary>Node options that skip the realpath of the main script and of every module, so no unreadable ancestor is stat-ed.</summary>
     internal const string PreserveNodeSymlinks = "--preserve-symlinks --preserve-symlinks-main";
-
-    /// <summary>FILE_FLAG_BACKUP_SEMANTICS: lets CreateFileW open a directory, with no access requested.</summary>
-    private const uint FileFlagBackupSemantics = 0x02000000;
-
-    /// <summary>FILE_NAME_NORMALIZED | VOLUME_NAME_DOS: the long, link-resolved name on its drive letter.</summary>
-    private const uint FileNameNormalizedVolumeNameDos = 0;
 
     /// <summary>Link hops followed before a path is treated as a cycle: half the kernel's limit of 40.</summary>
     /// <remarks>
@@ -561,30 +553,8 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     ///     opened or lives on a network share, so the tree is refused.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    private static string? FinalPathOfExisting(string path)
-    {
-        using var handle = CreateFile(path, desiredAccess: 0, FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open, FileFlagBackupSemantics, IntPtr.Zero);
-        if (handle.IsInvalid)
-        {
-            return null;
-        }
-
-        var buffer = new char[32_768];
-        var length = GetFinalPathNameByHandle(handle, buffer, (uint)buffer.Length, FileNameNormalizedVolumeNameDos);
-        if (length == 0 || length >= (uint)buffer.Length)
-        {
-            return null;
-        }
-
-        const string devicePrefix = @"\\?\";
-        var final = new string(buffer, 0, (int)length);
-        if (final.StartsWith(devicePrefix + @"UNC\", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        return Path.TrimEndingDirectorySeparator(final.StartsWith(devicePrefix, StringComparison.Ordinal) ? final[devicePrefix.Length..] : final);
-    }
+    private static string? FinalPathOfExisting(string path) =>
+        OpenedHandleContainment.ResolveExistingOrNull(path) is { } final && !final.StartsWith(@"\\", StringComparison.Ordinal) ? final : null;
 
     /// <summary>
     ///     Adds a denied root in its resolved form, and — when resolution gives up (a link cycle) — in its lexical one
@@ -823,23 +793,6 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     {
         return SandboxIsolatedPaths.Of(handle) is { } paths && paths != SandboxIsolatedPaths.Posix;
     }
-
-    [DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    private static extern SafeFileHandle CreateFile(string fileName,
-        uint desiredAccess,
-        FileShare shareMode,
-        IntPtr securityAttributes,
-        FileMode creationDisposition,
-        uint flagsAndAttributes,
-        IntPtr templateFile);
-
-    [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    private static extern uint GetFinalPathNameByHandle(SafeFileHandle file,
-        [Out] char[] filePath,
-        uint filePathSize,
-        uint flags);
 
     /// <summary>
     ///     The live transport handed to <c>McpClient</c>: the SDK's stream transport for the protocol, plus ownership

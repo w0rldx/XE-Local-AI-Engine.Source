@@ -2,7 +2,9 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -279,25 +281,22 @@ public sealed class ConversationSearchTests : IDisposable
     }
 
     [Test]
-    public async Task Backfill_SkipsAChatItCannotRead_CompletesForTheRest_AndRetriesOnlyThatChat()
+    public async Task Backfill_SkipsAChatItCannotRead_RetriesOnlyThatChat_StopsAtTheReadLimit_AndAWriteReArmsIt()
     {
         await using var provider = await BuildProviderAsync("search-backfill-skip.sqlite");
         var beforeRestart = CreateService(provider);
         var unreadable = await CreateChatAsync(beforeRestart, "unreadable", createdAtUtc: 10);
-        await PersistUserMessageAsync(beforeRestart, unreadable, "skipmarker in the unreadable chat", createdAtUtc: 11);
+        var unreadableMessage = await PersistUserMessageAsync(beforeRestart, unreadable, "skipmarker in the unreadable chat", createdAtUtc: 11);
         var healthy = await CreateChatAsync(beforeRestart, "healthy", createdAtUtc: 20);
         await PersistUserMessageAsync(beforeRestart, healthy, "skipmarker in the healthy chat", createdAtUtc: 21);
-        await using (var scope = provider.CreateAsyncScope())
-        {
-            // A message id that is not a Guid fails the chat's read every time, unlike a transient failure.
-            var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-            _ = await dbContext.Database.ExecuteSqlRawAsync("UPDATE messages SET message_id = 'not-a-guid' WHERE conversation_id = {0};", [unreadable]);
-        }
+        // A message id that is not a Guid fails the chat's read every time, unlike a transient failure.
+        await SetMessageIdAsync(provider, unreadable, "not-a-guid");
 
         var restartedWriter = new NodeChatPersistenceWriter(provider.GetRequiredService<IServiceScopeFactory>());
         var afterRestart = new NodeChatPersistenceService(restartedWriter, UnknownUsageProviderResolver.Instance);
         var clock = new ManualTimeProvider();
-        var backfill = new ConversationSearchBackfillService(restartedWriter, clock, NullLogger<ConversationSearchBackfillService>.Instance);
+        var logger = Substitute.For<ILogger<ConversationSearchBackfillService>>();
+        var backfill = new ConversationSearchBackfillService(restartedWriter, clock, logger);
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
         var run = BackgroundServiceTestHelper.RunExecuteAsync(backfill, stop.Token);
@@ -308,6 +307,22 @@ public sealed class ConversationSearchTests : IDisposable
             AssertEx.False(result.Indexing, "One unreadable chat must not keep the whole index reported as incomplete.");
             AssertEx.Equal(Expected(healthy), Found(result), "Every readable chat is searchable after the pass.");
             AssertEx.False(restartedWriter.SearchIndex.Contains(unreadable));
+
+            // Every pass before the limit reads the chat again after the doubling backoff; the pass that reaches it ends the service.
+            var delay = ConversationSearchBackfillService.FirstRetryDelay;
+            for (var pass = 2; pass < ConversationSearchBackfillService.MaxReadAttempts; pass++)
+            {
+                clock.Advance(delay);
+                delay *= 2;
+                var expectedRetries = pass;
+                await AssertEx.EventuallyAsync(() => Warnings(logger, "Retrying those") == expectedRetries && clock.ArmedTimerCount == 1, TimeSpan.FromSeconds(10),
+                    $"Pass {pass} must read the chat again and schedule another retry.");
+            }
+
+            clock.Advance(delay);
+            await run.WaitAsync(stop.Token);
+            AssertEx.Equal(expected: 0, clock.ArmedTimerCount, "Past the read limit nothing waits to retry the chat.");
+            AssertEx.Equal(expected: 1, Warnings(logger, "stops retrying"), "The chat it gives up on is logged once.");
         }
         finally
         {
@@ -315,6 +330,54 @@ public sealed class ConversationSearchTests : IDisposable
             await run;
             backfill.Dispose();
         }
+
+        await SetMessageIdAsync(provider, unreadable, unreadableMessage.MessageId);
+        AssertEx.Equal(Expected(healthy), Found(await SearchAsync(afterRestart, "skipmarker")), "A repaired chat nothing wrote to stays unindexed.");
+        await PersistUserMessageAsync(afterRestart, unreadable, "a new write", createdAtUtc: 30);
+        AssertEx.Equal(Expected(unreadable, healthy), Found(await SearchAsync(afterRestart, "skipmarker")), "A write to the chat marks it stale, so the next search reads it.");
+    }
+
+    [Test]
+    public async Task Backfill_KeepsRetryingAFailedPass_PastThePerChatReadLimit()
+    {
+        await using var provider = await BuildProviderAsync("search-backfill-transient.sqlite");
+        var beforeRestart = CreateService(provider);
+        var conversation = await CreateChatAsync(beforeRestart, "older", createdAtUtc: 10);
+        await PersistUserMessageAsync(beforeRestart, conversation, "transientmarker written before the restart", createdAtUtc: 11);
+        var restartedWriter = new NodeChatPersistenceWriter(provider.GetRequiredService<IServiceScopeFactory>());
+        var afterRestart = new NodeChatPersistenceService(restartedWriter, UnknownUsageProviderResolver.Instance);
+        var clock = new ManualTimeProvider();
+        var logger = Substitute.For<ILogger<ConversationSearchBackfillService>>();
+        var backfill = new ConversationSearchBackfillService(restartedWriter, clock, logger);
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var failingPasses = ConversationSearchBackfillService.MaxReadAttempts + 1;
+        Volatile.Write(ref _failingContextResolutions, failingPasses);
+
+        var run = BackgroundServiceTestHelper.RunExecuteAsync(backfill, stop.Token);
+        try
+        {
+            var delay = ConversationSearchBackfillService.FirstRetryDelay;
+            for (var pass = 1; pass <= failingPasses; pass++)
+            {
+                var expectedFailures = pass;
+                await AssertEx.EventuallyAsync(() => Warnings(logger, "backfill failed") == expectedFailures && clock.ArmedTimerCount == 1, TimeSpan.FromSeconds(10),
+                    $"Failed pass {pass} must wait for a retry, not give up.");
+                AssertEx.False(run.IsCompleted, "A failing pass is never counted against a chat, so the service stays alive.");
+                clock.Advance(delay);
+                delay = delay * 2 < ConversationSearchBackfillService.MaxRetryDelay ? delay * 2 : ConversationSearchBackfillService.MaxRetryDelay;
+            }
+
+            await run.WaitAsync(stop.Token);
+        }
+        finally
+        {
+            await stop.CancelAsync();
+            await run;
+            backfill.Dispose();
+        }
+
+        AssertEx.Equal(Expected(conversation), Found(await SearchAsync(afterRestart, "transientmarker")), "The pass that finally succeeds indexes the chat.");
+        AssertEx.Equal(expected: 0, Warnings(logger, "stops retrying"));
     }
 
     [Test]
@@ -434,6 +497,13 @@ public sealed class ConversationSearchTests : IDisposable
 
         AssertEx.False(index.Contains(conversation), "A deleted chat's decrypted text must leave memory when the delete commits.");
     }
+
+    // Warnings the service logged whose rendered message contains the fragment.
+    private static int Warnings(ILogger logger, string fragment) =>
+        logger.ReceivedCalls()
+              .Count(call => call.GetMethodInfo().Name == nameof(ILogger.Log)
+                             && call.GetArguments() is [LogLevel.Warning, _, var state, ..]
+                             && state?.ToString()?.Contains(fragment, StringComparison.Ordinal) == true);
 
     private static string Found(NodeChatConversationSearchResultDto result)
     {

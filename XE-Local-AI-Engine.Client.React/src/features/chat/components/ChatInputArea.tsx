@@ -9,6 +9,7 @@ import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStor
 import { DESKTOP_NAV_MIN_HEIGHT, isCompactViewport } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import type { ModelOption } from "@/core/models/ModelOption";
+import { isImeComposing } from "@/core/ui/models/ImeComposition";
 import { usePendingComposerTextStore } from "@/core/ui/stores/PendingComposerTextStore";
 import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
 import { ChatComposerToolbar } from "@/features/chat/components/ChatInputArea/ChatComposerToolbar";
@@ -516,7 +517,7 @@ export function ChatInputArea({
 								return;
 							}
 							if (event.key === "Enter" && !event.shiftKey) {
-								if (event.nativeEvent.isComposing || isComposing) {
+								if (isImeComposing(event) || isComposing) {
 									return;
 								}
 								event.preventDefault();
@@ -527,7 +528,10 @@ export function ChatInputArea({
 						minRows={compactViewport ? 1 : 2}
 						maxRows={compactViewport ? 4 : 8}
 						radius="md"
-						disabled={disabled || isSending}
+						// Read-only, not disabled, while a reply streams: disabling the focused textarea drops focus to
+						// the page body. `submit` refuses while sending, so the draft cannot be sent twice.
+						disabled={disabled}
+						readOnly={isSending}
 						bottomSection={toolbar}
 						styles={composerStyles}
 					/>

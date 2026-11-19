@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 
+using XE_Local_AI_Engine.Client.Common;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -255,7 +256,7 @@ internal sealed class ConversationStateDistiller : IConversationStateDistiller
 
         if (consumed == 0)
         {
-            messages.Append(ConversationSummarizer.TruncateAtRuneBoundary(RenderMessage(input.Messages[0]), available));
+            messages.Append(TextTruncation.TruncateAtRuneBoundary(RenderMessage(input.Messages[0]), available));
             consumed = 1;
         }
 

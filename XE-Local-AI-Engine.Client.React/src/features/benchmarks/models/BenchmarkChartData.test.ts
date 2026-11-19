@@ -8,13 +8,13 @@ import {
 	speedBarSeries,
 	throughputScatterSeries,
 } from "@/features/benchmarks/models/BenchmarkChartData";
-import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
 import type { BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
+import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkFidelityFixture,
 	benchmarkRunDetailFixture,
 	benchmarkRunSummaryFixture,
-} from "@/features/benchmarks/models/BenchmarkTestFixtures";
+} from "@/features/benchmarks/test/BenchmarkTestFixtures";
 
 // What these assert is not the arithmetic — it is which runs are allowed to become a point. A chart that plots a
 // warm-up, a failed run or two incomparable measurements on one axis is wrong in a way no amount of styling fixes.

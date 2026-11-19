@@ -8,12 +8,12 @@ using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-/// <summary>Imports a chat export file as NEW chats, written through the ordinary chat writer.</summary>
+/// <summary>Imports a chat export file as NEW chats, each written in one transaction by the chat writer.</summary>
 /// <remarks>
-///     Every conversation and message gets a fresh id, so the content is encrypted under its new AAD and nothing in the
-///     file can collide with a stored row. The validator refuses the whole file before anything is written; a write
-///     that still fails purges every chat this import created (a purge that fails too is logged) and surfaces the error.
-///     With an <c>importId</c> it pushes progress on the chat hub; the response still comes once, at the end.
+///     Fresh ids, so content is encrypted under its new AAD and nothing collides with a stored row. The validator
+///     refuses a bad file before any write. Each chat holds the write lock for its own transaction only, at most
+///     MaxMessages rows within MaxImportBytes. A failed chat leaves nothing; the import then purges the chats it
+///     committed and surfaces the error. A crash between chats keeps those; a re-import writes them under new ids.
 /// </remarks>
 public sealed class ImportNodeChatConversationsEndpoint : Endpoint<ImportNodeChatConversationsRequest, NodeChatImportResponse>
 {
@@ -115,44 +115,30 @@ public sealed class ImportNodeChatConversationsEndpoint : Endpoint<ImportNodeCha
 
     private async Task<NodeChatImportedConversationResponse> ImportAsync(NodeChatExportConversation conversation, List<Guid> createdIds, CancellationToken ct)
     {
-        var created = await _chatPersistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        var title = string.IsNullOrWhiteSpace(conversation.Title) ? null : conversation.Title.Trim();
+        var conversationId = await _chatPersistence.ImportConversationAsync(new NodeChatImportConversationRequest
             {
-                Title = string.IsNullOrWhiteSpace(conversation.Title) ? null : conversation.Title.Trim(),
-                UserId = null,
-                CreatedAtUtc = conversation.CreatedAtUtc
+                Title = title,
+                CreatedAtUtc = conversation.CreatedAtUtc,
+                Archived = conversation.Archived,
+                Messages =
+                [
+                    .. conversation.Messages.Select(static message => new NodeChatImportMessage
+                    {
+                        Role = message.Role,
+                        Content = message.Content,
+                        CreatedAtUtc = message.CreatedAtUtc,
+                        Model = message.Model
+                    })
+                ]
             },
             ct);
-        createdIds.Add(created.ConversationId);
-
-        foreach (var message in conversation.Messages)
-        {
-            _ = await _chatPersistence.InsertMessageIfAbsentAsync(new NodeChatInsertMessageIfAbsentRequest
-                {
-                    ConversationId = created.ConversationId,
-                    MessageId = Guid.NewGuid(),
-                    Role = message.Role,
-                    Content = message.Content,
-                    CreatedAtUtc = message.CreatedAtUtc,
-                    Model = message.Model
-                },
-                ct);
-        }
-
-        if (conversation.Archived)
-        {
-            _ = await _chatPersistence.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest
-                {
-                    ConversationId = created.ConversationId,
-                    Archived = true,
-                    UpdatedAtUtc = conversation.Messages.Count > 0 ? conversation.Messages[^1].CreatedAtUtc : conversation.CreatedAtUtc
-                },
-                ct);
-        }
+        createdIds.Add(conversationId);
 
         return new NodeChatImportedConversationResponse
         {
-            ConversationId = created.ConversationId,
-            Title = created.Title,
+            ConversationId = conversationId,
+            Title = title,
             MessageCount = conversation.Messages.Count
         };
     }

@@ -230,6 +230,22 @@ public sealed class RunGraphWorkflowHandlerTests
     }
 
     [Test]
+    public async Task ExecuteAsync_WhenTheRunTimesOutParkedOnADecision_NamesTheWaitingNode()
+    {
+        var harness = new Harness();
+        harness.RunService.StartAsync(DefinitionId, Arg.Any<Guid>(), Arg.Any<string?>(), null, Arg.Any<GraphWorkflowRunOrigin>(), Arg.Any<CancellationToken>())
+               .Returns(Detail(GraphWorkflowRunStatus.Running));
+        harness.RunService.GetRunAsync(RunId, Arg.Any<CancellationToken>())
+               .Returns(Detail(GraphWorkflowRunStatus.WaitingForApproval, NodeRun("review", GraphWorkflowNodeKind.Pause, GraphWorkflowNodeRunStatus.WaitingForApproval, outputJson: null)));
+
+        var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() =>
+            harness.Handler.ExecuteAsync(Context("""{ "definitionId": "22222222-2222-2222-2222-222222222222", "timeoutSeconds": 3 }"""), CancellationToken.None));
+
+        AssertEx.Equal($"Graph workflow run {RunId} waited for a decision at node 'review' and did not finish within 3 s, so it was cancelled.", exception.Message);
+        await harness.RunService.Received(1).CancelAsync(RunId, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenGraphWorkflowsAreOff_FailsWithoutStarting()
     {
         var harness = new Harness(graphWorkflowsEnabled: false);

@@ -66,6 +66,10 @@ public sealed class ImportNodeChatConversationsRequestValidator : Validator<Impo
                                             message.RuleFor(static m => m.CreatedAtUtc)
                                                    .Must(IsPlausibleTime)
                                                    .WithMessage("A message's creation time must be neither negative nor in the future.");
+
+                                            message.RuleFor(static m => m.Model)
+                                                   .Must(static model => model is null || model.Length <= NodeChatExportFile.MaxModelLength)
+                                                   .WithMessage($"A message's model name may be at most {NodeChatExportFile.MaxModelLength} characters.");
                                         });
                         })
                         .When(static request => request.Conversations is not null);

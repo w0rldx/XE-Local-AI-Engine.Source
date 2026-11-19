@@ -57,6 +57,7 @@ export function BenchmarkReviewInbox({ projects }: { projects: readonly Benchmar
 			<Stack gap="sm" data-testid="benchmark-review-inbox">
 				<Group justify="space-between" align="flex-end">
 					<SegmentedControl
+						aria-label={t("pages.benchmarks.review.stateFilter", "Show reviews that are")}
 						size="xs"
 						value={state}
 						onChange={(value) => {

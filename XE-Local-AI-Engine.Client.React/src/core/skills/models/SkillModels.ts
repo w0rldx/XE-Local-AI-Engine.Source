@@ -121,8 +121,6 @@ export function isSkillNameResolvable(name: string): boolean {
 	return SKILL_NAME_PATTERN.test(name);
 }
 
-export type SkillFormSchema = z.infer<typeof skillFormSchema>;
-
 /** Which source the skill-import dialog is collecting from. */
 export type SkillImportSourceTab = "upload" | "github" | "paste";
 

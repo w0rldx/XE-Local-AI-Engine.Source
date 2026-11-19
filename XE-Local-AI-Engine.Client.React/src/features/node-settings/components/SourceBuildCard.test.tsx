@@ -4,11 +4,13 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import type { LlamaCppRuntimeStatus } from "@/features/node-settings/models/LocalRuntimeModels";
 import type {
 	LlamaCppSourceBuildPrerequisites,
 	LlamaCppSourceBuildStatus,
 } from "@/features/node-settings/models/SourceBuildModels";
+import { acceptConfirm, cancelConfirm, openConfirm } from "@/test/ConfirmFlow";
 
 const { state } = vi.hoisted(() => ({
 	state: {
@@ -64,6 +66,7 @@ vi.mock("react-i18next", () => ({
 				"pages.nodeSettings.llamaCpp.sourceBuild.rebuild": "Rebuild",
 				"pages.nodeSettings.llamaCpp.sourceBuild.cancel": "Cancel",
 				"pages.nodeSettings.llamaCpp.sourceBuild.remove": "Remove",
+				"pages.nodeSettings.llamaCpp.sourceBuild.removeConfirmTitle": "Remove the managed runtime?",
 				"pages.nodeSettings.llamaCpp.sourceBuild.active": `Active ${String(vars?.["backend"] ?? "")} source runtime`,
 			};
 			return labels[key] ?? key;
@@ -96,6 +99,7 @@ vi.mock("@/features/node-settings/queries/useLocalRuntime", () => ({
 }));
 
 vi.mock("@/features/node-settings/hooks/useSourceBuildHub", () => ({
+	llamaCppSourceBuildStream: {},
 	useSourceBuildHub: () => ({ phase: null, logEntries: [], error: null, buildIdentity: null, reset: vi.fn() }),
 }));
 
@@ -107,7 +111,9 @@ import { testMantineTheme } from "@/test/MantineTestRender";
 function renderCard(): void {
 	render(
 		<MantineProvider env="test" theme={testMantineTheme}>
-			<SourceBuildCard />
+			<ConfirmProvider>
+				<SourceBuildCard />
+			</ConfirmProvider>
 		</MantineProvider>,
 	);
 }
@@ -255,6 +261,34 @@ describe("SourceBuildCard", () => {
 		expect(state.prerequisiteArgs).toHaveBeenLastCalledWith("cpu", true);
 	});
 
+	it("removes a source-built runtime only once the operator confirms, and keeps it on cancel", async () => {
+		state.runtime = {
+			...state.runtime,
+			installed: {
+				tag: "b1",
+				variant: "cpu",
+				asset: "source",
+				installedAtUtc: 1,
+				isSourceBuild: true,
+				sourceRepository: "https://github.com/ggml-org/llama.cpp",
+				sourceCommit: "a".repeat(40),
+				sourceSelection: "official",
+				sourceRevisionMode: "enginePinned",
+				sourceRequestedCommit: null,
+			},
+		};
+		renderCard();
+		const remove = screen.getByRole("button", { name: "Remove" });
+
+		await openConfirm(remove, "Remove the managed runtime?");
+		await cancelConfirm(remove);
+		expect(state.remove).not.toHaveBeenCalled();
+
+		await openConfirm(remove, "Remove the managed runtime?");
+		acceptConfirm();
+		await waitFor(() => expect(state.remove).toHaveBeenCalledWith(undefined, expect.any(Object)));
+	});
+
 	it("hydrates explicit custom provenance even when it uses the canonical official repository URL", async () => {
 		state.runtime = {
 			...state.runtime,
@@ -296,6 +330,50 @@ describe("SourceBuildCard", () => {
 			expect.any(Object),
 		);
 		expect(acknowledgement.checked).toBe(false);
+	});
+
+	it("keeps a typed draft across a status refetch and re-seeds only when a new runtime is installed", async () => {
+		const installed = {
+			tag: "b1",
+			variant: "vulkan",
+			asset: "source",
+			installedAtUtc: 1,
+			isSourceBuild: true,
+			sourceRepository: "https://github.com/example/original.cpp",
+			sourceCommit: "a".repeat(40),
+			sourceSelection: "custom",
+			sourceRevisionMode: "defaultBranch",
+			sourceRequestedCommit: null,
+		} as const;
+		state.runtime = { ...state.runtime, installed: { ...installed } };
+		// A fresh element each time: React bails out of re-rendering a referentially identical one, which would make
+		// the surviving draft below prove nothing.
+		const card = () => (
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<ConfirmProvider>
+					<SourceBuildCard />
+				</ConfirmProvider>
+			</MantineProvider>
+		);
+		const { rerender } = render(card());
+		await openBuildForm();
+		const repositoryInput = () => screen.getByLabelText("GitHub repository") as HTMLInputElement;
+		expect(repositoryInput().value).toBe("https://github.com/example/original.cpp");
+
+		fireEvent.change(repositoryInput(), { target: { value: "https://github.com/example/edited.cpp" } });
+
+		// Same install, a new object with a changed unrelated field: a refetch, not a new install. The edit survives.
+		state.runtime = { ...state.runtime, installed: { ...installed, operatorSelected: true } };
+		rerender(card());
+		expect(repositoryInput().value).toBe("https://github.com/example/edited.cpp");
+
+		// A completed build installs a new runtime (a new installedAtUtc), which is a new server state to seed from.
+		state.runtime = {
+			...state.runtime,
+			installed: { ...installed, sourceRepository: "https://github.com/example/rebuilt.cpp", installedAtUtc: 2 },
+		};
+		rerender(card());
+		expect(repositoryInput().value).toBe("https://github.com/example/rebuilt.cpp");
 	});
 
 	it("defaults the backend to the one the node's GPU vendor points at", async () => {

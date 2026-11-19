@@ -6,7 +6,6 @@ import type {
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse,
-	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse,
 } from "@/core/api/generated";
@@ -19,8 +18,6 @@ export type DevelopmentArtifact = XeLocalAiEngineClientEndpointsDevelopmentV1Dev
 export type DevelopmentEvent = XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse;
 export type DevelopmentPatchPreview = XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse;
 export type DevelopmentProfileDetection = XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse;
-export type DevelopmentRepositoryFromTemplate =
-	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse;
 
 /**
  * The code-owned command profiles. These ids are a backend contract — the server rejects anything else — so they are

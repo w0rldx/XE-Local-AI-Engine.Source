@@ -10,6 +10,7 @@ import {
 	removeTrainingRuntimeMutation,
 	startTrainingRuntimeInstallMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { toBaseArtifactView, toPrerequisitesView, toRuntimeStatusView } from "@/features/training/models/TrainingModels";
 
 // Server-state for the training feature. Runtime install phase + log lines arrive live over the training SignalR hub
@@ -23,18 +24,13 @@ const trainingQueryIds = {
 	baseArtifacts: "listBaseArtifacts",
 } as const;
 
-/** Builds the partial generated-query-key filter matching every cached variant of one training endpoint. */
-function trainingInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
-
 export const trainingQueryKeys = {
 	ids: trainingQueryIds,
-	invalidationKey: trainingInvalidationKey,
+	invalidationKey: operationInvalidationKey,
 };
 
 function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId: string): Promise<void> {
-	return queryClient.invalidateQueries({ queryKey: trainingInvalidationKey(operationId) });
+	return queryClient.invalidateQueries({ queryKey: operationInvalidationKey(operationId) });
 }
 
 /**

@@ -11168,40 +11168,6 @@ export type ListNodeChatMessageRevisionsResponses = {
 export type ListNodeChatMessageRevisionsResponse =
 	ListNodeChatMessageRevisionsResponses[keyof ListNodeChatMessageRevisionsResponses];
 
-export type CreateNodeChatMessageRevisionData = {
-	body?: never;
-	path: {
-		conversationId: string;
-		messageId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/revisions";
-};
-
-export type CreateNodeChatMessageRevisionErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
-};
-
-export type CreateNodeChatMessageRevisionError = CreateNodeChatMessageRevisionErrors[keyof CreateNodeChatMessageRevisionErrors];
-
-export type CreateNodeChatMessageRevisionResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse;
-};
-
-export type CreateNodeChatMessageRevisionResponse =
-	CreateNodeChatMessageRevisionResponses[keyof CreateNodeChatMessageRevisionResponses];
-
 export type PinNodeChatConversationData = {
 	body: XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationRequest;
 	path: {

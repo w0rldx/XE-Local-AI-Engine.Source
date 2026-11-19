@@ -399,6 +399,63 @@ public sealed class WorkSessionServiceTests
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
     }
 
+    /// <summary>No loop owns a paused session, so its cancel is the only announcement of the end; the operations feed hears it as a status broadcast.</summary>
+    [Test]
+    public async Task Cancel_OfASessionNoLoopOwns_PublishesTheStatusChange()
+    {
+        var publisher = new RecordingWorkSessionEventPublisher();
+        var sessionId = Guid.NewGuid();
+        await using var factory = NewFactory(configureExtra: services =>
+        {
+            services.RemoveAll<IWorkSessionEventPublisher>();
+            services.AddSingleton<IWorkSessionEventPublisher>(publisher);
+        });
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        await PauseAsync(factory, sessionId);
+
+        WorkSessionDetail cancelled;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            cancelled = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().CancelAsync(sessionId);
+        }
+
+        AssertEx.Equal(AgentWorkSessionStatus.Cancelled, cancelled.Status);
+        AssertEx.ContainsSingle(publisher.Published,
+            published => published.SessionId == sessionId && published.Kind == WorkSessionChangeKind.Status,
+            "The settle this method writes must be announced exactly once.");
+    }
+
+    /// <summary>
+    ///     A start that loses the admission race after its Running write parks the session again; that park is the only
+    ///     announcement, so the operations feed does not keep a row the session has left.
+    /// </summary>
+    [Test]
+    public async Task Start_ThatLosesTheAdmissionRace_PublishesThePark()
+    {
+        var publisher = new RecordingWorkSessionEventPublisher();
+        var supervisor = new LosingAdmissionSupervisor();
+        var sessionId = Guid.NewGuid();
+        await using var factory = NewFactory(configureExtra: services =>
+        {
+            services.RemoveAll<IWorkSessionEventPublisher>();
+            services.AddSingleton<IWorkSessionEventPublisher>(publisher);
+            services.RemoveAll<IWorkSessionExecutionSupervisor>();
+            services.AddSingleton<IWorkSessionExecutionSupervisor>(supervisor);
+        });
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            _ = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() =>
+                scope.ServiceProvider.GetRequiredService<IWorkSessionService>().StartAsync(sessionId));
+        }
+
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
+        AssertEx.ContainsSingle(publisher.Published,
+            published => published.SessionId == sessionId && published.Kind == WorkSessionChangeKind.Status,
+            "The park after a lost admission must be announced exactly once.");
+    }
+
     [Test]
     public async Task PostFollowUp_WhileTheSessionIsParked_PersistsTheTurnButDoesNotResume()
     {
@@ -617,6 +674,19 @@ public sealed class WorkSessionServiceTests
             ExpectedVersion = running.Version,
             TargetStatus = AgentWorkSessionStatus.Paused
         });
+    }
+
+    /// <summary>Reports capacity, then loses the admission: the race a concurrent start can win between the two calls.</summary>
+    private sealed class LosingAdmissionSupervisor : IWorkSessionExecutionSupervisor
+    {
+        public bool HasCapacity => true;
+
+        public bool TryStart(Guid sessionId) => false;
+
+        public ValueTask<bool> TryStopAsync(Guid sessionId, WorkSessionStopReason reason, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
+
+        public bool IsRunning(Guid sessionId) => false;
     }
 
     /// <summary>Tool-capable unless the model's name says otherwise; cloud only for the explicitly cloud-named ones.</summary>

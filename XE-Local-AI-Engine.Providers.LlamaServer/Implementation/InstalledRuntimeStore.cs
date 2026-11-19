@@ -9,8 +9,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     <c>installed-runtime.json</c> under the cache root.
 /// </summary>
 /// <remarks>
-///     Mirrors the node-settings store: tolerant deserialize (absent/corrupt → <see langword="null" />), atomic write via
-///     a temp file then <see cref="File.Move(string, string, bool)" />, and owner-only (0600) permissions on non-Windows.
+///     Tolerant deserialize (absent/corrupt → <see langword="null" />); writes go through
+///     <see cref="SecureFilePermissions.WriteJsonAtomicAsync{T}" />, atomic and owner-only.
 /// </remarks>
 public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
 {
@@ -106,23 +106,7 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
-
-            // Atomic write: serialize to a temp sibling, then move-with-overwrite into place. On non-Windows the temp file is created owner-only (0600) up front, so it is
-            // never briefly world-readable, and the mode is carried through the same-directory move; Windows relies on the per-user data-directory ACL.
-            var tempPath = _statePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-            try
-            {
-                await using (var stream = CreateOwnerOnly(tempPath))
-                {
-                    await JsonSerializer.SerializeAsync(stream, state, SerializerOptions, ct).ConfigureAwait(false);
-                }
-
-                File.Move(tempPath, _statePath, overwrite: true);
-            }
-            finally
-            {
-                BestEffortFile.TryDeleteFile(tempPath);
-            }
+            await SecureFilePermissions.WriteJsonAtomicAsync(_statePath, state, SerializerOptions, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -142,28 +126,5 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
         {
             _lock.Release();
         }
-    }
-
-    /// <summary>Opens a truncating write stream for <paramref name="path" />.</summary>
-    /// <remarks>
-    ///     On non-Windows the file is created owner-only (0600) atomically through
-    ///     <see cref="FileStreamOptions.UnixCreateMode" />, mirroring the node-settings posture. Windows does not
-    ///     support that option, so a plain create is used there and the per-user data-directory ACL governs access.
-    /// </remarks>
-    private static FileStream CreateOwnerOnly(string path)
-    {
-        var options = new FileStreamOptions
-        {
-            Mode = FileMode.Create,
-            Access = FileAccess.Write,
-            Share = FileShare.None
-        };
-
-        if (!OperatingSystem.IsWindows())
-        {
-            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        }
-
-        return new FileStream(path, options);
     }
 }

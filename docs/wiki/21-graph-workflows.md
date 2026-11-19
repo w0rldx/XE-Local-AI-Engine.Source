@@ -1374,7 +1374,10 @@ The pushed event is `graphWorkflowChanged`, carrying `(runId, seq, kind)` and **
 re-reads the named feed from its own watermark, so a dropped push degrades to a late read rather than to a wrong
 render. `kind` is **lowercase on the wire** — `run`, `node`, `gate` — written as literals in
 `GraphWorkflowEventPublisher.ToWireKind` and asserted literally on both sides. There is no `event` kind: every kind
-moves the append-only event feed, so the client invalidates it unconditionally.
+moves the append-only event feed, so the client invalidates it unconditionally. One event is not per run:
+`PublishingGraphWorkflowStore.TransitionRunAsync`, the one writer of a run's status, also broadcasts
+`graphWorkflowRunStatusChanged` carrying `(RunId, Status)` (the `GraphWorkflowRunStatus` name) to every connection, for
+the app-wide operations feed's list of runs waiting for a decision.
 
 The publisher is a **store decorator** (`PublishingGraphWorkflowStore`), so exactly one ping is emitted per committed
 mutation that has a subscriber, carrying the sequence that commit allocated — and every published transition carries a

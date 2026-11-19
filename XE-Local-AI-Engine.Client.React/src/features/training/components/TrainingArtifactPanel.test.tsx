@@ -1,12 +1,17 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { listTrainingArtifactsQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { TrainingArtifactPanel } from "@/features/training/components/TrainingArtifactPanel";
 import type { TrainingArtifactView } from "@/features/training/models/TrainingModels";
+import { acceptConfirm, cancelConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { testMantineTheme } from "@/test/MantineTestRender";
+import { createTestQueryClient } from "@/test/RenderWithProviders";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({ t: (_key: string, defaultValue?: string) => defaultValue ?? _key }),
@@ -19,6 +24,7 @@ const mocks = vi.hoisted(() => ({
 	discard: vi.fn(),
 	override: vi.fn(),
 	noop: vi.fn(),
+	remove: vi.fn(),
 }));
 
 vi.mock("@/features/training/queries/useTrainingArtifacts", () => ({
@@ -26,7 +32,7 @@ vi.mock("@/features/training/queries/useTrainingArtifacts", () => ({
 	useStartTrainingExport: () => ({ isPending: false, mutate: mocks.noop }),
 	useRunTrainingArtifactSmoke: () => ({ isPending: false, mutate: mocks.noop }),
 	usePromoteTrainingArtifact: () => ({ isPending: false, mutate: mocks.noop }),
-	useDeleteTrainingArtifact: () => ({ isPending: false, mutate: mocks.noop }),
+	useDeleteTrainingArtifact: () => ({ isPending: false, mutate: mocks.remove }),
 	useDecideTrainingArtifactQuality: () => ({ isPending: false, mutate: mocks.decide }),
 	useBeginTrainingArtifactQualityRevalidation: () => ({ isPending: false, mutate: mocks.beginRevalidation }),
 	useDiscardTrainingArtifactQuality: () => ({ isPending: false, mutate: mocks.discard }),
@@ -79,12 +85,16 @@ function artifact(overrides: Partial<TrainingArtifactView> = {}): TrainingArtifa
 	};
 }
 
-function renderPanel(row: TrainingArtifactView) {
+function renderPanel(row: TrainingArtifactView, queryClient = createTestQueryClient()) {
 	mocks.artifacts = [row];
 	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			<TrainingArtifactPanel exportPhase={null} onExportStarted={vi.fn()} runId="run-1" />
-		</MantineProvider>,
+		<QueryClientProvider client={queryClient}>
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<ConfirmProvider>
+					<TrainingArtifactPanel exportPhase={null} onExportStarted={vi.fn()} runId="run-1" />
+				</ConfirmProvider>
+			</MantineProvider>
+		</QueryClientProvider>,
 	);
 }
 
@@ -132,6 +142,42 @@ describe("TrainingArtifactPanel quality gate", () => {
 				body: { comparisonId: "comparison-1", expectedVersion: 3 },
 			},
 			expect.any(Object),
+		);
+	});
+
+	it("deletes an artifact with its expected version only once the operator confirms, and nothing on cancel", async () => {
+		renderPanel(artifact());
+		const remove = screen.getByRole("button", { name: "Delete" });
+
+		await openConfirm(remove, "Delete this artifact?");
+		await cancelConfirm(remove);
+		expect(mocks.remove).not.toHaveBeenCalled();
+
+		await openConfirm(remove, "Delete this artifact?");
+		acceptConfirm();
+		await waitFor(() =>
+			expect(mocks.remove).toHaveBeenCalledWith(
+				{ path: { artifactId: "artifact-1" }, body: { expectedVersion: 3 } },
+				expect.any(Object),
+			),
+		);
+	});
+
+	it("sends the version the artifact list holds when the operator confirms, not the one seen at the click", async () => {
+		const queryClient = createTestQueryClient();
+		renderPanel(artifact(), queryClient);
+
+		await openConfirm(screen.getByRole("button", { name: "Delete" }), "Delete this artifact?");
+		queryClient.setQueryData(listTrainingArtifactsQueryKey({ path: { runId: "run-1" } }), {
+			items: [{ id: "artifact-1", version: 4 }],
+		});
+		acceptConfirm();
+
+		await waitFor(() =>
+			expect(mocks.remove).toHaveBeenCalledWith(
+				{ path: { artifactId: "artifact-1" }, body: { expectedVersion: 4 } },
+				expect.any(Object),
+			),
 		);
 	});
 

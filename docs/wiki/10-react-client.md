@@ -375,8 +375,9 @@ lease, so a loaded model no longer blocks it, and any refusal it still answers (
 **Long-running operations share one feed.** `core/operations/hooks/useActiveOperations.ts` merges the sources into
 one normalized row type (`core/operations/models/OperationModels.ts`, job adapters in `JobOperationModels.ts`): GGUF
 downloads and imports (`useActiveGgufAcquisitions`), the llama.cpp runtime acquisition, knowledge-base indexing
-(uploads and repository imports, one batch row), training runs, dataset builds, image jobs, scheduler runs and image and
-Whisper model downloads. The job
+(uploads and repository imports, one batch row), training runs, dataset builds, image jobs, scheduler runs, image and
+Whisper model downloads, graph runs and work sessions waiting for the user, Model Lab experiments and base checkpoint
+downloads. The job
 sources live in `core/operations/hooks/useJobOperations.ts` and talk to the generated client and the shared hub manager
 only, so `core` still imports no feature. Reading and watching are split: every consumer reads the shared query cache,
 and only `useOperations({ watch: true })` (the coordinator, one per app) leases hubs. Training runs and image jobs
@@ -384,7 +385,8 @@ hydrate from their list with `activeOnly=true` (queued and running only, a SQL f
 page cannot push a running job off it), and each id that leaves that list is read back once by id
 (`getTrainingRun`/`getImageJob`), which is the terminal row the toast sees; until that read answers, the job's last
 active row stands in (still running), and a failed read drops the row. Dataset builds hydrate from the whole
-datasets list, which is not paged. Each list source leases
+datasets list, which is not paged; they read the same raw cache entry the datasets page maps through `select`, so both
+share one request. Each list source leases
 `training/runs/hub`, `training/datasets/hub` or `images/hub` while the feature is on, join each running
 id's group (live only on the training hubs, `afterSeq` past any retained event; the images hub replays a job's
 buffered events) and re-read the list on a state event, a replay reset, a reconnect, the hub's `job.created` broadcast
@@ -399,15 +401,43 @@ scheduler runs and model downloads come from broadcasts with no cheap list, so `
 leased while the feature is on (the scheduler and transcription only on a definite `schedulerEnabled: true` or
 `transcriptionEnabled: true` from the shared node-settings read) and fold their events into no-fetch cache entries,
 emptied on reconnect. A download already running at page load shows with its next progress push (at most a second
-apart). No source polls beside a connected hub; the images and transcription pages still poll their own download lists while one runs. Not a
+apart). Four more sources hydrate from a list and re-read it on an app-wide broadcast, with no interval beside a live
+hub (`pushedListSettings`): graph runs parked for a decision (`graph-workflows/runs?status=WaitingForApproval`, only on
+a definite `graphWorkflowsEnabled: true`; `graph-workflows/hub`'s `graphWorkflowRunStatusChanged` re-reads it for a run
+moving into a wait or out of one the list holds), work sessions in `WaitingForInput`/`WaitingForApproval` (filtered out
+of the session list, only on a definite `workSessionsEnabled: true`; re-read on `work-sessions/hub`'s
+`workSessionStatusChanged`), Model Lab experiments (a list source on `training/runs/hub`: `job.created` of kind
+`ModelLabExperiment` re-reads the list, and the running experiment's group is joined live-only like a training run's,
+so its State event re-reads it again) and base checkpoint downloads (only while the `training` capability is on;
+`job.created`/`job.ended` of kind `BaseArtifactDownload` on `training/runs/hub`; a download's byte count is pushed
+nowhere, so while one runs the list is also re-read once a minute for its progress). A hidden tab keeps its hub
+connection, so its title count and OS notification come from the push. While a source's hub is down its list is
+re-read every 60 s (every 15 s for a downloading checkpoint), also in a hidden tab, until the reconnect re-reads it
+once; a running Model Lab experiment is then read by id (`getModelLabExperiment`, one row instead of every retained
+prompt and result) every 15 s until it leaves Running, which re-reads the list once. A 403 or 404 (another role, or
+the feature switched off) stops the source with no lease, no further reads and no rows. The base checkpoint store is
+shared by Model Lab and training and records no starter, so every checkpoint download shows, labelled as a base
+checkpoint. No hub-backed source polls beside a connected hub, except that minute read of a running checkpoint
+download's bytes; the images and transcription pages still poll their own download lists while one runs. Not a
 source: benchmark runs (their list is per project, so there is no app-wide snapshot of which runs to join). Progress is known only from a source
-percentage, byte counts with a total, or the indexing batch's done count. Three consumers read it: Home's Activity card
+percentage, byte counts with a total, or the indexing batch's done count. A failed GGUF download or import reads its
+`errorCode` through `ggufFailureText` (`core/model-downloads/models/GgufAcquisitionErrors.ts`), the one mapping the
+feed row, its toast, the Models download and import panels and Home's first-run card share; the server's sanitized
+text follows on a second line only for `DownloadFailed` and `Network`, whose cause it narrows down. Three consumers read it: Home's Activity card
 (running rows, and failed downloads and runtime installs, with detail, link and, for the runtime, retry; a failed job is
 history and is not kept; not rendered when empty), `ActiveOperationsIndicator` in the header on desktop and mobile (the
-`headerIndicator` slot; "N running" or an error-coloured "Action required" while any row is failed, linking to `/`,
-hidden on `/`), and `OperationToastCoordinator` in the shell overlay, which alerts once per observed running-to-terminal
-transition. A terminal state seen first (page load, reconnect re-hydration, remount) never alerts. The alert is for a
-user who is elsewhere: no toast while the operation's own page is open and visible; while the tab is hidden the toast
+`headerIndicator` slot; "N running", "N waiting for you" while a row waits, or an error-coloured "Action required"
+while any row is failed, linking to `/`, hidden on `/`), and `OperationToastCoordinator` in the shell overlay, which
+alerts once per observed running-to-terminal transition. A terminal state seen first (page load, reconnect
+re-hydration, remount) never alerts. A `waiting` row alerts when first seen waiting, first sight included; its id is
+remembered in this browser (`recordAlertedWaits`, local storage), so a refetch, a reload or a second tab does not alert
+the same wait again. A wait is the row's id plus, for a work session, its waiting status, so a session that moves from
+`WaitingForInput` to `WaitingForApproval` between two reads alerts again; a graph run summary carries nothing that
+changes per Pause node, so a run decided at one Pause and parked at the next between two reads alerts once (accepted
+ceiling). A wait seen ending is forgotten, so the next wait of the same run or session alerts; every wait still open is
+kept, and only waits that ended while no page watched are capped at 50. Logging out (`useNodeLogout`) clears the list; an unmount, a dev remount or a reload keeps it.
+The alert is for a user who is elsewhere: no toast while the operation's own page is open and visible (for a graph run,
+that run's view: the editor or another run's view does not count), and a wait shown on its own page is not claimed; while the tab is hidden the toast
 is joined by a count in front of the tab title (`(2) …`, cleared on `visibilitychange` to visible) and, when the
 per-browser `JobNotificationStore` switch is on and the browser granted it, an OS `Notification`. The switch
 (`JobNotificationsSwitch`, Node settings → General → This browser) asks for the permission only when turned on and

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Transcription.Implementation;
 
 using System.Collections.Concurrent;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
@@ -220,10 +221,10 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
     }
 
     private IProgress<PullProgress> ProgressFor(string modelId, int partIndex) =>
-        new Progress<PullProgress>(update => ReportRunningProgress(modelId, update, partIndex));
+        new SynchronousProgress<PullProgress>(update => ReportRunningProgress(modelId, update, partIndex));
 
-    // Records byte progress WITHOUT ever resurrecting a finished download. Progress<T> marshals through the captured context, so a tick queued just before
-    // completion can be delivered after the terminal write; publishing it unguarded would flip a finished download back to Running and hang the UI on it.
+    // Records byte progress WITHOUT ever resurrecting a finished download: a tick recorded after the terminal write would flip a finished download back to
+    // Running and hang the UI on it.
     private void ReportRunningProgress(string modelId, PullProgress update, int partIndex)
     {
         WhisperModelDownloadStatus status;
@@ -296,7 +297,7 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
         _ = PushAsync(stamped);
     }
 
-    // Fire-and-forget from a synchronous Progress<T> callback: a failed push is only debug-logged, because the model list
+    // Fire-and-forget from a synchronous progress callback: a failed push is only debug-logged, because the model list
     // still serves the status. No request token exists here (MA0032/CA2016 opt-out).
     private async Task PushAsync(WhisperModelDownloadStatus status)
     {

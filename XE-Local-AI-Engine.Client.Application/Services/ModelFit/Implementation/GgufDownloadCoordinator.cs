@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using System.Collections.Concurrent;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -392,7 +393,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         PublishStatus(status);
     }
 
-    // Pushes fire-and-forget: the synchronous Progress<T> callback must not block byte flow, so a push failure is only
+    // Pushes fire-and-forget: the synchronous progress callback must not block byte flow, so a push failure is only
     // debug-logged. The hub publisher owns the wire projection.
     private void PublishStatus(GgufAcquisitionStatus status)
     {
@@ -403,7 +404,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     {
         try
         {
-            // Fire-and-forget from a synchronous Progress<T> callback: there is no request token here, and the push
+            // Fire-and-forget from a synchronous progress callback: there is no request token here, and the push
             // must outlive the caller, so cancellation is intentionally not propagated (MA0032/CA2016 opt-out).
             await _eventPublisher.PublishStatusAsync(status, CancellationToken.None);
         }
@@ -420,7 +421,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         CancellationToken token)
     {
         var modelName = identity.CanonicalModelName;
-        var progress = new Progress<PullProgress>(update => SetStatus(operationId,
+        var progress = new SynchronousProgress<PullProgress>(update => SetStatus(operationId,
             GgufAcquisitionPhase.Downloading,
             update.CompletedBytes,
             update.TotalBytes,

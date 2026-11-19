@@ -3,8 +3,9 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { downloadRecommendedEmbeddingMutation, listLocalModelsQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { toast } from "@/core/ui/notifications/Toast";
-import { knowledgeInvalidationKey, knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
+import { knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
 
 /**
  * Starts the one-click recommended-embedding-model download from the knowledge base, the same endpoint the Node
@@ -28,7 +29,7 @@ export function useRecommendedEmbeddingDownload() {
 		onSuccess: async (response) => {
 			await Promise.all([
 				queryClient.invalidateQueries({ queryKey: listLocalModelsQueryKey() }),
-				queryClient.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listDocuments) }),
+				queryClient.invalidateQueries({ queryKey: operationInvalidationKey(knowledgeQueryIds.listDocuments) }),
 			]);
 			if (response.alreadyInstalled) {
 				toast.info(

@@ -89,7 +89,8 @@ public sealed class SandboxOutputLineSplitterTests
         using var stream = new MultiplexedStream(framed, multiplexed: true);
         var observer = new RecordingSandboxOutputObserver();
 
-        var captured = await DockerDotNetRuntimeClient.ReadBoundedAsync(stream, maxBytesPerStream: 4096, observer, CancellationToken.None);
+        var captured = new DockerDotNetRuntimeClient.ExecCapture(maxBytesPerStream: 4096, observer);
+        await DockerDotNetRuntimeClient.ReadBoundedAsync(stream, captured, CancellationToken.None);
 
         AssertEx.Equal("price €5|tail", string.Join('|', observer.StandardOutput));
         AssertEx.Equal("warn|last", string.Join('|', observer.StandardError));

@@ -30,11 +30,17 @@ internal sealed class JobCreatedPublisher : IJobCreatedPublisher
         _logger = logger;
     }
 
-    public async Task PublishCreatedAsync(CreatedJobKind kind, Guid jobId, CancellationToken cancellationToken = default)
+    public Task PublishCreatedAsync(CreatedJobKind kind, Guid jobId, CancellationToken cancellationToken = default) =>
+        BroadcastAsync(JobCreatedHubEvents.Created, kind, jobId, cancellationToken);
+
+    public Task PublishEndedAsync(CreatedJobKind kind, Guid jobId, CancellationToken cancellationToken = default) =>
+        BroadcastAsync(JobCreatedHubEvents.Ended, kind, jobId, cancellationToken);
+
+    private async Task BroadcastAsync(string method, CreatedJobKind kind, Guid jobId, CancellationToken cancellationToken)
     {
         var clients = kind switch
         {
-            CreatedJobKind.TrainingRun => _runs.Clients,
+            CreatedJobKind.TrainingRun or CreatedJobKind.ModelLabExperiment or CreatedJobKind.BaseArtifactDownload => _runs.Clients,
             CreatedJobKind.DatasetBuild => _datasets.Clients,
             CreatedJobKind.ImageJob => _images.Clients,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown job kind.")
@@ -42,7 +48,7 @@ internal sealed class JobCreatedPublisher : IJobCreatedPublisher
 
         try
         {
-            await clients.All.SendAsync(JobCreatedHubEvents.Created,
+            await clients.All.SendAsync(method,
                 new JobCreatedHubEvent
                 {
                     Id = jobId,
@@ -52,7 +58,7 @@ internal sealed class JobCreatedPublisher : IJobCreatedPublisher
         }
         catch (Exception exception)
         {
-            _logger.LogWarning("Could not announce the new {Kind} {JobId} ({ErrorClass}).", kind, jobId, exception.GetType().Name);
+            _logger.LogWarning("Could not announce {Method} for {Kind} {JobId} ({ErrorClass}).", method, kind, jobId, exception.GetType().Name);
         }
     }
 }

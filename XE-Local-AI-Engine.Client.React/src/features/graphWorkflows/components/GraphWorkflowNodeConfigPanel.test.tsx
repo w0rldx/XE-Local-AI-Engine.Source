@@ -47,6 +47,8 @@ interface Handlers {
 	readonly allowsActions?: boolean;
 	readonly decisionModelOptionsReady?: boolean;
 	readonly graphNodes?: readonly GraphWorkflowCanvasNodeData[];
+	readonly onConnect?: (target: string, sourceHandle: string | undefined) => void;
+	readonly readOnly?: boolean;
 }
 
 function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {}) {
@@ -73,6 +75,8 @@ function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {})
 				decisionModelOptionsReady={handlers.decisionModelOptionsReady}
 				graphSettings={handlers.graphSettings}
 				graphNodes={handlers.graphNodes}
+				onConnect={handlers.onConnect}
+				readOnly={handlers.readOnly}
 			/>
 		</ConfirmProvider>,
 	);
@@ -259,6 +263,20 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 
 		expect(onRename).toHaveBeenCalledWith("agent-2");
 		expect(screen.getByText("That key already belongs to another node or edge.")).toBeTruthy();
+	});
+
+	it("commits the key on a plain Enter, never on an Enter that confirms an IME composition", () => {
+		const onRename = vi.fn<(to: string) => "ok" | "collision" | "invalid">(() => "ok");
+		renderPanel(defaultNodeData("Agent", "agent-1"), { onRename });
+
+		const keyInput = screen.getByTestId("gw-node-config-key");
+		fireEvent.change(keyInput, { target: { value: "agent-2" } });
+		fireEvent.keyDown(keyInput, { key: "Enter", isComposing: true });
+		fireEvent.keyDown(keyInput, { key: "Enter", keyCode: 229 });
+		expect(onRename).not.toHaveBeenCalled();
+
+		fireEvent.keyDown(keyInput, { key: "Enter" });
+		expect(onRename).toHaveBeenCalledWith("agent-2");
 	});
 
 	it("shows the kind's default max attempts without writing it", () => {
@@ -733,5 +751,66 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 		expect((screen.getByTestId("gw-node-config-repository") as HTMLInputElement).checked).toBe(true);
 		fireEvent.click(screen.getByTestId("gw-node-config-repository"));
 		expect(onChange).toHaveBeenLastCalledWith({ repository: false });
+	});
+
+	describe("Connect to", () => {
+		const graphNodes = [
+			defaultNodeData("Start", "start"),
+			defaultNodeData("Condition", "check"),
+			{ ...defaultNodeData("Agent", "analyze"), label: "Analyze" } as GraphWorkflowCanvasNodeData,
+			defaultNodeData("End", "done"),
+		];
+
+		async function connectOptions(testId: string): Promise<(string | null)[]> {
+			const input = screen.getByTestId(testId);
+			fireEvent.click(input);
+			const dropdown = document.getElementById(input.getAttribute("aria-controls") ?? "");
+			const options = await within(dropdown as HTMLElement).findAllByRole("option", { hidden: true });
+			return options.map((option) => option.textContent);
+		}
+
+		it("offers every node but itself and Start, and connects the chosen one", async () => {
+			const onConnect = vi.fn();
+			renderPanel(defaultNodeData("Tool", "lookup"), {
+				graphNodes: [...graphNodes, defaultNodeData("Tool", "lookup")],
+				onConnect,
+			});
+
+			expect(await connectOptions("gw-node-connect-target")).toEqual(["check", "Analyze (analyze)", "done"]);
+			const submit = screen.getByTestId<HTMLButtonElement>("gw-node-connect-submit");
+			expect(submit.disabled).toBe(true);
+
+			fireEvent.click(await screen.findByRole("option", { name: "done", hidden: true }));
+			fireEvent.click(submit);
+
+			expect(onConnect).toHaveBeenCalledWith("done", undefined);
+		});
+
+		it("asks a Condition which branch the edge leaves from, and sends it as the source handle", async () => {
+			const onConnect = vi.fn();
+			renderPanel(graphNodes[1] as GraphWorkflowCanvasNodeData, { graphNodes, onConnect });
+
+			expect(await connectOptions("gw-node-connect-branch")).toEqual(["true", "false"]);
+			fireEvent.click(await screen.findByRole("option", { name: "false", hidden: true }));
+			fireEvent.click(screen.getByTestId("gw-node-connect-target"));
+			fireEvent.click(await screen.findByRole("option", { name: "done", hidden: true }));
+			fireEvent.click(screen.getByTestId("gw-node-connect-submit"));
+
+			expect(onConnect).toHaveBeenCalledWith("done", "false");
+		});
+
+		it("is disabled read-only, and absent on an End or without a graph to connect in", () => {
+			const view = renderPanel(defaultNodeData("Tool", "lookup"), { graphNodes, onConnect: vi.fn(), readOnly: true });
+			expect(screen.getByTestId<HTMLInputElement>("gw-node-connect-target").disabled).toBe(true);
+			expect(screen.getByTestId<HTMLButtonElement>("gw-node-connect-submit").disabled).toBe(true);
+			view.unmount();
+
+			const end = renderPanel(defaultNodeData("End", "done"), { graphNodes, onConnect: vi.fn() });
+			expect(screen.queryByTestId("gw-node-connect")).toBeNull();
+			end.unmount();
+
+			renderPanel(defaultNodeData("Tool", "lookup"), { graphNodes });
+			expect(screen.queryByTestId("gw-node-connect")).toBeNull();
+		});
 	});
 });

@@ -254,6 +254,7 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 				{ready && allowed && (
 					<>
 						<SegmentedControl
+							aria-label={t("pages.modelLab.steer.jobKindLabel", "Kind of run")}
 							value={jobKind}
 							onChange={setJobKind}
 							w="fit-content"

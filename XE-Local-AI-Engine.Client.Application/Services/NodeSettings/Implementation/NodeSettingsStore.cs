@@ -193,8 +193,8 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     }
 
     /// <summary>
-    ///     Writes through a temp SIBLING plus an atomic rename, so a crash mid-write never leaves a torn file: the old
-    ///     one survives intact.
+    ///     Writes through <see cref="SecureFilePermissions.WriteJsonAtomicAsync{T}" />, a temp SIBLING plus an atomic rename, so a crash
+    ///     mid-write never leaves a torn file: the old one survives intact.
     /// </summary>
     /// <remarks>
     ///     <see cref="File.Move(string, string, bool)" /> within one directory is a rename — atomic on Linux (<c>rename(2)</c>) and
@@ -203,76 +203,8 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     ///     another holder has open FAILS on Windows, which is why that file's lock sits on a sibling <c>.lock</c> — does not bite here,
     ///     so do not "fix" it: every read and write here runs under <c>_lock</c>, the write opens <see cref="FileShare.None" />, and one node instance runs per data directory.
     /// </remarks>
-    private async Task SaveUnlockedAsync(StoredNodeSettings normalizedSettings, CancellationToken cancellationToken)
-    {
-        var tempPath = string.Concat(_settingsPath, ".", Guid.NewGuid().ToString("N"), ".tmp");
-        try
-        {
-            // Create with 0600 up front on non-Windows so the file is never briefly world-readable between create and chmod, and so the
-            // RENAMED file keeps owner-only permissions. Windows relies on the per-user data-directory ACL (UnixCreateMode is unsupported there).
-            await using (var fileStream = CreateOwnerOnly(tempPath))
-            {
-                await JsonSerializer.SerializeAsync(fileStream, normalizedSettings, SerializerOptions, cancellationToken);
-            }
-
-            File.Move(tempPath, _settingsPath, overwrite: true);
-        }
-        catch
-        {
-            // A failed serialize or move leaves the previous file untouched; drop the partial temp so no litter builds up. Best-effort, in its
-            // own try: a delete that throws here would REPLACE the original failure with a cleanup error, hiding why the write failed.
-            DeleteIfExists(tempPath);
-            throw;
-        }
-    }
-
-    /// <summary>
-    ///     Best-effort temp-file cleanup, matching <c>KnowledgeDocumentBlobStore.DeleteFileIfExists</c>: a leftover
-    ///     <c>.tmp</c> sibling is litter, never a correctness problem, and must not mask the exception being propagated.
-    /// </summary>
-    private static void DeleteIfExists(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup; a transient IO error leaves an orphan temp file next to node-settings.json.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Best-effort cleanup; a permission error leaves an orphan temp file next to node-settings.json.
-        }
-    }
-
-    /// <summary>
-    ///     Opens a truncating write stream for <paramref name="path" />.
-    /// </summary>
-    /// <remarks>
-    ///     On non-Windows the file is created with owner-only (0600) permissions atomically via
-    ///     <see cref="FileStreamOptions.UnixCreateMode" />, matching the key-file posture. On Windows that option is
-    ///     unsupported, so a plain create is used and the per-user data-directory ACL governs access.
-    /// </remarks>
-    private static FileStream CreateOwnerOnly(string path)
-    {
-        var options = new FileStreamOptions
-        {
-            Mode = FileMode.Create,
-            Access = FileAccess.Write,
-            Share = FileShare.None
-        };
-
-        if (!OperatingSystem.IsWindows())
-        {
-            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        }
-
-        return new FileStream(path, options);
-    }
+    private Task SaveUnlockedAsync(StoredNodeSettings normalizedSettings, CancellationToken cancellationToken) =>
+        SecureFilePermissions.WriteJsonAtomicAsync(_settingsPath, normalizedSettings, SerializerOptions, cancellationToken);
 
     /// <summary>Clamps/validates each stored field independently.</summary>
     /// <remarks>

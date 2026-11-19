@@ -479,6 +479,58 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     }
 
     [Test]
+    public async Task ProgressReports_AreRecordedBeforePrepareReturns_SoCommittingIsNeverOverwrittenByALateDownloadingTick()
+    {
+        var canonical = GgufModelName.Format(Repo, Quant);
+        var operations = new GgufAcquisitionOperationRegistry(TimeProvider.System);
+        var transaction = new ProvisioningDownloadTransaction
+        {
+            Reports =
+            [
+                new PullProgress { ModelName = canonical, Status = "downloading", CompletedBytes = 3, TotalBytes = 9 },
+                new PullProgress { ModelName = canonical, Status = "downloading", CompletedBytes = 7, TotalBytes = 9 }
+            ]
+        };
+        var coordinator = BuildCoordinator(transaction, new InMemoryCoordinatedModelProviderMapStore(), operations: operations);
+        // Any report posted to the context is held, so a progress type that defers its callback cannot land by luck.
+        var context = new HoldingProgressContext();
+        GgufAcquisitionStatus? afterReports = null;
+        GgufAcquisitionStatus? atCommit = null;
+        transaction.AfterReports = () => afterReports = operations.GetNewest(GgufAcquisitionOperationKind.Download, canonical);
+        transaction.OnCommit = () =>
+        {
+            context.RunHeld();
+            atCommit = operations.GetNewest(GgufAcquisitionOperationKind.Download, canonical);
+        };
+
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(context);
+        Task<GgufDownloadTicket> start;
+        try
+        {
+            start = coordinator.StartAsync(new GgufModelRequest
+            {
+                RepoId = Repo,
+                Quant = Quant
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        var ticket = await start;
+        await WaitForPhaseAsync(coordinator, ticket.ModelName, GgufDownloadPhase.Completed);
+
+        var reported = AssertEx.NotNull(afterReports);
+        AssertEx.Equal(GgufAcquisitionPhase.Downloading, reported.Phase);
+        AssertEx.Equal(7L, reported.CompletedBytes);
+        var committing = AssertEx.NotNull(atCommit);
+        AssertEx.Equal(GgufAcquisitionPhase.Committing, committing.Phase);
+        AssertEx.Equal(7L, committing.CompletedBytes);
+    }
+
+    [Test]
     public async Task UnexpectedDetachedFailure_PublishesSanitizedTerminalFailure()
     {
         var mapStore = new InMemoryCoordinatedModelProviderMapStore();
@@ -505,7 +557,8 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         GgufAcquisitionDisposition disposition = GgufAcquisitionDisposition.Available,
         IGgufDownloadEventPublisher? publisher = null,
         ILocalModelProviderResolver? providerResolver = null,
-        ILogger<GgufDownloadCoordinator>? logger = null)
+        ILogger<GgufDownloadCoordinator>? logger = null,
+        GgufAcquisitionOperationRegistry? operations = null)
     {
         var identityResolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
         var identity = identityResolver.Resolve(new GgufAcquisitionIntent
@@ -533,7 +586,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         return new GgufDownloadCoordinator(transaction,
             identityResolver,
             scopeFactory,
-            new GgufAcquisitionOperationRegistry(TimeProvider.System),
+            operations ?? new GgufAcquisitionOperationRegistry(TimeProvider.System),
             publisher ?? new NullGgufDownloadEventPublisher(),
             logger ?? NullLogger<GgufDownloadCoordinator>.Instance,
             TimeProvider.System);
@@ -568,6 +621,9 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         public bool WasRolledBack { get; private set; }
         public bool ThrowRollback { get; init; }
         public bool ThrowPartialCommit { get; init; }
+        public IReadOnlyList<PullProgress> Reports { get; init; } = [];
+        public Action? AfterReports { get; set; }
+        public Action? OnCommit { get; set; }
         public TaskCompletionSource PrepareStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _releasePrepare = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -610,6 +666,12 @@ public sealed class GgufDownloadCoordinatorRoutingTests
                 throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network, "Download failed.");
             }
 
+            foreach (var report in Reports)
+            {
+                progress?.Report(report);
+            }
+
+            AfterReports?.Invoke();
             var entry = Entry(destination);
             return new PreparedGgufDownload
             {
@@ -630,6 +692,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         public Task<GgufDownloadCommitReceipt> CommitAsync(PreparedGgufDownload preparedDownload, CancellationToken cancellationToken)
         {
             WasCommitted = true;
+            OnCommit?.Invoke();
             var receipt = new GgufDownloadCommitReceipt
             {
                 RegistryEntry = preparedDownload.RegistryEntry,
@@ -718,6 +781,49 @@ public sealed class GgufDownloadCoordinatorRoutingTests
                 Role = GgufRole.Chat,
                 ModelContentFingerprint = entry.ModelContentFingerprint!
             };
+    }
+
+    /// <summary>
+    ///     Runs every posted continuation on the thread pool under itself, except a <see cref="PullProgress" /> report,
+    ///     which it holds until <see cref="RunHeld" />.
+    /// </summary>
+    private sealed class HoldingProgressContext : SynchronizationContext
+    {
+        private readonly ConcurrentQueue<Action> _held = new();
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            if (state is PullProgress)
+            {
+                _held.Enqueue(() => d(state));
+                return;
+            }
+
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                var previous = Current;
+                SetSynchronizationContext(this);
+                try
+                {
+                    d(state);
+                }
+                finally
+                {
+                    SetSynchronizationContext(previous);
+                }
+            });
+        }
+
+        public override SynchronizationContext CreateCopy() =>
+            this;
+
+        public void RunHeld()
+        {
+            while (_held.TryDequeue(out var held))
+            {
+                held();
+            }
+        }
     }
 
     private sealed class RecordingPublisher : IGgufDownloadEventPublisher

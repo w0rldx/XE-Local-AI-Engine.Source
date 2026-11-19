@@ -1,19 +1,18 @@
 import { Alert, Checkbox, Input, SegmentedControl, Select, Stack, Switch, Textarea, TextInput } from "@mantine/core";
-import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { type Ref, useCallback, useEffect, useId, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { IntegrationApprovalWarning } from "@/features/integrations/components/IntegrationApprovalWarning";
-
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { IntegrationApprovalWarning } from "@/features/integrations/components/IntegrationApprovalWarning";
 import {
 	type IntegrationAgentOption,
 	type IntegrationGraphOption,
 	type IntegrationSessionPolicy,
 	type IntegrationTargetKind,
-	integrationSessionPolicies,
-	integrationTargetKinds,
 	type IntegrationToolFacts,
 	type IntegrationTriggerFormValues,
+	integrationSessionPolicies,
+	integrationTargetKinds,
 	integrationTriggerFormSchema,
 	integrationTriggerNamePattern,
 } from "@/features/integrations/models/IntegrationModels";
@@ -58,6 +57,7 @@ export function IntegrationTriggerForm({
 	ref,
 }: IntegrationTriggerFormProps) {
 	const { t } = useTranslation();
+	const labelId = useId();
 	const [values, setValues] = useState<IntegrationTriggerFormValues>(initialValues);
 	const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -163,8 +163,12 @@ export function IntegrationTriggerForm({
 				data-testid="integration-trigger-form-enabled"
 			/>
 
-			<Input.Wrapper label={t("pages.integrations.triggers.form.targetKind.label", "Target")}>
+			<Input.Wrapper
+				label={t("pages.integrations.triggers.form.targetKind.label", "Target")}
+				labelProps={{ id: `${labelId}-target` }}
+			>
 				<SegmentedControl
+					aria-labelledby={`${labelId}-target`}
 					fullWidth={true}
 					mt="xs"
 					data={integrationTargetKinds.map((kind) => ({

@@ -3,8 +3,8 @@ import LanguageDetector from "i18next-browser-languagedetector";
 import { initReactI18next } from "react-i18next";
 
 // No locale is bundled into the entry chunk: each one is its own chunk, fetched on demand by `loadLocale` below and
-// awaited by the render gate in Main.tsx. The fallback `en` used to be a static import, which put its ~364 KB raw
-// into the boot chunk of every session; it now loads in parallel with the detected language before the first paint.
+// awaited by the render gate in Main.tsx. The fallback `en` loads in parallel with the detected language before the
+// first paint, so its raw bytes never ride in the boot chunk of every session.
 const lazyLocales: Record<string, () => Promise<{ default: unknown }>> = {
 	de: () => import("./locales/de.json"),
 	en: () => import("./locales/en.json"),
@@ -39,9 +39,9 @@ function loadLocale(language: string | undefined): Promise<void> {
 	return pending;
 }
 
-// Keeps `<html lang>` on the language actually being rendered. index.html ships a static `lang="en"`, so a
-// German session used to be announced to screen readers — and hyphenated, and offered to translation tools —
-// as English. Guarded because this module is also loaded by node-environment tests, which have no document.
+// Keeps `<html lang>` on the language actually being rendered. index.html ships a static `lang="en"`, so without
+// this a German session is announced to screen readers — and hyphenated, and offered to translation tools — as
+// English. Guarded because this module is also loaded by node-environment tests, which have no document.
 function syncDocumentLanguage(language: string | undefined): void {
 	const resolved = language ?? i18next.resolvedLanguage ?? i18next.language;
 	if (typeof document !== "undefined" && resolved) {

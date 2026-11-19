@@ -1,5 +1,5 @@
 import { Button, Group, Loader, Progress, Stack, Text } from "@mantine/core";
-import { IconActivity, IconAlertTriangle } from "@tabler/icons-react";
+import { IconActivity, IconAlertTriangle, IconHandStop } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { useActiveOperations } from "@/core/operations/hooks/useActiveOperations";
@@ -17,6 +17,8 @@ function ActivityRow({ operation }: { operation: ActiveOperation }) {
 				<Group gap="xs" align="center" wrap="nowrap" style={{ minWidth: 0 }}>
 					{failed ? (
 						<IconAlertTriangle size={16} color="var(--mantine-color-red-6)" />
+					) : operation.state === "waiting" ? (
+						<IconHandStop size={16} color="var(--mantine-color-yellow-6)" />
 					) : operation.progress.kind === "indeterminate" ? (
 						<Loader size="xs" />
 					) : null}
@@ -35,8 +37,9 @@ function ActivityRow({ operation }: { operation: ActiveOperation }) {
 					</ButtonLink>
 				</Group>
 			</Group>
+			{/* pre-line: a download failure keeps the server's reason on its own line. */}
 			{operation.detail ? (
-				<Text size="xs" c={failed ? "red" : "dimmed"} data-testid="home-activity-detail">
+				<Text size="xs" c={failed ? "red" : "dimmed"} style={{ whiteSpace: "pre-line" }} data-testid="home-activity-detail">
 					{operation.detail}
 				</Text>
 			) : null}

@@ -19,7 +19,7 @@ import {
 	toChatMessageParts,
 	toggleBenchmarkRunSelection,
 } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkRunSummaryFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkRunSummaryFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 
 describe("benchmark output mapping", () => {
 	it("accumulates output and reasoning deltas without duplicating adjacent parts", () => {

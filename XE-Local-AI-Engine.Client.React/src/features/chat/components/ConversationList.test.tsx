@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import i18next from "i18next";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -241,6 +242,32 @@ describe("ConversationList management actions", () => {
 
 		expect(onRename).toHaveBeenCalledWith("local-1", "New title");
 		expect(onSelect).not.toHaveBeenCalled();
+	});
+
+	it("keeps the rename open on an Enter that confirms an IME composition and commits on a plain Enter", async () => {
+		const onRename = vi.fn();
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "local-1", origin: "local", title: "Old title" })]}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+				onRename={onRename}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("conversation-actions-local-1"));
+		fireEvent.click(await screen.findByTestId("conversation-rename-local-1"));
+		const input = (await screen.findByTestId("conversation-rename-input-local-1")) as HTMLInputElement;
+		fireEvent.change(input, { target: { value: "新しい題名" } });
+
+		fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+		fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+		expect(onRename).not.toHaveBeenCalled();
+		expect(screen.getByTestId("conversation-rename-input-local-1")).toBe(input);
+
+		fireEvent.keyDown(input, { key: "Enter" });
+		expect(onRename).toHaveBeenCalledWith("local-1", "新しい題名");
 	});
 
 	it("filters conversations by the search query against title and preview", () => {
@@ -633,5 +660,50 @@ describe("ConversationList export and import", () => {
 		);
 
 		expect(screen.queryByTestId("conversation-export-import")).toBeNull();
+	});
+});
+
+describe("ConversationList relative time", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-05-24T12:00:00.000Z"));
+	});
+
+	afterEach(async () => {
+		cleanup();
+		vi.useRealTimers();
+		await act(() => i18next.changeLanguage("en"));
+	});
+
+	function list(updatedAt: string) {
+		return (
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<ConversationList
+					conversations={[conversation({ id: "recent", updatedAt })]}
+					onCreateConversation={vi.fn()}
+					onSelect={vi.fn()}
+					onToggleCollapse={vi.fn()}
+				/>
+			</MantineProvider>
+		);
+	}
+
+	it("labels minutes in the UI language and follows a language switch without a remount", async () => {
+		render(list("2026-05-24T11:55:00.000Z"));
+		expect(screen.getByText("5m ago")).toBeTruthy();
+
+		await act(() => i18next.changeLanguage("de"));
+
+		expect(screen.getByText("vor 5 m")).toBeTruthy();
+	});
+
+	it("labels a conversation updated this minute as now, in English and German", async () => {
+		render(list("2026-05-24T11:59:50.000Z"));
+		expect(screen.getByText("now")).toBeTruthy();
+
+		await act(() => i18next.changeLanguage("de"));
+
+		expect(screen.getByText("jetzt")).toBeTruthy();
 	});
 });

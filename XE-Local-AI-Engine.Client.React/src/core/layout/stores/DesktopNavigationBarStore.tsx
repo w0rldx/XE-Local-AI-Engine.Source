@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import type { IDesktopNavigationBarStoreProperties } from "@/core/layout/models/NavigationBarModels";
+import { isRecord } from "@/core/models/JsonRecord";
 
 const STORAGE_KEY = "desktop-navigation-bar-storage";
 
@@ -68,8 +69,7 @@ export const useDesktopNavigationBarStore = create<IDesktopNavigationBarStorePro
 			name: STORAGE_KEY,
 			partialize: (state) => ({ sidebarState: state.sidebarState, openGroups: state.openGroups }),
 			merge: (persistedState, currentState) => {
-				const persisted: PersistedShape =
-					typeof persistedState === "object" && persistedState !== null ? (persistedState as PersistedShape) : {};
+				const persisted: PersistedShape = isRecord(persistedState) ? (persistedState as PersistedShape) : {};
 
 				return {
 					...currentState,

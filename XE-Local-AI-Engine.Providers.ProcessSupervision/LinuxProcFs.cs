@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 using System.Globalization;
 using System.Runtime.InteropServices;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <summary>Process identity read out of <c>/proc</c>, canonical paths and <c>kill(2)</c>, for the spawn-receipt reap.</summary>
@@ -18,40 +19,10 @@ internal static partial class LinuxProcFs
             return null;
         }
 
-        string raw;
-        try
-        {
-            // Forced sync: reached from the synchronous startup reaper and scanner contracts; the source is procfs, which never blocks on a device.
-#pragma warning disable MA0045 // Contract-forced: sync reaper/scanner contracts, procfs read.
-            raw = File.ReadAllText(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/stat"));
-#pragma warning restore MA0045
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-
-        // Field 2 (comm) is parenthesized and may contain spaces and parentheses, so the rest is located from the LAST ')'. Tokens then start at
-        // field 3 (state), putting state at index 0, ppid at index 1, pgrp at index 2 and starttime at index 19.
-        var commEnd = raw.LastIndexOf(')');
-        if (commEnd < 0 || commEnd + 2 >= raw.Length)
-        {
-            return null;
-        }
-
-        var fields = raw[(commEnd + 2)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        const int parentIndex = 1;
-        const int groupIndex = 2;
-        const int startTimeIndex = 19;
-        if (fields.Length <= startTimeIndex
-            || !int.TryParse(fields[parentIndex], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parent)
-            || !int.TryParse(fields[groupIndex], NumberStyles.Integer, CultureInfo.InvariantCulture, out var group)
-            || !long.TryParse(fields[startTimeIndex], NumberStyles.Integer, CultureInfo.InvariantCulture, out var startTicks))
-        {
-            return null;
-        }
-
-        return new ProcessStat(parent, group, startTicks, Exited: fields[0] is "Z" or "X");
+        var read = LinuxProcStat.Read(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/stat"));
+        return read.Outcome == LinuxProcStatOutcome.Parsed
+            ? new ProcessStat(read.ParentProcessId, read.ProcessGroupId, read.StartTicks, read.Exited)
+            : null;
     }
 
     /// <summary>

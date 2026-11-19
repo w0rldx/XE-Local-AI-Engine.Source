@@ -196,6 +196,49 @@ public sealed class FakeDockerNetworkAndExecRouteTests
     }
 
     [Test]
+    public async Task Execute_AStoppableExecOfAMissingExecutable_ReportsTheDaemonsWords_FromOneExec()
+    {
+        // A second, unwrapped exec for the daemon's own report could start a file a concurrent build installed in between,
+        // unsupervised: the supervised attempt's reason line is the whole answer.
+        await using var box = await FakeDockerRuntimeBox.StartAsync();
+        box.State.SeedImage(Image);
+        box.State.SeedNetwork("xe-app-net");
+        var containerId = await box.Runtime.RunContainerAsync(Specification());
+        box.State.ExecResponder = static commandLine =>
+        {
+            const string Marker = " xe-exec ";
+            var at = commandLine.IndexOf(Marker, StringComparison.Ordinal);
+            if (at < 0)
+            {
+                return null;
+            }
+
+            var identityPath = commandLine[(at + Marker.Length)..].Split(' ')[0];
+            return new FakeDockerExecOutcome
+            {
+                ExitCode = 127,
+                StandardError = identityPath + " path\n"
+            };
+        };
+
+        IDockerRuntimeClient client = box.Runtime;
+        var outcome = await client.ExecuteAsync(containerId,
+            new DockerExecutionRequest
+            {
+                Executable = "xe-no-such-tool",
+                Arguments = ["--version"],
+                MaxCapturedBytes = 4096,
+                StopMarkerDirectory = "/tmp"
+            });
+
+        AssertEx.Equal(expected: 127L, outcome.ExitCode);
+        AssertEx.Equal("OCI runtime exec failed: exec failed: unable to start container process: exec: \"xe-no-such-tool\": executable file not found in $PATH\r\n",
+            outcome.StandardOutput);
+        AssertEx.Empty(outcome.StandardError);
+        AssertEx.Equal(expected: 1, box.State.ExecSessions.Count, "the lookup failure must not be retried as an unsupervised exec");
+    }
+
+    [Test]
     public async Task Execute_SendsTheCommandAndWorkingDirectoryTheCallerAskedFor()
     {
         await using var box = await FakeDockerRuntimeBox.StartAsync();

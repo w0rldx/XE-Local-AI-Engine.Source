@@ -202,43 +202,55 @@ public enum ModelLabTraceReadStatus
 }
 
 /// <summary>One token at one layer, as measured. The short names are the file's, chosen to keep the capped trace small.</summary>
+/// <remarks>Every key is required, here and on the other line records: a key the script renames or drops makes the file unreadable, never a default value.</remarks>
 public sealed record ModelLabTraceRecord
 {
+    [JsonRequired]
     [JsonPropertyName("s")]
     public int Step { get; init; }
 
+    [JsonRequired]
     [JsonPropertyName("l")]
     public int Layer { get; init; }
 
+    [JsonRequired]
     [JsonPropertyName("k")]
     public string Kind { get; init; } = "?";
 
     /// <summary>Null, here and in the lists below, where the measured value was not a finite number.</summary>
+    [JsonRequired]
     [JsonPropertyName("n")]
     public double? Norm { get; init; }
 
     /// <summary>The 1st, 50th and 99th percentiles of the residual's values.</summary>
+    [JsonRequired]
     [JsonPropertyName("p")]
     public IReadOnlyList<double?> Percentiles { get; init; } = [];
 
+    [JsonRequired]
     [JsonPropertyName("ti")]
     public IReadOnlyList<int> TopIndices { get; init; } = [];
 
+    [JsonRequired]
     [JsonPropertyName("tv")]
     public IReadOnlyList<double?> TopValues { get; init; } = [];
 }
 
 public sealed record ModelLabTraceFooter
 {
+    [JsonRequired]
     [JsonPropertyName("truncated")]
     public bool Truncated { get; init; }
 
+    [JsonRequired]
     [JsonPropertyName("records")]
     public int Records { get; init; }
 
+    [JsonRequired]
     [JsonPropertyName("dropped")]
     public int Dropped { get; init; }
 
+    [JsonRequired]
     [JsonPropertyName("cap")]
     public long Cap { get; init; }
 }
@@ -256,24 +268,30 @@ public sealed record ModelLabTrace
 public sealed record ModelLabAttentionRecord
 {
     /// <summary>The index of the token this row predicted.</summary>
+    [JsonRequired]
     [JsonPropertyName("s")]
     public int Step { get; init; }
 
+    [JsonRequired]
     [JsonPropertyName("l")]
     public int Layer { get; init; }
 
+    [JsonRequired]
     [JsonPropertyName("q")]
     public int QueryPosition { get; init; }
 
     /// <summary>Key positions, per head.</summary>
+    [JsonRequired]
     [JsonPropertyName("k")]
     public IReadOnlyList<IReadOnlyList<int>> Keys { get; init; } = [];
 
     /// <summary>Weights in units of <see cref="ModelLabAttentionSummary.WeightScale" />, rounded down, matching <see cref="Keys" />.</summary>
+    [JsonRequired]
     [JsonPropertyName("w")]
     public IReadOnlyList<IReadOnlyList<int>> Weights { get; init; } = [];
 
     /// <summary>The weight outside the kept keys, per head, in the same units.</summary>
+    [JsonRequired]
     [JsonPropertyName("r")]
     public IReadOnlyList<int> Rest { get; init; } = [];
 }
@@ -294,30 +312,37 @@ public sealed record ModelLabAttention
 public sealed record ModelLabLensRecord
 {
     /// <summary>The index of the generated token.</summary>
+    [JsonRequired]
     [JsonPropertyName("s")]
     public int Step { get; init; }
 
     /// <summary>Per block, the top token ids of the readout, most probable first.</summary>
+    [JsonRequired]
     [JsonPropertyName("i")]
     public IReadOnlyList<IReadOnlyList<int>> Ids { get; init; } = [];
 
     /// <summary>Per block, their natural-log probabilities, rounded down to four decimals; null where not finite.</summary>
+    [JsonRequired]
     [JsonPropertyName("p")]
     public IReadOnlyList<IReadOnlyList<double?>> Logprobs { get; init; } = [];
 
     /// <summary>Per block, the generated token's logprob in the readout.</summary>
+    [JsonRequired]
     [JsonPropertyName("c")]
     public IReadOnlyList<double?> ChosenLogprobs { get; init; } = [];
 
     /// <summary>Per block, the generated token's competition rank in the readout: tokens tied with it share the better rank. Null where its logprob is.</summary>
+    [JsonRequired]
     [JsonPropertyName("r")]
     public IReadOnlyList<int?> ChosenRanks { get; init; } = [];
 
     /// <summary>Per block, the readout's entropy in nats, to three decimals; null where not finite.</summary>
+    [JsonRequired]
     [JsonPropertyName("e")]
     public IReadOnlyList<double?> Entropies { get; init; } = [];
 
     /// <summary>The step's distinct top ids, as decimal strings, to their decoded text cut to 64 escaped bytes.</summary>
+    [JsonRequired]
     [JsonPropertyName("t")]
     public IReadOnlyDictionary<string, string?> Texts { get; init; } = new Dictionary<string, string?>(StringComparer.Ordinal);
 }

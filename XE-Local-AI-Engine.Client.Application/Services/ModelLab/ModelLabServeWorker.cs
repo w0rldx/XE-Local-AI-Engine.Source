@@ -160,14 +160,7 @@ internal sealed class ModelLabServeWorker : IDisposable
     /// <param name="cancel">Sends the cooperative cancel; past its acknowledgement bound the group is killed.</param>
     public async Task<ModelLabServeJobOutcome> RunJobAsync(Guid jobId, string configPath, Action<TrainingStdioEvent> onEvent, CancellationToken cancel)
     {
-        var watchdog = new TrainingScriptWatchdog(_options.InactivityTimeout,
-            _options.MaxDuration,
-            _options.CancelAcknowledgementTimeout,
-            _timeProvider,
-            silentReason: "The Model Lab script stopped reporting and was terminated.",
-            overrunReason: "The Model Lab script exceeded its maximum duration and was terminated.",
-            noExitReason: "The Model Lab script stopped responding after closing its output and was terminated.",
-            killedExitCode: -1);
+        var watchdog = ModelLabScriptRunner.NewWatchdog(_options, _options.CancelAcknowledgementTimeout, _timeProvider);
         var job = new ServeJob
         {
             JobId = jobId.ToString("D"),

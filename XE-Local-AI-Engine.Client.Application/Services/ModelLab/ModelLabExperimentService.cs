@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Blobs;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
@@ -60,6 +61,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     private readonly GpuIdleHolderBroker _broker;
     private readonly IGpuWorkGate _gpuWorkGate;
     private readonly ITrainingProcessInspector _inspector;
+    private readonly IJobCreatedPublisher _jobCreated;
     private readonly Lock _jobLock = new();
     private readonly ILogger<ModelLabExperimentService> _logger;
     private readonly ModelLabJobOptions _options;
@@ -96,9 +98,11 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         INodeDataDirectory dataDirectory,
         INodeSqliteKeyHolder keyHolder,
         IOptions<ModelLabJobOptions> options,
+        IJobCreatedPublisher jobCreated,
         TimeProvider timeProvider,
         ILogger<ModelLabExperimentService> logger)
     {
+        ArgumentNullException.ThrowIfNull(jobCreated);
         ArgumentNullException.ThrowIfNull(arms);
         ArgumentNullException.ThrowIfNull(broker);
         ArgumentNullException.ThrowIfNull(dataDirectory);
@@ -124,6 +128,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         _events = events;
         _gpuWorkGate = gpuWorkGate;
         _inspector = inspector;
+        _jobCreated = jobCreated;
         _logger = logger;
         _options = options.Value;
         _preflight = preflight;
@@ -184,12 +189,6 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         typeof(ModelLabExperimentService).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion is { } version
             ? version[..Math.Min(version.Length, MaxAppVersionCharacters)]
             : null;
-
-    public static string WorkRoot(INodeDataDirectory dataDirectory)
-    {
-        ArgumentNullException.ThrowIfNull(dataDirectory);
-        return Path.Combine(dataDirectory.Root, "model-lab", "work");
-    }
 
     /// <summary>The fit and pairing preflight, then the license gate, then the download. A refused pick fetches no weights.</summary>
     public async Task<ModelLabCheckpointDownload> StartCheckpointDownloadAsync(string repoId,
@@ -838,6 +837,8 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                 InFlight = job;
             }
 
+            // After the row exists, so an operations feed's list re-read finds it; the publisher never throws.
+            await _jobCreated.PublishCreatedAsync(CreatedJobKind.ModelLabExperiment, id, CancellationToken.None);
             return new ModelLabStart
             {
                 ExperimentId = id
@@ -962,7 +963,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             }
             catch (Exception) when (active.SaveFailed)
             {
-                completion = Finished(ModelLabExperimentStatus.Failed, "A result could not be saved to the node's database, so the experiment stopped.");
+                completion = ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, "A result could not be saved to the node's database, so the experiment stopped.");
             }
             catch (Exception exception)
             {
@@ -1063,7 +1064,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     {
         if (active.Cancellation.IsCancellationRequested)
         {
-            return Cancelled();
+            return ModelLabExperimentCompletion.Cancelled();
         }
 
         var run = await RunServeJobAsync(active, JsonSerializer.SerializeToUtf8Bytes(job, TrainingJson.Options), script);
@@ -1078,7 +1079,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     {
         if (active.Cancellation.IsCancellationRequested)
         {
-            return Cancelled();
+            return ModelLabExperimentCompletion.Cancelled();
         }
 
         var id = active.ExperimentId;
@@ -1108,20 +1109,20 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
         catch (OperationCanceledException) when (active.Cancellation.IsCancellationRequested)
         {
-            return Cancelled();
+            return ModelLabExperimentCompletion.Cancelled();
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
-            return Finished(ModelLabExperimentStatus.Failed, $"'{request.InstalledModelName}' could not be verified within the experiment's maximum duration.");
+            return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, $"'{request.InstalledModelName}' could not be verified within the experiment's maximum duration.");
         }
         catch (KeyNotFoundException)
         {
-            return Finished(ModelLabExperimentStatus.Failed, $"'{request.InstalledModelName}' was not found among the installed models.");
+            return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, $"'{request.InstalledModelName}' was not found among the installed models.");
         }
         catch (Exception exception) when (exception is InvalidOperationException or InstalledGgufSnapshotException or IOException or UnauthorizedAccessException)
         {
             _logger.LogWarning(exception, "Holding the GGUF for Model Lab experiment {ExperimentId} failed.", id);
-            return Finished(ModelLabExperimentStatus.Failed, $"'{request.InstalledModelName}' could not be read as an installed model ({exception.Message}).");
+            return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, $"'{request.InstalledModelName}' could not be read as an installed model ({exception.Message}).");
         }
 
         await using (model)
@@ -1147,7 +1148,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         // The worker goes before the arms, so its memory is back for their own load tickets; only the gate and the lease pass to the job.
         if (await active.Session.DetachForArmsAsync() is not { } holds)
         {
-            return Finished(ModelLabExperimentStatus.Failed,
+            return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed,
                 "The derive's worker was not seen to exit, so it may still hold GPU memory. Model Lab refuses new experiments until it is confirmed gone.");
         }
 
@@ -1156,7 +1157,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         var result = await ReadDerivedResultOrNullAsync(job, steering);
         if (result?.Steering is not { } derived)
         {
-            return Finished(ModelLabExperimentStatus.Failed, "The script finished without writing a usable vector.");
+            return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, "The script finished without writing a usable vector.");
         }
 
         var vectorBytes = await File.ReadAllBytesAsync(job.VectorPath, CancellationToken.None);
@@ -1234,29 +1235,29 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                 {
                     Status = ModelLabExperimentStatus.Succeeded
                 }
-                : Finished(ModelLabExperimentStatus.Failed,
+                : ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed,
                     "The last arm's server was not seen to exit, so it may still be running and holding GPU memory. Its results are kept. Check for a llama-server process and stop it.");
         }
         catch (OperationCanceledException) when (active.Cancellation.IsCancellationRequested)
         {
-            return Cancelled();
+            return ModelLabExperimentCompletion.Cancelled();
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
-            return Finished(ModelLabExperimentStatus.Failed, "The arms exceeded their maximum duration, and the unfinished one was stopped.");
+            return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, "The arms exceeded their maximum duration, and the unfinished one was stopped.");
         }
         catch (OperationCanceledException)
         {
-            return Finished(ModelLabExperimentStatus.Failed, "An arm's server did not answer in time, and it was stopped.");
+            return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, "An arm's server did not answer in time, and it was stopped.");
         }
         catch (LlamaRuntimeException exception)
         {
-            return Finished(ModelLabExperimentStatus.Failed, exception.Message);
+            return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, exception.Message);
         }
         catch (Exception exception) when (!active.SaveFailed)
         {
             _logger.LogError(exception, "An arm of Model Lab experiment {ExperimentId} failed.", active.ExperimentId);
-            return Finished(ModelLabExperimentStatus.Failed, $"An arm failed ({exception.Message}). The finished arms are kept.");
+            return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, $"An arm failed ({exception.Message}). The finished arms are kept.");
         }
     }
 
@@ -1283,7 +1284,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     {
         var id = active.ExperimentId;
         var workDirectory = WorkDirectory(id);
-        TrainingRunWorkspace.CreateOwnerOnlyDirectory(WorkRoot(_dataDirectory));
+        TrainingRunWorkspace.CreateOwnerOnlyDirectory(ModelLabScriptRunner.WorkRoot(_dataDirectory));
         TrainingRunWorkspace.CreateOwnerOnlyDirectory(workDirectory);
         var jobPath = Path.Combine(workDirectory, JobFileName);
         // Owner-only by itself: the directory's own mode is best-effort, and this file holds the plaintext prompt.
@@ -1293,7 +1294,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         if (worker is null)
         {
 #pragma warning disable CA2000 // The session owns the worker from the attach below and disposes it when it evicts.
-            worker = ModelLabServeWorker.Spawn(_spawner, script, WorkRoot(_dataDirectory), _options, _timeProvider);
+            worker = ModelLabServeWorker.Spawn(_spawner, script, ModelLabScriptRunner.WorkRoot(_dataDirectory), _options, _timeProvider);
 #pragma warning restore CA2000
             var receiptPath = ModelLabWarmReceipts.PathFor(_dataDirectory, worker.RunToken);
             active.Session.AttachWorker(worker, receiptPath);
@@ -1329,7 +1330,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             await SetReceiptAsync(id, ModelLabWarmReceipts.Serialize(worker.Receipt));
         }
 
-        var outcome = await worker.RunJobAsync(id, jobPath, parsed => Publish(id, parsed), active.Cancellation.Token);
+        var outcome = await worker.RunJobAsync(id, jobPath, parsed => ModelLabScriptRunner.PublishFrame(_events, id, parsed), active.Cancellation.Token);
         // A reusable outcome came back with this job's ready, so the sample is this job's.
         if (outcome.Reusable && worker.VramBytes is { } vramBytes)
         {
@@ -1341,29 +1342,6 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         await SetReceiptAsync(id, receipt: null);
         active.WorkerReusable = active.KeepsWorker && outcome.Reusable;
         return outcome.Run;
-    }
-
-    private void Publish(Guid id, TrainingStdioEvent parsed)
-    {
-        switch (parsed.Kind)
-        {
-            case TrainingStdioEventKind.Phase:
-                _ = _events.Append(id, TrainingRunEventKind.Phase, new TrainingRunPayload
-                {
-                    Phase = parsed.Phase
-                });
-                break;
-            case TrainingStdioEventKind.Progress:
-                _ = _events.Append(id, TrainingRunEventKind.Progress, new TrainingRunPayload
-                {
-                    Step = parsed.Step,
-                    TotalSteps = parsed.TotalSteps,
-                    VramBytes = parsed.VramBytes
-                });
-                break;
-            default:
-                break;
-        }
     }
 
     /// <summary>A receipt file the startup sweep could not prove gone: a start re-reaps it and is refused while it stays.</summary>
@@ -1481,13 +1459,13 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         var attention = job.AttentionPath is { } attentionPath ? new FileInfo(attentionPath) : null;
         if (!trace.Exists || !result.Exists || attention is { Exists: false })
         {
-            return Finished(ModelLabExperimentStatus.Failed, "The Model Lab script finished without writing its results.");
+            return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, "The Model Lab script finished without writing its results.");
         }
 
         // The script holds the cap itself. This is the check that does not depend on the script being right.
         if (trace.Length > job.TraceByteCap + (job.LensByteCap ?? 0) || result.Length > ModelLabTraceSpec.MaxResultBytes || (attention is not null && attention.Length > job.AttentionByteCap))
         {
-            return Finished(ModelLabExperimentStatus.Failed, "The Model Lab script wrote more than its byte cap, so nothing was kept.");
+            return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, "The Model Lab script wrote more than its byte cap, so nothing was kept.");
         }
 
         var resultJson = await File.ReadAllBytesAsync(job.ResultPath, CancellationToken.None);
@@ -1531,17 +1509,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     }
 
     private string WorkDirectory(Guid id) =>
-        Path.Combine(WorkRoot(_dataDirectory), id.ToString("N"));
-
-    internal static ModelLabExperimentCompletion Cancelled() =>
-        Finished(ModelLabExperimentStatus.Cancelled, "The experiment was cancelled.");
-
-    internal static ModelLabExperimentCompletion Finished(ModelLabExperimentStatus status, string message) =>
-        new()
-        {
-            Status = status,
-            ErrorMessage = message
-        };
+        Path.Combine(ModelLabScriptRunner.WorkRoot(_dataDirectory), id.ToString("N"));
 
 #pragma warning disable CA2000 // The detached job disposes its token source; the start's finally does on any failure before that.
     private static ActiveJob NewJob(Guid id, Guid baseArtifactId, ModelLabGpuSession session, int? layer) =>

@@ -53,12 +53,7 @@ public sealed class ExportNodeChatConversationsEndpoint : Endpoint<ExportNodeCha
         }
         else
         {
-            var summaries = await _chatPersistence.ListConversationsAsync(new NodeChatListConversationsRequest
-                {
-                    IncludeArchived = true
-                },
-                ct);
-            conversationIds = [.. summaries.Select(static summary => summary.ConversationId)];
+            conversationIds = await _chatPersistence.ListChatConversationIdsAsync(ct);
         }
 
         // Built whole in memory and NOT capped, unlike the import: an export of a huge history is a file this node's

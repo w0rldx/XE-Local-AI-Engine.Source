@@ -48,6 +48,7 @@ export function BenchmarkRunResults({ controller }: { readonly controller: Bench
 				<SectionCard title={t("pages.benchmarks.runs", "Runs")}>
 					{isSuite ? (
 						<SegmentedControl
+							aria-label={t("pages.benchmarks.cells.viewLabel", "Show results as")}
 							size="xs"
 							value={ranking}
 							onChange={(value) => setRanking(value === "runs" ? "runs" : "cells")}

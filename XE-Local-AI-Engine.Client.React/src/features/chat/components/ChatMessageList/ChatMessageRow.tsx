@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 
 import { ChatMessage } from "@/features/chat/components/ChatMessage";
 import { StreamingIndicator } from "@/features/chat/components/StreamingIndicator";
@@ -8,9 +8,11 @@ import type {
 	ChatFeedbackRating,
 	ChatMessageFeedback,
 	ChatMessageModel,
+	ChatMessageRevisionNav,
 	ChatStreamingState,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
+import type { MessageRevisionGroup } from "@/features/chat/models/MessageRevisionGrouping";
 
 interface ChatMessageRowProps {
 	row: ListRow;
@@ -35,6 +37,25 @@ interface ChatMessageRowProps {
 	isPlainConversation: boolean;
 	renderAfterMessage?: (messageId: string) => ReactNode;
 	showTurnThroughput: boolean;
+}
+
+// Prev/next navigation across an assistant turn's sibling revisions; none for a user turn or a single revision.
+function revisionNavFor(
+	group: MessageRevisionGroup | undefined,
+	onSelectRevision: ((variantGroupId: string, messageId: string) => void) | undefined,
+): ChatMessageRevisionNav | undefined {
+	const variantGroupId = group?.active.variantGroupId;
+	if (group?.active.role !== "assistant" || group.revisions.length <= 1 || !variantGroupId) {
+		return undefined;
+	}
+	const previousRevision = group.revisions[Math.max(0, group.activeIndex - 1)];
+	const nextRevision = group.revisions[Math.min(group.revisions.length - 1, group.activeIndex + 1)];
+	return {
+		activeIndex: group.activeIndex,
+		total: group.revisions.length,
+		onPrevious: () => previousRevision && onSelectRevision?.(variantGroupId, previousRevision.id),
+		onNext: () => nextRevision && onSelectRevision?.(variantGroupId, nextRevision.id),
+	};
 }
 
 // The single row renderer shared by the plain and the virtualized paths, so the two can never disagree on
@@ -63,6 +84,10 @@ export function ChatMessageRow({
 }: ChatMessageRowProps) {
 	// Before the first token the queued/loading status sits inside the bubble (the placeholder text or the queued
 	// badge always gives that bubble content); once content starts it moves below the bubble as the footer.
+	// Memoized on the group, which the list keeps stable while another turn streams, so the memoized ChatMessage of
+	// every settled turn sees the same revisionNav and skips the per-token re-render.
+	const group = row.kind === "group" ? row.group : undefined;
+	const revisionNav = useMemo(() => revisionNavFor(group, onSelectRevision), [group, onSelectRevision]);
 	const isStatusInBubble = (scopedStreamingMessage?.isActive ?? false) && !hasStreamingContent;
 	const streamingIndicator = scopedStreamingMessage ? (
 		<StreamingIndicator
@@ -118,22 +143,9 @@ export function ChatMessageRow({
 		) : null;
 	}
 
-	const group = row.group;
-	const message = group.active;
+	const message = row.group.active;
 	const isStreamingTarget = scopedStreamingMessage?.messageId === message.id && message.role === "assistant";
 	const isAssistant = message.role === "assistant";
-	const variantGroupId = message.variantGroupId;
-	const previousRevision = group.revisions[Math.max(0, group.activeIndex - 1)];
-	const nextRevision = group.revisions[Math.min(group.revisions.length - 1, group.activeIndex + 1)];
-	const revisionNav =
-		isAssistant && group.revisions.length > 1 && variantGroupId
-			? {
-					activeIndex: group.activeIndex,
-					total: group.revisions.length,
-					onPrevious: () => previousRevision && onSelectRevision?.(variantGroupId, previousRevision.id),
-					onNext: () => nextRevision && onSelectRevision?.(variantGroupId, nextRevision.id),
-				}
-			: undefined;
 
 	const messageRow = (
 		<ChatMessage

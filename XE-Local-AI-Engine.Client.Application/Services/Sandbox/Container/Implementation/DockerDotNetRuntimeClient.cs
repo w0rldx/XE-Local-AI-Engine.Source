@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net;
@@ -33,12 +34,146 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     /// <summary>The per-read buffer for an exec stream. Bounds one read, not the capture; the ceiling does that.</summary>
     private const int ExecReadBufferBytes = 8 * 1024;
 
+    /// <summary>How long stopping a wrapped exec may take before the stop counts as unconfirmed.</summary>
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>How long a stopped exec's stream may take to reach its end, as the process provider bounds its drain.</summary>
+    private static readonly TimeSpan StopOutputDrainWait = TimeSpan.FromSeconds(2);
+
+    /// <summary>How long a stop waits before rerunning its script, or before asking the daemon again whether the wrapper exited.</summary>
+    private static readonly TimeSpan StopPollInterval = TimeSpan.FromMilliseconds(50);
+
+    /// <summary>The stop script's exit code for "processes of the session were still found after its passes".</summary>
+    private const int StopExitStillFound = 1;
+
+    /// <summary>The stop script's exit code for "no identity recorded yet".</summary>
+    private const int StopExitNoIdentity = 3;
+
+    /// <summary>The shell functions both exec scripts share; builtins only, so a stop needs no free pid beyond its own shell.</summary>
+    /// <remarks>
+    ///     <c>__xe_stat</c> reads a whole <c>/proc/&lt;pid&gt;/stat</c> record (a name may hold newlines and <c>") "</c>) and parses state,
+    ///     session id and start time after its last <c>") "</c>: 1 when unreadable, 2 when unparseable. <c>__xe_scan</c> sets
+    ///     <c>__xe_found</c> for a live process of session <c>$1</c> other than pid <c>$2</c>, or one it cannot parse, and with
+    ///     <c>$3</c> set SIGKILLs each one of the session.
+    /// </remarks>
+    private const string SessionScanFunctions = """
+        __xe_stat() {
+          __xe_l=
+          { while IFS= read -r __xe_line || [ -n "$__xe_line" ]; do __xe_l="$__xe_l$__xe_line "; done; } 2>/dev/null < "$1" || return 1
+          case "$__xe_l" in *") "*) ;; *) return 2 ;; esac
+          set -- ${__xe_l##*) }
+          __xe_state=$1 __xe_sid=$4 __xe_start=${20}
+          case "$__xe_state" in ?) ;; *) return 2 ;; esac
+          case "$__xe_sid" in ''|*[!0-9]*) return 2 ;; esac
+          case "$__xe_start" in ''|*[!0-9]*) return 2 ;; esac
+        }
+        __xe_scan() {
+          __xe_found=
+          for __xe_d in /proc/[0-9]*; do
+            __xe_stat "$__xe_d/stat"
+            case $? in
+              1) continue ;;
+              2) [ ! -e "$__xe_d" ] || __xe_found=1; continue ;;
+            esac
+            if [ "$__xe_sid" = "$1" ] && [ "$__xe_state" != Z ] && [ "${__xe_d#/proc/}" != "$2" ]; then
+              __xe_found=1
+              [ -z "$3" ] || kill -KILL "${__xe_d#/proc/}" 2>/dev/null
+            fi
+          done
+        }
+
+        """;
+
+    /// <summary>Runs a command so a stop can end it: the identity of the exec's session leader first, then the command as its child.</summary>
+    /// <remarks>
+    ///     Writes "pid start-time" to the file named by <c>$1</c>; the command is <c>"$2"</c> onwards, positional data, with the exec's
+    ///     stdin. A name a builtin shadows runs from the first file of that name on <c>$PATH</c>, its argv[0] then that path (POSIX sh
+    ///     cannot set argv[0]); a name it cannot start prints the identity path and why, and the client reports the daemon's words.
+    ///     A stop marker refuses a late start; the identity stays while descendants live; deleting it makes a stop time out and kill
+    ///     the sandbox. A shebang-less executable text file runs as a sh script, as POSIX sh's ENOEXEC fallback does.
+    /// </remarks>
+    internal const string StoppableExecScript = SessionScanFunctions + """
+        __xe_f=$1
+        shift
+        __xe_why=
+        __xe_walked=
+        case "$1" in
+          */*)
+            if [ -d "$1" ]; then __xe_why=directory; elif [ ! -e "$1" ]; then __xe_why=missing; elif [ ! -x "$1" ]; then __xe_why=denied; fi
+            ;;
+          *)
+            __xe_x=$(command -v "$1" 2>/dev/null) || __xe_x=
+            case "$__xe_x" in
+              /*) ;;
+              *)
+                __xe_x=$(IFS=:; set -f; for __xe_d in $PATH; do [ -n "$__xe_d" ] || __xe_d=.; if [ -f "$__xe_d/$1" ] && [ -x "$__xe_d/$1" ]; then printf '%s' "$__xe_d/$1"; break; fi; done)
+                __xe_walked=1
+                [ -n "$__xe_x" ] || __xe_why=path
+                ;;
+            esac
+            ;;
+        esac
+        [ -z "$__xe_why" ] || { printf '%s %s\n' "$__xe_f" "$__xe_why" >&2; exit 127; }
+        if __xe_stat "/proc/$$/stat" && printf '%s %s\n' "$$" "$__xe_start" 2>/dev/null > "$__xe_f"; then
+          :
+        else
+          printf '%s\n' 'The sandbox could not record the identity it needs to stop this command.' >&2
+          exit 125
+        fi
+        if [ -e "$__xe_f.stop" ]; then
+          rm -f "$__xe_f" "$__xe_f.stop" 2>/dev/null
+          exit 125
+        fi
+        if [ -n "$__xe_walked" ]; then
+          shift
+          "$__xe_x" "$@"
+        else
+          "$@"
+        fi
+        __xe_r=$?
+        __xe_scan "$$" "$$"
+        [ -n "$__xe_found" ] || rm -f "$__xe_f" 2>/dev/null
+        exit "$__xe_r"
+        """;
+
+    /// <summary>Stops the command whose identity file is <c>$1</c>: marker first, then SIGKILL to its session until a scan finds none.</summary>
+    /// <remarks>
+    ///     Exit 0 is "its session is empty", 1 still found after 20 passes (the client reruns it), 3 no identity, 4 a leader alive with
+    ///     another start time. The command can write the file, so 4 is never read as stopped and its session is not signalled: the pid
+    ///     may be another command's. Exit 0 is not confirmation on its own either; the client then accounts for every process left.
+    /// </remarks>
+    internal const string StopExecScript = SessionScanFunctions + """
+        __xe_f=$1
+        : 2>/dev/null > "$__xe_f.stop"
+        read -r __xe_p __xe_t 2>/dev/null < "$__xe_f" && [ -n "$__xe_t" ] || exit 3
+        if __xe_stat "/proc/$__xe_p/stat" && [ "$__xe_start" != "$__xe_t" ]; then
+          exit 4
+        fi
+        __xe_n=0
+        while :; do
+          __xe_scan "$__xe_p" "" kill
+          [ -n "$__xe_found" ] || break
+          __xe_n=$((__xe_n + 1))
+          [ "$__xe_n" -lt 20 ] || exit 1
+        done
+        rm -f "$__xe_f" "$__xe_f.stop" 2>/dev/null
+        exit 0
+        """;
+
     private readonly DockerClient _client;
     private readonly TimeSpan _probeTimeout;
     private readonly TimeSpan _pullTimeout;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
+
+    /// <summary>Execs this client started whose stream has not ended, by id: the processes a stop leaves alone.</summary>
+    private readonly ConcurrentDictionary<string, byte> _liveExecs = new(StringComparer.Ordinal);
+
+    /// <summary>Processes finished commands left running, pid to start time as the daemon lists them: a stop leaves them alone too.</summary>
+    private readonly ConcurrentDictionary<long, string> _knownSurvivors = new();
+
     private int _unrecognisedHealthLogged;
+
 
     /// <param name="endpoint">The daemon endpoint this client talks to.</param>
     /// <param name="probeTimeout">Bounds <see cref="ProbeAsync" />, and floors the transport timeout.</param>
@@ -303,6 +438,66 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         ArgumentException.ThrowIfNullOrWhiteSpace(containerId);
         ArgumentNullException.ThrowIfNull(request);
 
+        // A token the client mints, so the path is never caller text.
+        var identityPath = request.StopMarkerDirectory is null
+            ? null
+            : request.StopMarkerDirectory.TrimEnd('/') + "/.xe-exec-" + Guid.NewGuid().ToString("N");
+        var outcome = await ExecuteOnceAsync(containerId, request, identityPath, cancellationToken);
+        // Answered from the supervised attempt: a second, unwrapped exec could start a file installed in between, unsupervised.
+        return identityPath is not null
+               && outcome is { Stopped: false, ExitCode: 127, StandardOutput: "" }
+               && DescribeLaunchFailureOrNull(outcome.StandardError, identityPath, request.Executable) is { } launchFailure
+            ? launchFailure
+            : outcome;
+    }
+
+    /// <summary>
+    ///     The outcome the daemon gives for an exec it cannot start, built from the wrapper's reason line, or null when the standard
+    ///     error is not that line.
+    /// </summary>
+    /// <remarks>
+    ///     The text and exit codes are runc's, measured on 2026-11-19 against an unwrapped exec: on standard output, standard error
+    ///     empty. The reason line carries the client-minted identity path, which a command cannot know, so no command output passes
+    ///     for it.
+    /// </remarks>
+    internal static DockerExecutionOutcome? DescribeLaunchFailureOrNull(string standardError, string identityPath, string executable)
+    {
+        var prefix = identityPath + " ";
+        if (!standardError.StartsWith(prefix, StringComparison.Ordinal) || !standardError.EndsWith('\n'))
+        {
+            return null;
+        }
+
+        var reason = standardError[prefix.Length..^1] switch
+        {
+            "path" => "executable file not found in $PATH",
+            "missing" => $"stat {executable}: no such file or directory",
+            "denied" => "permission denied",
+            "directory" => "is a directory: permission denied",
+            _ => null
+        };
+
+        if (reason is null)
+        {
+            return null;
+        }
+
+        return new DockerExecutionOutcome
+        {
+            // runc's 126 is "found, cannot run"; 127 is "not found".
+            ExitCode = reason.EndsWith("permission denied", StringComparison.Ordinal) ? 126 : 127,
+            StandardOutput = $"OCI runtime exec failed: exec failed: unable to start container process: exec: \"{executable}\": {reason}\r\n",
+            StandardError = string.Empty,
+            StandardOutputTruncated = false,
+            StandardErrorTruncated = false
+        };
+    }
+
+    private async Task<DockerExecutionOutcome> ExecuteOnceAsync(string containerId,
+        DockerExecutionRequest request,
+        string? identityPath,
+        CancellationToken cancellationToken)
+    {
         try
         {
             var parameters = new ContainerExecCreateParameters
@@ -313,37 +508,364 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                 // read blocks until the connection is torn down, so every ordinary command would wait for input.
                 AttachStdin = request.StandardInput is not null,
                 TTY = false,
-                Cmd = [request.Executable, .. request.Arguments],
+                Cmd = identityPath is null
+                    ? [request.Executable, .. request.Arguments]
+                    : ["/bin/sh", "-c", StoppableExecScript, "xe-exec", identityPath, request.Executable, .. request.Arguments],
                 WorkingDir = request.WorkingDirectory ?? string.Empty,
                 Env = request.Environment?.Select(pair => pair.Key + "=" + pair.Value).ToArray() ?? []
             };
 
             var created = await _client.Exec.CreateContainerExecAsync(containerId, parameters, cancellationToken);
-            using var stream = await _client.Exec
-                                            .StartContainerExecAsync(created.ID, new ContainerExecStartParameters
-                                            {
-                                                Detach = false,
-                                                TTY = false
-                                            }, cancellationToken);
-
-            var captured = await PumpAsync(stream, request.StandardInput, request.MaxCapturedBytes, request.OutputObserver, cancellationToken);
-            var inspected = await _client.Exec.InspectContainerExecAsync(created.ID, cancellationToken);
-
-            var (outputText, outputTruncated, errorText, errorTruncated) = captured;
-
-            return new DockerExecutionOutcome
+            _liveExecs.TryAdd(created.ID, 0);
+            try
             {
-                ExitCode = inspected.ExitCode ?? -1,
-                StandardOutput = outputText,
-                StandardError = errorText,
-                StandardOutputTruncated = outputTruncated,
-                StandardErrorTruncated = errorTruncated
-            };
+                MultiplexedStream stream;
+                try
+                {
+                    stream = await _client.Exec
+                                          .StartContainerExecAsync(created.ID, new ContainerExecStartParameters
+                                          {
+                                              Detach = false,
+                                              TTY = false
+                                          }, cancellationToken);
+                }
+                catch (OperationCanceledException) when (identityPath is not null && cancellationToken.IsCancellationRequested)
+                {
+                    // The start may have reached the daemon. The stop leaves a marker that keeps a late start from running the command.
+                    var confirmed = await StopAsync(containerId, created.ID, identityPath);
+                    return new ExecCapture(request.MaxCapturedBytes, observer: null).ToOutcome(exitCode: -1, stopped: true, confirmed);
+                }
+
+                using (stream)
+                {
+                    var capture = new ExecCapture(request.MaxCapturedBytes, request.OutputObserver);
+                    // The read never sees the caller's token: a read cancelled mid-frame would leave the multiplexed framing unreadable,
+                    // and the output printed before a stop is still to be drained after it.
+                    using var drain = new CancellationTokenSource();
+    #pragma warning disable CA2025 // The finally below awaits the pump before the stream or the drain source is disposed.
+                    var pump = PumpAsync(stream, request.StandardInput, capture, drain.Token);
+    #pragma warning restore CA2025
+                    try
+                    {
+                        await pump.WaitAsync(cancellationToken);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && !pump.IsCompleted)
+                    {
+                        var confirmed = identityPath is not null && await StopAsync(containerId, created.ID, identityPath);
+                        await SettleAsync(pump, drain, identityPath is null ? TimeSpan.Zero : StopOutputDrainWait);
+                        if (identityPath is null)
+                        {
+                            throw;
+                        }
+
+                        return capture.ToOutcome(exitCode: -1, stopped: true, confirmed);
+                    }
+                    catch (OperationCanceledException) when (pump.IsCompleted)
+                    {
+                        // The command ended as the cancel landed: it is reported as finished, with its output and exit code.
+                    }
+                    finally
+                    {
+                        // WhenAny never throws: it only keeps the stream and the drain source alive until the pump is done.
+                        await Task.WhenAny(pump);
+                    }
+
+                    await pump;
+                    // The stream has ended, so the exit code is final; a cancel arriving now must not relabel a finished command.
+                    var inspected = await _client.Exec.InspectContainerExecAsync(created.ID, CancellationToken.None);
+                    if (identityPath is not null)
+                    {
+                        await RecordSurvivorsAsync(containerId, created.ID, inspected.Pid);
+                    }
+
+                    return capture.ToOutcome(inspected.ExitCode ?? -1, stopped: false, stopConfirmed: false);
+                }
+            }
+            finally
+            {
+                _liveExecs.TryRemove(created.ID, out _);
+            }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             throw Classify(exception);
         }
+    }
+
+    /// <summary>
+    ///     Ends a wrapped exec and every process in its session; true only once its session is empty and the daemon lists no process
+    ///     outside the sessions this client accounts for.
+    /// </summary>
+    /// <remarks>Never throws and ignores the caller's token: it runs because that token was cancelled, and its own deadline bounds it.</remarks>
+    private async Task<bool> StopAsync(string containerId, string execId, string identityPath)
+    {
+        using var deadline = new CancellationTokenSource(StopTimeout, _timeProvider);
+        try
+        {
+            return await ConfirmStopAsync(token => RunStopScriptAsync(containerId, execId, identityPath, token),
+                       async token => (await _client.Exec.InspectContainerExecAsync(execId, token)).Running,
+                       _timeProvider,
+                       deadline.Token)
+                   && await OnlyAccountedProcessesRemainAsync(containerId, execId, deadline.Token);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "Stop of exec {ExecId} in container {ContainerId} did not complete in time.", execId, containerId);
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     Reruns the stop script while it still finds processes, <see cref="StopPollInterval" /> apart, until the deadline cancels
+    ///     the wait: a process in uninterruptible sleep, or one slow to exit, outlives one run's tight passes but not the deadline.
+    /// </summary>
+    /// <remarks>
+    ///     No identity yet means the wrapper had not recorded one, and the marker the stop left makes it exit without running the
+    ///     command: confirmed once the daemon reports the exec over. Any other exit code is unconfirmed.
+    /// </remarks>
+    internal static async Task<bool> ConfirmStopAsync(Func<CancellationToken, Task<long>> runStopScript,
+        Func<CancellationToken, Task<bool>> isExecRunning,
+        TimeProvider timeProvider,
+        CancellationToken deadline)
+    {
+        while (true)
+        {
+            var exitCode = await runStopScript(deadline);
+            if (exitCode == 0)
+            {
+                return true;
+            }
+
+            if (exitCode == StopExitNoIdentity)
+            {
+                while (await isExecRunning(deadline))
+                {
+                    await Task.Delay(StopPollInterval, timeProvider, deadline);
+                }
+
+                return true;
+            }
+
+            if (exitCode != StopExitStillFound)
+            {
+                return false;
+            }
+
+            await Task.Delay(StopPollInterval, timeProvider, deadline);
+        }
+    }
+
+    /// <summary>
+    ///     True when every live process in the container is in init's session, in another in-flight exec's session, or a known
+    ///     survivor, read from daemon records no command in the container can write.
+    /// </summary>
+    /// <remarks>
+    ///     A process cannot join an existing session, only start a new one, so anything of the stopped command still alive, including a
+    ///     descendant that left for its own session, is unaccounted and makes the stop unconfirmed. After a confirmed stop nothing is
+    ///     left to record as a survivor.
+    /// </remarks>
+    private async Task<bool> OnlyAccountedProcessesRemainAsync(string containerId, string stoppedExecId, CancellationToken cancellationToken)
+    {
+        var unaccounted = await ListUnaccountedProcessesAsync(containerId, stoppedExecId, cancellationToken);
+        if (unaccounted is null)
+        {
+            return false;
+        }
+
+        if (unaccounted.Count > 0)
+        {
+            _logger.LogDebug("Stop of exec {ExecId} in container {ContainerId} left processes no known exec accounts for: {Processes}",
+                stoppedExecId,
+                containerId,
+                string.Join("; ", unaccounted.Select(static process => $"{process.Pid} sid {process.Session}")));
+        }
+
+        return unaccounted.Count == 0;
+    }
+
+    /// <summary>
+    ///     Records what a wrapped command that finished left running as known survivors, which a later stop does not count against
+    ///     itself. Never throws: a survivor not recorded only makes a later stop unconfirmed.
+    /// </summary>
+    /// <remarks>
+    ///     With another exec in flight, a process in a new session cannot be told apart from a sibling's detached descendant, so only
+    ///     the finished command's own session is recorded then; with none in flight, every unaccounted process came from a command
+    ///     that has ended.
+    /// </remarks>
+    private async Task RecordSurvivorsAsync(string containerId, string finishedExecId, long finishedSession)
+    {
+        using var deadline = new CancellationTokenSource(StopTimeout, _timeProvider);
+        try
+        {
+            if (await ListUnaccountedProcessesAsync(containerId, finishedExecId, deadline.Token) is { } processes)
+            {
+                // Read after the list: the finished exec is still tracked, so more than one means another exec is in flight.
+                var othersInFlight = _liveExecs.Count > 1;
+                foreach (var process in processes.Where(process => !othersInFlight || process.Session == finishedSession))
+                {
+                    _knownSurvivors[process.Pid] = process.Started;
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "The processes exec {ExecId} left in container {ContainerId} could not be recorded.", finishedExecId, containerId);
+        }
+    }
+
+    /// <summary>
+    ///     The daemon's live processes in the container outside init's session, the sessions of in-flight execs other than
+    ///     <paramref name="excludedExecId" />, and the known survivors; null when the list is unusable.
+    /// </summary>
+    /// <remarks>
+    ///     The daemon reports exec and init pids in the namespace its process list uses; an exec leader is its session's id. The tracked
+    ///     set is read before and after the list, so an exec ending in between is still counted.
+    /// </remarks>
+    private async Task<IReadOnlyList<ContainerProcess>?> ListUnaccountedProcessesAsync(
+        string containerId,
+        string excludedExecId,
+        CancellationToken cancellationToken)
+    {
+        var tracked = _liveExecs.Keys.ToHashSet(StringComparer.Ordinal);
+        var listed = await _client.Containers.ListProcessesAsync(containerId,
+            new ContainerListProcessesParameters
+            {
+                // The start time goes last: the daemon keeps only the last column's spaces.
+                PsArgs = "-e -o pid,sid,stat,lstart"
+            },
+            cancellationToken);
+        tracked.UnionWith(_liveExecs.Keys);
+        tracked.Remove(excludedExecId);
+
+        // An init the daemon does not report accounts for nothing, so its processes then count as unaccounted.
+        var sessions = new HashSet<long> { (await _client.Containers.InspectContainerAsync(containerId, cancellationToken)).State?.Pid ?? 0 };
+        foreach (var execId in tracked)
+        {
+            sessions.Add((await _client.Exec.InspectContainerExecAsync(execId, cancellationToken)).Pid);
+        }
+
+        var unaccounted = SelectUnaccounted(listed.Titles, listed.Processes, sessions, _knownSurvivors);
+        if (unaccounted is null)
+        {
+            _logger.LogDebug("Process list of container {ContainerId} lacks a usable column: {Titles}", containerId, string.Join(' ', listed.Titles));
+        }
+
+        return unaccounted;
+    }
+
+    /// <summary>
+    ///     The live rows outside <paramref name="sessions" /> that are not a known survivor, null when a column is missing or a row
+    ///     unparseable. Prunes every known survivor the list does not show with the same start time.
+    /// </summary>
+    /// <remarks>
+    ///     A survivor is matched by pid and start time, so a recycled pid is not trusted. The start time has a one-second grain: a pid
+    ///     reused within the same second as the survivor's start would pass for it.
+    /// </remarks>
+    internal static IReadOnlyList<ContainerProcess>? SelectUnaccounted(IList<string> titles,
+        IList<IList<string>> rows,
+        IReadOnlySet<long> sessions,
+        ConcurrentDictionary<long, string> knownSurvivors)
+    {
+        int[] columns = [titles.IndexOf("PID"), titles.IndexOf("SID"), titles.IndexOf("STAT"), titles.IndexOf("STARTED")];
+        if (columns.Any(static column => column < 0))
+        {
+            return null;
+        }
+
+        var live = new List<ContainerProcess>();
+        foreach (var row in rows)
+        {
+            if (row.Count < titles.Count
+                || !long.TryParse(row[columns[0]], CultureInfo.InvariantCulture, out var pid)
+                || !long.TryParse(row[columns[1]], CultureInfo.InvariantCulture, out var session))
+            {
+                return null;
+            }
+
+            if (!row[columns[2]].StartsWith('Z'))
+            {
+                live.Add(new ContainerProcess
+                {
+                    Pid = pid,
+                    Session = session,
+                    Started = row[columns[3]]
+                });
+            }
+        }
+
+        foreach (var gone in knownSurvivors.Where(survivor =>
+                     !live.Any(process => process.Pid == survivor.Key && string.Equals(process.Started, survivor.Value, StringComparison.Ordinal))))
+        {
+            knownSurvivors.TryRemove(gone);
+        }
+
+        return live.Where(process => !sessions.Contains(process.Session)
+                                     && !(knownSurvivors.TryGetValue(process.Pid, out var started) && string.Equals(started, process.Started, StringComparison.Ordinal)))
+                   .ToArray();
+    }
+
+    /// <summary>One run of <see cref="StopExecScript" /> in its own exec; its exit code.</summary>
+    private async Task<long> RunStopScriptAsync(string containerId, string execId, string identityPath, CancellationToken cancellationToken)
+    {
+        var created = await _client.Exec.CreateContainerExecAsync(containerId,
+            new ContainerExecCreateParameters
+            {
+                AttachStdout = true,
+                AttachStderr = true,
+                AttachStdin = false,
+                TTY = false,
+                Cmd = ["/bin/sh", "-c", StopExecScript, "xe-stop", identityPath],
+                WorkingDir = string.Empty,
+                Env = []
+            },
+            cancellationToken);
+        var capture = new ExecCapture(WriteProbeCaptureBytes, observer: null);
+        long exitCode;
+        // Tracked too: a stop of one command runs while a sibling's stop may be signalling its own session.
+        _liveExecs.TryAdd(created.ID, 0);
+        try
+        {
+            using (var stream = await _client.Exec.StartContainerExecAsync(created.ID,
+                       new ContainerExecStartParameters
+                       {
+                           Detach = false,
+                           TTY = false
+                       },
+                       cancellationToken))
+            {
+                await PumpAsync(stream, standardInput: null, capture, cancellationToken);
+            }
+
+            exitCode = (await _client.Exec.InspectContainerExecAsync(created.ID, cancellationToken)).ExitCode ?? -1;
+        }
+        finally
+        {
+            _liveExecs.TryRemove(created.ID, out _);
+        }
+
+        if (exitCode != 0)
+        {
+            _logger.LogDebug("Stop of exec {ExecId} in container {ContainerId} exited {ExitCode}: {Output}",
+                execId,
+                containerId,
+                exitCode,
+                capture.StandardOutput + capture.StandardError);
+        }
+
+        return exitCode;
+    }
+
+    /// <summary>Lets a pump reach the end of its stream for at most <paramref name="wait" />, then cuts it; the capture keeps what was read.</summary>
+    private async Task SettleAsync(Task pump, CancellationTokenSource drain, TimeSpan wait)
+    {
+        using (var delay = new CancellationTokenSource())
+        {
+            await Task.WhenAny(pump, Task.Delay(wait, _timeProvider, delay.Token));
+            await delay.CancelAsync();
+        }
+
+        await drain.CancelAsync();
+        await Task.WhenAny(pump);
     }
 
     // IContainerRuntime — the application-container surface. Everything below is additive to the members above, so
@@ -921,7 +1443,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                                                 },
                                                 deadline.Token);
 
-            var captured = await PumpAsync(stream, standardInput: null, WriteProbeCaptureBytes, observer: null, deadline.Token);
+            var captured = new ExecCapture(WriteProbeCaptureBytes, observer: null);
+            await PumpAsync(stream, standardInput: null, captured, deadline.Token);
             var inspected = await _client.Exec.InspectContainerExecAsync(created.ID, deadline.Token);
             var exitCode = inspected.ExitCode ?? -1;
 
@@ -1301,7 +1824,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         }
     }
 
-    /// <summary>Drives both directions of one exec stream and returns its captured output.</summary>
+    /// <summary>Drives both directions of one exec stream into <paramref name="capture" />.</summary>
     /// <remarks>
     ///     The payload goes up WHILE the output is drained: a Docker exec is one bidirectional connection, so with
     ///     nothing reading, a child that writes as it reads fills the daemon's buffer, the daemon stops accepting the
@@ -1309,22 +1832,22 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     ///     past where a serialized version stops working. The half-close after the write is equally load-bearing: a
     ///     child reading to end-of-input never returns while the write side is open.
     /// </remarks>
-    private static async Task<ExecOutput> PumpAsync(MultiplexedStream stream,
+    private static async Task PumpAsync(MultiplexedStream stream,
         string? standardInput,
-        int maxBytesPerStream,
-        ISandboxOutputObserver? observer,
+        ExecCapture capture,
         CancellationToken cancellationToken)
     {
         if (standardInput is null)
         {
-            return await ReadBoundedAsync(stream, maxBytesPerStream, observer, cancellationToken);
+            await ReadBoundedAsync(stream, capture, cancellationToken);
+            return;
         }
 
         var payload = Encoding.UTF8.GetBytes(standardInput);
         var writeTask = SendAsync(stream, payload, cancellationToken);
         try
         {
-            return await ReadBoundedAsync(stream, maxBytesPerStream, observer, cancellationToken);
+            await ReadBoundedAsync(stream, capture, cancellationToken);
         }
         finally
         {
@@ -1335,30 +1858,19 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     }
 
     /// <summary>
-    ///     Drain an exec stream to its end, keeping at most <paramref name="maxBytesPerStream" /> bytes of each half
-    ///     and discarding the rest as it arrives.
+    ///     Drain an exec stream to its end into <paramref name="capture" />, which keeps at most its ceiling of each half
+    ///     and discards the rest as it arrives.
     /// </summary>
     /// <remarks>
     ///     The ceiling is applied DURING the read, because the other end is a process inside an image the engine did
     ///     not build and <c>ReadOutputToEndAsync</c> accumulates everything before anyone truncates it, letting a
     ///     container that writes a gigabyte decide how much of this node's memory it uses. The stream is still
     ///     drained to the end: the caller's deadline bounds the time, and stopping early leaves the daemon writing
-    ///     into a connection nobody reads.
+    ///     into a connection nobody reads. The capture outlives a cancelled read, so what arrived before it is kept.
     /// </remarks>
-    internal static async Task<ExecOutput> ReadBoundedAsync(MultiplexedStream stream,
-        int maxBytesPerStream,
-        ISandboxOutputObserver? observer,
-        CancellationToken cancellationToken)
+    internal static async Task ReadBoundedAsync(MultiplexedStream stream, ExecCapture capture, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(stream);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytesPerStream);
-
         var buffer = new byte[ExecReadBufferBytes];
-        var standardOutput = new BoundedCapture(maxBytesPerStream);
-        var standardError = new BoundedCapture(maxBytesPerStream);
-        var standardOutputLines = observer is null ? null : new SandboxOutputLineSplitter(observer, SandboxOutputSource.StandardOutput);
-        var standardErrorLines = observer is null ? null : new SandboxOutputLineSplitter(observer, SandboxOutputSource.StandardError);
-
         while (true)
         {
             var read = await stream.ReadOutputAsync(buffer, offset: 0, buffer.Length, cancellationToken);
@@ -1367,14 +1879,10 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                 break;
             }
 
-            var isError = read.Target == MultiplexedStream.TargetStream.StandardError;
-            (isError ? standardError : standardOutput).Append(buffer, read.Count);
-            (isError ? standardErrorLines : standardOutputLines)?.Write(buffer.AsSpan(0, read.Count));
+            capture.Append(read.Target == MultiplexedStream.TargetStream.StandardError, buffer, read.Count);
         }
 
-        standardOutputLines?.Complete();
-        standardErrorLines?.Complete();
-        return new ExecOutput(standardOutput.Text, standardOutput.Truncated, standardError.Text, standardError.Truncated);
+        capture.Complete();
     }
 
     private static async Task SendAsync(MultiplexedStream stream, byte[] payload, CancellationToken cancellationToken)
@@ -1432,8 +1940,68 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         };
     }
 
-    // Both captured streams of one exec, each already bounded by the caller's per-stream capture ceiling.
-    internal sealed record ExecOutput(string StandardOutput, bool StandardOutputTruncated, string StandardError, bool StandardErrorTruncated);
+    /// <summary>One row of the daemon's process list for a container, in the daemon's pid namespace.</summary>
+    internal sealed record ContainerProcess
+    {
+        public required long Pid { get; init; }
+
+        public required long Session { get; init; }
+
+        /// <summary>The start time as the daemon's <c>ps</c> prints it, to the second.</summary>
+        public required string Started { get; init; }
+    }
+
+    /// <summary>Both captured streams of one exec, each bounded by the caller's per-stream ceiling, plus the line observer.</summary>
+    internal sealed class ExecCapture
+    {
+        private readonly BoundedCapture _standardError;
+        private readonly SandboxOutputLineSplitter? _standardErrorLines;
+        private readonly BoundedCapture _standardOutput;
+        private readonly SandboxOutputLineSplitter? _standardOutputLines;
+
+        public ExecCapture(int maxBytesPerStream, ISandboxOutputObserver? observer)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytesPerStream);
+            _standardOutput = new BoundedCapture(maxBytesPerStream);
+            _standardError = new BoundedCapture(maxBytesPerStream);
+            _standardOutputLines = observer is null ? null : new SandboxOutputLineSplitter(observer, SandboxOutputSource.StandardOutput);
+            _standardErrorLines = observer is null ? null : new SandboxOutputLineSplitter(observer, SandboxOutputSource.StandardError);
+        }
+
+        public string StandardOutput => _standardOutput.Text;
+
+        public string StandardError => _standardError.Text;
+
+        public bool StandardOutputTruncated => _standardOutput.Truncated;
+
+        public bool StandardErrorTruncated => _standardError.Truncated;
+
+        public void Append(bool isError, byte[] buffer, int count)
+        {
+            (isError ? _standardError : _standardOutput).Append(buffer, count);
+            (isError ? _standardErrorLines : _standardOutputLines)?.Write(buffer.AsSpan(0, count));
+        }
+
+        public void Complete()
+        {
+            _standardOutputLines?.Complete();
+            _standardErrorLines?.Complete();
+        }
+
+        public DockerExecutionOutcome ToOutcome(long exitCode, bool stopped, bool stopConfirmed)
+        {
+            return new DockerExecutionOutcome
+            {
+                ExitCode = exitCode,
+                StandardOutput = _standardOutput.Text,
+                StandardError = _standardError.Text,
+                StandardOutputTruncated = StandardOutputTruncated,
+                StandardErrorTruncated = StandardErrorTruncated,
+                Stopped = stopped,
+                StopConfirmed = stopConfirmed
+            };
+        }
+    }
 
     /// <summary>
     ///     One captured stream, bounded: the first <c>maxBytes</c> bytes are kept and everything after them is

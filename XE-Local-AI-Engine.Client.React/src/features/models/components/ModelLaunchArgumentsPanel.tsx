@@ -1,7 +1,7 @@
 import { Alert, Button, Code, Group, Loader, Stack, Text, Textarea } from "@mantine/core";
 import { IconAlertTriangle, IconArrowBackUp } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -28,11 +28,15 @@ export function ModelLaunchArgumentsPanel({ modelName }: ModelLaunchArgumentsPan
 	const query = useQuery(getModelLaunchArgumentsOptions({ path: { modelName } }));
 	const serverValue = query.data?.rawArguments ?? "";
 	const [value, setValue] = useState(serverValue);
-
-	// Re-seed the editor when the fetched override arrives or the model changes.
-	useEffect(() => {
-		setValue(serverValue);
-	}, [serverValue]);
+	// Re-seeded during render: a changed model always resets the editor, a changed server value only while the editor
+	// still shows the previous one, so a background refetch never overwrites what the operator is typing.
+	const [seeded, setSeeded] = useState({ modelName, serverValue });
+	if (seeded.modelName !== modelName || seeded.serverValue !== serverValue) {
+		setSeeded({ modelName, serverValue });
+		if (seeded.modelName !== modelName || value.trim() === seeded.serverValue.trim()) {
+			setValue(serverValue);
+		}
+	}
 
 	const invalidate = () => queryClient.invalidateQueries({ queryKey: getModelLaunchArgumentsQueryKey({ path: { modelName } }) });
 

@@ -5,6 +5,8 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
+
 // Captured event handlers keyed by the SignalR client-method name the hook subscribes to.
 const handlers = new Map<string, (...args: unknown[]) => void>();
 
@@ -46,7 +48,7 @@ vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { SCHEDULER_POLL_INTERVAL_MS, SCHEDULER_PUSH_FLOOR_MS, useSchedulerHub } from "@/features/scheduler/hooks/useSchedulerHub";
-import { schedulerInvalidationKey, schedulerQueryIds } from "@/features/scheduler/queries/useScheduler";
+import { schedulerQueryIds } from "@/features/scheduler/queries/useScheduler";
 
 const RUN_EVENTS = [
 	"scheduler.runStarted",
@@ -61,9 +63,9 @@ const RUN_EVENTS = [
 // both listScheduledJobRuns and getScheduledJobRun. Invalidation is by the `_id` partial object (TanStack
 // partial-object matching), so it matches every cached variant regardless of the query/path the call carried.
 // These expected keys are built via the same production helper the hub uses.
-const JOBS_KEY = schedulerInvalidationKey(schedulerQueryIds.listJobs);
-const RUNS_KEY = schedulerInvalidationKey(schedulerQueryIds.listRuns);
-const RUN_KEY = schedulerInvalidationKey(schedulerQueryIds.getRun);
+const JOBS_KEY = operationInvalidationKey(schedulerQueryIds.listJobs);
+const RUNS_KEY = operationInvalidationKey(schedulerQueryIds.listRuns);
+const RUN_KEY = operationInvalidationKey(schedulerQueryIds.getRun);
 
 // queryKey of every invalidateQueries call, so a test can assert the partial `_id` key shape the hub passed.
 const invalidatedKeys: unknown[] = [];

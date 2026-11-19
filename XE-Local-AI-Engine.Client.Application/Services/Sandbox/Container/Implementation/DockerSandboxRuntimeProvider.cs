@@ -45,6 +45,15 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     // not show it, and removed host-side immediately afterwards either way.
     private const string WorkspaceProbePrefix = ".xe-sandbox-mapping-probe-";
 
+    /// <summary>Bounds one shared container removal, which no single caller's token may cut short for the others.</summary>
+    private static readonly TimeSpan RemovalTimeout = TimeSpan.FromSeconds(60);
+
+    internal const string UnconfirmedStopMessage = "The command could not be confirmed stopped, so its sandbox was killed.";
+
+    internal const string SandboxKilledMessage = "The sandbox was killed while this command ran, which ended it.";
+
+    internal const string SandboxNotRemovedMessage = "The sandbox had to be killed, but the daemon did not remove it, so the command may still be running.";
+
     private readonly IDockerRuntimeClientFactory _clientFactory;
     private readonly string _installId;
     private readonly ILogger<DockerSandboxRuntimeProvider> _logger;
@@ -111,7 +120,10 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
         foreach (var state in _sandboxes.Values)
         {
-            await TerminateAsync(state, CancellationToken.None);
+            if (!await TerminateAsync(state, CancellationToken.None))
+            {
+                await state.Client.DisposeAsync();
+            }
         }
 
         _sandboxes.Clear();
@@ -132,9 +144,18 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             var sandboxId = BuildSandboxId(request.AttachKey);
             if (_sandboxes.TryGetValue(sandboxId, out var existing))
             {
-                EnsureCompatibleWorkspaceBinding(existing, request.TrustedHostWorkspace);
-                EnsureCompatibleMounts(existing, request, options);
-                return existing.Handle;
+                if (!existing.Killed)
+                {
+                    EnsureCompatibleWorkspaceBinding(existing, request.TrustedHostWorkspace);
+                    EnsureCompatibleMounts(existing, request, options);
+                    return existing.Handle;
+                }
+
+                // A kill whose removal the daemon refused: retried here, and a new container only once the old one is gone.
+                if (!await TryKillAsync(existing, cancellationToken))
+                {
+                    throw new DockerRuntimeException("The previous sandbox for this attach key could not be removed, so no new one is created beside it.");
+                }
             }
 
             await EvictOwnerConflictsAsync(request.AttachKey, cancellationToken);
@@ -152,7 +173,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         cancellationToken.ThrowIfCancellationRequested();
 
         var sandboxId = BuildSandboxId(attachKey);
-        if (_sandboxes.TryGetValue(sandboxId, out var state) && state.Handle.AttachKey == attachKey)
+        if (_sandboxes.TryGetValue(sandboxId, out var state) && !state.Killed && state.Handle.AttachKey == attachKey)
         {
             return Task.FromResult(state.Handle);
         }
@@ -180,6 +201,12 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         bool cancelledBeforeStart;
         lock (state.Sync)
         {
+            // Rechecked here, where a kill cancels what is in flight, so no command registers after a kill began.
+            if (state.Killed)
+            {
+                throw new SandboxHandleInvalidException($"Sandbox '{handle.SandboxId}' is no longer available.");
+            }
+
             if (!state.InFlight.TryAdd(request.ExecutionId, execution))
             {
                 throw new InvalidOperationException($"Execution id '{request.ExecutionId}' is already in flight for this sandbox.");
@@ -209,9 +236,15 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                     Environment = request.Environment,
                     StandardInput = request.StandardInput,
                     MaxCapturedBytes = DefaultMaxCapturedOutputBytes,
-                    OutputObserver = GuardedSandboxOutputObserver.Wrap(request.OutputObserver, _logger, request.ExecutionId)
+                    OutputObserver = GuardedSandboxOutputObserver.Wrap(request.OutputObserver, _logger, request.ExecutionId),
+                    StopMarkerDirectory = state.TempMountTarget
                 },
                 execution.Token);
+
+            if (outcome.Stopped)
+            {
+                return await StoppedResultAsync(state, request.ExecutionId, outcome, startedAt, cancellationToken);
+            }
 
             return new SandboxCommandResult
             {
@@ -227,8 +260,8 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            // Cancelled by CancelCommandAsync or by the per-command timeout. Reported as an incomplete result rather
-            // than as an exception, matching the contract's Completed flag.
+            // Cancelled by CancelCommandAsync or by the per-command timeout before the exec started. Reported as an incomplete
+            // result rather than as an exception, matching the contract's Completed flag.
             return new SandboxCommandResult
             {
                 ExecutionId = request.ExecutionId,
@@ -242,6 +275,65 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         {
             state.InFlight.TryRemove(request.ExecutionId, out _);
         }
+    }
+
+    /// <summary>
+    ///     The result of a command the client stopped: what it printed before the stop, then the cancel message, which
+    ///     Development reads as the closing line it replaces with the operator-stop text.
+    /// </summary>
+    /// <remarks>
+    ///     A stop the container could not confirm kills the whole sandbox, because an untracked process would go on writing
+    ///     to the worktree while the next command runs; later calls on the handle then fail as invalid. Killed is reported only
+    ///     once the daemon removed the container; a refused removal says the command may still run and leaves the sandbox
+    ///     registered for a later kill to retry. A command whose sandbox another caller killed says so. A caller cancel still
+    ///     throws, after the same stop.
+    /// </remarks>
+    private async Task<SandboxCommandResult> StoppedResultAsync(SandboxState state,
+        string executionId,
+        DockerExecutionOutcome outcome,
+        DateTimeOffset startedAt,
+        CancellationToken cancellationToken)
+    {
+        // The closing lines go on lines of their own, after a partial last line the command printed.
+        var standardError = outcome.StandardError.Length == 0 || outcome.StandardError.EndsWith('\n') ? outcome.StandardError : outcome.StandardError + "\n";
+        var killedElsewhere = state.Killed;
+        if (killedElsewhere || !outcome.StopConfirmed)
+        {
+            if (!killedElsewhere)
+            {
+                _logger.LogWarning("Execution {ExecutionId} in container {ContainerId} could not be confirmed stopped; killing the sandbox.",
+                    executionId,
+                    state.ContainerId);
+            }
+
+            var removed = await TryKillAsync(state, CancellationToken.None);
+            if (!removed)
+            {
+                _logger.LogWarning("Execution {ExecutionId} in container {ContainerId} may still be running: the daemon did not remove its sandbox.",
+                    executionId,
+                    state.ContainerId);
+            }
+
+            standardError += (removed, killedElsewhere) switch
+            {
+                (false, _) => SandboxNotRemovedMessage,
+                (true, true) => SandboxKilledMessage,
+                (true, false) => UnconfirmedStopMessage
+            } + "\n";
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return new SandboxCommandResult
+        {
+            ExecutionId = executionId,
+            ExitCode = -1,
+            StandardOutput = outcome.StandardOutput,
+            StandardError = standardError + SandboxCommandResult.CancelledMessage,
+            StandardOutputTruncated = outcome.StandardOutputTruncated,
+            StandardErrorTruncated = outcome.StandardErrorTruncated,
+            Completed = false,
+            Duration = _timeProvider.GetUtcNow() - startedAt
+        };
     }
 
     /// <summary>
@@ -358,10 +450,23 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     {
         ArgumentNullException.ThrowIfNull(handle);
 
-        if (_sandboxes.TryRemove(handle.SandboxId, out var state))
+        if (_sandboxes.TryGetValue(handle.SandboxId, out var state))
         {
-            await TerminateAsync(state, cancellationToken);
+            await TryKillAsync(state, cancellationToken);
         }
+    }
+
+    /// <summary>Kills a sandbox; true once the daemon removed its container, which is when it leaves the registry.</summary>
+    /// <remarks>On false it stays registered with an invalid handle, so a later kill, create or dispose retries the removal.</remarks>
+    private async Task<bool> TryKillAsync(SandboxState state, CancellationToken cancellationToken)
+    {
+        if (!await TerminateAsync(state, cancellationToken))
+        {
+            return false;
+        }
+
+        _sandboxes.TryRemove(new KeyValuePair<string, SandboxState>(state.Handle.SandboxId, state));
+        return true;
     }
 
     /// <summary>Resolve the in-container UID/GID for the daemon that is about to run the container.</summary>
@@ -684,7 +789,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                 WorkingRoot = options.WorkspaceMountTarget
             };
 
-            _sandboxes[sandboxId] = new SandboxState(handle, client, containerId, workspaceRoot, options.WorkspaceMountTarget);
+            _sandboxes[sandboxId] = new SandboxState(handle, client, containerId, workspaceRoot, options.WorkspaceMountTarget, options.TempMountTarget);
             _logger.LogInformation("Created verified sandbox container {ContainerId} for sandbox {SandboxId}.", containerId, sandboxId);
             return handle;
         }
@@ -906,21 +1011,40 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
         foreach (var conflicting in conflicts)
         {
-            if (_sandboxes.TryRemove(conflicting, out var state))
+            if (_sandboxes.TryGetValue(conflicting, out var state) && !await TryKillAsync(state, cancellationToken))
             {
-                await TerminateAsync(state, cancellationToken);
+                throw new DockerRuntimeException("Another owner's sandbox on this node could not be removed, so no new one is created beside it.");
             }
         }
     }
 
     private SandboxState GetAliveState(SandboxHandle handle)
     {
-        return _sandboxes.TryGetValue(handle.SandboxId, out var state)
+        return _sandboxes.TryGetValue(handle.SandboxId, out var state) && !state.Killed
             ? state
             : throw new SandboxHandleInvalidException($"Sandbox '{handle.SandboxId}' is no longer available.");
     }
 
-    private async Task TerminateAsync(SandboxState state, CancellationToken cancellationToken)
+    /// <summary>Marks the sandbox killed and removes its container; true once the daemon removed it.</summary>
+    /// <remarks>
+    ///     Concurrent kills share one removal, which runs on its own deadline: a caller's token only stops that caller's wait. A refused
+    ///     removal is started again by the next kill; the client is disposed only once the container is gone.
+    /// </remarks>
+    private Task<bool> TerminateAsync(SandboxState state, CancellationToken cancellationToken)
+    {
+        lock (state.Sync)
+        {
+            if (state.Removal is not { } removal || (removal.IsCompleted && !state.Removed))
+            {
+                removal = RemoveContainerAsync(state);
+                state.Removal = removal;
+            }
+
+            return removal.WaitAsync(cancellationToken);
+        }
+    }
+
+    private async Task<bool> RemoveContainerAsync(SandboxState state)
     {
         foreach (var execution in state.InFlight.Values)
         {
@@ -931,16 +1055,23 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
         try
         {
-            await state.Client.RemoveContainerAsync(state.ContainerId, cancellationToken);
+            using var deadline = new CancellationTokenSource(RemovalTimeout, _timeProvider);
+            await state.Client.RemoveContainerAsync(state.ContainerId, deadline.Token);
         }
-        catch (DockerRuntimeException exception)
+        catch (Exception exception) when (exception is DockerRuntimeException or OperationCanceledException)
         {
-            _logger.LogError(exception, "Failed to remove sandbox container {ContainerId}.", state.ContainerId);
+            // No caller's token reaches here, so a cancel is the deadline or the client's own transport timeout: a refusal.
+            _logger.LogError(exception, "Failed to remove sandbox container {ContainerId}; it stays registered for a later kill to retry.", state.ContainerId);
+            return false;
         }
-        finally
+
+        lock (state.Sync)
         {
-            await state.Client.DisposeAsync();
+            state.Removed = true;
         }
+
+        await state.Client.DisposeAsync();
+        return true;
     }
 
     /// <summary>
@@ -1050,17 +1181,21 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
     private sealed class SandboxState
     {
+        private Task<bool>? _removal;
+
         public SandboxState(SandboxHandle handle,
             IDockerRuntimeClient client,
             string containerId,
             string workspaceRoot,
-            string workspaceMountTarget)
+            string workspaceMountTarget,
+            string tempMountTarget)
         {
             Handle = handle;
             Client = client;
             ContainerId = containerId;
             WorkspaceRoot = workspaceRoot;
             WorkspaceMountTarget = workspaceMountTarget;
+            TempMountTarget = tempMountTarget;
         }
 
         public SandboxHandle Handle { get; }
@@ -1073,6 +1208,9 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
         public string WorkspaceMountTarget { get; }
 
+        /// <summary>The container's temp tmpfs, where a command's stop identity lives: writable by every exec, and never the workspace.</summary>
+        public string TempMountTarget { get; }
+
         public ConcurrentDictionary<string, CancellationTokenSource> InFlight { get; } = new(StringComparer.Ordinal);
 
         /// <summary>Guards registering an execution against latching a cancel for it, so neither slips past the other.</summary>
@@ -1080,5 +1218,18 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
         /// <summary>Cancels that arrived before their execution registered; used only under <see cref="Sync" />.</summary>
         public PendingCommandCancels PendingCancels { get; } = new();
+
+        /// <summary>The removal of the container once a kill began, set under <see cref="Sync" />; read from any thread.</summary>
+        public Task<bool>? Removal
+        {
+            get => Volatile.Read(ref _removal);
+            set => Volatile.Write(ref _removal, value);
+        }
+
+        /// <summary>The daemon removed the container; used only under <see cref="Sync" />.</summary>
+        public bool Removed { get; set; }
+
+        /// <summary>A kill began: the handle is invalid from here on, even while a refused removal waits for a retry.</summary>
+        public bool Killed => Removal is not null;
     }
 }

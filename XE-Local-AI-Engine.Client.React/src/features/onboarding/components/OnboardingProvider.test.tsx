@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -141,6 +141,11 @@ function renderProvider() {
 	);
 }
 
+// Joyride is a lazy chunk, so a started tour renders it a tick after the click.
+async function waitForTour() {
+	await waitFor(() => expect(joyrideProps.current?.run).toBe(true));
+}
+
 function applyModelsQuery(view: ReturnType<typeof renderProvider>, query: typeof modelsRef.current) {
 	modelsRef.current = query;
 	act(() => {
@@ -232,9 +237,10 @@ describe("first-run choices card", () => {
 		expect(choicesIdleRef.current).toBe(true);
 	});
 
-	it("waits while a tour runs", () => {
+	it("waits while a tour runs", async () => {
 		renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 		expect(joyrideProps.current?.run).toBe(true);
 		expect(choicesIdleRef.current).toBe(false);
 	});
@@ -244,14 +250,17 @@ describe("explicit opt-in", () => {
 	it("never auto-starts when progress exists and changes the invitation CTA to Resume", () => {
 		localStorage.setItem(tutorialProgressStorageKey("main-app-v1"), JSON.stringify({ format: 1, stepId: "chatInput" }));
 		renderProvider();
-		expect(joyrideProps.current?.run).toBe(false);
+		// Not even loaded: Joyride is a lazy chunk fetched by the first tour start.
+		expect(joyrideProps.current).toBeNull();
 		expect(screen.getByTestId("onboarding-welcome-start").textContent).toBe("onboarding.actions.resume");
 	});
 
-	it("starts only after the explicit Start click", () => {
+	it("starts only after the explicit Start click", async () => {
 		renderProvider();
-		expect(joyrideProps.current?.run).toBe(false);
+		// The shell does not load react-joyride until a tour is asked for.
+		expect(joyrideProps.current).toBeNull();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 		expect(joyrideProps.current?.run).toBe(true);
 	});
 });
@@ -278,10 +287,11 @@ describe("frozen Quick Start readiness", () => {
 			{ data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" }, isSuccess: false },
 			"navModels",
 		],
-	])("selects the canonical first step for %s", (_name, query, firstStepId) => {
+	])("selects the canonical first step for %s", async (_name, query, firstStepId) => {
 		modelsRef.current = query;
 		const view = renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 		expect(joyrideProps.current?.steps[0]?.title).toContain(`.${firstStepId}.title`);
 		const frozenLength = joyrideProps.current?.steps.length;
 		applyModelsQuery(view, {
@@ -291,13 +301,14 @@ describe("frozen Quick Start readiness", () => {
 		expect(joyrideProps.current?.steps.length).toBe(frozenLength);
 	});
 
-	it("finishes the frozen flow as completed and clears progress", () => {
+	it("finishes the frozen flow as completed and clears progress", async () => {
 		modelsRef.current = {
 			data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
 		};
 		renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 		act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index: 3, status: STATUS.RUNNING }));
 		expect(markDoneMock).toHaveBeenCalledWith(
 			"main-app-v1",
@@ -307,10 +318,11 @@ describe("frozen Quick Start readiness", () => {
 		expect(localStorage.getItem(tutorialProgressStorageKey("main-app-v1"))).toBeNull();
 	});
 
-	it("advances within the frozen plan when model installation and default selection complete", () => {
+	it("advances within the frozen plan when model installation and default selection complete", async () => {
 		modelsRef.current = { data: { items: [], selectedModelName: null }, isSuccess: true };
 		const view = renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 		act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index: 0, status: STATUS.RUNNING }));
 		expect(joyrideProps.current?.stepIndex).toBe(1);
 
@@ -324,10 +336,11 @@ describe("frozen Quick Start readiness", () => {
 		expect(joyrideProps.current?.stepIndex).toBe(3);
 	});
 
-	it("skips the already-satisfied default step when install and selection resolve together", () => {
+	it("skips the already-satisfied default step when install and selection resolve together", async () => {
 		modelsRef.current = { data: { items: [], selectedModelName: null }, isSuccess: true };
 		const view = renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 		act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index: 0, status: STATUS.RUNNING }));
 
 		applyModelsQuery(view, {
@@ -345,10 +358,11 @@ describe("frozen Quick Start readiness", () => {
 			3,
 		],
 		["only the install step", { data: { items: [{ modelName: "chat", kind: "Chat" }] }, isSuccess: true }, 2],
-	])("skips %s when readiness changes before entering the setup step", (_name, query, expectedIndex) => {
+	])("skips %s when readiness changes before entering the setup step", async (_name, query, expectedIndex) => {
 		modelsRef.current = { data: { items: [], selectedModelName: null }, isSuccess: true };
 		const view = renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 
 		applyModelsQuery(view, query);
 		expect(joyrideProps.current?.stepIndex).toBe(0);
@@ -357,7 +371,7 @@ describe("frozen Quick Start readiness", () => {
 		expect(joyrideProps.current?.stepIndex).toBe(expectedIndex);
 	});
 
-	it("completes when a slow assistant reply arrives after entering the final step", () => {
+	it("completes when a slow assistant reply arrives after entering the final step", async () => {
 		modelsRef.current = {
 			data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
@@ -365,6 +379,7 @@ describe("frozen Quick Start readiness", () => {
 		conversationsRef.current = [[["conversations", "existing"], { messages: [{ role: "assistant", content: "Earlier" }] }]];
 		const view = renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 		for (let index = 0; index < 3; index += 1) {
 			act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index, status: STATUS.RUNNING }));
 		}
@@ -384,7 +399,7 @@ describe("frozen Quick Start readiness", () => {
 		expect(joyrideProps.current?.run).toBe(false);
 	});
 
-	it("completes when a fast assistant reply arrives before entering the final step", () => {
+	it("completes when a fast assistant reply arrives before entering the final step", async () => {
 		modelsRef.current = {
 			data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
@@ -392,6 +407,7 @@ describe("frozen Quick Start readiness", () => {
 		conversationsRef.current = [[["conversations", "existing"], { messages: [{ role: "assistant", content: "Earlier" }] }]];
 		const view = renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 		for (let index = 0; index < 2; index += 1) {
 			act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index, status: STATUS.RUNNING }));
 		}
@@ -413,13 +429,14 @@ describe("frozen Quick Start readiness", () => {
 		expect(joyrideProps.current?.run).toBe(false);
 	});
 
-	it("does not downgrade a same-session completion when its replay is closed", () => {
+	it("does not downgrade a same-session completion when its replay is closed", async () => {
 		modelsRef.current = {
 			data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
 		};
 		renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 		act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index: 3, status: STATUS.RUNNING }));
 		expect(markDoneMock).toHaveBeenCalledTimes(1);
 		expect(markDoneMock).toHaveBeenLastCalledWith(
@@ -436,7 +453,7 @@ describe("frozen Quick Start readiness", () => {
 		expect(contextRef.current?.tutorials["quick-start"].status).toBe("completed");
 	});
 
-	it("keeps completed when consecutive completion and skip saves resolve out of order", () => {
+	it("keeps completed when consecutive completion and skip saves resolve out of order", async () => {
 		const callbacks: Array<{
 			status: string;
 			onSuccess?: () => void;
@@ -450,6 +467,7 @@ describe("frozen Quick Start readiness", () => {
 		};
 		renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 		act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index: 3, status: STATUS.RUNNING }));
 		act(() => contextRef.current?.restart("quick-start"));
 		act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.CLOSE, index: 0, status: STATUS.RUNNING }));
@@ -485,10 +503,11 @@ describe("frozen Quick Start readiness", () => {
 		expect(contextRef.current?.tutorials["agents-basics"].status).toBe("completed");
 	});
 
-	it("does not replace an already active tutorial", () => {
+	it("does not replace an already active tutorial", async () => {
 		modelsRef.current = { data: { items: [], selectedModelName: null }, isSuccess: true };
 		renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 		expect(contextRef.current?.activeTutorialId).toBe("quick-start");
 
 		act(() => contextRef.current?.start("agents-basics"));
@@ -515,9 +534,10 @@ describe("controlled tutorial recovery", () => {
 		modelsRef.current = { data: { items: [], selectedModelName: null }, isSuccess: true };
 	});
 
-	it("keeps Back available on an action step", () => {
+	it("keeps Back available on an action step", async () => {
 		renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 		act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index: 0, status: STATUS.RUNNING }));
 		expect(joyrideProps.current?.stepIndex).toBe(1);
 
@@ -526,9 +546,10 @@ describe("controlled tutorial recovery", () => {
 		expect(joyrideProps.current?.stepIndex).toBe(0);
 	});
 
-	it("advances after bounded missing-target retries instead of dead-ending", () => {
+	it("advances after bounded missing-target retries instead of dead-ending", async () => {
 		renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 		act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index: 0, status: STATUS.RUNNING }));
 
 		for (let attempt = 0; attempt <= 4; attempt += 1) {
@@ -542,9 +563,10 @@ describe("controlled tutorial recovery", () => {
 		expect(markDoneMock).not.toHaveBeenCalled();
 	});
 
-	it("records skipped and stops when an incomplete tutorial is closed", () => {
+	it("records skipped and stops when an incomplete tutorial is closed", async () => {
 		renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		await waitForTour();
 
 		act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.CLOSE, index: 0, status: STATUS.RUNNING }));
 

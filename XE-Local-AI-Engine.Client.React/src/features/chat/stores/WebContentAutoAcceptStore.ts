@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { create } from "zustand";
 
 /* eslint-disable react-doctor/auth-token-in-web-storage -- xe-node-chat-web-auto:* holds a per-conversation UI toggle only; no credential or session token is persisted here. */
@@ -79,7 +80,9 @@ export function forgetWebContentAutoAccept(conversationId: string): void {
 
 export function useWebContentAutoAccept(conversationId: string): boolean {
 	const inMemory = useWebContentAutoAcceptStore((state) => state.byConversation[conversationId]);
-	return inMemory ?? (conversationId ? readStored(conversationId) : false);
+	// Storage is read once per conversation, not on every render; any later choice lands in memory and wins.
+	const stored = useMemo(() => (conversationId ? readStored(conversationId) : false), [conversationId]);
+	return inMemory ?? stored;
 }
 
 export function useSetWebContentAutoAccept(): (conversationId: string, value: boolean) => void {

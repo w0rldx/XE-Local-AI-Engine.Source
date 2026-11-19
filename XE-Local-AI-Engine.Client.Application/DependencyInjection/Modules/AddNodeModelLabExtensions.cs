@@ -1,7 +1,10 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Common;
+using XE_Local_AI_Engine.Client.Services.Common.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 
 /// <summary>Registers Model Lab: the checkpoint preflight, the experiment service, its arm runner and its startup reaper.</summary>
@@ -37,6 +40,8 @@ internal static class AddNodeModelLabExtensions
 #pragma warning restore EXTEXP0001
         builder.Services.AddSingleton<ModelLabArmRunner>();
         builder.Services.AddSingleton<ModelLabExperimentService>();
+        // The service announces each start; the Client host's hub publisher wins over this no-op.
+        builder.Services.TryAddSingleton<IJobCreatedPublisher, NullJobCreatedPublisher>();
         builder.Services.AddSingleton<IModelLabActiveJob>(static provider => provider.GetRequiredService<ModelLabExperimentService>());
 
         // The experiment service owns the warm session, so it is the residents widget's Model Lab row and its eject.

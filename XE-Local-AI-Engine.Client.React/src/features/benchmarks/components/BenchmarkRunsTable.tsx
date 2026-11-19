@@ -29,7 +29,7 @@ interface BenchmarkRunsTableProps {
 	onToggleRun: (runId: string) => void;
 	onRejudgeRun: (run: BenchmarkRunSummary) => void;
 	onMeasureFidelity: (run: BenchmarkRunSummary) => void;
-	onDeleteRun: (run: BenchmarkRunSummary) => void;
+	onDeleteRun: (run: BenchmarkRunSummary, menuButton: HTMLElement | null) => void;
 }
 
 /**

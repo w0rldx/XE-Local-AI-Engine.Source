@@ -19,9 +19,9 @@ import {
 // before the client has authenticated and opened this connection, so a push-only subscription would miss the entire
 // download on precisely the slow first run the operation indicator exists to explain.
 //
-// Connection lifetime copies the race-safe pattern from the other local hubs (source-build): a shared
-// refcounted connection, a per-mount handler so this subscriber coexists with any other, and a deferred release so a
-// StrictMode double-invoke cannot abort an in-flight negotiation.
+// Connection lifetime is race-safe, as in the other local hubs: a shared refcounted connection, a per-mount handler
+// so this subscriber coexists with any other, and a deferred release so a StrictMode double-invoke cannot abort an
+// in-flight negotiation.
 
 // The client method the backend invokes to push an acquisition status.
 const RUNTIME_ACQUISITION_STATUS_CHANGED = "runtimeAcquisition.statusChanged";

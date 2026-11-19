@@ -67,7 +67,7 @@ public sealed class ModelLabStartupReaper : IHostedService
             _logger.LogError(exception, "The Model Lab startup sweep failed.");
         }
 
-        BestEffortFile.TryDeleteDirectory(ModelLabExperimentService.WorkRoot(_dataDirectory));
+        BestEffortFile.TryDeleteDirectory(ModelLabScriptRunner.WorkRoot(_dataDirectory));
     }
 
     public Task StopAsync(CancellationToken cancellationToken) =>

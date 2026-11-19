@@ -10,6 +10,7 @@ import {
 	inspectGgufRepositoryOptions,
 	startGgufDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import type { GgufAcquisitionStatus } from "@/core/model-downloads/models/GgufAcquisitionModels";
 import { toGgufRepository, toGgufRepositoryDetail, toGgufTestedModel } from "@/core/model-downloads/models/GgufMappers";
 import { sortTestedModelsByFit } from "@/core/model-downloads/models/GgufModels";
@@ -31,13 +32,8 @@ const ggufQueryIds = {
 	runningModels: "listRunningModels",
 } as const;
 
-/** Builds the partial generated-query-key filter that matches every cached variant of one GGUF endpoint. */
-function ggufInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
-
 function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId: string): Promise<void> {
-	return queryClient.invalidateQueries({ queryKey: ggufInvalidationKey(operationId) });
+	return queryClient.invalidateQueries({ queryKey: operationInvalidationKey(operationId) });
 }
 
 // GGUF repository browse search. enabled gates the query so it only fires once the operator has entered a search term
@@ -148,10 +144,10 @@ function isActiveDownloadPhase(phase: GgufAcquisitionStatus["phase"]): boolean {
 	return phase === "Queued" || phase === "Validating" || phase === "Downloading" || phase === "Committing";
 }
 
-// Domain view-model for a single active GGUF download, derived from the backend DTO.
+// Domain view-model for a single active GGUF download, derived from the backend DTO. Its failure text comes from
+// ggufFailureText, like every other surface that shows one.
 export type GgufDownloadStatus = GgufAcquisitionStatus & {
 	readonly operationKind: "Download";
-	readonly sanitizedError: string | null | undefined;
 };
 
 // Live GGUF download progress. Does ONE initial fetch of GET model-fit/gguf/downloads to hydrate on mount (no polling),
@@ -177,11 +173,7 @@ export function useActiveGgufDownloads({ enabled = true }: { enabled?: boolean }
 				continue;
 			}
 			if (status.operationKind === "Download") {
-				downloads.set(status.modelName, {
-					...status,
-					operationKind: "Download",
-					sanitizedError: status.sanitizedMessage,
-				});
+				downloads.set(status.modelName, { ...status, operationKind: "Download" });
 			}
 		}
 		return downloads;

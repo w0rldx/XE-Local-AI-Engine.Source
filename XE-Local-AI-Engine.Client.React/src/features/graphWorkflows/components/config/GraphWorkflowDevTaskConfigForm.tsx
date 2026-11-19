@@ -6,7 +6,7 @@ import { Select, TagsInput, Textarea, TextInput } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { GraphWorkflowInputBindingsField } from "@/features/graphWorkflows/components/config/GraphWorkflowInputBindingsField";
-import { withCurrentValue } from "@/features/graphWorkflows/components/config/GraphWorkflowSelectOptions";
+import { graphNodeSelectOption, withCurrentValue } from "@/features/graphWorkflows/components/config/GraphWorkflowSelectOptions";
 import type { GraphWorkflowCanvasNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { graphWorkflowDevTaskActions } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 
@@ -33,12 +33,7 @@ export function GraphWorkflowDevTaskConfigForm({
 	const { t } = useTranslation();
 	const implementOptions = graphNodes.flatMap((candidate) =>
 		candidate.kind === "DevTask" && candidate.action === "implement" && candidate.key !== node.key
-			? [
-					{
-						value: candidate.key,
-						label: candidate.label.trim().length > 0 ? `${candidate.label} (${candidate.key})` : candidate.key,
-					},
-				]
+			? [graphNodeSelectOption(candidate)]
 			: [],
 	);
 
@@ -82,7 +77,11 @@ export function GraphWorkflowDevTaskConfigForm({
 				<>
 					<TextInput
 						label={t("pages.graphWorkflows.config.devTaskTitle", "Task title")}
-						placeholder={t("pages.graphWorkflows.config.devTaskTitlePlaceholder", "The node label")}
+						description={t(
+							"pages.graphWorkflows.config.devTaskTitleHelp",
+							"Leave it empty to title the task with the first line of the requirements.",
+						)}
+						placeholder={t("pages.graphWorkflows.config.devTaskTitlePlaceholder", "The first line of the requirements")}
 						value={node.title}
 						disabled={readOnly}
 						onChange={(event) => onChange({ title: event.currentTarget.value })}

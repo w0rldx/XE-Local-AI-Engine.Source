@@ -80,6 +80,8 @@ describe("AzureFoundryPanel — Azure Foundry connection form (generated hey-api
 		expect(screen.queryByText("Enter an absolute HTTPS Azure OpenAI endpoint.")).toBeNull();
 		expect(screen.queryByText("Add at least one deployment name.")).toBeNull();
 		expect(screen.queryByText("Enter the API key. Saved keys are never returned to this page.")).toBeNull();
+		expect(screen.getByRole("radiogroup", { name: "Authentication" })).toBe(screen.getByTestId("cloud-settings-auth-mode"));
+		expect(screen.getByRole("radiogroup", { name: "API surface" })).toBe(screen.getByTestId("cloud-settings-api-surface"));
 	});
 
 	it("shows an error for endpoint only after blurring that field", async () => {
@@ -344,7 +346,15 @@ describe("AzureFoundryPanel — Azure Foundry connection form (generated hey-api
 		// the query to the password-style API key field specifically.
 		expect(screen.queryByLabelText("API key", { selector: 'input[type="password"]' })).toBeNull();
 		// No stored secret yet, so the sign-in method picker is shown.
-		expect(screen.getByTestId("cloud-settings-entra-sign-in-method")).toBeTruthy();
+		expect(screen.getByRole("radiogroup", { name: "Sign-in method" })).toBe(
+			screen.getByTestId("cloud-settings-entra-sign-in-method"),
+		);
+
+		// A typed secret swaps in the secret-backed choice, named the same way.
+		fireEvent.change(screen.getByLabelText("Client secret"), { target: { value: "s3cret" } });
+		expect(screen.getByRole("radiogroup", { name: "Sign-in method" })).toBe(
+			screen.getByTestId("cloud-settings-entra-sign-in-method-secret"),
+		);
 	});
 
 	it("requires tenant, client id, and token scope before saving in EntraId mode", async () => {

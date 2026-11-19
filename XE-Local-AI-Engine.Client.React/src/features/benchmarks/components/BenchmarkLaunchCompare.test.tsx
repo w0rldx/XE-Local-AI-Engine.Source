@@ -8,7 +8,7 @@ import { getBenchmarkRunQueryKey } from "@/core/api/generated/@tanstack/react-qu
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
 import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkFidelityFixture, benchmarkRunDetailFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkFidelityFixture, benchmarkRunDetailFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // Two runs of the same task are only worth reading side by side if the operator can see how their launches differed.

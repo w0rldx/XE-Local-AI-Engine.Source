@@ -11269,16 +11269,6 @@ export const zListNodeChatMessageRevisionsPath = z.object({
  */
 export const zListNodeChatMessageRevisionsResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse;
 
-export const zCreateNodeChatMessageRevisionPath = z.object({
-	conversationId: z.guid(),
-	messageId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zCreateNodeChatMessageRevisionResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse;
-
 export const zPinNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationRequest;
 
 export const zPinNodeChatConversationPath = z.object({

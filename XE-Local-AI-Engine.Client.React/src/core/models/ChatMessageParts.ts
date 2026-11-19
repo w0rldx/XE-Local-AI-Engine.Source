@@ -60,8 +60,6 @@ export interface NodeChatWebReviewPreviewDto {
 
 export type ToolCallState = "requesting" | "waiting" | "received" | "failed" | "denied";
 
-export type ChatMessagePartKind = "reasoning" | "tool" | "text" | "notice";
-
 /** A folded "Thoughts" run. Each reasoning segment renders as its own block, so reasoning and tools interleave in stream order. */
 export interface ChatReasoningPart {
 	kind: "reasoning";

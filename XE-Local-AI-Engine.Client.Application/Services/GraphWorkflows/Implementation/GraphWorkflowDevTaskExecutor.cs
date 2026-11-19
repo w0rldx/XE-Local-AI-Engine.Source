@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
@@ -27,6 +28,9 @@ internal sealed class GraphWorkflowDevTaskExecutor : IGraphWorkflowNodeExecutor
 
     /// <summary>Dev Mode's own default review budget, for a project that somehow carries no task to copy one from.</summary>
     private const int DefaultMaxReviewRounds = 3;
+
+    /// <summary>The longest title a task takes from its requirements; the store has no cap, so it matches the product's other title caps.</summary>
+    internal const int MaxRequirementsTitleLength = 200;
 
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
@@ -510,7 +514,8 @@ internal sealed class GraphWorkflowDevTaskExecutor : IGraphWorkflowNodeExecutor
                 ProjectId = projectId,
                 TaskId = Guid.NewGuid(),
                 OperationId = OperationId(run.Id, node.NodeKey, attempt: 0, "devtask-create"),
-                Title = string.IsNullOrWhiteSpace(config.Title) ? node.Label : config.Title,
+                // The operator's own requirements text, never the fenced input data the bound prompt appends to it.
+                Title = TaskTitle(config.Title, config.Requirements ?? string.Empty, node.Label),
                 Requirements = requirements,
                 AcceptanceCriteriaJson = config.AcceptanceCriteria.Count > 0
                     ? JsonSerializer.Serialize(config.AcceptanceCriteria, GraphWorkflowInvocationExecutor.PromptJsonOptions)
@@ -519,6 +524,18 @@ internal sealed class GraphWorkflowDevTaskExecutor : IGraphWorkflowNodeExecutor
             },
             cancellationToken);
         return created.TaskId ?? throw new InvalidOperationException("The Development store created a task without naming it.");
+    }
+
+    /// <summary>The explicit title, else the first non-empty line of the requirements cut to the title cap, else the node label.</summary>
+    internal static string TaskTitle(string? title, string requirements, string nodeLabel)
+    {
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            return title;
+        }
+
+        var firstLine = requirements.Split('\n').Select(static line => line.Trim()).FirstOrDefault(static line => line.Length > 0);
+        return firstLine is null ? nodeLabel : TextTruncation.TruncateAtRuneBoundary(firstLine, MaxRequirementsTitleLength).TrimEnd();
     }
 
     /// <summary>Pins the task on the row; false when the run stopped being live first, whether the store declined or the cancel's write beat this one.</summary>

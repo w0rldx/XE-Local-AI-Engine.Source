@@ -52,7 +52,6 @@ export const benchmarkReplayResetSchema = z.object({
 	latestSequence: z.number().int().nonnegative(),
 	runVersion: z.number().int().nonnegative(),
 });
-export type BenchmarkReplayReset = z.infer<typeof benchmarkReplayResetSchema>;
 
 /**
  * The live corrections the hub has streamed since the last authoritative read. Kept as an overlay rather than written

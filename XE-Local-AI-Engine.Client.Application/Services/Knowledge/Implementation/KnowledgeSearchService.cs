@@ -176,7 +176,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
 
         // Hydrate the fused candidate POOL once in fused order, then drop content duplicates BEFORE any top-`limit` cut so
         // near-identical chunks under different ids cannot crowd out distinct results; the higher-ranked one is kept.
-        var pool = await HydratePoolAsync(connection, fused, candidatePool, collectionId, cancellationToken);
+        var pool = await HydratePoolAsync(connection, fused, candidatePool, collectionId, request.IncludeDocumentNames, cancellationToken);
         var deduped = DeduplicateByContent(pool);
 
         // Optional rerank: a configured reranker reorders the deduped pool BEFORE the top-`limit` cut; off or failed, the order
@@ -355,12 +355,14 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         IReadOnlyList<RankFusionEntry> fused,
         int candidatePool,
         string? collectionId,
+        bool includeFileNames,
         CancellationToken cancellationToken)
     {
         var pooled = fused.Take(candidatePool).ToList();
         var hydrated = await HydrateChunksAsync(connection,
             pooled.Select(static entry => entry.ChunkId).ToList(),
             collectionId,
+            includeFileNames,
             cancellationToken);
 
         var pool = new List<ChunkSelection>(pooled.Count);
@@ -555,6 +557,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
     private static async Task<IReadOnlyDictionary<Guid, HydratedChunk>> HydrateChunksAsync(DbConnection connection,
         IReadOnlyList<Guid> chunkIds,
         string? collectionId,
+        bool includeFileNames,
         CancellationToken cancellationToken)
     {
         var start = Stopwatch.GetTimestamp();
@@ -584,13 +587,15 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
                                    SELECT c.chunk_id, c.document_id, c.chunk_index, c.content, c.heading_path,
                                           d.storage_path, d.status, d.vector_identity, d.collection_id,
                                           c.source_path, c.content_kind, c.language, c.symbol, c.page_number,
-                                          c.start_offset, c.end_offset, d.original_file_name
+                                          c.start_offset, c.end_offset, CASE WHEN $include_file_names THEN d.original_file_name END
                                    FROM knowledge_document_chunks c
                                    JOIN knowledge_documents d ON d.document_id = c.document_id
                                    WHERE ($collection_id IS NULL OR d.collection_id = $collection_id)
                                      AND c.chunk_id IN ({string.Join(", ", placeholders)});
                                    """;
             AddParameter(command, "$collection_id", collectionId);
+            // The encrypted name leaves the database only for a caller that asked for document names.
+            AddParameter(command, "$include_file_names", includeFileNames);
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
@@ -616,7 +621,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
                     PageNumber = await reader.IsDBNullAsync(13, cancellationToken) ? null : reader.GetInt32(13),
                     StartOffset = reader.GetInt32(14),
                     EndOffset = reader.GetInt32(15),
-                    EncryptedFileName = await reader.GetFieldValueAsync<byte[]>(16, cancellationToken)
+                    EncryptedFileName = await reader.IsDBNullAsync(16, cancellationToken) ? null : await reader.GetFieldValueAsync<byte[]>(16, cancellationToken)
                 };
             }
         }
@@ -638,7 +643,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
     {
         if (!names.TryGetValue(row.DocumentId, out var name))
         {
-            name = _dbContext.DecryptKnowledgeFileName(row.EncryptedFileName, row.DocumentId);
+            name = _dbContext.DecryptKnowledgeFileName(row.EncryptedFileName ?? throw new InvalidOperationException("Document names were not hydrated for this search."), row.DocumentId);
             names[row.DocumentId] = name;
         }
 
@@ -690,7 +695,8 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
 
         public required int EndOffset { get; init; }
 
-        public required byte[] EncryptedFileName { get; init; }
+        // Null unless the search requested document names.
+        public required byte[]? EncryptedFileName { get; init; }
     }
 
     // One selected candidate carried from ranking to hit-building: the chunk id, its hydrated row, and the score to

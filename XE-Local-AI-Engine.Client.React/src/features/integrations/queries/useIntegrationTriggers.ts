@@ -6,6 +6,7 @@ import {
 	listIntegrationTriggersOptions,
 	updateIntegrationTriggerMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { toIntegrationTrigger } from "@/features/integrations/models/IntegrationMappers";
 
 // Server state for the integration triggers surface. Reads use the generated hey-api `*Options()` (which wire the
@@ -21,11 +22,6 @@ export const integrationQueryIds = {
 	listSessions: "listIntegrationSessions",
 } as const;
 
-/** Builds the partial generated-query-key filter that matches every cached variant of one integrations endpoint. */
-export function integrationInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
-
 export function useIntegrationTriggers() {
 	return useQuery({
 		...listIntegrationTriggersOptions(),
@@ -34,7 +30,7 @@ export function useIntegrationTriggers() {
 }
 
 function invalidateTriggers(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
-	return queryClient.invalidateQueries({ queryKey: integrationInvalidationKey(integrationQueryIds.listTriggers) });
+	return queryClient.invalidateQueries({ queryKey: operationInvalidationKey(integrationQueryIds.listTriggers) });
 }
 
 export function useCreateIntegrationTrigger() {

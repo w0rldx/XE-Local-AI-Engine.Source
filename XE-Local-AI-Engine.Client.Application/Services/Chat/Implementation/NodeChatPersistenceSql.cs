@@ -259,6 +259,7 @@ internal static class NodeChatPersistenceSql
                 Parts = metadata.Parts,
                 AgentDefinitionId = metadata.AgentDefinitionId,
                 AgentName = metadata.AgentName,
+                Imported = metadata.Imported == true,
                 ReasoningEffort = metadata.ReasoningEffort,
                 GenerationDurationMs = metadata.GenerationDurationMs,
                 Sources = metadata.Sources,

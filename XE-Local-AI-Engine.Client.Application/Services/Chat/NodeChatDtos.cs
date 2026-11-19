@@ -259,6 +259,10 @@ public sealed record NodeChatPersistedMessageDto : ISelectedPathMessage
 
     public string? AgentName { get; init; }
 
+    // A chat import wrote this assistant message (metadata only). Read by the branch copy so the flag survives it; never serialized.
+    [JsonIgnore]
+    public bool Imported { get; init; }
+
     // The reasoning effort actually used to generate this assistant turn, surfaced from the metadata blob (no DB
     // column). Null for legacy turns persisted before this field existed and for user messages.
     public string? ReasoningEffort { get; init; }

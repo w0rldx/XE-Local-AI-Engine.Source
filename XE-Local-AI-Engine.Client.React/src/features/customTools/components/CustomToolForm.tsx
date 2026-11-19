@@ -1,5 +1,5 @@
 import { Checkbox, Divider, SegmentedControl, Stack, Switch, Text, Textarea, TextInput } from "@mantine/core";
-import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { type Ref, useCallback, useEffect, useId, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -7,8 +7,8 @@ import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
 import { CommandEditor, HttpEditor, ParameterBuilder } from "@/features/customTools/components/CustomToolEditors";
 import type { FieldErrors } from "@/features/customTools/models/CustomToolFormErrors";
 import {
-	CUSTOM_TOOL_NAME_PREFIX,
 	buildCustomToolFormSchema,
+	CUSTOM_TOOL_NAME_PREFIX,
 	CUSTOM_TOOL_TIMEOUT_MAX_FALLBACK,
 	type CustomToolFormValues,
 	storedSecretRowNames,
@@ -52,6 +52,7 @@ export function CustomToolForm({
 	maxTimeoutSeconds = CUSTOM_TOOL_TIMEOUT_MAX_FALLBACK,
 }: CustomToolFormProps) {
 	const { t } = useTranslation();
+	const labelId = useId();
 	const [values, setValues] = useState<CustomToolFormValues>(initialValues);
 	const [errors, setErrors] = useState<FieldErrors>({});
 
@@ -151,10 +152,11 @@ export function CustomToolForm({
 			/>
 
 			<Stack gap={4}>
-				<Text size="sm" fw={500}>
+				<Text size="sm" fw={500} id={`${labelId}-kind`}>
 					{t("pages.customTools.form.kind.label", "Kind")}
 				</Text>
 				<SegmentedControl
+					aria-labelledby={`${labelId}-kind`}
 					value={values.kind}
 					onChange={(value) => update((current) => ({ ...current, kind: value as CustomToolFormValues["kind"] }))}
 					data={[
@@ -166,10 +168,11 @@ export function CustomToolForm({
 			</Stack>
 
 			<Stack gap={4}>
-				<Text size="sm" fw={500}>
+				<Text size="sm" fw={500} id={`${labelId}-mode`}>
 					{t("pages.customTools.form.mode.label", "Mode")}
 				</Text>
 				<SegmentedControl
+					aria-labelledby={`${labelId}-mode`}
 					value={values.mode}
 					onChange={(value) => update((current) => ({ ...current, mode: value as CustomToolFormValues["mode"] }))}
 					data={[

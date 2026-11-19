@@ -3,6 +3,8 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
+
 // Mock the generated hey-api TanStack mutation factories. Each returns an object carrying a `mutationFn` the hook
 // spreads into useMutation; the hooks layer their own onSuccess/onSettled
 // invalidation on top. The factory mocks let a test assert the variable shape the hook forwarded to the wire.
@@ -44,7 +46,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 }));
 
 import {
-	schedulerInvalidationKey,
 	schedulerQueryIds,
 	useCancelScheduledJobRun,
 	useCreateScheduledJob,
@@ -73,11 +74,11 @@ const sampleBody = {
 };
 
 // Generated keys are object arrays; tests assert invalidation through the production `_id` filter.
-const jobsKey = schedulerInvalidationKey(schedulerQueryIds.listJobs);
-const runsKey = schedulerInvalidationKey(schedulerQueryIds.listRuns);
-const runKey = schedulerInvalidationKey(schedulerQueryIds.getRun);
+const jobsKey = operationInvalidationKey(schedulerQueryIds.listJobs);
+const runsKey = operationInvalidationKey(schedulerQueryIds.listRuns);
+const runKey = operationInvalidationKey(schedulerQueryIds.getRun);
 // Home's upcoming card reads this endpoint; a job edit can move a next fire.
-const upcomingKey = schedulerInvalidationKey(schedulerQueryIds.listUpcoming);
+const upcomingKey = operationInvalidationKey(schedulerQueryIds.listUpcoming);
 
 const invalidatedKeys: unknown[] = [];
 

@@ -484,25 +484,58 @@ def test_job_frames_carry_the_job_id_and_a_phase_boundary_is_a_cancel_point():
     assert run.phase == "tracing"
 
 
-def _main_failing_with(error, job=None, runner="trace"):
-    """Runs the script's real main with the job's runner raising, and returns its error events."""
+def _main_with(job, error=None):
+    """Runs the script's real main on ``--config`` with every job runner replaced, ``source`` raising ``error`` when
+    given. Returns its exit status, its events and the runners that were called."""
     modellab = _load_modellab()
     modellab.torch.__version__ = "2"
     modellab.transformers.__version__ = "5"
     modellab.torch.cuda.OutOfMemoryError = MemoryError
     events = []
+    runners = {name: mock.MagicMock() for name in ("trace", "derive", "source")}
+    runners["source"].side_effect = error
     with tempfile.TemporaryDirectory() as directory:
         config = os.path.join(directory, "job.json")
         with open(config, "w", encoding="utf-8") as handle:
-            json.dump(job or VALID_JOB, handle)
+            json.dump(job, handle)
         with (
-            mock.patch.object(modellab, runner, side_effect=error),
+            mock.patch.multiple(modellab, **runners),
             mock.patch.object(modellab, "emit", lambda event, **fields: events.append((event, fields))),
             mock.patch.object(sys, "argv", ["modellab.py", "--config", config]),
             mock.patch("os.umask"),
         ):
-            assert modellab.main() == 1
+            status = modellab.main()
+    return status, events, [name for name, runner in runners.items() if runner.called]
+
+
+def _main_failing_with(error, job=None):
+    """Runs the script's real main with a source job's runner raising, and returns its error events."""
+    status, events, _ = _main_with(job or VALID_SOURCE_JOB, error)
+    assert status == 1
     return [fields for event, fields in events if event == "error"]
+
+
+def test_a_source_job_runs_with_config_and_ends_done():
+    status, events, called = _main_with(VALID_SOURCE_JOB)
+    assert status == 0
+    assert called == ["source"]
+    assert [event for event, _ in events][0] == "handshake"
+    assert events[-1] == ("done", {"cancelled": False})
+    assert not [event for event, _ in events if event == "error"]
+
+
+def test_a_trace_or_steering_job_is_refused_with_config_and_runs_nothing():
+    for job in (VALID_JOB, VALID_STEERING_JOB):
+        status, events, called = _main_with(job)
+        assert status == 1
+        assert called == [], f"A {job['kind']} job must not run outside a serving worker."
+        errors = [fields for event, fields in events if event == "error"]
+        assert errors == [
+            {
+                "category": "contract",
+                "message": "A trace or steering job runs in a serving worker (--serve), not with --config.",
+            }
+        ]
 
 
 def test_a_missing_compiler_says_what_to_do():
@@ -927,6 +960,35 @@ def test_an_attention_row_rounded_down_never_sums_past_the_scale():
         assert sum(weights) + rest <= ATTENTION_WEIGHT_SCALE, (weights, rest)
     assert record["r"][0] == 0  # clamped, not negative
     assert record["w"][3] == [10_000]
+
+
+def test_a_non_finite_attention_weight_is_a_clear_job_error():
+    for bad in (float("nan"), float("inf")):
+        try:
+            attention_record(0, 3, 1, [[1, 0]], [[bad, 0.25]])
+        except JobError as error:
+            assert "attention weight was not a finite number" in str(error)
+            continue
+        raise AssertionError(f"A {bad} weight must not reach the attention file.")
+
+
+def test_a_non_finite_result_value_is_refused_rather_than_written_as_invalid_json():
+    result = _trace_result("x")
+    result["seconds"] = float("nan")
+    try:
+        fitted_trace_result(result)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("A trace result must stay strict JSON.")
+    modellab = _load_modellab()
+    with tempfile.TemporaryDirectory() as directory:
+        path = os.path.join(directory, "result.json")
+        try:
+            modellab.write_result({"resultPath": path}, {"seconds": float("inf")})
+        except ValueError:
+            return
+    raise AssertionError("A steering result must stay strict JSON.")
 
 
 def test_a_query_with_fewer_keys_than_asked_for_keeps_a_short_row():
@@ -1375,9 +1437,7 @@ def test_a_result_over_the_cap_is_refused():
 
 
 def test_a_source_refusal_reaches_the_host_under_its_own_category():
-    errors = _main_failing_with(
-        SourceRefusalError("remote_code", "config.json names repository code."), VALID_SOURCE_JOB, "source"
-    )
+    errors = _main_failing_with(SourceRefusalError("remote_code", "config.json names repository code."))
     assert errors == [{"category": "remote_code", "message": "config.json names repository code."}]
 
 

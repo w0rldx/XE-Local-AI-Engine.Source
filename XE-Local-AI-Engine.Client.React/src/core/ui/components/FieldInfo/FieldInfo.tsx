@@ -3,6 +3,8 @@ import { IconInfoCircle } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import { tooltipDefaultProps } from "@/core/theme/config/TooltipDefaults";
+
 import classes from "./FieldInfo.module.css";
 
 interface FieldInfoProps {
@@ -13,10 +15,9 @@ interface FieldInfoProps {
 	readonly testId?: string;
 }
 
-const HOVER_AND_FOCUS_AND_TOUCH = { hover: true, focus: true, touch: true } as const;
-
 // An icon-only (i) whose read-only card explains a tunable field. It opens on hover, on keyboard focus and on touch;
-// clicking does nothing, and the card never takes the pointer.
+// clicking does nothing, and the card never takes the pointer. The events are the app theme's Tooltip default, passed
+// explicitly so the card behaves the same under any MantineProvider.
 export function FieldInfo({ label, text, testId }: FieldInfoProps) {
 	const { t } = useTranslation();
 	return (
@@ -33,7 +34,7 @@ export function FieldInfo({ label, text, testId }: FieldInfoProps) {
 					))}
 				</Stack>
 			}
-			events={HOVER_AND_FOCUS_AND_TOUCH}
+			events={tooltipDefaultProps.events}
 			openDelay={300}
 			multiline={true}
 			w={300}

@@ -209,6 +209,7 @@ describe("CloudProviders page — OpenAI-compatible connections", () => {
 	it("warns when Local is declared for a host that is not loopback or private, and not otherwise", async () => {
 		await openStoredEditor();
 
+		expect(screen.getByRole("radiogroup", { name: "Trust" })).toBe(screen.getByTestId("external-provider-locality"));
 		expect(screen.queryByTestId("external-provider-locality-warning")).toBeNull();
 
 		fireEvent.change(screen.getByTestId("external-provider-base-url"), {

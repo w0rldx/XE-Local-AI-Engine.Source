@@ -316,7 +316,7 @@ public sealed class ModelLabStartupReaperTests
 
     private static async Task<string> SeedPlaintextAsync(INodeDataDirectory dataDirectory, Guid id)
     {
-        var work = Path.Combine(ModelLabExperimentService.WorkRoot(dataDirectory), id.ToString("N"));
+        var work = Path.Combine(ModelLabScriptRunner.WorkRoot(dataDirectory), id.ToString("N"));
         Directory.CreateDirectory(work);
         var file = Path.Combine(work, "job.json");
         await File.WriteAllTextAsync(file, "secret");

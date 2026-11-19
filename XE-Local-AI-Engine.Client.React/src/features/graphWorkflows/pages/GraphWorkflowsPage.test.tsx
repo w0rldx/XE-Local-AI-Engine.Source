@@ -19,20 +19,34 @@ vi.mock("@xyflow/react", async (importOriginal) => ({
 	ReactFlowProvider: ({ children }: { readonly children: React.ReactNode }) => children,
 	useReactFlow: () => ({ screenToFlowPosition: () => ({ x: 0, y: 0 }), fitView: () => Promise.resolve(true) }),
 	// One button per node, so a card click is reachable: selecting a node is a search-param write, and that write is
-	// what the navigation guard used to block.
+	// what the navigation guard used to block. A click reports React Flow's select change and then the click itself, as
+	// React Flow does; the editor selects from the first, the run view from the second. The edges are echoed as text.
 	ReactFlow: ({
 		nodes,
+		edges,
 		onNodeClick,
+		onNodesChange,
 	}: {
 		readonly nodes?: readonly { readonly id: string }[];
+		readonly edges?: readonly { readonly source: string; readonly target: string }[];
 		readonly onNodeClick?: (event: unknown, node: { readonly id: string }) => void;
+		readonly onNodesChange?: (changes: readonly { type: "select"; id: string; selected: boolean }[]) => void;
 	}) => (
 		<div data-testid="react-flow">
 			{(nodes ?? []).map((node) => (
-				<button key={node.id} type="button" data-testid={`flow-node-${node.id}`} onClick={(event) => onNodeClick?.(event, node)}>
+				<button
+					key={node.id}
+					type="button"
+					data-testid={`flow-node-${node.id}`}
+					onClick={(event) => {
+						onNodesChange?.([{ type: "select", id: node.id, selected: true }]);
+						onNodeClick?.(event, node);
+					}}
+				>
 					{node.id}
 				</button>
 			))}
+			<output data-testid="flow-edges">{(edges ?? []).map((edge) => `${edge.source}>${edge.target}`).join(",")}</output>
 		</div>
 	),
 }));
@@ -374,6 +388,34 @@ describe("GraphWorkflowsPage", () => {
 		expect(screen.getByTestId<HTMLButtonElement>("gw-page-rename").disabled).toBe(true);
 	});
 
+	it("connects the selected node from its panel through the editor's own rules, refusing a second plain edge", async () => {
+		server.use(
+			...editorRoutes(),
+			// The open node's inspector fills the agent, model and tool pickers.
+			jsonRoute("get", "agents", { items: [] }),
+			jsonRoute("get", "models", { items: [] }),
+			jsonRoute("get", "graph-workflows/tools", graphWorkflowTools()),
+		);
+		renderPage({ definitionId, nodeKey: "lookup" });
+
+		const target = await screen.findByTestId("gw-node-connect-target");
+		const connect = async (key: string): Promise<void> => {
+			fireEvent.click(target);
+			fireEvent.click(await screen.findByRole("option", { name: new RegExp(`\\(${key}\\)$`), hidden: true }));
+			fireEvent.click(screen.getByTestId("gw-node-connect-submit"));
+		};
+		const edgesFrom = (): string[] =>
+			(screen.getByTestId("flow-edges").textContent ?? "").split(",").filter((edge) => edge.startsWith("lookup>"));
+
+		// `e6` already joins lookup to fanout without a condition: the editor refuses the duplicate, as it does a drag.
+		await connect("fanout");
+		expect(screen.getByTestId("graph-workflow-editor-notice").textContent).toContain("without a condition");
+		expect(edgesFrom()).toEqual(["lookup>fanout"]);
+
+		await connect("merge");
+		expect(edgesFrom()).toEqual(["lookup>fanout", "lookup>merge"]);
+	});
+
 	// Clicking a card with unsaved edits opened "Discard unsaved changes?", because selecting a node
 	// writes `nodeKey` through the router and the guard blocked every transition. Configuring the node you just added
 	// must not cost you the graph.
@@ -581,7 +623,7 @@ describe("GraphWorkflowsPage", () => {
 		server.use(
 			...editorRoutes(),
 			validateRoute({ valid: false, errors: [{ key: "deleted-node", message: "This node is gone." }] }),
-			// The only case here that opens a node: its inspector fills the agent, model and tool pickers.
+			// It opens a node, and the inspector fills the agent, model and tool pickers.
 			jsonRoute("get", "agents", { items: [] }),
 			jsonRoute("get", "models", { items: [] }),
 			jsonRoute("get", "graph-workflows/tools", graphWorkflowTools()),

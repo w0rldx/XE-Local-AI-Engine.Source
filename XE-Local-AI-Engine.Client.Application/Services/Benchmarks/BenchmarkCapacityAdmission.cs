@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Services.Capacity;
-using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>How long a benchmark phase waits for local capacity before it gives up.</summary>
@@ -132,7 +132,7 @@ internal static class BenchmarkCapacityAdmission
             }
 
             // The reason names what is loaded and what to eject; trimmed so a long resident list cannot crowd out the rest.
-            var reason = ConversationSummarizer.TruncateAtRuneBoundary(decision.Reason, MaxReasonChars);
+            var reason = TextTruncation.TruncateAtRuneBoundary(decision.Reason, MaxReasonChars);
             if (reason.Length < decision.Reason.Length)
             {
                 reason += "…";

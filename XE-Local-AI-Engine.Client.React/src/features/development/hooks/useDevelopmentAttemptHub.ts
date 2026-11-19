@@ -2,6 +2,7 @@ import { HubConnectionState } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import {
 	appendLiveOutputLines,
@@ -12,7 +13,7 @@ import type {
 	DevelopmentAttemptLiveUpdate,
 	DevelopmentAttemptSubscriptionSnapshot,
 } from "@/features/development/models/DevelopmentModels";
-import { developmentInvalidationKey, developmentQueryIds } from "@/features/development/queries/useDevelopment";
+import { developmentQueryIds } from "@/features/development/queries/useDevelopment";
 
 const EVENT_NAME = "developmentAttemptUpdate";
 const MAX_RETAINED_UPDATES = 200;
@@ -172,7 +173,7 @@ export function useDevelopmentAttemptHub(
 				// The stream is over: nothing will publish to it again, so a later poll must not subscribe once more.
 				terminated = true;
 				queryClient
-					.invalidateQueries({ queryKey: developmentInvalidationKey(developmentQueryIds.getProject) })
+					.invalidateQueries({ queryKey: operationInvalidationKey(developmentQueryIds.getProject) })
 					.catch(() => undefined);
 			}
 		};

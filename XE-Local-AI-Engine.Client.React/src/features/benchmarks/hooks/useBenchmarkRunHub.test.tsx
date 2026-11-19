@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { benchmarkHubEvents, useBenchmarkRunHub } from "@/features/benchmarks/hooks/useBenchmarkRunHub";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkRunDetailFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkRunDetailFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 
 const handlers = new Map<string, (payload: unknown) => void>();
 const invoke = vi.fn(() => Promise.resolve());

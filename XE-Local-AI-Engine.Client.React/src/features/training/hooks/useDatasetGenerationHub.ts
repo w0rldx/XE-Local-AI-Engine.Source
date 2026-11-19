@@ -1,93 +1,52 @@
-import { HubConnectionState } from "@microsoft/signalr";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
+import type { z } from "zod";
 
-import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
-import { joinHubGroup } from "@/core/api/signalr/SharedHubGroups";
-import type { DatasetGenerationProgress } from "@/features/training/models/TrainingModels";
+import { type RunStreamChannel, useRunStreamSubscription } from "@/core/api/signalr/useRunStreamSubscription";
+import type { DatasetGenerationEvent, DatasetGenerationProgress } from "@/features/training/models/TrainingModels";
 import {
 	applyGenerationEvent,
 	datasetGenerationEventSchema,
 	datasetGenerationReplayResetSchema,
 } from "@/features/training/models/TrainingModels";
 
-const datasetGenerationHubEvents = {
-	event: "datasetGeneration.event",
-	replayReset: "datasetGeneration.replayReset",
-} as const;
+const datasetGenerationStream: RunStreamChannel<DatasetGenerationEvent, z.infer<typeof datasetGenerationReplayResetSchema>> = {
+	hubPath: "training/datasets/hub",
+	eventName: "datasetGeneration.event",
+	replayResetName: "datasetGeneration.replayReset",
+	eventSchema: datasetGenerationEventSchema,
+	resetSchema: datasetGenerationReplayResetSchema,
+	idOf: (frame) => frame.datasetId,
+};
 
 const emptyProgress: DatasetGenerationProgress = { completed: 0, total: 0, rejected: 0, state: null };
 
 /**
  * Subscribes to one dataset's bounded generation stream. Generation events are coarse progress rather than token
- * deltas, so this hook keeps only a cursor and a counter: an out-of-order or duplicate event is dropped, and a gap or
- * a server-pushed replay reset falls back to the authoritative HTTP snapshot (`onResync`) instead of guessing.
+ * deltas, so this hook keeps only a counter: a gap or a server-pushed replay reset falls back to the authoritative
+ * HTTP snapshot (`onResync`) instead of guessing.
  */
 export function useDatasetGenerationHub(datasetId: string | null, onResync: () => void): DatasetGenerationProgress {
 	const [progress, setProgress] = useState<DatasetGenerationProgress>(emptyProgress);
-	const cursorRef = useRef(0);
-	const resyncRef = useRef(onResync);
-	useLayoutEffect(() => {
-		resyncRef.current = onResync;
-	}, [onResync]);
-
-	useEffect(() => {
-		if (!datasetId) {
-			setProgress(emptyProgress);
-			cursorRef.current = 0;
-			return;
-		}
-
+	// Another dataset, or none, starts from zero.
+	const [trackedId, setTrackedId] = useState(datasetId);
+	if (trackedId !== datasetId) {
+		setTrackedId(datasetId);
 		setProgress(emptyProgress);
-		cursorRef.current = 0;
-		const hub = acquireHubConnection("training/datasets/hub");
-		const { connection } = hub;
-		let disposed = false;
+	}
 
-		const eventHandler = (value: unknown): void => {
-			const parsed = datasetGenerationEventSchema.safeParse(value);
-			if (!parsed.success || parsed.data.datasetId !== datasetId || parsed.data.sequence <= cursorRef.current) {
+	useRunStreamSubscription(datasetGenerationStream, datasetId, {
+		onResync,
+		onEvent: (event, gap) => {
+			if (gap) {
+				onResync();
 				return;
 			}
-			if (parsed.data.sequence !== cursorRef.current + 1) {
-				cursorRef.current = parsed.data.sequence;
-				resyncRef.current();
-				return;
+			setProgress((current) => applyGenerationEvent(current, event));
+			if (event.kind === "State") {
+				onResync();
 			}
-			cursorRef.current = parsed.data.sequence;
-			setProgress((current) => applyGenerationEvent(current, parsed.data));
-			if (parsed.data.kind === "State") {
-				resyncRef.current();
-			}
-		};
-
-		const resetHandler = (value: unknown): void => {
-			const parsed = datasetGenerationReplayResetSchema.safeParse(value);
-			if (parsed.success && parsed.data.datasetId === datasetId) {
-				cursorRef.current = parsed.data.latestSequence;
-				resyncRef.current();
-			}
-		};
-
-		connection.on(datasetGenerationHubEvents.event, eventHandler);
-		connection.on(datasetGenerationHubEvents.replayReset, resetHandler);
-
-		const subscribe = (): void => {
-			if (disposed || connection.state !== HubConnectionState.Connected) {
-				return;
-			}
-			connection.invoke("Subscribe", datasetId, cursorRef.current).catch(() => resyncRef.current());
-		};
-		// The operations feed may hold this dataset's group on the same connection; only the last holder leaves it.
-		const leave = joinHubGroup(hub, ["Unsubscribe", datasetId], subscribe);
-
-		return () => {
-			disposed = true;
-			connection.off(datasetGenerationHubEvents.event, eventHandler);
-			connection.off(datasetGenerationHubEvents.replayReset, resetHandler);
-			leave();
-			hub.release();
-		};
-	}, [datasetId]);
+		},
+	});
 
 	return progress;
 }

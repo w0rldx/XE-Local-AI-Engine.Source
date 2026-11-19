@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { useRouterState } from "@tanstack/react-router";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { generatedMock } = vi.hoisted(() => ({
@@ -99,6 +99,21 @@ describe("CommandPalette", () => {
 
 		await waitFor(() => expect(screen.getByTestId("path").textContent).toBe("/node-settings"));
 		expect(screen.queryByRole("combobox", { name: "Page name" })).toBeNull();
+	});
+
+	it("leaves an Enter that confirms an IME composition alone and opens the page on a plain Enter", async () => {
+		renderPalette();
+		await screen.findByTestId("path");
+		pressModK();
+		const input = await screen.findByRole("combobox", { name: "Page name" });
+		fireEvent.change(input, { target: { value: "settings node" } });
+
+		fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+		fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+		expect(screen.getByRole("combobox", { name: "Page name" })).toBe(input);
+
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => expect(screen.getByTestId("path").textContent).toBe("/node-settings"));
 	});
 
 	it("says so when no page matches", async () => {

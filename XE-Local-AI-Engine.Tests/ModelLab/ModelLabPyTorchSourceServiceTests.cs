@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -495,7 +496,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         {
             get
             {
-                var root = ModelLabExperimentService.WorkRoot(DataDirectory);
+                var root = ModelLabScriptRunner.WorkRoot(DataDirectory);
                 _ = Directory.CreateDirectory(root);
                 return root;
             }
@@ -733,7 +734,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
             var configDirectory = job.RootElement.GetProperty("configDirectory").GetString()!;
             LastConfigFiles = [.. Directory.GetFiles(configDirectory).Select(static path => Path.GetFileName(path))];
             LastConfig = File.ReadAllText(Path.Combine(configDirectory, "config.json"));
-            var handle = new Handle(this, job.RootElement.GetProperty("resultPath").GetString()!);
+            var handle = new Handle(this, job.RootElement.GetProperty("resultPath").GetString()!, request.RunToken);
             Started.TrySetResult();
             return handle;
         }
@@ -742,11 +743,13 @@ public sealed class ModelLabPyTorchSourceServiceTests
         {
             private readonly ScriptedSourceJob _owner;
             private readonly string _resultPath;
+            private readonly string _runToken;
 
-            public Handle(ScriptedSourceJob owner, string resultPath)
+            public Handle(ScriptedSourceJob owner, string resultPath, string runToken)
             {
                 _owner = owner;
                 _resultPath = resultPath;
+                _runToken = runToken;
             }
 
             public TrainingLaunchReceipt Receipt { get; } = new()
@@ -772,8 +775,20 @@ public sealed class ModelLabPyTorchSourceServiceTests
 
                 foreach (var line in _owner.Lines)
                 {
-                    yield return line;
+                    yield return Stamped(line);
                 }
+            }
+
+            /// <summary>A frame carries the spawn's token, as the script's do; one that names a token keeps it.</summary>
+            private string Stamped(string line)
+            {
+                if (!line.StartsWith('{') || JsonNode.Parse(line) is not JsonObject frame || frame.ContainsKey("token"))
+                {
+                    return line;
+                }
+
+                frame["token"] = _runToken;
+                return frame.ToJsonString();
             }
 
             public Task<int> WaitForExitAsync(CancellationToken cancellationToken) =>

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import { modelRecommendationCheckTemplateId } from "@/features/model-fit/models/ModelFitModels";
 import {
@@ -10,7 +11,7 @@ import {
 	notifyModelFitRefreshEvent,
 	notifyModelFitRefreshRun,
 } from "@/features/model-fit/notifications/ModelFitRefreshNotifications";
-import { modelFitInvalidationKey, modelFitQueryIds } from "@/features/model-fit/queries/useModelFit";
+import { modelFitQueryIds } from "@/features/model-fit/queries/useModelFit";
 import { fetchScheduledJobRuns } from "@/features/scheduler/queries/useScheduler";
 
 /* eslint-disable react-doctor/effect-needs-cleanup -- The cleanup does tear down: it offs every registered handler and releases the shared lease; the rule only recognizes teardown of a connection created inline in the effect. */
@@ -24,9 +25,8 @@ import { fetchScheduledJobRuns } from "@/features/scheduler/queries/useScheduler
 // operator gets immediate, actionable feedback (the POST that fired the run already returned 200).
 //
 // The data layer is the generated hey-api TanStack query layer, whose query keys are single-element arrays
-// `[{ _id: "<operationId>", ... }]`. Invalidating with the `_id` partial object (via modelFitInvalidationKey)
-// matches every cached (useCase, providerName) variant of the latest-recommendations query — the realtime
-// analogue of the old latestRoot() prefix invalidation.
+// `[{ _id: "<operationId>", ... }]`. Invalidating with the `_id` partial object (via operationInvalidationKey)
+// matches every cached (useCase, providerName) variant of the latest-recommendations query.
 //
 // Terminal events only: RunCompleted/RunFailed/RunCancelled change the stored snapshot (or its diagnostics).
 // RunStarted/RunProgress carry no new cache state, so reacting to them would refetch needlessly — but they are still
@@ -180,7 +180,7 @@ export function useModelFitSchedulerEvents(
 			onTerminalRunRef.current?.(manualFireId);
 
 			// Authoritative state path (unchanged): TanStack Query refetches the canonical snapshot.
-			queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.latest) }).catch(() => undefined);
+			queryClient.invalidateQueries({ queryKey: operationInvalidationKey(modelFitQueryIds.latest) }).catch(() => undefined);
 
 			// Best-effort UI feedback. Stable id per run so a reconnect/duplicate broadcast replaces rather than stacks.
 			notifyModelFitRefreshEvent(eventName, { errorMessage, runId }, tRef.current);

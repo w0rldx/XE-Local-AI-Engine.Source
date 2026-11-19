@@ -30,6 +30,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
 
     private readonly IDevelopmentEvidenceService _evidence;
     private readonly IDevelopmentAttemptLiveBroker? _liveBroker;
+    private readonly ILogger<DevelopmentValidationRunner> _logger;
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
     private readonly IDevelopmentStore _store;
@@ -42,9 +43,12 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
         IDevelopmentEvidenceService evidence,
         IOptions<DevelopmentOptions> options,
         TimeProvider timeProvider,
+        ILogger<DevelopmentValidationRunner> logger,
         IDevelopmentAttemptLiveBroker? liveBroker = null)
     {
         _liveBroker = liveBroker;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
         ArgumentNullException.ThrowIfNull(workspaceProvider);
@@ -200,7 +204,8 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                 Options.Create(_options),
                 _timeProvider,
                 Math.Min(snapshot.MaxTokens ?? _options.MaxOutputTokens, _options.MaxOutputTokens),
-                _options.MaxToolCalls);
+                _options.MaxToolCalls,
+                _logger);
         var tools = new DevelopmentWorkspaceTools(_sandbox, tree, Options.Create(_options), profile, liveProgress);
 
         // The validation run needs a deadline of its own: bounded only per command, a four-command profile runs

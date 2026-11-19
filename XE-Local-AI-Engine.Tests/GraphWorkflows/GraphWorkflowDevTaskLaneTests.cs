@@ -186,10 +186,40 @@ public sealed class GraphWorkflowDevTaskLaneTests
 
         var task = await ReadTaskAsync(harness, TaskOf(await harness.ReadNodeRunAsync(runId, "impl")));
         AssertEx.True(task.Requirements.StartsWith(written, StringComparison.Ordinal), $"the requirements text arrives as written: {task.Requirements}");
+        AssertEx.Equal(written, task.Title, "with no explicit title, the task is titled from its requirements' first line, not the node label.");
         AssertEx.False(task.Requirements.Contains("\\u", StringComparison.Ordinal), $"nothing reaches the coder as a \\u escape: {task.Requirements}");
         AssertEx.Contains(task.Requirements, "\"plan\":\"Run `make test` and print \\\"Grüße — ✓\\\" <done> & 'ok'.\"", message: "the bound value keeps every character but the JSON quote escape.");
         AssertEx.False(task.AcceptanceCriteriaJson.Contains("\\u", StringComparison.Ordinal), $"nor do the criteria: {task.AcceptanceCriteriaJson}");
         AssertEx.Equal(written, JsonSerializer.Deserialize<string[]>(task.AcceptanceCriteriaJson)?.Single());
+    }
+
+    [Test]
+    public void TaskTitle_AnExplicitTitleWinsOverTheRequirementsAndTheLabel()
+    {
+        AssertEx.Equal("Fix login", GraphWorkflowDevTaskExecutor.TaskTitle("Fix login", "Fix the login bug.", "impl"));
+    }
+
+    [Test]
+    public void TaskTitle_TakesTheFirstNonEmptyRequirementsLineTrimmed()
+    {
+        AssertEx.Equal("Fix the login bug.", GraphWorkflowDevTaskExecutor.TaskTitle("  ", "\r\n   \n  Fix the login bug.  \r\nThen add a test.", "impl"));
+    }
+
+    [Test]
+    public void TaskTitle_FallsBackToTheNodeLabelWhenTheRequirementsHaveNoText()
+    {
+        AssertEx.Equal("Implement", GraphWorkflowDevTaskExecutor.TaskTitle(null, " \n\t\n", "Implement"));
+    }
+
+    [Test]
+    public void TaskTitle_CutsALongFirstLineToTheTitleCapWithoutSplittingASurrogatePair()
+    {
+        var limit = GraphWorkflowDevTaskExecutor.MaxRequirementsTitleLength;
+        AssertEx.Equal(new string('a', limit), GraphWorkflowDevTaskExecutor.TaskTitle(null, new string('a', limit + 50) + "\nsecond line", "impl"));
+
+        // An emoji straddling the cap is dropped whole, never left as a lone high surrogate.
+        var straddling = new string('a', limit - 1) + "\U0001F600" + "tail";
+        AssertEx.Equal(new string('a', limit - 1), GraphWorkflowDevTaskExecutor.TaskTitle(null, straddling, "impl"));
     }
 
     /// <summary>

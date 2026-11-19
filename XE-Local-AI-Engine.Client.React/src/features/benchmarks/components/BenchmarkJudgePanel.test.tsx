@@ -4,7 +4,7 @@ import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BenchmarkJudgePanel } from "@/features/benchmarks/components/BenchmarkJudgePanel";
-import { benchmarkJudgeFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkJudgeFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The judging is independent from the primary run, and the panel is where that independence is made legible: a judge

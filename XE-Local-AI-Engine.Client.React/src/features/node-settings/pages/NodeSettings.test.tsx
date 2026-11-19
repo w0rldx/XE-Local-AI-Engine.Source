@@ -1524,5 +1524,23 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			expect(await screen.findByTestId("node-settings-section-content-knowledge")).toBeTruthy();
 			expect((screen.getByTestId("node-settings-search") as HTMLInputElement).value).toBe("");
 		});
+
+		it("keeps the focus in the search box on an Enter or Escape that belongs to an IME composition", async () => {
+			renderPage("general");
+			await screen.findByTestId("node-settings-section-content-general");
+			const input = screen.getByTestId("node-settings-search");
+			input.focus();
+
+			search("worker limits");
+			await waitFor(() => expect(searchStatus()).toBe("1 matching cards"));
+			fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+			fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+			fireEvent.keyDown(input, { key: "Escape", keyCode: 229 });
+			expect(document.activeElement).toBe(input);
+			expect((input as HTMLInputElement).value).toBe("worker limits");
+
+			fireEvent.keyDown(input, { key: "Enter" });
+			expect(document.activeElement).toBe(screen.getByTestId("node-settings-max-response-size"));
+		});
 	});
 });

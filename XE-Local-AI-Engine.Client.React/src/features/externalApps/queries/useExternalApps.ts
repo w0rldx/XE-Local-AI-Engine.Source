@@ -30,6 +30,7 @@ import {
 	updateExternalAppMutation,
 	updateExternalAppVariablesMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import type { FeedOptions } from "@/core/api/QueryKeys";
 import { isExternalAppBusy, toExternalAppStatus } from "@/features/externalApps/models/ExternalAppModels";
 
 /** Generated operationIds, which are also the generated SDK fn names and the `_id` of every generated query key. */
@@ -44,8 +45,6 @@ export const externalAppQueryIds = {
 	events: "listExternalAppInstanceEvents",
 	logs: "getExternalAppInstanceLogs",
 } as const;
-
-export type ExternalAppQueryId = (typeof externalAppQueryIds)[keyof typeof externalAppQueryIds];
 
 /**
  * Partial generated-query-key filter. Without a `path` it matches every cached variant of that endpoint (what the
@@ -63,12 +62,6 @@ export const externalAppListPollIntervalMs = 5_000;
 
 /** The history feed's page size, and the hub's replay cap — one page is one full replay window. */
 export const externalAppEventsPageSize = 200;
-
-interface FeedOptions {
-	/** Polling cadence while the hub is unavailable. `undefined` (the live case) means no polling at all. */
-	readonly pollIntervalMs?: number;
-	readonly enabled?: boolean;
-}
 
 /**
  * The container-runtime health card. No polling: it changes when the operator changes the machine, and the card's own

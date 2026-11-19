@@ -68,7 +68,23 @@ public sealed class CodexLoginCoordinator : ICodexLoginCoordinator, IDisposable
             CancelPending(superseded);
         }
 
-        var handle = _authService.Value.BeginLogin(newCts.Token);
+        CodexLoginHandle handle;
+        try
+        {
+            handle = _authService.Value.BeginLogin(newCts.Token);
+        }
+        catch
+        {
+            // No tracking task will ever own this attempt's CTS, so release it here. While it is still current the status
+            // must say Failed: the superseded attempt can no longer update it and would keep showing its own Pending URL.
+            UpdateStatusIfCurrent(newCts, new CodexLoginStatus
+            {
+                State = CodexLoginState.Failed,
+                AuthorizeUrl = null
+            });
+            ReleasePending(newCts);
+            throw;
+        }
 
         lock (_gate)
         {
@@ -158,16 +174,22 @@ public sealed class CodexLoginCoordinator : ICodexLoginCoordinator, IDisposable
         }
         finally
         {
-            lock (_gate)
-            {
-                if (ReferenceEquals(_pendingCts, cts))
-                {
-                    _pendingCts = null;
-                }
-            }
-
-            cts.Dispose();
+            ReleasePending(cts);
         }
+    }
+
+    /// <summary>Clears <paramref name="cts" /> as the current attempt when it still is one, then disposes it.</summary>
+    private void ReleasePending(CancellationTokenSource cts)
+    {
+        lock (_gate)
+        {
+            if (ReferenceEquals(_pendingCts, cts))
+            {
+                _pendingCts = null;
+            }
+        }
+
+        cts.Dispose();
     }
 
     /// <summary>

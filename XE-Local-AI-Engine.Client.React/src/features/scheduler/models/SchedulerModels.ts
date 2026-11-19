@@ -232,5 +232,3 @@ export const scheduledJobFormSchema = z
 			ctx.addIssue({ code: "custom", message: "pages.scheduler.form.validation.endInvalid", path: ["endAtUtc"] });
 		}
 	});
-
-export type ScheduledJobFormSchema = z.infer<typeof scheduledJobFormSchema>;

@@ -74,6 +74,7 @@ vi.mock("react-i18next", () => ({
 				"pages.nodeSettings.imageRuntime.sourceBuild.cancel": "Cancel",
 				"pages.nodeSettings.imageRuntime.sourceBuild.eject": "Eject image processes",
 				"pages.nodeSettings.imageRuntime.sourceBuild.remove": "Remove",
+				"pages.nodeSettings.imageRuntime.sourceBuild.removeConfirmTitle": "Remove the managed runtime?",
 			};
 			return labels[key] ?? key;
 		},
@@ -110,8 +111,9 @@ vi.mock("@/core/loaded-models/queries/useEjectRuntimes", () => ({
 	useEjectImageRuntime: () => ({ mutate: state.eject, isPending: state.ejectPending }),
 }));
 
-vi.mock("@/features/node-settings/hooks/useImageRuntimeSourceBuildHub", () => ({
-	useImageRuntimeSourceBuildHub: () => ({
+vi.mock("@/features/node-settings/hooks/useSourceBuildHub", () => ({
+	imageRuntimeSourceBuildStream: {},
+	useSourceBuildHub: () => ({
 		phase: null,
 		logEntries: [],
 		error: null,
@@ -120,13 +122,17 @@ vi.mock("@/features/node-settings/hooks/useImageRuntimeSourceBuildHub", () => ({
 	}),
 }));
 
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { ImageRuntimeSourceBuildCard } from "@/features/node-settings/components/ImageRuntimeSourceBuildCard";
+import { acceptConfirm, cancelConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 function card() {
 	return (
 		<MantineProvider env="test" theme={testMantineTheme}>
-			<ImageRuntimeSourceBuildCard />
+			<ConfirmProvider>
+				<ImageRuntimeSourceBuildCard />
+			</ConfirmProvider>
 		</MantineProvider>
 	);
 }
@@ -321,8 +327,12 @@ describe("ImageRuntimeSourceBuildCard", () => {
 		expect(screen.getByText("The managed binary failed integrity verification.")).toBeTruthy();
 		const remove = screen.getByRole("button", { name: "Remove" }) as HTMLButtonElement;
 		expect(remove.disabled).toBe(false);
-		fireEvent.click(remove);
-		expect(state.remove).toHaveBeenCalledWith(undefined, expect.any(Object));
+		await openConfirm(remove, "Remove the managed runtime?");
+		await cancelConfirm(remove);
+		expect(state.remove).not.toHaveBeenCalled();
+		await openConfirm(remove, "Remove the managed runtime?");
+		acceptConfirm();
+		await waitFor(() => expect(state.remove).toHaveBeenCalledWith(undefined, expect.any(Object)));
 		// A rebuild is now offered beside the removal — the record is invalid, not the toolchain.
 		expect(screen.getByRole("button", { name: "Rebuild" })).toBeTruthy();
 	});
@@ -462,7 +472,9 @@ describe("ImageRuntimeSourceBuildCard", () => {
 		// the surviving draft below prove nothing.
 		const card = () => (
 			<MantineProvider env="test" theme={testMantineTheme}>
-				<ImageRuntimeSourceBuildCard />
+				<ConfirmProvider>
+					<ImageRuntimeSourceBuildCard />
+				</ConfirmProvider>
 			</MantineProvider>
 		);
 		const { rerender } = render(card());

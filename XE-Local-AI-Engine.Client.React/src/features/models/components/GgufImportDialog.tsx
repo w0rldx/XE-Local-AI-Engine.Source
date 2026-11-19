@@ -7,7 +7,7 @@ import type { XeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportResponse 
 import { usePreviewGgufImport, useStartGgufImport } from "@/core/model-downloads/queries/useGgufAcquisitions";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { importErrorCodeFrom, importErrorMessage } from "@/features/models/models/GgufImportErrors";
+import { importErrorCodeFrom, importErrorMessage } from "@/core/model-downloads/models/GgufAcquisitionErrors";
 import { formatModelSize } from "@/features/models/models/LocalModelModel";
 
 interface GgufImportDialogProps {

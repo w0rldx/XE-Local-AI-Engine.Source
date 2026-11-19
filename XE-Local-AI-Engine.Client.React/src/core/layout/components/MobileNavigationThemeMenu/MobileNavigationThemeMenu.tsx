@@ -17,10 +17,14 @@ import { SidebarMenuItem } from "@/core/layout/components/Sidebar/SidebarMenuIte
 import { useMobileNavigationDrawer } from "@/core/layout/hooks/useMobileNavigationDrawer";
 import type { IMobileNavigationThemeMenuProperties } from "@/core/layout/components/MobileNavigationThemeMenu/MobileNavigationThemeMenu.types";
 
-export function MobileNavigationThemeMenu({ menuItemStyle, setDrawerOpen, width }: IMobileNavigationThemeMenuProperties) {
+export function MobileNavigationThemeMenu({
+	menuItemStyle,
+	setDrawerOpen,
+	onPanelOpenChange,
+	width,
+}: IMobileNavigationThemeMenuProperties) {
 	const { t } = useTranslation();
-	const { isDrawerOpen, setIsDrawerOpen, drawerReference, menuReference, openDrawer, closeDrawer } =
-		useMobileNavigationDrawer(setDrawerOpen);
+	const { isDrawerOpen, openDrawer, closePanel, closeDrawer } = useMobileNavigationDrawer(setDrawerOpen);
 	const { colorScheme, setColorScheme } = useMantineColorScheme();
 	const computedColorScheme = useComputedColorScheme("light");
 
@@ -30,7 +34,7 @@ export function MobileNavigationThemeMenu({ menuItemStyle, setDrawerOpen, width 
 	};
 
 	const themeMenuItem = () => (
-		<Flex ref={menuReference} h="4.25rem" align="center" justify="center">
+		<Flex h="4.25rem" align="center" justify="center">
 			<SidebarMenuItem icon={computedColorScheme === "light" ? <IconSun /> : <IconMoon />} onClick={openDrawer} isMobile={true}>
 				<Text size="sm" fw={500} lh="1.5">
 					{t("theme.title")}
@@ -50,8 +54,8 @@ export function MobileNavigationThemeMenu({ menuItemStyle, setDrawerOpen, width 
 			isOpen={isDrawerOpen}
 			width={width}
 			title={t("theme.title")}
-			onClose={() => setIsDrawerOpen(false)}
-			drawerReference={drawerReference}
+			onClose={closePanel}
+			onPanelOpenChange={onPanelOpenChange}
 		>
 			<Stack gap="0.5rem">
 				{themeOptions.map((option, index) => (

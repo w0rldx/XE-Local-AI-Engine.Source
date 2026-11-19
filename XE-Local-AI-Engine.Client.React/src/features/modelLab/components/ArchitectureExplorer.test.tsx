@@ -756,6 +756,7 @@ describe("ArchitectureExplorer PyTorch source", () => {
 			"Qwen3_5ForCausalLM from the Hugging Face config.json of Qwen/Qwen3.5-0.8B @ 2fc06364715b",
 		);
 		expect((screen.getByRole("radio", { name: "Hugging Face config.json" }) as HTMLInputElement).checked).toBe(true);
+		expect(screen.getByRole("radiogroup", { name: "Read the architecture from" })).toBeTruthy();
 		expect((screen.getByRole("textbox", { name: "Repository" }) as HTMLInputElement).value).toBe("Qwen/Qwen3.5-0.8B");
 		expect((screen.getByRole("textbox", { name: "Revision (optional)" }) as HTMLInputElement).value).toBe("2fc06364715b967f1860");
 	});

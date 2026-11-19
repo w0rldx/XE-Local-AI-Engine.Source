@@ -369,49 +369,16 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
     /// <summary>Reads one stat file: missing is gone, unreadable or unparsable is unknown, and a zombie is gone.</summary>
     internal static TrainingProcessStatRead ReadStatFile(string path)
     {
-        string raw;
-        try
+        var read = LinuxProcStat.Read(path);
+        return read.Outcome switch
         {
-            // Forced sync: reached from the synchronous ITrainingProcessSpawner.Inspect contract and from the spawner's
-            // post-start identity read; the source is procfs, which never blocks on a device.
-#pragma warning disable MA0045 // Contract-forced: sync Inspect contract, procfs read.
-            raw = File.ReadAllText(path);
-#pragma warning restore MA0045
-        }
-        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
-        {
-            return TrainingProcessStatRead.Missing;
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return TrainingProcessStatRead.Unreadable;
-        }
-
-        // Field 2 (comm) is parenthesized and may contain spaces and parentheses, so the rest is located from the LAST
-        // ')'. Tokens then start at field 3 (state), putting pgrp at index 2 and starttime at index 19.
-        var commEnd = raw.LastIndexOf(')');
-        if (commEnd < 0 || commEnd + 2 >= raw.Length)
-        {
-            return TrainingProcessStatRead.Unreadable;
-        }
-
-        var fields = raw[(commEnd + 2)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        const int stateIndex = 0;
-        const int pgidIndex = 2;
-        const int startTimeIndex = 19;
-        if (fields.Length <= startTimeIndex
-            || !int.TryParse(fields[pgidIndex], NumberStyles.Integer, CultureInfo.InvariantCulture, out var pgid)
-            || !long.TryParse(fields[startTimeIndex], NumberStyles.Integer, CultureInfo.InvariantCulture, out var startTicks))
-        {
-            return TrainingProcessStatRead.Unreadable;
-        }
-
-        // Z (zombie) and X (dead) hold no memory and run nothing; only the parent's wait() is left.
-        var exited = fields[stateIndex] is "Z" or "X";
-        return new TrainingProcessStatRead
-        {
-            Presence = exited ? TrainingProcessPresence.Gone : TrainingProcessPresence.Alive,
-            Stat = new TrainingProcessStat(pgid, startTicks)
+            LinuxProcStatOutcome.Missing => TrainingProcessStatRead.Missing,
+            LinuxProcStatOutcome.Unreadable => TrainingProcessStatRead.Unreadable,
+            _ => new TrainingProcessStatRead
+            {
+                Presence = read.Exited ? TrainingProcessPresence.Gone : TrainingProcessPresence.Alive,
+                Stat = new TrainingProcessStat(read.ProcessGroupId, read.StartTicks)
+            }
         };
     }
 

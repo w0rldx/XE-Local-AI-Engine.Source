@@ -40,7 +40,8 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
                 "true",
                 StringComparison.OrdinalIgnoreCase))
         {
-            Skip.Test("Run scripts/run-agent-framework-hardware-compat.sh with a fixed GGUF and llama-server.");
+            Skip.Test("Set RUN_AGENT_FRAMEWORK_HARDWARE_COMPAT=true, XE_FRAMEWORK_COMPAT_GGUF_PATH, "
+                      + "XE_LLAMACPP_SERVER_PATH and XE_FRAMEWORK_COMPAT_EVIDENCE_PATH to run this lane.");
         }
 
         var modelPath = RequireFile("XE_FRAMEWORK_COMPAT_GGUF_PATH");

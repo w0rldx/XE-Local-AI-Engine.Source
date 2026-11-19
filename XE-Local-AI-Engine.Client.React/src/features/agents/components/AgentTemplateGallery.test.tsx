@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
+
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
 		t: (_key: string, defaultValue?: string, options?: Record<string, unknown>) => {
@@ -73,7 +75,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	listAgentTemplatesQueryKey: vi.fn(() => [{ _id: "listAgentTemplates" }]),
 }));
 
-import { agentDefinitionsInvalidationKey, agentDefinitionsQueryIds } from "@/core/agents/queries/useAgentDefinitions";
+import { agentDefinitionsQueryIds } from "@/core/agents/queries/useAgentDefinitions";
 import { listAgentTemplatesQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
 import { AgentTemplateGallery } from "@/features/agents/components/AgentTemplateGallery";
 import { testMantineTheme } from "@/test/MantineTestRender";
@@ -172,7 +174,7 @@ describe("AgentTemplateGallery", () => {
 
 		// On success the hook invalidates both the agent-definitions list and the templates list. The keys are built
 		// via the production helpers (the `_id` discriminator literal lives only there) so the assertion tracks them.
-		const definitionsKey = agentDefinitionsInvalidationKey(agentDefinitionsQueryIds.list);
+		const definitionsKey = operationInvalidationKey(agentDefinitionsQueryIds.list);
 		await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: definitionsKey }));
 		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: listAgentTemplatesQueryKey() });
 		expect(toastMock.success).toHaveBeenCalled();

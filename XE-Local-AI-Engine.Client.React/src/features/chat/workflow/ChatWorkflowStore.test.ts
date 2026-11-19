@@ -67,6 +67,24 @@ describe("ChatWorkflowStore", () => {
 		expect(reloaded.useChatWorkflowStore.getState().showActivity).toBe(true);
 	});
 
+	it("forgets a deleted conversation's pick and dismissed run, in memory and in storage, and keeps the others", () => {
+		const { actions } = useChatWorkflowStore.getState();
+		actions.selectDefinition("conversation-a", "");
+		actions.selectDefinition("conversation-b", "");
+		actions.dismissRun("conversation-a", "run-1");
+		actions.dismissRun("conversation-b", "run-2");
+
+		actions.forgetConversation("conversation-a");
+
+		const state = useChatWorkflowStore.getState();
+		expect(state.selectedDefinitionByConversation).toEqual({ "conversation-b": "" });
+		expect(state.dismissedRunByConversation).toEqual({ "conversation-b": "run-2" });
+		expect(JSON.parse(localStorage.getItem("xe-node-chat-workflow-opted-out") ?? "{}")).toEqual({ "conversation-b": "" });
+		expect(JSON.parse(localStorage.getItem("xe-node-chat-workflow-dismissed-runs") ?? "{}")).toEqual({
+			"conversation-b": "run-2",
+		});
+	});
+
 	it("still works when storage throws", () => {
 		vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
 			throw new Error("quota");

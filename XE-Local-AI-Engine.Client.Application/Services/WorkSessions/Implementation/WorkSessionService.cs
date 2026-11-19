@@ -419,7 +419,8 @@ internal sealed class WorkSessionService : IWorkSessionService
             },
             cancellationToken);
         _logger.LogWarning("Work session {SessionId} lost the admission race and was left Paused.", sessionId);
-        _ = parked;
+        // Its Running move went unannounced, and no loop owns it now, so this park is the one announcement of where it stands.
+        await _publisher.PublishAsync(sessionId, parked.LastSequence, WorkSessionChangeKind.Status, cancellationToken);
         throw new WorkSessionInvalidTransitionException("The node could not admit the work session just now. Try again in a moment.");
     }
 
@@ -446,6 +447,8 @@ internal sealed class WorkSessionService : IWorkSessionService
                 SanitizedReason = sanitizedReason
             },
             cancellationToken);
+        // No loop owns this session (a parked one, say), so nothing else announces its end.
+        await _publisher.PublishAsync(sessionId, settled.LastSequence, WorkSessionChangeKind.Status, cancellationToken);
         return ToDetail(settled);
     }
 

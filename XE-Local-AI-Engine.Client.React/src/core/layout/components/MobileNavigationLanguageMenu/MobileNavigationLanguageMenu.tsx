@@ -10,10 +10,14 @@ import { useUserLanguageStore } from "@/core/locales/stores/UserLanguageStore";
 import { languageData } from "@/core/locales/models/LanguageMenuData";
 import type { IMobileNavigationLanguageMenuProperties } from "@/core/layout/components/MobileNavigationLanguageMenu/MobileNavigationLanguageMenu.types";
 
-export function MobileNavigationLanguageMenu({ menuItemStyle, setDrawerOpen, width }: IMobileNavigationLanguageMenuProperties) {
+export function MobileNavigationLanguageMenu({
+	menuItemStyle,
+	setDrawerOpen,
+	onPanelOpenChange,
+	width,
+}: IMobileNavigationLanguageMenuProperties) {
 	const { t, i18n } = useTranslation();
-	const { isDrawerOpen, setIsDrawerOpen, drawerReference, menuReference, openDrawer, closeDrawer } =
-		useMobileNavigationDrawer(setDrawerOpen);
+	const { isDrawerOpen, openDrawer, closePanel, closeDrawer } = useMobileNavigationDrawer(setDrawerOpen);
 	const selectedApplicationLanguage = useUserLanguageStore((state) => state.selectedApplicationLanguage);
 	const changeLanguage = useUserLanguageStore((state) => state.actions.changeLanguage);
 
@@ -24,7 +28,7 @@ export function MobileNavigationLanguageMenu({ menuItemStyle, setDrawerOpen, wid
 	};
 
 	const languageMenuItem = () => (
-		<div ref={menuReference} className="h-17 flex items-center justify-center">
+		<div className="h-17 flex items-center justify-center">
 			<SidebarMenuItem icon={<IconLanguage />} onClick={openDrawer} isMobile={true}>
 				<Text size="sm" fw={500} lh="1.5">
 					{t("components.mobileNavigation.languageTitle")}
@@ -38,8 +42,8 @@ export function MobileNavigationLanguageMenu({ menuItemStyle, setDrawerOpen, wid
 			isOpen={isDrawerOpen}
 			width={width}
 			title={t("components.mobileNavigation.languageTitle")}
-			onClose={() => setIsDrawerOpen(false)}
-			drawerReference={drawerReference}
+			onClose={closePanel}
+			onPanelOpenChange={onPanelOpenChange}
 		>
 			<List className="gap-2 flex flex-col">
 				{languageData.map((language) => (

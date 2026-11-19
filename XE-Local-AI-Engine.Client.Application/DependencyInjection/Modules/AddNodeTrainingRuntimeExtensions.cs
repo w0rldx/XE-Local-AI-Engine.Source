@@ -1,7 +1,10 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Common;
+using XE_Local_AI_Engine.Client.Services.Common.Implementation;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 using XE_Local_AI_Engine.Client.Services.Training.Runtime;
 using XE_Local_AI_Engine.Providers.HuggingFace;
@@ -33,6 +36,8 @@ internal static class AddNodeTrainingRuntimeExtensions
         builder.Services.AddScoped<ITrainingRunStore, TrainingRunStore>();
         builder.Services.AddScoped<ITrainingEvaluationStore, TrainingEvaluationStore>();
         builder.Services.AddSingleton<BaseArtifactDownloadCoordinator>();
+        // The coordinator announces each download's start and end; the Client host's hub publisher wins over this no-op.
+        builder.Services.TryAddSingleton<IJobCreatedPublisher, NullJobCreatedPublisher>();
         builder.Services.AddScoped<IBaseArtifactService, BaseArtifactService>();
         return builder;
     }

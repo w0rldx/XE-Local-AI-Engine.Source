@@ -8,8 +8,9 @@ import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import type { KnowledgeDocument } from "@/features/knowledge/models/KnowledgeModels";
-import { knowledgeInvalidationKey, knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
+import { knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
 
 const hubMock = vi.hoisted(() => {
 	const handlers = new Map<string, (event: unknown) => void>();
@@ -48,7 +49,7 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 import { useKnowledgeBaseHub } from "@/features/knowledge/hooks/useKnowledgeBaseHub";
 
 const documentId = "11111111-1111-4111-8111-111111111111";
-const listKey = knowledgeInvalidationKey(knowledgeQueryIds.listDocuments);
+const listKey = operationInvalidationKey(knowledgeQueryIds.listDocuments);
 
 function cachedRow(status: string): { items: KnowledgeDocument[] } {
 	return { items: [{ documentId, status } as unknown as KnowledgeDocument] };
@@ -109,7 +110,7 @@ describe("useKnowledgeBaseHub", () => {
 		act(() => lastCallback(hubMock.handle.onReconnected)());
 
 		expect(invalidatedIds(invalidateSpy)).toEqual(
-			expect.arrayContaining([listKey, knowledgeInvalidationKey(knowledgeQueryIds.getDocument)]),
+			expect.arrayContaining([listKey, operationInvalidationKey(knowledgeQueryIds.getDocument)]),
 		);
 	});
 
@@ -129,6 +130,54 @@ describe("useKnowledgeBaseHub", () => {
 			await vi.advanceTimersByTimeAsync(10_000);
 			expect(invalidateSpy).not.toHaveBeenCalled();
 			view.unmount();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("refetches once per key for a burst of pushes, and again for a push after the window", async () => {
+		vi.useFakeTimers();
+		try {
+			const { queryClient, wrapper } = harness();
+			const view = renderHook(() => useKnowledgeBaseHub(), { wrapper });
+			const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+			const keys = [
+				listKey,
+				operationInvalidationKey(knowledgeQueryIds.getDocument),
+				operationInvalidationKey(knowledgeQueryIds.listCollections),
+			];
+
+			for (const status of ["Pending", "Extracting", "Chunking", "Embedding", "Indexed"]) {
+				emit({ documentId, status });
+				emit({ documentId: `${documentId}-other`, status });
+			}
+			// Each push is on screen at once through the optimistic write; only the refetch waits.
+			expect(cachedStatus(queryClient)).toBe("Indexed");
+			expect(invalidateSpy).not.toHaveBeenCalled();
+
+			await vi.advanceTimersByTimeAsync(250);
+			expect(invalidatedIds(invalidateSpy)).toEqual(keys);
+
+			emit({ documentId, status: "Failed" });
+			await vi.advanceTimersByTimeAsync(250);
+			expect(invalidatedIds(invalidateSpy)).toEqual([...keys, ...keys]);
+			view.unmount();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("refetches a burst still waiting when the page unmounts", () => {
+		vi.useFakeTimers();
+		try {
+			const { queryClient, wrapper } = harness();
+			const view = renderHook(() => useKnowledgeBaseHub(), { wrapper });
+			const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+
+			emit({ documentId, status: "Indexed" });
+			view.unmount();
+
+			expect(invalidatedIds(invalidateSpy)).toContainEqual(listKey);
 		} finally {
 			vi.useRealTimers();
 		}

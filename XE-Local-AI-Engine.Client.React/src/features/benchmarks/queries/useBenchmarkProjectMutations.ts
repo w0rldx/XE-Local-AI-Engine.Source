@@ -115,13 +115,6 @@ export function useDeleteBenchmarkProject() {
 	});
 }
 
-/** What a judge change did: the refreshed project plus the runs it enqueued for re-judging. */
-export interface BenchmarkJudgeChange {
-	project: BenchmarkProjectDetail;
-	enqueuedRunIds: readonly string[];
-	enqueuedRunCount: number;
-}
-
 /**
  * The judge policy of a project, editable even while the project is frozen (its task/agent/context are not). A change
  * that would re-score existing runs is refused with 409 `RejudgeRequired` until `confirmRejudge` is set — the caller

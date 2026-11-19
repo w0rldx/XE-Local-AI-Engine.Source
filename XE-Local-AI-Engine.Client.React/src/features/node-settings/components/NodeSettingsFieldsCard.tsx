@@ -14,7 +14,13 @@ import {
 	nodeSettingsFieldLabel,
 } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
 import { NodeSettingsKnowledgeModelsCard } from "@/features/node-settings/components/NodeSettingsKnowledgeModelsCard";
-import { NodeSettingsRuntimeCard } from "@/features/node-settings/components/NodeSettingsRuntimeCard";
+import {
+	NodeSettingsKeepWarmCard,
+	NodeSettingsLaunchTuningCard,
+	NodeSettingsProcessPoolCard,
+	NodeSettingsResourceReserveCard,
+	NodeSettingsServerTimeoutsCard,
+} from "@/features/node-settings/components/NodeSettingsRuntimeCards";
 import { NodeSettingsUiModeCard } from "@/features/node-settings/components/NodeSettingsUiModeCard";
 import { NodeSettingsUsageRatesCard } from "@/features/node-settings/components/NodeSettingsUsageRatesCard";
 import {
@@ -116,14 +122,13 @@ export function NodeSettingsFieldsCard(props: NodeSettingsFieldsCardProps) {
 			);
 		case "runtime":
 			return (
-				<NodeSettingsRuntimeCard
-					form={form}
-					bounds={bounds}
-					errors={errors}
-					onChange={onChange}
-					draftModelOptions={props.draftModelOptions}
-					keepWarmModelOptions={props.keepWarmModelOptions}
-				/>
+				<>
+					<NodeSettingsProcessPoolCard {...tunable} />
+					<NodeSettingsServerTimeoutsCard {...tunable} />
+					<NodeSettingsResourceReserveCard {...tunable} />
+					<NodeSettingsKeepWarmCard {...tunable} keepWarmModelOptions={props.keepWarmModelOptions} />
+					<NodeSettingsLaunchTuningCard {...tunable} draftModelOptions={props.draftModelOptions} />
+				</>
 			);
 		case "runtimes":
 			return <NodeSettingsContainerRuntimeCard {...tunable} />;

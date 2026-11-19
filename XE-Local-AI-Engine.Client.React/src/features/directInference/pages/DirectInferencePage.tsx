@@ -1,7 +1,7 @@
 import { Button, Group, NumberInput, Paper, Select, Stack, Textarea, Title } from "@mantine/core";
 import { useClipboard } from "@mantine/hooks";
 import { IconBolt } from "@tabler/icons-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { runDirectInference } from "@/core/directInference/DirectInferenceApi";
@@ -15,8 +15,10 @@ import {
 import { DirectInferenceErrorAlert, DirectInferenceOutput } from "@/core/directInference/DirectInferenceOutput";
 import { DirectInferenceSamplingFields } from "@/core/directInference/DirectInferenceSamplingFields";
 import { DirectInferenceThinkingSwitch } from "@/core/directInference/DirectInferenceThinkingSwitch";
+import { useAbortableRun } from "@/core/directInference/useAbortableRun";
 import { useDirectInferenceModels } from "@/core/directInference/useDirectInferenceModels";
 import { type ChatSamplingOptions, toWireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
+import { useStreamCommitScheduler } from "@/core/streaming/useStreamCommitScheduler";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { StickyBar } from "@/core/ui/components/StickyBar/StickyBar";
@@ -34,11 +36,9 @@ export function DirectInferencePage() {
 	const [disableThinking, setDisableThinking] = useState(false);
 	const [result, setResult] = useState<DirectInferenceResult>(emptyDirectInferenceResult);
 	const [lastRequest, setLastRequest] = useState<DirectInferenceRequest | undefined>();
-	const [running, setRunning] = useState(false);
+	const { running, start, stop } = useAbortableRun();
+	const resultCommits = useStreamCommitScheduler(setResult);
 	const clipboard = useClipboard();
-	const abortRef = useRef<AbortController | undefined>(undefined);
-	// Leaving the page mid-stream cancels the request, or it keeps holding the node's invocation slot.
-	useEffect(() => () => abortRef.current?.abort(), []);
 
 	const isLlamaCppModel = modelId !== null && llamaCppModels.has(modelId);
 	const isReasoningLlamaCppModel = modelId !== null && reasoningLlamaCppModels.has(modelId);
@@ -60,22 +60,14 @@ export function DirectInferencePage() {
 			topLogprobs: isLlamaCppModel ? topLogprobs : undefined,
 			disableThinking: isReasoningLlamaCppModel && disableThinking ? true : undefined,
 		};
-		const controller = new AbortController();
-		abortRef.current = controller;
+		// A stopped run's frame that never painted must not merge into this one.
+		resultCommits.cancel();
 		setLastRequest(request);
-		setRunning(true);
-		await runDirectInference(request, setResult, controller.signal);
-		// A stopped attempt already went idle, and by now the page may belong to a newer Send.
-		if (!controller.signal.aborted) {
-			setRunning(false);
-			abortRef.current = undefined;
-		}
-	};
-
-	// Idle at once: while the hub is still connecting, the attempt only settles when the connection does.
-	const stop = (): void => {
-		abortRef.current?.abort();
-		setRunning(false);
+		await start(async (signal) => {
+			await runDirectInference(request, resultCommits.schedule, signal);
+			// A finished or stopped run shows its last events at once, not on the next frame.
+			resultCommits.flush();
+		});
 	};
 
 	return (
@@ -164,7 +156,7 @@ export function DirectInferencePage() {
 				<Stack gap="sm">
 					<Group justify="space-between">
 						<Title order={4}>{t("pages.directInference.output", "Output")}</Title>
-						{/* Stringified on click: every streamed event re-renders this page. */}
+						{/* Stringified on click: every streamed frame re-renders this page. */}
 						<Button
 							size="xs"
 							variant="default"

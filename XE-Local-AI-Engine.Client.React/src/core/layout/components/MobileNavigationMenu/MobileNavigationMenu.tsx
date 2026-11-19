@@ -1,5 +1,4 @@
 import { Divider, List, Text } from "@mantine/core";
-import type { RefObject } from "react";
 import { useCallback } from "react";
 
 import { MobileNavigationDrawerPanel } from "@/core/layout/components/MobileNavigationDrawerPanel/MobileNavigationDrawerPanel";
@@ -41,15 +40,14 @@ function MobileNavigationDrawerLinks({ links, onLinkClick }: MobileNavigationDra
 
 interface MobileNavigationRootItemProperties {
 	menuItem: IMobileNavigationMenuProperties["menuItem"];
-	menuReference: RefObject<HTMLDivElement | null>;
 	/** Route the item leads to, or undefined when it is a disclosure that opens the sub-panel instead. */
 	to?: string;
 	onOpen: () => void;
 }
 
-function MobileNavigationRootItem({ menuItem, menuReference, to, onOpen }: MobileNavigationRootItemProperties) {
+function MobileNavigationRootItem({ menuItem, to, onOpen }: MobileNavigationRootItemProperties) {
 	return (
-		<div ref={menuReference} className="h-17 flex items-center justify-center">
+		<div className="h-17 flex items-center justify-center">
 			<SidebarMenuItem icon={menuItem.icon} to={to} onClick={onOpen} active={menuItem.active} isMobile={true}>
 				<Text size="sm" fw={500} lh="1.5">
 					{menuItem.label}
@@ -62,14 +60,14 @@ function MobileNavigationRootItem({ menuItem, menuReference, to, onOpen }: Mobil
 export function MobileNavigationMenu({
 	menuItemStyle,
 	setDrawerOpen,
+	onPanelOpenChange,
 	menuItem,
 	drawerTitle,
 	links,
 	shouldRender,
 	width,
 }: IMobileNavigationMenuProperties) {
-	const { isDrawerOpen, drawerReference, menuReference, openDrawer, closeDrawer, setIsDrawerOpen } =
-		useMobileNavigationDrawer(setDrawerOpen);
+	const { isDrawerOpen, openDrawer, closePanel, closeDrawer } = useMobileNavigationDrawer(setDrawerOpen);
 
 	// A group's root item is a disclosure for the sub-panel, so it never becomes an anchor; a flat one leads
 	// somewhere and does, unless it carries an onClick of its own (which runs INSTEAD of navigating).
@@ -102,8 +100,8 @@ export function MobileNavigationMenu({
 			isOpen={isDrawerOpen}
 			width={width}
 			title={drawerTitle ?? ""}
-			onClose={() => setIsDrawerOpen(false)}
-			drawerReference={drawerReference}
+			onClose={closePanel}
+			onPanelOpenChange={onPanelOpenChange}
 		>
 			<List className="gap-2 flex flex-col">
 				{links ? <MobileNavigationDrawerLinks links={links} onLinkClick={handleLinkClick} /> : null}
@@ -117,7 +115,7 @@ export function MobileNavigationMenu({
 
 	return (
 		<SidebarMenu menuItemStyles={menuItemStyle}>
-			<MobileNavigationRootItem menuItem={menuItem} menuReference={menuReference} to={rootItemTo} onOpen={handleDrawerOpen} />
+			<MobileNavigationRootItem menuItem={menuItem} to={rootItemTo} onOpen={handleDrawerOpen} />
 			{drawerContent}
 		</SidebarMenu>
 	);

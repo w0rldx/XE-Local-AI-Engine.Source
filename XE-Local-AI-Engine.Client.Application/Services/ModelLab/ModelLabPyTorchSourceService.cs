@@ -316,7 +316,7 @@ public sealed partial class ModelLabPyTorchSourceService
     /// <summary>Only <c>config.json</c>, pinned to the commit the Hub resolves and kept under that commit. No weights, and no safetensors needed.</summary>
     private async Task<ConfigRead> FetchHubConfigAsync(string repoId, string? revision, CancellationToken ct)
     {
-        var staging = Path.Combine(ModelLabExperimentService.WorkRoot(_dataDirectory), Guid.NewGuid().ToString("N"));
+        var staging = Path.Combine(ModelLabScriptRunner.WorkRoot(_dataDirectory), Guid.NewGuid().ToString("N"));
         try
         {
             var manifest = await _checkpoints.FetchConfigAsync(repoId.Trim(), string.IsNullOrWhiteSpace(revision) ? null : revision.Trim(), staging, ct);
@@ -402,7 +402,7 @@ public sealed partial class ModelLabPyTorchSourceService
     private async Task<JobBuild> RunJobAsync(byte[] config, RuntimePackages packages, ModelLabScriptRunner.ScriptCommand script, CancellationToken ct)
     {
         var id = Guid.NewGuid();
-        var workDirectory = Path.Combine(ModelLabExperimentService.WorkRoot(_dataDirectory), id.ToString("N"));
+        var workDirectory = Path.Combine(ModelLabScriptRunner.WorkRoot(_dataDirectory), id.ToString("N"));
         var configDirectory = Path.Combine(workDirectory, "config");
         var job = new ModelLabSourceJobV1
         {

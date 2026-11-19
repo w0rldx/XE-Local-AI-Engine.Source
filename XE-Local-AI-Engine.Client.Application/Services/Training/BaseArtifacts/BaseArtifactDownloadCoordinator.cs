@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 
 using System.Collections.Concurrent;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
@@ -22,20 +24,24 @@ internal sealed class BaseArtifactDownloadCoordinator : IDisposable
     private readonly IBaseCheckpointStore _checkpointStore;
     private readonly INodeDataDirectory _dataDirectory;
     private readonly ConcurrentDictionary<Guid, InFlightDownload> _inFlight = new();
+    private readonly IJobCreatedPublisher _jobs;
     private readonly ILogger<BaseArtifactDownloadCoordinator> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
 
     public BaseArtifactDownloadCoordinator(IServiceScopeFactory scopeFactory,
         IBaseCheckpointStore checkpointStore,
         INodeDataDirectory dataDirectory,
+        IJobCreatedPublisher jobs,
         ILogger<BaseArtifactDownloadCoordinator> logger)
     {
         ArgumentNullException.ThrowIfNull(checkpointStore);
         ArgumentNullException.ThrowIfNull(dataDirectory);
+        ArgumentNullException.ThrowIfNull(jobs);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(scopeFactory);
         _checkpointStore = checkpointStore;
         _dataDirectory = dataDirectory;
+        _jobs = jobs;
         _logger = logger;
         _scopeFactory = scopeFactory;
     }
@@ -119,10 +125,12 @@ internal sealed class BaseArtifactDownloadCoordinator : IDisposable
             return;
         }
 
+        // The download has no hub group, so both ends go out as broadcasts for the operations feed; the publisher never throws.
+        await _jobs.PublishCreatedAsync(CreatedJobKind.BaseArtifactDownload, artifactId, CancellationToken.None);
         var directory = BaseArtifactManifest.ResolveDirectory(_dataDirectory, artifactId);
         try
         {
-            var progress = new Progress<PullProgress>(value => download.Progress = new BaseArtifactProgressView
+            var progress = new SynchronousProgress<PullProgress>(value => download.Progress = new BaseArtifactProgressView
             {
                 CompletedBytes = value.CompletedBytes ?? 0,
                 TotalBytes = value.TotalBytes,
@@ -161,6 +169,10 @@ internal sealed class BaseArtifactDownloadCoordinator : IDisposable
         {
             _ = _inFlight.TryRemove(artifactId, out _);
             download.Dispose();
+
+            // After the terminal write, so a list read on this push shows how the download ended. In the finally, so
+            // the end goes out on every path, even one that escaped the catches.
+            await _jobs.PublishEndedAsync(CreatedJobKind.BaseArtifactDownload, artifactId, CancellationToken.None);
         }
     }
 

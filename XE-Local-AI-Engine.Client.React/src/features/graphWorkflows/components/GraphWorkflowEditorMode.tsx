@@ -249,6 +249,9 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 			decisionModelOptionsReady={decisionModelOptionsQuery.isSuccess}
 			graphSettings={editor.settings}
 			graphNodes={editor.nodes.map((node) => node.data)}
+			onConnect={(target, sourceHandle) =>
+				editor.onConnect({ source: selectedNode.id, target, sourceHandle: sourceHandle ?? null, targetHandle: null })
+			}
 			readOnly={!isEditing}
 			onAskAssistant={() =>
 				designer.openAssistant(

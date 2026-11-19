@@ -497,6 +497,20 @@ describe("ChatInputArea Enter-key send gating", () => {
 		expect(onSend).toHaveBeenCalledTimes(1);
 		expect(onSend).toHaveBeenCalledWith("hello", "medium", "local-default");
 	});
+
+	it("does not send on an Enter that confirms an IME composition, then sends on a plain Enter", () => {
+		const onSend = vi.fn();
+		renderWithProviders(<ChatInputArea {...baseProps()} onSend={onSend} sendDisabled={false} />);
+
+		const input = screen.getByTestId("chat-input");
+		fireEvent.change(input, { target: { value: "hello" } });
+		fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+		fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+		expect(onSend).not.toHaveBeenCalled();
+
+		fireEvent.keyDown(input, { key: "Enter" });
+		expect(onSend).toHaveBeenCalledWith("hello", "medium", "local-default");
+	});
 });
 
 describe("ChatInputArea message-size pre-check", () => {

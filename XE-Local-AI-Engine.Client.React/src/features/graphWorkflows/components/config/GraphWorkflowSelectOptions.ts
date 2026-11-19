@@ -5,6 +5,8 @@
 
 import type { TFunction } from "i18next";
 
+import type { GraphWorkflowCanvasNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+
 export interface GraphWorkflowSelectOption {
 	readonly value: string;
 	readonly label: string;
@@ -33,6 +35,11 @@ export function withCloudModelLabels(
 					}),
 				},
 	);
+}
+
+/** A node of this graph as a picker option: its label with the key, which is what tells two same-named nodes apart. */
+export function graphNodeSelectOption(node: GraphWorkflowCanvasNodeData): GraphWorkflowSelectOption {
+	return { value: node.key, label: node.label.trim().length > 0 ? `${node.label} (${node.key})` : node.key };
 }
 
 export function withCurrentValue(

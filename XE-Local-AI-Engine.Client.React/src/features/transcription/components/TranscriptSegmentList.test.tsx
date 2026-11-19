@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { TranscriptSegmentList } from "@/features/transcription/components/TranscriptSegmentList";
@@ -120,6 +120,23 @@ describe("TranscriptSegmentList", () => {
 		fireEvent.change(input(), { target: { value: "kept" } });
 		fireEvent.keyDown(input(), { key: "Enter", ctrlKey: true });
 		await waitFor(() => expect(bodies).toEqual([{ text: "kept" }]));
+	});
+
+	it("leaves Ctrl+Enter and Escape to an IME composition and saves on a plain Ctrl+Enter", async () => {
+		const bodies: unknown[] = [];
+		segmentRoute(bodies);
+		renderEditable();
+
+		fireEvent.click(screen.getByTestId("transcript-segment-edit-1"));
+		fireEvent.change(input(), { target: { value: "変換中" } });
+		fireEvent.keyDown(input(), { key: "Enter", ctrlKey: true, isComposing: true });
+		fireEvent.keyDown(input(), { key: "Enter", ctrlKey: true, keyCode: 229 });
+		fireEvent.keyDown(input(), { key: "Escape", keyCode: 229 });
+		expect(screen.getByTestId("transcript-segment-editor-1")).toBeTruthy();
+
+		fireEvent.change(input(), { target: { value: "変換済み" } });
+		fireEvent.keyDown(input(), { key: "Enter", ctrlKey: true });
+		await waitFor(() => expect(bodies).toEqual([{ text: "変換済み" }]));
 	});
 
 	it("restores the original text on cancel without calling the node", () => {

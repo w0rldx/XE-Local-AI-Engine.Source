@@ -3,6 +3,8 @@ import { IconSearch } from "@tabler/icons-react";
 import { type RefObject, useDeferredValue, useLayoutEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { isImeComposing } from "@/core/ui/models/ImeComposition";
+
 // The page's results view marks each section with this attribute (holding its label) and its cards' parent with the second.
 const SEARCH_SECTION_ATTRIBUTE = "data-search-section";
 const SEARCH_CARDS_ATTRIBUTE = "data-search-cards";
@@ -131,6 +133,9 @@ export function NodeSettingsSearch({ resultsRef, onSearchingChange, onShowAdvanc
 				value={value}
 				onChange={(event) => change(event.currentTarget.value)}
 				onKeyDown={(event) => {
+					if (isImeComposing(event)) {
+						return;
+					}
 					if (event.key === "Escape" && value !== "") {
 						event.preventDefault();
 						change("");

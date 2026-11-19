@@ -146,4 +146,27 @@ public sealed class PathContainmentTests
         AssertEx.False(PathContainment.PathsEqual(Path.Combine(Root, "bin"), Path.Combine(Root, "bin2")));
         AssertEx.Equal(OperatingSystem.IsWindows(), PathContainment.PathsEqual(Root.ToUpperInvariant(), Root));
     }
+
+    /// <summary>
+    ///     The handle-side half: a resolved root is spelled as the kernel names a handle, so a file under it passes even through an 8.3
+    ///     short temp path or a link, and a file elsewhere is refused.
+    /// </summary>
+    [Test]
+    [ExcludeOn(OS.MacOs)]
+    public void OpenedHandleContainment_AcceptsAHandleUnderTheResolvedRoot_AndRefusesOneOutside()
+    {
+        using var root = new TempDirectory("xe-opened-root");
+        using var outside = new TempDirectory("xe-opened-outside");
+        File.WriteAllText(root.FilePath("inside.txt"), "inside");
+        File.WriteAllText(outside.FilePath("outside.txt"), "outside");
+        var trustedRoot = AssertEx.NotNull(OpenedHandleContainment.ResolveExistingOrNull(root.Path));
+
+        using (var inside = File.OpenHandle(root.FilePath("inside.txt")))
+        {
+            AssertEx.DoesNotThrow(() => OpenedHandleContainment.EnsureWithinRoot(inside, trustedRoot), "A file under the resolved root is contained.");
+        }
+
+        using var escaped = File.OpenHandle(outside.FilePath("outside.txt"));
+        _ = AssertEx.Throws<UnauthorizedAccessException>(() => OpenedHandleContainment.EnsureWithinRoot(escaped, trustedRoot));
+    }
 }

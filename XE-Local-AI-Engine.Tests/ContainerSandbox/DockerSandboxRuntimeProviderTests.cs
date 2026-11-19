@@ -386,6 +386,155 @@ public sealed class DockerSandboxRuntimeProviderTests
     }
 
     [Test]
+    public async Task ExecuteAsync_AStoppedCommand_KeepsWhatItPrintedAndEndsWithTheCancelMessage()
+    {
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        client.RegisterCommand("dotnet test", Stopped(confirmed: true));
+
+        var result = await provider.ExecuteAsync(handle, TestCommand());
+
+        AssertEx.False(result.Completed);
+        AssertEx.Equal(expected: -1, result.ExitCode);
+        AssertEx.Equal("Restoring...\n", result.StandardOutput);
+        AssertEx.Equal("warning: slow\n" + SandboxCommandResult.CancelledMessage, result.StandardError,
+            "the partial last line gets its own line, and the cancel message closes it");
+        AssertEx.True(result.StandardOutputTruncated, "the capture's truncation survives the stop");
+        var executed = client.ExecutedRequests.Single(static request => string.Equals(request.Executable, "dotnet", StringComparison.Ordinal));
+        AssertEx.Equal(DockerSandboxHardeningTests.Options().TempMountTarget, executed.StopMarkerDirectory, "a user command runs stoppable");
+        AssertEx.Empty(client.RemovedContainerIds);
+        AssertEx.Equal(expected: 0, (await provider.ExecuteAsync(handle, TestCommand() with { ExecutionId = "exec-2", Arguments = ["--version"] })).ExitCode,
+            "a confirmed stop leaves the sandbox usable");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_AStopTheContainerCouldNotConfirm_KillsTheSandbox_AndTheNextAttemptGetsAFreshOne()
+    {
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        var containerId = client.CreatedContainerIds.Single();
+        client.RegisterCommand("dotnet test", Stopped(confirmed: false));
+
+        var result = await provider.ExecuteAsync(handle, TestCommand());
+
+        AssertEx.False(result.Completed);
+        AssertEx.Equal("warning: slow\n" + DockerSandboxRuntimeProvider.UnconfirmedStopMessage + "\n" + SandboxCommandResult.CancelledMessage,
+            result.StandardError,
+            "the cancel message stays last, so Development still reads the stop and keeps the lines before it");
+        AssertEx.Contains(client.RemovedContainerIds, containerId);
+
+        // What the attempt sees next: its following command fails as an invalid handle, which the Development runners
+        // already terminalize as a failed attempt, and a new attempt gets a new verified container.
+        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => provider.ExecuteAsync(handle, TestCommand() with { ExecutionId = "exec-2" }));
+        var fresh = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        AssertEx.Equal(expected: 2, client.CreatedContainerIds.Count, "the next attempt must get a new container, not the killed one");
+        client.RegisterCommand("git status", exitCode: 0, "clean");
+        var next = await provider.ExecuteAsync(fresh, new SandboxCommandRequest
+        {
+            ExecutionId = "exec-3",
+            Executable = "git",
+            Arguments = ["status"]
+        });
+        AssertEx.Equal("clean", next.StandardOutput);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_AnUnconfirmedStopWhoseRemovalIsRefused_DoesNotClaimTheKill_AndALaterKillRetries()
+    {
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        var containerId = client.CreatedContainerIds.Single();
+        client.RegisterCommand("dotnet test", Stopped(confirmed: false));
+        client.RemovalFailure = _ => new DockerRuntimeException("removal refused");
+
+        var result = await provider.ExecuteAsync(handle, TestCommand());
+
+        AssertEx.Equal("warning: slow\n" + DockerSandboxRuntimeProvider.SandboxNotRemovedMessage + "\n" + SandboxCommandResult.CancelledMessage,
+            result.StandardError,
+            "a container the daemon kept may still run the command, so the result must not say it was killed");
+        AssertEx.Empty(client.RemovedContainerIds);
+        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => provider.ExecuteAsync(handle, TestCommand() with { ExecutionId = "exec-2" }));
+        await AssertEx.ThrowsAsync<DockerRuntimeException>(() => provider.CreateOrAttachAsync(CreateRequest(workspace)));
+        AssertEx.Equal(expected: 1, client.CreatedContainerIds.Count, "no second container beside one that may still run");
+
+        client.RemovalFailure = null;
+        await provider.KillAsync(handle);
+
+        AssertEx.Contains(client.RemovedContainerIds, containerId);
+        await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        AssertEx.Equal(expected: 2, client.CreatedContainerIds.Count, "once removed, the next attempt gets a fresh container");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_AnUnconfirmedStopWhoseRemovalTimesOut_KeepsTheOutput_AndSaysTheSandboxWasNotRemoved()
+    {
+        // The client's transport timeout surfaces as a cancel, which once escaped the stop path and dropped the output and the warning.
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        client.RegisterCommand("dotnet test", Stopped(confirmed: false));
+        client.RemovalFailure = _ => new TaskCanceledException("the request timed out");
+
+        var result = await provider.ExecuteAsync(handle, TestCommand());
+
+        AssertEx.Equal("Restoring...\n", result.StandardOutput);
+        AssertEx.Equal("warning: slow\n" + DockerSandboxRuntimeProvider.SandboxNotRemovedMessage + "\n" + SandboxCommandResult.CancelledMessage,
+            result.StandardError);
+        AssertEx.Empty(client.RemovedContainerIds);
+    }
+
+    [Test]
+    public async Task CreateOrAttachAsync_AnotherOwnersSandboxTheDaemonWillNotRemove_CreatesNoContainerBesideIt()
+    {
+        var (provider, client, workspace) = CreateProvider();
+        await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        client.RemovalFailure = _ => new DockerRuntimeException("removal refused");
+        var otherOwner = CreateRequest(workspace) with { AttachKey = AttachKey() with { OwnerUserId = "owner-2" } };
+
+        await AssertEx.ThrowsAsync<DockerRuntimeException>(() => provider.CreateOrAttachAsync(otherOwner));
+
+        AssertEx.Equal(expected: 1, client.CreatedContainerIds.Count, "the evicted owner's container may still run its command");
+        client.RemovalFailure = null;
+        await provider.CreateOrAttachAsync(otherOwner);
+        AssertEx.Equal(expected: 2, client.CreatedContainerIds.Count, "once the old one is removed, the new owner gets a container");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_ACallerCancelThatStoppedTheCommand_StillThrows()
+    {
+        var (provider, client, workspace) = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(workspace));
+        client.RegisterCommand("dotnet test", Stopped(confirmed: true));
+        using var caller = new CancellationTokenSource();
+        client.OnExecute = request =>
+        {
+            if (string.Equals(request.Executable, "dotnet", StringComparison.Ordinal))
+            {
+                caller.Cancel();
+            }
+        };
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => provider.ExecuteAsync(handle, TestCommand(), caller.Token));
+    }
+
+    private static SandboxCommandRequest TestCommand() => new()
+    {
+        ExecutionId = "exec-1",
+        Executable = "dotnet",
+        Arguments = ["test"]
+    };
+
+    private static DockerExecutionOutcome Stopped(bool confirmed) => new()
+    {
+        ExitCode = -1,
+        StandardOutput = "Restoring...\n",
+        StandardError = "warning: slow",
+        StandardOutputTruncated = true,
+        StandardErrorTruncated = false,
+        Stopped = true,
+        StopConfirmed = confirmed
+    };
+
+    [Test]
     public async Task CopyIntoAsync_WritesThroughTheWorkspaceMountOnTheHostSide()
     {
         // write_file is built on this. While it threw, Development Mode's write_file could not work at all.

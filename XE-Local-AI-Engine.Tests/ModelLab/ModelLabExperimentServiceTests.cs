@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -85,6 +86,31 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.Equal(ModelLabExperimentStatus.Succeeded, record.Status);
         AssertEx.Equal(Prompt, record.Prompt);
         AssertEx.False(Directory.Exists(host.WorkDirectory(id)), "No plaintext work directory survives the job.");
+    }
+
+    /// <summary>The operations feed of every open tab learns of a start from this broadcast; a refused start announces nothing.</summary>
+    [Test]
+    public async Task AStart_IsAnnouncedOnce_AndARefusedOneNot()
+    {
+        using var process = new ScriptedProcess();
+        var jobs = Substitute.For<IJobCreatedPublisher>();
+        await using var host = await LabHost.StartAsync(process, configure: services =>
+        {
+            services.RemoveAll<IJobCreatedPublisher>();
+            services.AddSingleton(jobs);
+        });
+
+        var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+        AssertEx.True(start.ExperimentId.HasValue, start.RefusalMessage ?? "The job should have started.");
+        var id = start.ExperimentId!.Value;
+        var refused = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+
+        AssertEx.Equal(ModelLabStartRefusal.Busy, refused.Refusal!.Value);
+        await jobs.Received(1).PublishCreatedAsync(CreatedJobKind.ModelLabExperiment, id, Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 1, jobs.ReceivedCalls().Count(), "Only the start that ran is announced.");
+        await process.Spawned.WaitAsync(TestBudgets.Contended);
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
     }
 
     /// <summary>
@@ -1591,7 +1617,7 @@ public sealed class ModelLabExperimentServiceTests
         public string DataRoot => Services.GetRequiredService<INodeDataDirectory>().Root;
 
         public string WorkDirectory(Guid id) =>
-            Path.Combine(ModelLabExperimentService.WorkRoot(Services.GetRequiredService<INodeDataDirectory>()), id.ToString("N"));
+            Path.Combine(ModelLabScriptRunner.WorkRoot(Services.GetRequiredService<INodeDataDirectory>()), id.ToString("N"));
 
         /// <param name="warmIdleSeconds">The node's warm time; 0, the default here, makes every job one-shot as before warming existed.</param>
         public static async Task<LabHost> StartAsync(ITrainingProcessSpawner process,

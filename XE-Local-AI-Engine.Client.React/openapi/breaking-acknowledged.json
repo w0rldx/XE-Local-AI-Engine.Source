@@ -68,6 +68,10 @@
     "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
   },
   {
+    "id": "operation-removed:POST /api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/revisions",
+    "reason": "Orphan revision POST removed: the hub's RegenerateMessage mints variants, pre-1.0"
+  },
+  {
     "id": "operation-removed:POST /api/local/v1/development-workflows/definitions",
     "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
   },

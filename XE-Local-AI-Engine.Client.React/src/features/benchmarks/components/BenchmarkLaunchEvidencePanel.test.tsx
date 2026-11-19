@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { BenchmarkLaunchEvidencePanel } from "@/features/benchmarks/components/BenchmarkLaunchEvidencePanel";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
 import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkRunDetailFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkRunDetailFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // "What we meant to launch" vs "what launched" is the one comparison a single run can make on its own, and both halves

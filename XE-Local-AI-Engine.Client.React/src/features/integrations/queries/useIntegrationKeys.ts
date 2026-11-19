@@ -5,8 +5,9 @@ import {
 	listIntegrationApiKeysOptions,
 	revokeIntegrationApiKeyMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { toIntegrationApiKey } from "@/features/integrations/models/IntegrationMappers";
-import { integrationInvalidationKey, integrationQueryIds } from "@/features/integrations/queries/useIntegrationTriggers";
+import { integrationQueryIds } from "@/features/integrations/queries/useIntegrationTriggers";
 
 // Server state for the integration API keys surface. The generate response carries the show-once plaintext, which the
 // panel captures in the mutation's onSuccess callback and holds in component state, because the node persists only a
@@ -22,7 +23,7 @@ export function useIntegrationKeys() {
 }
 
 function invalidateKeys(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
-	return queryClient.invalidateQueries({ queryKey: integrationInvalidationKey(integrationQueryIds.listKeys) });
+	return queryClient.invalidateQueries({ queryKey: operationInvalidationKey(integrationQueryIds.listKeys) });
 }
 
 export function useGenerateIntegrationApiKey() {

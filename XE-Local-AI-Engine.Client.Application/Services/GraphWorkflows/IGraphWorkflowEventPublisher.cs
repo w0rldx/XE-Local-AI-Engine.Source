@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+
 /// <summary>What changed on a run, as the hub's subscribers see it.</summary>
 /// <remarks>
 ///     Three kinds, because they map onto exactly two refetches plus one that also raises an operator notification —
@@ -29,4 +31,10 @@ public enum GraphWorkflowChangeKind
 public interface IGraphWorkflowEventPublisher
 {
     Task PublishAsync(Guid runId, long sequence, GraphWorkflowChangeKind kind, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Announces a committed run status to every connection, so an operations feed watching no run learns that one
+    ///     started or stopped waiting for a decision. The payload is the run id and its new status only.
+    /// </summary>
+    Task PublishRunStatusAsync(Guid runId, GraphWorkflowRunStatus status, CancellationToken cancellationToken = default);
 }

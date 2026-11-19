@@ -2,20 +2,28 @@ import i18next, { t } from "i18next";
 import { describe, expect, it } from "vitest";
 
 import type {
+	XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactResponse as BaseArtifactResponse,
+	XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse as ExperimentResponse,
+	XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse as GraphRunResponse,
 	XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse as ImageJobResponse,
 	XeLocalAiEngineClientEndpointsTrainingV1TrainingDatasetResponse as TrainingDatasetResponse,
 	XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse as TrainingRunResponse,
+	XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionSummaryResponse as WorkSessionResponse,
 } from "@/core/api/generated";
 import {
 	applyKnowledgeDocumentStatus,
 	applyModelDownloadEvent,
 	applySchedulerRunEvent,
+	fromBaseArtifactDownloads,
 	fromDatasetBuilds,
 	fromImageJobs,
 	fromKnowledgeIndexing,
 	fromModelDownloads,
+	fromModelLabExperiments,
 	fromSchedulerRuns,
 	fromTrainingRuns,
+	fromWaitingGraphRuns,
+	fromWaitingWorkSessions,
 	type KnowledgeIndexingBatch,
 	type ModelDownloads,
 	modelRecommendationCheckTemplateId,
@@ -309,5 +317,112 @@ describe("image and transcription model downloads", () => {
 			state: "succeeded",
 			label: "The image model a is downloaded",
 		});
+	});
+});
+
+describe("polled sources map into operation rows", () => {
+	it("maps a parked graph run to one waiting row linked to the run, and nothing else", () => {
+		const runs = [
+			{ id: "run-1", definitionId: "def-1", status: "WaitingForApproval" },
+			{ id: "run-2", definitionId: "def-1", status: "Running" },
+		] as GraphRunResponse[];
+
+		expect(fromWaitingGraphRuns(runs, t)).toEqual([
+			{
+				id: "graph-run:run-1",
+				kind: "graph-run",
+				label: "A workflow waits for your decision",
+				progress: { kind: "indeterminate" },
+				state: "waiting",
+				href: { to: "/graph-workflows", search: { definitionId: "def-1", runId: "run-1" } },
+			},
+		]);
+	});
+
+	it("keeps only the work sessions that wait for input or approval, each linked to its session", () => {
+		const sessions = [
+			{ id: "s-1", title: "Refactor", status: "Running" },
+			{ id: "s-2", title: "Docs", status: "WaitingForInput" },
+			{ id: "s-3", title: "Release", status: "WaitingForApproval" },
+			{ id: "s-4", title: "Old", status: "Completed" },
+		] as WorkSessionResponse[];
+
+		expect(fromWaitingWorkSessions(sessions, t).map(({ id, label, state, href }) => ({ id, label, state, href }))).toEqual([
+			{
+				id: "work-session:s-2",
+				label: "Work session Docs waits for your input",
+				state: "waiting",
+				href: { to: "/work-sessions/$sessionId", params: { sessionId: "s-2" } },
+			},
+			{
+				id: "work-session:s-3",
+				label: "Work session Release waits for your approval",
+				state: "waiting",
+				href: { to: "/work-sessions/$sessionId", params: { sessionId: "s-3" } },
+			},
+		]);
+	});
+
+	it("maps Model Lab experiments by status under stable ids and drops a cancelled one", () => {
+		const experiment = (id: string, status: string, errorMessage: string | null = null) =>
+			({ id, status, installedModelName: "qwen3-0.6b", repoId: "Qwen/Qwen3-0.6B", errorMessage }) as ExperimentResponse;
+
+		const rows = fromModelLabExperiments(
+			[experiment("e-1", "Running"), experiment("e-2", "Failed", "The trace ran out of memory."), experiment("e-3", "Cancelled")],
+			t,
+		);
+
+		expect(rows).toEqual([
+			expect.objectContaining({
+				id: "model-lab-experiment:e-1",
+				state: "running",
+				label: "Running a Model Lab experiment on qwen3-0.6b",
+				href: { to: "/model-lab", search: { tab: "trace" } },
+			}),
+			expect.objectContaining({
+				id: "model-lab-experiment:e-2",
+				state: "failed",
+				label: "The Model Lab experiment on qwen3-0.6b failed",
+				detail: "The trace ran out of memory.",
+			}),
+		]);
+		// History, not activity: the toast reports the end, the Model Lab page keeps the record.
+		expect(rows.filter(isActiveOperation).map((row) => row.id)).toEqual(["model-lab-experiment:e-1"]);
+	});
+
+	it("links a steering run to the same Model Lab tab as a trace, which holds both", () => {
+		const steering = {
+			id: "e-4",
+			kind: "Steering",
+			status: "Running",
+			installedModelName: "m",
+			repoId: "r",
+		} as ExperimentResponse;
+
+		expect(fromModelLabExperiments([steering], t)[0]?.href).toEqual({ to: "/model-lab", search: { tab: "trace" } });
+	});
+
+	it("labels every base checkpoint download as such, with byte progress while it runs", () => {
+		const artifact = (id: string, status: string, extra: Partial<BaseArtifactResponse> = {}) =>
+			({ id, repoId: "Qwen/Qwen3-0.6B", status, ...extra }) as BaseArtifactResponse;
+
+		const [running, ready, failed] = fromBaseArtifactDownloads(
+			[
+				artifact("a-1", "Downloading", { progress: { completedBytes: 1024, totalBytes: 4096, fileIndex: 0, fileCount: 2 } }),
+				artifact("a-2", "Ready"),
+				artifact("a-3", "Failed", { errorMessage: "The repository was not found." }),
+			],
+			t,
+		);
+
+		expect(running).toMatchObject({
+			id: "base-artifact-download:a-1",
+			label: "Downloading the base checkpoint Qwen/Qwen3-0.6B",
+			state: "running",
+			progress: { kind: "known", pct: 25 },
+			detail: "1 KiB of 4 KiB",
+		});
+		expect(ready).toMatchObject({ state: "succeeded", label: "The base checkpoint Qwen/Qwen3-0.6B is downloaded" });
+		expect(failed).toMatchObject({ state: "failed", detail: "The repository was not found." });
 	});
 });

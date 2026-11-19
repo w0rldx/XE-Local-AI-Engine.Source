@@ -13,7 +13,7 @@ vi.mock("@/core/api/generated", async (importOriginal) => ({
 
 import { BenchmarkCellsTable } from "@/features/benchmarks/components/BenchmarkCellsTable";
 import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
-import { benchmarkCellFixture, benchmarkTaskItemFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkCellFixture, benchmarkTaskItemFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const cohort = { policyRevision: 1, executionKey: "k", cohortGeneration: 1, rankedCount: 1, totalScored: 2 };

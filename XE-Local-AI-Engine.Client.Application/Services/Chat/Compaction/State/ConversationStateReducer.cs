@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 
+using XE_Local_AI_Engine.Client.Common;
 using System.Globalization;
 
 /// <summary>
@@ -65,7 +66,7 @@ public static class ConversationStateReducer
             {
                 Id = id,
                 Category = proposed.Category,
-                Value = ConversationSummarizer.TruncateAtRuneBoundary(value, MaxValueChars),
+                Value = TextTruncation.TruncateAtRuneBoundary(value, MaxValueChars),
                 SourceSequences = proposed.SourceSequences.Distinct().Order().ToList(),
                 CreatedAtSequence = atSequence
             });

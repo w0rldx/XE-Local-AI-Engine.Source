@@ -3,7 +3,7 @@
 //
 // Presentational on purpose. Every mutation goes through the `editor` state the page owns, so the config panels and
 // this canvas cannot disagree about what the graph is. What lives here is the React Flow plumbing nothing else needs:
-// the node-type registry, the palette's drag payload, and turning a click into the page's selection.
+// the node-type registry, the palette's drag payload, and turning React Flow's selection into the page's.
 //
 // Layout is the page's business — this is a plain block that fills its container, and there is no drawer here.
 
@@ -27,8 +27,13 @@ import {
 	Background,
 	Controls,
 	type Edge,
+	type EdgeChange,
 	type Node,
+	type NodeChange,
+	type NodeSelectionChange,
 	type NodeTypes,
+	type OnEdgesChange,
+	type OnNodesChange,
 	ReactFlow,
 	ReactFlowProvider,
 	useReactFlow,
@@ -41,7 +46,11 @@ import "@xyflow/react/dist/style.css";
 import { GraphWorkflowNodeCard } from "@/features/graphWorkflows/components/GraphWorkflowNodeComponents";
 import classes from "@/features/graphWorkflows/components/GraphWorkflowNodes.module.css";
 import type { GraphWorkflowEditorState } from "@/features/graphWorkflows/hooks/useGraphWorkflowEditor";
-import { graphWorkflowNodeTypeByKind } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+import {
+	type GraphWorkflowCanvasEdge,
+	type GraphWorkflowCanvasNode,
+	graphWorkflowNodeTypeByKind,
+} from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { type GraphWorkflowNodeKind, graphWorkflowNodeKinds } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import type { GraphWorkflowGraphIssue } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 
@@ -84,11 +93,18 @@ function parsePalettePayload(raw: string): GraphWorkflowNodeKind | undefined {
 	}
 }
 
+/** What a React Flow change batch selects, if anything. Single selection, so there is at most one. */
+function selectedIdOf(
+	changes: readonly (NodeChange<GraphWorkflowCanvasNode> | EdgeChange<GraphWorkflowCanvasEdge>)[],
+): string | undefined {
+	return changes.find((change): change is NodeSelectionChange => change.type === "select" && change.selected)?.id;
+}
+
 export interface GraphWorkflowEditorCanvasProps {
 	readonly editor: GraphWorkflowEditorState;
 	readonly selectedNodeKey?: string;
 	readonly selectedEdgeId?: string;
-	/** Sticky single selection: a card click selects, a pane click clears. */
+	/** Sticky single selection: a click, or Enter / Space on a focused card or edge, selects; a pane click clears. */
 	readonly onSelectNode: (nodeKey: string | undefined) => void;
 	readonly onSelectEdge: (edgeId: string | undefined) => void;
 	/** Client AND server issues. A keyed one rings its node or edge; the strip below the canvas renders the text. */
@@ -125,6 +141,7 @@ function GraphWorkflowEditorCanvasInner({
 	);
 
 	const isEditing = editor.mode === "editing";
+	const isSelectable = editor.mode !== "generating";
 	// While a proposal is under review the canvas draws IT, diff-tagged; the working graph stays untouched underneath.
 	const shown = editor.mode === "reviewing" && editor.review !== undefined ? editor.review.canvas : editor;
 
@@ -156,6 +173,36 @@ function GraphWorkflowEditorCanvasInner({
 		[editor, shown, issueSubjects, selectedEdgeId],
 	);
 
+	// The page owns the selection, so React Flow's own select changes are routed to it: a pointer click and Enter / Space
+	// on a focused card or edge both arrive here, and the next render writes `selected` back. A deselect is never routed:
+	// selecting an edge reports the node's deselect AFTER the edge's select, which would clear the edge again. The pane
+	// click clears.
+	const onNodesChange = useCallback<OnNodesChange<GraphWorkflowCanvasNode>>(
+		(changes) => {
+			const picked = selectedIdOf(changes);
+			if (picked !== undefined) {
+				onSelectEdge(undefined);
+				onSelectNode(picked);
+			}
+			editor.onNodesChange(changes);
+		},
+		[editor, onSelectEdge, onSelectNode],
+	);
+
+	const onEdgesChange = useCallback<OnEdgesChange<GraphWorkflowCanvasEdge>>(
+		(changes) => {
+			const picked = selectedIdOf(changes);
+			if (picked !== undefined) {
+				onSelectNode(undefined);
+				onSelectEdge(picked);
+			}
+			editor.onEdgesChange(changes);
+		},
+		[editor, onSelectEdge, onSelectNode],
+	);
+
+	// While a designer turn is generating nothing is selectable, so React Flow reports no select change; a click still
+	// opens the inspector, read-only, through these.
 	const onNodeClick = useCallback(
 		(_event: React.MouseEvent, node: Node) => {
 			onSelectEdge(undefined);
@@ -171,6 +218,30 @@ function GraphWorkflowEditorCanvasInner({
 		},
 		[onSelectEdge, onSelectNode],
 	);
+
+	// React Flow's own screen-reader text, in the page's language and true to the mode: a proposal under review can be
+	// inspected, not moved or deleted.
+	const ariaLabelConfig = useMemo(() => {
+		const nodeDescription = isEditing
+			? t(
+					"pages.graphWorkflows.editor.a11yNode",
+					"Press Enter or Space to select this node and open its settings. The arrow keys move it, Delete removes it, and Connect to in its settings adds a connection.",
+				)
+			: t("pages.graphWorkflows.editor.a11yNodeReadOnly", "Press Enter or Space to select this node and inspect its settings.");
+		return {
+			"node.a11yDescription.default": nodeDescription,
+			"node.a11yDescription.keyboardDisabled": nodeDescription,
+			"edge.a11yDescription.default": isEditing
+				? t(
+						"pages.graphWorkflows.editor.a11yEdge",
+						"Press Enter or Space to select this connection and open its settings. Delete removes it.",
+					)
+				: t(
+						"pages.graphWorkflows.editor.a11yEdgeReadOnly",
+						"Press Enter or Space to select this connection and inspect its settings.",
+					),
+		};
+	}, [isEditing, t]);
 
 	const onPaneClick = useCallback(() => {
 		onSelectNode(undefined);
@@ -296,15 +367,19 @@ function GraphWorkflowEditorCanvasInner({
 					nodeTypes={nodeTypes}
 					// The editor drops every change outside `editing` anyway; off here as well, so the canvas does not offer
 					// a gesture it would then ignore. A proposal stays selectable, so its nodes can be inspected.
-					onNodesChange={isEditing ? editor.onNodesChange : undefined}
-					onEdgesChange={isEditing ? editor.onEdgesChange : undefined}
+					onNodesChange={isSelectable ? onNodesChange : undefined}
+					onEdgesChange={isSelectable ? onEdgesChange : undefined}
 					onConnect={isEditing ? editor.onConnect : undefined}
 					nodesDraggable={isEditing}
 					nodesConnectable={isEditing}
-					elementsSelectable={editor.mode !== "generating"}
-					onNodeClick={onNodeClick}
-					onEdgeClick={onEdgeClick}
+					elementsSelectable={isSelectable}
+					// A drag only moves a card: React Flow's default selects on mousedown, which would open the inspector
+					// (a Drawer on a narrow layout) mid-drag. A click and Enter / Space still select.
+					selectNodesOnDrag={false}
+					onNodeClick={isSelectable ? undefined : onNodeClick}
+					onEdgeClick={isSelectable ? undefined : onEdgeClick}
 					onPaneClick={onPaneClick}
+					ariaLabelConfig={ariaLabelConfig}
 					onDrop={onDrop}
 					onDragOver={onDragOver}
 					fitView={true}

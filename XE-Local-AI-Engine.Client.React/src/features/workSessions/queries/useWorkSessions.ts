@@ -26,6 +26,7 @@ import {
 	startWorkSessionMutation,
 	updateWorkSessionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { type FeedOptions, feedQuerySettings } from "@/core/api/QueryKeys";
 
 /** Generated operationIds, which are also the generated SDK fn names and the `_id` of every generated query key. */
 export const workSessionQueryIds = {
@@ -39,8 +40,6 @@ export const workSessionQueryIds = {
 	events: "listWorkSessionEvents",
 	artifactContent: "getWorkSessionArtifactContent",
 } as const;
-
-export type WorkSessionQueryId = (typeof workSessionQueryIds)[keyof typeof workSessionQueryIds];
 
 /**
  * Partial generated-query-key filter. Without `sessionId` it matches every session's cached variant of that
@@ -59,19 +58,6 @@ const FULL_FEED = { sinceSeq: 0 } as const;
 export const workSessionEventsPageSize = 200;
 /** The server clamps `limit` at 500; asking for more is silently truncated, so the tab stops offering "load more" there. */
 export const workSessionEventsMaxLimit = 500;
-
-interface FeedOptions {
-	/** Polling cadence while the hub is unavailable. `undefined` (the live case) means no polling at all. */
-	readonly pollIntervalMs?: number;
-	readonly enabled?: boolean;
-}
-
-function feedQuerySettings(sessionId: string | undefined, options: FeedOptions) {
-	return {
-		enabled: (options.enabled ?? true) && Boolean(sessionId),
-		refetchInterval: options.pollIntervalMs ?? false,
-	} as const;
-}
 
 /**
  * Whether this node serves work sessions at all — the ONE route that still answers when the feature is off, every

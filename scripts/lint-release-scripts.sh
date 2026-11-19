@@ -64,6 +64,7 @@ SHELL_TARGETS=(
   "scripts/tests/coverage-merge.test.sh"
   "scripts/tests/dev-aspire-helpers.test.sh"
   "scripts/tests/dev-stop-select.test.sh"
+  "scripts/tests/python-validation.test.sh"
   "scripts/tests/gpu-smoke.test.sh"
   "scripts/tests/run-retrieval-eval-local.test.sh"
   "scripts/tests/openapi-live-check.test.sh"
@@ -77,8 +78,6 @@ SHELL_TARGETS=(
   "scripts/run-tool-grammar-smoke-local.sh"
   "scripts/run-retrieval-eval-local.sh"
   "scripts/run-docker-smoke-local.sh"
-  "scripts/run-agent-framework-validation.sh"
-  "scripts/capture-agent-framework-dependencies.sh"
   "scripts/lint-release-scripts.sh"
   # Not release-path, but they gate the trustworthiness of every test result the release leans on —
   # a bug in the contamination guard reads as a phantom regression or, worse, hides a real one.

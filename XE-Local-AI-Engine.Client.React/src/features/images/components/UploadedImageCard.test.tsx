@@ -4,9 +4,11 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { UploadedImageCard } from "@/features/images/components/UploadedImageCard";
 import type { UploadedImageView } from "@/features/images/models/ImageModels";
 import en from "@/locales/en.json";
+import { acceptConfirm, cancelConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -32,7 +34,11 @@ describe("UploadedImageCard", () => {
 	afterEach(cleanup);
 
 	it("shows the upload label and its size, with no prompt", () => {
-		renderWithProviders(<UploadedImageCard image={image} onEdit={vi.fn()} />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<UploadedImageCard image={image} onEdit={vi.fn()} />
+			</ConfirmProvider>,
+		);
 
 		expect(screen.getByText(en.pages.images.uploads.uploaded)).toBeTruthy();
 		expect(screen.getByTestId("uploaded-image-size").textContent).toBe("4000×3000");
@@ -41,7 +47,11 @@ describe("UploadedImageCard", () => {
 
 	it("starts an edit from the upload with its own dimensions", () => {
 		const onEdit = vi.fn();
-		renderWithProviders(<UploadedImageCard image={image} onEdit={onEdit} />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<UploadedImageCard image={image} onEdit={onEdit} />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(screen.getByTestId("uploaded-image-edit"));
 
@@ -50,25 +60,36 @@ describe("UploadedImageCard", () => {
 	});
 
 	it("hides Edit when no installed model can edit", () => {
-		renderWithProviders(<UploadedImageCard image={image} />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<UploadedImageCard image={image} />
+			</ConfirmProvider>,
+		);
 
 		expect(screen.queryByTestId("uploaded-image-edit")).toBeNull();
 	});
 
-	it("deletes the upload on the node", async () => {
-		let deleted = false;
+	it("deletes the upload on the node once the operator confirms, and nothing on cancel", async () => {
+		let deletes = 0;
 		server.use(
 			http.delete(localApiPath(`images/uploads/${image.imageId}`), () => {
-				deleted = true;
+				deletes += 1;
 				return new HttpResponse(null, { status: 204 });
 			}),
 		);
-		renderWithProviders(<UploadedImageCard image={image} onEdit={vi.fn()} />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<UploadedImageCard image={image} onEdit={vi.fn()} />
+			</ConfirmProvider>,
+		);
+		const button = screen.getByTestId("uploaded-image-delete");
 
-		fireEvent.click(screen.getByTestId("uploaded-image-delete"));
+		await openConfirm(button, "Delete this uploaded image?");
+		await cancelConfirm(button);
+		expect(deletes).toBe(0);
 
-		await waitFor(() => {
-			expect(deleted).toBe(true);
-		});
+		await openConfirm(button, "Delete this uploaded image?");
+		acceptConfirm();
+		await waitFor(() => expect(deletes).toBe(1));
 	});
 });

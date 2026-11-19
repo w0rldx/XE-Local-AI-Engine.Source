@@ -3,6 +3,8 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
+
 // Mock generated query/mutation factories to isolate the hook while retaining validation and mapping.
 const { listMock, importMutationFn, templatesKeyMock } = vi.hoisted(() => ({
 	listMock: vi.fn(),
@@ -16,11 +18,11 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	listAgentTemplatesQueryKey: templatesKeyMock,
 }));
 
-import { agentDefinitionsInvalidationKey, agentDefinitionsQueryIds } from "@/core/agents/queries/useAgentDefinitions";
+import { agentDefinitionsQueryIds } from "@/core/agents/queries/useAgentDefinitions";
 import { useAgentTemplates, useImportAgentTemplates } from "@/features/agents/queries/useAgentTemplates";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
-const DEFINITIONS_KEY = agentDefinitionsInvalidationKey(agentDefinitionsQueryIds.list);
+const DEFINITIONS_KEY = operationInvalidationKey(agentDefinitionsQueryIds.list);
 const TEMPLATES_KEY = [{ _id: "listAgentTemplates" }];
 
 const generatedSummary = {

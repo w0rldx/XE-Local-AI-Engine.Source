@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
@@ -599,7 +600,7 @@ public sealed class GgufStoreTests
         var store = Infra.Store(download, discovery, registry, options);
 
         var reports = new List<PullProgress>();
-        var progress = new SynchronousProgress(reports.Add);
+        var progress = new SynchronousProgress<PullProgress>(reports.Add);
 
         await store.EnsureModelAsync(new GgufModelRequest
         {
@@ -903,22 +904,6 @@ public sealed class GgufStoreTests
         response.Content.Headers.ContentRange = new ContentRangeHeaderValue(from, bytes.Length - 1, bytes.Length);
         response.Headers.TryAddWithoutValidation("X-Repo-Commit", "abc123def456");
         return response;
-    }
-
-    // Reports progress on the calling thread so assertions see every report deterministically.
-    private sealed class SynchronousProgress : IProgress<PullProgress>
-    {
-        private readonly Action<PullProgress> _onReport;
-
-        public SynchronousProgress(Action<PullProgress> onReport)
-        {
-            _onReport = onReport;
-        }
-
-        public void Report(PullProgress value)
-        {
-            _onReport(value);
-        }
     }
 
     // A read stream that yields some bytes then throws an ENOSPC IOException, simulating a disk-full write failure.

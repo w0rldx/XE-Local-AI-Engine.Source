@@ -209,17 +209,21 @@ internal static class SandboxJailPathGuard
     [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
     private static extern int open(byte[] pathname, int flags, int mode);
 
-    /// <summary>Reads a jail-side file's raw bytes through a no-follow open.</summary>
+    /// <summary>Reads a jail-side file's raw bytes through a no-follow open whose handle is then proven under the jail.</summary>
     /// <remarks>
-    ///     On Linux the open is atomic with <c>O_NOFOLLOW</c>, so a leaf swapped to a symlink after the per-component check fails the open
-    ///     instead of redirecting the read; off Linux it falls back to a plain handle and relies on the per-component check plus the jail
-    ///     canonicalization. Throws <see cref="UnauthorizedAccessException" /> when the leaf is a symlink or the open fails.
+    ///     <c>O_NOFOLLOW</c> (Linux) refuses a leaf swapped to a symlink after the walk; a DIRECTORY swapped after it is caught on the opened
+    ///     handle (Linux and Windows). The root is spelled the way the kernel names the handle, so a jail under a linked temp directory still
+    ///     reads. Throws <see cref="UnauthorizedAccessException" /> on a symlink leaf, a failed open or a file outside the jail.
     /// </remarks>
-    internal static async Task<byte[]> ReadJailFileBytesNoFollowAsync(string jailPath,
+    internal static async Task<byte[]> ReadJailFileBytesNoFollowAsync(string jailRoot,
+        string jailPath,
         int maxBytes,
         CancellationToken cancellationToken)
     {
+        var trustedRoot = OpenedHandleContainment.ResolveExistingOrNull(jailRoot)
+                          ?? throw new UnauthorizedAccessException("The sandbox jail root could not be resolved.");
         using var handle = OpenNoFollow(jailPath);
+        OpenedHandleContainment.EnsureWithinRoot(handle, trustedRoot);
         var length = RandomAccess.GetLength(handle);
         if (length > maxBytes)
         {

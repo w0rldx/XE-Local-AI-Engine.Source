@@ -1,10 +1,8 @@
-import type { Dispatch, RefObject, SetStateAction } from "react";
-
 export interface UseMobileNavigationDrawerResult {
 	isDrawerOpen: boolean;
-	setIsDrawerOpen: Dispatch<SetStateAction<boolean>>;
-	drawerReference: RefObject<HTMLDivElement | null>;
-	menuReference: RefObject<HTMLDivElement | null>;
 	openDrawer: () => void;
+	/** Closes the sub-panel only, back to the parent drawer. */
+	closePanel: () => void;
+	/** Closes the sub-panel and the parent drawer. */
 	closeDrawer: () => void;
 }

@@ -629,6 +629,7 @@
 				}
 			},
 			"noModels": "No installed llama.cpp model is available. Install one under Models first.",
+			"openModels": "Open Models",
 			"pytorch": {
 				"blockRoot": "(block)",
 				"build": "Build PyTorch index",
@@ -684,6 +685,7 @@
 				"sourceCheckpoint": "Downloaded checkpoint",
 				"sourceFailed": "The source file could not be loaded.",
 				"sourceHuggingFace": "Hugging Face config.json",
+				"sourceLabel": "Read the architecture from",
 				"title": "PyTorch"
 			},
 			"savedCompare": {
@@ -749,6 +751,7 @@
 				"caveatStrength": "Equal relative strength in the checkpoint and the GGUF is an assumption.",
 				"facts": "Layer {{layer}} ({{kind}}), scale {{scale}}, vector length {{norm}}, vector {{hash}}. Derived in {{seconds}} s, peak {{vram}} on {{device}}.",
 				"intro": "Derives a vector from the two sets, then runs the GGUF three times on the same prompts and seed: no vector, this vector, and a random one of the same length. One prompt per line.",
+				"jobKindLabel": "Kind of run",
 				"jobSteering": "Steering",
 				"jobTrace": "Trace",
 				"kindFull": "full attention",
@@ -784,6 +787,11 @@
 				"basisRaw": "Raw logits",
 				"basisRawNote": "Computed by PyTorch from the model's raw logits over the whole vocabulary",
 				"cancel": "Cancel experiment",
+				"cancelConfirm": {
+					"description": "The running experiment stops before it finishes.",
+					"keep": "Keep running",
+					"title": "Cancel this experiment?"
+				},
 				"chatWait": "Chats that need a local model wait until this finishes, or until you cancel it.",
 				"check": "Check",
 				"checkFailed": "The check could not run.",
@@ -793,6 +801,10 @@
 				"compareKind": "Compare traces only with traces, and steering runs only with steering runs.",
 				"compareUnfinished": "Only finished runs can be compared.",
 				"delete": "Delete",
+				"deleteConfirm": {
+					"description": "The saved run and what it recorded are deleted from this node, pinned or not. This cannot be undone.",
+					"title": "Delete this experiment?"
+				},
 				"deleteFailed": "The experiment could not be deleted.",
 				"download": "Get the checkpoint",
 				"downloadFailed": "The download could not start.",
