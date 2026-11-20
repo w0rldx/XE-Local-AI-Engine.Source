@@ -112,7 +112,8 @@ public sealed class WindowsJobLauncherTests
 
         using (launcher.Start(Command, WindowsJobLimits.Map(2048, 64, null, 16)))
         {
-            AssertEx.True(api.Calls.IndexOf("SetScheduling") < api.Calls.IndexOf("Resume"), "the scheduling is set while the command is suspended");
+            var set = api.Calls.IndexOf("SetScheduling");
+            AssertEx.True(set >= 0 && set < api.Calls.IndexOf("Resume"), "the scheduling is set while the command is suspended");
         }
 
         api.EngineScheduling = new WindowsJobScheduling { AffinityMask = 0x5, PriorityClass = 0x8000 };
