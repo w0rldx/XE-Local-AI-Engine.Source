@@ -411,7 +411,8 @@ public sealed class WindowsJobSandboxWindowsTests
             var started = AssertEx.NotNull(bystander);
             started.Kill();
             await AssertEx.CompletesAsync(started.WaitForExitAsync(), TimeSpan.FromSeconds(30), "the bystander did not exit");
-            AssertEx.Equal(ErrorBrokenPipe, PeekError(control), "the control pipe outlived the bystander, so the bystander was not what held it");
+            // The bystander's console host inherits its handles and exits just after it, so the break is awaited, bounded.
+            await AssertEx.EventuallyAsync(() => PeekError(control) == ErrorBrokenPipe, Settle, "the control pipe outlived the bystander, so the bystander was not what held it");
         }
         finally
         {
