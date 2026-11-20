@@ -12,7 +12,6 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
-using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Content-hash dedupe on the real store: a second upload of byte-identical content must not create a second row. The
@@ -440,7 +439,7 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
     private KnowledgeDocumentBlobStore CreateStore(ServiceProvider provider)
     {
         return new KnowledgeDocumentBlobStore(provider.GetRequiredService<IServiceScopeFactory>(),
-            new FixedNodeDataDirectory(Path.Combine(_rootPath, "data")),
+            new FakeNodeDataDirectory(Path.Combine(_rootPath, "data")),
             _keyHolder,
             TimeProvider.System);
     }
@@ -485,15 +484,5 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
-    }
-
-    private sealed class FixedNodeDataDirectory : INodeDataDirectory
-    {
-        public FixedNodeDataDirectory(string root)
-        {
-            Root = root;
-        }
-
-        public string Root { get; }
     }
 }

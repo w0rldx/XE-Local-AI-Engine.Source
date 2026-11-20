@@ -34,7 +34,6 @@ import {
 // gated is the backend's call (NodeSettingsRestartGate); these tests cover only how the form uses the list.
 const restartRequiredFields: ReadonlySet<string> = new Set([
 	"chatCacheReuse",
-	"llamaMaxLoadedProcesses",
 	"llamaChatCacheRamMiB",
 	"toolPipelineMaxIterationsPerRequest",
 	"knowledgeScheduledReindexIntervalMinutes",
@@ -917,13 +916,25 @@ describe("unified node fields and the pending-change summary", () => {
 	});
 
 	it("counts sendable changes, invalid edits and the restart-gated subset", () => {
-		const form = { ...baseline, uiMode: "simple", chatCacheReuse: 512, llamaMaxLoadedProcesses: "abc" };
+		// llamaMaxLoadedProcesses applies on save, so it counts as a change but never as restart-gated.
+		const form = {
+			...baseline,
+			uiMode: "simple",
+			chatCacheReuse: 512,
+			toolPipelineMaxIterationsPerRequest: "abc",
+			llamaMaxLoadedProcesses: 5,
+		};
 		const result = buildNodeSettingsRequest(form, baseline, bounds, false);
 
 		const summary = summarizePendingChanges(result, form, baseline, restartRequiredFields);
 
-		expect([...summary.changed].sort()).toEqual(["chatCacheReuse", "llamaMaxLoadedProcesses", "uiMode"]);
-		expect([...summary.restartRequired].sort()).toEqual(["chatCacheReuse", "llamaMaxLoadedProcesses"]);
+		expect([...summary.changed].sort()).toEqual([
+			"chatCacheReuse",
+			"llamaMaxLoadedProcesses",
+			"toolPipelineMaxIterationsPerRequest",
+			"uiMode",
+		]);
+		expect([...summary.restartRequired].sort()).toEqual(["chatCacheReuse", "toolPipelineMaxIterationsPerRequest"]);
 	});
 
 	it("reports nothing for an untouched draft", () => {

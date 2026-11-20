@@ -18,6 +18,8 @@ import { setupMswServer } from "@/test/UseMswServer";
 setupMswServer();
 
 const navigate = vi.hoisted(() => vi.fn());
+// What a navigation returns, kept outside the `vi.fn`: its result tracking attaches a rejection handler of its own.
+const navigation = vi.hoisted(() => ({ result: (): Promise<void> => Promise.resolve() }));
 
 // Monaco owns a canvas and a worker neither jsdom nor this test needs: what the viewer owes is the right text with
 // the right language, which the stub below is enough to assert.
@@ -32,7 +34,10 @@ vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 // The app router is built from routeTree.gen.ts; a unit test only needs the navigate CALL, not a real route match.
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@tanstack/react-router")>()),
-	useNavigate: () => navigate,
+	useNavigate: () => (options: unknown) => {
+		navigate(options);
+		return navigation.result();
+	},
 }));
 
 const runId = "run-1758300000000-1";
@@ -71,6 +76,7 @@ function listRoutes(body: { readonly items: readonly unknown[]; readonly totalCo
 describe("AgentRunsPage", () => {
 	beforeEach(() => {
 		navigate.mockClear();
+		navigation.result = () => Promise.resolve();
 		usePendingChatConversationStore.setState({ pendingConversationId: "" });
 	});
 
@@ -185,6 +191,25 @@ describe("AgentRunsPage", () => {
 
 		expect(usePendingChatConversationStore.getState().pendingConversationId).toBe(conversationId);
 		expect(navigate).toHaveBeenCalledWith({ to: "/chat" });
+	});
+
+	// A refused or superseded navigation rejects; the hand-off still happened, and the rejection must not surface as
+	// unhandled. `.catch` attaches its handler through `then`, so the spy sees exactly that handler.
+	it("still hands the conversation over when the navigation rejects, and handles the rejection", async () => {
+		server.use(...listRoutes({ items: [runDto({ conversationId })], totalCount: 1 }));
+		let then: ReturnType<typeof vi.spyOn> | undefined;
+		navigation.result = () => {
+			const rejected = Promise.reject(new Error("navigation aborted"));
+			then = vi.spyOn(rejected, "then");
+			return rejected;
+		};
+
+		renderWithProviders(<AgentRunsPage />);
+		fireEvent.click(await screen.findByTestId(`agent-run-conversation-${runId}`));
+
+		expect(usePendingChatConversationStore.getState().pendingConversationId).toBe(conversationId);
+		expect(navigate).toHaveBeenCalledWith({ to: "/chat" });
+		expect(then).toHaveBeenCalledExactlyOnceWith(undefined, expect.any(Function));
 	});
 
 	// A run older than the `started` event carrying the id, or one whose log could not be parsed, has no conversation

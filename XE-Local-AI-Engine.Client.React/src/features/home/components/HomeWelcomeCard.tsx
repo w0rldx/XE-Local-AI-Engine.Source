@@ -16,7 +16,7 @@ import {
 import { hasAnyChatModel } from "@/core/models/ChatModelOptions";
 import { ButtonLink } from "@/core/ui/components/ButtonLink/ButtonLink";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
-import { useChatHandOff } from "@/features/home/hooks/useChatHandOff";
+import { useChatHandOff } from "@/core/ui/hooks/useChatHandOff";
 import { greetingPeriod, setupDownloadPercent } from "@/features/home/models/HomeModels";
 import { useRecentConversations } from "@/features/home/queries/useRecentConversations";
 

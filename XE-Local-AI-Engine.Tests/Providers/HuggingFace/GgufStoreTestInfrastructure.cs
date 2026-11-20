@@ -199,35 +199,4 @@ internal static class GgufStoreTestInfrastructure
 
         public required string? AuthParameter { get; init; }
     }
-
-    public sealed class TempModelsDir : IDisposable
-    {
-        public TempModelsDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-hf-test-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
-        }
-
-        public string FilePath(string fileName)
-        {
-            return System.IO.Path.Combine(Path, fileName);
-        }
-    }
 }

@@ -27,7 +27,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
     public async Task AddAsync_ThenReadBackInNewContext_DecryptsHostPath()
     {
         var databasePath = GetDatabasePath("roundtrip.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid folderId;
         await using (var writeContext = CreateContext(databasePath, keyHolder))
@@ -63,7 +63,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
     public async Task AddAsync_WithReadOnlyMount_RoundTripsNonDefaultMode()
     {
         var databasePath = GetDatabasePath("mode.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid folderId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -86,7 +86,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
     public async Task DatabaseFile_AfterAdd_DoesNotContainPlaintextHostPath()
     {
         var databasePath = GetDatabasePath("ciphertext.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var hostPath = "/secret/host/path/" + Guid.NewGuid().ToString("N");
 
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -120,7 +120,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
     public async Task AddAsync_WithDuplicateAlias_ThrowsOnUniqueIndex()
     {
         var databasePath = GetDatabasePath("dupe.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -139,7 +139,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
     public async Task RevokeAsync_HidesFolderFromEveryActiveRead_AndIsIdempotent()
     {
         var databasePath = GetDatabasePath("revoke.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -168,7 +168,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
     public async Task AddAsync_AfterAliasWasRevoked_AllowsNewOpaqueRegistration()
     {
         var databasePath = GetDatabasePath("reuse-alias.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -187,7 +187,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
     public async Task GetByIdAsync_WhenHostPathTampered_FailsAuthenticatedDecryption()
     {
         var databasePath = GetDatabasePath("tamper.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid folderId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -212,7 +212,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
     public async Task Migrate_CreatesSelectedFoldersTableWithUniqueAliasIndex()
     {
         var databasePath = GetDatabasePath("migrate.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
@@ -296,12 +296,6 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
     }
-
-    private static byte[] CreateKeyMaterial()
-    {
-        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
-    }
-
     private static bool ContainsSubsequence(byte[] source, byte[] needle)
     {
         if (needle.Length == 0)
@@ -330,35 +324,5 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
         }
 
         return false;
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
     }
 }

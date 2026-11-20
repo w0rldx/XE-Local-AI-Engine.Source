@@ -20,7 +20,7 @@ public sealed class BinaryManagerInstalledLookupTests
     [Test]
     public async Task TryGetInstalledBinary_NothingOnDisk_ReturnsNull_WithoutNetworkOrCacheWrites()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-lookup");
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var store = Substitute.For<IInstalledRuntimeStore>();
@@ -42,7 +42,7 @@ public sealed class BinaryManagerInstalledLookupTests
     [Test]
     public async Task TryGetInstalledBinary_CachedBinaryPresent_ResolvesIt_WithoutNetwork()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-lookup");
         var serverPath = WritePinnedCpuServer(cache.Path);
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -62,7 +62,7 @@ public sealed class BinaryManagerInstalledLookupTests
         // The install-after-unknown sequence, at the layer that decides it: the first lookup finds nothing (which is
         // what makes the device audit report "unknown"), and the lookup made after an install — by provisioning, the
         // ensure/select endpoint, or a source-build adoption — resolves the new binary. Nothing caches the "none".
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-lookup");
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = Manager(http, cache.Path, store: null);
@@ -81,7 +81,7 @@ public sealed class BinaryManagerInstalledLookupTests
     {
         // No Linux arm64 CUDA prebuilt is pinned, so an ensure raises its sanitized "no prebuilt" refusal. The
         // lookup must simply report "none installed" instead, so a page-load diagnostic degrades rather than erroring.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-lookup");
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.Arm64, TimeProvider.System);
@@ -126,32 +126,6 @@ public sealed class BinaryManagerInstalledLookupTests
         {
             CallCount++;
             throw new InvalidOperationException($"The installed-binary lookup must never touch the network (requested {request.RequestUri}).");
-        }
-    }
-
-    private sealed class TempCacheDir : IDisposable
-    {
-        public TempCacheDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-llama-lookup-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
         }
     }
 }

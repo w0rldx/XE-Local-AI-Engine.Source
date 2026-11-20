@@ -21,7 +21,7 @@ public sealed class GgufRegistryTrainedOriginTests
     [Test]
     public async Task Registry_UnknownOrigin_RescanTolerates()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var goodPath = dir.FilePath(BaseFileName);
         var futurePath = dir.FilePath("Future-Model-Q5_K_M.gguf");
         await File.WriteAllTextAsync(goodPath, "fake-gguf");
@@ -50,7 +50,7 @@ public sealed class GgufRegistryTrainedOriginTests
     [Test]
     public async Task Registry_TrainedOrigin_LoadsNormally()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("Tuned-Model-Q4_K_M.gguf");
         await File.WriteAllTextAsync(path, "fake-gguf");
         await File.WriteAllTextAsync(Path.Combine(dir.Path, "index.json"),
@@ -73,7 +73,7 @@ public sealed class GgufRegistryTrainedOriginTests
     {
         // The lineage block is written into the revision only when an entry carries lineage, so every already-installed
         // model keeps the exact revision recorded before adapters existed. A regression here silently skips them all.
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var entry = new GgufModelRegistryEntry
         {
             ModelName = BaseModelName,
@@ -103,7 +103,7 @@ public sealed class GgufRegistryTrainedOriginTests
     [Test]
     public async Task Store_ResolveAdapterLaunch_PairsTheAdapterWithItsBase()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
         var basePath = dir.FilePath(BaseFileName);
@@ -132,7 +132,7 @@ public sealed class GgufRegistryTrainedOriginTests
     [Test]
     public async Task Store_ResolveAdapterLaunch_WhenBaseIsMissing_FailsWithAClearError()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
         var adapterPath = dir.FilePath("Tuned-Adapter-Q4_K_M.gguf");

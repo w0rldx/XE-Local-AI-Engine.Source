@@ -137,14 +137,14 @@ public sealed record NodeSettingsResponse
     /// <summary>Quantization a model download picks when the request names none. Applies after a node restart.</summary>
     public string? HuggingFaceDefaultQuant { get; init; }
 
-    /// <summary>llama-server processes kept loaded at once. Applies after a node restart.</summary>
+    /// <summary>llama-server processes kept loaded at once. Applies on save; a lower cap unloads idle processes on the next reap pass.</summary>
     public int? LlamaMaxLoadedProcesses { get; init; }
 
     public int MinLlamaMaxLoadedProcesses { get; init; }
 
     public int MaxAllowedLlamaMaxLoadedProcesses { get; init; }
 
-    /// <summary>Idle time-to-live of a llama-server process, in seconds. Applies after a node restart.</summary>
+    /// <summary>Idle time-to-live of a llama-server process, in seconds. Applies on save, from the next reap pass.</summary>
     public int? LlamaIdleTimeToLiveSeconds { get; init; }
 
     public int MinLlamaIdleTimeToLiveSeconds { get; init; }
@@ -340,7 +340,7 @@ public sealed record NodeSettingsResponse
 
     public int MaxAllowedLlamaRamReservePercent { get; init; }
 
-    /// <summary>Idle time-to-live of an sd-server daemon, in seconds. Applies after a node restart.</summary>
+    /// <summary>Idle time-to-live of an sd-server daemon, in seconds. Applies on save, from the next reap pass.</summary>
     public int? ImageIdleTimeToLiveSeconds { get; init; }
 
     public int MinImageIdleTimeToLiveSeconds { get; init; }
@@ -661,7 +661,7 @@ public sealed record NodeSettingsResponse
     /// <summary>Scheduled-job run history window in days. Applies to the next sweep. Effective value: stored, else the configuration seed.</summary>
     public int SchedulerHistoryRetentionDays { get; init; }
 
-    /// <summary>sd-server processes kept loaded at once. Applies after a node restart.</summary>
+    /// <summary>sd-server processes kept loaded at once. Applies on save; a lower cap unloads idle processes on the next reap pass.</summary>
     public int? ImageMaxLoadedProcesses { get; init; }
 
     public int MinImageMaxLoadedProcesses { get; init; }
@@ -920,10 +920,10 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>Quantization a model download picks when the request names none. Applies after a node restart.</summary>
     public string? HuggingFaceDefaultQuant { get; init; }
 
-    /// <summary>llama-server processes kept loaded at once; null resets to the default. Applies after a node restart.</summary>
+    /// <summary>llama-server processes kept loaded at once; null resets to the default. Applies on save; a lower cap unloads idle processes on the next reap pass.</summary>
     public int? LlamaMaxLoadedProcesses { get; init; }
 
-    /// <summary>Idle time-to-live of a llama-server, in seconds; null resets to the default. Applies after a node restart.</summary>
+    /// <summary>Idle time-to-live of a llama-server, in seconds; null resets to the default. Applies on save, from the next reap pass.</summary>
     public int? LlamaIdleTimeToLiveSeconds { get; init; }
 
     public bool? KeepModelWarmEnabled { get; init; }
@@ -1043,7 +1043,7 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>Share of RAM, in percent, the context allocator keeps free; null resets to the default. Applies after a node restart and invalidates frozen inference profiles.</summary>
     public int? LlamaRamReservePercent { get; init; }
 
-    /// <summary>Idle time-to-live of an sd-server daemon, in seconds; null resets to the default. Applies after a node restart.</summary>
+    /// <summary>Idle time-to-live of an sd-server daemon, in seconds; null resets to the default. Applies on save, from the next reap pass.</summary>
     public int? ImageIdleTimeToLiveSeconds { get; init; }
 
     /// <summary>Model-fit safety margin in percent of weights plus KV cache; null resets to the default. Applies to the next fit estimate.</summary>
@@ -1220,7 +1220,7 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>Scheduled-job run history window in days; null resets to the default. Applies to the next sweep.</summary>
     public int? SchedulerHistoryRetentionDays { get; init; }
 
-    /// <summary>sd-server processes kept loaded at once; null resets to the default. Applies after a node restart.</summary>
+    /// <summary>sd-server processes kept loaded at once; null resets to the default. Applies on save; a lower cap unloads idle processes on the next reap pass.</summary>
     public int? ImageMaxLoadedProcesses { get; init; }
 
     /// <summary>Whether sd-server keeps the text encoder on the GPU. Applies after a node restart.</summary>

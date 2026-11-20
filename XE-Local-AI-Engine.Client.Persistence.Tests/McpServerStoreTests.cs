@@ -31,7 +31,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task AddAsync_ThenReadBackInNewContext_DecryptsArgumentsEnvironmentAndDescription()
     {
         var databasePath = GetDatabasePath("roundtrip.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid serverId;
         await using (var writeContext = CreateContext(databasePath, keyHolder))
@@ -79,7 +79,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task AddAsync_WithHttpTransport_RoundTripsUrlAndEmptyStdioFields()
     {
         var databasePath = GetDatabasePath("http.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid serverId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -107,7 +107,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task AddAsync_WithNullDescription_RoundTripsNull()
     {
         var databasePath = GetDatabasePath("null-description.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid serverId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -133,7 +133,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task DatabaseFile_AfterAdd_DoesNotContainPlaintextArgumentsEnvironmentOrDescription()
     {
         var databasePath = GetDatabasePath("ciphertext.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var secretArg = "SECRET-ARG-" + Guid.NewGuid().ToString("N");
         var secretEnv = "SECRET-ENV-" + Guid.NewGuid().ToString("N");
         var secretDescription = "SECRET-DESC-" + Guid.NewGuid().ToString("N");
@@ -170,7 +170,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task UpdateAsync_WhenConnectionFieldChanges_BumpsVersionAndUpdatedAt()
     {
         var databasePath = GetDatabasePath("version-bump.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(1_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -196,7 +196,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task UpdateAsync_WhenOnlyNameOrDescriptionChanges_DoesNotBumpVersion()
     {
         var databasePath = GetDatabasePath("no-bump.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(2_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -224,7 +224,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task UpdateAsync_WhenEnvironmentReorderedButUnchanged_DoesNotBumpVersion()
     {
         var databasePath = GetDatabasePath("env-reorder.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(3_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -278,7 +278,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task UpdateAsync_WhenEnabledToggled_BumpsVersion()
     {
         var databasePath = GetDatabasePath("enable-toggle.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(4_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -307,7 +307,7 @@ public sealed class McpServerStoreTests : IDisposable
         // The tier is structural and plaintext — the sandbox backend selector reads it before any key is available —
         // and changing it relaunches the server, so it is connection-affecting and bumps Version.
         var databasePath = GetDatabasePath("trust-tier.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(5_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -346,7 +346,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task UpdateAsync_WhenIdMissing_ReturnsNull()
     {
         var databasePath = GetDatabasePath("update-missing.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -361,7 +361,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task DeleteAsync_RemovesRow()
     {
         var databasePath = GetDatabasePath("delete.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -379,7 +379,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task ListEnabledAsync_ReturnsOnlyEnabledServers()
     {
         var databasePath = GetDatabasePath("list-enabled.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -415,7 +415,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task AddAsync_WhenNameDiffersOnlyByCase_RejectedAsDuplicate()
     {
         var databasePath = GetDatabasePath("case-insensitive-name.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -442,7 +442,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task SetEnabledAsync_TogglesFlag_BumpsVersionOnceAndLeavesSecretCiphertextUntouched()
     {
         var databasePath = GetDatabasePath("set-enabled.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(5_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -504,7 +504,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task Headers_AreEncryptedAtRest_RoundTrip_AndAnEditBumpsVersion()
     {
         var databasePath = GetDatabasePath("headers.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var secretHeader = "Bearer SECRET-HEADER-" + Guid.NewGuid().ToString("N");
 
         Guid serverId;
@@ -565,7 +565,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task AssignSlugAsync_PersistsOnce_WithoutBumpingVersionOrRewritingSecrets()
     {
         var databasePath = GetDatabasePath("slug.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -594,7 +594,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task SetEnabledAsync_WhenIdMissing_ReturnsNull()
     {
         var databasePath = GetDatabasePath("set-enabled-missing.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -609,7 +609,7 @@ public sealed class McpServerStoreTests : IDisposable
     public async Task GetByIdAsync_WhenArgumentsTampered_FailsAuthenticatedDecryption()
     {
         var databasePath = GetDatabasePath("tamper.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid serverId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -723,12 +723,6 @@ public sealed class McpServerStoreTests : IDisposable
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
     }
-
-    private static byte[] CreateKeyMaterial()
-    {
-        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
-    }
-
     private static bool ContainsSubsequence(byte[] source, byte[] needle)
     {
         if (needle.Length == 0)
@@ -757,55 +751,5 @@ public sealed class McpServerStoreTests : IDisposable
         }
 
         return false;
-    }
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private long _milliseconds;
-
-        public MutableTimeProvider(long initialMilliseconds)
-        {
-            _milliseconds = initialMilliseconds;
-        }
-
-        public void Advance(long milliseconds)
-        {
-            _milliseconds += milliseconds;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return DateTimeOffset.FromUnixTimeMilliseconds(_milliseconds);
-        }
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
     }
 }

@@ -13,7 +13,12 @@ const settingsResponse = {
 	minMessageRequestTimeoutSeconds: 5,
 	maxAllowedMessageRequestTimeoutSeconds: 3600,
 	// The node's restart gate, served on both the GET and the PUT; a slice is enough for these page tests.
-	restartRequiredFields: ["huggingFaceDefaultQuant", "llamaChatCacheRamMiB", "llamaMaxLoadedProcesses", "schedulerEnabled"],
+	restartRequiredFields: [
+		"huggingFaceDefaultQuant",
+		"llamaChatCacheRamMiB",
+		"llamaReadinessTimeoutCapSeconds",
+		"schedulerEnabled",
+	],
 };
 
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
@@ -687,21 +692,27 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		expect((screen.getByTestId("node-settings-save-button") as HTMLButtonElement).disabled).toBe(true);
 		expect(screen.getByTestId("node-settings-save-bar-status").getAttribute("role")).toBe("status");
 
-		// llamaMaxLoadedProcesses is restart-gated; enableTools is live.
+		// llamaReadinessTimeoutCapSeconds is restart-gated; llamaMaxLoadedProcesses and enableTools apply on save.
 		fireEvent.change(maxProcesses, { target: { value: "5" } });
+		fireEvent.change(screen.getByTestId("node-settings-llama-readiness-cap"), { target: { value: "300" } });
 		openSection("chat");
 		clickSwitch("node-settings-enable-tools");
 
-		expect(saveBarStatus()).toBe("2 unsaved changes · 1 need a restart");
+		expect(saveBarStatus()).toBe("3 unsaved changes · 1 need a restart");
 		expect((screen.getByTestId("node-settings-save-button") as HTMLButtonElement).disabled).toBe(false);
 		// Each section with an edit carries its own count in the nav.
-		expect(screen.getByTestId("node-settings-section-runtime").textContent).toContain("1");
+		expect(screen.getByTestId("node-settings-section-runtime").textContent).toContain("2");
 
-		// One Save sends both, wherever they were edited.
+		// One Save sends them all, wherever they were edited.
 		fireEvent.click(screen.getByTestId("node-settings-save-button"));
 		await waitFor(() =>
 			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
-				body: { llamaMaxLoadedProcesses: 5, enableTools: false, maxMessageRequestTimeoutSeconds: 600 },
+				body: {
+					llamaMaxLoadedProcesses: 5,
+					llamaReadinessTimeoutCapSeconds: 300,
+					enableTools: false,
+					maxMessageRequestTimeoutSeconds: 600,
+				},
 			}),
 		);
 		// A single save point: the old second Save button is gone.
@@ -762,7 +773,9 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 	it("badges restart-gated fields in place of the old hint text", async () => {
 		renderPage("runtime");
 
-		expect(await screen.findByTestId("node-settings-restart-badge-llamaMaxLoadedProcesses")).toBeTruthy();
+		expect(await screen.findByTestId("node-settings-restart-badge-llamaReadinessTimeoutCapSeconds")).toBeTruthy();
+		// The process cap applies on save, so the node does not gate it.
+		expect(screen.queryByTestId("node-settings-restart-badge-llamaMaxLoadedProcesses")).toBeNull();
 		expect(screen.queryByTestId("node-settings-restart-badge-keepModelWarmEnabled")).toBeNull();
 	});
 

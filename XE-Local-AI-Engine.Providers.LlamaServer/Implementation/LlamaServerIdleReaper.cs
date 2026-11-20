@@ -47,6 +47,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     private readonly ILogger _logger;
     private readonly IRuntimeResidencyChangeNotifier _residencyNotifier;
     private readonly ILlamaServerLoadTelemetry _loadTelemetry;
+    private readonly ILlamaServerPooledLaunchAdmission? _pooledLaunchAdmission;
 
     internal LlamaServerIdleReaper(ConcurrentDictionary<ProcessKey, RunningProcess> processes,
         LlamaServerPortAllocator ports,
@@ -55,10 +56,12 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         TimeProvider timeProvider,
         ILogger logger,
         IRuntimeResidencyChangeNotifier? residencyNotifier = null,
-        ILlamaServerLoadTelemetry? loadTelemetry = null)
+        ILlamaServerLoadTelemetry? loadTelemetry = null,
+        ILlamaServerPooledLaunchAdmission? pooledLaunchAdmission = null)
     {
         _residencyNotifier = residencyNotifier ?? NullRuntimeResidencyChangeNotifier.Instance;
         _loadTelemetry = loadTelemetry ?? new NullLlamaServerLoadTelemetry();
+        _pooledLaunchAdmission = pooledLaunchAdmission;
         ArgumentNullException.ThrowIfNull(processes);
         _processes = processes;
         ArgumentNullException.ThrowIfNull(ports);
@@ -86,12 +89,12 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     ///     Chat processes count against <see cref="LlamaServerSupervisorOptions.MaxLoadedProcesses" />, companions (embedding,
     ///     reranker, decision) against <see cref="LlamaServerSupervisorOptions.MaxLoadedCompanionProcesses" />, each by its
     ///     <em>reserved-port</em> count, so in-flight spawns are included — see wiki 03, "Eviction &amp; reaper". A
-    ///     <see cref="ModelResidencyIntent.Background" /> spawn never evicts a live chat process.
+    ///     <see cref="ModelResidencyIntent.Background" /> spawn never evicts a live chat process. The cap is read under the gate and as many
+    ///     victims are evicted as it needs; out of victims, the admission is refused and the ones already detached are still torn down.
     /// </remarks>
     internal async Task<int> AdmitAndAllocatePortAsync(ModelRole role, ModelResidencyIntent intent, CancellationToken ct)
     {
         var companion = IsCompanion(role);
-        var cap = companion ? _options.MaxLoadedCompanionProcesses : _options.MaxLoadedProcesses;
         // Processes detached from the table under the gate, tree-killed after it is released (see KillDetachedProcesses).
         var detached = new List<RunningProcess>();
         var exitedSurvivors = new List<IProcessTreeHandle>();
@@ -102,9 +105,16 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             PruneExitedProcesses(detached);
             ReclaimExitedUnconfirmedKills(exitedSurvivors);
 
-            if (_ports.ReservedCountOf(companion) >= cap && !TryEvictIdleLeastRecentlyUsed(intent, companion, cap, detached))
+            var cap = companion ? _options.MaxLoadedCompanionProcesses : _options.MaxLoadedProcesses;
+            while (_ports.ReservedCountOf(companion) >= cap)
             {
-                throw CapReached(_unconfirmedKills.Count > 0);
+                // A cancelled admission stops evicting; the finally below still tears down every victim it already detached.
+                ct.ThrowIfCancellationRequested();
+                if (!TryEvictIdleLeastRecentlyUsed(intent, companion, cap, detached))
+                {
+                    // A held survivor occupies a slot of its own class only, so only one of the admitting class explains the refusal.
+                    throw CapReached(_unconfirmedKills.Exists(kill => IsCompanion(kill.Key.Role) == companion));
+                }
             }
 
             return _ports.Allocate(companion);
@@ -122,55 +132,229 @@ internal sealed class LlamaServerIdleReaper : IDisposable
 
     /// <summary>
     ///     Background reaper: evicts processes idle beyond <see cref="LlamaServerSupervisorOptions.IdleTimeToLive" />, or
-    ///     beyond the shorter transient lifetime for a transient process.
+    ///     beyond the shorter transient lifetime for a transient process, then unloads chat processes above a lowered cap.
     /// </summary>
     /// <remarks>Paced by the shorter, transient TTL, so a transient process is reaped on time too.</remarks>
     internal Task ReapIdleLoopAsync(CancellationToken ct) =>
-        IdleReapLoop.RunAsync(_options.EffectiveTransientIdleTimeToLive, _timeProvider, ReapIdleOnceAsync, ct);
+        IdleReapLoop.RunAsync(() => _options.EffectiveTransientIdleTimeToLive, _timeProvider, () => ReapIdlePassAsync(ct), _logger, ct);
 
-    internal async Task ReapIdleOnceAsync()
+    /// <summary>One reaper pass outside the background loop, with nothing to cancel its keep-warm read.</summary>
+    internal Task ReapIdleOnceAsync() =>
+        ReapIdlePassAsync(CancellationToken.None);
+
+    /// <summary>One reaper pass; <paramref name="ct" /> (shutdown) cancels only the keep-warm read, never a teardown or a gate wait.</summary>
+    private async Task ReapIdlePassAsync(CancellationToken ct)
     {
         await RetryUnconfirmedKillsAsync().ConfigureAwait(false);
         var now = _timeProvider.GetUtcNow();
         foreach (var (key, running) in _processes.ToArray())
         {
-            // A live profiling process is never idle-evicted mid-benchmark; an EXITED one is still reaped below so a dead handle never leaks. IsProfilingOwned
-            // covers the registration-to-Pin() window, where the pin alone does not yet protect it.
-            if ((running.IsProfilingPinned || running.IsProfilingOwned) && !running.Handle.HasExited)
+            // A teardown failure must not fault the reaper loop (it would never run again) or skip the remaining processes.
+            try
             {
-                continue;
-            }
-
-            // A live process with in-flight inference (an active lease) is never reaped, even past the TTL: LastUsedUtc is stamped at request start and lease release, not
-            // per token, so a generation that legitimately outruns the idle window (a raised invocation timeout on a slow CPU machine) looks idle while mid-flight.
-            if (running.ActiveLeases > 0 && !running.Handle.HasExited)
-            {
-                continue;
-            }
-
-            var ttl = IdleTimeToLiveFor(running);
-            if (running.Handle.HasExited || now - running.LastUsedUtc >= ttl)
-            {
-                if (!running.Handle.HasExited)
-                {
-                    _logger.LogInformation("Evicting idle {Residency} llama-server for model {ModelName} role {Role} (idle {IdleSeconds:F0}s past TTL {TtlSeconds:F0}s).",
-                        running.IsTransient ? "transient" : "interactive", key.ModelName, key.Role, (now - running.LastUsedUtc).TotalSeconds, ttl.TotalSeconds);
-                    RecordUnload(key, LlamaServerUnloadReason.IdleTimeout);
-                }
-
-                // A teardown failure must not fault the reaper loop (it would never run again) or skip the remaining processes.
-                try
+                // An exited child is cleaned up unconditionally, profiling or leased alike, so a dead handle never leaks.
+                if (running.Handle.HasExited)
                 {
                     await RemoveProcessAsync(key, running).ConfigureAwait(false);
+                    continue;
                 }
-                catch (Exception exception)
+
+                // Never a live profiling process (IsProfilingOwned covers the registration-to-Pin() window) or one with an active lease: LastUsedUtc is stamped at request
+                // start and lease release, not per token, so a generation outrunning the idle window (a raised invocation timeout on a slow CPU machine) looks idle mid-flight.
+                if (running.IsProfilingPinned || running.IsProfilingOwned || running.ActiveLeases > 0 || now - running.LastUsedUtc < IdleTimeToLiveFor(running))
                 {
-                    _logger.LogWarning(exception, "Tearing down an idle llama-server for model {ModelName} role {Role} (pid {ProcessId}) failed; its slot and port were already released.",
-                        key.ModelName, key.Role, running.Handle.ProcessId);
+                    continue;
+                }
+
+                _logger.LogInformation("Evicting idle {Residency} llama-server for model {ModelName} role {Role} (idle {IdleSeconds:F0}s past TTL {TtlSeconds:F0}s).",
+                    running.IsTransient ? "transient" : "interactive", key.ModelName, key.Role, (now - running.LastUsedUtc).TotalSeconds, IdleTimeToLiveFor(running).TotalSeconds);
+                await ReapExpiredAsync(key, running).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Tearing down an idle llama-server for model {ModelName} role {Role} (pid {ProcessId}) failed; its slot and port were already released.",
+                    key.ModelName, key.Role, running.Handle.ProcessId);
+            }
+        }
+
+        await ReconcileLoweredChatCapAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Tears down a process the pass found idle past its TTL, unless a request used it since; the kill runs outside the gate.</summary>
+    /// <remarks>
+    ///     The scan ran outside the gate, so a request may have leased the process, or leased and released it, since. The claim comes first:
+    ///     while it is held no lease can start, and a lease that ended before it stamped the idle clock first, so the expiry read after it is
+    ///     final. A fresh process gets its claim back. The unload is recorded only for a detach this pass won. Accepted ceiling: a lease
+    ///     requested in the instant the claim is held is refused as evicting, as during an admission's claim.
+    /// </remarks>
+    private async Task ReapExpiredAsync(ProcessKey key, RunningProcess running)
+    {
+        var detached = new List<RunningProcess>();
+        await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            if (!running.TryBeginEvict(forProfiling: false, out var claim))
+            {
+                _logger.LogDebug("Kept llama-server for model {ModelName} role {Role}: a request leased it after the idle scan, or another teardown owns it.", key.ModelName, key.Role);
+                return;
+            }
+
+            if (_timeProvider.GetUtcNow() - running.LastUsedUtc < IdleTimeToLiveFor(running))
+            {
+                running.ReleaseEvictionClaim(claim);
+                _logger.LogDebug("Kept llama-server for model {ModelName} role {Role}: a request used it after the idle scan.", key.ModelName, key.Role);
+                return;
+            }
+
+            if (DetachProcess(key, running) is not { } evicted)
+            {
+                return; // A concurrent teardown already removed it.
+            }
+
+            detached.Add(evicted);
+
+            // A child that exited since the scan died outside the node; DetachProcess already logged it as such.
+            if (!running.Handle.HasExited)
+            {
+                RecordUnload(key, LlamaServerUnloadReason.IdleTimeout);
+            }
+        }
+        finally
+        {
+            _admissionGate.Release();
+            KillDetachedProcesses(detached);
+        }
+    }
+
+    /// <summary>
+    ///     Unloads chat processes, best victim first, while more chat slots are reserved than <see cref="LlamaServerSupervisorOptions.MaxLoadedProcesses" />
+    ///     allows; only a lowered cap leaves the node above it, since admission never admits past the cap.
+    /// </summary>
+    /// <remarks>
+    ///     Victims rank by <see cref="AboveCapRank" />, LRU first within a rank; never a companion or a process <see cref="IsUnloadableChat" />
+    ///     rules out. A leased one goes on the first pass after its lease ends; in-flight spawns and held survivors count but never go.
+    ///     Keep-warm names are read outside the gate: unreadable, nothing goes; one changed during the pass applies on the next.
+    /// </remarks>
+    private async Task ReconcileLoweredChatCapAsync(CancellationToken ct)
+    {
+        // Reserved ports, not registered processes: an in-flight spawn or a held survivor occupies a slot a registered chat must yield.
+        await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            if (_ports.ReservedCountOf(companion: false) <= _options.MaxLoadedProcesses)
+            {
+                return;
+            }
+        }
+        finally
+        {
+            _admissionGate.Release();
+        }
+
+        IReadOnlyCollection<string> protectedModels;
+        try
+        {
+            protectedModels = _pooledLaunchAdmission is null
+                ? []
+                : await _pooledLaunchAdmission.GetProtectedChatModelsAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            // Only a shutdown cancellation escapes, ending the loop quietly; anything else costs this pass its reconciliation.
+            _logger.LogWarning(exception, "Reading the keep-warm model failed; chat processes above the loaded-model cap are unloaded on a later pass.");
+            return;
+        }
+
+        var detached = new List<RunningProcess>();
+        var exitedSurvivors = new List<IProcessTreeHandle>();
+        await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            // A held survivor that exited since the early check frees its slot here, so a live chat is not unloaded in its place.
+            PruneExitedProcesses(detached);
+            ReclaimExitedUnconfirmedKills(exitedSurvivors);
+            while (_ports.ReservedCountOf(companion: false) > _options.MaxLoadedProcesses)
+            {
+                if (!TryEvictChatAboveCap(protectedModels, detached))
+                {
+                    break;
                 }
             }
         }
+        finally
+        {
+            _admissionGate.Release();
+            KillDetachedProcesses(detached);
+            DisposeExited(exitedSurvivors);
+        }
     }
+
+    /// <summary>Detaches the best chat victim above a lowered cap into <paramref name="detached" />; the caller holds the admission gate.</summary>
+    private bool TryEvictChatAboveCap(IReadOnlyCollection<string> protectedModels, List<RunningProcess> detached)
+    {
+        var now = _timeProvider.GetUtcNow();
+        ProcessKey? victimKey = null;
+        RunningProcess? victim = null;
+        var victimRank = int.MaxValue;
+        foreach (var (key, running) in _processes)
+        {
+            if (!IsUnloadableChat(key, running, protectedModels, now) || running.ActiveLeases > 0)
+            {
+                continue;
+            }
+
+            var rank = AboveCapRank(running, now);
+            if (victim is not null && !IsBetterVictim(rank, running, victimRank, victim))
+            {
+                continue;
+            }
+
+            victimKey = key;
+            victim = running;
+            victimRank = rank;
+        }
+
+        if (victimKey is null || victim is null || !TryClaimAndDetach(victimKey.Value, victim, detached))
+        {
+            return false;
+        }
+
+        _logger.LogWarning("Loaded-model cap ({Cap}) is below the loaded chat models; unloading the llama-server for model {ModelName}.",
+            _options.MaxLoadedProcesses, victimKey.Value.ModelName);
+        RecordUnload(victimKey.Value, LlamaServerUnloadReason.LoadedModelCap);
+        return true;
+    }
+
+    /// <summary>Victim rank above a lowered cap, best first: 0 idle past its TTL, 1 an in-window transient process, 2 an in-window interactive chat.</summary>
+    private int AboveCapRank(RunningProcess running, DateTimeOffset now)
+    {
+        if (now - running.LastUsedUtc >= IdleTimeToLiveFor(running))
+        {
+            return 0;
+        }
+
+        return running.IsTransient ? 1 : 2;
+    }
+
+    /// <summary>
+    ///     Whether a live chat process may be unloaded on demand, for a memory shortfall or a lowered cap: never a <paramref name="protectedModels" />
+    ///     name (the keep-warm model), a profiling process, or one still within <see cref="FirstLeaseGracePeriod" /> of its first lease.
+    /// </summary>
+    /// <remarks>
+    ///     A process awaiting its first lease was just loaded for a request that has not leased it yet, so it is spared, but only for the grace
+    ///     period: a warm-only load (the model picker) never leases at all. An active lease is each caller's own check.
+    /// </remarks>
+    private static bool IsUnloadableChat(ProcessKey key, RunningProcess running, IReadOnlyCollection<string> protectedModels, DateTimeOffset now) =>
+        key.Role == ModelRole.Chat
+        && !running.Handle.HasExited
+        && !running.IsProfilingPinned
+        && !running.IsProfilingOwned
+        && !(running.AwaitingFirstLease && now - running.ReadyUtc < FirstLeaseGracePeriod)
+        && !protectedModels.Contains(key.ModelName, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A better (lower) rank always wins; within the same rank, the least recently used wins.</summary>
+    private static bool IsBetterVictim(int rank, RunningProcess candidate, int victimRank, RunningProcess victim) =>
+        rank != victimRank ? rank < victimRank : candidate.LastUsedUtc < victim.LastUsedUtc;
 
     /// <summary>
     ///     Evicts the least-recently-used process that is currently idle; the caller holds the admission gate.
@@ -225,8 +409,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
 
             var rank = isIdlePastTtl ? 0 : 1;
 
-            // A better rank always wins; within the same rank, least-recently-used wins.
-            if (victim is not null && (rank != victimRank ? rank > victimRank : running.LastUsedUtc >= victim.LastUsedUtc))
+            if (victim is not null && !IsBetterVictim(rank, running, victimRank, victim))
             {
                 continue;
             }
@@ -275,15 +458,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             RunningProcess? victim = null;
             foreach (var (key, running) in _processes)
             {
-                // An exited process holds no memory to free. A process awaiting its first lease was just loaded for a request that has not leased it
-                // yet, so it is spared, but only for a grace period: a warm-only load (the model picker) never leases at all.
-                if (key.Role != ModelRole.Chat
-                    || key.Equals(requesting)
-                    || protectedModels.Contains(key.ModelName, StringComparer.OrdinalIgnoreCase)
-                    || running.Handle.HasExited
-                    || running.IsProfilingPinned
-                    || running.IsProfilingOwned
-                    || running.AwaitingFirstLease && now - running.ReadyUtc < FirstLeaseGracePeriod)
+                if (key.Equals(requesting) || !IsUnloadableChat(key, running, protectedModels, now))
                 {
                     continue;
                 }

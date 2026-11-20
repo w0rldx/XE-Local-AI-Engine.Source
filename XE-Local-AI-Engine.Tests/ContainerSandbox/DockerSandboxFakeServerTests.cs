@@ -36,7 +36,7 @@ public sealed class DockerSandboxFakeServerTests
             DaemonId = "fakedaemon:preflight"
         });
 
-        using var attestationRoot = new TemporaryDirectory();
+        using var attestationRoot = new TempDirectory("xe-docker-tests");
         var options = Options(docker);
         var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(options);
 
@@ -103,7 +103,7 @@ public sealed class DockerSandboxFakeServerTests
     [Test]
     public async Task TheContainerBackend_AdvertisesNetworkPolicySupport()
     {
-        using var workspace = new TemporaryDirectory();
+        using var workspace = new TempDirectory("xe-docker-tests");
         var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(new ContainerSandboxOptions());
         await using var provider = new DockerSandboxRuntimeProvider(monitor,
             new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
@@ -185,7 +185,7 @@ public sealed class DockerSandboxFakeServerTests
     /// </summary>
     private sealed class SandboxFixture : IAsyncDisposable
     {
-        private readonly TemporaryDirectory _workspace;
+        private readonly TempDirectory _workspace;
 
         private SandboxFixture(FakeDockerServer docker,
             DockerSandboxRuntimeProvider provider,
@@ -193,7 +193,7 @@ public sealed class DockerSandboxFakeServerTests
             IDockerRuntimeClient client,
             string containerId,
             DockerContainerSpecification specification,
-            TemporaryDirectory workspace)
+            TempDirectory workspace)
         {
             Docker = docker;
             Provider = provider;
@@ -225,7 +225,7 @@ public sealed class DockerSandboxFakeServerTests
         public static async Task<SandboxFixture> CreateAsync(SandboxNetworkPolicy networkPolicy)
         {
             var docker = await FakeDockerServer.StartAsync();
-            var workspace = new TemporaryDirectory();
+            var workspace = new TempDirectory("xe-docker-tests");
 
             try
             {

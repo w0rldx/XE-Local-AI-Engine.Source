@@ -28,7 +28,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task CreateAsync_RoundTripsAndEncryptsBlobs()
     {
         var databasePath = GetDatabasePath("roundtrip.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var description = "SECRET-DESC-" + Guid.NewGuid().ToString("N");
         var body = "SECRET-BODY-" + Guid.NewGuid().ToString("N");
 
@@ -86,7 +86,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task UpdateAsync_BumpsVersionOnBodyChange_NotOnEnabledToggle()
     {
         var databasePath = GetDatabasePath("version-bump.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(1_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -146,7 +146,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task Name_IsNocaseUnique()
     {
         var databasePath = GetDatabasePath("nocase-unique.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -177,7 +177,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task ListEnabledByIdsAsync_ReturnsOnlyEnabledAssignedSkills()
     {
         var databasePath = GetDatabasePath("list-enabled.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -229,7 +229,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task DeleteAsync_RemovesRow()
     {
         var databasePath = GetDatabasePath("delete.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -252,7 +252,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task Resources_RoundTripAndStayCiphertextAtRest()
     {
         var databasePath = GetDatabasePath("resources-roundtrip.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var content = "SECRET-RESOURCE-" + Guid.NewGuid().ToString("N");
 
         Guid skillId;
@@ -328,7 +328,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task Resources_BumpSkillVersionOnEveryChange()
     {
         var databasePath = GetDatabasePath("resource-version.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(1_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -414,7 +414,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task ResourceName_IsNocaseUniquePerSkill()
     {
         var databasePath = GetDatabasePath("resource-nocase.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -481,7 +481,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task DeleteAsync_CascadesToResources()
     {
         var databasePath = GetDatabasePath("resource-cascade.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -527,7 +527,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task Resource_WhenReparentedOrRenamed_FailsAuthenticatedDecryption()
     {
         var databasePath = GetDatabasePath("resource-aad.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid victimId;
         Guid attackerId;
@@ -589,7 +589,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task Provenance_DefaultsToLocal_RoundTrips_AndIsPromoteOnly()
     {
         var databasePath = GetDatabasePath("provenance.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(1_000);
 
         Guid localId;
@@ -671,7 +671,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task UpdateAsync_GeneratedConversionOfImportedSkill_ReplacesWholeProvenanceUnit()
     {
         var databasePath = GetDatabasePath("generated-conversion.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(1_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -717,7 +717,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task SourceUri_RejectsAnythingBeyondTheImportKind()
     {
         var databasePath = GetDatabasePath("source-uri.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -783,7 +783,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     public async Task Frontmatter_RoundTripsAndIsContentAffecting()
     {
         var databasePath = GetDatabasePath("frontmatter.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(1_000);
         var secretMetadataValue = "SECRET-META-" + Guid.NewGuid().ToString("N");
 
@@ -902,12 +902,6 @@ public sealed class AgentSkillStoreTests : IDisposable
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
     }
-
-    private static byte[] CreateKeyMaterial()
-    {
-        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
-    }
-
     private static bool ContainsSubsequence(byte[] source, byte[] needle)
     {
         if (needle.Length == 0)
@@ -936,55 +930,5 @@ public sealed class AgentSkillStoreTests : IDisposable
         }
 
         return false;
-    }
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private long _milliseconds;
-
-        public MutableTimeProvider(long initialMilliseconds)
-        {
-            _milliseconds = initialMilliseconds;
-        }
-
-        public void Advance(long milliseconds)
-        {
-            _milliseconds += milliseconds;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return DateTimeOffset.FromUnixTimeMilliseconds(_milliseconds);
-        }
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
     }
 }

@@ -143,34 +143,4 @@ public sealed class TrainingBaseArtifactStoreTests : IDisposable
     {
         return RandomNumberGenerator.GetBytes(32);
     }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
-    }
 }

@@ -191,7 +191,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             _timeProvider,
             _logger,
             _residencyNotifier,
-            _loadTelemetry);
+            _loadTelemetry,
+            _pooledLaunchAdmission);
 
         _reaperLoop = Task.Run(() => _reaper.ReapIdleLoopAsync(_shutdownCts.Token), _shutdownCts.Token);
     }

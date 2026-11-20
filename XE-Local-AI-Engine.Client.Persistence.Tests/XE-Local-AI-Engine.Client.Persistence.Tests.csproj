@@ -25,6 +25,8 @@
   <ItemGroup>
     <Compile Remove="Knowledge/RetrievalEval/LiveCorpus/**"/>
     <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Fakes\FakeNodeSettingsStore.cs" Link="Testing\FakeNodeSettingsStore.cs"/>
+    <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Fakes\FixedNodeSqliteKeyHolder.cs" Link="Testing\FixedNodeSqliteKeyHolder.cs"/>
+    <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Fakes\FakeNodeDataDirectory.cs" Link="Testing\FakeNodeDataDirectory.cs"/>
     <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Fakes\RecordingLogger.cs" Link="Testing\RecordingLogger.cs"/>
     <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Categories\TestCategories.cs" Link="Categories\TestCategories.cs"/>
   </ItemGroup>

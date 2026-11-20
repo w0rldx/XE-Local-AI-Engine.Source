@@ -16,7 +16,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
     [UnsupportedOSPlatform("windows")]
     public async Task Probe_Cpu_DoesNotRequireCudaOrVulkanTools()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-prereq");
         WriteCommonTools(temp.Path);
         using var path = new PathScope(temp.Path);
         var probe = new LlamaCppSourceBuildPrerequisiteProbe(new VendorProbe(), temp.Path, requiredFreeDiskBytes: 0);
@@ -44,7 +44,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
             Skip.Test("File modes do not stop a privileged process, so the cache root cannot be made unwritable.");
         }
 
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-prereq");
         WriteCommonTools(temp.Path);
         using var path = new PathScope(temp.Path);
         var readOnlyRoot = Path.Combine(temp.Path, "read-only");
@@ -70,7 +70,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
     [UnsupportedOSPlatform("windows")]
     public async Task Probe_Vulkan_RequiresGlslcAndVulkanInfoButNotNvcc()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-prereq");
         WriteCommonTools(temp.Path);
         using var path = new PathScope(temp.Path);
         var probe = new LlamaCppSourceBuildPrerequisiteProbe(new VendorProbe(), temp.Path, requiredFreeDiskBytes: 0);
@@ -88,7 +88,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
     [UnsupportedOSPlatform("windows")]
     public async Task Probe_Cuda_RequiresNvidiaCompilerAndDriverProbe()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-prereq");
         WriteCommonTools(temp.Path);
         using var path = new PathScope(temp.Path);
 
@@ -119,7 +119,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
     [UnsupportedOSPlatform("windows")]
     public async Task Probe_Cuda_FindsNvccUnderTheConfiguredCudaRootWhenItIsNotOnPath()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-prereq");
         WriteCommonTools(temp.Path);
         using var path = new PathScope(temp.Path);
 
@@ -218,25 +218,5 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
 
         public void Dispose() =>
             Environment.SetEnvironmentVariable("PATH", _original);
-    }
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public TempDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-source-prereq-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try { Directory.Delete(Path, recursive: true); }
-            catch (Exception)
-            {
-                /* Best-effort test cleanup. */
-            }
-        }
     }
 }

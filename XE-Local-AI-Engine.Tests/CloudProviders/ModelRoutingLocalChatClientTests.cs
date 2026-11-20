@@ -214,7 +214,7 @@ public sealed class ModelRoutingLocalChatClientTests
         services.AddScoped<ICoordinatedModelProviderMapStore>(_ => mapStore);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        return new LocalModelProviderResolver(providers, scopeFactory, defaultProviderName, maxLoadedProcesses: 3, timeProvider: TimeProvider.System);
+        return new LocalModelProviderResolver(providers, scopeFactory, defaultProviderName, timeProvider: TimeProvider.System);
     }
 
     /// <summary>

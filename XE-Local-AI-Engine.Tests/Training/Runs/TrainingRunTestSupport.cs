@@ -3,31 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Training.Runs;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
-
-/// <summary>A key holder with fixed material, so the frozen-copy round trip exercises the real AES-GCM path.</summary>
-internal sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-{
-    private byte[]? _key;
-
-    public FixedNodeSqliteKeyHolder(byte[] key)
-    {
-        _key = key;
-    }
-
-    public ReadOnlyMemory<byte> Key
-    {
-        get
-        {
-            ObjectDisposedException.ThrowIf(_key is null, this);
-            return _key;
-        }
-    }
-
-    public void Dispose() =>
-        _key = null;
-}
 
 /// <summary>
 ///     A scripted trainer. Lines are handed to the reader in order; the process "exits" with the scripted status once

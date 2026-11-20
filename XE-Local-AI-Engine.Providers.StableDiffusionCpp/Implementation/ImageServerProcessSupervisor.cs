@@ -103,7 +103,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         // simply off — the composition root injects the real singleton shared with the llama-server supervisor.
         _loadAdmission = loadAdmission ?? new NoOpGpuModelLoadAdmission();
 
-        _reaperLoop = Task.Run(() => IdleReapLoop.RunAsync(_options.IdleTimeToLive, _timeProvider, ReapIdleOnceAsync, _shutdownCts.Token), _shutdownCts.Token);
+        _reaperLoop = Task.Run(() => IdleReapLoop.RunAsync(() => _options.IdleTimeToLive, _timeProvider, ReapIdleOnceAsync, _logger, _shutdownCts.Token), _shutdownCts.Token);
     }
 
     /// <inheritdoc />
@@ -155,7 +155,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
         // Fast path: an already-running, live daemon is reused without taking the spawn gate — subject to a rate-limited
         // liveness probe so a wedged (alive but unresponsive) daemon is respawned instead of handed out.
-        if (_processes.TryGetValue(modelName, out var existing) && !existing.Handle.HasExited)
+        if (_processes.TryGetValue(modelName, out var existing) && IsReusable(existing))
         {
             var reused = await ReuseOrNullAsync(modelName, existing, ct).ConfigureAwait(false);
             if (reused is not null)
@@ -238,17 +238,20 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     }
 
     /// <inheritdoc />
-    public bool TryAcquireJobLease(string modelName, [NotNullWhen(true)] out IImageServerJobLease? lease)
+    public bool TryAcquireJobLease(ImageServerEndpoint endpoint, [NotNullWhen(true)] out IImageServerJobLease? lease)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        var modelName = endpoint.ModelName;
         lease = null;
-        if (!_processes.TryGetValue(modelName, out var running) || running.Handle.HasExited)
+
+        // Only the daemon that handed out this endpoint: a replacement under the same model name serves another port and process.
+        if (!_processes.TryGetValue(modelName, out var running) || !ReferenceEquals(running.Endpoint, endpoint) || running.Handle.HasExited)
         {
             return false;
         }
 
         // Atomically register the lease, refusing if an idle reaper / cap evictor has already latched this daemon for eviction, then confirm the daemon is still the registered, live one: a forced
-        // teardown between the lookup and here would leave the lease guarding a dead handle, so release and return false (leaseless).
+        // teardown between the lookup and here would leave the lease guarding a dead handle, so release and return false: the endpoint is stale.
         if (!running.TryAcquireJob())
         {
             return false;
@@ -351,6 +354,10 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         return null;
     }
 
+    // A daemon latched for teardown but not yet removed would only hand out an endpoint no lease can attach to: it is respawned instead.
+    private static bool IsReusable(RunningServer running) =>
+        !running.Handle.HasExited && !running.IsEvicting;
+
     private async Task<ImageServerEndpoint> SpawnUnderGateAsync(string modelName, bool evictFirst, CancellationToken ct)
     {
         var gate = _ensureGates.GetOrAdd(modelName, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
@@ -358,7 +365,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         try
         {
             // Re-check under the gate — another caller may have spawned while we waited (ensure path only).
-            if (!evictFirst && _processes.TryGetValue(modelName, out var existing) && !existing.Handle.HasExited)
+            if (!evictFirst && _processes.TryGetValue(modelName, out var existing) && IsReusable(existing))
             {
                 var reused = await ReuseOrNullAsync(modelName, existing, ct).ConfigureAwait(false);
                 if (reused is not null)
@@ -536,7 +543,11 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         return code + tail;
     }
 
-    private async Task ReapIdleOnceAsync()
+    /// <summary>
+    ///     One reaper pass: evicts every daemon idle past the TTL, then unloads unleased daemons, least recently used first, while more are
+    ///     loaded than <see cref="StableDiffusionRuntimeOptions.MaxLoadedProcesses" /> allows; only a lowered cap leaves the node above it.
+    /// </summary>
+    internal async Task ReapIdleOnceAsync()
     {
         var now = _timeProvider.GetUtcNow();
         foreach (var (key, running) in _processes.ToArray())
@@ -564,6 +575,24 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
                 await RemoveProcessAsync(key, running).ConfigureAwait(false);
             }
         }
+
+        var detached = new List<RunningServer>();
+        await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            while (_allocatedPorts.Count > _options.MaxLoadedProcesses)
+            {
+                if (!TryEvictIdleLeastRecentlyUsed(detached))
+                {
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            _admissionGate.Release();
+            KillDetachedProcesses(detached);
+        }
     }
 
     /// <summary>
@@ -572,7 +601,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     /// </summary>
     /// <remarks>
     ///     The admission gate serializes the cap decision so it can never be raced past. The cap is measured by the
-    ///     reserved-port count, which already includes in-flight spawns, mirroring the llama supervisor.
+    ///     reserved-port count, which already includes in-flight spawns, mirroring the llama supervisor. It is read under the gate and
+    ///     evicts as many victims as a lowered cap needs; when they run out it is refused, and the ones already detached are still torn down.
     /// </remarks>
     private async Task<int> AllocatePortAsync(CancellationToken ct)
     {
@@ -584,9 +614,16 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             // Drop any daemon that has already exited so its slot/port is reclaimed before the cap check.
             PruneExitedProcesses(detached);
 
-            if (_allocatedPorts.Count >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed(detached))
+            // One cap per admission: a save that lands while this admission evicts applies to the next one and to the reap pass.
+            var cap = _options.MaxLoadedProcesses;
+            while (_allocatedPorts.Count >= cap)
             {
-                throw CapReached();
+                // A cancelled admission stops evicting; the finally below still tears down every victim it already detached.
+                ct.ThrowIfCancellationRequested();
+                if (!TryEvictIdleLeastRecentlyUsed(detached))
+                {
+                    throw CapReached();
+                }
             }
 
             return ReserveFreePort();
@@ -662,7 +699,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             return false;
         }
 
-        _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting {Idleness} sd-server for model {ModelName} to admit a new one.",
+        _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting {Idleness} sd-server for model {ModelName}.",
             _options.MaxLoadedProcesses, victimIsIdlePastTtl ? "idle" : "in-window but unleased", victimKey);
 
         detached.Add(evicted);
@@ -885,6 +922,9 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         /// <summary>The <see cref="FingerprintOf" /> of the weight set this daemon was launched from.</summary>
         public string PartsFingerprint { get; }
 
+        /// <summary>Whether a reaper or evictor latched this daemon for teardown; it is no longer handed out, though it may still be in the table.</summary>
+        public bool IsEvicting => Volatile.Read(ref _leaseState) < 0;
+
         /// <summary>Whether a generation currently leases this daemon — best-effort read for the evictor's victim heuristic; the atomic claim is <see cref="TryBeginEvict" />.</summary>
         public bool IsLeased => Volatile.Read(ref _leaseState) > 0;
 
@@ -911,8 +951,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         ///     eviction.
         /// </summary>
         /// <remarks>
-        ///     Returns <see langword="false" /> when an idle reaper / cap evictor has begun tearing it down, in which
-        ///     case the caller must proceed leaseless rather than over a to-be-killed daemon.
+        ///     Returns <see langword="false" /> when an idle reaper / cap evictor has begun tearing it down; the caller then
+        ///     ensures again rather than run a job on a to-be-killed daemon.
         /// </remarks>
         public bool TryAcquireJob()
         {

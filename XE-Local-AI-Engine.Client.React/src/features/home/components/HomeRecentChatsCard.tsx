@@ -6,7 +6,7 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
-import { useChatHandOff } from "@/features/home/hooks/useChatHandOff";
+import { useChatHandOff } from "@/core/ui/hooks/useChatHandOff";
 import { useRecentConversations } from "@/features/home/queries/useRecentConversations";
 
 const lastSeenFormat: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short" };

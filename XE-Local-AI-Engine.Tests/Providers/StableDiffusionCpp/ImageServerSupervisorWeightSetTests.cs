@@ -98,8 +98,8 @@ public sealed class ImageServerSupervisorWeightSetTests
         };
         await using var supervisor = ImageSupervisorFactory.Create(launcher, modelStore: store);
 
-        await supervisor.EnsureRunningAsync(ModelName, CancellationToken.None);
-        AssertEx.Succeeded(supervisor.TryAcquireJobLease(ModelName, out var lease));
+        var endpoint = await supervisor.EnsureRunningAsync(ModelName, CancellationToken.None);
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease(endpoint, out var lease));
         using var leaseScope = lease;
 
         store.Parts = [Diffusion, Vae, Llm, LlmVision];

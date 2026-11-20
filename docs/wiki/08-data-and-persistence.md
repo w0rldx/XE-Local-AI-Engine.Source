@@ -459,7 +459,9 @@ itself `Configure`-d from this accessor at the composition root, so the AI.Agent
 `INodeRuntimeSettings`, still gets the stored value), while the Hugging Face and transcription seeds come from
 configuration because their options are registered by modules that **not every host or test context runs**, and
 this accessor is constructed in all of them. For knobs with no config section at all (the llama.cpp supervisor
-cap/TTL) the seed IS the hardcoded default.
+cap/TTL) the seed IS the hardcoded default. The llama.cpp cap/TTL and the image cap/TTL are seeded into the supervisor
+options at host build and written again by every committed node-settings save (a refused or conflicted save writes
+nothing), from the record it committed, so an edit applies to the running node.
 
 **The appsettings keys that became node settings in the second round.** Forty-seven former appsettings-only
 knobs are stored fields now; each keeps its old configuration key as the seed, so a node that never saves one behaves
@@ -478,7 +480,8 @@ default chat model only when it is node-local; a cloud or `ext:` default falls b
 | Privacy | `AllowCloudModelAccess` (`KnowledgeBase`), independent of the external-access preset | next turn, at all six egress readers |
 | | `AllowCloudModelUnattendedRuns`, `AllowCloudModelWebTools`, `AllowCloudModelMcpTools`, `AllowCloudModelSubAgents` (no seed, off), independent of the external-access preset | next run, offer or spawn |
 | Usage | chat and agent-execution-log retention switches and windows, `NodeDbBackupRetainCount`, `BenchmarkKldCacheMaxBytes`, `SchedulerHistoryRetentionDays` | next sweep, backup or trim |
-| Runtime | `ImageMaxLoadedProcesses`, `ImageTextEncoderOnGpu` (`StableDiffusionRuntime`) | restart: the `AddNodeImagesExtensions` host-build factory |
+| Runtime | `ImageMaxLoadedProcesses` (`StableDiffusionRuntime`) | on save: written into the running `StableDiffusionRuntimeOptions`; a lower cap unloads idle daemons on the next reap pass |
+| | `ImageTextEncoderOnGpu` (`StableDiffusionRuntime`) | restart: the `AddNodeImagesExtensions` host-build factory |
 | Workspaces | the graph-workflow run cap and default node timeout, the work-session step and concurrency caps, the development attempt duration, tool-call and output-token budgets | restart: `Configure<T>` after each section's bind |
 | | AgentHome inner tool calls, patch-apply timeout, and the run-retention window, count cap and byte cap (0 turns a cap off) | next run, apply or sweep |
 | Feature switches | the eight `<Feature>Enabled` booleans (`Development`, `WorkSessions`, `GraphWorkflows`, `AgentHome`, `Compute`, `ExternalApps`, `Transcription`, `Scheduler`, each from its section's `Enabled`), edited in the General section's Features card; a stored `devWorkflowsEnabled` from before the retirement still loads and is ignored | live for six: `FeatureSwitchMiddleware` and every per-service check read the switch per request (the Compute seeder still runs only at startup); restart for `DevelopmentEnabled` and `SchedulerEnabled` (whose API families the middleware still closes at once when they are turned off), and for the container-bridge half of `ExternalAppsEnabled`, all three read by `NodeStartupSettings` before the host is built |

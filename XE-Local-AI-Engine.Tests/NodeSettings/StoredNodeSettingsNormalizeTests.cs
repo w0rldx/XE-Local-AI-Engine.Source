@@ -1129,6 +1129,56 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    public async Task LoadStrictAsync_WhenTheFileHoldsANullDocument_ReturnsNull()
+    {
+        // A null document carries no stored value, so it must not read as a valid default record (keep-warm off, for one).
+        await WriteSettingsJsonAsync("null");
+        using var store = NewStore();
+
+        AssertEx.Null(await store.LoadStrictAsync());
+        AssertEx.Null((await store.LoadAsync()).ExternalAccessProfile);
+    }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task LoadStrictAsync_WhenTheDirectoryCannotBeSearched_ReturnsNull()
+    {
+        await WriteSettingsJsonAsync("{ \"keepModelWarmEnabled\": true }");
+        var settingsPath = Path.Combine(_root, "node-settings.json");
+        File.SetUnixFileMode(_root, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        try
+        {
+            if (CanOpen(settingsPath))
+            {
+                Skip.Test("BLOCKED: this account bypasses file permissions (root), so a directory without search permission cannot be produced.");
+            }
+
+            using var store = NewStore();
+
+            // The file is there but cannot be reached: an existence probe answers false, and the store must not read that as a fresh node.
+            AssertEx.Null(await store.LoadStrictAsync());
+        }
+        finally
+        {
+            File.SetUnixFileMode(_root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    private static bool CanOpen(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    [Test]
     public async Task LoadStrictAsync_WhenTheFileIsValid_ReturnsTheNormalizedRecord()
     {
         await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"  offline  \", \"llamaMaxLoadedProcesses\": 99 }");

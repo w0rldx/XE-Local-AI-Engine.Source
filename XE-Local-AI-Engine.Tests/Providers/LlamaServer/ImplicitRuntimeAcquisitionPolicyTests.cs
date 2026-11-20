@@ -27,7 +27,7 @@ public sealed class ImplicitRuntimeAcquisitionPolicyTests
     public async Task EnsureBinary_WhenThePolicyRefusesAndNothingIsInstalled_ThrowsTheReasonWithoutDownloading()
     {
         using var cache = new TempDirectory();
-        using var handler = new CountingHandler();
+        using var handler = NewCountingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = CreateManager(http, cache.Path, new RefusingPolicy());
 
@@ -41,7 +41,7 @@ public sealed class ImplicitRuntimeAcquisitionPolicyTests
     public async Task AcquireBinary_WhenThePolicyRefuses_StillDownloadsForTheOperator()
     {
         using var cache = new TempDirectory();
-        using var handler = new CountingHandler();
+        using var handler = NewCountingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = CreateManager(http, cache.Path, new RefusingPolicy());
 
@@ -59,7 +59,7 @@ public sealed class ImplicitRuntimeAcquisitionPolicyTests
         var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
         await File.WriteAllTextAsync(serverPath, "fake-llama-server");
-        using var handler = new CountingHandler();
+        using var handler = NewCountingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = CreateManager(http, cache.Path, new RefusingPolicy());
 
@@ -74,7 +74,7 @@ public sealed class ImplicitRuntimeAcquisitionPolicyTests
     public async Task ImplicitAcquisitionRefusal_MatchesWhatTheLaunchWouldDo()
     {
         using var cache = new TempDirectory();
-        using var handler = new CountingHandler();
+        using var handler = NewCountingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         ILlamaCppBinaryManager refusing = CreateManager(http, cache.Path, new RefusingPolicy());
 
@@ -109,7 +109,7 @@ public sealed class ImplicitRuntimeAcquisitionPolicyTests
         store.ReadAsync(Arg.Any<CancellationToken>())
              .Returns(new InstalledRuntimeState(olderTag, pin.AssetName, new string('a', 64), GpuVariant.Cpu, DateTimeOffset.UnixEpoch));
         var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
-        using var handler = new CountingHandler();
+        using var handler = NewCountingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, TimeProvider.System,
             catalog, store, implicitAcquisitionPolicy: new RefusingPolicy());
@@ -131,7 +131,7 @@ public sealed class ImplicitRuntimeAcquisitionPolicyTests
     {
         using var cache = new TempDirectory();
         var serverPath = await WriteCachedWindowsCudaServerAsync(cache.Path);
-        using var handler = new CountingHandler();
+        using var handler = NewCountingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RuntimeAcquisitionStatusRegistry(new NullRuntimeAcquisitionEventPublisher(), NullLogger<RuntimeAcquisitionStatusRegistry>.Instance, TimeProvider.System);
         var manager = CreateWindowsManager(http, cache.Path, registry);
@@ -151,7 +151,7 @@ public sealed class ImplicitRuntimeAcquisitionPolicyTests
     {
         using var cache = new TempDirectory();
         var serverPath = await WriteCachedWindowsCudaServerAsync(cache.Path);
-        using var handler = new CountingHandler();
+        using var handler = NewCountingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RuntimeAcquisitionStatusRegistry(new NullRuntimeAcquisitionEventPublisher(), NullLogger<RuntimeAcquisitionStatusRegistry>.Instance, TimeProvider.System);
         var manager = CreateWindowsManager(http, cache.Path, registry);
@@ -239,19 +239,6 @@ public sealed class ImplicitRuntimeAcquisitionPolicyTests
             Task.FromResult<string?>(Refusal);
     }
 
-    private sealed class CountingHandler : HttpMessageHandler
-    {
-        private int _callCount;
-
-        public int CallCount => Volatile.Read(ref _callCount);
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            Interlocked.Increment(ref _callCount);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray())
-            });
-        }
-    }
+    private static CountingHttpMessageHandler NewCountingHandler() =>
+        new(() => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray()) });
 }

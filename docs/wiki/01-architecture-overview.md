@@ -315,7 +315,9 @@ extension method, whose `TryAddSingleton` default then becomes a no-op. The same
 the other way for implementations: a plain `AddSingleton` in `Client.Application` overrides a provider's
 `TryAddSingleton` floor (the DB-backed `IInferenceProfileResolver` over the explore-only in-provider default, the
 real GPU-load admission gate over each provider's no-op). Seeded values are read once at host build, so an operator
-edit applies on the next process restart.
+edit applies on the next node restart. The exception is the four process caps and idle TTLs (llama.cpp and sd-server):
+the node-settings save writes them into the running option singletons, resolved from the record it committed
+(`NodeSettingsAdministrationService`), and the supervisors read them per decision and per reap pass.
 
 ### Launch-args seam — the inference profile resolver
 Inside the LlamaServer provider stack the supervisor no longer hard-codes placement: `LlamaServerProcessSupervisor`

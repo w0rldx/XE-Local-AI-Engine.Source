@@ -179,7 +179,7 @@ public sealed class CapacityService : ICapacityService
 
         // Process-count headroom mirrors the supervisor's chat-model cap: companions (embedder, reranker) hold their own slots, so only chat-class keys count.
         // A pooled role and the supervisor's own chat admission skip it: at the cap the supervisor evicts within the class or refuses the launch itself.
-        if (!isPooledRole && !request.SupervisorEnforcesProcessCap && CountChatClassProcesses(running, launchSnapshot) + 1 > _localProviderResolver.MaxLoadedProcesses)
+        if (!isPooledRole && !request.SupervisorEnforcesProcessCap && CountChatClassProcesses(running, launchSnapshot) + 1 > _supervisorOptions.MaxLoadedProcesses)
         {
             return Reject(ReasonRejectProcessCap, modelName, role, runningSnapshot, launchSnapshot);
         }

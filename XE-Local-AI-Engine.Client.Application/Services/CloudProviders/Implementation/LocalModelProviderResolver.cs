@@ -42,18 +42,16 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
 
     /// <summary>
     ///     Builds the resolver over every registered <see cref="ILocalModelProvider" /> (llama-server plus the external
-    ///     OpenAI-compatible provider), the scope factory that reads the per-model map, the default provider and the
-    ///     loaded-process cap.
+    ///     OpenAI-compatible provider), the scope factory that reads the per-model map and the default provider.
     /// </summary>
     /// <remarks>
-    ///     The default provider serves unmapped models and the cap is surfaced to the preview cap check. The injected
+    ///     The default provider serves unmapped models. The injected
     ///     time provider and the optional cache TTL exist for deterministic tests; a non-positive TTL disables the map
     ///     cache entirely.
     /// </remarks>
     public LocalModelProviderResolver(IEnumerable<ILocalModelProvider> providers,
         IServiceScopeFactory scopeFactory,
         string defaultProviderName,
-        int maxLoadedProcesses,
         TimeProvider timeProvider,
         TimeSpan? mapCacheTtl = null)
     {
@@ -91,11 +89,7 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
         _providersByName = byName;
         _defaultProviderName = defaultProviderName;
         DefaultProvider = defaultProvider;
-        MaxLoadedProcesses = maxLoadedProcesses;
     }
-
-    /// <inheritdoc />
-    public int MaxLoadedProcesses { get; }
 
     /// <inheritdoc />
     public ILocalModelProvider DefaultProvider { get; }

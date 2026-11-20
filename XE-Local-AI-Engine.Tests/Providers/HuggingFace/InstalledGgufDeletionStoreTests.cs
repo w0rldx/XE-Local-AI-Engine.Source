@@ -11,7 +11,7 @@ public sealed class InstalledGgufDeletionStoreTests
     [Test]
     public async Task StageRemoveRestore_RoundTripsExactMemberAndRegistryValue()
     {
-        using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var directory = new TempDirectory("xe-hf-test");
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
         var entry = await SeedLegacyAsync(directory.Path, registry);
@@ -35,7 +35,7 @@ public sealed class InstalledGgufDeletionStoreTests
     [Test]
     public async Task Purge_RemovesOnlyOperationOwnedQuarantine()
     {
-        using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var directory = new TempDirectory("xe-hf-test");
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
         var entry = await SeedLegacyAsync(directory.Path, registry);
@@ -58,7 +58,7 @@ public sealed class InstalledGgufDeletionStoreTests
     [Test]
     public async Task Restore_WhenOriginalWasRacedIn_FailsWithoutOverwritingEitherFile()
     {
-        using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var directory = new TempDirectory("xe-hf-test");
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
         var entry = await SeedLegacyAsync(directory.Path, registry);

@@ -28,7 +28,7 @@ public sealed class OverrideBinaryManagerTests
         var serverPath = WriteExecutableStub(dir.Path, GpuStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cpu);
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
@@ -52,7 +52,7 @@ public sealed class OverrideBinaryManagerTests
         var serverPath = WriteExecutableStub(dir.Path, GpuStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cuda);
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
@@ -69,7 +69,7 @@ public sealed class OverrideBinaryManagerTests
         var missing = Path.Combine(dir.Path, "does-not-exist", "llama-server");
         var options = ActiveOverride(missing, GpuVariant.Cpu);
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
@@ -83,7 +83,7 @@ public sealed class OverrideBinaryManagerTests
     {
         using var dir = new TempDir();
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
 
         // Relative path → rejected (no base dir to resolve it against).
@@ -115,7 +115,7 @@ public sealed class OverrideBinaryManagerTests
             | UnixFileMode.OtherRead | UnixFileMode.OtherExecute | UnixFileMode.OtherWrite);
 
         var options = ActiveOverride(serverPath, GpuVariant.Cpu);
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
@@ -132,7 +132,7 @@ public sealed class OverrideBinaryManagerTests
         var serverPath = WriteExecutableStub(dir.Path, SmokeFailStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cpu);
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
@@ -151,7 +151,7 @@ public sealed class OverrideBinaryManagerTests
         var options = ActiveOverride(serverPath, GpuVariant.Cpu);
         var logger = new ExceptionCapturingLogger();
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, logger: logger, overrideOptions: options);
@@ -171,7 +171,7 @@ public sealed class OverrideBinaryManagerTests
         var serverPath = WriteExecutableStub(dir.Path, NoGpuStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cuda);
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
@@ -189,7 +189,7 @@ public sealed class OverrideBinaryManagerTests
         var serverPath = WriteExecutableStub(dir.Path, DeviceCheckWouldFailStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cpu);
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
@@ -211,7 +211,7 @@ public sealed class OverrideBinaryManagerTests
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
         await File.WriteAllTextAsync(serverPath, "pinned-binary");
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null,
@@ -258,13 +258,8 @@ public sealed class OverrideBinaryManagerTests
         return path;
     }
 
-    private sealed class ThrowingHandler : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            throw new InvalidOperationException("No network call expected: an active override must never download.");
-        }
-    }
+    private static ThrowingHttpMessageHandler NoNetworkHandler() =>
+        new(new InvalidOperationException("No network call expected: an active override must never download."));
 
     private sealed class TempDir : IDisposable
     {

@@ -26,7 +26,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_DiskGuard_BlocksBeforeAnyBytes_WhenInsufficient()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         // Free space is well below the file size → the hard guard must throw before any stream opens.
         var probe = Infra.FixedSpace(ModelBytes.Length - 1);
@@ -51,7 +51,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_RejectsPathTraversalFileName_WritesNothingOutsideModelsDir()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>
             throw new InvalidOperationException("A traversal file name must be rejected before any HTTP call."));
@@ -75,7 +75,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_EnsureModel_DefaultsToQ4_K_M_WhenNoQuant()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
@@ -116,7 +116,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_DownloadCommitRejectsCaseOnlyDestinationCollision()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         var collisionPath = dir.FilePath(Infra.FileName.ToUpperInvariant());
         await File.WriteAllTextAsync(collisionPath, "preserve-existing");
@@ -141,7 +141,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_EnsureModel_HonorsQuantOverride()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
@@ -164,7 +164,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_EnsureModel_ResolvesExplicitUnslothDynamicQuant()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
@@ -190,7 +190,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_EnsureModel_BaseQuantFallsBackToUnslothDynamic_WhenNoPlainFile()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
@@ -212,7 +212,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_EnsureModel_BaseQuantPrefersPlainOverDynamic_WhenBothExist()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
@@ -236,7 +236,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_EnsureModel_ExplicitDynamicQuant_DoesNotFallBackToPlain()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>
             throw new InvalidOperationException("No download must occur when the Dynamic quant is absent."));
@@ -260,7 +260,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_Resume_ContinuesFromPartialPart_AcrossRuns()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         const int prefix = 1024;
         // Pre-seed a .part with the first 1024 bytes, simulating an interrupted earlier run, plus the resume record
@@ -294,7 +294,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_Resume_RecoversFrom416_ByRestartingFromStart()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         // A stale .part at/over the real length → the first (ranged) request 416s; the store must drop it and the
         // retry (no Range) must complete the full file from byte 0.
@@ -329,7 +329,7 @@ public sealed class GgufStoreTests
     {
         // ResponseHeadersRead bounds only the headers by the HttpClient timeout, so a CDN stalling mid-body hits the
         // read-idle timeout as a TRANSIENT failure and complete through the retry/resume path rather than hang forever.
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = new HuggingFaceOptions
         {
             ModelsDirectory = dir.Path,
@@ -369,7 +369,7 @@ public sealed class GgufStoreTests
     {
         // HttpClient raises HttpIOException (an IOException) on a premature body end. It escaped the copy loop raw, so
         // the transient retry/resume never ran and a multi-GB download failed where a resume would have finished it.
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = new HuggingFaceOptions
         {
             ModelsDirectory = dir.Path,
@@ -409,7 +409,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_DiskFullMidDownload_SurfacesReason_LeavesPartIntact()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -436,7 +436,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_VerifiesHash_RejectsCorruptDownload()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         // The handler advertises a sha that does NOT match the bytes it streams → integrity failure.
         var wrongSha = Infra.Sha256Upper(Encoding.UTF8.GetBytes("different-content"));
@@ -460,7 +460,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_AcceptsDownload_WhenLfsShaMatches()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         var correctSha = Infra.Sha256Upper(ModelBytes);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes, correctSha));
@@ -484,7 +484,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_VerifiesAgainstDiscoveryDigest_WhenNoResolveOid()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         var correctSha = Infra.Sha256Upper(ModelBytes);
         // Neither the resolve probe nor the byte GET expose an X-Linked-Etag; the discovery digest is the sole integrity
@@ -510,7 +510,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_DiscoveryDigestMismatch_RejectsDownload()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         // The discovery digest does NOT match the streamed bytes, and no OID is on the wire → the fallback verification
         // must reject the download.
@@ -535,7 +535,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_NoShaAnywhere_PersistsComputedCanonicalSha()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         // No OID on the resolve probe, no X-Linked-Etag on the GET, and no discovery digest. The universal acquisition
         // contract still persists the hash computed from the completed local bytes in canonical lowercase form.
@@ -564,7 +564,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_CancelDuringDownload_StopsAndLeavesNoFinal()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var cts = new CancellationTokenSource();
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)
@@ -590,7 +590,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_ReportsProgress_AsPullProgressDto()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
@@ -616,7 +616,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_GatedRepo_UsesBearerToken_WhenPresent()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         const string token = "hf_secret_token_value";
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
@@ -638,7 +638,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_GatedRepo_NoToken_SurfacesUnauthorized()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage(HttpStatusCode.Unauthorized));
         using var http = new HttpClient(handler);
@@ -662,7 +662,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_XetBacked_VerifiesAgainstLinkedEtagProbe_NotCdnEtag()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         var correctSha = Infra.Sha256Upper(ModelBytes);
         // A non-sha 64-hex value standing in for the Xet content-defined-chunking hash the CDN returns as ETag.
@@ -711,7 +711,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_XetProbeShaMismatch_RejectsDownload()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         // The probe advertises a sha that does NOT match the streamed bytes → integrity failure from the probe OID.
         var wrongSha = Infra.Sha256Upper(Encoding.UTF8.GetBytes("different-content"));
@@ -742,7 +742,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_ListInstalled_PopulatesMaxContextTokens_FromLocalHeader()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
 
@@ -774,7 +774,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_ListInstalled_CarriesFamilySizeLabelAndQuant_FromTheHeaderAndRegistry()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
 
@@ -801,7 +801,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_ListInstalled_GarbageFile_YieldsNullContext_StillLists()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
 
@@ -824,7 +824,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_ListInstalled_CachesHeaderRead_AcrossCalls()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
 
@@ -852,7 +852,7 @@ public sealed class GgufStoreTests
     }
 
     // Writes a GGUF file to the temp models dir and registers it so ListInstalledModelsAsync returns it.
-    private static async Task<GgufModelRegistryEntry> SeedInstalledModel(GgufStoreTestInfrastructure.TempModelsDir dir,
+    private static async Task<GgufModelRegistryEntry> SeedInstalledModel(TempDirectory dir,
         GgufModelRegistry registry,
         string fileName,
         byte[] fileBytes)

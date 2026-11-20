@@ -16,12 +16,6 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 public interface ILocalModelProviderResolver
 {
     /// <summary>
-    ///     The hard cap on concurrently-loaded <c>(model, role)</c> processes. The preview-workflow
-    ///     resolver reads this to reject-at-start when a graph's distinct-model count would exceed it.
-    /// </summary>
-    int MaxLoadedProcesses { get; }
-
-    /// <summary>
     ///     The provider that unmapped models route to: <c>llamacpp</c>.
     /// </summary>
     /// <remarks>

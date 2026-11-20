@@ -773,9 +773,6 @@ public sealed class StubNodeRuntimeSettings
         settings.GetToolCapableModelsAsync(Arg.Any<CancellationToken>()).Returns(_toolCapableModels);
         settings.GetHuggingFaceDefaultQuantAsync(Arg.Any<CancellationToken>()).Returns(_huggingFaceDefaultQuant);
         settings.GetHuggingFaceDiskMarginBytesAsync(Arg.Any<CancellationToken>()).Returns(_huggingFaceDiskMarginBytes);
-        settings.GetLlamaMaxLoadedProcessesAsync(Arg.Any<CancellationToken>()).Returns(_llamaMaxLoadedProcesses);
-        settings.GetLlamaIdleTimeToLiveAsync(Arg.Any<CancellationToken>())
-                .Returns(_llamaIdleTimeToLive);
         settings.GetKeepModelWarmEnabledAsync(Arg.Any<CancellationToken>()).Returns(_keepModelWarmEnabled);
         settings.GetKeepModelWarmModelNameAsync(Arg.Any<CancellationToken>()).Returns(_keepModelWarmModelName);
         settings.GetKeepModelWarmIntervalAsync(Arg.Any<CancellationToken>()).Returns(_keepModelWarmInterval);
@@ -942,6 +939,11 @@ public sealed class StubNodeRuntimeSettings
                         ChatRetentionEnabled = stored.ChatRetentionEnabled ?? _chatRetentionEnabled,
                         AgentExecutionLogRetentionEnabled = stored.AgentExecutionLogRetentionEnabled ?? _agentExecutionLogRetentionEnabled,
                         ImageTextEncoderOnGpu = stored.ImageTextEncoderOnGpu ?? _imageTextEncoderOnGpu,
+                        LlamaMaxLoadedProcesses = stored.LlamaMaxLoadedProcesses ?? _llamaMaxLoadedProcesses,
+                        LlamaIdleTimeToLive = stored.LlamaIdleTimeToLiveSeconds is { } llamaTtl ? TimeSpan.FromSeconds(llamaTtl) : _llamaIdleTimeToLive,
+                        ImageMaxLoadedProcesses = stored.ImageMaxLoadedProcesses ?? _imageMaxLoadedProcesses,
+                        ImageIdleTimeToLive = TimeSpan.FromSeconds(stored.ImageIdleTimeToLiveSeconds ?? StoredNodeSettings.DefaultImageIdleTimeToLiveSeconds),
+                        KeepModelWarmInterval = stored.KeepModelWarmIntervalSeconds is { } interval ? TimeSpan.FromSeconds(interval) : _keepModelWarmInterval,
                         ChatRetentionDays = stored.ChatRetentionDays ?? _chatRetentionDays,
                         AgentExecutionLogRetentionDays = stored.AgentExecutionLogRetentionDays ?? _agentExecutionLogRetentionDays,
                         SchedulerHistoryRetentionDays = stored.SchedulerHistoryRetentionDays ?? _schedulerHistoryRetentionDays,

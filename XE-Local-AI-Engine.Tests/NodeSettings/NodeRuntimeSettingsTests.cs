@@ -62,8 +62,8 @@ public sealed class NodeRuntimeSettingsTests
         AssertEx.Equal("stored-model", await sut.GetDefaultModelNameAsync());
         AssertEx.Equal(expected: false, await sut.GetEnableToolsAsync());
         AssertEx.Equal("stored-tool-model", (await sut.GetToolCapableModelsAsync())[0]);
-        AssertEx.Equal(expected: 9, await sut.GetLlamaMaxLoadedProcessesAsync());
-        AssertEx.Equal(TimeSpan.FromSeconds(1200), await sut.GetLlamaIdleTimeToLiveAsync());
+        AssertEx.Equal(expected: 9, sut.GetLlamaMaxLoadedProcesses());
+        AssertEx.Equal(TimeSpan.FromSeconds(1200), sut.GetLlamaIdleTimeToLive());
         AssertEx.Equal(expected: true, await sut.GetKeepModelWarmEnabledAsync());
         AssertEx.Equal("stored-warm-model", await sut.GetKeepModelWarmModelNameAsync());
         AssertEx.Equal(TimeSpan.FromSeconds(240), await sut.GetKeepModelWarmIntervalAsync());
@@ -188,8 +188,8 @@ public sealed class NodeRuntimeSettingsTests
 
         AssertEx.Equal(StoredNodeSettings.DefaultHuggingFaceQuant, await sut.GetHuggingFaceDefaultQuantAsync());
         AssertEx.Equal(StoredNodeSettings.DefaultHuggingFaceDiskMarginBytes, await sut.GetHuggingFaceDiskMarginBytesAsync());
-        AssertEx.Equal(expected: StoredNodeSettings.DefaultLlamaMaxLoadedProcesses, await sut.GetLlamaMaxLoadedProcessesAsync());
-        AssertEx.Equal(TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds), await sut.GetLlamaIdleTimeToLiveAsync());
+        AssertEx.Equal(expected: StoredNodeSettings.DefaultLlamaMaxLoadedProcesses, sut.GetLlamaMaxLoadedProcesses());
+        AssertEx.Equal(TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds), sut.GetLlamaIdleTimeToLive());
         AssertEx.Equal(expected: StoredNodeSettings.DefaultKeepModelWarmEnabled, await sut.GetKeepModelWarmEnabledAsync());
         AssertEx.Null(await sut.GetKeepModelWarmModelNameAsync());
         AssertEx.Equal(TimeSpan.FromSeconds(StoredNodeSettings.DefaultKeepModelWarmIntervalSeconds), await sut.GetKeepModelWarmIntervalAsync());

@@ -36,6 +36,21 @@ public sealed record NodeSettingsEffectiveValues
 
     public required bool ImageTextEncoderOnGpu { get; init; }
 
+    /// <summary>The llama.cpp chat-process cap the supervisor runs with. Not on the wire: the node-settings save applies it.</summary>
+    public required int LlamaMaxLoadedProcesses { get; init; }
+
+    /// <summary>The llama.cpp idle time-to-live the supervisor runs with. Not on the wire: the node-settings save applies it.</summary>
+    public required TimeSpan LlamaIdleTimeToLive { get; init; }
+
+    /// <summary>The sd-server process cap the image supervisor runs with. Not on the wire: the node-settings save applies it.</summary>
+    public required int ImageMaxLoadedProcesses { get; init; }
+
+    /// <summary>The sd-server idle time-to-live the image supervisor runs with. Not on the wire: the node-settings save applies it.</summary>
+    public required TimeSpan ImageIdleTimeToLive { get; init; }
+
+    /// <summary>The keep-model-warm interval, so the save policy compares it with the TTL of the same record. Not on the wire.</summary>
+    public required TimeSpan KeepModelWarmInterval { get; init; }
+
     public required int ChatRetentionDays { get; init; }
 
     public required int AgentExecutionLogRetentionDays { get; init; }

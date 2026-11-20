@@ -169,16 +169,22 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     /// </remarks>
     private async Task<StoredNodeSettings?> ReadUnlockedAsync(CancellationToken cancellationToken)
     {
-        if (!File.Exists(_settingsPath))
-        {
-            return new StoredNodeSettings();
-        }
-
+        // Opened directly rather than probed with File.Exists, which also answers false when the directory cannot be searched: only a
+        // genuinely missing file is a node that never saved.
         try
         {
             await using var fileStream = File.OpenRead(_settingsPath);
-            var settings = await JsonSerializer.DeserializeAsync<StoredNodeSettings>(fileStream, SerializerOptions, cancellationToken);
-            return Normalize(settings ?? new StoredNodeSettings());
+            if (await JsonSerializer.DeserializeAsync<StoredNodeSettings>(fileStream, SerializerOptions, cancellationToken) is not { } settings)
+            {
+                _logger.LogWarning("Node settings hold a null document.");
+                return null;
+            }
+
+            return Normalize(settings);
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return new StoredNodeSettings();
         }
         catch (JsonException exception)
         {

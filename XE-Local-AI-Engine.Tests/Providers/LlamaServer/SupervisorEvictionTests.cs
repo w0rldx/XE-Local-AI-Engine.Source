@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -725,6 +727,538 @@ public sealed class SupervisorEvictionTests
         AssertEx.True(launcher.Handles.Single().WasTreeKilled, "Unload telemetry is report-only and never blocks an eviction.");
     }
 
+    [Test]
+    public async Task LoweredChatCap_TheNextReapUnloadsLruIdleChats_DownToTheCap()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var telemetry = new FakeLlamaServerLoadTelemetry();
+        var options = CapOf(cap: 4, TimeSpan.FromMinutes(15));
+        await using var supervisor = SupervisorFactory.Create(launcher, options: options, timeProvider: time, loadTelemetry: telemetry);
+        foreach (var model in new[] { "chat-a", "chat-b", "chat-c", "chat-d" })
+        {
+            await ServeOneTurnAsync(supervisor, model);
+            time.Advance(TimeSpan.FromMinutes(1));
+        }
+
+        // A node-settings save lowers the cap. Every resident is an in-window interactive chat, which no admission would take.
+        options.MaxLoadedProcesses = 2;
+        await supervisor.ReapIdleOnceAsync();
+
+        var handles = ByLaunchOrder(launcher);
+        AssertEx.True(handles[0].WasTreeKilled && handles[1].WasTreeKilled, "the two least recently used chats are unloaded");
+        AssertEx.False(handles[2].WasTreeKilled || handles[3].WasTreeKilled, "the two most recently used stay loaded at the new cap");
+        AssertEx.Equal(expected: 2, supervisor.CountRunningProcesses());
+        AssertEx.Equal("(chat-a, Chat, LoadedModelCap), (chat-b, Chat, LoadedModelCap)", string.Join(", ", telemetry.Unloads));
+    }
+
+    [Test]
+    public async Task LoweredChatCap_SparesALeasedChat_AndUnloadsTheNextLeastRecentlyUsed()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var options = CapOf(cap: 3, TimeSpan.FromMinutes(15));
+        await using var supervisor = SupervisorFactory.Create(launcher, options: options, timeProvider: time);
+        await supervisor.EnsureRunningAsync("chat-a", ModelRole.Chat, CancellationToken.None);
+        using var lease = AssertEx.NotNull(supervisor.TryAcquireInferenceLease("chat-a", ModelRole.Chat).Lease);
+        time.Advance(TimeSpan.FromMinutes(1));
+        await ServeOneTurnAsync(supervisor, "chat-b");
+        time.Advance(TimeSpan.FromMinutes(1));
+        await ServeOneTurnAsync(supervisor, "chat-c");
+
+        options.MaxLoadedProcesses = 2;
+        await supervisor.ReapIdleOnceAsync();
+
+        var handles = ByLaunchOrder(launcher);
+        AssertEx.False(handles[0].WasTreeKilled, "a chat mid-request is never unloaded, though it is the least recently used");
+        AssertEx.True(handles[1].WasTreeKilled, "the least recently used unleased chat is unloaded instead");
+        AssertEx.False(handles[2].WasTreeKilled);
+    }
+
+    [Test]
+    public async Task LoweredChatCap_ALeasedExcessProcessIsUnloadedOnThePassAfterItsLeaseEnds()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var options = CapOf(cap: 2, TimeSpan.FromMinutes(15));
+        await using var supervisor = SupervisorFactory.Create(launcher, options: options, timeProvider: time);
+        await supervisor.EnsureRunningAsync("chat-a", ModelRole.Chat, CancellationToken.None);
+        var leaseA = AssertEx.NotNull(supervisor.TryAcquireInferenceLease("chat-a", ModelRole.Chat).Lease);
+        await supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None);
+        using var leaseB = AssertEx.NotNull(supervisor.TryAcquireInferenceLease("chat-b", ModelRole.Chat).Lease);
+
+        options.MaxLoadedProcesses = 1;
+        await supervisor.ReapIdleOnceAsync();
+        AssertEx.False(launcher.Handles.Any(static handle => handle.WasTreeKilled), "both chats are mid-request");
+
+        leaseA.Dispose();
+        await supervisor.ReapIdleOnceAsync();
+
+        var handles = ByLaunchOrder(launcher);
+        AssertEx.True(handles[0].WasTreeKilled, "the excess chat is unloaded on the first pass after its lease ends");
+        AssertEx.False(handles[1].WasTreeKilled);
+    }
+
+    [Test]
+    public async Task LoweredChatCap_SparesAChatAwaitingItsFirstLease_AndUnloadsAnother()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var options = CapOf(cap: 2, TimeSpan.FromMinutes(15));
+        await using var supervisor = SupervisorFactory.Create(launcher, options: options, timeProvider: time);
+
+        // chat-a is ready, but the conversation that cold-started it has not taken its lease yet.
+        await supervisor.EnsureRunningAsync("chat-a", ModelRole.Chat, CancellationToken.None);
+        time.Advance(TimeSpan.FromSeconds(10));
+        await ServeOneTurnAsync(supervisor, "chat-b");
+
+        options.MaxLoadedProcesses = 1;
+        await supervisor.ReapIdleOnceAsync();
+
+        var handles = ByLaunchOrder(launcher);
+        AssertEx.False(handles[0].WasTreeKilled, "a chat within its first-lease grace is spared, though it is the least recently used");
+        AssertEx.True(handles[1].WasTreeKilled, "the other chat is unloaded instead");
+    }
+
+    [Test]
+    public async Task LoweredChatCap_SparesAProfilingProcess_AndUnloadsAnother()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var options = CapOf(cap: 2, TimeSpan.FromMinutes(15));
+        await using var supervisor = SupervisorFactory.Create(launcher, options: options, timeProvider: time);
+
+        var profilingKilled = true;
+        var otherKilled = false;
+        await supervisor.RunExclusiveProfilingAsync("model-a",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Explore(),
+            enableMetrics: false,
+            async (_, _) =>
+            {
+                time.Advance(TimeSpan.FromMinutes(1));
+                await ServeOneTurnAsync(supervisor, "model-b");
+                options.MaxLoadedProcesses = 1;
+                await supervisor.ReapIdleOnceAsync();
+                var handles = ByLaunchOrder(launcher);
+                profilingKilled = handles[0].WasTreeKilled;
+                otherKilled = handles[1].WasTreeKilled;
+                return true;
+            },
+            CancellationToken.None);
+
+        AssertEx.False(profilingKilled, "the process a benchmark is measuring is never unloaded, though it is the least recently used");
+        AssertEx.True(otherKilled, "the other chat is unloaded instead");
+    }
+
+    [Test]
+    public async Task LoweredChatCap_SparesTheKeepWarmModel_AndUnloadsAnother()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var options = CapOf(cap: 2, TimeSpan.FromMinutes(15));
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: options,
+            timeProvider: time,
+            pooledLaunchAdmission: new EvictingChatAdmission
+            {
+                Protected = ["KEEP-WARM"]
+            });
+        await ServeOneTurnAsync(supervisor, "keep-warm");
+        time.Advance(TimeSpan.FromMinutes(1));
+        await ServeOneTurnAsync(supervisor, "chat-b");
+
+        options.MaxLoadedProcesses = 1;
+        await supervisor.ReapIdleOnceAsync();
+
+        var handles = ByLaunchOrder(launcher);
+        AssertEx.False(handles[0].WasTreeKilled, "the keep-warm model is never unloaded for the cap, though it is the least recently used");
+        AssertEx.True(handles[1].WasTreeKilled, "the other chat is unloaded instead");
+    }
+
+    [Test]
+    public async Task LoweredChatCap_NeverTouchesACompanion_AndUnloadsAChat()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var options = CapOf(cap: 2, TimeSpan.FromMinutes(15));
+        await using var supervisor = SupervisorFactory.Create(launcher, options: options, timeProvider: time);
+        await supervisor.EnsureRunningAsync("embed-model", ModelRole.Embedding, CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(1));
+        await ServeOneTurnAsync(supervisor, "chat-a");
+        time.Advance(TimeSpan.FromMinutes(1));
+        await ServeOneTurnAsync(supervisor, "chat-b");
+
+        options.MaxLoadedProcesses = 1;
+        await supervisor.ReapIdleOnceAsync();
+
+        var handles = ByLaunchOrder(launcher);
+        AssertEx.False(handles[0].WasTreeKilled, "a companion holds its own slot and is never a chat-cap victim, though it is the least recently used");
+        AssertEx.True(handles[1].WasTreeKilled, "the least recently used chat is unloaded");
+        AssertEx.False(handles[2].WasTreeKilled);
+    }
+
+    [Test]
+    public async Task LoweredChatCap_UnloadsANewerTransientChat_BeforeAnOlderInteractiveOne()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var options = CapOf(cap: 2, TimeSpan.FromMinutes(15));
+        await using var supervisor = SupervisorFactory.Create(launcher, options: options, timeProvider: time);
+        await ServeOneTurnAsync(supervisor, "chat-a");
+        time.Advance(TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("draft-model", ModelRole.Chat, ModelResidencyIntent.Transient, CancellationToken.None);
+
+        // Past the first-lease grace, still inside the transient lifetime: both chats are in-window.
+        time.Advance(TimeSpan.FromSeconds(40));
+        options.MaxLoadedProcesses = 1;
+        await supervisor.ReapIdleOnceAsync();
+
+        var handles = ByLaunchOrder(launcher);
+        AssertEx.False(handles[0].WasTreeKilled, "an in-window interactive chat ranks after a transient one, even as the least recently used");
+        AssertEx.True(handles[1].WasTreeKilled, "the transient chat is unloaded first");
+    }
+
+    [Test]
+    public async Task LoweredChatCap_AnAdmissionEvictsEveryEligibleVictim()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var ttl = TimeSpan.FromMinutes(15);
+        var options = CapOf(cap: 3, ttl);
+        await using var supervisor = SupervisorFactory.Create(launcher, options: options, timeProvider: time);
+        await ServeOneTurnAsync(supervisor, "chat-a");
+        await ServeOneTurnAsync(supervisor, "chat-b");
+        await ServeOneTurnAsync(supervisor, "chat-c");
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+
+        // Two over the new cap: one eviction alone would still leave no room.
+        options.MaxLoadedProcesses = 1;
+        await supervisor.EnsureRunningAsync("chat-d", ModelRole.Chat, CancellationToken.None);
+
+        var handles = ByLaunchOrder(launcher);
+        AssertEx.True(handles.Take(3).All(static handle => handle.WasTreeKilled), "every idle chat is evicted to fit the new cap");
+        AssertEx.Equal(expected: 4, launcher.LaunchCount);
+        AssertEx.Equal(expected: 1, supervisor.CountRunningProcesses());
+    }
+
+    [Test]
+    public async Task LoweredChatCap_PartialEvictionThenRefusal_TearsDownTheDetached()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var ttl = TimeSpan.FromMinutes(15);
+        var options = CapOf(cap: 3, ttl);
+        await using var supervisor = SupervisorFactory.Create(launcher, options: options, timeProvider: time);
+        await ServeOneTurnAsync(supervisor, "chat-a");
+        await supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None);
+        using var lease = AssertEx.NotNull(supervisor.TryAcquireInferenceLease("chat-b", ModelRole.Chat).Lease);
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+        await ServeOneTurnAsync(supervisor, "chat-c");
+
+        // chat-a is idle past its TTL; chat-b is mid-request and chat-c an in-window interactive chat, so neither is an admission victim.
+        options.MaxLoadedProcesses = 1;
+        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("chat-d", ModelRole.Chat, CancellationToken.None));
+
+        AssertEx.Contains(ex.Message, "maximum number of local models", StringComparison.OrdinalIgnoreCase);
+        var handles = ByLaunchOrder(launcher);
+        AssertEx.True(handles[0].WasTreeKilled && handles[0].WasDisposed, "the victim detached before the refusal is still torn down");
+        AssertEx.False(handles[1].WasTreeKilled || handles[2].WasTreeKilled);
+        AssertEx.Equal(expected: 3, launcher.LaunchCount, "the refused model never launched");
+        AssertEx.Equal(expected: 2, supervisor.CountRunningProcesses());
+    }
+
+    [Test]
+    public async Task LoweredChatCap_AnAdmissionCancelledAfterTheFirstDetach_TearsItDown_AndStops()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var ttl = TimeSpan.FromMinutes(15);
+        var options = CapOf(cap: 3, ttl);
+        using var cts = new CancellationTokenSource();
+        var notifier = new CallbackResidencyChangeNotifier();
+        await using var supervisor = SupervisorFactory.Create(launcher, options: options, timeProvider: time, residencyNotifier: notifier);
+        await ServeOneTurnAsync(supervisor, "chat-a");
+        time.Advance(TimeSpan.FromSeconds(1));
+        await ServeOneTurnAsync(supervisor, "chat-b");
+        time.Advance(TimeSpan.FromSeconds(1));
+        await ServeOneTurnAsync(supervisor, "chat-c");
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+        options.MaxLoadedProcesses = 1;
+
+        // The first detach under the admission gate ticks residency; the caller is cancelled right there. Profiling hands the caller's
+        // token to the admission itself, while an ensure admits on the detached spawn's own token.
+        notifier.OnChange = cts.Cancel;
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => supervisor.RunExclusiveProfilingAsync("model-p",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Explore(),
+            enableMetrics: false,
+            static (_, _) => Task.FromResult(true),
+            cts.Token));
+        notifier.OnChange = null;
+
+        var handles = ByLaunchOrder(launcher);
+        AssertEx.True(handles[0].WasTreeKilled && handles[0].WasDisposed, "the victim detached before the cancellation is torn down");
+        AssertEx.False(handles[1].WasTreeKilled || handles[2].WasTreeKilled, "a cancelled admission evicts nothing more");
+        AssertEx.Equal(expected: 3, launcher.LaunchCount, "the cancelled admission never launched");
+    }
+
+    [Test]
+    public async Task LoweredChatCap_AnAdmissionEnteringAfterTheSave_SeesTheNewCap()
+    {
+        var options = CapOf(cap: 2, TimeSpan.FromMinutes(15));
+        var notifier = new CallbackResidencyChangeNotifier();
+        var processes = NewProcessTable();
+        using var reaper = NewReaper(processes, options, TimeProvider.System, notifier);
+        _ = await reaper.AdmitAndAllocatePortAsync(ModelRole.Chat, ModelResidencyIntent.Interactive, CancellationToken.None);
+
+        // An unrelated teardown holds the admission gate: its detach blocks in the residency tick, under the gate, until the test releases it.
+        using var gateHeld = new ManualResetEventSlim();
+        var gateEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        notifier.OnChange = () =>
+        {
+            gateEntered.TrySetResult();
+            gateHeld.Wait();
+        };
+        var other = RegisterProcess(processes, "other", DateTimeOffset.UtcNow);
+        var teardown = Task.Run(() => reaper.RemoveProcessAsync(other.Key, other.Value));
+        try
+        {
+            await gateEntered.Task.WaitAsync(TestBudgets.Contended);
+
+            var admission = reaper.AdmitAndAllocatePortAsync(ModelRole.Chat, ModelResidencyIntent.Interactive, CancellationToken.None);
+            AssertEx.False(admission.IsCompleted, "the admission waits at the gate the teardown holds");
+
+            // The save returns while the admission waits; the admission decides on the cap it reads inside the gate.
+            options.MaxLoadedProcesses = 1;
+            notifier.OnChange = null;
+            gateHeld.Set();
+            await teardown.WaitAsync(TestBudgets.Contended);
+
+            var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => admission.WaitAsync(TestBudgets.Contended));
+            AssertEx.Contains(ex.Message, "maximum number of local models", StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            // Released and drained before the reaper and the event are disposed, whatever failed above.
+            notifier.OnChange = null;
+            gateHeld.Set();
+            await teardown;
+        }
+    }
+
+    [Test]
+    public async Task Dispose_DuringAKeepWarmReadInTheBackgroundPass_CancelsTheRead_AndCompletes()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var admission = new BlockingKeepWarmAdmission();
+
+        // A 2 s TTL paces the background pass at its 1 s floor on the real clock; the test clock stays put, so nothing is reaped for idleness.
+        var options = CapOf(cap: 2, TimeSpan.FromSeconds(2));
+        var supervisor = SupervisorFactory.Create(launcher, options: options, timeProvider: time, pooledLaunchAdmission: admission);
+        Task? disposal = null;
+        try
+        {
+            await ServeOneTurnAsync(supervisor, "chat-a");
+            await ServeOneTurnAsync(supervisor, "chat-b");
+            options.MaxLoadedProcesses = 1;
+
+            var readToken = await admission.ReadStarted.Task.WaitAsync(TestBudgets.Contended);
+            disposal = supervisor.DisposeAsync().AsTask();
+            var completed = true;
+            try
+            {
+                await disposal.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            catch (TimeoutException)
+            {
+                completed = false;
+            }
+
+            AssertEx.True(completed, "disposal must not wait on a keep-warm read that ignores shutdown");
+            AssertEx.True(readToken.IsCancellationRequested, "the keep-warm read runs on the shutdown token");
+        }
+        finally
+        {
+            admission.Unblock();
+            if (disposal is null)
+            {
+                await supervisor.DisposeAsync();
+            }
+            else
+            {
+                await disposal;
+            }
+        }
+    }
+
+    [Test]
+    public async Task TtlReap_ReadsTheIdleClockOnlyWhileHoldingTheClaim()
+    {
+        // A request that starts and ends between an unclaimed expiry check and the claim would leave the reap to unload a process it just
+        // used. With the claim held first, no lease can start, and one that ended before stamped the idle clock first.
+        var ttl = TimeSpan.FromMinutes(15);
+        var started = DateTimeOffset.UtcNow;
+        var processes = NewProcessTable();
+        var process = RegisterProcess(processes, "chat-a", started).Value;
+        bool? claimedAtTheExpiryRead = null;
+        var clock = new CallbackClock(started + ttl + TimeSpan.FromMinutes(1))
+        {
+            // Read 1 is the scan; read 2 is the expiry check under the gate.
+            OnRead = read => claimedAtTheExpiryRead = read == 2 ? process.IsEvicting : claimedAtTheExpiryRead
+        };
+        using var reaper = NewReaper(processes, CapOf(cap: 2, ttl), clock);
+
+        await reaper.ReapIdleOnceAsync();
+
+        AssertEx.Equal(true, claimedAtTheExpiryRead, "the expiry check must run while the eviction claim is held");
+        AssertEx.True(process.Handle is FakeProcessTreeHandle { WasTreeKilled: true }, "the expired process is reaped");
+    }
+
+    [Test]
+    public async Task TtlReap_AProcessFoundFreshUnderTheClaim_GetsTheClaimBack_AndStaysLeasable()
+    {
+        var ttl = TimeSpan.FromMinutes(15);
+        var started = DateTimeOffset.UtcNow;
+        var now = started + ttl + TimeSpan.FromMinutes(1);
+        var processes = NewProcessTable();
+        var process = RegisterProcess(processes, "chat-a", started).Value;
+
+        // A request ended just before the claim: its release stamped the idle clock at the very instant of the expiry check.
+        var clock = new CallbackClock(now)
+        {
+            OnRead = read =>
+            {
+                if (read == 2)
+                {
+                    process.StampLastUsed(now);
+                }
+            }
+        };
+        using var reaper = NewReaper(processes, CapOf(cap: 2, ttl), clock);
+
+        await reaper.ReapIdleOnceAsync();
+
+        AssertEx.False(process.Handle is FakeProcessTreeHandle { WasTreeKilled: true }, "a process used since the scan is kept");
+        AssertEx.False(process.IsEvicting, "the claim is given back, so new requests can lease the process");
+        AssertEx.Equal(expected: 1, processes.Count);
+    }
+
+    private static ConcurrentDictionary<LlamaServerProcessSupervisor.ProcessKey, LlamaServerProcessSupervisor.RunningProcess> NewProcessTable() =>
+        new();
+
+    private static LlamaServerIdleReaper NewReaper(ConcurrentDictionary<LlamaServerProcessSupervisor.ProcessKey, LlamaServerProcessSupervisor.RunningProcess> processes,
+        LlamaServerSupervisorOptions options,
+        TimeProvider timeProvider,
+        CallbackResidencyChangeNotifier? notifier = null) =>
+        new(processes, new LlamaServerPortAllocator(options), new LlamaLayerPlacementReport(), options, timeProvider, NullLogger.Instance, notifier);
+
+    /// <summary>Puts a ready, unleased chat process last used at <paramref name="lastUsed" /> straight into the reaper's table.</summary>
+    private static KeyValuePair<LlamaServerProcessSupervisor.ProcessKey, LlamaServerProcessSupervisor.RunningProcess> RegisterProcess(
+        ConcurrentDictionary<LlamaServerProcessSupervisor.ProcessKey, LlamaServerProcessSupervisor.RunningProcess> processes,
+        string modelName,
+        DateTimeOffset lastUsed)
+    {
+        var key = new LlamaServerProcessSupervisor.ProcessKey(modelName, ModelRole.Chat);
+#pragma warning disable CA2000 // The reaper owns the handle: a teardown disposes it.
+        var process = new LlamaServerProcessSupervisor.RunningProcess(new FakeProcessTreeHandle(4000 + processes.Count),
+            new LlamaServerEndpoint
+            {
+                ModelName = modelName,
+                Role = ModelRole.Chat,
+                BaseAddress = new Uri("http://127.0.0.1:1/")
+            },
+            port: 0,
+            lastUsed);
+#pragma warning restore CA2000
+        processes[key] = process;
+        return new KeyValuePair<LlamaServerProcessSupervisor.ProcessKey, LlamaServerProcessSupervisor.RunningProcess>(key, process);
+    }
+
+    /// <summary>A frozen clock that reports each <see cref="GetUtcNow" /> read, numbered from 1, before it returns.</summary>
+    private sealed class CallbackClock : TimeProvider
+    {
+        private readonly DateTimeOffset _now;
+        private int _reads;
+
+        public CallbackClock(DateTimeOffset now)
+        {
+            _now = now;
+        }
+
+        public Action<int>? OnRead { get; init; }
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            OnRead?.Invoke(Interlocked.Increment(ref _reads));
+            return _now;
+        }
+    }
+
+    [Test]
+    public async Task TtlReap_ALeaseTakenBetweenSelectionAndDetach_KeepsTheProcess()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var telemetry = new FakeLlamaServerLoadTelemetry();
+        var ttl = TimeSpan.FromMinutes(15);
+        ILlamaServerInferenceLease? lease = null;
+        LlamaServerProcessSupervisor? target = null;
+
+        // The pass logs its idle decision after the scan and before it takes the gate: a request leases the process right there. The
+        // lease stamps the idle clock, so the clock moves past the TTL again: only the claim's lease check can keep the process.
+        var logger = new OnInformationLogger<LlamaServerProcessSupervisor>("Evicting idle",
+            () =>
+            {
+                lease = target!.TryAcquireInferenceLease("chat-a", ModelRole.Chat).Lease;
+                time.Advance(ttl + TimeSpan.FromMinutes(1));
+            });
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 2, ttl), timeProvider: time, loadTelemetry: telemetry, logger: logger);
+        target = supervisor;
+        await ServeOneTurnAsync(supervisor, "chat-a");
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+
+        await supervisor.ReapIdleOnceAsync();
+
+        using var held = AssertEx.NotNull(lease, "the request in the window was granted its lease");
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "a process leased after the scan is never torn down under the request");
+        AssertEx.Equal(expected: 1, supervisor.CountRunningProcesses());
+        AssertEx.Empty(telemetry.Unloads, "no unload is recorded for a reap that did not happen");
+    }
+
+    [Test]
+    public async Task TtlReap_ALeaseReleasedInTheWindow_RestartsTheIdleClock()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var telemetry = new FakeLlamaServerLoadTelemetry();
+        var ttl = TimeSpan.FromMinutes(15);
+        LlamaServerProcessSupervisor? target = null;
+
+        // A short request runs and ends between the pass's scan and its claim.
+        var logger = new OnInformationLogger<LlamaServerProcessSupervisor>("Evicting idle",
+            () => AssertEx.NotNull(target!.TryAcquireInferenceLease("chat-a", ModelRole.Chat).Lease).Dispose());
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 2, ttl), timeProvider: time, loadTelemetry: telemetry, logger: logger);
+        target = supervisor;
+        await ServeOneTurnAsync(supervisor, "chat-a");
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+
+        await supervisor.ReapIdleOnceAsync();
+
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "the release restarted the idle clock, so the process is in its window again");
+        AssertEx.Empty(telemetry.Unloads);
+
+        // One full TTL after that release it is reaped as usual, with exactly one recorded unload.
+        time.Advance(ttl);
+        await supervisor.ReapIdleOnceAsync();
+        AssertEx.True(launcher.Handles.Single().WasTreeKilled);
+        AssertEx.Equal("(chat-a, Chat, IdleTimeout)", string.Join(", ", telemetry.Unloads));
+    }
+
+    private static List<FakeProcessTreeHandle> ByLaunchOrder(FakeProcessLauncher launcher) =>
+        [.. launcher.Handles.OrderBy(static handle => handle.ProcessId)];
+
     private static LlamaServerSupervisorOptions CapOf(int cap, TimeSpan ttl, int companionCap = 2)
     {
         return new LlamaServerSupervisorOptions
@@ -734,6 +1268,33 @@ public sealed class SupervisorEvictionTests
             IdleTimeToLive = ttl,
             MaxRestartAttempts = 3
         };
+    }
+
+    /// <summary>A pooled launch admission whose keep-warm read blocks until its token is cancelled or the test unblocks it.</summary>
+    private sealed class BlockingKeepWarmAdmission : ILlamaServerPooledLaunchAdmission
+    {
+        private readonly TaskCompletionSource _unblocked = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<CancellationToken> ReadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void Unblock() =>
+            _unblocked.TrySetResult();
+
+        public Task<IDisposable?> AdmitAsync(string modelName, ModelRole role, CancellationToken ct) =>
+            Task.FromResult<IDisposable?>(null);
+
+        public Task<IDisposable?> AdmitChatAsync(string modelName,
+            bool mayUnloadIdleModels,
+            Func<IReadOnlyCollection<string>, CancellationToken, Task<IdleChatEvictionResult>> evictIdleModel,
+            CancellationToken ct) =>
+            Task.FromResult<IDisposable?>(null);
+
+        public async Task<IReadOnlyCollection<string>> GetProtectedChatModelsAsync(CancellationToken ct)
+        {
+            ReadStarted.TrySetResult(ct);
+            await _unblocked.Task.WaitAsync(ct);
+            return [];
+        }
     }
 
     /// <summary>A chat admission that, for one model, asks the supervisor to unload one idle chat process and records what it took.</summary>
@@ -752,6 +1313,9 @@ public sealed class SupervisorEvictionTests
 
         public Task<IDisposable?> AdmitAsync(string modelName, ModelRole role, CancellationToken ct) =>
             Task.FromResult<IDisposable?>(null);
+
+        public Task<IReadOnlyCollection<string>> GetProtectedChatModelsAsync(CancellationToken ct) =>
+            Task.FromResult(Protected);
 
         public async Task<IDisposable?> AdmitChatAsync(string modelName,
             bool mayUnloadIdleModels,

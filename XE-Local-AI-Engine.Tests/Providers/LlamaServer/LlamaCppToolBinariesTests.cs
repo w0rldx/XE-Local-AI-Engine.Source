@@ -23,7 +23,7 @@ public sealed class LlamaCppToolBinariesTests
     [Test]
     public void TryResolvePerplexity_ReturnsThePath_WhenTheToolIsPresent()
     {
-        using var dir = new TempDirectory();
+        using var dir = new TempDirectory("xe-tool-binaries");
         var expected = Path.Combine(dir.Path, LlamaCppToolBinaries.PerplexityFileName);
         File.WriteAllText(expected, "perplexity");
 
@@ -33,7 +33,7 @@ public sealed class LlamaCppToolBinariesTests
     [Test]
     public void TryResolvePerplexity_ReturnsNull_ForAnAbsentToolOrABlankDirectory()
     {
-        using var dir = new TempDirectory();
+        using var dir = new TempDirectory("xe-tool-binaries");
 
         AssertEx.Null(LlamaCppToolBinaries.FindPerplexity(dir.Path));
         AssertEx.Null(LlamaCppToolBinaries.FindPerplexity(null));
@@ -43,7 +43,7 @@ public sealed class LlamaCppToolBinariesTests
     [Test]
     public void PerplexityExecutablePath_ResolvesBesideTheServer_AndIsNullWithoutIt()
     {
-        using var dir = new TempDirectory();
+        using var dir = new TempDirectory("xe-tool-binaries");
         var server = Path.Combine(dir.Path, "llama-server");
         File.WriteAllText(server, "server");
         var binary = new LlamaBinary
@@ -61,25 +61,5 @@ public sealed class LlamaCppToolBinariesTests
         var expected = Path.Combine(dir.Path, LlamaCppToolBinaries.PerplexityFileName);
         File.WriteAllText(expected, "perplexity");
         AssertEx.Equal(expected, binary.PerplexityExecutablePath);
-    }
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public TempDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-tool-binaries-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try { Directory.Delete(Path, recursive: true); }
-            catch (Exception)
-            {
-                /* Best-effort test cleanup. */
-            }
-        }
     }
 }

@@ -358,12 +358,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public async Task<long> GetHuggingFaceDiskMarginBytesAsync(CancellationToken cancellationToken = default) =>
         ResolveHuggingFaceDiskMarginBytes(await LoadAsync(cancellationToken));
 
-    public async Task<int> GetLlamaMaxLoadedProcessesAsync(CancellationToken cancellationToken = default) =>
-        ResolveLlamaMaxLoadedProcesses(await LoadAsync(cancellationToken));
-
-    public async Task<TimeSpan> GetLlamaIdleTimeToLiveAsync(CancellationToken cancellationToken = default) =>
-        ResolveLlamaIdleTimeToLive(await LoadAsync(cancellationToken));
-
     public async Task<bool> GetKeepModelWarmEnabledAsync(CancellationToken cancellationToken = default) =>
         ResolveKeepModelWarmEnabled(await LoadAsync(cancellationToken));
 
@@ -611,6 +605,11 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
             ChatRetentionEnabled = stored.ChatRetentionEnabled ?? _chatRetentionEnabledSeed,
             AgentExecutionLogRetentionEnabled = stored.AgentExecutionLogRetentionEnabled ?? _agentExecutionLogRetentionEnabledSeed,
             ImageTextEncoderOnGpu = stored.ImageTextEncoderOnGpu ?? _imageTextEncoderOnGpuSeed,
+            LlamaMaxLoadedProcesses = ResolveLlamaMaxLoadedProcesses(stored),
+            LlamaIdleTimeToLive = ResolveLlamaIdleTimeToLive(stored),
+            ImageMaxLoadedProcesses = ResolveImageMaxLoadedProcesses(stored),
+            ImageIdleTimeToLive = ResolveImageIdleTimeToLive(stored),
+            KeepModelWarmInterval = ResolveKeepModelWarmInterval(stored),
             ChatRetentionDays = stored.ChatRetentionDays ?? _chatRetentionDaysSeed,
             AgentExecutionLogRetentionDays = stored.AgentExecutionLogRetentionDays ?? _agentExecutionLogRetentionDaysSeed,
             SchedulerHistoryRetentionDays = stored.SchedulerHistoryRetentionDays ?? _schedulerHistoryRetentionDaysSeed,
@@ -772,7 +771,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         (LoadStored().LlamaRamReservePercent ?? StoredNodeSettings.DefaultLlamaRamReservePercent) / 100d;
 
     public TimeSpan GetImageIdleTimeToLive() =>
-        LoadStored().ImageIdleTimeToLiveSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : _imageIdleTimeToLiveSeed;
+        ResolveImageIdleTimeToLive(LoadStored());
 
     public int GetMaxProviderCallsPerInvocation() =>
         LoadStored().MaxProviderCallsPerInvocation ?? _maxProviderCallsPerInvocationSeed;
@@ -823,7 +822,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         LoadStored().AllowCloudModelSubAgents ?? StoredNodeSettings.DefaultAllowCloudModelSubAgents;
 
     public int GetImageMaxLoadedProcesses() =>
-        LoadStored().ImageMaxLoadedProcesses ?? _imageMaxLoadedProcessesSeed;
+        ResolveImageMaxLoadedProcesses(LoadStored());
 
     public bool GetImageTextEncoderOnGpu() =>
         LoadStored().ImageTextEncoderOnGpu ?? _imageTextEncoderOnGpuSeed;
@@ -911,13 +910,19 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     private static TimeSpan ResolveLlamaIdleTimeToLive(StoredNodeSettings stored) =>
         TimeSpan.FromSeconds(stored.LlamaIdleTimeToLiveSeconds ?? StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds);
 
+    private int ResolveImageMaxLoadedProcesses(StoredNodeSettings stored) =>
+        stored.ImageMaxLoadedProcesses ?? _imageMaxLoadedProcessesSeed;
+
+    private TimeSpan ResolveImageIdleTimeToLive(StoredNodeSettings stored) =>
+        stored.ImageIdleTimeToLiveSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : _imageIdleTimeToLiveSeed;
+
     private TimeSpan ResolveTranscriptionIdleTimeout(StoredNodeSettings stored) =>
         TimeSpan.FromMinutes(stored.TranscriptionIdleTimeoutMinutes ?? _transcriptionIdleTimeoutMinutesSeed);
 
-    private static bool ResolveKeepModelWarmEnabled(StoredNodeSettings stored) =>
+    internal static bool ResolveKeepModelWarmEnabled(StoredNodeSettings stored) =>
         stored.KeepModelWarmEnabled ?? StoredNodeSettings.DefaultKeepModelWarmEnabled;
 
-    private static string? ResolveKeepModelWarmModelName(StoredNodeSettings stored) =>
+    internal static string? ResolveKeepModelWarmModelName(StoredNodeSettings stored) =>
         string.IsNullOrWhiteSpace(stored.KeepModelWarmModelName) ? null : stored.KeepModelWarmModelName;
 
     private static TimeSpan ResolveKeepModelWarmInterval(StoredNodeSettings stored) =>

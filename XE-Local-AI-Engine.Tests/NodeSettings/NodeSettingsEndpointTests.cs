@@ -20,6 +20,8 @@ using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -58,9 +60,10 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task GetAndSaveNodeSettings_ReportTheRestartGateAndTheFieldsChangedSinceStart()
     {
-        // Started on defaults; since then one restart-gated knob and one live knob changed.
+        // Started on defaults; since then one restart-gated knob and two live knobs changed.
         var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
         {
+            ChatCacheReuse = 512,
             LlamaMaxLoadedProcesses = 3,
             AgentHomeRunRetentionDays = 9
         });
@@ -83,7 +86,7 @@ public sealed class NodeSettingsEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
         AssertEx.Equal(string.Join(',', NodeSettingsRestartGate.Fields), string.Join(',', fetched.RestartRequiredFields));
-        AssertEx.Equal("llamaMaxLoadedProcesses", string.Join(',', fetched.PendingRestartFields));
+        AssertEx.Equal("chatCacheReuse", string.Join(',', fetched.PendingRestartFields));
 
         using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
         putRequest.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
@@ -95,7 +98,176 @@ public sealed class NodeSettingsEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
         AssertEx.Equal(string.Join(',', NodeSettingsRestartGate.Fields), string.Join(',', saved.RestartRequiredFields));
-        AssertEx.Equal("kvCacheType,llamaMaxLoadedProcesses", string.Join(',', saved.PendingRestartFields));
+        AssertEx.Equal("chatCacheReuse,kvCacheType", string.Join(',', saved.PendingRestartFields));
+    }
+
+    /// <summary>
+    ///     The save writes the four process limits into the option singletons the supervisors already hold, resolved before the PUT so a
+    ///     lazily built singleton cannot pass for a live apply, and none of the four waits for a restart.
+    /// </summary>
+    [Test]
+    public async Task SavingTheProcessCapsAndTtls_UpdatesTheRunningOptions_AndNeedsNoRestart()
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+        var llamaOptions = factory.Services.GetRequiredService<LlamaServerSupervisorOptions>();
+        var imageOptions = factory.Services.GetRequiredService<StableDiffusionRuntimeOptions>();
+        AssertEx.Equal(StoredNodeSettings.DefaultLlamaMaxLoadedProcesses, llamaOptions.MaxLoadedProcesses);
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
+        {
+            LlamaMaxLoadedProcesses = 5,
+            LlamaIdleTimeToLiveSeconds = 600,
+            ImageMaxLoadedProcesses = 2,
+            ImageIdleTimeToLiveSeconds = 120
+        });
+        using var response = await client.SendAsync(request);
+        var saved = await ReadJsonAsync<NodeSettingsResponse>(response);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.True(ReferenceEquals(llamaOptions, factory.Services.GetRequiredService<LlamaServerSupervisorOptions>()));
+        AssertEx.True(ReferenceEquals(imageOptions, factory.Services.GetRequiredService<StableDiffusionRuntimeOptions>()));
+        AssertEx.Equal(5, llamaOptions.MaxLoadedProcesses);
+        AssertEx.Equal(TimeSpan.FromSeconds(600), llamaOptions.IdleTimeToLive);
+        AssertEx.Equal(2, imageOptions.MaxLoadedProcesses);
+        AssertEx.Equal(TimeSpan.FromSeconds(120), imageOptions.IdleTimeToLive);
+        string[] liveFields = ["llamaMaxLoadedProcesses", "llamaIdleTimeToLiveSeconds", "imageMaxLoadedProcesses", "imageIdleTimeToLiveSeconds"];
+        AssertEx.Empty(saved.RestartRequiredFields.Intersect(liveFields, StringComparer.Ordinal));
+        AssertEx.Empty(saved.PendingRestartFields);
+    }
+
+    /// <summary>A cleared image cap falls back to the configuration seed on the running supervisor, as it would at startup.</summary>
+    [Test]
+    public async Task ClearingTheImageCap_AppliesTheConfigurationSeed()
+    {
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            ImageMaxLoadedProcesses = 1
+        });
+        await using var factory = CreateFactory(nodeSettingsStore,
+            configuration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["StableDiffusionRuntime:MaxLoadedProcesses"] = "3"
+            });
+        using var client = factory.CreateClient();
+        // The host seeded the running node from the stored cap.
+        var imageOptions = factory.Services.GetRequiredService<StableDiffusionRuntimeOptions>();
+        AssertEx.Equal(1, imageOptions.MaxLoadedProcesses);
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest(), nameof(SaveNodeSettingsRequest.ImageMaxLoadedProcesses));
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(3, imageOptions.MaxLoadedProcesses);
+    }
+
+    /// <summary>A cleared TTL is judged as the default it becomes, never as the stored value it replaces.</summary>
+    [Test]
+    public async Task ClearingTheTtl_IsValidatedAgainstTheDefault()
+    {
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            KeepModelWarmEnabled = true,
+            KeepModelWarmModelName = "model-a",
+            KeepModelWarmIntervalSeconds = 1200,
+            LlamaIdleTimeToLiveSeconds = 3600,
+            LlamaMaxLoadedProcesses = 3
+        });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest(), nameof(SaveNodeSettingsRequest.LlamaIdleTimeToLiveSeconds));
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The keep-model-warm interval must be shorter than the llama.cpp idle time-to-live.");
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>A cleared interval is judged as the default (300 s) it becomes, which the 60 s TTL set with it does not outlast.</summary>
+    [Test]
+    public async Task ClearingTheIntervalWhileShorteningTheTtl_IsValidatedAgainstTheDefaultInterval()
+    {
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            KeepModelWarmEnabled = true,
+            KeepModelWarmModelName = "model-a",
+            KeepModelWarmIntervalSeconds = 20,
+            LlamaMaxLoadedProcesses = 3
+        });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
+            {
+                LlamaIdleTimeToLiveSeconds = 60
+            },
+            nameof(SaveNodeSettingsRequest.KeepModelWarmIntervalSeconds));
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The keep-model-warm interval must be shorter than the llama.cpp idle time-to-live.");
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>Clearing the TTL and the interval together is judged as both defaults (300 s against 900 s) and saved, then applied.</summary>
+    [Test]
+    public async Task ClearingTheTtlAndTheInterval_IsValidatedAgainstBothDefaults()
+    {
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            KeepModelWarmEnabled = true,
+            KeepModelWarmModelName = "model-a",
+            KeepModelWarmIntervalSeconds = 1200,
+            LlamaIdleTimeToLiveSeconds = 3600,
+            LlamaMaxLoadedProcesses = 3
+        });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+        var llamaOptions = factory.Services.GetRequiredService<LlamaServerSupervisorOptions>();
+        AssertEx.Equal(TimeSpan.FromSeconds(3600), llamaOptions.IdleTimeToLive);
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest(),
+            nameof(SaveNodeSettingsRequest.LlamaIdleTimeToLiveSeconds),
+            nameof(SaveNodeSettingsRequest.KeepModelWarmIntervalSeconds));
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds), llamaOptions.IdleTimeToLive);
+    }
+
+    /// <summary>The inverse: clearing a restrictive stored cap is judged as the default it becomes, so enabling keep-warm with it is accepted.</summary>
+    [Test]
+    public async Task ClearingARestrictiveCap_IsValidatedAgainstTheDefault()
+    {
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            LlamaMaxLoadedProcesses = 1
+        });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+        // The host seeded the running node from the stored cap.
+        var llamaOptions = factory.Services.GetRequiredService<LlamaServerSupervisorOptions>();
+        AssertEx.Equal(1, llamaOptions.MaxLoadedProcesses);
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
+            {
+                KeepModelWarmEnabled = true,
+                KeepModelWarmModelName = "model-a",
+                KeepModelWarmIntervalSeconds = 300
+            },
+            nameof(SaveNodeSettingsRequest.LlamaMaxLoadedProcesses));
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(StoredNodeSettings.DefaultLlamaMaxLoadedProcesses, llamaOptions.MaxLoadedProcesses);
     }
 
     [Test]
@@ -3069,6 +3241,8 @@ public sealed class NodeSettingsEndpointTests
         var settings = current ?? new StoredNodeSettings();
         var store = Substitute.For<INodeSettingsStore>();
         store.LoadAsync(Arg.Any<CancellationToken>()).Returns(settings);
+        // The synchronous read seeds the host's option singletons at startup, so the running node starts on this record.
+        store.Load(Arg.Any<CancellationToken>()).Returns(settings);
         store.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
              .Returns(call => Task.FromResult(call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(settings)));
         return store;

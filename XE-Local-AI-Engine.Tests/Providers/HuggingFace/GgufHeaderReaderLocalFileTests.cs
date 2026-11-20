@@ -16,7 +16,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_ExtractsContextLength_FromQwen2Header()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("qwen2-0.5b-Q4_K_M.gguf");
         // Qwen2.5-0.5B-Instruct advertises qwen2.context_length = 32768 (a u32 keyed by general.architecture=qwen2).
         var header = new GgufHeaderBytesBuilder()
@@ -35,7 +35,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_ExtractsChatTemplate_AfterTheVocabArray()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("qwen2-0.5b-tooltemplate.gguf");
         // tokenizer.chat_template usually lands AFTER the large tokenizer.ggml.tokens vocab array, so emit a
         // representative array between the early metadata and the template to prove the grow loop reaches it.
@@ -57,7 +57,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_ExtractsChatTemplate_AfterAVocabLargerThanTheFirstProbe()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("qwen35-large-vocab.gguf");
         // A complete architecture block followed by a ~1.5 MiB vocab: the remote path would stop at the tokenizer, the local one must not.
         const string template = "{% for tool in tools %}{{ tool }}{% endfor %}";
@@ -82,7 +82,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_ExtractsExpertCount_AndFlagsMoe()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("qwen3moe-Q4_K_M.gguf");
         // A Mixture-of-Experts GGUF advertises <arch>.expert_count (a u32) — e.g. Qwen3-MoE writes 8 experts.
         var header = new GgufHeaderBytesBuilder()
@@ -102,7 +102,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_Int8Value_IsSigned()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("qwen2-int8.gguf");
         // GGUF value type 1 is INT8: the byte 0xFF is -1, not 255.
         var header = new GgufHeaderBytesBuilder()
@@ -120,7 +120,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_DenseModel_NoExpertCount_IsNotMoe()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("qwen2-0.5b-dense.gguf");
         // A dense model omits the expert_count key entirely.
         var header = new GgufHeaderBytesBuilder()
@@ -139,7 +139,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_ExtractsAttentionKeyValueLength_AndSlidingWindow_Gemma3()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("gemma3-12b-Q4_K_M.gguf");
         // Gemma3 writes explicit attention.key_length / value_length (256) and attention.sliding_window (1024). The 5:1
         // local:global layer pattern (stride 6) is resolved from the per-architecture default when the header omits it.
@@ -167,7 +167,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_ExplicitSlidingWindowPattern_OverridesArchDefault()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("gemma3-custom.gguf");
         var header = new GgufHeaderBytesBuilder()
                      .WithString("general.architecture", "gemma3")
@@ -185,7 +185,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_DenseQwen3_ExplicitKeyValue_NoSlidingWindow()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("qwen35-dense.gguf");
         // Qwen3 is dense (no sliding window) but DOES write explicit key/value length 128 — its head_dim is decoupled
         // from the embedding width, which is exactly why the derived head_dim under-estimates its KV cache.
@@ -209,7 +209,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_HybridQwen35Moe_ExtractsFullAttentionInterval()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("qwen36-35b-a3b.gguf");
         var header = new GgufHeaderBytesBuilder()
                      .WithString("general.architecture", "qwen35moe")
@@ -227,7 +227,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_ExtractsMlaKeyValueLengths_DeepSeek2()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("deepseek-v2-lite-Q4_K_M.gguf");
         // deepseek2 writes BOTH attention.key_length_mla (kv_lora_rank 512 + rope.dimension_count 64 = 576) and
         // attention.value_length_mla (512) beside the ordinary explicit lengths. Both keys present and positive is
@@ -256,7 +256,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_NonMlaModel_LeavesTheMlaLengthsNull()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("qwen35-non-mla.gguf");
         var header = new GgufHeaderBytesBuilder()
                      .WithString("general.architecture", "qwen35")
@@ -286,7 +286,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_NonGgufFile_ReturnsEmpty()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("not-a-model.gguf");
         await File.WriteAllBytesAsync(path, "this is plainly not a GGUF header"u8.ToArray());
         var reader = NewReader();
@@ -300,7 +300,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_EmptyFile_ReturnsEmpty()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("empty.gguf");
         await File.WriteAllBytesAsync(path, []);
         var reader = NewReader();
@@ -313,7 +313,7 @@ public sealed class GgufHeaderReaderLocalFileTests
     [Test]
     public async Task ReadHeaderFromFile_MissingFile_ReturnsEmpty_DoesNotThrow()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("never-downloaded.gguf");
         var reader = NewReader();
 

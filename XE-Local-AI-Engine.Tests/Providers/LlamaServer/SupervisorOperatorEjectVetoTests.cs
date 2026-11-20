@@ -303,6 +303,116 @@ public sealed class SupervisorOperatorEjectVetoTests
     }
 
     [Test]
+    public async Task LoweredChatCap_WithAHeldChatSurvivor_TheNextReapUnloadsTheRegisteredChat()
+    {
+        var launches = 0;
+        var launcher = new FakeProcessLauncher(_ =>
+        {
+            var launch = Interlocked.Increment(ref launches);
+#pragma warning disable CA2000 // Ownership transfers to the supervisor through the launcher fake.
+            return new FakeProcessTreeHandle(7000 + launch, exitOnTreeKill: launch != 1);
+#pragma warning restore CA2000
+        });
+        var probe = new PublicationGatedHealthProbe();
+        var options = new LlamaServerSupervisorOptions
+        {
+            IdleTimeToLive = TimeSpan.FromHours(1),
+            MaxLoadedProcesses = 2,
+            MaxRestartAttempts = 3
+        };
+        await using var supervisor = SupervisorFactory.Create(launcher, healthProbe: probe, options: options);
+        supervisor.VetoedKillExitWait = TimeSpan.Zero;
+        await EjectAParkedBackgroundLoadAsync(supervisor, probe);
+        await supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None);
+        AssertEx.NotNull(supervisor.TryAcquireInferenceLease("chat-b", ModelRole.Chat).Lease).Dispose();
+
+        // One registered chat, but two reserved chat slots: the held survivor still occupies one.
+        options.MaxLoadedProcesses = 1;
+        await supervisor.ReapIdleOnceAsync();
+
+        var handles = launcher.Handles.OrderBy(static handle => handle.ProcessId).ToList();
+        AssertEx.False(handles[0].HasExited, "the survivor is still held");
+        AssertEx.True(handles[1].WasTreeKilled, "the registered chat yields, so the reserved slots meet the lowered cap");
+        AssertEx.Equal(expected: 0, supervisor.CountRunningProcesses());
+    }
+
+    [Test]
+    public async Task LoweredChatCap_AHeldSurvivorExitingDuringTheKeepWarmRead_FreesItsSlot_AndTheLiveChatStays()
+    {
+        var launches = 0;
+        var launcher = new FakeProcessLauncher(_ =>
+        {
+            var launch = Interlocked.Increment(ref launches);
+#pragma warning disable CA2000 // Ownership transfers to the supervisor through the launcher fake.
+            return new FakeProcessTreeHandle(7000 + launch, exitOnTreeKill: launch != 1);
+#pragma warning restore CA2000
+        });
+        var probe = new PublicationGatedHealthProbe();
+        var options = new LlamaServerSupervisorOptions
+        {
+            IdleTimeToLive = TimeSpan.FromHours(1),
+            MaxLoadedProcesses = 2,
+            MaxRestartAttempts = 3
+        };
+
+        // The survivor exits while the reconciliation reads the keep-warm names, outside the gate, after its early over-cap check.
+        var admission = Substitute.For<ILlamaServerPooledLaunchAdmission>();
+        admission.GetProtectedChatModelsAsync(Arg.Any<CancellationToken>())
+                 .Returns(_ =>
+                 {
+                     launcher.Handles.OrderBy(static handle => handle.ProcessId).First().SimulateExit();
+                     return Task.FromResult<IReadOnlyCollection<string>>([]);
+                 });
+        await using var supervisor = SupervisorFactory.Create(launcher, healthProbe: probe, options: options, pooledLaunchAdmission: admission);
+        supervisor.VetoedKillExitWait = TimeSpan.Zero;
+        await EjectAParkedBackgroundLoadAsync(supervisor, probe);
+        await supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None);
+        AssertEx.NotNull(supervisor.TryAcquireInferenceLease("chat-b", ModelRole.Chat).Lease).Dispose();
+
+        options.MaxLoadedProcesses = 1;
+        await supervisor.ReapIdleOnceAsync();
+
+        var handles = launcher.Handles.OrderBy(static handle => handle.ProcessId).ToList();
+        AssertEx.True(handles[0].HasExited && handles[0].WasDisposed, "the exited survivor is reclaimed and its handle disposed");
+        AssertEx.False(handles[1].WasTreeKilled, "with the survivor's slot freed the node meets the cap, so the live chat stays loaded");
+        AssertEx.Equal(expected: 1, supervisor.CountRunningProcesses());
+    }
+
+    [Test]
+    public async Task CompanionAtItsCap_WithAHeldChatSurvivor_ReportsThePlainCapMessage()
+    {
+        var launches = 0;
+        var launcher = new FakeProcessLauncher(_ =>
+        {
+            var launch = Interlocked.Increment(ref launches);
+#pragma warning disable CA2000 // Ownership transfers to the supervisor through the launcher fake.
+            return new FakeProcessTreeHandle(7000 + launch, exitOnTreeKill: launch != 1);
+#pragma warning restore CA2000
+        });
+        var probe = new PublicationGatedHealthProbe();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: probe,
+            options: new LlamaServerSupervisorOptions
+            {
+                IdleTimeToLive = TimeSpan.FromHours(1),
+                MaxLoadedProcesses = 1,
+                MaxLoadedCompanionProcesses = 1,
+                MaxRestartAttempts = 3
+            });
+        supervisor.VetoedKillExitWait = TimeSpan.Zero;
+        await EjectAParkedBackgroundLoadAsync(supervisor, probe);
+        await AssertCappedAsync(supervisor, "The held chat survivor fills the chat slot, and the chat cap message names it.");
+
+        // The only companion slot holds a leased embedder, so the next companion is refused at the companion cap.
+        await supervisor.EnsureRunningAsync("embed-a", ModelRole.Embedding, CancellationToken.None);
+        using var lease = AssertEx.NotNull(supervisor.TryAcquireInferenceLease("embed-a", ModelRole.Embedding).Lease);
+        var capped = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("embed-b", ModelRole.Embedding, CancellationToken.None));
+
+        AssertEx.Contains(capped.Message, "maximum number of local models");
+        AssertEx.False(capped.Message.Contains("still shutting down", StringComparison.Ordinal), "A chat survivor holds no companion slot, so the companion cap message must not blame it.");
+    }
+
+    [Test]
     public async Task FreshEnsure_AfterAnOperatorEjectsAPublishedSpawnStillReleasingItsTicket_DecidesAfresh()
     {
         using var ticketGate = new ManualResetEventSlim(initialState: false);
@@ -725,6 +835,33 @@ public sealed class SupervisorOperatorEjectVetoTests
         var capped = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None), message);
         AssertEx.True(capped.Message.Contains("maximum number", StringComparison.Ordinal), message);
         AssertEx.True(capped.Message.Contains("still shutting down", StringComparison.Ordinal), "The cap message must explain the held slot.");
+    }
+
+    /// <summary>
+    ///     Parks a background load of <see cref="Model" /> at publication, ejects it and lets the veto land, leaving its child held when
+    ///     the launcher's kill does not end it. A load that ends before it parks fails here with its own fault, never as a hang.
+    /// </summary>
+    private static async Task EjectAParkedBackgroundLoadAsync(LlamaServerProcessSupervisor supervisor, PublicationGatedHealthProbe probe)
+    {
+        var background = EnsureBackgroundAsync(supervisor);
+        try
+        {
+            var first = await Task.WhenAny(probe.Entered, background).WaitAsync(TestBudgets.Contended);
+            if (ReferenceEquals(first, background))
+            {
+                await background; // A fault surfaces here as itself.
+            }
+
+            AssertEx.False(background.IsCompleted, "The background load completed before it parked at publication.");
+
+            await OperatorEjectAsync(supervisor);
+        }
+        finally
+        {
+            probe.Release();
+        }
+
+        await AssertEx.ThrowsAsync<OperatorEjectedException>(() => background.WaitAsync(TestBudgets.Contended));
     }
 
     private static Task<LlamaServerEjectOutcome> OperatorEjectAsync(LlamaServerProcessSupervisor supervisor) =>

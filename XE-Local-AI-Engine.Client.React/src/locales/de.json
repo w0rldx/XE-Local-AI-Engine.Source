@@ -6669,12 +6669,12 @@
 					"label": "Parallele Download-Verbindungen"
 				},
 				"imageIdleTimeToLiveSeconds": {
-					"info": "Wie lange in Sekunden ein Bildmodell ungenutzt bleiben darf, bevor sein sd-server-Prozess beendet wird, um VRAM freizugeben. Kürzer gibt den Speicher früher an Chat-Modelle zurück; länger erspart das Warten auf erneutes Laden zwischen Bildern. Standard: 900 (15 Minuten), erlaubt 30 bis 86400. Wirkt nach einem Neustart des Nodes.",
+					"info": "Wie lange in Sekunden ein Bildmodell ungenutzt bleiben darf, bevor sein sd-server-Prozess beendet wird, um VRAM freizugeben. Kürzer gibt den Speicher früher an Chat-Modelle zurück; länger erspart das Warten auf erneutes Laden zwischen Bildern. Standard: 900 (15 Minuten), erlaubt 30 bis 86400. Gilt sofort nach dem Speichern.",
 					"label": "Leerlaufzeit des Bildservers"
 				},
 				"imageMaxLoadedProcesses": {
 					"description": "Wie viele Bildmodelle gleichzeitig geladen bleiben; ein weiteres entlädt das am längsten ungenutzte. Ein Modell, das noch generiert, wird nie entladen; sind alle beschäftigt, schlägt ein neuer Auftrag fehl, bis eines fertig ist.",
-					"info": "Jedes geladene Bildmodell ist ein eigener sd-server-Prozess, der seine Gewichte im VRAM hält, meist neben einem Chat-Modell. Der Standard 1 hält diesen Speicherbedarf klein; erhöhen Sie ihn nur, wenn Sie oft zwischen Bildmodellen wechseln und VRAM übrig haben. Ein Modell, das noch generiert, wird nie entladen; sind alle beschäftigt, schlägt das Laden fehl. Wirkt nach einem Neustart des Nodes.",
+					"info": "Jedes geladene Bildmodell ist ein eigener sd-server-Prozess, der seine Gewichte im VRAM hält, meist neben einem Chat-Modell. Der Standard 1 hält diesen Speicherbedarf klein; erhöhen Sie ihn nur, wenn Sie oft zwischen Bildmodellen wechseln und VRAM übrig haben. Ein Modell, das noch generiert, wird nie entladen; sind alle beschäftigt, schlägt das Laden fehl. Gilt sofort nach dem Speichern; eine niedrigere Grenze entlädt untätige Modelle innerhalb von etwa einer halben Minute.",
 					"label": "Max. geladene Bildserver"
 				},
 				"imageTextEncoderOnGpu": {
@@ -6786,11 +6786,11 @@
 					"label": "Reservierter GPU-Speicher"
 				},
 				"llamaIdleTimeToLiveSeconds": {
-					"info": "Wie lange in Sekunden ein llama-server-Modell ungenutzt bleiben darf, bevor der Node es entlädt, um Speicher freizugeben. Ein Modell, das noch antwortet, wird nie entladen. Kürzer gibt VRAM früher frei; länger erspart Wartezeit beim erneuten Laden, wenn Sie zu einem Modell zurückkehren. Standard: 900 (15 Minuten), erlaubt 30 bis 86400. Wirkt nach einem Neustart des Nodes.",
+					"info": "Wie lange in Sekunden ein llama-server-Modell ungenutzt bleiben darf, bevor der Node es entlädt, um Speicher freizugeben. Ein Modell, das noch antwortet, wird nie entladen. Kürzer gibt VRAM früher frei; länger erspart Wartezeit beim erneuten Laden, wenn Sie zu einem Modell zurückkehren. Standard: 900 (15 Minuten), erlaubt 30 bis 86400. Gilt sofort nach dem Speichern.",
 					"label": "Leerlauf-Prozess-Lebensdauer"
 				},
 				"llamaMaxLoadedProcesses": {
-					"info": "Wie viele Chat-Modelle llama-server gleichzeitig geladen hält. Embedding- und Reranker-Modelle haben eigene Plätze und zählen nicht mit. Ist die Grenze erreicht, wird das am längsten unbenutzte, untätige Chat-Modell entladen; ist keines untätig, schlägt das Laden fehl. Standard: 3. „Modell warmhalten\" braucht mindestens 2. Wirkt nach einem Neustart des Nodes.",
+					"info": "Wie viele Chat-Modelle llama-server gleichzeitig geladen hält. Embedding- und Reranker-Modelle haben eigene Plätze und zählen nicht mit. Ist die Grenze erreicht, wird das am längsten unbenutzte, untätige Chat-Modell entladen; ist keines untätig, schlägt das Laden fehl. Standard: 3. „Modell warmhalten\" braucht mindestens 2. Gilt sofort nach dem Speichern; eine niedrigere Grenze entlädt untätige Modelle innerhalb von etwa einer halben Minute.",
 					"label": "Max. geladene Chat-Modelle"
 				},
 				"llamaRamReservePercent": {

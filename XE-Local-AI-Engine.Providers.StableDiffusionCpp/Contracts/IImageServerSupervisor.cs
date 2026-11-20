@@ -50,15 +50,16 @@ public interface IImageServerSupervisor
     Task<ImageServerEvictAllResult> EvictAllAsync(CancellationToken ct);
 
     /// <summary>
-    ///     Acquires an active-job lease against the resident daemon serving <paramref name="modelName" /> so the idle
+    ///     Acquires an active-job lease against the daemon that returned <paramref name="endpoint" /> so the idle
     ///     reaper and cap-admission LRU evictor keep it alive while a generation is in flight.
     /// </summary>
     /// <remarks>
-    ///     Returns <see langword="false" /> when no live daemon backs the model — the caller then proceeds leaseless and
-    ///     relies on the just-completed <see cref="EnsureRunningAsync" /> plus self-heal. Call immediately after
-    ///     <see cref="EnsureRunningAsync" /> and dispose the lease when the job ends (completed / failed / cancelled).
+    ///     Returns <see langword="false" /> when that daemon is no longer the live, registered one (evicted, exited, being
+    ///     torn down, or replaced under the same model name): the endpoint is stale, so the caller ensures again rather than
+    ///     submit to it. Call immediately after <see cref="EnsureRunningAsync" /> and dispose the lease when the job ends
+    ///     (completed / failed / cancelled).
     /// </remarks>
-    bool TryAcquireJobLease(string modelName, [NotNullWhen(true)] out IImageServerJobLease? lease);
+    bool TryAcquireJobLease(ImageServerEndpoint endpoint, [NotNullWhen(true)] out IImageServerJobLease? lease);
 
     /// <summary>
     ///     Lists the daemons in the process table from memory alone: no gate, no probe. Cheap enough to poll; may briefly

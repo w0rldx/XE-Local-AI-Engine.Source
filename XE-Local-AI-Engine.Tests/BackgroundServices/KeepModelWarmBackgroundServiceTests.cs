@@ -220,6 +220,33 @@ public sealed class KeepModelWarmBackgroundServiceTests
         await harness.Provider.DidNotReceiveWithAnyArgs().WarmModelAsync(default!, default, default);
     }
 
+    /// <summary>The cap is a live setting: the warning names the fix without a restart.</summary>
+    [Test]
+    public async Task RunIterationAsync_WhenActiveProcessCapIsOne_WarnsToRaiseTheCap_WithoutARestart()
+    {
+        var harness = CreateHarness(enabled: true, modelName: "model-a", intervalSeconds: 60, maxLoadedProcesses: 1);
+
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+
+        AssertEx.ContainsSingle(harness.Logger.Entries,
+            static entry => entry.Level == LogLevel.Warning
+                            && entry.Message == "Keep model warm is enabled, but the active llama.cpp process cap is 1; at least two slots are required. Raise the cap to at least 2.");
+        AssertEx.False(harness.Logger.AllText.Contains("restart", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Test]
+    public async Task RunIterationAsync_WhenTheCapIsRaisedLive_StartsWarming()
+    {
+        var harness = CreateHarness(enabled: true, modelName: "model-a", intervalSeconds: 60, maxLoadedProcesses: 1);
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+        await harness.Provider.DidNotReceiveWithAnyArgs().WarmModelAsync(default!, default, default);
+
+        harness.SupervisorOptions.MaxLoadedProcesses = 2;
+        await harness.Service.RunIterationAsync(CancellationToken.None);
+
+        await harness.Provider.Received(1).WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
+    }
+
     [Test]
     public async Task RunIterationAsync_WhenRuntimeMutationIsSuppressed_DoesNotWarmModel()
     {
@@ -258,6 +285,10 @@ public sealed class KeepModelWarmBackgroundServiceTests
         harness.Clock.Advance(TimeSpan.FromSeconds(1));
         await harness.Service.RunIterationAsync(CancellationToken.None);
         await harness.Provider.Received(2).WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
+        AssertEx.ContainsSingle(harness.Logger.Entries,
+            static entry => entry.Level == LogLevel.Warning
+                            && entry.Message == "Keep model warm interval 00:05:00 is too close to the active llama.cpp idle TTL 00:00:30; using 00:00:15 instead.");
+        AssertEx.False(harness.Logger.AllText.Contains("restart", StringComparison.OrdinalIgnoreCase));
     }
 
     [Test]
@@ -365,15 +396,16 @@ public sealed class KeepModelWarmBackgroundServiceTests
         supervisor.IsKeepWarmSuppressed().Returns(_ => harness.RuntimeMutationSuppressed);
         sourceBuildActivity.ActiveBuildId.Returns(_ => harness.SourceBuildActive ? Guid.Parse("58fce305-7417-4a9f-a9c3-058567492496") : (Guid?)null);
 
+        harness.SupervisorOptions = new LlamaServerSupervisorOptions
+        {
+            MaxLoadedProcesses = maxLoadedProcesses,
+            IdleTimeToLive = idleTimeToLive ?? TimeSpan.FromMinutes(15)
+        };
         harness.Service = new KeepModelWarmBackgroundService(runtimeSettings,
             resolver,
             supervisor,
             sourceBuildActivity,
-            new LlamaServerSupervisorOptions
-            {
-                MaxLoadedProcesses = maxLoadedProcesses,
-                IdleTimeToLive = idleTimeToLive ?? TimeSpan.FromMinutes(15)
-            },
+            harness.SupervisorOptions,
             clock,
             logger);
         return harness;
@@ -412,6 +444,8 @@ public sealed class KeepModelWarmBackgroundServiceTests
         public bool RuntimeMutationSuppressed { get; set; }
 
         public KeepModelWarmBackgroundService Service { get; set; }
+
+        public LlamaServerSupervisorOptions SupervisorOptions { get; set; } = null!;
 
         public bool SourceBuildActive { get; set; }
 

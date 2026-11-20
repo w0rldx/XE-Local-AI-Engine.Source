@@ -24,7 +24,7 @@ public sealed class GgufInspectionEndpointTests
     [Test]
     public async Task Inspect_UnregisteredModel_Returns404()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         await using var factory = CreateFactory(dir.FilePath("tiny.gguf"));
         using var client = factory.CreateClient();
 
@@ -37,7 +37,7 @@ public sealed class GgufInspectionEndpointTests
     [Test]
     public async Task Inspect_RegisteredModel_ReturnsMetadataAndBlockGroups()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("tiny.gguf");
         await File.WriteAllBytesAsync(path,
             new GgufHeaderBytesBuilder()

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
-using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +27,7 @@ public sealed class CustomToolStoreTests : IDisposable
     public async Task CreateAsync_RoundTripsAllFields()
     {
         var databasePath = GetDatabasePath("roundtrip.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var configJson = """{"method":"GET","urlTemplate":"https://example.com/weather?q={city}","headers":[],"allowedHosts":["example.com"]}""";
 
         Guid toolId;
@@ -89,7 +88,7 @@ public sealed class CustomToolStoreTests : IDisposable
     public async Task SecretConfigValue_IsCiphertextAtRest()
     {
         var databasePath = GetDatabasePath("secret-config.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var secretValue = "SECRET-TOKEN-" + Guid.NewGuid().ToString("N");
         // A Command tool with a secret-flagged env value — exactly the shape whose plaintext must never touch disk.
         var configJson = $$"""{"executable":"/usr/bin/curl","argsTemplate":["--silent"],"env":[{"name":"API_TOKEN","value":"{{secretValue}}","isSecret":true}]}""";
@@ -134,7 +133,7 @@ public sealed class CustomToolStoreTests : IDisposable
     public async Task UpdateAsync_BumpsVersionOnConfigChange_NotOnEnabledOrAckToggle()
     {
         var databasePath = GetDatabasePath("version-bump.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(1_000);
         var configJson = """{"method":"GET","urlTemplate":"https://example.com/a"}""";
 
@@ -208,7 +207,7 @@ public sealed class CustomToolStoreTests : IDisposable
     public async Task AllowUnattended_RoundTripsThroughAFreshContext_AndTogglingItDoesNotBumpVersion()
     {
         var databasePath = GetDatabasePath("allow-unattended.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(1_000);
         var configJson = """{"executable":"/usr/bin/true","argsTemplate":[]}""";
 
@@ -261,7 +260,7 @@ public sealed class CustomToolStoreTests : IDisposable
     public async Task Name_IsNocaseUnique()
     {
         var databasePath = GetDatabasePath("nocase-unique.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var configJson = """{"method":"GET","urlTemplate":"https://example.com"}""";
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -295,7 +294,7 @@ public sealed class CustomToolStoreTests : IDisposable
     public async Task DeleteAsync_RemovesRow()
     {
         var databasePath = GetDatabasePath("delete.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var configJson = """{"method":"GET","urlTemplate":"https://example.com"}""";
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -327,12 +326,6 @@ public sealed class CustomToolStoreTests : IDisposable
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
     }
-
-    private static byte[] CreateKeyMaterial()
-    {
-        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
-    }
-
     private static bool ContainsSubsequence(byte[] source, byte[] needle)
     {
         if (needle.Length == 0)
@@ -361,55 +354,5 @@ public sealed class CustomToolStoreTests : IDisposable
         }
 
         return false;
-    }
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private long _milliseconds;
-
-        public MutableTimeProvider(long initialMilliseconds)
-        {
-            _milliseconds = initialMilliseconds;
-        }
-
-        public void Advance(long milliseconds)
-        {
-            _milliseconds += milliseconds;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return DateTimeOffset.FromUnixTimeMilliseconds(_milliseconds);
-        }
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
     }
 }

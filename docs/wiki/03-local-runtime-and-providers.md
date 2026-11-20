@@ -60,7 +60,7 @@ Both come from **Microsoft.Extensions.AI (MEAI)**. The provider returns them; th
 
 ### How a provider is chosen at runtime
 
-`Client.Application/Services/CloudProviders/Implementation/LocalModelProviderResolver.cs` collects all registered `ILocalModelProvider`s into a **case-insensitive map keyed by `ProviderName`** (last registration wins, so a host can override a provider). It resolves a `defaultProviderName`, which is `llamacpp`, and carries `MaxLoadedProcesses`.
+`Client.Application/Services/CloudProviders/Implementation/LocalModelProviderResolver.cs` collects all registered `ILocalModelProvider`s into a **case-insensitive map keyed by `ProviderName`** (last registration wins, so a host can override a provider). It resolves a `defaultProviderName`, which is `llamacpp`. The chat-process cap is not on the resolver: `CapacityService` reads it from `LlamaServerSupervisorOptions` per decision.
 
 Other abstraction-project contracts worth knowing: `INodeDataDirectory` (where node data lives), `IProcessVramBudgetProbe` (llama.cpp's process-local VRAM budget, §2.5), `IGgufMetadataReader` (header facts incl. MoE expert count), and the `Gguf/*` family (`IGgufModelStore`, `IGgufModelRegistry`, `IHfTokenStore`, `IHuggingFaceGgufDiscovery`, `GgufModelName`, `GgufFilePath`) which is the shared GGUF vocabulary the llama-server and HuggingFace projects both speak. The same `Gguf/` folder now also holds the **quant-quality single source of truth** — `QuantLadder` (the curated best→worst quant ladder + `Q3_K_M` quality floor) and `GgufQuantQuality` (coarse `GgufQuantTier` classifier) — moved here so both the advisor's memory-fit step-down and the download picker's per-row badge read one table. The advisor side is detailed in [07-model-fit.md](07-model-fit.md).
 
@@ -174,7 +174,7 @@ See [the reference page](reference/03-llama-server-supervisor.md#reuse-path-live
 
 ### Eviction & reaper
 
-`LlamaServerSupervisorOptions` sets the loaded-process caps (chat models, and two separate companion slots for the embedder and reranker; the capacity admission, not these counts, guards memory) and the idle TTLs; a background reaper loop evicts exited or idle processes, and admission evicts the least-recently-used idle process of the same class to free a slot, or an idle chat model to free memory.
+`LlamaServerSupervisorOptions` sets the loaded-process caps (chat models, and two separate companion slots for the embedder and reranker; the capacity admission, not these counts, guards memory) and the idle TTLs; a background reaper loop evicts exited or idle processes, and admission evicts the least-recently-used idle process of the same class to free a slot, or an idle chat model to free memory. The chat cap and the idle TTL are node settings a save applies to the running node; after a lowered cap, the next reap pass unloads chat processes above it.
 
 See [the reference page](reference/03-llama-server-supervisor.md#eviction--reaper) for the rest of this section.
 

@@ -22,8 +22,6 @@ public static class NodeSettingsRestartGate
             ["huggingFaceDefaultQuant"] = static (s, _) => s.HuggingFaceDefaultQuant, // BuildSeededHuggingFaceOptions
             ["huggingFaceDiskMarginBytes"] = static (s, _) => s.HuggingFaceDiskMarginBytes, // BuildSeededHuggingFaceOptions
             ["huggingFaceDownloadConnections"] = static (s, _) => s.HuggingFaceDownloadConnections, // BuildSeededHuggingFaceOptions
-            ["llamaMaxLoadedProcesses"] = static (s, _) => s.LlamaMaxLoadedProcesses, // BuildSeededLlamaServerSupervisorOptions
-            ["llamaIdleTimeToLiveSeconds"] = static (s, _) => s.LlamaIdleTimeToLiveSeconds, // BuildSeededLlamaServerSupervisorOptions
             ["chatCacheReuse"] = static (s, _) => s.ChatCacheReuse, // BuildSeededLlamaServerSupervisorOptions
             ["speculativeMode"] = static (s, _) => s.SpeculativeMode, // BuildSeededLlamaServerSupervisorOptions
             ["speculativeDraftModelName"] = static (s, _) => s.SpeculativeDraftModelName, // BuildSeededLlamaServerSupervisorOptions
@@ -46,8 +44,6 @@ public static class NodeSettingsRestartGate
             ["maxPendingToolCallAgeMinutes"] = static (s, _) => s.MaxPendingToolCallAgeMinutes, // InvocationRunner, ToolApprovalCoordinator, InvocationLifecycleTracker
             ["transcriptionIdleTimeoutMinutes"] = static (s, _) => s.TranscriptionIdleTimeoutMinutes, // WhisperCpp runtime options seed, AddNodeTranscription
             ["transcriptionInferenceTimeoutMinutes"] = static (s, _) => s.TranscriptionInferenceTimeoutMinutes, // WhisperCpp runtime options seed
-            ["imageIdleTimeToLiveSeconds"] = static (s, _) => s.ImageIdleTimeToLiveSeconds, // StableDiffusion runtime options seed, AddNodeImages
-            ["imageMaxLoadedProcesses"] = static (s, _) => s.ImageMaxLoadedProcesses, // StableDiffusion runtime options seed, AddNodeImages
             ["imageTextEncoderOnGpu"] = static (_, e) => e.ImageTextEncoderOnGpu, // StableDiffusion runtime options seed, AddNodeImages
             ["knowledgeScheduledReindexEnabled"] = static (_, e) => e.KnowledgeScheduledReindexEnabled, // KnowledgeBaseOptions seed, AddNodeKnowledgeBase
             ["knowledgeScheduledReindexIntervalMinutes"] = static (s, _) => s.KnowledgeScheduledReindexIntervalMinutes, // KnowledgeBaseOptions seed

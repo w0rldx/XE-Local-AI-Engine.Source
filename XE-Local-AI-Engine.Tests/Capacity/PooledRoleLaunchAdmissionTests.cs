@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.Capacity;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -338,6 +340,42 @@ public sealed class PooledRoleLaunchAdmissionTests
         AssertEx.Empty(host.Created);
         AssertEx.Equal(0, evictions.Calls);
         AssertEx.True(host.Logger.AllText.Contains("Chat admission for model " + ChatModel + " skipped", StringComparison.Ordinal), host.Logger.AllText);
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task GetProtectedChatModels_NamesTheKeepWarmModel_OnlyWhileKeepWarmIsOn(bool keepWarmOn)
+    {
+        using var directory = new TempDirectory();
+        using var store = new NodeSettingsStore(new FakeNodeDataDirectory(directory.Path), NullLogger<NodeSettingsStore>.Instance);
+        await store.UpdateAsync(stored => stored with
+        {
+            KeepModelWarmEnabled = keepWarmOn,
+            KeepModelWarmModelName = "keep/warm-GGUF:Q4_K_M"
+        });
+
+        var protectedModels = await ProtectedChatModelsAsync(store);
+
+        AssertEx.Equal(keepWarmOn ? "keep/warm-GGUF:Q4_K_M" : string.Empty, string.Join(", ", protectedModels));
+    }
+
+    [Test]
+    public async Task GetProtectedChatModels_OnAnUnreadableSettingsFile_Throws_RatherThanReadAsKeepWarmOff()
+    {
+        // The tolerant read turns a corrupt file into defaults, and the default is keep-warm off: a cap pass would then unload the keep-warm model.
+        using var directory = new TempDirectory();
+        await File.WriteAllTextAsync(directory.FilePath("node-settings.json"), "{ \"keepModelWarmEnabled\": tr");
+        using var store = new NodeSettingsStore(new FakeNodeDataDirectory(directory.Path), NullLogger<NodeSettingsStore>.Instance);
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => ProtectedChatModelsAsync(store));
+    }
+
+    private static async Task<IReadOnlyCollection<string>> ProtectedChatModelsAsync(INodeSettingsStore store)
+    {
+        await using var services = new ServiceCollection().AddSingleton(store).BuildServiceProvider();
+        var admission = new PooledRoleLaunchAdmission(services.GetRequiredService<IServiceScopeFactory>(), TimeProvider.System, NullLogger<PooledRoleLaunchAdmission>.Instance);
+        return await admission.GetProtectedChatModelsAsync(CancellationToken.None);
     }
 
     private static CapacityDecision Allow(IDisposable reservation) =>

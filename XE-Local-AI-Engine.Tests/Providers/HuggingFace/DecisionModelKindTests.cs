@@ -112,7 +112,7 @@ public sealed class DecisionModelKindTests
 
     private static async Task<GgufHeaderMetadata> ReadAsync(byte[] header)
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("decision.gguf");
         await File.WriteAllBytesAsync(path, header);
         var options = new HuggingFaceOptions();

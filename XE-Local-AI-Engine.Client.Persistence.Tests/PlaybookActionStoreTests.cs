@@ -27,7 +27,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task AddAsync_ThenReadBackInNewContext_DecryptsBehaviorAndTriggerCondition()
     {
         var databasePath = GetDatabasePath("roundtrip.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid actionId;
         Guid agentId;
@@ -71,7 +71,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task AddAsync_WithNullTriggerCondition_RoundTripsNull()
     {
         var databasePath = GetDatabasePath("null-trigger.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid actionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -99,7 +99,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task ListEnabledByAgentAsync_ReturnsOnlyEnabledOrderedByPriorityThenCreatedAt()
     {
         var databasePath = GetDatabasePath("list-enabled.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid agentId;
         Guid otherAgentId;
@@ -160,7 +160,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task UpdateAsync_WhenBehaviorPriorityOrStateChanges_BumpsVersion()
     {
         var databasePath = GetDatabasePath("version-bump.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(1_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -205,7 +205,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task UpdateAsync_NeverChangesAgentDefinitionId()
     {
         var databasePath = GetDatabasePath("no-reparent.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -231,7 +231,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task UpdateAsync_WhenOnlyScopeOrTriggerConditionChanges_DoesNotBumpVersion()
     {
         var databasePath = GetDatabasePath("no-bump.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(2_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -261,7 +261,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task UpdateAsync_WhenIdMissing_ReturnsNull()
     {
         var databasePath = GetDatabasePath("update-missing.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -277,7 +277,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task DeleteAsync_RemovesRow()
     {
         var databasePath = GetDatabasePath("delete.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -296,7 +296,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task DatabaseFile_AfterAdd_DoesNotContainPlaintextBehaviorOrTriggerCondition()
     {
         var databasePath = GetDatabasePath("ciphertext.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var behavior = "SECRET-BEHAVIOR-" + Guid.NewGuid().ToString("N");
         var trigger = "SECRET-TRIGGER-" + Guid.NewGuid().ToString("N");
 
@@ -324,7 +324,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task GetByIdAsync_WhenBehaviorTampered_FailsAuthenticatedDecryption()
     {
         var databasePath = GetDatabasePath("tamper.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid actionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -350,7 +350,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task AddAsync_WithSourceFeedbackIdsAndConfidence_RoundTripsThroughJson()
     {
         var databasePath = GetDatabasePath("provenance-roundtrip.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var feedbackIds = new[]
         {
             Guid.NewGuid(),
@@ -403,7 +403,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task AddAsync_ManualAction_ReadsBackNullProvenanceAndConfidence()
     {
         var databasePath = GetDatabasePath("manual-null-provenance.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid actionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -432,7 +432,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task AddAsync_WithEvalResult_RoundTripsJsonString()
     {
         var databasePath = GetDatabasePath("eval-result-roundtrip.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         const string EvalJson = """{"passed":true,"goldenCaseCount":3,"regressedCaseCount":0}""";
 
         Guid actionId;
@@ -465,7 +465,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task UpdateAsync_WhenOnlyEvalResultChanges_DoesNotBumpVersion()
     {
         var databasePath = GetDatabasePath("eval-result-no-bump.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(3_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -496,7 +496,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task ListEnabledByAgentAsync_ExcludesSuggestedAction()
     {
         var databasePath = GetDatabasePath("enabled-excludes-suggested.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -532,7 +532,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task AddAsync_WhenCreatedAsEnabled_StampsEnabledAtUtc()
     {
         var databasePath = GetDatabasePath("enabled-at-create.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(5_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -551,7 +551,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task AddAsync_WhenCreatedAsSuggested_LeavesEnabledAtUtcNull()
     {
         var databasePath = GetDatabasePath("enabled-at-suggested-create.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -577,7 +577,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task UpdateAsync_WhenTransitioningSuggestedToEnabled_StampsEnabledAtUtc()
     {
         var databasePath = GetDatabasePath("enabled-at-promote.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(6_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -619,7 +619,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task UpdateAsync_WhenTransitioningDisabledToEnabled_StampsEnabledAtUtc()
     {
         var databasePath = GetDatabasePath("enabled-at-reenable.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(7_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -649,7 +649,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task UpdateAsync_WhenDisablingEnabledAction_PreservesEnabledAtUtc()
     {
         var databasePath = GetDatabasePath("enabled-at-disable-preserve.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(8_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -679,7 +679,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task UpdateAsync_WhenRecordingEvalWhileEnabled_CarriesEnabledAtUtcAndDoesNotBumpVersion()
     {
         var databasePath = GetDatabasePath("enabled-at-eval-carry.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(9_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -711,7 +711,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     public async Task UpdateAsync_WhenEditingSuggestedAction_LeavesEnabledAtUtcNull()
     {
         var databasePath = GetDatabasePath("enabled-at-suggested-edit.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(10_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -814,12 +814,6 @@ public sealed class PlaybookActionStoreTests : IDisposable
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
     }
-
-    private static byte[] CreateKeyMaterial()
-    {
-        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
-    }
-
     private static bool ContainsSubsequence(byte[] source, byte[] needle)
     {
         if (needle.Length == 0)
@@ -848,55 +842,5 @@ public sealed class PlaybookActionStoreTests : IDisposable
         }
 
         return false;
-    }
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private long _milliseconds;
-
-        public MutableTimeProvider(long initialMilliseconds)
-        {
-            _milliseconds = initialMilliseconds;
-        }
-
-        public void Advance(long milliseconds)
-        {
-            _milliseconds += milliseconds;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return DateTimeOffset.FromUnixTimeMilliseconds(_milliseconds);
-        }
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
     }
 }

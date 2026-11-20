@@ -161,7 +161,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
             IKnowledgeDocumentBlobStore blobStore = sourcePathOf is null
                 ? memoryStore
                 : new KnowledgeDocumentBlobStore(repositoryServices!.GetRequiredService<IServiceScopeFactory>(),
-                    new FixedNodeDataDirectory(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(databasePath))!, Path.GetFileNameWithoutExtension(databasePath) + "-data")),
+                    new FakeNodeDataDirectory(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(databasePath))!, Path.GetFileNameWithoutExtension(databasePath) + "-data")),
                     keyHolder,
                     TimeProvider.System);
             var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance);
@@ -412,18 +412,6 @@ internal sealed class RetrievalEvalFixture : IDisposable
         parameter.Value = value;
         _ = command.Parameters.Add(parameter);
     }
-
-    private sealed class FixedNodeDataDirectory : INodeDataDirectory
-    {
-        public FixedNodeDataDirectory(string root)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(root);
-            Root = root;
-        }
-
-        public string Root { get; }
-    }
-
     /// <summary>In-memory blob source: the ingestion service reads the raw document bytes from here by id.</summary>
     private sealed class InMemoryBlobStore : IKnowledgeDocumentBlobStore
     {

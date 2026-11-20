@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
-using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -32,7 +31,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task PlaybookActionMemoryScope_RoundTrips()
     {
         var databasePath = GetDatabasePath("memory-scope.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid actionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -68,7 +67,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task PlaybookActionMemoryScope_WhenUntyped_RoundTripsNull()
     {
         var databasePath = GetDatabasePath("memory-scope-null.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid actionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -102,7 +101,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         AssertEx.Equal(expected: 2, (int)PlaybookActionSource.Extracted);
 
         var databasePath = GetDatabasePath("source-extracted.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid actionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -132,7 +131,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task AgentDefaultTemporaryChat_RoundTrips()
     {
         var databasePath = GetDatabasePath("default-temp-chat.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid definitionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -171,7 +170,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task AgentDefaultTemporaryChat_DefaultsFalse()
     {
         var databasePath = GetDatabasePath("default-temp-chat-default.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -187,7 +186,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task AgentMemoryExtractionEnabled_DefaultsTrue()
     {
         var databasePath = GetDatabasePath("memory-extraction-default.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -205,7 +204,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task AgentMemoryExtractionEnabled_RoundTrips()
     {
         var databasePath = GetDatabasePath("memory-extraction-roundtrip.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid definitionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -245,7 +244,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task AgentExecutionLog_StoresMetadataOnly_NoContent()
     {
         var databasePath = GetDatabasePath("exec-log.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         var agentDefinitionId = Guid.NewGuid();
         var conversationId = Guid.NewGuid();
@@ -314,7 +313,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task AgentExecutionLog_FailedRun_StoresErrorClassTypeNameOnly()
     {
         var databasePath = GetDatabasePath("exec-log-failed.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var agentDefinitionId = Guid.NewGuid();
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -347,7 +346,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task AgentExecutionLog_ListByAgent_ReturnsNewestFirstAndPages()
     {
         var databasePath = GetDatabasePath("exec-log-paging.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var agentDefinitionId = Guid.NewGuid();
         var otherAgentId = Guid.NewGuid();
         var clock = new MutableTimeProvider(1_000);
@@ -400,7 +399,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task DeleteOlderThanAsync_RemovesRowsOlderThanCutoff_KeepsRecent()
     {
         var databasePath = GetDatabasePath("exec-log-sweep.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var agentDefinitionId = Guid.NewGuid();
         var clock = new MutableTimeProvider(1_000);
 
@@ -448,7 +447,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task DeleteOlderThanAsync_WhenNoneExpired_ReturnsZero()
     {
         var databasePath = GetDatabasePath("exec-log-sweep-none.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var agentDefinitionId = Guid.NewGuid();
         var clock = new MutableTimeProvider(5_000);
 
@@ -477,7 +476,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task TrimToMaxPerAgentAsync_KeepsNewestPerAgent_DeletesRest()
     {
         var databasePath = GetDatabasePath("exec-log-trim.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var agentA = Guid.NewGuid();
         var agentB = Guid.NewGuid();
         var clock = new MutableTimeProvider(1_000);
@@ -534,7 +533,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task TrimToMaxPerAgentAsync_WhenCapNonPositive_DeletesNothing()
     {
         var databasePath = GetDatabasePath("exec-log-trim-zero.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var agentDefinitionId = Guid.NewGuid();
         var clock = new MutableTimeProvider(1_000);
 
@@ -564,7 +563,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task RunEnvelopeRow_IsExcludedFromAdaptiveMemoryDiagnosticsView()
     {
         var databasePath = GetDatabasePath("run-envelope-excluded.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var agentId = Guid.NewGuid();
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -602,7 +601,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task DeleteOlderThanAsync_PrunesRunEnvelopeRowsByTable()
     {
         var databasePath = GetDatabasePath("run-envelope-retention.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var agentId = Guid.NewGuid();
         var clock = new MutableTimeProvider(1_000);
 
@@ -635,7 +634,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task RunEnvelopeUniqueIndex_RejectsDuplicateMessageIdAtDatabaseLevel()
     {
         var databasePath = GetDatabasePath("run-envelope-unique-index.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var messageId = Guid.NewGuid();
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -671,7 +670,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task ListRunEnvelopesAsync_FiltersByConversation_AndExcludesMemoryRows()
     {
         var databasePath = GetDatabasePath("run-envelope-list.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var conversationA = Guid.NewGuid();
         var conversationB = Guid.NewGuid();
 
@@ -708,7 +707,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     public async Task ConversationFootprintPurge_DeletesEnvelopeAndMemoryExecutionLogs()
     {
         var databasePath = GetDatabasePath("run-envelope-purge.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var purgedConversation = Guid.NewGuid();
         var keptConversation = Guid.NewGuid();
 
@@ -813,60 +812,5 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
-    }
-
-    private static byte[] CreateKeyMaterial()
-    {
-        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
-    }
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private long _milliseconds;
-
-        public MutableTimeProvider(long initialMilliseconds)
-        {
-            _milliseconds = initialMilliseconds;
-        }
-
-        public void Advance(long milliseconds)
-        {
-            _milliseconds += milliseconds;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return DateTimeOffset.FromUnixTimeMilliseconds(_milliseconds);
-        }
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
     }
 }

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
-using System.Security.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -34,7 +33,7 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
     public async Task SummarizeTokenUsageAsync_GroupsByModelAndDay_SumsTokensNewestDayFirst()
     {
         var databasePath = GetDatabasePath("usage-summary-group.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -86,7 +85,7 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
     public async Task SummarizeTokenUsageAsync_GroupsByProvider_SplittingSameModelAndDay()
     {
         var databasePath = GetDatabasePath("usage-summary-provider.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -136,7 +135,7 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
     public async Task SummarizeTokenUsageAsync_ExcludesMemoryDiagnosticsRows()
     {
         var databasePath = GetDatabasePath("usage-summary-exclude-memory.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -172,7 +171,7 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
     {
         // A run stopped before the model reported usage leaves its token columns NULL; the bucket says how many runs its sums cover.
         var databasePath = GetDatabasePath("usage-summary-reported.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -196,7 +195,7 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
     public async Task SummarizeTokenUsageAsync_EmptyRange_ReturnsEmpty()
     {
         var databasePath = GetDatabasePath("usage-summary-empty.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -215,7 +214,7 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
     public async Task SummarizeTokenUsageAsync_HonoursHalfOpenRange()
     {
         var databasePath = GetDatabasePath("usage-summary-range.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -281,40 +280,5 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
-    }
-
-    private static byte[] CreateKeyMaterial()
-    {
-        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
     }
 }

@@ -705,7 +705,7 @@ public sealed class DockerSandboxRealDaemonTests
         // real daemon rather than the fake because the property under test is the daemon-side label filter, which the
         // fake can only imitate.
         var options = await RequireDaemonAsync();
-        using var workspace = new TemporaryDirectory();
+        using var workspace = new TempDirectory("xe-docker-tests");
         var workspaceRoot = Path.Combine(workspace.Path, "workspace");
         Directory.CreateDirectory(workspaceRoot);
 
@@ -770,8 +770,8 @@ public sealed class DockerSandboxRealDaemonTests
     public async Task RealDaemon_StartupSweep_LeavesAnotherInstallationsContainerAlone()
     {
         var options = await RequireDaemonAsync();
-        using var theirWorkspace = new TemporaryDirectory();
-        using var ourWorkspace = new TemporaryDirectory();
+        using var theirWorkspace = new TempDirectory("xe-docker-tests");
+        using var ourWorkspace = new TempDirectory("xe-docker-tests");
         var workspaceRoot = Path.Combine(theirWorkspace.Path, "workspace");
         Directory.CreateDirectory(workspaceRoot);
 
@@ -838,7 +838,7 @@ public sealed class DockerSandboxRealDaemonTests
             UserId = 1000,
             GroupId = 1000
         };
-        using var workspace = new TemporaryDirectory();
+        using var workspace = new TempDirectory("xe-docker-tests");
         var workspaceRoot = Path.Combine(workspace.Path, "workspace");
         Directory.CreateDirectory(workspaceRoot);
 
@@ -1262,7 +1262,7 @@ public sealed class DockerSandboxRealDaemonTests
     /// <summary>A provider plus one verified container plus its host workspace, torn down together.</summary>
     private sealed class ContainerFixture : IAsyncDisposable
     {
-        private readonly TemporaryDirectory _workspace;
+        private readonly TempDirectory _workspace;
 
         private ContainerFixture(DockerSandboxRuntimeProvider provider,
             SandboxHandle handle,
@@ -1270,7 +1270,7 @@ public sealed class DockerSandboxRealDaemonTests
             string containerId,
             DockerContainerSpecification specification,
             bool daemonIsRootless,
-            TemporaryDirectory workspace)
+            TempDirectory workspace)
         {
             Provider = provider;
             Handle = handle;
@@ -1311,7 +1311,7 @@ public sealed class DockerSandboxRealDaemonTests
             SandboxNetworkPolicy networkPolicy = SandboxNetworkPolicy.None,
             bool withRuntimeMounts = false)
         {
-            var workspace = new TemporaryDirectory();
+            var workspace = new TempDirectory("xe-docker-tests");
             var workspaceRoot = Path.Combine(workspace.Path, "workspace");
             Directory.CreateDirectory(workspaceRoot);
 

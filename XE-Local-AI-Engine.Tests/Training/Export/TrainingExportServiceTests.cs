@@ -16,7 +16,6 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Tests.Capacity;
 using XE_Local_AI_Engine.Tests.Testing;
-using XE_Local_AI_Engine.Tests.Training.Runs;
 
 /// <summary>
 ///     The export pipeline against scripted subprocesses: a failure lands ON the artifact and spares the run, a missing

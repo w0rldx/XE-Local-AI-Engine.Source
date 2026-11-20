@@ -91,7 +91,7 @@ public sealed class FfmpegAudioTranscoderTests
     [RunOn(OS.Linux)]
     public async Task ToWav16kMono_WhenCancelled_KillsTheChildAndReportsTheCancellation()
     {
-        using var directory = new TempDir();
+        using var directory = new TempDirectory("xe-ffmpeg");
         var pidPath = Path.Combine(directory.Path, "child.pid");
         var destination = Path.Combine(directory.Path, "out.wav");
 
@@ -148,7 +148,7 @@ public sealed class FfmpegAudioTranscoderTests
     [RunOn(OS.Linux)]
     public async Task ToWav16kMono_WhenTheConverterExitsCleanly_ReturnsTheDestinationItWrote()
     {
-        using var directory = new TempDir();
+        using var directory = new TempDirectory("xe-ffmpeg");
         var destination = Path.Combine(directory.Path, "out.wav");
         var executable = WriteScript(directory, "printf 'RIFF' > \"${@: -1}\"");
 
@@ -174,7 +174,7 @@ public sealed class FfmpegAudioTranscoderTests
         }
     }
 
-    private static string WriteScript(TempDir directory, params string[] lines)
+    private static string WriteScript(TempDirectory directory, params string[] lines)
     {
         var path = Path.Combine(directory.Path, $"converter-{Guid.NewGuid():N}.sh");
         File.WriteAllText(path, string.Join('\n', ["#!/bin/bash", .. lines, string.Empty]));
@@ -184,28 +184,5 @@ public sealed class FfmpegAudioTranscoderTests
         }
 
         return path;
-    }
-
-    private sealed class TempDir : IDisposable
-    {
-        public TempDir() =>
-            _ = Directory.CreateDirectory(Path);
-
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"xe-ffmpeg-{Guid.NewGuid():N}");
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // A scratch directory that outlives the run is litter, never a failure.
-            }
-        }
     }
 }

@@ -163,14 +163,10 @@ internal static class AddNodeModelRuntimeExtensions
         // The provider resolver maps ModelName to ProviderName over the persisted model_provider_map, then ProviderName to an
         // ILocalModelProvider. Singleton, reading the scoped map store per lookup; unmapped names default to "llamacpp" (see docs/wiki/01-architecture-overview.md).
         builder.Services.AddSingleton<ILocalModelProviderResolver>(sp =>
-        {
-            var supervisorOptions = sp.GetRequiredService<LlamaServerSupervisorOptions>();
-            return new LocalModelProviderResolver(sp.GetServices<ILocalModelProvider>(),
+            new LocalModelProviderResolver(sp.GetServices<ILocalModelProvider>(),
                 sp.GetRequiredService<IServiceScopeFactory>(),
                 LlamaServerProviderConstants.ProviderName,
-                supervisorOptions.MaxLoadedProcesses,
-                sp.GetRequiredService<TimeProvider>());
-        });
+                sp.GetRequiredService<TimeProvider>()));
 
         // The local-branch router is its own singleton so its (provider, model) chat-client cache can be invalidated out-of-band: the
         // runtime-update endpoint clears it after a variant switch, or a cached deferred client keeps dialling the now-gone endpoint.
@@ -308,13 +304,14 @@ internal static class AddNodeModelRuntimeExtensions
     }
 
     /// <summary>
-    ///     Builds the <see cref="LlamaServerSupervisorOptions" /> the process supervisor and the resolver's loaded-cap
-    ///     consume, with the migrated cap/TTL seeded from <see cref="INodeRuntimeSettings" /> (stored &gt; seed &gt; default).
+    ///     Builds the <see cref="LlamaServerSupervisorOptions" /> the process supervisor and capacity admission consume,
+    ///     with the migrated cap/TTL seeded from <see cref="INodeRuntimeSettings" /> (stored &gt; seed &gt; default).
     /// </summary>
     /// <remarks>
     ///     The non-migrated port-range and restart fields keep their defaults. The supervisor reads these as plain
     ///     value-object fields on its hot reaper and spawn loop, so the one-time read here keeps that loop allocation-
-    ///     and await-free; an operator cap or TTL edit applies on the next process restart.
+    ///     and await-free. The cap and TTL are written again by the node-settings save, from the record it committed; every
+    ///     other field here applies on the next node restart.
     /// </remarks>
     internal static LlamaServerSupervisorOptions BuildSeededLlamaServerSupervisorOptions(IServiceProvider serviceProvider)
     {

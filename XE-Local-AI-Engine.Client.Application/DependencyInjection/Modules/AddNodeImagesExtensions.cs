@@ -37,7 +37,7 @@ internal static class AddNodeImagesExtensions
         builder.Services.AddSingleton(sp =>
         {
             // The idle TTL, process cap and text-encoder placement are node settings (stored > this section's value > default), seeded
-            // here because the provider cannot read them. Read once, so an edit applies on the next node restart.
+            // here because the provider cannot read them. The node-settings save writes the TTL and cap again; the text encoder waits for a restart.
             var runtimeSettings = sp.GetRequiredService<INodeRuntimeSettings>();
             var options = BindStableDiffusionRuntimeOptions(configuration);
             options.IdleTimeToLive = runtimeSettings.GetImageIdleTimeToLive();

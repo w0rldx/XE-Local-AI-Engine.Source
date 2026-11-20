@@ -232,7 +232,7 @@ public sealed class LocalModelProxyForwarderTests
     {
         // The child exited/refused after provisioning — an HttpRequestException before any response bytes. This must map
         // to the same retryable 503 as an at-capacity spawn, not fall through to a generic 500.
-        using var upstream = new ThrowingHandler();
+        using var upstream = new ThrowingHttpMessageHandler(new HttpRequestException("connection refused"));
         var forwarder = CreateForwarder(out _, out _, upstream);
         var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
 
@@ -743,7 +743,7 @@ public sealed class LocalModelProxyForwarderTests
     /// <summary>Drives one route into a failure the proxy answers itself, and parses what it wrote.</summary>
     private static async Task<FailureResult> RunFailureAsync(string route, string failure)
     {
-        HttpMessageHandler upstream = failure == "connection-refused" ? new ThrowingHandler() : Idle();
+        HttpMessageHandler upstream = failure == "connection-refused" ? new ThrowingHttpMessageHandler(new HttpRequestException("connection refused")) : Idle();
         var forwarder = CreateForwarder(out _, out var supervisor, upstream);
         if (failure == "cannot-provision")
         {
@@ -904,15 +904,6 @@ public sealed class LocalModelProxyForwarderTests
             response.Content.Headers.ContentType = new MediaTypeHeaderValue(_contentType);
             response.Headers.RetryAfter = RetryAfter;
             return response;
-        }
-    }
-
-    /// <summary>Stands in for a child that exited or refused the connection: the send itself fails.</summary>
-    private sealed class ThrowingHandler : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            return Task.FromException<HttpResponseMessage>(new HttpRequestException("connection refused"));
         }
     }
 

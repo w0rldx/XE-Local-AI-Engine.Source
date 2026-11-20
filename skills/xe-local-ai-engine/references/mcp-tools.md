@@ -88,6 +88,11 @@ the 1.x line, and a breaking change waits for the next major version. A `preview
 `model_lab_warm_idle_seconds` (0–3600, default 300) is how long an idle Model Lab worker keeps its
 checkpoint loaded; 0 turns warming off.
 
+`llama_max_loaded_processes` and `llama_idle_time_to_live_seconds` apply to the running node as soon as the update is
+saved; no restart is needed. A lower cap has a side effect: the next reap pass (passes run at most 30 seconds apart)
+unloads idle chat models above it, least recently used first, sparing a model in use, one just loaded and the keep-warm model. A run
+between turns holds no model, so its next turn can then be refused with "cap reached".
+
 `auto_effort_fast_model_name` is refused unless it names an installed node-local llama.cpp model and
 the node keeps at least two loaded-process slots: it is the model an `auto` reasoning-effort turn may
 be moved onto, and that turn's context was admitted against a node-local model.

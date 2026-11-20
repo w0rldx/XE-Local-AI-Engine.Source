@@ -20,7 +20,7 @@ public sealed class GgufRegistryTests
     [Test]
     public async Task GgufRegistry_ListsPresentModels_AndResolvesPathByModelName()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
 
@@ -55,7 +55,7 @@ public sealed class GgufRegistryTests
     [Test]
     public async Task GgufRegistry_SelfHeals_OnCorruptManifest_ByRescan()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
 
         // A .gguf file is on disk but the manifest is corrupt — a rescan must recover it without throwing.
@@ -72,7 +72,7 @@ public sealed class GgufRegistryTests
     [Test]
     public async Task GgufRegistry_MissingManifest_RescansDirectory_NoThrow()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
 
         await File.WriteAllTextAsync(dir.FilePath("Other-Model-Q5_K_M.gguf"), "fake-gguf");
@@ -89,7 +89,7 @@ public sealed class GgufRegistryTests
     [Test]
     public async Task GgufRegistry_DeterministicUdFilenameWithoutSidecar_FailsClosed()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         await File.WriteAllTextAsync(dir.FilePath("demo-UD-Q4_K_XL-0123456789abcdef01234567.gguf"), "untrusted");
 
@@ -102,7 +102,7 @@ public sealed class GgufRegistryTests
     [Test]
     public async Task GgufRegistry_Remove_DropsEntry_Idempotent()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
 
@@ -130,7 +130,7 @@ public sealed class GgufRegistryTests
     [Test]
     public async Task GgufRegistry_DropsEntry_WhenBackingFileDeleted()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
 
@@ -159,7 +159,7 @@ public sealed class GgufRegistryTests
     {
         // First-download double-registration: the .gguf lands with NO manifest, so the upsert's load rescans and adds a
         // filename-alias entry; the canonical upsert must collapse it, not append a second entry for the one file.
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
 
@@ -182,7 +182,7 @@ public sealed class GgufRegistryTests
     {
         // An already-affected user's manifest carries two entries (legacy alias + canonical) for one file. Listing must
         // collapse them to the canonical entry without touching the file (migration for affected installs).
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         var filePath = dir.FilePath(Infra.FileName);
         await File.WriteAllTextAsync(filePath, "fake-gguf");
@@ -212,7 +212,7 @@ public sealed class GgufRegistryTests
     // leave the complete legacy alias set untouched; the application deletion coordinator owns the actual mutation.
     private static async Task AssertDeleteRemovesBothEntriesAsync(bool deleteThroughAlias)
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         var filePath = dir.FilePath(Infra.FileName);
         await File.WriteAllTextAsync(filePath, "fake-gguf");

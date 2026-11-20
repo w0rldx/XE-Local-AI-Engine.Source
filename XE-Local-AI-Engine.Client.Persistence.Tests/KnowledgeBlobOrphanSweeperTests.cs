@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
-using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     The startup sweep reclaiming knowledge blobs whose <c>knowledge_documents</c> row is gone, as left by a failed
@@ -304,7 +303,7 @@ public sealed class KnowledgeBlobOrphanSweeperTests : IDisposable
     private KnowledgeDocumentBlobStore CreateStore(ServiceProvider provider, TimeProvider? timeProvider = null)
     {
         return new KnowledgeDocumentBlobStore(provider.GetRequiredService<IServiceScopeFactory>(),
-            new FixedNodeDataDirectory(DataDirectory()),
+            new FakeNodeDataDirectory(DataDirectory()),
             _keyHolder,
             timeProvider ?? TimeProvider.System);
     }
@@ -381,17 +380,6 @@ public sealed class KnowledgeBlobOrphanSweeperTests : IDisposable
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
     }
-
-    private sealed class FixedNodeDataDirectory : INodeDataDirectory
-    {
-        public FixedNodeDataDirectory(string root)
-        {
-            Root = root;
-        }
-
-        public string Root { get; }
-    }
-
     // Wraps the real store and fails the delete of one nominated document, reproducing a file the OS refuses to remove
     // without faking the enumeration or the row probe around it.
     private sealed class ThrowingDeleteBlobStore : IKnowledgeDocumentBlobStore

@@ -19,7 +19,10 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class NodeSettingsAdministrationServiceTests
@@ -39,7 +42,7 @@ public sealed class NodeSettingsAdministrationServiceTests
             ToolApprovalPolicy = new NodeToolApprovalPolicySettings()
         });
         var approvalPolicy = store.Current.ToolApprovalPolicy;
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -68,7 +71,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     public async Task ApplyAgenticPatch_ModelLabWarmIdleSeconds_StoresZero_AndRefusesOutOfRangeWithTheRange()
     {
         var store = new FakeNodeSettingsStore(new StoredNodeSettings());
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var off = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -115,7 +118,7 @@ public sealed class NodeSettingsAdministrationServiceTests
                     ToolCapableModels = [.. latest.ToolCapableModels ?? [], "registered-while-the-patch-validated"]
                 };
             });
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -158,7 +161,7 @@ public sealed class NodeSettingsAdministrationServiceTests
                     ToolCapableModels = [.. latest.ToolCapableModels ?? [], "registered-while-the-save-validated"]
                 };
             });
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         // Request-shaped: only ChatCacheReuse is supplied, every other field comes from the record this is applied to.
         var result = await service.SaveTrustedMergedAsync(static record => new StoredNodeSettings
@@ -196,7 +199,7 @@ public sealed class NodeSettingsAdministrationServiceTests
             {
                 ToolCapableModels = [.. latest.ToolCapableModels ?? [], $"sibling-{++siblingWrites}"]
             });
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -240,7 +243,7 @@ public sealed class NodeSettingsAdministrationServiceTests
                     KeepModelWarmModelName = null
                 };
             });
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -283,7 +286,7 @@ public sealed class NodeSettingsAdministrationServiceTests
                 };
             });
         var cloudResolver = Substitute.For<ICloudModelResolver>();
-        var service = CreateService(store, cloudResolver: cloudResolver);
+        using var service = CreateService(store, cloudResolver: cloudResolver);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -310,7 +313,7 @@ public sealed class NodeSettingsAdministrationServiceTests
              {
                  ToolCapableModels = ["normalized-by-the-store"]
              }));
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -352,7 +355,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult("external"));
-        var service = CreateService(store, localModelProviderResolver: providerResolver);
+        using var service = CreateService(store, localModelProviderResolver: providerResolver);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -371,7 +374,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var store = NewSubstituteStore(new StoredNodeSettings());
         var trustResolver = Substitute.For<IModelTrustResolver>();
         trustResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(ModelTrustLocality.Cloud));
-        var service = CreateService(store, modelTrustResolver: trustResolver);
+        using var service = CreateService(store, modelTrustResolver: trustResolver);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -391,7 +394,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     {
         // Installed: the nomic and bge-m3 embedders and a chat model. A pin naming a missing embedder or a non-embedding model is refused.
         var store = new FakeNodeSettingsStore(new StoredNodeSettings());
-        var service = CreateService(store,
+        using var service = CreateService(store,
             localModelProviderResolver: EmbeddingProviderResolver("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", "CompendiumLabs/bge-m3-gguf:Q8_0", "unsloth/Qwen3-8B-GGUF:Q4_K_M"));
 
         var result = await service.SaveTrustedMergedAsync(current => current with
@@ -419,7 +422,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         {
             KnowledgeEmbeddingModelName = "nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0"
         });
-        var service = CreateService(store, localModelProviderResolver: EmbeddingProviderResolver());
+        using var service = CreateService(store, localModelProviderResolver: EmbeddingProviderResolver());
 
         var result = await service.SaveTrustedMergedAsync(current => current with
         {
@@ -441,7 +444,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         {
             KnowledgeEmbeddingModelName = Pin
         });
-        var service = CreateService(store,
+        using var service = CreateService(store,
             localModelProviderResolver: EmbeddingProviderResolver(Pin),
             indexedEmbeddingModels: corpusIndexed ? [Pin] : []);
 
@@ -469,7 +472,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     public async Task SaveTrusted_PinOfAMissingModel_IsRefusedWithAMessageThatNullClears()
     {
         var store = new FakeNodeSettingsStore(new StoredNodeSettings());
-        var service = CreateService(store, localModelProviderResolver: EmbeddingProviderResolver());
+        using var service = CreateService(store, localModelProviderResolver: EmbeddingProviderResolver());
 
         var result = await service.SaveTrustedMergedAsync(current => current with
         {
@@ -489,7 +492,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         // (llamacpp), so the pair alone accepted ANY string — a cloud model id saved with HTTP 200. Registry
         // membership is what refuses it.
         var store = NewSubstituteStore(new StoredNodeSettings());
-        var service = CreateService(store, fastModelInstalled: false);
+        using var service = CreateService(store, fastModelInstalled: false);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -511,7 +514,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult("external"));
-        var service = CreateService(store, localModelProviderResolver: providerResolver);
+        using var service = CreateService(store, localModelProviderResolver: providerResolver);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -530,7 +533,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         // The fast model is a SECOND chat process alongside the conversation's own, so a node capped at one slot could
         // never admit it: the setting would look configured and silently never apply.
         var store = NewSubstituteStore(new StoredNodeSettings());
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -557,7 +560,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         NodeSettingsField field)
     {
         var store = NewSubstituteStore(new StoredNodeSettings());
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -583,7 +586,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     public async Task ApplyAgenticPatch_WithAKnownQuantInOddCasing_IsSaved()
     {
         var store = new FakeNodeSettingsStore(new StoredNodeSettings());
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -605,7 +608,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         });
         var trustResolver = Substitute.For<IModelTrustResolver>();
         trustResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(ModelTrustLocality.Local));
-        var service = CreateService(store, modelTrustResolver: trustResolver);
+        using var service = CreateService(store, modelTrustResolver: trustResolver);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -630,7 +633,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult("external"));
-        var service = CreateService(store, localModelProviderResolver: providerResolver);
+        using var service = CreateService(store, localModelProviderResolver: providerResolver);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -655,7 +658,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult("external"));
-        var service = CreateService(store, localModelProviderResolver: providerResolver);
+        using var service = CreateService(store, localModelProviderResolver: providerResolver);
 
         var result = await service.SaveTrustedMergedAsync(_ => stored with
         {
@@ -676,7 +679,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         {
             MachineKey = "abc"
         });
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.SaveTrustedMergedAsync(_ => new StoredNodeSettings
         {
@@ -704,7 +707,7 @@ public sealed class NodeSettingsAdministrationServiceTests
             TranscriptionSelectedModelId = "large-v3-turbo",
             TranscriptionIdleTimeoutMinutes = 42
         });
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.SaveTrustedMergedAsync(_ => new StoredNodeSettings
         {
@@ -730,7 +733,7 @@ public sealed class NodeSettingsAdministrationServiceTests
             {
                 MachineKey = "minted-while-the-save-was-validating"
             });
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.SaveTrustedMergedAsync(_ => new StoredNodeSettings
         {
@@ -752,7 +755,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult("external"));
-        var service = CreateService(store, localModelProviderResolver: providerResolver);
+        using var service = CreateService(store, localModelProviderResolver: providerResolver);
 
         var result = await service.SaveTrustedMergedAsync(_ => new StoredNodeSettings
         {
@@ -769,7 +772,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     public async Task ApplyAgenticPatchAsync_WhenMergedPolicyRejects_DoesNotSave()
     {
         var store = NewSubstituteStore(new StoredNodeSettings());
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -791,7 +794,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     {
         const string malformed = "unsloth/model\u0001-GGUF:Q4_K_M";
         var store = NewSubstituteStore(new StoredNodeSettings());
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(field switch
         {
@@ -820,7 +823,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     public async Task ApplyAgenticPatchAsync_WhenFieldRangeIsInvalid_DoesNotNormalizeSaveOrReport()
     {
         var store = NewSubstituteStore(new StoredNodeSettings());
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -836,7 +839,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     public async Task ApplyAgenticPatchAsync_WhenToolCapableModelsIsEmpty_DoesNotSave()
     {
         var store = NewSubstituteStore(new StoredNodeSettings());
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -858,7 +861,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var cloudResolver = Substitute.For<ICloudModelResolver>();
         cloudResolver.IsCloudModelAsync("old-cloud", Arg.Any<CancellationToken>()).Returns(true);
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
-        var service = CreateService(store, cloudResolver: cloudResolver, cloudFactory: cloudFactory);
+        using var service = CreateService(store, cloudResolver: cloudResolver, cloudFactory: cloudFactory);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -906,7 +909,7 @@ public sealed class NodeSettingsAdministrationServiceTests
             RerankerModelName = "old-reranker"
         });
         var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
-        var service = CreateService(store, knowledgeModelPrewarmer: prewarmer);
+        using var service = CreateService(store, knowledgeModelPrewarmer: prewarmer);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -922,7 +925,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     {
         var store = new FakeNodeSettingsStore(new StoredNodeSettings());
         var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
-        var service = CreateService(store, knowledgeModelPrewarmer: prewarmer);
+        using var service = CreateService(store, knowledgeModelPrewarmer: prewarmer);
 
         var result = await service.SaveTrustedMergedAsync(record => record with
         {
@@ -938,7 +941,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     {
         var store = new FakeNodeSettingsStore(new StoredNodeSettings());
         var prewarmer = Substitute.For<IKnowledgeModelPrewarmer>();
-        var service = CreateService(store, knowledgeModelPrewarmer: prewarmer);
+        using var service = CreateService(store, knowledgeModelPrewarmer: prewarmer);
 
         var result = await service.SaveTrustedMergedAsync(record => record with
         {
@@ -951,6 +954,269 @@ public sealed class NodeSettingsAdministrationServiceTests
         prewarmer.DidNotReceive().RequestWarm();
     }
 
+    /// <summary>
+    ///     The save applies the COMMITTED record: the real store resets an out-of-range cap of 99 to unset, so proposal and commit differ.
+    ///     A cleared field falls back to the seed (image) or the default (llama).
+    /// </summary>
+    [Test]
+    public async Task Save_AppliesTheCommittedCapsAndTtls_AndAClearAppliesTheSeed()
+    {
+        using var dataDir = new TempDirectory("xe-settings-apply");
+        using var store = new NodeSettingsStore(new FakeNodeDataDirectory(dataDir.Path), NullLogger<NodeSettingsStore>.Instance);
+        // The running node on a cap of 7, so neither "unchanged" nor "the proposal" can pass for the committed default.
+        var llama = new LlamaServerSupervisorOptions
+        {
+            MaxLoadedProcesses = 7
+        };
+        var image = new StableDiffusionRuntimeOptions();
+        using var service = CreateService(store,
+            llamaOptions: llama,
+            imageOptions: image,
+            runtimeSeed: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["StableDiffusionRuntime:MaxLoadedProcesses"] = "3",
+                ["StableDiffusionRuntime:IdleTimeToLive"] = "00:20:00"
+            });
+
+        var saved = await service.SaveTrustedMergedAsync(record => record with
+        {
+            LlamaMaxLoadedProcesses = 99,
+            LlamaIdleTimeToLiveSeconds = 600,
+            ImageMaxLoadedProcesses = 4,
+            ImageIdleTimeToLiveSeconds = 120
+        });
+
+        AssertEx.True(saved.Updated);
+        AssertEx.Null(saved.Settings.LlamaMaxLoadedProcesses);
+        AssertEx.Equal(StoredNodeSettings.DefaultLlamaMaxLoadedProcesses, llama.MaxLoadedProcesses);
+        AssertEx.Equal(TimeSpan.FromSeconds(600), llama.IdleTimeToLive);
+        AssertEx.Equal(4, image.MaxLoadedProcesses);
+        AssertEx.Equal(TimeSpan.FromSeconds(120), image.IdleTimeToLive);
+
+        var cleared = await service.SaveTrustedMergedAsync(record => record with
+        {
+            LlamaMaxLoadedProcesses = 5,
+            LlamaIdleTimeToLiveSeconds = null,
+            ImageMaxLoadedProcesses = null,
+            ImageIdleTimeToLiveSeconds = null
+        });
+
+        AssertEx.True(cleared.Updated);
+        AssertEx.Equal(5, llama.MaxLoadedProcesses);
+        AssertEx.Equal(TimeSpan.FromSeconds(StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds), llama.IdleTimeToLive);
+        AssertEx.Equal(3, image.MaxLoadedProcesses);
+        AssertEx.Equal(TimeSpan.FromMinutes(20), image.IdleTimeToLive);
+    }
+
+    /// <summary>A save that touches none of the four leaves the running options as they are, never on a default the sync loader answers.</summary>
+    [Test]
+    public async Task Save_AnUnrelatedSave_LeavesTheRunningLimits()
+    {
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings
+        {
+            LlamaMaxLoadedProcesses = 5,
+            LlamaIdleTimeToLiveSeconds = 600,
+            ImageMaxLoadedProcesses = 2,
+            ImageIdleTimeToLiveSeconds = 120
+        });
+        var llama = new LlamaServerSupervisorOptions
+        {
+            MaxLoadedProcesses = 5,
+            IdleTimeToLive = TimeSpan.FromSeconds(600)
+        };
+        var image = new StableDiffusionRuntimeOptions
+        {
+            MaxLoadedProcesses = 2,
+            IdleTimeToLive = TimeSpan.FromSeconds(120)
+        };
+        using var service = CreateService(store, llamaOptions: llama, imageOptions: image);
+
+        var result = await service.SaveTrustedMergedAsync(record => record with
+        {
+            ChatCacheReuse = 512
+        });
+
+        AssertEx.True(result.Updated);
+        AssertLimits(llama, image, 5, TimeSpan.FromSeconds(600), 2, TimeSpan.FromSeconds(120));
+    }
+
+    /// <summary>Neither a policy rejection nor a save that loses every attempt to a concurrent writer touches the running limits.</summary>
+    [Test]
+    public async Task Save_ARejectedSave_LeavesTheRunningLimits()
+    {
+        var llama = new LlamaServerSupervisorOptions();
+        var image = new StableDiffusionRuntimeOptions();
+        var rejectingStore = new FakeNodeSettingsStore(new StoredNodeSettings());
+        using var rejecting = CreateService(rejectingStore, llamaOptions: llama, imageOptions: image);
+
+        var rejected = await rejecting.SaveTrustedMergedAsync(record => record with
+        {
+            LlamaMaxLoadedProcesses = 5,
+            ImageMaxLoadedProcesses = 4,
+            // Keep-warm on with no model is refused by the merged-record policy.
+            KeepModelWarmEnabled = true
+        });
+
+        AssertEx.False(rejected.Updated);
+        AssertLimits(llama, image, 3, TimeSpan.FromMinutes(15), 1, TimeSpan.FromMinutes(15));
+
+        // The sibling rewrites the record on every attempt, so the save never lands; what the sibling writes is not this save's to apply.
+        var siblingWrites = 0;
+        var conflictingStore = new FakeNodeSettingsStore(new StoredNodeSettings(),
+            siblingWriteBeforeTheUpdate: latest => latest with
+            {
+                ImageMaxLoadedProcesses = 4,
+                ToolCapableModels = [$"sibling-{++siblingWrites}"]
+            });
+        using var conflicting = CreateService(conflictingStore, llamaOptions: llama, imageOptions: image);
+
+        var conflicted = await conflicting.SaveTrustedMergedAsync(record => record with
+        {
+            LlamaMaxLoadedProcesses = 5
+        });
+
+        AssertEx.True(conflicted.Conflicted);
+        AssertLimits(llama, image, 3, TimeSpan.FromMinutes(15), 1, TimeSpan.FromMinutes(15));
+    }
+
+    /// <summary>A caller that gives up after the commit (a disconnected client) still leaves the node on the committed limits.</summary>
+    [Test]
+    public async Task Save_CancelledAfterCommit_StillApplies()
+    {
+        using var caller = new CancellationTokenSource();
+        var store = new CancelAfterCommitStore(new FakeNodeSettingsStore(new StoredNodeSettings()), caller);
+        var llama = new LlamaServerSupervisorOptions();
+        var image = new StableDiffusionRuntimeOptions();
+        using var service = CreateService(store, llamaOptions: llama, imageOptions: image);
+
+        var result = await service.SaveTrustedMergedAsync(record => record with
+            {
+                LlamaMaxLoadedProcesses = 5,
+                LlamaIdleTimeToLiveSeconds = 600,
+                ImageMaxLoadedProcesses = 2,
+                ImageIdleTimeToLiveSeconds = 120
+            },
+            caller.Token);
+
+        AssertEx.True(caller.IsCancellationRequested);
+        AssertEx.True(result.Updated);
+        AssertLimits(llama, image, 5, TimeSpan.FromSeconds(600), 2, TimeSpan.FromSeconds(120));
+    }
+
+    /// <summary>
+    ///     Two overlapping saves apply in commit order: the first commits and stalls before its apply, the second is started meanwhile,
+    ///     and the running options end on the record the store holds, not on the older save's limits.
+    /// </summary>
+    /// <remarks>
+    ///     Every await before the store call completes synchronously here, so the second save has reached the commit gate (or, without
+    ///     it, finished) when its call returns. No sleep.
+    /// </remarks>
+    [Test]
+    public async Task Save_TwoOverlappingSaves_ApplyTheLastCommittedRecord()
+    {
+        var store = new PauseFirstCommitStore(new FakeNodeSettingsStore(new StoredNodeSettings()));
+        var llama = new LlamaServerSupervisorOptions();
+        var image = new StableDiffusionRuntimeOptions();
+        using var service = CreateService(store, llamaOptions: llama, imageOptions: image);
+
+        var first = service.SaveTrustedMergedAsync(static record => record with
+        {
+            LlamaMaxLoadedProcesses = 5,
+            LlamaIdleTimeToLiveSeconds = 600
+        });
+        await store.FirstCommitted.WaitAsync(TestBudgets.Contended);
+        var second = service.SaveTrustedMergedAsync(static record => record with
+        {
+            LlamaMaxLoadedProcesses = 6,
+            ImageMaxLoadedProcesses = 2
+        });
+        store.ReleaseFirst();
+        var results = await Task.WhenAll(first, second).WaitAsync(TestBudgets.Contended);
+
+        AssertEx.True(results.All(static result => result.Updated));
+        var committed = store.Current;
+        AssertEx.Equal(6, committed.LlamaMaxLoadedProcesses);
+        AssertEx.Equal(2, committed.ImageMaxLoadedProcesses);
+        AssertLimits(llama, image, 6, TimeSpan.FromSeconds(600), 2, TimeSpan.FromMinutes(15));
+    }
+
+    private static void AssertLimits(LlamaServerSupervisorOptions llama,
+        StableDiffusionRuntimeOptions image,
+        int llamaCap,
+        TimeSpan llamaTtl,
+        int imageCap,
+        TimeSpan imageTtl)
+    {
+        AssertEx.Equal(llamaCap, llama.MaxLoadedProcesses);
+        AssertEx.Equal(llamaTtl, llama.IdleTimeToLive);
+        AssertEx.Equal(imageCap, image.MaxLoadedProcesses);
+        AssertEx.Equal(imageTtl, image.IdleTimeToLive);
+    }
+
+    /// <summary>Commits the FIRST update through the fake and holds its return until <see cref="ReleaseFirst" />; later updates pass straight through.</summary>
+    private sealed class PauseFirstCommitStore : INodeSettingsStore
+    {
+        private readonly TaskCompletionSource _firstCommitted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly FakeNodeSettingsStore _inner;
+        private int _updates;
+
+        public PauseFirstCommitStore(FakeNodeSettingsStore inner)
+        {
+            _inner = inner;
+        }
+
+        public Task FirstCommitted => _firstCommitted.Task;
+
+        public StoredNodeSettings Current => _inner.Current;
+
+        public void ReleaseFirst() => _release.TrySetResult();
+
+        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default) => _inner.LoadAsync(cancellationToken);
+
+        public StoredNodeSettings Load(CancellationToken cancellationToken = default) => _inner.Load(cancellationToken);
+
+        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default) => _inner.SaveAsync(settings, cancellationToken);
+
+        public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
+        {
+            var committed = await _inner.UpdateAsync(mutate, cancellationToken);
+            if (Interlocked.Increment(ref _updates) == 1)
+            {
+                _firstCommitted.TrySetResult();
+                await _release.Task.WaitAsync(TestBudgets.Contended, cancellationToken);
+            }
+
+            return committed;
+        }
+    }
+
+    /// <summary>Commits through the fake, then cancels the caller's token before returning: the disconnect lands after the commit.</summary>
+    private sealed class CancelAfterCommitStore : INodeSettingsStore
+    {
+        private readonly CancellationTokenSource _caller;
+        private readonly FakeNodeSettingsStore _inner;
+
+        public CancelAfterCommitStore(FakeNodeSettingsStore inner, CancellationTokenSource caller)
+        {
+            _inner = inner;
+            _caller = caller;
+        }
+
+        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default) => _inner.LoadAsync(cancellationToken);
+
+        public StoredNodeSettings Load(CancellationToken cancellationToken = default) => _inner.Load(cancellationToken);
+
+        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default) => _inner.SaveAsync(settings, cancellationToken);
+
+        public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
+        {
+            var committed = await _inner.UpdateAsync(mutate, cancellationToken);
+            await _caller.CancelAsync();
+            return committed;
+        }
+    }
+
     private static NodeSettingsAdministrationService CreateService(INodeSettingsStore store,
         ICloudModelResolver? cloudResolver = null,
         IActiveCloudChatClientFactory? cloudFactory = null,
@@ -959,10 +1225,16 @@ public sealed class NodeSettingsAdministrationServiceTests
         ILocalModelProviderResolver? localModelProviderResolver = null,
         bool fastModelInstalled = true,
         IKnowledgeModelPrewarmer? knowledgeModelPrewarmer = null,
+        LlamaServerSupervisorOptions? llamaOptions = null,
+        StableDiffusionRuntimeOptions? imageOptions = null,
+        IDictionary<string, string?>? runtimeSeed = null,
         params string[] indexedEmbeddingModels)
     {
         var runtime = runtimeSettings ?? Substitute.For<INodeRuntimeSettings>();
-        runtime.GetLlamaMaxLoadedProcessesAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(StoredNodeSettings.DefaultLlamaMaxLoadedProcesses));
+
+        // The effective values come from the real resolution (stored > configuration seed > default) over the record passed in.
+        var resolution = SeededNodeRuntimeSettings.Create(runtimeSeed);
+        runtime.ResolveEffectiveValues(Arg.Any<StoredNodeSettings>()).Returns(call => resolution.ResolveEffectiveValues(call.Arg<StoredNodeSettings>()));
 
         // Default to an installed node-local llama.cpp model so the fast-model locality gate is transparent to every
         // test that does not set the setting at all. The trust stub is explicit rather than leaning on NSubstitute's
@@ -1005,6 +1277,8 @@ public sealed class NodeSettingsAdministrationServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             knowledgeModelPrewarmer ?? Substitute.For<IKnowledgeModelPrewarmer>(),
             CatalogScopeFactory(indexedEmbeddingModels),
+            llamaOptions ?? new LlamaServerSupervisorOptions(),
+            imageOptions ?? new StableDiffusionRuntimeOptions(),
             NullLogger<NodeSettingsAdministrationService>.Instance);
     }
 
@@ -1031,7 +1305,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     public async Task Save_WhenABackgroundModelIsAnInstalledGguf_IsAccepted()
     {
         var store = NewSubstituteStore(new StoredNodeSettings());
-        var service = CreateService(store);
+        using var service = CreateService(store);
 
         var result = await service.SaveTrustedMergedAsync(static record => record with
         {
@@ -1050,7 +1324,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         // Both resolvers call an unknown id local, so GGUF registry membership is what refuses a typo, a cloud id saved by
         // name, or a tag-style name an older node could serve from another runtime.
         var store = NewSubstituteStore(new StoredNodeSettings());
-        var service = CreateService(store, fastModelInstalled: false);
+        using var service = CreateService(store, fastModelInstalled: false);
 
         var result = await service.SaveTrustedMergedAsync(record => record with
         {
@@ -1070,7 +1344,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var store = NewSubstituteStore(new StoredNodeSettings());
         var trustResolver = Substitute.For<IModelTrustResolver>();
         trustResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(ModelTrustLocality.Cloud));
-        var cloudService = CreateService(store, modelTrustResolver: trustResolver);
+        using var cloudService = CreateService(store, modelTrustResolver: trustResolver);
 
         var cloud = await cloudService.SaveTrustedMergedAsync(static record => record with
         {
@@ -1078,7 +1352,8 @@ public sealed class NodeSettingsAdministrationServiceTests
         });
 
         // An `ext:` id is refused by its scheme even when its connection is declared Local and the registry says installed.
-        var external = await CreateService(store).SaveTrustedMergedAsync(static record => record with
+        using var externalService = CreateService(store);
+        var external = await externalService.SaveTrustedMergedAsync(static record => record with
         {
             PlaybookAnalysisModelName = "ext:lab-box/llama-70b"
         });
@@ -1096,7 +1371,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         {
             PlaybookEvalModelName = "since-uninstalled:7b"
         });
-        var service = CreateService(store, fastModelInstalled: false);
+        using var service = CreateService(store, fastModelInstalled: false);
 
         var result = await service.SaveTrustedMergedAsync(static record => record with
         {

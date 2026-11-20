@@ -538,7 +538,7 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
 
     private static async Task InitializeDatabaseAsync(string databasePath)
     {
-        using var keyHolder = new FixedNodeSqliteKeyHolder();
+        using var keyHolder = new FixedNodeSqliteKeyHolder(SHA256.HashData(Encoding.UTF8.GetBytes("mcp-agent-run-boundary-test-key")));
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
@@ -632,7 +632,7 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
 
     private sealed class StoreFixture : IAsyncDisposable
     {
-        private readonly FixedNodeSqliteKeyHolder _keyHolder = new();
+        private readonly FixedNodeSqliteKeyHolder _keyHolder = new(SHA256.HashData(Encoding.UTF8.GetBytes("mcp-agent-run-boundary-test-key")));
         private readonly NodeChatDbContext _context;
 
         public StoreFixture(string databasePath)
@@ -651,22 +651,6 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             Protector.Dispose();
             await _context.DisposeAsync();
             _keyHolder.Dispose();
-        }
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key = SHA256.HashData(Encoding.UTF8.GetBytes("mcp-agent-run-boundary-test-key"));
-
-        public ReadOnlyMemory<byte> Key => _key ?? throw new ObjectDisposedException(nameof(FixedNodeSqliteKeyHolder));
-
-        public void Dispose()
-        {
-            if (_key is not null)
-            {
-                CryptographicOperations.ZeroMemory(_key);
-                _key = null;
-            }
         }
     }
 }

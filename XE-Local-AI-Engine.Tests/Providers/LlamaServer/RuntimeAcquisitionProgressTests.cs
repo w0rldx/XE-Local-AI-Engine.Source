@@ -26,7 +26,7 @@ public sealed class RuntimeAcquisitionProgressTests
     [Test]
     public async Task EnsureBinary_WhileDownloading_ReportsMonotonicBytesAgainstTheContentLengthTotal()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         // Bytes that cannot match the pinned SHA256, but enough of them to span many 81 920-byte read-loop iterations.
         var body = new byte[512 * 1024];
         using var handler = new ScriptedHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
@@ -61,7 +61,7 @@ public sealed class RuntimeAcquisitionProgressTests
     [Test]
     public async Task EnsureBinary_ReportsTheFullLifecycle_WithStrictlyIncreasingSequences()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         using var handler = new ScriptedHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray())
@@ -91,7 +91,7 @@ public sealed class RuntimeAcquisitionProgressTests
     [Test]
     public async Task EnsureBinary_WhenVerificationFails_ReportsTerminalFailed_WithASanitizedReason()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         using var handler = new ScriptedHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray())
@@ -115,7 +115,7 @@ public sealed class RuntimeAcquisitionProgressTests
     [Test]
     public async Task EnsureBinary_WhenDownloadFails_ReportsTerminalFailed_WithNoTransportDetail()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         // A transport failure, not a LlamaRuntimeException: its message is NOT sanitized by contract, so it must be
         // collapsed to a generic reason rather than surfaced verbatim (it names the host).
         using var handler = new ScriptedHandler(() => throw new HttpRequestException("connect failed to https://internal.example.invalid/secret-path"));
@@ -140,7 +140,7 @@ public sealed class RuntimeAcquisitionProgressTests
         // not persist a terminal Failed: the banner would stick on a network diagnosis for something that never broke,
         // behind a retry attached to a non-failure. Host shutdown (the first-run service's stoppingToken) is the same.
         // Nor may it stay silent: the registry latches the last write, so the banner froze at its last percentage.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         using var cts = new CancellationTokenSource();
         using var handler = new CancellingHandler(cts);
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -163,7 +163,7 @@ public sealed class RuntimeAcquisitionProgressTests
     {
         // A half-open connection delivers nothing and never errors, so without an inactivity bound the acquisition and its
         // banner sit at one percentage forever. The stall must surface as Failed with a reason, not as a silent cancel.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         var time = new ManualTimeProvider();
         using var hung = new SemaphoreSlim(initialCount: 0);
         using var handler = new ScriptedHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
@@ -199,7 +199,7 @@ public sealed class RuntimeAcquisitionProgressTests
     {
         // Every model spawn ensures the binary; without single-flight a second spawn mid-download started its own
         // download into the same variant dir. The second caller must wait, then serve what the first left on disk.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var handler = new GatedHandler(release.Task);
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -230,7 +230,7 @@ public sealed class RuntimeAcquisitionProgressTests
     {
         // A cancelled waiter just stops waiting: it never reported, so it must not reset the banner, and the first
         // caller's download must not observe the waiter's token.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var handler = new GatedHandler(release.Task);
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -261,7 +261,7 @@ public sealed class RuntimeAcquisitionProgressTests
     {
         // Invariant: the registry is an OPTIONAL trailing ctor parameter, so a provider-only / headless host that omits
         // it must keep the retry-once + sanitized-failure contract byte-for-byte.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         using var handler = new ScriptedHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray())
@@ -280,7 +280,7 @@ public sealed class RuntimeAcquisitionProgressTests
     {
         // This path runs on EVERY model spawn. A Completed here would push a terminal status per spawn and make the
         // banner flicker on a warm cache, so an acquisition that acquired nothing must stay entirely silent.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
         // The pin's relative path is archive-shaped ('/'), and the manager runs it through Path.GetFullPath — which
         // rewrites the separators on Windows. Normalize here or the equality below compares 'build/bin' to 'build\bin'.
@@ -307,7 +307,7 @@ public sealed class RuntimeAcquisitionProgressTests
     {
         // The no-prebuilt throw happens BEFORE any acquisition starts, so there is nothing to narrate and no banner to
         // put into a Failed state — the operator never asked for this variant, the variant selector did.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         using var handler = new ScriptedHandler(() => throw new InvalidOperationException("An unresolvable variant must not download."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RecordingRegistry();
@@ -325,7 +325,7 @@ public sealed class RuntimeAcquisitionProgressTests
     {
         // Windows CUDA fetches TWO archives back to back — the build plus its cudart companion. Without the step
         // counter the banner would run 0→100 % twice with nothing to explain the second pass.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda));
         var cudartName = AssertEx.NotNull(LlamaCppReleasePins.DeriveCudartAssetName(pin.AssetName));
 
@@ -370,7 +370,7 @@ public sealed class RuntimeAcquisitionProgressTests
         // driven by a returned exception rather than a thrown one — so a recovered acquisition must end at Completed
         // with no Failed anywhere in the stream, or the banner would latch onto a failure that was already repaired.
         // POSIX only: the post-install smoke test spawns the extracted shell stub, which needs a real exec bit.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         var archive = BuildExecutableTarGz();
         var attempt = 0;
         using var handler = new ScriptedHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
@@ -404,7 +404,7 @@ public sealed class RuntimeAcquisitionProgressTests
     public async Task InstallTag_WhenTheRequestIsRejected_ReportsNothing()
     {
         // Request validation acquires nothing, so a malformed tag must not put the banner into a runtime-failure state.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-acq");
         using var handler = new ScriptedHandler(() => throw new InvalidOperationException("A malformed tag must never download."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RecordingRegistry();
@@ -732,31 +732,5 @@ public sealed class RuntimeAcquisitionProgressTests
 
         public override void Write(byte[] buffer, int offset, int count) =>
             throw new NotSupportedException();
-    }
-
-    private sealed class TempCacheDir : IDisposable
-    {
-        public TempCacheDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-llama-acq-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
-        }
     }
 }

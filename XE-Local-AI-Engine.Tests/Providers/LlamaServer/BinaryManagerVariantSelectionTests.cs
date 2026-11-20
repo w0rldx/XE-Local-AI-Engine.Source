@@ -139,12 +139,12 @@ public sealed class BinaryManagerVariantSelectionTests
     {
         // A Cuda request on Linux/arm64 (no CUDA prebuilt or source build) fails loud even with a "cuda" cached binary:
         // EnsureBinary throws BEFORE any cache lookup, never returning the CPU archive as Variant=Cuda for GPU flags.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-test");
         var cpuPin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cpu)!;
         // Seed a CPU server under the CUDA variant dir — the exact path a lax cache hit would serve as Cuda.
         SeedCachedServer(cache.Path, LlamaCppReleasePins.PinnedTag, "cuda", cpuPin.ServerRelativePath);
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.Arm64, TimeProvider.System);
 
@@ -157,12 +157,12 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public async Task EnsureBinary_PinnedTag_MarksBinaryAsPinnedFallback()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-test");
         // Pre-seed a cached binary so EnsureBinary reuses it offline (handler would throw if a download were attempted).
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
         SeedCachedServer(cache.Path, LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath);
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, TimeProvider.System);
 
@@ -175,14 +175,14 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public async Task EnsureBinary_UpgradeTag_KeepsPinnedFallbackCacheIntact()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-test");
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
 
         // Both the pinned fallback and an upgrade tag are cached side by side under distinct tag directories.
         var pinnedServer = SeedCachedServer(cache.Path, LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath);
         SeedCachedServer(cache.Path, "b9999", "cpu", pin.ServerRelativePath);
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, "b9999", OSPlatform.Linux, Architecture.X64, TimeProvider.System);
 
@@ -217,37 +217,6 @@ public sealed class BinaryManagerVariantSelectionTests
         }
     }
 
-    private sealed class ThrowingHandler : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            throw new InvalidOperationException("No network call expected: a cached binary should have been reused.");
-        }
-    }
-
-    private sealed class TempCacheDir : IDisposable
-    {
-        public TempCacheDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-llama-test-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
-        }
-    }
+    private static ThrowingHttpMessageHandler NoNetworkHandler() =>
+        new(new InvalidOperationException("No network call expected: a cached binary should have been reused."));
 }

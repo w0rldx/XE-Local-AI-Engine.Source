@@ -567,7 +567,7 @@ public sealed class McpAgentRunCoordinatorTests
 
     private sealed class Harness : IDisposable
     {
-        private readonly FixedNodeSqliteKeyHolder _keyHolder = new();
+        private readonly FixedNodeSqliteKeyHolder _keyHolder = new(SHA256.HashData(Encoding.UTF8.GetBytes("mcp-coordinator-test-key")));
         private readonly McpAgentRunMetrics _metrics = new();
         private readonly McpAgentRunPayloadProtector _protector;
 
@@ -614,22 +614,6 @@ public sealed class McpAgentRunCoordinatorTests
             _metrics.Dispose();
             _protector.Dispose();
             _keyHolder.Dispose();
-        }
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key = SHA256.HashData(Encoding.UTF8.GetBytes("mcp-coordinator-test-key"));
-
-        public ReadOnlyMemory<byte> Key => _key ?? throw new ObjectDisposedException(nameof(FixedNodeSqliteKeyHolder));
-
-        public void Dispose()
-        {
-            if (_key is not null)
-            {
-                CryptographicOperations.ZeroMemory(_key);
-                _key = null;
-            }
         }
     }
 }

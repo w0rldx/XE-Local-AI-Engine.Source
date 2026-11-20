@@ -28,12 +28,6 @@ public interface INodeRuntimeSettings
     /// <summary>The Hugging Face disk-guard margin in bytes (stored &gt; <c>HuggingFace:DiskMarginBytes</c> &gt; 1 GiB).</summary>
     Task<long> GetHuggingFaceDiskMarginBytesAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>The max concurrently-loaded llama.cpp processes (stored &gt; seed 3).</summary>
-    Task<int> GetLlamaMaxLoadedProcessesAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>The llama.cpp idle eviction TTL (stored &gt; seed 15 minutes).</summary>
-    Task<TimeSpan> GetLlamaIdleTimeToLiveAsync(CancellationToken cancellationToken = default);
-
     /// <summary>Whether periodic keep-warm is enabled (stored &gt; off).</summary>
     Task<bool> GetKeepModelWarmEnabledAsync(CancellationToken cancellationToken = default);
 
@@ -284,8 +278,8 @@ public interface INodeRuntimeSettings
     Task<string> GetMemoryExtractionModelNameAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The effective value of every migrated switch and retention window for <paramref name="stored" /> (stored, else the configuration seed). Pure over
-    ///     the record passed in, so a save response reports the record it just wrote.
+    ///     The effective switches, retention windows and process caps/TTLs of <paramref name="stored" /> (stored, else seed, else default). Pure over the
+    ///     record, so a save reports and applies the record it just wrote.
     /// </summary>
     NodeSettingsEffectiveValues ResolveEffectiveValues(StoredNodeSettings stored);
 
@@ -379,10 +373,10 @@ public interface INodeRuntimeSettings
     /// <inheritdoc cref="GetHuggingFaceDiskMarginBytesAsync" />
     long GetHuggingFaceDiskMarginBytes();
 
-    /// <inheritdoc cref="GetLlamaMaxLoadedProcessesAsync" />
+    /// <summary>The max concurrently-loaded llama.cpp chat processes (stored &gt; seed 3), read once to seed the supervisor options.</summary>
     int GetLlamaMaxLoadedProcesses();
 
-    /// <inheritdoc cref="GetLlamaIdleTimeToLiveAsync" />
+    /// <summary>The llama.cpp idle eviction TTL (stored &gt; seed 15 minutes), read once to seed the supervisor options.</summary>
     TimeSpan GetLlamaIdleTimeToLive();
 
     /// <summary>

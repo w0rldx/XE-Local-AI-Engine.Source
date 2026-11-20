@@ -15,7 +15,7 @@ public sealed class InstalledRuntimeStoreTests
     [Test]
     public async Task RoundTrips()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-runtime-state");
         using var store = new InstalledRuntimeStore(cache.Path);
         var state = new InstalledRuntimeState("b9700", "llama-b9700-bin-ubuntu-x64.tar.gz", new string('e', 64),
             GpuVariant.Vulkan, DateTimeOffset.UtcNow);
@@ -33,7 +33,7 @@ public sealed class InstalledRuntimeStoreTests
     [Test]
     public async Task ReadAsync_WhenFileAbsent_ReturnsNull()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-runtime-state");
         using var store = new InstalledRuntimeStore(cache.Path);
 
         var read = await store.ReadAsync(CancellationToken.None);
@@ -44,38 +44,12 @@ public sealed class InstalledRuntimeStoreTests
     [Test]
     public async Task ReadAsync_WhenFileCorrupt_ReturnsNullNoThrow()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-runtime-state");
         await File.WriteAllTextAsync(Path.Combine(cache.Path, "installed-runtime.json"), "{ this is not valid json");
         using var store = new InstalledRuntimeStore(cache.Path);
 
         var read = await store.ReadAsync(CancellationToken.None);
 
         AssertEx.Null(read);
-    }
-
-    private sealed class TempDir : IDisposable
-    {
-        public TempDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-runtime-state-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
-        }
     }
 }

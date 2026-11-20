@@ -17,7 +17,7 @@ public sealed class SingleInstanceLeaseTests
     [Test]
     public void TryAcquire_OnFreeDataDirectory_Succeeds()
     {
-        using var temp = new TempDataDirectory();
+        using var temp = new TempDirectory("xe-single-instance-lease-tests");
 
         AssertEx.Succeeded(SingleInstanceLease.TryAcquire(temp.Path, out var lease));
         using var leaseScope = lease;
@@ -28,7 +28,7 @@ public sealed class SingleInstanceLeaseTests
     [Test]
     public void TryAcquire_WhileAlreadyHeld_ReturnsNull()
     {
-        using var temp = new TempDataDirectory();
+        using var temp = new TempDirectory("xe-single-instance-lease-tests");
 
         AssertEx.Succeeded(SingleInstanceLease.TryAcquire(temp.Path, out var first));
         using var firstScope = first;
@@ -60,7 +60,7 @@ public sealed class SingleInstanceLeaseTests
     public async Task TryAcquire_WhenUnixOpenFailsForAnotherReason_ThrowsRatherThanReportingAnotherInstance()
     {
         // ELOOP stands in for EROFS/EIO: a genuine open fault that is not a flock conflict and must not read as contention.
-        using var temp = new TempDataDirectory();
+        using var temp = new TempDirectory("xe-single-instance-lease-tests");
         var leasePath = Path.Combine(temp.Path, SingleInstanceLease.LeaseFileName);
         File.CreateSymbolicLink(leasePath, leasePath);
 
@@ -81,7 +81,7 @@ public sealed class SingleInstanceLeaseTests
             Skip.Test("BLOCKED: a privileged process bypasses the directory mode this test denies the creation with.");
         }
 
-        using var temp = new TempDataDirectory();
+        using var temp = new TempDirectory("xe-single-instance-lease-tests");
         File.SetUnixFileMode(temp.Path, UnixFileMode.UserRead | UnixFileMode.UserExecute);
         try
         {
@@ -105,7 +105,7 @@ public sealed class SingleInstanceLeaseTests
     [Test]
     public void TryAcquire_AfterDispose_ReacquiresSuccessfully()
     {
-        using var temp = new TempDataDirectory();
+        using var temp = new TempDirectory("xe-single-instance-lease-tests");
 
         AssertEx.Succeeded(SingleInstanceLease.TryAcquire(temp.Path, out var first));
         first.Dispose();
@@ -113,32 +113,5 @@ public sealed class SingleInstanceLeaseTests
         AssertEx.Succeeded(SingleInstanceLease.TryAcquire(temp.Path, out var second),
             "Disposing the held lease must release it so a new instance can acquire it.");
         using var secondScope = second;
-    }
-
-    /// <summary>A disposable temp directory standing in for the per-user data directory.</summary>
-    private sealed class TempDataDirectory : IDisposable
-    {
-        public TempDataDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-single-instance-lease-tests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // Best-effort cleanup.
-            }
-        }
     }
 }

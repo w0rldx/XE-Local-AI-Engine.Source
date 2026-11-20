@@ -6669,12 +6669,12 @@
 					"label": "Parallel download connections"
 				},
 				"imageIdleTimeToLiveSeconds": {
-					"info": "How long, in seconds, an image model may sit unused before its sd-server process is stopped to free VRAM. Shorter returns memory to chat models sooner; longer avoids waiting for a reload between images. Default 900 (15 minutes), allowed 30 to 86400. Takes effect after a node restart.",
+					"info": "How long, in seconds, an image model may sit unused before its sd-server process is stopped to free VRAM. Shorter returns memory to chat models sooner; longer avoids waiting for a reload between images. Default 900 (15 minutes), allowed 30 to 86400. Applies as soon as you save.",
 					"label": "Image server idle time-to-live"
 				},
 				"imageMaxLoadedProcesses": {
 					"description": "How many image models stay loaded at once; loading one more unloads the least recently used. A model still generating is never unloaded; if all are busy, a new job fails until one finishes.",
-					"info": "Each loaded image model is a separate sd-server process that holds its weights in VRAM, usually next to a chat model. The default of 1 keeps that memory small; raise it only if you switch between image models often and have VRAM to spare. A model that is still generating is never unloaded; if all are busy, the new load fails. Takes effect after a node restart.",
+					"info": "Each loaded image model is a separate sd-server process that holds its weights in VRAM, usually next to a chat model. The default of 1 keeps that memory small; raise it only if you switch between image models often and have VRAM to spare. A model that is still generating is never unloaded; if all are busy, the new load fails. Applies as soon as you save; a lower limit unloads idle models within about half a minute.",
 					"label": "Max loaded image servers"
 				},
 				"imageTextEncoderOnGpu": {
@@ -6786,11 +6786,11 @@
 					"label": "Reserved GPU memory"
 				},
 				"llamaIdleTimeToLiveSeconds": {
-					"info": "How long, in seconds, a llama-server model may sit unused before the node unloads it to free memory. A model that is still answering is never unloaded. Shorter frees VRAM sooner; longer avoids reload waits when you return to a model. Default 900 (15 minutes), allowed 30 to 86400. Takes effect after a node restart.",
+					"info": "How long, in seconds, a llama-server model may sit unused before the node unloads it to free memory. A model that is still answering is never unloaded. Shorter frees VRAM sooner; longer avoids reload waits when you return to a model. Default 900 (15 minutes), allowed 30 to 86400. Applies as soon as you save.",
 					"label": "Idle process time-to-live"
 				},
 				"llamaMaxLoadedProcesses": {
-					"info": "How many chat models llama-server keeps loaded at the same time. Embedding and reranker models have their own slots and do not count. When the limit is reached, the least recently used idle chat model is unloaded to make room; if none is idle, the new load fails. Default 3. \"Keep a model warm\" needs at least 2. Takes effect after a node restart.",
+					"info": "How many chat models llama-server keeps loaded at the same time. Embedding and reranker models have their own slots and do not count. When the limit is reached, the least recently used idle chat model is unloaded to make room; if none is idle, the new load fails. Default 3. \"Keep a model warm\" needs at least 2. Applies as soon as you save; a lower limit unloads idle models within about half a minute.",
 					"label": "Max loaded chat models"
 				},
 				"llamaRamReservePercent": {

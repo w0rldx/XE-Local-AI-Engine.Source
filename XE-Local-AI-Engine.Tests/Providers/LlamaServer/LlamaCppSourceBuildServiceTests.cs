@@ -20,7 +20,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [ExcludeOn(OS.Linux)]
     public async Task Start_NonLinux_FailsBeforeProbeOrActivityReservation()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
         var probe = new CountingReadyProbe();
@@ -51,7 +51,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Start_ConcurrentCaller_WaitsForStartTransactionAndCannotRecoverWinnerWorkTree()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
         WriteScript(Path.Combine(stubs, "git"), "#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then sleep 30; fi\n");
@@ -88,7 +88,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task StartupStop_BlockingBuild_CancelsAndAwaitsProcessTree()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
         var pidFile = Path.Combine(temp.Path, "git.pid");
@@ -126,7 +126,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task GracefulStop_DuringABuild_IsReportedAsInterruptedOnTheNextStart()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
         var pidFile = Path.Combine(temp.Path, "git.pid");
@@ -165,7 +165,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task OperatorCancel_DuringABuild_IsNotReportedAsInterrupted()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
         var pidFile = Path.Combine(temp.Path, "git.pid");
@@ -200,7 +200,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [Test]
     public async Task AppendLog_ConcurrentCallbacks_PersistAndPublishInIdenticalOrder()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
         var publisher = new RecordingPublisher();
@@ -218,7 +218,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [Test]
     public async Task AppendLog_PastServerRing_ReportsMonotonicSequences()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
         var publisher = new RecordingPublisher();
@@ -245,7 +245,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Start_WhenRuntimeMutationLeaseUnavailable_ReturnsBusyAfterSingleProbe()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
         var probe = new CountingReadyProbe();
@@ -284,7 +284,7 @@ public sealed class LlamaCppSourceBuildServiceTests
                 }
             ]
         };
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
         using var service = new LlamaCppSourceBuildService(new FixedReportProbe(report),
@@ -328,7 +328,7 @@ public sealed class LlamaCppSourceBuildServiceTests
                 }
             ]
         };
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
         using var service = new LlamaCppSourceBuildService(new FixedReportProbe(report),
@@ -359,7 +359,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Start_WhenAnotherBuildOwnsReservation_ReturnsBusyWithoutReplacingOwner()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
         ILlamaCppSourceBuildActivity activity = new LlamaCppSourceBuildActivity();
@@ -386,7 +386,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Cancel_CustomCpu_RetainsTheActiveRuntimeAndAllowsAFreshStart()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         using var store = new InstalledRuntimeStore(temp.Path);
         var (previousState, previousServer) = await SeedActiveRuntimeAsync(temp.Path, store);
         var stubs = Path.Combine(temp.Path, "stubs");
@@ -434,7 +434,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Recover_ActiveRuntimeWithoutFitHelper_DiscardsTreeRecordAndSignal()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         using var store = new InstalledRuntimeStore(temp.Path);
         var (_, server) = await SeedActiveRuntimeAsync(temp.Path, store);
         var tree = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(server)!, "..", ".."));
@@ -464,7 +464,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Start_WhenResolvedCommitMismatches_StopsBeforeCmakeAndRecordsNothing()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
         var cmakeMarker = Path.Combine(temp.Path, "cmake-ran");
@@ -495,7 +495,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Start_WhenUnexpectedAdoptionFailure_UsesGenericSourceBuildMessage()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
         WriteScript(Path.Combine(stubs, "git"),
@@ -540,7 +540,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Swap_WhenParkingThePreviousRuntimeFails_LeavesItByteIdentical()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         using var store = new InstalledRuntimeStore(temp.Path);
         var (previousState, previousServer) = await SeedActiveRuntimeAsync(temp.Path, store);
         var sourceBuildRoot = Path.Combine(temp.Path, "llama.cpp", "source-build");
@@ -600,7 +600,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Swap_WhenAdoptionFails_RestoresThePreviousRuntimeByteIdentical()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         using var store = new InstalledRuntimeStore(temp.Path);
         var (previousState, _) = await SeedActiveRuntimeAsync(temp.Path, store);
         var sourceBuildRoot = Path.Combine(temp.Path, "llama.cpp", "source-build");
@@ -634,7 +634,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task SuccessfulBuild_HoldsTheAdoptionMutationLeaseUntilTheTerminalStatus()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
         WriteScript(Path.Combine(stubs, "git"),
@@ -678,7 +678,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Quantizer_BuiltAndAdopted_OnSourceBuild()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
         var cmakeArgs = Path.Combine(temp.Path, "cmake.txt");
@@ -730,7 +730,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Quantizer_Missing_DoesNotFailAdoption()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
         WriteScript(Path.Combine(stubs, "git"),
@@ -772,7 +772,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Start_OfficialCpu_UsesPinnedCommitScrubbedGitAndCpuMatrix()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
         var envDump = Path.Combine(temp.Path, "env.txt");
@@ -847,7 +847,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     public async Task Start_OfficialExplicitCommit_BuildsAndRecordsExplicitRevision()
     {
         var commit = "abcdefabcdefabcdefabcdefabcdefabcdefabcd";
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-source-build");
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
         var gitArgs = Path.Combine(temp.Path, "git.txt");
@@ -1211,29 +1211,6 @@ public sealed class LlamaCppSourceBuildServiceTests
 
         public void Dispose() =>
             Environment.SetEnvironmentVariable("PATH", _original);
-    }
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public TempDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-source-build-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                Directory.Delete(Path, recursive: true);
-            }
-            catch (Exception)
-            {
-                // Best-effort test cleanup.
-            }
-        }
     }
 
     [UnsupportedOSPlatform("windows")]

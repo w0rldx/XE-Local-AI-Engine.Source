@@ -17,7 +17,7 @@ public sealed class GgufAcquisitionArtifactStartupReaperTests
     [Test]
     public async Task Reaper_DeletesStalePartFile_ButKeepsFreshOne()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         var stalePart = dir.FilePath("Model-Q4_K_M.gguf.abc123.part");
         var freshPart = dir.FilePath("Other-Q4_K_M.gguf.def456.part");
@@ -38,7 +38,7 @@ public sealed class GgufAcquisitionArtifactStartupReaperTests
     [Test]
     public async Task Reaper_AgesADownloadIntentByItsPartial()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         var longRunning = dir.FilePath("Long-Q8_0.gguf");
         var abandoned = dir.FilePath("Gone-Q8_0.gguf");
@@ -66,7 +66,7 @@ public sealed class GgufAcquisitionArtifactStartupReaperTests
     [Test]
     public async Task Reaper_DeletesFreshDownloadLeftoversOfAnInstalledFile_ButKeepsAResumablePartial()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         var installed = dir.FilePath("Installed-Q4_K_M.gguf");
         var installedSidecar = installed + ".xe-model.json";
@@ -111,7 +111,7 @@ public sealed class GgufAcquisitionArtifactStartupReaperTests
     [Test]
     public async Task Reaper_DeletesStaleOrphanSidecar_ButKeepsSidecarWithAdjacentGguf()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
 
         var orphanSidecar = dir.FilePath("Orphan-Q4_K_M.gguf.xe-model.json");
@@ -136,7 +136,7 @@ public sealed class GgufAcquisitionArtifactStartupReaperTests
     [Test]
     public async Task Reaper_KeepsFreshOrphanSidecar()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         var freshOrphanSidecar = dir.FilePath("Fresh-Orphan-Q4_K_M.gguf.xe-model.json");
         await File.WriteAllTextAsync(freshOrphanSidecar, "{}");
@@ -149,7 +149,7 @@ public sealed class GgufAcquisitionArtifactStartupReaperTests
     [Test]
     public async Task Reaper_NeverDeletesGgufFiles_EvenWhenVeryOld()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         var oldGguf = dir.FilePath("Ancient-Q4_K_M.gguf");
         await File.WriteAllTextAsync(oldGguf, "fake-gguf");

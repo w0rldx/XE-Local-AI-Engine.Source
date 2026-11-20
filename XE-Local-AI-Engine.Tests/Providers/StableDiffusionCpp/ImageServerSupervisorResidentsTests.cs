@@ -36,9 +36,9 @@ public sealed class ImageServerSupervisorResidentsTests
     public async Task GetResidents_ReportsAJobLeaseUntilItIsDisposed()
     {
         await using var supervisor = ImageSupervisorFactory.Create();
-        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        var endpoint = await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
 
-        AssertEx.Succeeded(supervisor.TryAcquireJobLease("sd15", out var lease));
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease(endpoint, out var lease));
         AssertEx.True(supervisor.GetResidents().Single().HasActiveJobLease);
 
         lease.Dispose();
@@ -65,11 +65,11 @@ public sealed class ImageServerSupervisorResidentsTests
         var notifier = new RecordingResidencyChangeNotifier();
         await using var supervisor = ImageSupervisorFactory.Create(residencyNotifier: notifier);
 
-        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        var endpoint = await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
         AssertEx.True(notifier.Count >= 1, "Registration must tick: the daemon is now in GetResidents.");
 
         var beforeLease = notifier.Count;
-        AssertEx.Succeeded(supervisor.TryAcquireJobLease("sd15", out var lease));
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease(endpoint, out var lease));
         AssertEx.Equal(beforeLease + 1, notifier.Count);
 
         lease.Dispose();

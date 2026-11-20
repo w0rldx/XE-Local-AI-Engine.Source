@@ -113,13 +113,14 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         // is simply off. The composition root injects the real singleton shared with the other supervisors.
         _loadAdmission = loadAdmission ?? new NoOpGpuModelLoadAdmission();
 
-        _reaperLoop = Task.Run(() => IdleReapLoop.RunAsync(_options.IdleTimeToLive,
+        _reaperLoop = Task.Run(() => IdleReapLoop.RunAsync(() => _options.IdleTimeToLive,
                 _timeProvider,
                 () =>
                 {
                     ReapIdleOnce();
                     return Task.CompletedTask;
                 },
+                _logger,
                 _shutdownCts.Token),
             _shutdownCts.Token);
     }

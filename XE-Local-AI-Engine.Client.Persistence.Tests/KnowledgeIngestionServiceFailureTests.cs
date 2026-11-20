@@ -480,8 +480,6 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
     /// <summary>A provider resolver that always fails to resolve, standing in for "no embedding model available".</summary>
     private sealed class ThrowingProviderResolver : ILocalModelProviderResolver
     {
-        public int MaxLoadedProcesses => 1;
-
         public ILocalModelProvider DefaultProvider => throw new InvalidOperationException("No provider is registered.");
 
         public Task<string> ResolveProviderNameForModelAsync(string modelName, CancellationToken cancellationToken = default)
