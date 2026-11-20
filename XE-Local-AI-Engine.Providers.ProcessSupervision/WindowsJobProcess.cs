@@ -66,10 +66,26 @@ public sealed class WindowsJobProcess : IDisposable
 
     public void Dispose()
     {
-        _ = ExitCode;
+        try
+        {
+            // Read while the process handle is open, so ExitCode still answers after Dispose.
+            _ = ExitCode;
+        }
+        catch (Win32Exception)
+        {
+            // The exit code stays unknown; the teardown below must run regardless.
+        }
+
         Terminate();
-        _child.Dispose();
-        _job.Dispose();
+        try
+        {
+            _child.Dispose();
+        }
+        finally
+        {
+            // The kill-on-close job is the backstop for every member: it is closed even if a pipe end fails to close.
+            _job.Dispose();
+        }
     }
 
     /// <summary>The job handle, for the Windows tests' membership and read-back checks.</summary>

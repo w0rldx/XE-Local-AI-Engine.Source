@@ -205,6 +205,19 @@ public sealed class WindowsJobLauncherTests
         await Task.CompletedTask;
     }
 
+    [Test]
+    public async Task Dispose_WhenTheExitCodeCannotBeRead_StillTerminatesTheJob_AndClosesEveryHandle()
+    {
+        var api = new FakeWindowsJobApi { ExitCodeFails = true };
+        var process = new WindowsJobLauncher(api).Start(Command, WindowsJobLimits.Map(2048, 64, 2, 16));
+        await process.WaitForExitAsync(CancellationToken.None);
+
+        process.Dispose();
+
+        AssertEx.Equal(1, api.Terminations);
+        AssertEx.Equal(0, api.OpenHandles, "the job and every pipe end are closed although the exit code read failed");
+    }
+
     private static void AssertNothingSurvived(FakeWindowsJobApi api, bool resumeAttempted)
     {
         AssertEx.Equal(resumeAttempted, api.Calls.Contains("Resume"), "the payload is resumed only after every check passed");

@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision;
 /// <remarks>
 ///     When the root exits, the job is terminated first, ending every member that holds an output pipe, and the pumps get
 ///     <see cref="MxcChildProcess.PumpDrainBudget" /> to reach end of stream; past it (a process outside the job holds a pipe end) their
-///     overlapped reads are cancelled and the wait returns. Text is UTF-8 both ways, no preamble, as on the MXC path: git, Python and
+///     overlapped reads are cancelled, the pumps deliver what they hold and the wait returns. Text is UTF-8 both ways, no preamble, as on the MXC path: git, Python and
 ///     dotnet output is the data that matters (patches are stored as UTF-8), so a cmd builtin printing in the OEM code page is not
 ///     decoded faithfully, an accepted trade-off (ADR 0025).
 /// </remarks>
@@ -20,9 +20,10 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
     private static readonly UTF8Encoding Utf8WithoutPreamble = new(encoderShouldEmitUTF8Identifier: false);
 
     private readonly WindowsJobProcess _process;
-    private readonly Task[] _pumps;
+    private readonly Task<bool>[] _pumps;
     private readonly CancellationTokenSource _readsCancelled = new();
-    private readonly bool _standardOutputPumped;
+    private readonly Task<bool> _standardErrorPump;
+    private readonly Task<bool>? _standardOutputPump;
     private readonly TimeProvider _timeProvider;
 
     public WindowsJobSandboxChildProcess(WindowsJobProcess process,
@@ -35,27 +36,33 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
         ArgumentNullException.ThrowIfNull(onStandardErrorLine);
         _process = process;
         _timeProvider = timeProvider;
-        var pumps = new List<Task>(2) { Pump(process.StandardError, onStandardErrorLine) };
-        if (onStandardOutputLine is not null)
+        _standardErrorPump = Pump(process.StandardError, onStandardErrorLine);
+        if (onStandardOutputLine is null)
         {
-            pumps.Add(Pump(process.StandardOutput, onStandardOutputLine));
-            _standardOutputPumped = true;
+            _pumps = [_standardErrorPump];
         }
-
-        _pumps = [.. pumps];
+        else
+        {
+            _standardOutputPump = Pump(process.StandardOutput, onStandardOutputLine);
+            _pumps = [_standardErrorPump, _standardOutputPump];
+        }
     }
 
     public int Id => _process.Id;
 
     public Stream StandardInput => _process.StandardInput;
 
-    public Stream StandardOutput => _standardOutputPumped
+    public Stream StandardOutput => _standardOutputPump is not null
         ? throw new InvalidOperationException("The job child's stdout is pumped to a line callback.")
         : _process.StandardOutput;
 
     public bool TimedOut => false;
 
     public int? ExitCode => _process.ExitCode;
+
+    public bool StandardOutputIncomplete => _standardOutputPump is { IsCompletedSuccessfully: true, Result: true };
+
+    public bool StandardErrorIncomplete => _standardErrorPump is { IsCompletedSuccessfully: true, Result: true };
 
     public IReadOnlyList<string> Warnings => [];
 
@@ -102,7 +109,7 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
         _process.Dispose();
     }
 
-    private Task Pump(Stream stream, Action<string> onLine) =>
+    private Task<bool> Pump(Stream stream, Action<string> onLine) =>
         MxcChildProcess.PumpLinesAsync(stream, onLine, _readsCancelled.Token);
 
     private async Task DrainPumpsAsync()
@@ -116,7 +123,9 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
             return;
         }
 
-        // A process outside the job holds a pipe: cancel the pumps' reads, which ends them; nothing awaits them past this point.
+        // A process outside the job holds a pipe: cancelling the overlapped reads ends the pumps at once, and each delivers its pending
+        // partial line before the caller reads the capture.
         await _readsCancelled.CancelAsync();
+        await drained;
     }
 }

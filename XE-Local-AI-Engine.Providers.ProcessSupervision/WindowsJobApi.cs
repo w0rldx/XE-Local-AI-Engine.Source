@@ -315,14 +315,16 @@ internal sealed class WindowsJobApi : IWindowsJobApi
 
         nint size = 0;
         _ = WindowsJobNative.InitializeProcThreadAttributeList(IntPtr.Zero, dwAttributeCount: 2, dwFlags: 0, ref size);
-        var attributes = Marshal.AllocHGlobal(size);
-        // Both arrays must outlive the attribute list, which stores their addresses.
-        var jobs = Marshal.AllocHGlobal(IntPtr.Size);
-        var inherited = Marshal.AllocHGlobal(3 * IntPtr.Size);
+        // Allocated inside the try, so a failed allocation frees the earlier ones; FreeHGlobal of IntPtr.Zero does nothing.
+        IntPtr attributes = IntPtr.Zero, jobs = IntPtr.Zero, inherited = IntPtr.Zero;
         var initialized = false;
         bool jobRef = false, stdinRef = false, stdoutRef = false, stderrRef = false;
         try
         {
+            attributes = Marshal.AllocHGlobal(size);
+            // Both arrays must outlive the attribute list, which stores their addresses.
+            jobs = Marshal.AllocHGlobal(IntPtr.Size);
+            inherited = Marshal.AllocHGlobal(3 * IntPtr.Size);
             job.DangerousAddRef(ref jobRef);
             stdin.DangerousAddRef(ref stdinRef);
             stdout.DangerousAddRef(ref stdoutRef);

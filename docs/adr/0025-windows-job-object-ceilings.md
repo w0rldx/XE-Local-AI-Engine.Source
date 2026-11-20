@@ -44,8 +44,10 @@ can open its owner with `VM_WRITE`, `CREATE_THREAD` and `TERMINATE`.
      under the limit succeeds and one past it fails with `ERROR_COMMITMENT_LIMIT`; a process chain inside the cap runs, and
      one past it does not while the same chain under a wider cap does). A failure withdraws the ceilings with its reason and
      never anything else. The probe runs once per engine process, on the startup path: four short `cmd.exe` launches,
-     each bounded by a 5 s wait, so a healthy host pays well under a second and a hung control at most about 20 s. Its
-     result is cached until the engine restarts, so a failed probe leaves the ceilings off until then.
+     the three process chains each bounded by a 30 s wait, so a healthy host pays well under a second, a contended one
+     (a first antivirus scan, a model load) is not misread as unsupported, and a hung control costs at most about 90 s. A
+     wrong exit code is a verdict and is never retried. Its result is cached until the engine restarts, so a failed probe
+     leaves the ceilings off until then.
    - Output is read overlapped. Windows documents cancelling a blocked read on another thread only for overlapped I/O
      (`CancelIoEx`; synchronous I/O needs `CancelSynchronousIo` on the reading thread), so stdout and stderr are named-pipe
      server ends opened with `FILE_FLAG_OVERLAPPED`, and the drain budget cancels their reads through a token.
@@ -80,9 +82,13 @@ stated, not mitigated.
 - **A handle window.** The three child pipe ends are inheritable only around the launcher's own `CreateProcessW`, under
   one lock. .NET 10's `Process.Start` inherits every inheritable handle under a lock no other code can take, so a
   concurrent engine `Process.Start` in that window can inherit a child end and delay that command's end of output. The
-  reader's cancellable drain budget bounds the delay; `ProcessStartInfo.InheritedHandles` (after .NET 10) retires it.
+  reader's cancellable drain budget bounds the delay; `ProcessStartInfo.InheritedHandles`, documented for .NET 11 only
+  (checked on 2026-11-20), retires it once the engine targets that release.
 - **Commit, not resident memory,** is what Windows counts.
 - **A CPU rate under RDS with DFSS** is refused by the OS; the probe then reports the ceilings unavailable.
+- **A parent job with a CPU rate** (a Windows container started with `--cpus`, some hosted runners) tightens the cap
+  further: a nested job's rate is a share of its parent's, and `Environment.ProcessorCount` already reflects the parent,
+  so a command gets less CPU than its numbers say. This fails safe; it never loosens a ceiling.
 
 ## Consequences
 

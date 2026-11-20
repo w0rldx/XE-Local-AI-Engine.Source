@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Providers.ProcessSupervision;
 
-using System.Buffers;
 using System.ComponentModel;
 using System.IO.Pipelines;
 using System.Runtime.InteropServices;
@@ -50,8 +49,11 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
     /// <summary>A process outside the job keeps the child's stdout open: it never reaches end of stream, not even on terminate.</summary>
     public bool HoldStandardOutput { get; set; }
 
-    /// <summary>Closing the child's stdin throws, as a broken pipe would.</summary>
+    /// <summary>Closing the child's stdin throws once, as a broken pipe would.</summary>
     public bool StandardInputFailsOnDispose { get; set; }
+
+    /// <summary>Reading an exited process's exit code throws a <see cref="Win32Exception" />.</summary>
+    public bool ExitCodeFails { get; set; }
 
     /// <summary>The processes terminated directly, not through their job.</summary>
     public int ProcessTerminations { get; private set; }
@@ -176,7 +178,8 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
         return _exits[process].Task;
     }
 
-    public int GetExitCode(SafeHandle process) => _exitCodes[process];
+    public int GetExitCode(SafeHandle process) =>
+        ExitCodeFails ? throw new Win32Exception(6, "injected: the exit code could not be read") : _exitCodes[process];
 
     public void TerminateProcess(SafeHandle process)
     {
@@ -211,10 +214,16 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
 
     internal sealed class FailingDisposeStream : MemoryStream
     {
-        public override async ValueTask DisposeAsync()
+        private bool _failed;
+
+        protected override void Dispose(bool disposing)
         {
-            await base.DisposeAsync();
-            throw new IOException("injected: the pipe broke");
+            base.Dispose(disposing);
+            if (disposing && !_failed)
+            {
+                _failed = true;
+                throw new IOException("injected: the pipe broke");
+            }
         }
     }
 
@@ -236,7 +245,8 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
     /// <summary>An in-memory pipe whose read end reaches end of stream only once the writer completes.</summary>
     internal sealed class FakePipe
     {
-        private readonly Pipe _pipe = new();
+        // Never pauses its writer, so a write is readable at once, however large.
+        private readonly Pipe _pipe = new(new PipeOptions(pauseWriterThreshold: 0));
 
         public FakePipe()
         {
@@ -248,9 +258,9 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
 
         public Stream Writer { get; }
 
-        // Committed by Complete: a fake process's output is readable once it has exited.
+        // Written and flushed through the stream at once, so a pump sees output that a held pipe never completes; it cannot pause.
         public void Write(string text) =>
-            _pipe.Writer.Write(System.Text.Encoding.UTF8.GetBytes(text));
+            Writer.Write(System.Text.Encoding.UTF8.GetBytes(text));
 
         public void Complete() => _pipe.Writer.Complete();
     }

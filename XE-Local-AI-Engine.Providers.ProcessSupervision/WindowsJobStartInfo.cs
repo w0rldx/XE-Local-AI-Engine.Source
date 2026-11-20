@@ -11,4 +11,7 @@ public sealed record WindowsJobStartInfo
 
     /// <summary>The child's complete environment; nothing of the engine's is added.</summary>
     public required IReadOnlyDictionary<string, string> Environment { get; init; }
+
+    /// <summary>The caller writes stdin; otherwise its write end is closed while the child is suspended, so the child reads end of stream.</summary>
+    public bool RedirectStandardInput { get; init; }
 }

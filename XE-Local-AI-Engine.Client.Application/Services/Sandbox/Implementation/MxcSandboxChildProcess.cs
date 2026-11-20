@@ -32,6 +32,10 @@ internal sealed class MxcSandboxChildProcess : ISandboxChildProcess
 
     public int? ExitCode => _child.ExitCode;
 
+    public bool StandardOutputIncomplete => _child.StandardOutputIncomplete;
+
+    public bool StandardErrorIncomplete => _child.StandardErrorIncomplete;
+
     public IReadOnlyList<string> Warnings => _child.Warnings;
 
     public async Task WriteStandardInputAndCloseAsync(string text, CancellationToken cancellationToken)

@@ -19,9 +19,14 @@ public sealed class MxcChildProcess : IDisposable
     /// <summary>How long a pumped stream may stay open after the child exited or was killed before it is closed under the pump.</summary>
     internal static readonly TimeSpan PumpDrainBudget = TimeSpan.FromSeconds(5);
 
+    /// <summary>The longest line a pump holds: the capture budget, since the capture would cut a longer line anyway.</summary>
+    internal const int MaxPendingLineChars = ProcessSandboxRuntimeProvider.DefaultMaxCapturedOutputBytes;
+
     private readonly List<IMxcStreamCloser> _closers = new(2);
     private readonly IMxcProcess _process;
-    private readonly Task[] _pumps;
+    private readonly Task<bool>[] _pumps;
+    private readonly Task<bool>? _standardErrorPump;
+    private readonly Task<bool>? _standardOutputPump;
     private readonly TimeProvider _timeProvider;
 
     public MxcChildProcess(IMxcProcess process,
@@ -33,11 +38,10 @@ public sealed class MxcChildProcess : IDisposable
         _process = process;
         ArgumentNullException.ThrowIfNull(timeProvider);
         _timeProvider = timeProvider;
-        var pumps = new List<Task>(2);
         if (onStandardOutputLine is not null && process.StandardOutput is { } standardOutput)
         {
             // The SDK hands out a closer only for a stream already taken, so it is requested right after the stream.
-            pumps.Add(PumpLinesAsync(standardOutput, onStandardOutputLine, CancellationToken.None));
+            _standardOutputPump = PumpLinesAsync(standardOutput, onStandardOutputLine, CancellationToken.None);
             AddCloser(process.StandardOutputCloser);
         }
         else if (process.StandardOutput is { } rawOutput)
@@ -48,7 +52,7 @@ public sealed class MxcChildProcess : IDisposable
 
         if (onStandardErrorLine is not null && process.StandardError is { } standardError)
         {
-            pumps.Add(PumpLinesAsync(standardError, onStandardErrorLine, CancellationToken.None));
+            _standardErrorPump = PumpLinesAsync(standardError, onStandardErrorLine, CancellationToken.None);
             AddCloser(process.StandardErrorCloser);
         }
         else
@@ -56,7 +60,7 @@ public sealed class MxcChildProcess : IDisposable
             StandardError = process.StandardError;
         }
 
-        _pumps = [.. pumps];
+        _pumps = [.. new[] { _standardOutputPump, _standardErrorPump }.OfType<Task<bool>>()];
     }
 
     /// <summary>The OS process id of the contained child.</summary>
@@ -79,6 +83,12 @@ public sealed class MxcChildProcess : IDisposable
 
     /// <summary>The exit code once the child has exited, else <see langword="null" />. Never waits.</summary>
     public int? ExitCode => _process.TryGetExitCode(out var exitCode) ? exitCode : null;
+
+    /// <summary>The stdout pump finished and reported its lines incomplete (<see cref="PumpLinesAsync" />).</summary>
+    public bool StandardOutputIncomplete => _standardOutputPump is { IsCompletedSuccessfully: true, Result: true };
+
+    /// <summary>As <see cref="StandardOutputIncomplete" />, for stderr.</summary>
+    public bool StandardErrorIncomplete => _standardErrorPump is { IsCompletedSuccessfully: true, Result: true };
 
     /// <summary>
     ///     Waits for exit and for every pumped stream to reach end of stream, at most <see cref="PumpDrainBudget" /> after exit; returns
@@ -170,29 +180,114 @@ public sealed class MxcChildProcess : IDisposable
             return;
         }
 
-        // The pumps end on the closed pipe (end of stream or an I/O error they swallow); nothing awaits them past this point.
+        // Closing ends the native read, so the pumps end on the closed pipe (end of stream or an I/O error they swallow) and deliver a
+        // pending partial line before the caller reads the capture.
         foreach (var closer in _closers)
         {
             closer.Close();
         }
+
+        // A pumped stream the SDK gave no closer for cannot be ended from here, so then nothing waits for the pumps.
+        if (_closers.Count == _pumps.Length)
+        {
+            await drained;
+        }
     }
 
-    /// <summary>Delivers each UTF-8 line of <paramref name="stream" /> until end of stream, an I/O error or <paramref name="cancellationToken" />.</summary>
-    internal static async Task PumpLinesAsync(Stream stream, Action<string> onLine, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Delivers each UTF-8 line of <paramref name="stream" /> (split as <see cref="StreamReader.ReadLine" /> splits) until end of stream,
+    ///     an I/O error or <paramref name="cancellationToken" />; returns <see langword="true" /> when what it delivered is incomplete.
+    /// </summary>
+    /// <remarks>
+    ///     A line is held at most <see cref="MaxPendingLineChars" />: past it the line is delivered cut and the rest up to its newline is
+    ///     read and discarded, so a command printing without newlines cannot grow the engine. A final unterminated line is delivered at
+    ///     end of stream, and also when the read stops early, which then counts as incomplete because its line may have gone on.
+    /// </remarks>
+    internal static async Task<bool> PumpLinesAsync(Stream stream, Action<string> onLine, CancellationToken cancellationToken)
     {
         // Yield first so a synchronously completing stream cannot run the whole pump inside the constructor.
         await Task.Yield();
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false);
+        var buffer = new char[4096];
+        var line = new StringBuilder();
+        var discarding = false;
+        var afterCarriageReturn = false;
+        var incomplete = false;
         try
         {
-            while (await reader.ReadLineAsync(cancellationToken) is { } line)
+            int read;
+            while ((read = await reader.ReadAsync(buffer, cancellationToken)) > 0)
             {
-                onLine(line);
+                var chunk = buffer.AsSpan(0, read);
+                // A "\r\n" split across two reads is one terminator.
+                if (afterCarriageReturn && chunk[0] == '\n')
+                {
+                    chunk = chunk[1..];
+                }
+
+                afterCarriageReturn = false;
+                while (!chunk.IsEmpty)
+                {
+                    var end = chunk.IndexOfAny('\r', '\n');
+                    var text = end < 0 ? chunk : chunk[..end];
+                    if (!discarding)
+                    {
+                        var room = MaxPendingLineChars - line.Length;
+                        if (text.Length <= room)
+                        {
+                            line.Append(text);
+                        }
+                        else
+                        {
+                            // Never end a cut line on half a surrogate pair.
+                            var kept = room > 0 && char.IsHighSurrogate(text[room - 1]) ? room - 1 : room;
+                            line.Append(text[..kept]);
+                            onLine(line.ToString());
+                            line.Clear();
+                            discarding = true;
+                            incomplete = true;
+                        }
+                    }
+
+                    if (end < 0)
+                    {
+                        break;
+                    }
+
+                    if (!discarding)
+                    {
+                        onLine(line.ToString());
+                        line.Clear();
+                    }
+
+                    discarding = false;
+                    if (chunk[end] == '\r')
+                    {
+                        if (end + 1 == chunk.Length)
+                        {
+                            afterCarriageReturn = true;
+                        }
+                        else if (chunk[end + 1] == '\n')
+                        {
+                            end++;
+                        }
+                    }
+
+                    chunk = chunk[(end + 1)..];
+                }
             }
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException or OperationCanceledException)
         {
-            // The drain budget ran out and the stream was closed (or its read cancelled) under this read; the lines read so far were delivered.
+            // The drain budget ran out and the stream was closed (or its read cancelled) under this read; a pending line is delivered below.
+            incomplete |= line.Length > 0;
         }
+
+        if (line.Length > 0)
+        {
+            onLine(line.ToString());
+        }
+
+        return incomplete;
     }
 }

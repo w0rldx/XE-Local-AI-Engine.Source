@@ -133,6 +133,32 @@ public sealed class MxcChildProcessTests
     }
 
     [Test]
+    public async Task PumpLinesAsync_SplitsLikeReadLine_AndDeliversAFinalUnterminatedLine()
+    {
+        var lines = new List<string>();
+
+        var incomplete = await MxcChildProcess.PumpLinesAsync(new MemoryStream("a\r\nb\rc\n\nd"u8.ToArray()), lines.Add, CancellationToken.None);
+
+        AssertEx.Equal("a|b|c||d", string.Join('|', lines));
+        AssertEx.False(incomplete, "every line reached its terminator or end of stream");
+    }
+
+    [Test]
+    public async Task PumpLinesAsync_CutsALineWithoutNewlines_AtTheCaptureBudget_AndKeepsDraining()
+    {
+        // Twice the budget without a newline, then one more line: the pump holds at most the budget and still reads to the end.
+        var text = new string('x', 2 * MxcChildProcess.MaxPendingLineChars) + "\nnext";
+        var lines = new List<string>();
+
+        var incomplete = await MxcChildProcess.PumpLinesAsync(new MemoryStream(Encoding.UTF8.GetBytes(text)), lines.Add, CancellationToken.None);
+
+        AssertEx.Equal(2, lines.Count);
+        AssertEx.Equal(MxcChildProcess.MaxPendingLineChars, lines[0].Length, "the newline-free run is delivered cut at the budget, never whole");
+        AssertEx.Equal("next", lines[1], "the stream is drained past the cut line");
+        AssertEx.True(incomplete, "a cut line makes the stream incomplete");
+    }
+
+    [Test]
     public async Task UnpumpedStreams_AreExposedRaw_AndIdIsTheOsPid()
     {
         var output = new MemoryStream("raw"u8.ToArray());

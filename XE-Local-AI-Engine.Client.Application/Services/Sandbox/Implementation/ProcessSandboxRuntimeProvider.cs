@@ -35,7 +35,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
     // Default captured-output ceiling per stream (stdout / stderr). Mirrors the container provider's bounded transfer
     // posture: capture is capped, and reading stops once the cap is reached so a runaway command cannot exhaust memory.
-    private const int DefaultMaxCapturedOutputBytes = 4 * 1024 * 1024;
+    internal const int DefaultMaxCapturedOutputBytes = 4 * 1024 * 1024;
 
     private const string SandboxKilledBeforeStart = "The sandbox was killed before the command started.";
 
@@ -421,8 +421,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 ExitCode = exitCode,
                 StandardOutput = standardOutput,
                 StandardError = standardError,
-                StandardOutputTruncated = standardOutputBuilder.IsTruncated,
-                StandardErrorTruncated = standardErrorBuilder.IsTruncated,
+                StandardOutputTruncated = standardOutputBuilder.IsTruncated || process.StandardOutputIncomplete,
+                StandardErrorTruncated = standardErrorBuilder.IsTruncated || process.StandardErrorIncomplete,
                 Completed = true,
                 Duration = _timeProvider.GetUtcNow() - startedAt
             };
@@ -456,8 +456,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 standardOutputBuilder.ToString());
             return cancelled with
             {
-                StandardOutputTruncated = standardOutputBuilder.IsTruncated,
-                StandardErrorTruncated = standardErrorBuilder.IsTruncated
+                StandardOutputTruncated = standardOutputBuilder.IsTruncated || process.StandardOutputIncomplete,
+                StandardErrorTruncated = standardErrorBuilder.IsTruncated || process.StandardErrorIncomplete
             };
         }
         catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
@@ -885,7 +885,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
         if (launch.WindowsJobLimits is { } jobLimits)
         {
-            return await StartInWindowsJobAsync(startInfo, jobLimits, onStandardOutputLine, onStandardErrorLine);
+            return StartInWindowsJob(startInfo, jobLimits, onStandardOutputLine, onStandardErrorLine);
         }
 
         var process = new Process
@@ -920,7 +920,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
     /// <summary>Starts the command suspended inside its own Job Object, verified and then resumed (<see cref="WindowsJobLauncher" />).</summary>
     /// <remarks>Any setup failure throws with nothing running and no handle left; the command line follows the CommandLineToArgvW rules.</remarks>
-    private async Task<WindowsJobSandboxChildProcess> StartInWindowsJobAsync(ProcessStartInfo startInfo,
+    private WindowsJobSandboxChildProcess StartInWindowsJob(ProcessStartInfo startInfo,
         WindowsJobLimits limits,
         Action<string?>? onStandardOutputLine,
         Action<string?> onStandardErrorLine)
@@ -943,24 +943,10 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             {
                 CommandLine = WindowsCommandLine.Join(startInfo.FileName, startInfo.ArgumentList),
                 WorkingDirectory = startInfo.WorkingDirectory,
-                Environment = environment
+                Environment = environment,
+                RedirectStandardInput = startInfo.RedirectStandardInput
             },
             limits);
-        try
-        {
-            if (!startInfo.RedirectStandardInput)
-            {
-                // An unredirected child reads end of stream, never the engine's own stdin.
-                await process.StandardInput.DisposeAsync();
-            }
-        }
-        catch
-        {
-            // The command already runs: its job must not wait for a finalizer.
-            process.Dispose();
-            throw;
-        }
-
         return new WindowsJobSandboxChildProcess(process,
             _timeProvider,
             onStandardOutputLine is null ? null : line => onStandardOutputLine(line),

@@ -25,6 +25,13 @@ internal interface ISandboxChildProcess : IDisposable
     /// <summary>The exit code once the child has exited, else <see langword="null" />. Never waits.</summary>
     int? ExitCode { get; }
 
+    /// <summary>The stdout pump cut a line, or stopped with an unterminated line pending, so the captured stdout is incomplete.</summary>
+    /// <remarks>Read after a wait returned; the pumps have finished by then.</remarks>
+    bool StandardOutputIncomplete { get; }
+
+    /// <summary>As <see cref="StandardOutputIncomplete" />, for stderr.</summary>
+    bool StandardErrorIncomplete { get; }
+
     /// <summary>The mechanism's own warnings for this run (MXC's); empty for a plain child.</summary>
     IReadOnlyList<string> Warnings { get; }
 

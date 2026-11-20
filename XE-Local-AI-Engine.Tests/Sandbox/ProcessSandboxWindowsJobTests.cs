@@ -54,6 +54,21 @@ public sealed class ProcessSandboxWindowsJobTests
     }
 
     [Test]
+    public async Task ANewlineFreeStdout_LargerThanTheCaptureBudget_IsBoundedAndReportedTruncated()
+    {
+        var api = new FakeWindowsJobApi { StandardOutputText = new string('x', MxcChildProcess.MaxPendingLineChars + 4096) };
+        using var provider = Provider(api);
+        var handle = await provider.CreateOrAttachAsync(Request());
+
+        var result = await provider.ExecuteAsync(handle, Command("no-newline", "tool.exe"));
+
+        AssertEx.True(result.Completed, result.StandardError);
+        AssertEx.True(result.StandardOutputTruncated, "output cut at the capture budget is reported truncated");
+        AssertEx.True(result.StandardOutput.Length <= MxcChildProcess.MaxPendingLineChars, $"captured {result.StandardOutput.Length} chars, past the budget");
+        await provider.KillAsync(handle);
+    }
+
+    [Test]
     public async Task StandardInput_ReachesTheJobChild_AsUtf8()
     {
         var api = new FakeWindowsJobApi();
@@ -121,7 +136,7 @@ public sealed class ProcessSandboxWindowsJobTests
     }
 
     [Test]
-    public async Task AFailedStdinClose_RefusesTheCommand_AndDisposesItsJob()
+    public async Task AFailedStdinClose_RefusesTheCommand_BeforeItIsResumed_AndDisposesItsJob()
     {
         var api = new FakeWindowsJobApi { StandardInputFailsOnDispose = true, ExitCodeFor = static _ => null };
         var markers = new CountingMarkerStore();
@@ -131,7 +146,8 @@ public sealed class ProcessSandboxWindowsJobTests
         var result = await provider.ExecuteAsync(handle, Command("stdin-close", "tool.exe"));
 
         AssertRefused(result, api, markers);
-        AssertEx.True(api.Terminations >= 1, "the started command's job is terminated, not left for a finalizer");
+        AssertEx.False(api.Calls.Contains("Resume"), "unused stdin is closed while the child is still suspended, so a refusal means nothing ran");
+        AssertEx.True(api.Terminations >= 1, "the suspended command's job is terminated, not left for a finalizer");
         await provider.KillAsync(handle);
     }
 

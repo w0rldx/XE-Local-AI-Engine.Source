@@ -179,13 +179,16 @@ public sealed class WindowsJobSandboxWindowsTests
         }
     }
 
-    /// <summary>A process outside the job holding stdout open ends the command at the drain budget, and both pumps finish.</summary>
+    /// <summary>
+    ///     A process outside the job holding stdout open ends the command at the drain budget, the unterminated line the root printed is
+    ///     still delivered and marks stdout incomplete, and both pumps finish.
+    /// </summary>
     /// <remarks>
     ///     The root duplicates its own stdout into this test host, which is outside the job, then exits. Windows documents cancelling a
     ///     blocked read on another thread for overlapped I/O, so the engine reads stdout and stderr overlapped (ADR 0025).
     /// </remarks>
     [Test]
-    public async Task AStdoutHeldOutsideTheJob_EndsAtTheDrainBudget_AndBothPumpsFinish()
+    public async Task AStdoutHeldOutsideTheJob_EndsAtTheDrainBudget_DeliversThePendingLine_AndBothPumpsFinish()
     {
         var script = """
                      Add-Type -Name K -Namespace XeTest -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n); [DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr OpenProcess(uint access, bool inherit, int pid); [DllImport("kernel32.dll", SetLastError = true)] public static extern bool DuplicateHandle(IntPtr sourceProcess, IntPtr source, IntPtr targetProcess, out IntPtr target, uint access, bool inherit, uint options); [DllImport("kernel32.dll")] public static extern IntPtr GetCurrentProcess();'
@@ -193,12 +196,21 @@ public sealed class WindowsJobSandboxWindowsTests
                      $held = [IntPtr]::Zero
                      if (-not [XeTest.K]::DuplicateHandle([XeTest.K]::GetCurrentProcess(), [XeTest.K]::GetStdHandle(-11), $engine, [ref]$held, 0, $false, 2)) { exit 9 }
                      [Console]::Error.WriteLine($held.ToInt64())
+                     [Console]::Out.Write('partial')
+                     [Console]::Out.Flush()
                      """.Replace("ENGINE_PID", Environment.ProcessId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
         var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
         var errors = new List<string>();
+        var output = new List<string>();
         using var child = new WindowsJobSandboxChildProcess(Launch($"powershell -NoProfile -NonInteractive -EncodedCommand {encoded}", WindowsJobLimits.Map(4096, 256, null, Environment.ProcessorCount)),
             TimeProvider.System,
-            static _ => { },
+            line =>
+            {
+                lock (output)
+                {
+                    output.Add(line);
+                }
+            },
             line =>
             {
                 lock (errors)
@@ -222,6 +234,12 @@ public sealed class WindowsJobSandboxWindowsTests
             AssertEx.True(held != IntPtr.Zero, "the root reported no duplicated handle");
             AssertEx.True(returnedAfter >= MxcChildProcess.PumpDrainBudget - TimeSpan.FromSeconds(1), $"returned after {returnedAfter}, before the held pipe's drain budget");
             AssertEx.True(returnedAfter <= MxcChildProcess.PumpDrainBudget + TimeSpan.FromSeconds(30), $"returned after {returnedAfter}: the held read was not cancelled");
+            lock (output)
+            {
+                AssertEx.Equal("partial", string.Join('|', output), "the unterminated line is delivered before the wait returns");
+            }
+
+            AssertEx.True(child.StandardOutputIncomplete, "a line cut off by the drain budget makes stdout incomplete");
             using var pumps = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             AssertEx.True(await child.TryWaitForExitAsync(pumps.Token), "a pump stayed blocked on the held pipe after its read was cancelled");
         }
@@ -404,7 +422,9 @@ public sealed class WindowsJobSandboxWindowsTests
         {
             CommandLine = commandLine,
             WorkingDirectory = Path.GetTempPath(),
-            Environment = environment
+            Environment = environment,
+            // These tests read the engine's stdin end or keep an interactive cmd alive on it.
+            RedirectStandardInput = true
         };
     }
 

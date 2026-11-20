@@ -37,6 +37,11 @@ internal sealed class ProcessSandboxChildProcess : ISandboxChildProcess
         }
     }
 
+    // The Process event pump delivers whole lines and ends only at end of stream.
+    public bool StandardOutputIncomplete => false;
+
+    public bool StandardErrorIncomplete => false;
+
     public IReadOnlyList<string> Warnings => [];
 
     public async Task WriteStandardInputAndCloseAsync(string text, CancellationToken cancellationToken)

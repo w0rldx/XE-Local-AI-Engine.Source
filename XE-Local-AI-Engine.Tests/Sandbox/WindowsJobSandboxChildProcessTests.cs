@@ -14,16 +14,28 @@ public sealed class WindowsJobSandboxChildProcessTests
     private static readonly WindowsJobStartInfo Command = new()
     {
         CommandLine = "tool.exe",
-        Environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        Environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+        RedirectStandardInput = true
     };
 
     [Test]
-    public async Task AStdoutHeldOutsideTheJob_EndsAtTheDrainBudget_AndBothPumpsFinish()
+    public async Task AStdoutHeldOutsideTheJob_EndsAtTheDrainBudget_DeliversThePendingLine_AndBothPumpsFinish()
     {
-        // The root exited with 3, its job was terminated, but a process outside the job still holds stdout: no end of stream comes.
-        var api = new FakeWindowsJobApi { HoldStandardOutput = true, ExitCodeFor = static _ => 3 };
+        // The root printed an unterminated line and exited with 3, its job was terminated, but a process outside the job still holds
+        // stdout: no newline and no end of stream come.
+        var api = new FakeWindowsJobApi { HoldStandardOutput = true, StandardOutputText = "partial", ExitCodeFor = static _ => 3 };
         var time = new ManualTimeProvider();
-        using var child = new WindowsJobSandboxChildProcess(new WindowsJobLauncher(api).Start(Command, Limits()), time, static _ => { }, static _ => { });
+        var stdout = new List<string>();
+        using var child = new WindowsJobSandboxChildProcess(new WindowsJobLauncher(api).Start(Command, Limits()),
+            time,
+            line =>
+            {
+                lock (stdout)
+                {
+                    stdout.Add(line);
+                }
+            },
+            static _ => { });
 
         var wait = child.WaitForExitAsync(CancellationToken.None);
         await AssertEx.StaysIncompleteAsync(wait, "the pumps get their drain budget before their reads are cancelled");
@@ -31,6 +43,13 @@ public sealed class WindowsJobSandboxChildProcessTests
 
         await AssertEx.CompletesAsync(wait, TestBudgets.Contended, "the wait must return once the drain budget is spent");
         AssertEx.Equal(3, await wait);
+        lock (stdout)
+        {
+            AssertEx.Equal("partial", string.Join('|', stdout), "the unterminated line is delivered before the wait returns");
+        }
+
+        AssertEx.True(child.StandardOutputIncomplete, "a line cut off by the drain budget makes stdout incomplete");
+        AssertEx.False(child.StandardErrorIncomplete, "stderr reached its end with nothing pending");
         using var pumps = new CancellationTokenSource(TestBudgets.Contended);
         AssertEx.True(await child.TryWaitForExitAsync(pumps.Token), "both pumps must end once their reads are cancelled");
     }

@@ -62,6 +62,12 @@ public sealed class WindowsJobLauncher
                 throw new InvalidOperationException("the new process is not a member of its Windows job, so it was never resumed");
             }
 
+            if (!startInfo.RedirectStandardInput)
+            {
+                // Closed before the resume, so a failure here is a refusal with nothing run, never the engine's own stdin.
+                child.StandardInput.Dispose();
+            }
+
             // The exit wait is registered while the process is still suspended, so a failure there leaves nothing that ran.
             var process = new WindowsJobProcess(_api, job, child);
             _api.Resume(child.Thread);

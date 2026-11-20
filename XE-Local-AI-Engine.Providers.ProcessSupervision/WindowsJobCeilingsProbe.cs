@@ -29,7 +29,7 @@ public static class WindowsJobCeilingsProbe
     // ERROR_COMMITMENT_LIMIT: the error a commit past JOB_OBJECT_LIMIT_JOB_MEMORY returns (ADR 0025, Context).
     internal const int CommitmentLimitError = 1455;
 
-    private static readonly TimeSpan ControlTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan ControlTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>Runs the controls with the host's own <c>cmd.exe</c>.</summary>
     public static WindowsJobProbeResult Measure(WindowsJobLauncher launcher) =>
@@ -68,7 +68,7 @@ public static class WindowsJobCeilingsProbe
     private static WindowsJobProbeResult? MeasureCommit(WindowsJobLauncher launcher, string commandInterpreter, WindowsJobLimits limits)
     {
         // An interactive cmd reading its open stdin stays alive and idle while the engine commits inside its job.
-        using var holder = launcher.Start(StartInfo(commandInterpreter, ["/d", "/q", "/k"]), limits);
+        using var holder = launcher.Start(StartInfo(commandInterpreter, ["/d", "/q", "/k"]) with { RedirectStandardInput = true }, limits);
         try
         {
             if (!holder.TryCommit(UnderLimitCommitBytes, out var underError))
@@ -112,7 +112,6 @@ public static class WindowsJobCeilingsProbe
             // The containment probe is synchronous by contract (one cached measurement behind ISandboxContainmentProbe); the wait is
             // bounded and completes on a thread-pool wait callback, so it cannot deadlock.
 #pragma warning disable MA0045, MA0032
-            chain.StandardInput.Dispose();
             var finished = chain.WaitForExitAsync(CancellationToken.None).Wait(ControlTimeout);
 #pragma warning restore MA0045, MA0032
             if (!finished)
