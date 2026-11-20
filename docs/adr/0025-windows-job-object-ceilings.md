@@ -28,9 +28,9 @@ can open its owner with `VM_WRITE`, `CREATE_THREAD` and `TERMINATE`.
 ## Decision
 
 1. **Plain Windows launches carry an engine-owned job.**
-   - Attached at creation: the process is created suspended with `PROC_THREAD_ATTRIBUTE_JOB_LIST` and a
-     `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` of exactly its three stdio ends, its membership is verified with `IsProcessInJob`,
-     and only then is it resumed (`WindowsJobLauncher`). Any failure before the resume terminates and closes the job and
+   - Attached at creation: the process is created suspended with `PROC_THREAD_ATTRIBUTE_JOB_LIST`, with its three stdio
+     ends inherited from a handle parent (below); its membership is verified with `IsProcessInJob`, its affinity mask and
+     priority class are set to the engine's current ones, and only then is it resumed (`WindowsJobLauncher`). Any failure before the resume terminates and closes the job and
      every handle; the payload never runs, and the command is refused. There is no "run unbounded" path.
    - One job per command. Whatever the command started dies when it ends: MSBuild reuse nodes, `VBCSCompiler`, a dev
      server an agent started. This matches Linux.
@@ -45,7 +45,7 @@ can open its owner with `VM_WRITE`, `CREATE_THREAD` and `TERMINATE`.
      succeeds, since that error also means host-wide commit exhaustion; a process chain inside the cap runs, and one past it
      does not while the same chain under a wider cap does). A failure, an inconclusive control included, withdraws the
      ceilings with its reason and never anything else. The probe runs once per engine process, on the startup path: five
-     short `cmd.exe` launches, the three process chains each bounded by a 30 s wait, so a healthy host pays well under a
+     short `cmd.exe` launches (the first also creates the handle parent), the three process chains each bounded by a 30 s wait, so a healthy host pays well under a
      second, a contended one (a first antivirus scan, a model load) is not misread as unsupported, and a hung control
      costs at most about 90 s. A wrong exit code is a verdict and is never retried. Its result is cached until the engine
      restarts, so a failed probe leaves the ceilings off until then.
@@ -56,8 +56,19 @@ can open its owner with `VM_WRITE`, `CREATE_THREAD` and `TERMINATE`.
      UTF-8 whatever the console code page, and a captured `git diff` is stored as a UTF-8 patch, so decoding with an OEM or
      ANSI code page would corrupt non-ASCII patches. Accepted trade-off: a `cmd` builtin that prints in the OEM code page
      is not decoded faithfully.
-   - The launcher always passes exactly the three stdio ends in its handle list. It has no path yet that inherits nothing
-     (`bInheritHandles = FALSE`, no handle list), which the broker of Decision 2 needs.
+   - **The handle parent.** No job-launched command's pipe end (the stdin read end and the stdout and stderr write ends the
+     job launcher creates for the child) is ever inheritable in the engine process. The engine creates them non-inheritable,
+     duplicates them as inheritable into a handle parent (the system `cmd.exe`, created suspended, never resumed, member of
+     a kill-on-close parent job the engine alone holds), creates the command with `PROC_THREAD_ATTRIBUTE_PARENT_PROCESS` =
+     that helper and a `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` of exactly those three duplicates, and closes them in the helper
+     right after (`DUPLICATE_CLOSE_SOURCE`), a variant of the pattern Microsoft describes in The Old New Thing, 2026-05-11,
+     whose helper runs. A process the launcher ends on a failure path is held until a wait confirms its exit, and no launch
+     proceeds while one is unconfirmed. The launcher has no path that starts a command without inherited handles
+     (`bInheritHandles = FALSE`, no handle list); the broker of Decision 2 needs one.
+   - **Affinity and priority follow the engine.** A command would inherit the helper's affinity and priority class, a
+     snapshot of the engine at helper creation. Each launch instead reads the engine's current process affinity mask and
+     priority class and sets both on the suspended command before the resume; a failed read or set refuses the command
+     with nothing run.
    - The ceilings serve the plain path only. One predicate, `SandboxRequirements.CeilingsServed`, decides for every
      consumer; a role the AppContainer boundary serves stays unbounded and is reported so, and the raw capability flag is
      read nowhere else (an architecture test).
@@ -80,12 +91,24 @@ stated, not mitigated.
 
 - **The escapes above.** Approval gating and the jail remain the controls for what a plain command may do; the job bounds
   only what runs inside it.
-- **A handle window.** The three child pipe ends are inheritable only around the launcher's own `CreateProcessW`, under
-  the launcher's lock. .NET 10's `Process.Start` inherits every inheritable handle under a lock no other code can take, so
-  another engine process start running at the same time, outside the launcher's lock, can inherit them: an engine-owned
-  child can then hold a sandbox pipe end and delay that command's end of output. The reader's cancellable drain budget
-  bounds the delay; `ProcessStartInfo.InheritedHandles`, documented for .NET 11 only (checked on 2026-11-20), or a launch
-  path without inheritable handles retires it.
+- **Limits of the handle guarantee.** It covers the job launcher's three pipe ends only. .NET's `Process.Start` still
+  creates its child's pipe ends inheritable while its private lock is held; that lock serializes .NET's own starts only.
+  A native launcher in the engine (the MXC SDK's) is not covered and was not examined. A host whose probe failed runs a
+  plain command under the `low` profile through `Process.Start`, as before this decision.
+- **The handle parent and endpoint protection.** Each command's recorded parent is a long-lived suspended `cmd.exe`,
+  the pattern of parent-process spoofing (MITRE ATT&CK T1134.004); endpoint protection may alert on or block it. No
+  packaged check against Microsoft Defender is recorded yet, so Defender, other products, policies and Defender for
+  Endpoint behavioural alerts are all unproven. A failure after a passed probe refuses the affected command, naming the
+  handle parent and the Win32 error; only the advertised capability stays cached until restart.
+- **One shared same-user target.** A same-user process that opens the helper during a launch can duplicate, terminate
+  or resume it; that is no new reach (a member can already open the engine, see "Status of the mechanism"), but one
+  helper serves every command.
+- **Inherited context.** Token (user and integrity), session and device map come from the helper, a snapshot of the
+  engine at helper creation. Affinity and priority class follow the engine at each launch (Decision 1). On a host with
+  more than 64 logical processors a process affinity mask describes one processor group, so a command is confined to a
+  single group, and an engine whose affinity reads back as no mask (its threads in several groups) has its job launches
+  refused. Every command gains the parent job as an ancestor (kill on close, no limits), and the helper takes one
+  active-process slot in any job that encloses the engine.
 - **A blocked stdin write.** A root that exits while a descendant holds stdin unread can block the engine's synchronous
   stdin write before the job is terminated, as on the Windows `Process` path. An overlapped, cancellable stdin pipe is the
   follow-up.
@@ -110,3 +133,7 @@ stated, not mitigated.
   job; it cannot be advertised honestly.
 - **A fixed Windows memory default (4 GB).** It fails `dotnet build -m` (measured).
 - **Warn and run unbounded when the job cannot be set up.** A ceiling the policy carries is never dropped silently.
+- **A launcher process that calls `CreateProcessW` itself.** The same guarantee with a control protocol and the launch
+  split across two processes; the fallback if endpoint protection rejects the handle parent.
+- **Making the ends inheritable only around the launcher's own `CreateProcessW`.** Any concurrent `Process.Start`
+  inherits them.
