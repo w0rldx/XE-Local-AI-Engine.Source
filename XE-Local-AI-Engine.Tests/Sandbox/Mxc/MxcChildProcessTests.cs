@@ -133,6 +133,34 @@ public sealed class MxcChildProcessTests
     }
 
     [Test]
+    public async Task WaitForExitAsync_WhenAClosedStreamStillNeverEnds_ReturnsAfterTheCloseGrace_AndFlagsTheStreamIncomplete()
+    {
+        // The close does not end the read (a closer that misses the native handle): the wait must still return.
+        var stdout = new Pipe();
+        var closer = Substitute.For<IMxcStreamCloser>();
+        var process = Substitute.For<IMxcProcess>();
+        process.StandardOutput.Returns(stdout.Reader.AsStream());
+        process.StandardOutputCloser.Returns(closer);
+        process.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult
+        {
+            ExitCode = 0
+        });
+        var time = new ManualTimeProvider();
+        using var child = new MxcChildProcess(process, time, static _ => { });
+
+        var wait = child.WaitForExitAsync(CancellationToken.None);
+        await AssertEx.StaysIncompleteAsync(wait, "the wait gives the pump its drain budget before closing the stream");
+        time.Advance(MxcChildProcess.PumpDrainBudget);
+        await AssertEx.StaysIncompleteAsync(wait, "after the close the pump gets its grace to end");
+        closer.Received(1).Close();
+        time.Advance(MxcChildProcess.PumpCloseGrace);
+
+        await AssertEx.CompletesAsync(wait, TestBudgets.Contended, "the wait must return once the close grace is spent");
+        AssertEx.True(child.StandardOutputIncomplete, "a pump still reading when the wait returned leaves its capture incomplete");
+        await stdout.Writer.CompleteAsync();
+    }
+
+    [Test]
     public async Task PumpLinesAsync_SplitsLikeReadLine_AndDeliversAFinalUnterminatedLine()
     {
         var lines = new List<string>();

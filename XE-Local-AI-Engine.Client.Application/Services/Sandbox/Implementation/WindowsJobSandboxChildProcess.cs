@@ -60,9 +60,9 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
 
     public int? ExitCode => _process.ExitCode;
 
-    public bool StandardOutputIncomplete => _standardOutputPump is { IsCompletedSuccessfully: true, Result: true };
+    public bool StandardOutputIncomplete => _standardOutputPump is { IsCompletedSuccessfully: false } or { Result: true };
 
-    public bool StandardErrorIncomplete => _standardErrorPump is { IsCompletedSuccessfully: true, Result: true };
+    public bool StandardErrorIncomplete => _standardErrorPump is { IsCompletedSuccessfully: false } or { Result: true };
 
     public IReadOnlyList<string> Warnings => [];
 
@@ -126,6 +126,6 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
         // A process outside the job holds a pipe: cancelling the overlapped reads ends the pumps at once, and each delivers its pending
         // partial line before the caller reads the capture.
         await _readsCancelled.CancelAsync();
-        await drained;
+        await MxcChildProcess.AwaitClosedPumpsAsync(drained, _timeProvider);
     }
 }

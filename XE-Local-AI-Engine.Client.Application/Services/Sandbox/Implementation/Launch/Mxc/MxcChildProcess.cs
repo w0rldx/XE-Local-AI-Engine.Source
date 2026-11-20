@@ -19,6 +19,9 @@ public sealed class MxcChildProcess : IDisposable
     /// <summary>How long a pumped stream may stay open after the child exited or was killed before it is closed under the pump.</summary>
     internal static readonly TimeSpan PumpDrainBudget = TimeSpan.FromSeconds(5);
 
+    /// <summary>How long the pumps may take to end after their streams were closed or their reads cancelled; past it the wait returns.</summary>
+    internal static readonly TimeSpan PumpCloseGrace = TimeSpan.FromSeconds(1);
+
     /// <summary>The longest line a pump holds: the capture budget, since the capture would cut a longer line anyway.</summary>
     internal const int MaxPendingLineChars = ProcessSandboxRuntimeProvider.DefaultMaxCapturedOutputBytes;
 
@@ -84,11 +87,11 @@ public sealed class MxcChildProcess : IDisposable
     /// <summary>The exit code once the child has exited, else <see langword="null" />. Never waits.</summary>
     public int? ExitCode => _process.TryGetExitCode(out var exitCode) ? exitCode : null;
 
-    /// <summary>The stdout pump finished and reported its lines incomplete (<see cref="PumpLinesAsync" />).</summary>
-    public bool StandardOutputIncomplete => _standardOutputPump is { IsCompletedSuccessfully: true, Result: true };
+    /// <summary>The stdout pump is still reading, or finished cutting or losing a line (<see cref="PumpLinesAsync" />).</summary>
+    public bool StandardOutputIncomplete => _standardOutputPump is { IsCompletedSuccessfully: false } or { Result: true };
 
     /// <summary>As <see cref="StandardOutputIncomplete" />, for stderr.</summary>
-    public bool StandardErrorIncomplete => _standardErrorPump is { IsCompletedSuccessfully: true, Result: true };
+    public bool StandardErrorIncomplete => _standardErrorPump is { IsCompletedSuccessfully: false } or { Result: true };
 
     /// <summary>
     ///     Waits for exit and for every pumped stream to reach end of stream, at most <see cref="PumpDrainBudget" /> after exit; returns
@@ -190,7 +193,20 @@ public sealed class MxcChildProcess : IDisposable
         // A pumped stream the SDK gave no closer for cannot be ended from here, so then nothing waits for the pumps.
         if (_closers.Count == _pumps.Length)
         {
-            await drained;
+            await AwaitClosedPumpsAsync(drained, _timeProvider);
+        }
+    }
+
+    /// <summary>Waits at most <see cref="PumpCloseGrace" /> for pumps whose streams were closed, so a read that ignores the close never hangs the command.</summary>
+    internal static async Task AwaitClosedPumpsAsync(Task drained, TimeProvider timeProvider)
+    {
+        try
+        {
+            await drained.WaitAsync(PumpCloseGrace, timeProvider, CancellationToken.None);
+        }
+        catch (TimeoutException)
+        {
+            // The capture is reported incomplete (the pump has not finished); the pump ends when its stream finally does.
         }
     }
 
