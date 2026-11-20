@@ -28,6 +28,7 @@ internal sealed class JailState
     /// <summary>The sentinel <see cref="GetOrCaptureOccupancyBaseline" /> starts from; any real measurement is >= 0.</summary>
     private const long NotYetMeasured = -1;
 
+    private SandboxLaunchPolicy _launchPolicy;
     private long _maxJailDiskBytes;
     private long _occupancyBaseline = NotYetMeasured;
 
@@ -39,7 +40,7 @@ internal sealed class JailState
     {
         Handle = handle;
         JailRoot = jailRoot;
-        LaunchPolicy = launchPolicy;
+        _launchPolicy = launchPolicy;
         PreserveJailRoot = preserveJailRoot;
         _maxJailDiskBytes = maxJailDiskBytes is { } ceiling && ceiling > 0 ? ceiling : InheritsNodeCeiling;
     }
@@ -48,8 +49,12 @@ internal sealed class JailState
 
     public string JailRoot { get; }
 
-    /// <summary>The containment resolved at create time and applied to every command this sandbox runs.</summary>
-    public SandboxLaunchPolicy LaunchPolicy { get; }
+    /// <summary>The containment the NEXT command runs under: resolved at create time, replaced by each later attach.</summary>
+    /// <remarks>
+    ///     Read from the command path without the registry lock while an attach may be replacing it, hence the volatile read of one
+    ///     immutable record; a command takes the policy it read at launch for its whole run.
+    /// </remarks>
+    public SandboxLaunchPolicy LaunchPolicy => Volatile.Read(ref _launchPolicy);
 
     public bool PreserveJailRoot { get; }
 
@@ -114,6 +119,30 @@ internal sealed class JailState
                 return;
             }
         }
+    }
+
+    /// <summary>
+    ///     Replaces the policy future commands run under with the one an attach built and validated, keeping the filesystem shape the
+    ///     sandbox was created with (its isolation, read-only trees, binds, private root and AppContainer boundary).
+    /// </summary>
+    /// <remarks>
+    ///     Ceilings, egress and thread limit follow the latest attach, tighter or looser: the attach's caller is the one whose commands
+    ///     run next, so the ceilings it asked for must be the ones applied. The filesystem shape stays, since the handle reports it and its
+    ///     binds were resolved against this jail at create. Callers hold the registry lock, so replacements never interleave.
+    /// </remarks>
+    public void ReplaceLaunchPolicy(SandboxLaunchPolicy requested)
+    {
+        ArgumentNullException.ThrowIfNull(requested);
+        var current = LaunchPolicy;
+        Volatile.Write(ref _launchPolicy,
+            requested with
+            {
+                Isolation = current.Isolation,
+                ReadOnlyTrees = current.ReadOnlyTrees,
+                Binds = current.Binds,
+                PrivateRoot = current.PrivateRoot,
+                AppContainerBoundary = current.AppContainerBoundary
+            });
     }
 
     /// <summary>

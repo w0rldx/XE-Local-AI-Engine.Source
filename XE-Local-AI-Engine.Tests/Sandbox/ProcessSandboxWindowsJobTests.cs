@@ -69,6 +69,25 @@ public sealed class ProcessSandboxWindowsJobTests
     }
 
     [Test]
+    public async Task ASameKeyAttach_AskingForCeilings_RunsTheNextCommandInAJob_UnderThem()
+    {
+        // Created unlimited, then attached under the same key by a caller that asks for ceilings: its commands must carry them.
+        var api = new FakeWindowsJobApi();
+        using var provider = Provider(api);
+        var bounded = Request();
+        var handle = await provider.CreateOrAttachAsync(bounded with { ResourceLimits = null });
+
+        var attached = await provider.CreateOrAttachAsync(bounded);
+        var result = await provider.ExecuteAsync(attached, Command("attached", "tool.exe"));
+
+        AssertEx.Equal(handle.SandboxId, attached.SandboxId, "the same key attaches rather than creating a second jail");
+        AssertEx.True(result.Completed, result.StandardError);
+        AssertEx.NotNull(api.Started.SingleOrDefault(), "the command after the attach runs inside a job");
+        AssertEx.Equal(WindowsJobLimits.Map(Limits.MemoryMb, Limits.PidsLimit, Limits.CpuCount, 16), api.LastSetLimits);
+        await provider.KillAsync(handle);
+    }
+
+    [Test]
     public async Task StandardInput_ReachesTheJobChild_AsUtf8()
     {
         var api = new FakeWindowsJobApi();

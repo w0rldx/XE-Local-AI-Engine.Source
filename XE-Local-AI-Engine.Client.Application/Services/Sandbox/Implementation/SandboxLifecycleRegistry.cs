@@ -14,11 +14,10 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     owner-conflict eviction and termination. The provider keeps command execution and process control.
 /// </summary>
 /// <remarks>
-///     There is exactly ONE dictionary and ONE lock, both here: the provider holds no copy and every provider operation reaches a
-///     <see cref="JailState" /> through this type, so create, attach, evict and kill stay serialized against each other. Attach is
-///     idempotent by <see cref="SandboxAttachKey" /> — a create matching a live jail returns that jail's handle once the
-///     trusted-host-workspace binding still agrees and a stricter disk ceiling has tightened the live one. A same-node request under a
-///     DIFFERENT owner is not an attach: the old jail is killed and removed first, so one user's sandbox never reaches another.
+///     ONE dictionary and ONE lock, both here: every provider operation reaches a <see cref="JailState" /> through this type, so create,
+///     attach, evict and kill stay serialized. Attach is idempotent by <see cref="SandboxAttachKey" />: a matching live jail returns its
+///     handle once the workspace binding agrees, a stricter disk ceiling has tightened it and the attach's policy has replaced its own.
+///     A same-node request under a DIFFERENT owner is not an attach: the old jail is killed first, so no sandbox reaches another user.
 /// </remarks>
 internal sealed class SandboxLifecycleRegistry
 {
@@ -68,6 +67,9 @@ internal sealed class SandboxLifecycleRegistry
                 // The disk ceiling is a CREATE-TIME property, so an attach cannot re-specify it, but it can ask for LESS: refusing that
                 // would be the wrong asymmetry, the tighter request being the careful one. Future commands only (see the method's docs).
                 attached.TightenMaxJailDiskBytes(request.MaxJailDiskBytes);
+
+                // The ceilings this caller asked for were validated above; its commands run under them, not the creator's.
+                attached.ReplaceLaunchPolicy(launchPolicy);
                 return Task.FromResult(attached.Handle);
             }
 
