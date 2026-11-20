@@ -38,6 +38,7 @@ public sealed class WindowsJobSandboxChildProcessTests
             static _ => { });
 
         var wait = child.WaitForExitAsync(CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount > 0, TestBudgets.Contended, "the drain budget must be armed");
         await AssertEx.StaysIncompleteAsync(wait, "the pumps get their drain budget before their reads are cancelled");
         time.Advance(MxcChildProcess.PumpDrainBudget);
 
@@ -52,6 +53,23 @@ public sealed class WindowsJobSandboxChildProcessTests
         AssertEx.False(child.StandardErrorIncomplete, "stderr reached its end with nothing pending");
         using var pumps = new CancellationTokenSource(TestBudgets.Contended);
         AssertEx.True(await child.TryWaitForExitAsync(pumps.Token), "both pumps must end once their reads are cancelled");
+    }
+
+    [Test]
+    public async Task ACancelDuringTheDrain_EndsThePumps_AndThrows_InsteadOfReportingACompletedCommand()
+    {
+        var api = new FakeWindowsJobApi { HoldStandardOutput = true, StandardOutputText = "partial", ExitCodeFor = static _ => 0 };
+        var time = new ManualTimeProvider();
+        using var child = new WindowsJobSandboxChildProcess(new WindowsJobLauncher(api).Start(Command, Limits()), time, static _ => { }, static _ => { });
+        using var stop = new CancellationTokenSource();
+
+        var wait = child.WaitForExitAsync(stop.Token);
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount > 0, TestBudgets.Contended, "the drain budget must be armed");
+        await stop.CancelAsync();
+
+        // No clock advance: the cancel alone must end the drain, well before its budget.
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => wait.WaitAsync(TestBudgets.Contended));
+        AssertEx.True(child.StandardOutputIncomplete, "the held stream was cut by the cancel");
     }
 
     [Test]

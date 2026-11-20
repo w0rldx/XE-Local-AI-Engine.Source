@@ -80,7 +80,7 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
         var exitCode = _process.ExitCode ?? -1;
         // The command is over: its members die with it, which closes the pipes they hold.
         _process.Terminate();
-        await DrainPumpsAsync();
+        await DrainPumpsAsync(cancellationToken);
         return exitCode;
     }
 
@@ -114,10 +114,14 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
     private Task<bool> Pump(Stream stream, Action<string> onLine) =>
         MxcChildProcess.PumpLinesAsync(stream, onLine, _readsCancelled.Token);
 
-    private async Task DrainPumpsAsync()
+    /// <summary>
+    ///     Gives the pumps <see cref="MxcChildProcess.PumpDrainBudget" />, ended early by <paramref name="cancellationToken" />, then cuts
+    ///     what is still open; a cancel then throws, so a stop or timeout during the drain is never reported as a completed command.
+    /// </summary>
+    private async Task DrainPumpsAsync(CancellationToken cancellationToken)
     {
         var drained = Task.WhenAll(_pumps);
-        using var budget = new CancellationTokenSource();
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         if (await Task.WhenAny(drained, Task.Delay(MxcChildProcess.PumpDrainBudget, _timeProvider, budget.Token)) == drained)
         {
             await budget.CancelAsync();
@@ -131,5 +135,6 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
         _standardErrorCut |= _standardErrorPump is { IsCompleted: false };
         await _readsCancelled.CancelAsync();
         await MxcChildProcess.AwaitClosedPumpsAsync(drained, _timeProvider);
+        cancellationToken.ThrowIfCancellationRequested();
     }
 }

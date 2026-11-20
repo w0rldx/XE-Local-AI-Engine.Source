@@ -123,6 +123,7 @@ public sealed class MxcChildProcessTests
         using var child = new MxcChildProcess(process, time, static _ => { });
 
         var wait = child.WaitForExitAsync(CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount > 0, TestBudgets.Contended, "the drain budget must be armed");
         await AssertEx.StaysIncompleteAsync(wait, "the wait gives the pump its drain budget before closing the stream");
         closer.DidNotReceive().Close();
         time.Advance(MxcChildProcess.PumpDrainBudget);
@@ -150,8 +151,11 @@ public sealed class MxcChildProcessTests
         using var child = new MxcChildProcess(process, time, static _ => { });
 
         var wait = child.WaitForExitAsync(CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount > 0, TestBudgets.Contended, "the drain budget must be armed");
         await AssertEx.StaysIncompleteAsync(wait, "the wait gives the pump its drain budget before closing the stream");
         time.Advance(MxcChildProcess.PumpDrainBudget);
+        // The close comes first, then the grace timer: advancing before it is armed would leave the wait on a deadline never reached.
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount > 0, TestBudgets.Contended, "the close grace must be armed");
         await AssertEx.StaysIncompleteAsync(wait, "after the close the pump gets its grace to end");
         closer.Received(1).Close();
         time.Advance(MxcChildProcess.PumpCloseGrace);

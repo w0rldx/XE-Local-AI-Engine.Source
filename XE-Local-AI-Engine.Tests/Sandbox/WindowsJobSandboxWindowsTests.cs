@@ -127,24 +127,31 @@ public sealed class WindowsJobSandboxWindowsTests
     }
 
     /// <summary>One core's worth under a two-processor affinity: the rate is against the WHOLE system, not the processors a member may use.</summary>
-    /// <remarks>Only the child is pinned, never this test host, so no other test runs under a changed affinity (ADR 0025, CPU rule).</remarks>
+    /// <remarks>
+    ///     <c>start /affinity 3</c> pins powershell from creation, so this test host never runs under a changed affinity (ADR 0025, CPU
+    ///     rule). The denominator is read in this unrestricted host, where the system and affinity counts agree, so this test cannot
+    ///     catch <c>WindowsJobApi.GetSystemProcessorCount</c> turning affinity-relative.
+    /// </remarks>
     [Test]
     public async Task TheCpuCeiling_HoldsOneCore_UnderRestrictedAffinity()
     {
         var system = new WindowsJobLauncher().SystemProcessorCount;
         AssertEx.True(system >= 2, $"this test needs at least two logical processors; the host has {system}");
-        using var process = Launch("powershell -NoProfile -NonInteractive -Command \"Start-Sleep 1; 1..2 | ForEach-Object { [powershell]::Create().AddScript('while ($true) {}').BeginInvoke() } | Out-Null; Start-Sleep 60\"",
+        const string spinners = "1..2 | ForEach-Object { [powershell]::Create().AddScript('[Console]::Out.WriteLine(''spinning''); [Console]::Out.Flush(); while ($true) {}').BeginInvoke() } | Out-Null; Start-Sleep 60";
+        using var process = Launch($"cmd /d /c start \"\" /b /wait /affinity 3 powershell -NoProfile -NonInteractive -Command \"{spinners}\"",
             WindowsJobLimits.Map(4096, 64, 1, system));
         try
         {
-            // Pinned before its spinner threads exist; a process-relative denominator would give the job two of these processors.
-            using (var root = Process.GetProcessById(process.Id))
+            // Both spinners announce themselves once they run, so the window below measures spinning, not powershell's start. One reader:
+            // a second one could miss a line the first already buffered.
+            using (var reader = new StreamReader(process.StandardOutput, leaveOpen: true))
+            using (var announced = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
             {
-                root.ProcessorAffinity = 0b11;
+                AssertEx.Equal("spinning", await reader.ReadLineAsync(announced.Token));
+                AssertEx.Equal("spinning", await reader.ReadLineAsync(announced.Token));
             }
 
             // real-timer: a CPU measurement window, not a wait for an event; the job's CPU time is read at both ends of it.
-            await Task.Delay(TimeSpan.FromSeconds(2));
             var before = JobCpuTime(process.Job);
             var clock = Stopwatch.StartNew();
             await Task.Delay(TimeSpan.FromSeconds(4));
