@@ -187,6 +187,18 @@ public sealed class MxcChildProcessTests
     }
 
     [Test]
+    public async Task PumpLinesAsync_WhenTheReadFailsAfterACompleteLine_ReportsIncomplete()
+    {
+        var lines = new List<string>();
+        await using var stream = new FailsAtEndStream("a\n"u8.ToArray());
+
+        var incomplete = await MxcChildProcess.PumpLinesAsync(stream, lines.Add, CancellationToken.None);
+
+        AssertEx.Equal("a", string.Join('|', lines));
+        AssertEx.True(incomplete, "a read that failed before end of stream may have lost what followed");
+    }
+
+    [Test]
     public async Task UnpumpedStreams_AreExposedRaw_AndIdIsTheOsPid()
     {
         var output = new MemoryStream("raw"u8.ToArray());
@@ -214,5 +226,15 @@ public sealed class MxcChildProcessTests
 
         process.Received(1).Dispose();
         await Task.CompletedTask;
+    }
+
+    /// <summary>Yields its bytes, then fails the next read as a broken pipe would, never reaching end of stream.</summary>
+    private sealed class FailsAtEndStream(byte[] bytes) : MemoryStream(bytes)
+    {
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            Position < Length ? base.ReadAsync(buffer, cancellationToken) : ValueTask.FromException<int>(new IOException("the pipe broke"));
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
     }
 }

@@ -16,7 +16,8 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// <remarks>
 ///     ONE dictionary and ONE lock, both here: every provider operation reaches a <see cref="JailState" /> through this type, so create,
 ///     attach, evict and kill stay serialized. Attach is idempotent by <see cref="SandboxAttachKey" />: a matching live jail returns its
-///     handle once the workspace binding agrees, a stricter disk ceiling has tightened it and the attach's policy has replaced its own.
+///     handle once the workspace binding and the network, isolation and role boundary agree, its ceilings have replaced the jail's and
+///     a stricter disk ceiling has tightened it.
 ///     A same-node request under a DIFFERENT owner is not an attach: the old jail is killed first, so no sandbox reaches another user.
 /// </remarks>
 internal sealed class SandboxLifecycleRegistry
@@ -64,12 +65,13 @@ internal sealed class SandboxLifecycleRegistry
             {
                 EnsureCompatibleWorkspaceBinding(attached, request.TrustedHostWorkspace);
 
+                // Checked before the disk tighten, so a refused attach changes nothing. The validated ceilings apply to future commands.
+                attached.FollowCeilings(launchPolicy);
+
                 // The disk ceiling is a CREATE-TIME property, so an attach cannot re-specify it, but it can ask for LESS: refusing that
                 // would be the wrong asymmetry, the tighter request being the careful one. Future commands only (see the method's docs).
                 attached.TightenMaxJailDiskBytes(request.MaxJailDiskBytes);
 
-                // The ceilings this caller asked for were validated above; its commands run under them, not the creator's.
-                attached.ReplaceLaunchPolicy(launchPolicy);
                 return Task.FromResult(attached.Handle);
             }
 

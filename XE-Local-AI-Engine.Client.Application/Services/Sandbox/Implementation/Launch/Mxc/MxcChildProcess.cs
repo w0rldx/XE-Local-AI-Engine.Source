@@ -217,7 +217,7 @@ public sealed class MxcChildProcess : IDisposable
     /// <remarks>
     ///     A line is held at most <see cref="MaxPendingLineChars" />: past it the line is delivered cut and the rest up to its newline is
     ///     read and discarded, so a command printing without newlines cannot grow the engine. A final unterminated line is delivered at
-    ///     end of stream, and also when the read stops early, which then counts as incomplete because its line may have gone on.
+    ///     end of stream, and also when the read stops early (closed, cancelled or failed), which always counts as incomplete.
     /// </remarks>
     internal static async Task<bool> PumpLinesAsync(Stream stream, Action<string> onLine, CancellationToken cancellationToken)
     {
@@ -295,8 +295,8 @@ public sealed class MxcChildProcess : IDisposable
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException or OperationCanceledException)
         {
-            // The drain budget ran out and the stream was closed (or its read cancelled) under this read; a pending line is delivered below.
-            incomplete |= line.Length > 0;
+            // The read stopped before end of stream (the drain budget closed or cancelled it, or the pipe failed): whatever followed is lost.
+            incomplete = true;
         }
 
         if (line.Length > 0)

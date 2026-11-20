@@ -401,6 +401,9 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 return NotCompleted(request.ExecutionId, "Command timed out.", startedAt, standardOutputBuilder.ToString());
             }
 
+            // Read before the text: a pump still running past its close grace may finish after the copy, and must not read as complete.
+            var standardOutputIncomplete = process.StandardOutputIncomplete;
+            var standardErrorIncomplete = process.StandardErrorIncomplete;
             var standardOutput = standardOutputBuilder.ToString();
             var standardError = standardErrorBuilder.ToString();
 
@@ -421,8 +424,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 ExitCode = exitCode,
                 StandardOutput = standardOutput,
                 StandardError = standardError,
-                StandardOutputTruncated = standardOutputBuilder.IsTruncated || process.StandardOutputIncomplete,
-                StandardErrorTruncated = standardErrorBuilder.IsTruncated || process.StandardErrorIncomplete,
+                StandardOutputTruncated = standardOutputBuilder.IsTruncated || standardOutputIncomplete,
+                StandardErrorTruncated = standardErrorBuilder.IsTruncated || standardErrorIncomplete,
                 Completed = true,
                 Duration = _timeProvider.GetUtcNow() - startedAt
             };
@@ -449,6 +452,10 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 _ = await process.TryWaitForExitAsync(drain.Token);
             }
 
+            // Read before the text, as on the completed path.
+            var outputIncomplete = process.StandardOutputIncomplete;
+            var errorIncomplete = process.StandardErrorIncomplete;
+
             // Every captured line ends in a newline, so the cancel message lands on its own line.
             var cancelled = NotCompleted(request.ExecutionId,
                 standardErrorBuilder.ToString() + SandboxCommandResult.CancelledMessage,
@@ -456,8 +463,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 standardOutputBuilder.ToString());
             return cancelled with
             {
-                StandardOutputTruncated = standardOutputBuilder.IsTruncated || process.StandardOutputIncomplete,
-                StandardErrorTruncated = standardErrorBuilder.IsTruncated || process.StandardErrorIncomplete
+                StandardOutputTruncated = standardOutputBuilder.IsTruncated || outputIncomplete,
+                StandardErrorTruncated = standardErrorBuilder.IsTruncated || errorIncomplete
             };
         }
         catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
