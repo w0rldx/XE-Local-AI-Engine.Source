@@ -29,8 +29,8 @@ can open its owner with `VM_WRITE`, `CREATE_THREAD` and `TERMINATE`.
 
 1. **Plain Windows launches carry an engine-owned job.**
    - Attached at creation: the process is created suspended with `PROC_THREAD_ATTRIBUTE_JOB_LIST`, with its three stdio
-     ends inherited from a handle parent (below); its membership is verified with `IsProcessInJob`, its affinity mask and
-     priority class are set to the engine's current ones, and only then is it resumed (`WindowsJobLauncher`). Any failure before the resume terminates and closes the job and
+     ends inherited from a handle parent (below); its membership is verified with `IsProcessInJob`, its priority class
+     (and, while the engine is restricted, its affinity mask) is set to the engine's current one, and only then is it resumed (`WindowsJobLauncher`). Any failure before the resume terminates and closes the job and
      every handle; the payload never runs, and the command is refused. There is no "run unbounded" path.
    - One job per command. Whatever the command started dies when it ends: MSBuild reuse nodes, `VBCSCompiler`, a dev
      server an agent started. This matches Linux.
@@ -66,9 +66,11 @@ can open its owner with `VM_WRITE`, `CREATE_THREAD` and `TERMINATE`.
      proceeds while one is unconfirmed. The launcher has no path that starts a command without inherited handles
      (`bInheritHandles = FALSE`, no handle list); the broker of Decision 2 needs one.
    - **Affinity and priority follow the engine.** A command would inherit the helper's affinity and priority class, a
-     snapshot of the engine at helper creation. Each launch instead reads the engine's current process affinity mask and
-     priority class and sets both on the suspended command before the resume; a failed read or set refuses the command
-     with nothing run.
+     snapshot of the engine at helper creation. Each launch instead reads the engine's current process and system affinity
+     masks and priority class, and before the resume sets the priority class on the suspended command, and the affinity
+     mask only when the engine is restricted (its process mask differs from the system mask). An unrestricted engine's mask
+     names a single processor group on a host with more than 64 logical processors, so setting it would confine the
+     command to that group. A failed read or set refuses the command with nothing run.
    - The ceilings serve the plain path only. One predicate, `SandboxRequirements.CeilingsServed`, decides for every
      consumer; a role the AppContainer boundary serves stays unbounded and is reported so, and the raw capability flag is
      read nowhere else (an architecture test).
@@ -104,10 +106,11 @@ stated, not mitigated.
   or resume it; that is no new reach (a member can already open the engine, see "Status of the mechanism"), but one
   helper serves every command.
 - **Inherited context.** Token (user and integrity), session and device map come from the helper, a snapshot of the
-  engine at helper creation. Affinity and priority class follow the engine at each launch (Decision 1). On a host with
-  more than 64 logical processors a process affinity mask describes one processor group, so a command is confined to a
-  single group, and an engine whose affinity reads back as no mask (its threads in several groups) has its job launches
-  refused. Every command gains the parent job as an ancestor (kill on close, no limits), and the helper takes one
+  engine at helper creation. The priority class follows the engine at each launch, and so does the affinity while the
+  engine is restricted (Decision 1). An unrestricted engine sets no affinity, so the command keeps the helper's: an engine
+  restricted when the helper was created and unrestricted later leaves its commands on the old mask until the helper is
+  replaced. An engine whose affinity reads back as no mask (its threads in several processor groups) has its job
+  launches refused. Every command gains the parent job as an ancestor (kill on close, no limits), and the helper takes one
   active-process slot in any job that encloses the engine.
 - **A blocked stdin write.** A root that exits while a descendant holds stdin unread can block the engine's synchronous
   stdin write before the job is terminated, as on the Windows `Process` path. An overlapped, cancellable stdin pipe is the

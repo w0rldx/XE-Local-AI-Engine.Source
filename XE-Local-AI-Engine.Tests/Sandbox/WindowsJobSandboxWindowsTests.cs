@@ -825,8 +825,8 @@ public sealed class WindowsJobSandboxWindowsTests
         await Task.CompletedTask;
     }
 
-    /// <summary>Two launches through one handle parent: each command gets the affinity and priority the engine reports at its own launch.</summary>
-    /// <remarks>The second report is injected through the seam, so this host's own affinity never changes.</remarks>
+    /// <summary>Three launches through one handle parent: each command gets the priority, and a restricted affinity, the engine reports then.</summary>
+    /// <remarks>The later reports are injected through the seam, so this host's own affinity never changes.</remarks>
     [Test]
     public async Task EachCommand_GetsTheAffinityAndPriorityTheEngineReportsAtItsLaunch()
     {
@@ -836,36 +836,40 @@ public sealed class WindowsJobSandboxWindowsTests
         var launcher = new WindowsJobLauncher(api);
         var limits = WindowsJobLimits.Map(2048, 64, null, Environment.ProcessorCount);
         using var engine = Process.GetCurrentProcess();
-        AssertEx.True(GetProcessAffinityMask(engine.SafeHandle, out var engineAffinity, out _), "the engine's affinity");
-        var injected = new WindowsJobScheduling
-        {
-            AffinityMask = engineAffinity & (~engineAffinity + 1),
-            PriorityClass = IdlePriorityClass
-        };
-        AssertEx.NotEqual(IdlePriorityClass, GetPriorityClass(engine.SafeHandle), "the injected priority class must differ from this host's");
+        AssertEx.True(GetProcessAffinityMask(engine.SafeHandle, out var engineAffinity, out var systemAffinity), "the engine's affinity");
+        AssertEx.Equal(systemAffinity, engineAffinity, "this test needs an unrestricted host, so the helper's snapshot is the whole system mask");
+        var lowest = engineAffinity & (~engineAffinity + 1);
+        AssertEx.NotEqual(engineAffinity, lowest, $"this test needs at least two logical processors; the host's mask is 0x{engineAffinity:X}");
+        var hostPriority = GetPriorityClass(engine.SafeHandle);
+        AssertEx.NotEqual(IdlePriorityClass, hostPriority, "the injected priority class must differ from this host's");
+        AssertEx.NotEqual(BelowNormalPriorityClass, hostPriority, "the injected priority class must differ from this host's");
+        var restricted = new WindowsJobScheduling { AffinityMask = lowest, SystemAffinityMask = systemAffinity, PriorityClass = IdlePriorityClass };
+        var unrestricted = new WindowsJobScheduling { AffinityMask = systemAffinity, SystemAffinityMask = systemAffinity, PriorityClass = BelowNormalPriorityClass };
 
         using var first = launcher.Start(StartInfo("cmd /d /q /k"), limits);
-        api.Report = _ => injected;
+        api.Report = _ => restricted;
         using var second = launcher.Start(StartInfo("cmd /d /q /k"), limits);
+        api.Report = _ => unrestricted;
+        using var third = launcher.Start(StartInfo("cmd /d /q /k"), limits);
         try
         {
             AssertEx.Equal(engineAffinity, api.Read[0].AffinityMask, "the first launch read the engine's current affinity");
-            AssertEx.Equal(GetPriorityClass(engine.SafeHandle), api.Read[0].PriorityClass, "the first launch read the engine's current priority class");
-            AssertEx.Equal(api.Read[0], api.Set[0], "the first command was set to what the engine reported at its launch");
-            AssertEx.Equal(injected, api.Set[1], "the second command was set to what the engine reported at its launch");
-            AssertEx.Equal(2, api.Set.Count);
-            AssertEx.True(GetProcessAffinityMask(native.Commands[0], out var firstAffinity, out _), "the first command's affinity");
-            AssertEx.True(GetProcessAffinityMask(native.Commands[1], out var secondAffinity, out _), "the second command's affinity");
-            AssertEx.Equal(engineAffinity, firstAffinity, "the first command runs under another affinity");
-            AssertEx.Equal(GetPriorityClass(engine.SafeHandle), GetPriorityClass(native.Commands[0]), "the first command runs under another priority class");
-            AssertEx.Equal(injected.AffinityMask, secondAffinity, "the second command kept the helper's snapshot, not the engine's report");
-            AssertEx.Equal(injected.PriorityClass, GetPriorityClass(native.Commands[1]), "the second command kept the helper's priority, not the engine's report");
-            AssertEx.Equal(1, native.Helpers.Count, "both commands came from one handle parent");
+            AssertEx.Equal(hostPriority, api.Read[0].PriorityClass, "the first launch read the engine's current priority class");
+            AssertEx.Equal(lowest.ToString("X", CultureInfo.InvariantCulture), string.Join(',', api.Affinities.Select(static mask => mask.ToString("X", CultureInfo.InvariantCulture))), "only the restricted report set an affinity, exactly as reported");
+            AssertEx.Equal(string.Join(',', hostPriority, IdlePriorityClass, BelowNormalPriorityClass), string.Join(',', api.Priorities), "each launch set the priority class reported then");
+            AssertEx.Equal(engineAffinity, AffinityOf(native.Commands[0]), "the first command runs under another affinity");
+            AssertEx.Equal(hostPriority, GetPriorityClass(native.Commands[0]), "the first command runs under another priority class");
+            AssertEx.Equal(lowest, AffinityOf(native.Commands[1]), "the second command kept the helper's snapshot, not the engine's report");
+            AssertEx.Equal(IdlePriorityClass, GetPriorityClass(native.Commands[1]), "the second command kept the helper's priority, not the engine's report");
+            AssertEx.Equal(engineAffinity, AffinityOf(native.Commands[2]), "an unrestricted report left the third command on the whole system");
+            AssertEx.Equal(BelowNormalPriorityClass, GetPriorityClass(native.Commands[2]), "the third command kept the helper's priority, not the engine's report");
+            AssertEx.Equal(1, native.Helpers.Count, "every command came from one handle parent");
         }
         finally
         {
             first.Terminate();
             second.Terminate();
+            third.Terminate();
         }
 
         await Task.CompletedTask;
@@ -894,6 +898,12 @@ public sealed class WindowsJobSandboxWindowsTests
         {
             owned[index].Dispose();
         }
+    }
+
+    private static nuint AffinityOf(SafeHandle process)
+    {
+        AssertEx.True(GetProcessAffinityMask(process, out var mask, out _), $"GetProcessAffinityMask failed ({Marshal.GetLastPInvokeError()})");
+        return mask;
     }
 
     private static int PeekError(SafeHandle pipe) =>
@@ -953,6 +963,7 @@ public sealed class WindowsJobSandboxWindowsTests
     private const int TokenUser = 1;
     private const int TokenIntegrityLevel = 25;
     private const uint IdlePriorityClass = 0x40;
+    private const uint BelowNormalPriorityClass = 0x4000;
 
     /// <summary>Three engine-owned child ends, as <c>WindowsJobApi.CreateSuspended</c> would hand them over.</summary>
     private sealed class TestPipeEnds : IDisposable
@@ -1135,7 +1146,7 @@ public sealed class WindowsJobSandboxWindowsTests
         public uint TotalTerminatedProcesses;
     }
 
-    /// <summary>The real native calls; records each engine scheduling read and each set, and can report another engine value.</summary>
+    /// <summary>The real native calls; records each engine scheduling read and each affinity and priority set, and can report another engine value.</summary>
     private sealed class EngineSchedulingApi : IWindowsJobApi
     {
         private readonly WindowsJobApi _real;
@@ -1150,7 +1161,9 @@ public sealed class WindowsJobSandboxWindowsTests
 
         public List<WindowsJobScheduling> Read { get; } = [];
 
-        public List<WindowsJobScheduling> Set { get; } = [];
+        public List<nuint> Affinities { get; } = [];
+
+        public List<uint> Priorities { get; } = [];
 
         public int GetSystemProcessorCount() => _real.GetSystemProcessorCount();
 
@@ -1173,10 +1186,16 @@ public sealed class WindowsJobSandboxWindowsTests
             return Report(real);
         }
 
-        public void SetScheduling(SafeHandle process, WindowsJobScheduling scheduling)
+        public void SetAffinityMask(SafeHandle process, nuint affinityMask)
         {
-            Set.Add(scheduling);
-            _real.SetScheduling(process, scheduling);
+            Affinities.Add(affinityMask);
+            _real.SetAffinityMask(process, affinityMask);
+        }
+
+        public void SetPriorityClass(SafeHandle process, uint priorityClass)
+        {
+            Priorities.Add(priorityClass);
+            _real.SetPriorityClass(process, priorityClass);
         }
 
         public void Resume(SafeHandle thread) => _real.Resume(thread);
@@ -1232,7 +1251,9 @@ public sealed class WindowsJobSandboxWindowsTests
 
         public WindowsJobScheduling GetEngineScheduling() => _real.GetEngineScheduling();
 
-        public void SetScheduling(SafeHandle process, WindowsJobScheduling scheduling) => _real.SetScheduling(process, scheduling);
+        public void SetAffinityMask(SafeHandle process, nuint affinityMask) => _real.SetAffinityMask(process, affinityMask);
+
+        public void SetPriorityClass(SafeHandle process, uint priorityClass) => _real.SetPriorityClass(process, priorityClass);
 
         public void Resume(SafeHandle thread) => throw new InvalidOperationException("a child that failed its membership check must never be resumed");
 

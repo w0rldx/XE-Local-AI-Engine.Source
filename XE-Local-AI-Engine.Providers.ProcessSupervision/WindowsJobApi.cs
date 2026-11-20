@@ -144,7 +144,7 @@ internal sealed class WindowsJobApi : IWindowsJobApi
 
     public WindowsJobScheduling GetEngineScheduling()
     {
-        if (!WindowsJobNative.GetProcessAffinityMask(WindowsJobNative.GetCurrentProcess(), out var affinityMask, out _))
+        if (!WindowsJobNative.GetProcessAffinityMask(WindowsJobNative.GetCurrentProcess(), out var affinityMask, out var systemAffinityMask))
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
@@ -164,14 +164,22 @@ internal sealed class WindowsJobApi : IWindowsJobApi
         return new WindowsJobScheduling
         {
             AffinityMask = affinityMask,
+            SystemAffinityMask = systemAffinityMask,
             PriorityClass = priorityClass
         };
     }
 
-    public void SetScheduling(SafeHandle process, WindowsJobScheduling scheduling)
+    public void SetAffinityMask(SafeHandle process, nuint affinityMask)
     {
-        if (!WindowsJobNative.SetProcessAffinityMask(process, scheduling.AffinityMask)
-            || !WindowsJobNative.SetPriorityClass(process, scheduling.PriorityClass))
+        if (!WindowsJobNative.SetProcessAffinityMask(process, affinityMask))
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
+    }
+
+    public void SetPriorityClass(SafeHandle process, uint priorityClass)
+    {
+        if (!WindowsJobNative.SetPriorityClass(process, priorityClass))
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
         }

@@ -96,35 +96,41 @@ public sealed class WindowsJobLauncherTests
 
         using var process = new WindowsJobLauncher(api).Start(Command, limits);
 
-        AssertEx.Equal("CreateJob,SetExtendedLimits,SetCpuRate,QueryLimits,CreateSuspended,IsProcessInJob,GetEngineScheduling,SetScheduling,WaitForExitAsync,Resume",
+        AssertEx.Equal("CreateJob,SetExtendedLimits,SetCpuRate,QueryLimits,CreateSuspended,IsProcessInJob,GetEngineScheduling,SetAffinityMask,SetPriorityClass,WaitForExitAsync,Resume",
             string.Join(',', api.Calls));
         AssertEx.Equal(Command, api.Started[0]);
         await process.WaitForExitAsync(CancellationToken.None);
         AssertEx.Equal(0, process.ExitCode);
     }
 
-    /// <summary>Each launch reads the engine's affinity and priority class anew and sets exactly those on its suspended command.</summary>
+    /// <summary>
+    ///     Each launch reads the engine anew: its priority class is always set on the suspended command, its affinity mask only while the
+    ///     engine is restricted (process mask differs from the system mask).
+    /// </summary>
     [Test]
-    public async Task EachLaunch_SetsTheEnginesCurrentAffinityAndPriority_BeforeTheResume()
+    public async Task EachLaunch_SetsTheEnginesCurrentPriority_AndOnlyARestrictedAffinity_BeforeTheResume()
     {
-        var api = new FakeWindowsJobApi { EngineScheduling = new WindowsJobScheduling { AffinityMask = 0x3, PriorityClass = 0x4000 } };
+        var api = new FakeWindowsJobApi { EngineScheduling = new WindowsJobScheduling { AffinityMask = 0x3, SystemAffinityMask = 0xF, PriorityClass = 0x4000 } };
         var launcher = new WindowsJobLauncher(api);
 
         using (launcher.Start(Command, WindowsJobLimits.Map(2048, 64, null, 16)))
         {
-            var set = api.Calls.IndexOf("SetScheduling");
-            AssertEx.True(set >= 0 && set < api.Calls.IndexOf("Resume"), "the scheduling is set while the command is suspended");
+            var resume = api.Calls.IndexOf("Resume");
+            foreach (var step in new[] { "SetAffinityMask", "SetPriorityClass" })
+            {
+                var at = api.Calls.IndexOf(step);
+                AssertEx.True(at >= 0 && at < resume, $"{step} happens while the command is suspended");
+            }
         }
 
-        api.EngineScheduling = new WindowsJobScheduling { AffinityMask = 0x5, PriorityClass = 0x8000 };
+        api.EngineScheduling = new WindowsJobScheduling { AffinityMask = 0xF, SystemAffinityMask = 0xF, PriorityClass = 0x8000 };
         using (launcher.Start(Command, WindowsJobLimits.Map(2048, 64, null, 16)))
         {
             AssertEx.Equal(2, api.Calls.Count(static call => call == "GetEngineScheduling"), "the engine's values are read at every launch");
         }
 
-        AssertEx.Equal(new WindowsJobScheduling { AffinityMask = 0x3, PriorityClass = 0x4000 }, api.SetSchedulings[0]);
-        AssertEx.Equal(new WindowsJobScheduling { AffinityMask = 0x5, PriorityClass = 0x8000 }, api.SetSchedulings[1]);
-        AssertEx.Equal(2, api.SetSchedulings.Count);
+        AssertEx.Equal("3", string.Join(',', api.SetAffinityMasks), "only the restricted engine's mask is set, exactly as read");
+        AssertEx.Equal("16384,32768", string.Join(',', api.SetPriorityClasses), "each launch sets the priority class it read");
         await Task.CompletedTask;
     }
 
@@ -147,7 +153,8 @@ public sealed class WindowsJobLauncherTests
     [Arguments("CreateSuspended")]
     [Arguments("IsProcessInJob")]
     [Arguments("GetEngineScheduling")]
-    [Arguments("SetScheduling")]
+    [Arguments("SetAffinityMask")]
+    [Arguments("SetPriorityClass")]
     [Arguments("WaitForExitAsync")]
     [Arguments("Resume")]
     public async Task ASetupFailure_RefusesTheLaunch_NeverResumes_AndClosesEveryHandle(string step)

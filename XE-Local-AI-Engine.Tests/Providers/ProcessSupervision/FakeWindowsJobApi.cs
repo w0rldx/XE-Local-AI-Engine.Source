@@ -75,10 +75,13 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
     public int Terminations { get; private set; }
 
     /// <summary>What <see cref="GetEngineScheduling" /> reports as the engine's current affinity and priority class.</summary>
-    public WindowsJobScheduling EngineScheduling { get; set; } = new() { AffinityMask = 0xF, PriorityClass = 0x20 };
+    public WindowsJobScheduling EngineScheduling { get; set; } = new() { AffinityMask = 0xF, SystemAffinityMask = 0xFF, PriorityClass = 0x20 };
 
-    /// <summary>Every scheduling applied to a created process, in order.</summary>
-    public List<WindowsJobScheduling> SetSchedulings { get; } = [];
+    /// <summary>Every affinity mask set on a created process, in order.</summary>
+    public List<nuint> SetAffinityMasks { get; } = [];
+
+    /// <summary>Every priority class set on a created process, in order.</summary>
+    public List<uint> SetPriorityClasses { get; } = [];
 
     /// <summary>The limits the last job was configured with, the CPU rate included.</summary>
     public WindowsJobLimits LastSetLimits => _set;
@@ -168,10 +171,16 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
         return EngineScheduling;
     }
 
-    public void SetScheduling(SafeHandle process, WindowsJobScheduling scheduling)
+    public void SetAffinityMask(SafeHandle process, nuint affinityMask)
     {
-        Step(nameof(SetScheduling));
-        SetSchedulings.Add(scheduling);
+        Step(nameof(SetAffinityMask));
+        SetAffinityMasks.Add(affinityMask);
+    }
+
+    public void SetPriorityClass(SafeHandle process, uint priorityClass)
+    {
+        Step(nameof(SetPriorityClass));
+        SetPriorityClasses.Add(priorityClass);
     }
 
     public void Resume(SafeHandle thread)

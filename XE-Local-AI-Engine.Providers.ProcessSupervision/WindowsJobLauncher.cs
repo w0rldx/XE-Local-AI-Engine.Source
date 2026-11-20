@@ -8,7 +8,7 @@ using System.Runtime.Versioning;
 /// <summary>Starts one command inside its own Job Object, bounded from its first instruction (ADR 0025).</summary>
 /// <remarks>
 ///     The job is created, limited and read back; the process is created SUSPENDED inside it (<c>PROC_THREAD_ATTRIBUTE_JOB_LIST</c>), its
-///     membership verified, its affinity and priority class set to the engine's current ones, and only then resumed. Any failure before the resume terminates and closes the job and every handle, so the
+///     membership verified, its priority class (and, when the engine is restricted, its affinity) set to the engine's current ones, and only then resumed. Any failure before the resume terminates and closes the job and every handle, so the
 ///     payload never runs; there is no "run unbounded" fallback. A governor, not a boundary: work started through WMI or the Task Scheduler
 ///     is outside the job, and a member can open the engine process (ADR 0025).
 /// </remarks>
@@ -63,7 +63,14 @@ public sealed class WindowsJobLauncher
             }
 
             // The helper's affinity and priority are a snapshot from its creation; each command follows the engine's at its own launch.
-            _api.SetScheduling(child.Process, _api.GetEngineScheduling());
+            // An unrestricted engine's mask names one processor group only, so setting it would confine the command to that group.
+            var engine = _api.GetEngineScheduling();
+            if (engine.AffinityMask != engine.SystemAffinityMask)
+            {
+                _api.SetAffinityMask(child.Process, engine.AffinityMask);
+            }
+
+            _api.SetPriorityClass(child.Process, engine.PriorityClass);
 
             if (!startInfo.RedirectStandardInput)
             {

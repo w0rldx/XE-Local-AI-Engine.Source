@@ -89,7 +89,8 @@ public sealed class ProcessSandboxWindowsJobTests
     [Arguments("SetExtendedLimits")]
     [Arguments("QueryLimits")]
     [Arguments("CreateSuspended")]
-    [Arguments("SetScheduling")]
+    [Arguments("SetAffinityMask")]
+    [Arguments("SetPriorityClass")]
     [Arguments("Resume")]
     public async Task ALaunchTimeJobFailure_RefusesTheCommand_AndLeavesNothing(string step)
     {
