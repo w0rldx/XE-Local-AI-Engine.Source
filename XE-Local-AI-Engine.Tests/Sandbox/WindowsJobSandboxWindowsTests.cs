@@ -84,7 +84,8 @@ public sealed class WindowsJobSandboxWindowsTests
     [Test]
     public async Task TheCommitCeiling_FailsAnAllocationPastIt_AndAdmitsOneUnderIt()
     {
-        const string allocate = "'starting'; $b = [byte[]]::new(800MB); $b[0] = 1; 'allocated'";
+        // Stop, so a refused allocation ends the script: a method exception alone only ends its statement, and 'allocated' would still print.
+        const string allocate = "$ErrorActionPreference = 'Stop'; 'starting'; $b = [byte[]]::new(800MB); $b[0] = 1; 'allocated'";
         using var provider = Provider();
         var tight = await provider.CreateOrAttachAsync(Request(new SandboxResourceLimits { MemoryMb = 512 }));
         var roomy = await provider.CreateOrAttachAsync(Request(new SandboxResourceLimits { MemoryMb = 2048 }));
