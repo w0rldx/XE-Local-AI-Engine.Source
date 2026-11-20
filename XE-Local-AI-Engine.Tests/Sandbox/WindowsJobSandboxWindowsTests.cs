@@ -108,21 +108,26 @@ public sealed class WindowsJobSandboxWindowsTests
     }
 
     [Test]
-    public async Task TheProcessCeiling_StopsAChainPastIt_AndAdmitsOneInsideIt()
+    public async Task TheProcessCeiling_StopsAChainPastIt_AndAdmitsTheSameChainUnderAWiderOne()
     {
+        string[] chainOfFive = ["cmd", "/d", "/c", "cmd", "/d", "/c", "cmd", "/d", "/c", "cmd", "/d", "/c", "exit", "7"];
         using var provider = Provider();
-        var handle = await provider.CreateOrAttachAsync(Request(new SandboxResourceLimits { PidsLimit = 4 }));
+        var tight = await provider.CreateOrAttachAsync(Request(new SandboxResourceLimits { PidsLimit = 4 }));
+        var wide = await provider.CreateOrAttachAsync(Request(new SandboxResourceLimits { PidsLimit = 8 }));
         try
         {
-            var inside = await provider.ExecuteAsync(handle, Cmd("chain-2", "cmd", "/d", "/c", "exit", "7"));
-            var past = await provider.ExecuteAsync(handle, Cmd("chain-5", "cmd", "/d", "/c", "cmd", "/d", "/c", "cmd", "/d", "/c", "cmd", "/d", "/c", "exit", "7"));
+            var past = await provider.ExecuteAsync(tight, Cmd("chain-5-tight", chainOfFive));
+            var under = await provider.ExecuteAsync(wide, Cmd("chain-5-wide", chainOfFive));
 
-            AssertEx.Equal(7, inside.ExitCode, inside.StandardError);
+            // The control: the same chain runs to its exit code under a wider cap, so the tight cap's other exit is the ceiling's doing.
+            AssertEx.Equal(7, under.ExitCode, under.StandardError);
+            AssertEx.True(past.Completed, $"the command must run and exit, not fail to launch or time out: {past.StandardError}");
             AssertEx.NotEqual(7, past.ExitCode, "a chain of five processes ran inside a four-process job");
         }
         finally
         {
-            await provider.KillAsync(handle);
+            await provider.KillAsync(tight);
+            await provider.KillAsync(wide);
         }
     }
 
