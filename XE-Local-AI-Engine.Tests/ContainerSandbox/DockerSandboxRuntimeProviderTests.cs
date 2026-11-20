@@ -403,7 +403,11 @@ public sealed class DockerSandboxRuntimeProviderTests
         var executed = client.ExecutedRequests.Single(static request => string.Equals(request.Executable, "dotnet", StringComparison.Ordinal));
         AssertEx.Equal(DockerSandboxHardeningTests.Options().TempMountTarget, executed.StopMarkerDirectory, "a user command runs stoppable");
         AssertEx.Empty(client.RemovedContainerIds);
-        AssertEx.Equal(expected: 0, (await provider.ExecuteAsync(handle, TestCommand() with { ExecutionId = "exec-2", Arguments = ["--version"] })).ExitCode,
+        AssertEx.Equal(expected: 0, (await provider.ExecuteAsync(handle, TestCommand() with
+            {
+                ExecutionId = "exec-2",
+                Arguments = ["--version"]
+            })).ExitCode,
             "a confirmed stop leaves the sandbox usable");
     }
 
@@ -425,7 +429,10 @@ public sealed class DockerSandboxRuntimeProviderTests
 
         // What the attempt sees next: its following command fails as an invalid handle, which the Development runners
         // already terminalize as a failed attempt, and a new attempt gets a new verified container.
-        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => provider.ExecuteAsync(handle, TestCommand() with { ExecutionId = "exec-2" }));
+        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => provider.ExecuteAsync(handle, TestCommand() with
+        {
+            ExecutionId = "exec-2"
+        }));
         var fresh = await provider.CreateOrAttachAsync(CreateRequest(workspace));
         AssertEx.Equal(expected: 2, client.CreatedContainerIds.Count, "the next attempt must get a new container, not the killed one");
         client.RegisterCommand("git status", exitCode: 0, "clean");
@@ -453,7 +460,10 @@ public sealed class DockerSandboxRuntimeProviderTests
             result.StandardError,
             "a container the daemon kept may still run the command, so the result must not say it was killed");
         AssertEx.Empty(client.RemovedContainerIds);
-        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => provider.ExecuteAsync(handle, TestCommand() with { ExecutionId = "exec-2" }));
+        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => provider.ExecuteAsync(handle, TestCommand() with
+        {
+            ExecutionId = "exec-2"
+        }));
         await AssertEx.ThrowsAsync<DockerRuntimeException>(() => provider.CreateOrAttachAsync(CreateRequest(workspace)));
         AssertEx.Equal(expected: 1, client.CreatedContainerIds.Count, "no second container beside one that may still run");
 
@@ -488,7 +498,13 @@ public sealed class DockerSandboxRuntimeProviderTests
         var (provider, client, workspace) = CreateProvider();
         await provider.CreateOrAttachAsync(CreateRequest(workspace));
         client.RemovalFailure = _ => new DockerRuntimeException("removal refused");
-        var otherOwner = CreateRequest(workspace) with { AttachKey = AttachKey() with { OwnerUserId = "owner-2" } };
+        var otherOwner = CreateRequest(workspace) with
+        {
+            AttachKey = AttachKey() with
+            {
+                OwnerUserId = "owner-2"
+            }
+        };
 
         await AssertEx.ThrowsAsync<DockerRuntimeException>(() => provider.CreateOrAttachAsync(otherOwner));
 
@@ -516,23 +532,25 @@ public sealed class DockerSandboxRuntimeProviderTests
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => provider.ExecuteAsync(handle, TestCommand(), caller.Token));
     }
 
-    private static SandboxCommandRequest TestCommand() => new()
-    {
-        ExecutionId = "exec-1",
-        Executable = "dotnet",
-        Arguments = ["test"]
-    };
+    private static SandboxCommandRequest TestCommand() =>
+        new()
+        {
+            ExecutionId = "exec-1",
+            Executable = "dotnet",
+            Arguments = ["test"]
+        };
 
-    private static DockerExecutionOutcome Stopped(bool confirmed) => new()
-    {
-        ExitCode = -1,
-        StandardOutput = "Restoring...\n",
-        StandardError = "warning: slow",
-        StandardOutputTruncated = true,
-        StandardErrorTruncated = false,
-        Stopped = true,
-        StopConfirmed = confirmed
-    };
+    private static DockerExecutionOutcome Stopped(bool confirmed) =>
+        new()
+        {
+            ExitCode = -1,
+            StandardOutput = "Restoring...\n",
+            StandardError = "warning: slow",
+            StandardOutputTruncated = true,
+            StandardErrorTruncated = false,
+            Stopped = true,
+            StopConfirmed = confirmed
+        };
 
     [Test]
     public async Task CopyIntoAsync_WritesThroughTheWorkspaceMountOnTheHostSide()

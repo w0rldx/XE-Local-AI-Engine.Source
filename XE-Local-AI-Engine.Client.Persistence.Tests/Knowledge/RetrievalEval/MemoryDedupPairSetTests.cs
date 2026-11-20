@@ -46,7 +46,11 @@ public sealed class MemoryDedupPairSetTests
     public void Texts_AreUniqueAcrossBothFiles_SoNoPairOrScenarioItemRepeats()
     {
         var set = MemoryDedupPairSet.Load(MemoryDedupPairSet.CommittedDirectory);
-        var texts = set.Pairs.SelectMany(static pair => new[] { pair.A, pair.B })
+        var texts = set.Pairs.SelectMany(static pair => new[]
+                       {
+                           pair.A,
+                           pair.B
+                       })
                        .Concat(set.Scenarios.SelectMany(static scenario => scenario.Existing.Concat(scenario.Candidates)).Select(static item => item.Behavior))
                        .Select(static text => text.Trim())
                        .ToList();
@@ -112,7 +116,8 @@ public sealed class MemoryDedupPairSetTests
                         AssertEx.True(sameLessonExisting.Exists(item => item.Scope == candidate.Scope), $"{where} restates no same-scope existing memory.");
                         break;
                     case MemoryDedupPairSet.CrossScopeCandidate:
-                        AssertEx.True(sameLessonExisting.Count > 0 && sameLessonExisting.TrueForAll(item => item.Scope != candidate.Scope), $"{where} must restate an existing memory under another scope.");
+                        AssertEx.True(sameLessonExisting.Count > 0 && sameLessonExisting.TrueForAll(item => item.Scope != candidate.Scope),
+                            $"{where} must restate an existing memory under another scope.");
                         break;
                     case MemoryDedupPairSet.NearMissCandidate:
                         AssertEx.False(existingLessons.Contains(candidate.LessonId), $"{where} must state a lesson no existing memory holds.");
@@ -294,7 +299,10 @@ internal sealed class MemoryDedupPairSet
     {
         // A misspelled field must fail the load, never read as an empty value.
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        Converters = { new JsonStringEnumConverter<MemoryScope>(allowIntegerValues: false) }
+        Converters =
+        {
+            new JsonStringEnumConverter<MemoryScope>(allowIntegerValues: false)
+        }
     };
 
     public static string CommittedDirectory { get; } = Path.Combine(AppContext.BaseDirectory, "Knowledge", "RetrievalEval", "DedupPairs");

@@ -90,7 +90,8 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         _store = store;
     }
 
-    public void Dispose() => _commitGate.Dispose();
+    public void Dispose() =>
+        _commitGate.Dispose();
 
     public async Task<StoredNodeSettings> GetTrustedSettingsAsync(CancellationToken cancellationToken = default) =>
         await _store.LoadAsync(cancellationToken) ?? new StoredNodeSettings();

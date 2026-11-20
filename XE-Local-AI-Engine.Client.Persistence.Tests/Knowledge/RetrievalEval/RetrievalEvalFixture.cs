@@ -412,6 +412,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
         parameter.Value = value;
         _ = command.Parameters.Add(parameter);
     }
+
     /// <summary>In-memory blob source: the ingestion service reads the raw document bytes from here by id.</summary>
     private sealed class InMemoryBlobStore : IKnowledgeDocumentBlobStore
     {

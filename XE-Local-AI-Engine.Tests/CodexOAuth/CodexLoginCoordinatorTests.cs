@@ -187,6 +187,7 @@ public sealed class CodexLoginCoordinatorTests
             {
                 cancellationToken.Register(() => completion.TrySetCanceled(CancellationToken.None));
             }
+
             var handle = new CodexLoginHandle
             {
                 AuthorizeUrl = new Uri($"https://auth.openai.com/authorize?attempt={index}"),

@@ -92,12 +92,12 @@ public sealed class NodeSettingsPolicyTests
     public async Task KeepWarmInterval_NotShorterThanTheEffectiveIdleTimeToLive_IsRejected()
     {
         var errors = await ValidateAsync(new StoredNodeSettings
-            {
-                KeepModelWarmEnabled = true,
-                KeepModelWarmModelName = "warm.gguf",
-                KeepModelWarmIntervalSeconds = 600,
-                LlamaIdleTimeToLiveSeconds = 600
-            });
+        {
+            KeepModelWarmEnabled = true,
+            KeepModelWarmModelName = "warm.gguf",
+            KeepModelWarmIntervalSeconds = 600,
+            LlamaIdleTimeToLiveSeconds = 600
+        });
 
         AssertEx.ContainsSingle(errors,
             error => error.Field == NodeSettingsField.KeepModelWarmIntervalSeconds

@@ -227,6 +227,7 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         command.CommandText = "SELECT COUNT(*) FROM knowledge_documents;";
         return Convert.ToInt64(await command.ExecuteScalarAsync());
     }
+
     private sealed class FixedTimeProvider : TimeProvider
     {
         private readonly DateTimeOffset _now;

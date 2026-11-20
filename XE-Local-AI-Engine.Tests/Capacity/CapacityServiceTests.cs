@@ -233,7 +233,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            SupervisorOptions = new LlamaServerSupervisorOptions { MaxLoadedProcesses = 2 },
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 2
+            },
             RunningLlama =
             [
                 new LlamaServerProcessHealth
@@ -272,7 +275,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            SupervisorOptions = new LlamaServerSupervisorOptions { MaxLoadedProcesses = 2 },
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 2
+            },
             RunningLlama =
             [
                 new LlamaServerProcessHealth
@@ -313,7 +319,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            SupervisorOptions = new LlamaServerSupervisorOptions { MaxLoadedProcesses = 2 },
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 2
+            },
             RunningLlama =
             [
                 Responsive("running/chat:Q4_K_M", ModelRole.Chat),
@@ -345,7 +354,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            SupervisorOptions = new LlamaServerSupervisorOptions { MaxLoadedProcesses = 1 }
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 1
+            }
         };
         var service = harness.Build();
         var first = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
@@ -419,7 +431,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            SupervisorOptions = new LlamaServerSupervisorOptions { MaxLoadedProcesses = 2 },
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 2
+            },
             RunningLlama =
             [
                 new LlamaServerProcessHealth
@@ -773,7 +788,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            SupervisorOptions = new LlamaServerSupervisorOptions { MaxLoadedProcesses = 1 },
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 1
+            },
             RunningLlama =
             [
                 new LlamaServerProcessHealth
@@ -976,7 +994,10 @@ public sealed class CapacityServiceTests
         {
             Profile = CpuProfile(availableRam: 10 * Gb),
             Footprint = CpuFootprint(8 * Gb),
-            SupervisorOptions = new LlamaServerSupervisorOptions { MaxLoadedProcesses = 5 },
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 5
+            },
             RunningLlama =
             [
                 new LlamaServerProcessHealth
@@ -1161,7 +1182,10 @@ public sealed class CapacityServiceTests
                     Detail = "ok"
                 }
             ],
-            SupervisorOptions = new LlamaServerSupervisorOptions { MaxLoadedProcesses = 5 }
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 5
+            }
         };
         var service = harness.Build();
 
@@ -1245,7 +1269,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(10 * Gb),
             Footprint = GpuFootprint(6 * Gb),
-            SupervisorOptions = new LlamaServerSupervisorOptions { MaxLoadedProcesses = 5 }
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 5
+            }
         };
         var service = harness.Build();
 
@@ -1362,7 +1389,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            SupervisorOptions = new LlamaServerSupervisorOptions { MaxLoadedProcesses = 1 },
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 1
+            },
             RunningLlama =
             [
                 new LlamaServerProcessHealth

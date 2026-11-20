@@ -23,7 +23,8 @@ public sealed class ModelLabTraceContractTests
         var trace = ModelLabTraceSpec.ParseTrace(Bytes(Files.Trace));
 
         AssertEx.Equal(ModelLabTraceReadStatus.Found, trace.Status);
-        AssertEx.Equal("0:0,0:1,1:0,1:1", string.Join(',', trace.Records.Select(static record => string.Create(CultureInfo.InvariantCulture, $"{record.Step}:{record.Layer}"))), "Lens lines are not hook records.");
+        AssertEx.Equal("0:0,0:1,1:0,1:1", string.Join(',', trace.Records.Select(static record => string.Create(CultureInfo.InvariantCulture, $"{record.Step}:{record.Layer}"))),
+            "Lens lines are not hook records.");
         var first = trace.Records[0];
         AssertEx.Equal("F", first.Kind);
         AssertEx.Equal(expected: 3.5, first.Norm);
@@ -108,9 +109,12 @@ public sealed class ModelLabTraceContractTests
         AssertEx.Equal(expected: 2, token.ProcessedCandidates?.Count);
 
         var lens = AssertEx.NotNull(result.Lens);
-        AssertEx.Equal("0,1|2|2|False|True|16", string.Create(CultureInfo.InvariantCulture, $"{string.Join(',', lens.Layers)}|{lens.TopTokens}|{lens.Records}|{lens.Truncated}|{lens.TiedEmbeddings}|{lens.VocabSize}"));
+        AssertEx.Equal("0,1|2|2|False|True|16",
+            string.Create(CultureInfo.InvariantCulture, $"{string.Join(',', lens.Layers)}|{lens.TopTokens}|{lens.Records}|{lens.Truncated}|{lens.TiedEmbeddings}|{lens.VocabSize}"));
         var attention = AssertEx.NotNull(result.Attention);
-        AssertEx.Equal("1|2|1|8|2|10000|2|False", string.Create(CultureInfo.InvariantCulture, $"{string.Join(',', attention.Layers)}|{attention.Heads}|{attention.KvHeads}|{attention.HeadDim}|{attention.TopKeys}|{attention.WeightScale}|{attention.Records}|{attention.Truncated}"));
+        AssertEx.Equal("1|2|1|8|2|10000|2|False",
+            string.Create(CultureInfo.InvariantCulture,
+                $"{string.Join(',', attention.Layers)}|{attention.Heads}|{attention.KvHeads}|{attention.HeadDim}|{attention.TopKeys}|{attention.WeightScale}|{attention.Records}|{attention.Truncated}"));
     }
 
     /// <summary>A key the script renames or drops makes the file unreadable rather than reading as a default.</summary>

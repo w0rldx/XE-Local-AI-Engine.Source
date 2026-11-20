@@ -137,7 +137,11 @@ public sealed class NodeChatImportPersistenceTests : IDisposable
             IncludeArchived = true,
             Limit = 10
         });
-        AssertEx.Equal(string.Join(',', new[] { bulk, perMessage }.Order()), string.Join(',', hits.Items.Select(static hit => hit.ConversationId).Order()),
+        AssertEx.Equal(string.Join(',', new[]
+            {
+                bulk,
+                perMessage
+            }.Order()), string.Join(',', hits.Items.Select(static hit => hit.ConversationId).Order()),
             "The import marks its chat stale like any write, so the next search finds it.");
     }
 

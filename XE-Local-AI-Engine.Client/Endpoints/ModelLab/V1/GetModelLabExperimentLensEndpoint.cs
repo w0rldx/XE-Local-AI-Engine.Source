@@ -68,7 +68,14 @@ public sealed class GetModelLabExperimentLensEndpoint : Endpoint<ModelLabExperim
                             ]
                         })
                     ],
-                    Texts = [.. texts.Select(static text => new ModelLabLensTextResponse { Id = text.Key, Text = text.Value })],
+                    Texts =
+                    [
+                        .. texts.Select(static text => new ModelLabLensTextResponse
+                        {
+                            Id = text.Key,
+                            Text = text.Value
+                        })
+                    ],
                     Truncated = lens.Footer?.Truncated ?? false,
                     DroppedSteps = lens.Footer?.Dropped ?? 0
                 }, ct);

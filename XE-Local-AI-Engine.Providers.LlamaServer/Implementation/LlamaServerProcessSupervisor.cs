@@ -167,6 +167,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             _logger.LogInformation("Attached embedding endpoint for {ModelName}: profile {ProfileId} expects {Pooling} pooling; the node cannot verify it.",
                 modelName, profile.Id, profile.Pooling);
         }
+
         _detachedSpawnScheduler = detachedSpawnScheduler ?? TaskScheduler.Default;
         _spawnReceipts = spawnReceipts ?? new ProcessSpawnReceiptStore(nodeDataRoot: null, "llama-server", _logger);
 
@@ -524,7 +525,10 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         EnsureDecision Join(InflightSpawn joined) =>
             TryJoinInflightSpawn(key, joined, intent)
                 ? new EnsureDecision(Reused: null, joined.Task)
-                : new EnsureDecision(Reused: null, SpawnTask: null) { Refused = joined };
+                : new EnsureDecision(Reused: null, SpawnTask: null)
+                {
+                    Refused = joined
+                };
     }
 
     /// <summary>

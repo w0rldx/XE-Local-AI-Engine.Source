@@ -176,7 +176,11 @@ public sealed class MemoryDedupCalibrationLiveTests
         });
 
         // Raw behaviour text, exactly what MemorySemanticDeduplicator embeds: no profile prefix.
-        var texts = data.Pairs.SelectMany(static pair => new[] { pair.A, pair.B })
+        var texts = data.Pairs.SelectMany(static pair => new[]
+                        {
+                            pair.A,
+                            pair.B
+                        })
                         .Concat(data.Scenarios.SelectMany(static scenario => scenario.Existing.Concat(scenario.Candidates)).Select(static item => item.Behavior))
                         .Distinct(StringComparer.Ordinal)
                         .ToList();
@@ -186,7 +190,8 @@ public sealed class MemoryDedupCalibrationLiveTests
             var generated = await generator.GenerateAsync(batch, options: null, ct);
             if (generated.Count != batch.Length)
             {
-                throw new InvalidOperationException($"'{name}' returned {generated.Count.ToString(CultureInfo.InvariantCulture)} embeddings for {batch.Length.ToString(CultureInfo.InvariantCulture)} inputs.");
+                throw new InvalidOperationException(
+                    $"'{name}' returned {generated.Count.ToString(CultureInfo.InvariantCulture)} embeddings for {batch.Length.ToString(CultureInfo.InvariantCulture)} inputs.");
             }
 
             for (var index = 0; index < batch.Length; index++)

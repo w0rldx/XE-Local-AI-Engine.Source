@@ -9,8 +9,8 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Tests.Testing;
-using static XE_Local_AI_Engine.Tests.ModelLab.ModelLabAttentionTests;
-using static XE_Local_AI_Engine.Tests.ModelLab.ModelLabExperimentServiceTests;
+using static ModelLabAttentionTests;
+using static ModelLabExperimentServiceTests;
 
 /// <summary>A trace's logit lens: the job's fields and cap, the lens lines beside the hook records in one blob, their check, and the read route.</summary>
 [Category(TestCategories.Integration)]
@@ -95,7 +95,10 @@ public sealed class ModelLabLensTests
         AssertEx.False(trace.Footer!.Truncated, "The lens footer does not stand in for the hook footer.");
         AssertEx.Equal(expected: 1, trace.Footer.Records);
 
-        var attention = ModelLabTraceSpec.ParseAttention(Encoding.UTF8.GetBytes("""{"s":0,"l":3,"q":2,"k":[[2,1]],"w":[[5000,4000]],"r":[1000]}""" + "\n" + new JsonObject { ["lens"] = Record(0) }.ToJsonString() + "\n"), heads: 1);
+        var attention = ModelLabTraceSpec.ParseAttention(Encoding.UTF8.GetBytes("""{"s":0,"l":3,"q":2,"k":[[2,1]],"w":[[5000,4000]],"r":[1000]}""" + "\n" + new JsonObject
+        {
+            ["lens"] = Record(0)
+        }.ToJsonString() + "\n"), heads: 1);
         AssertEx.Equal(ModelLabTraceReadStatus.Found, attention.Status);
         AssertEx.Equal(expected: 3, attention.Records.Single().Layer);
     }
@@ -338,7 +341,12 @@ public sealed class ModelLabLensTests
         }
 
         using var client = host.Factory.CreateClient();
-        foreach (var id in new[] { before, steering, Guid.NewGuid() })
+        foreach (var id in new[]
+                 {
+                     before,
+                     steering,
+                     Guid.NewGuid()
+                 })
         {
             await ExpectStatusAsync(host, client, $"/api/local/v1/model-lab/experiments/{id}/lens", HttpStatusCode.NotFound);
         }
@@ -377,13 +385,18 @@ public sealed class ModelLabLensTests
     [Test]
     public void AResultFromBeforeContractFive_ReadsWithNoLens_AndAFiveResultRoundTrips()
     {
-        var before = AssertEx.NotNull(ModelLabTraceSpec.ReadResultOrNull("""{"promptTokens":3,"tokens":[],"text":"hi","layers":[6,12,18],"layerKinds":"LLLF","attnImplementation":"sdpa"}"""u8.ToArray()));
+        var before = AssertEx.NotNull(
+            ModelLabTraceSpec.ReadResultOrNull("""{"promptTokens":3,"tokens":[],"text":"hi","layers":[6,12,18],"layerKinds":"LLLF","attnImplementation":"sdpa"}"""u8.ToArray()));
         AssertEx.Null(before.Lens);
         AssertEx.Equal("sdpa", before.AttnImplementation);
 
         var after = AssertEx.NotNull(ModelLabTraceSpec.ReadResultOrNull(Encoding.UTF8.GetBytes(Result(tokens: 2, Summary(records: 2, truncated: true)))));
         var roundTrip = AssertEx.NotNull(ModelLabTraceSpec.ReadResultOrNull(JsonSerializer.SerializeToUtf8Bytes(after, JsonSerializerOptions.Web)));
-        foreach (var lens in new[] { after.Lens, roundTrip.Lens })
+        foreach (var lens in new[]
+                 {
+                     after.Lens,
+                     roundTrip.Lens
+                 })
         {
             var read = AssertEx.NotNull(lens);
             AssertEx.Equal("0,1", string.Join(',', read.Layers));
@@ -464,7 +477,14 @@ public sealed class ModelLabLensTests
         JsonSerializer.Serialize(new ModelLabTraceResult
         {
             PromptTokens = 3,
-            Tokens = [.. Enumerable.Range(0, tokens).Select(static _ => new ModelLabResultToken { Id = 7, Text = "the" })],
+            Tokens =
+            [
+                .. Enumerable.Range(0, tokens).Select(static _ => new ModelLabResultToken
+                {
+                    Id = 7,
+                    Text = "the"
+                })
+            ],
             Text = "the",
             BlockCount = 24,
             Lens = lens

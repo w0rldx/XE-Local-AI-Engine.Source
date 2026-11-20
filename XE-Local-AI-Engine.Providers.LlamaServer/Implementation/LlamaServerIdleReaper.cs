@@ -655,7 +655,10 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
-            _unconfirmedKills.Add(new UnconfirmedKill(key, handle, port) { LastWarnedUtc = _timeProvider.GetUtcNow() });
+            _unconfirmedKills.Add(new UnconfirmedKill(key, handle, port)
+            {
+                LastWarnedUtc = _timeProvider.GetUtcNow()
+            });
             Volatile.Write(ref _unconfirmedKillCount, _unconfirmedKills.Count);
         }
         finally

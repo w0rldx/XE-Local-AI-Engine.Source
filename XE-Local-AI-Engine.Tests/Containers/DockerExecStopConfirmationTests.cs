@@ -119,7 +119,10 @@ public sealed class DockerExecStopConfirmationTests
             ["800", "800", "Z", "Thu Nov 19 10:06:00 2026"]
         ];
 
-        var unaccounted = DockerDotNetRuntimeClient.SelectUnaccounted(ProcessTitles, rows, new HashSet<long> { 100 }, known);
+        var unaccounted = DockerDotNetRuntimeClient.SelectUnaccounted(ProcessTitles, rows, new HashSet<long>
+        {
+            100
+        }, known);
 
         AssertEx.Equal(expected: 600, unaccounted!.Single().Pid, "pid 600 now names a process started later, so it is not the survivor");
         AssertEx.Equal(expected: 500, known.Keys.Single(), "the recycled pid and the vanished one are pruned; the live survivor stays");
@@ -131,7 +134,10 @@ public sealed class DockerExecStopConfirmationTests
     {
         IList<IList<string>> rows = [["100", "100", "Ss"]];
 
-        AssertEx.Null(DockerDotNetRuntimeClient.SelectUnaccounted(["PID", "SID", "STAT"], rows, new HashSet<long> { 100 }, new ConcurrentDictionary<long, string>()));
+        AssertEx.Null(DockerDotNetRuntimeClient.SelectUnaccounted(["PID", "SID", "STAT"], rows, new HashSet<long>
+        {
+            100
+        }, new ConcurrentDictionary<long, string>()));
         await Task.CompletedTask;
     }
 }

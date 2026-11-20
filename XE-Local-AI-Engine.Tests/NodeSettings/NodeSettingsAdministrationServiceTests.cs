@@ -1170,13 +1170,17 @@ public sealed class NodeSettingsAdministrationServiceTests
 
         public StoredNodeSettings Current => _inner.Current;
 
-        public void ReleaseFirst() => _release.TrySetResult();
+        public void ReleaseFirst() =>
+            _release.TrySetResult();
 
-        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default) => _inner.LoadAsync(cancellationToken);
+        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default) =>
+            _inner.LoadAsync(cancellationToken);
 
-        public StoredNodeSettings Load(CancellationToken cancellationToken = default) => _inner.Load(cancellationToken);
+        public StoredNodeSettings Load(CancellationToken cancellationToken = default) =>
+            _inner.Load(cancellationToken);
 
-        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default) => _inner.SaveAsync(settings, cancellationToken);
+        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default) =>
+            _inner.SaveAsync(settings, cancellationToken);
 
         public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
         {
@@ -1203,11 +1207,14 @@ public sealed class NodeSettingsAdministrationServiceTests
             _caller = caller;
         }
 
-        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default) => _inner.LoadAsync(cancellationToken);
+        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default) =>
+            _inner.LoadAsync(cancellationToken);
 
-        public StoredNodeSettings Load(CancellationToken cancellationToken = default) => _inner.Load(cancellationToken);
+        public StoredNodeSettings Load(CancellationToken cancellationToken = default) =>
+            _inner.Load(cancellationToken);
 
-        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default) => _inner.SaveAsync(settings, cancellationToken);
+        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default) =>
+            _inner.SaveAsync(settings, cancellationToken);
 
         public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
         {

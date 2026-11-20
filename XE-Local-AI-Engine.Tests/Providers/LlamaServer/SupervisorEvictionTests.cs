@@ -735,7 +735,13 @@ public sealed class SupervisorEvictionTests
         var telemetry = new FakeLlamaServerLoadTelemetry();
         var options = CapOf(cap: 4, TimeSpan.FromMinutes(15));
         await using var supervisor = SupervisorFactory.Create(launcher, options: options, timeProvider: time, loadTelemetry: telemetry);
-        foreach (var model in new[] { "chat-a", "chat-b", "chat-c", "chat-d" })
+        foreach (var model in new[]
+                 {
+                     "chat-a",
+                     "chat-b",
+                     "chat-c",
+                     "chat-d"
+                 })
         {
             await ServeOneTurnAsync(supervisor, model);
             time.Advance(TimeSpan.FromMinutes(1));

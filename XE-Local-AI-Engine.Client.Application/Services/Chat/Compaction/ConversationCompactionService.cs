@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
-using XE_Local_AI_Engine.Client.Common;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;

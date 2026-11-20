@@ -57,32 +57,32 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     ///     <c>$3</c> set SIGKILLs each one of the session.
     /// </remarks>
     private const string SessionScanFunctions = """
-        __xe_stat() {
-          __xe_l=
-          { while IFS= read -r __xe_line || [ -n "$__xe_line" ]; do __xe_l="$__xe_l$__xe_line "; done; } 2>/dev/null < "$1" || return 1
-          case "$__xe_l" in *") "*) ;; *) return 2 ;; esac
-          set -- ${__xe_l##*) }
-          __xe_state=$1 __xe_sid=$4 __xe_start=${20}
-          case "$__xe_state" in ?) ;; *) return 2 ;; esac
-          case "$__xe_sid" in ''|*[!0-9]*) return 2 ;; esac
-          case "$__xe_start" in ''|*[!0-9]*) return 2 ;; esac
-        }
-        __xe_scan() {
-          __xe_found=
-          for __xe_d in /proc/[0-9]*; do
-            __xe_stat "$__xe_d/stat"
-            case $? in
-              1) continue ;;
-              2) [ ! -e "$__xe_d" ] || __xe_found=1; continue ;;
-            esac
-            if [ "$__xe_sid" = "$1" ] && [ "$__xe_state" != Z ] && [ "${__xe_d#/proc/}" != "$2" ]; then
-              __xe_found=1
-              [ -z "$3" ] || kill -KILL "${__xe_d#/proc/}" 2>/dev/null
-            fi
-          done
-        }
+                                                __xe_stat() {
+                                                  __xe_l=
+                                                  { while IFS= read -r __xe_line || [ -n "$__xe_line" ]; do __xe_l="$__xe_l$__xe_line "; done; } 2>/dev/null < "$1" || return 1
+                                                  case "$__xe_l" in *") "*) ;; *) return 2 ;; esac
+                                                  set -- ${__xe_l##*) }
+                                                  __xe_state=$1 __xe_sid=$4 __xe_start=${20}
+                                                  case "$__xe_state" in ?) ;; *) return 2 ;; esac
+                                                  case "$__xe_sid" in ''|*[!0-9]*) return 2 ;; esac
+                                                  case "$__xe_start" in ''|*[!0-9]*) return 2 ;; esac
+                                                }
+                                                __xe_scan() {
+                                                  __xe_found=
+                                                  for __xe_d in /proc/[0-9]*; do
+                                                    __xe_stat "$__xe_d/stat"
+                                                    case $? in
+                                                      1) continue ;;
+                                                      2) [ ! -e "$__xe_d" ] || __xe_found=1; continue ;;
+                                                    esac
+                                                    if [ "$__xe_sid" = "$1" ] && [ "$__xe_state" != Z ] && [ "${__xe_d#/proc/}" != "$2" ]; then
+                                                      __xe_found=1
+                                                      [ -z "$3" ] || kill -KILL "${__xe_d#/proc/}" 2>/dev/null
+                                                    fi
+                                                  done
+                                                }
 
-        """;
+                                                """;
 
     /// <summary>Runs a command so a stop can end it: the identity of the exec's session leader first, then the command as its child.</summary>
     /// <remarks>
@@ -93,48 +93,48 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     ///     the sandbox. A shebang-less executable text file runs as a sh script, as POSIX sh's ENOEXEC fallback does.
     /// </remarks>
     internal const string StoppableExecScript = SessionScanFunctions + """
-        __xe_f=$1
-        shift
-        __xe_why=
-        __xe_walked=
-        case "$1" in
-          */*)
-            if [ -d "$1" ]; then __xe_why=directory; elif [ ! -e "$1" ]; then __xe_why=missing; elif [ ! -x "$1" ]; then __xe_why=denied; fi
-            ;;
-          *)
-            __xe_x=$(command -v "$1" 2>/dev/null) || __xe_x=
-            case "$__xe_x" in
-              /*) ;;
-              *)
-                __xe_x=$(IFS=:; set -f; for __xe_d in $PATH; do [ -n "$__xe_d" ] || __xe_d=.; if [ -f "$__xe_d/$1" ] && [ -x "$__xe_d/$1" ]; then printf '%s' "$__xe_d/$1"; break; fi; done)
-                __xe_walked=1
-                [ -n "$__xe_x" ] || __xe_why=path
-                ;;
-            esac
-            ;;
-        esac
-        [ -z "$__xe_why" ] || { printf '%s %s\n' "$__xe_f" "$__xe_why" >&2; exit 127; }
-        if __xe_stat "/proc/$$/stat" && printf '%s %s\n' "$$" "$__xe_start" 2>/dev/null > "$__xe_f"; then
-          :
-        else
-          printf '%s\n' 'The sandbox could not record the identity it needs to stop this command.' >&2
-          exit 125
-        fi
-        if [ -e "$__xe_f.stop" ]; then
-          rm -f "$__xe_f" "$__xe_f.stop" 2>/dev/null
-          exit 125
-        fi
-        if [ -n "$__xe_walked" ]; then
-          shift
-          "$__xe_x" "$@"
-        else
-          "$@"
-        fi
-        __xe_r=$?
-        __xe_scan "$$" "$$"
-        [ -n "$__xe_found" ] || rm -f "$__xe_f" 2>/dev/null
-        exit "$__xe_r"
-        """;
+                                                                       __xe_f=$1
+                                                                       shift
+                                                                       __xe_why=
+                                                                       __xe_walked=
+                                                                       case "$1" in
+                                                                         */*)
+                                                                           if [ -d "$1" ]; then __xe_why=directory; elif [ ! -e "$1" ]; then __xe_why=missing; elif [ ! -x "$1" ]; then __xe_why=denied; fi
+                                                                           ;;
+                                                                         *)
+                                                                           __xe_x=$(command -v "$1" 2>/dev/null) || __xe_x=
+                                                                           case "$__xe_x" in
+                                                                             /*) ;;
+                                                                             *)
+                                                                               __xe_x=$(IFS=:; set -f; for __xe_d in $PATH; do [ -n "$__xe_d" ] || __xe_d=.; if [ -f "$__xe_d/$1" ] && [ -x "$__xe_d/$1" ]; then printf '%s' "$__xe_d/$1"; break; fi; done)
+                                                                               __xe_walked=1
+                                                                               [ -n "$__xe_x" ] || __xe_why=path
+                                                                               ;;
+                                                                           esac
+                                                                           ;;
+                                                                       esac
+                                                                       [ -z "$__xe_why" ] || { printf '%s %s\n' "$__xe_f" "$__xe_why" >&2; exit 127; }
+                                                                       if __xe_stat "/proc/$$/stat" && printf '%s %s\n' "$$" "$__xe_start" 2>/dev/null > "$__xe_f"; then
+                                                                         :
+                                                                       else
+                                                                         printf '%s\n' 'The sandbox could not record the identity it needs to stop this command.' >&2
+                                                                         exit 125
+                                                                       fi
+                                                                       if [ -e "$__xe_f.stop" ]; then
+                                                                         rm -f "$__xe_f" "$__xe_f.stop" 2>/dev/null
+                                                                         exit 125
+                                                                       fi
+                                                                       if [ -n "$__xe_walked" ]; then
+                                                                         shift
+                                                                         "$__xe_x" "$@"
+                                                                       else
+                                                                         "$@"
+                                                                       fi
+                                                                       __xe_r=$?
+                                                                       __xe_scan "$$" "$$"
+                                                                       [ -n "$__xe_found" ] || rm -f "$__xe_f" 2>/dev/null
+                                                                       exit "$__xe_r"
+                                                                       """;
 
     /// <summary>Stops the command whose identity file is <c>$1</c>: marker first, then SIGKILL to its session until a scan finds none.</summary>
     /// <remarks>
@@ -143,22 +143,22 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     ///     may be another command's. Exit 0 is not confirmation on its own either; the client then accounts for every process left.
     /// </remarks>
     internal const string StopExecScript = SessionScanFunctions + """
-        __xe_f=$1
-        : 2>/dev/null > "$__xe_f.stop"
-        read -r __xe_p __xe_t 2>/dev/null < "$__xe_f" && [ -n "$__xe_t" ] || exit 3
-        if __xe_stat "/proc/$__xe_p/stat" && [ "$__xe_start" != "$__xe_t" ]; then
-          exit 4
-        fi
-        __xe_n=0
-        while :; do
-          __xe_scan "$__xe_p" "" kill
-          [ -n "$__xe_found" ] || break
-          __xe_n=$((__xe_n + 1))
-          [ "$__xe_n" -lt 20 ] || exit 1
-        done
-        rm -f "$__xe_f" "$__xe_f.stop" 2>/dev/null
-        exit 0
-        """;
+                                                                  __xe_f=$1
+                                                                  : 2>/dev/null > "$__xe_f.stop"
+                                                                  read -r __xe_p __xe_t 2>/dev/null < "$__xe_f" && [ -n "$__xe_t" ] || exit 3
+                                                                  if __xe_stat "/proc/$__xe_p/stat" && [ "$__xe_start" != "$__xe_t" ]; then
+                                                                    exit 4
+                                                                  fi
+                                                                  __xe_n=0
+                                                                  while :; do
+                                                                    __xe_scan "$__xe_p" "" kill
+                                                                    [ -n "$__xe_found" ] || break
+                                                                    __xe_n=$((__xe_n + 1))
+                                                                    [ "$__xe_n" -lt 20 ] || exit 1
+                                                                  done
+                                                                  rm -f "$__xe_f" "$__xe_f.stop" 2>/dev/null
+                                                                  exit 0
+                                                                  """;
 
     private readonly DockerClient _client;
     private readonly TimeSpan _probeTimeout;
@@ -542,9 +542,9 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                     // The read never sees the caller's token: a read cancelled mid-frame would leave the multiplexed framing unreadable,
                     // and the output printed before a stop is still to be drained after it.
                     using var drain = new CancellationTokenSource();
-    #pragma warning disable CA2025 // The finally below awaits the pump before the stream or the drain source is disposed.
+#pragma warning disable CA2025 // The finally below awaits the pump before the stream or the drain source is disposed.
                     var pump = PumpAsync(stream, request.StandardInput, capture, drain.Token);
-    #pragma warning restore CA2025
+#pragma warning restore CA2025
                     try
                     {
                         await pump.WaitAsync(cancellationToken);
@@ -721,8 +721,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     ///     The daemon reports exec and init pids in the namespace its process list uses; an exec leader is its session's id. The tracked
     ///     set is read before and after the list, so an exec ending in between is still counted.
     /// </remarks>
-    private async Task<IReadOnlyList<ContainerProcess>?> ListUnaccountedProcessesAsync(
-        string containerId,
+    private async Task<IReadOnlyList<ContainerProcess>?> ListUnaccountedProcessesAsync(string containerId,
         string excludedExecId,
         CancellationToken cancellationToken)
     {
@@ -738,7 +737,10 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         tracked.Remove(excludedExecId);
 
         // An init the daemon does not report accounts for nothing, so its processes then count as unaccounted.
-        var sessions = new HashSet<long> { (await _client.Containers.InspectContainerAsync(containerId, cancellationToken)).State?.Pid ?? 0 };
+        var sessions = new HashSet<long>
+        {
+            (await _client.Containers.InspectContainerAsync(containerId, cancellationToken)).State?.Pid ?? 0
+        };
         foreach (var execId in tracked)
         {
             sessions.Add((await _client.Exec.InspectContainerExecAsync(execId, cancellationToken)).Pid);

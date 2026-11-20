@@ -54,12 +54,15 @@ internal static class ModelLabEndpointMapper
         new()
         {
             RenderedPrompt = tokens.RenderedPrompt,
-            Tokens = [.. tokens.Tokens.Select(static token => new ModelLabPromptTokenResponse
-            {
-                Id = token.Id,
-                Piece = token.Piece,
-                Special = token.Special
-            })],
+            Tokens =
+            [
+                .. tokens.Tokens.Select(static token => new ModelLabPromptTokenResponse
+                {
+                    Id = token.Id,
+                    Piece = token.Piece,
+                    Special = token.Special
+                })
+            ],
             TokenCount = tokens.TokenCount,
             Truncated = tokens.Truncated
         };

@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Tests.Testing;
-using static XE_Local_AI_Engine.Tests.ModelLab.ModelLabExperimentServiceTests;
+using static ModelLabExperimentServiceTests;
 
 /// <summary>A trace that records attention: the job's capture fields, the second blob and its cleanup, the read route, and the refusals.</summary>
 [Category(TestCategories.Integration)]
@@ -135,7 +135,12 @@ public sealed class ModelLabAttentionTests
         }
 
         using var client = host.Factory.CreateClient();
-        foreach (var id in new[] { plain, steering, Guid.NewGuid() })
+        foreach (var id in new[]
+                 {
+                     plain,
+                     steering,
+                     Guid.NewGuid()
+                 })
         {
             await ExpectStatusAsync(host, client, $"/api/local/v1/model-lab/experiments/{id}/attention/3", HttpStatusCode.NotFound);
         }
@@ -366,8 +371,16 @@ public sealed class ModelLabAttentionTests
             s = step,
             l = layer,
             q = query,
-            k = Enumerable.Repeat(new[] { query, 0 }, Heads),
-            w = Enumerable.Repeat(new[] { 6000, 2500 }, Heads),
+            k = Enumerable.Repeat(new[]
+            {
+                query,
+                0
+            }, Heads),
+            w = Enumerable.Repeat(new[]
+            {
+                6000,
+                2500
+            }, Heads),
             r = Enumerable.Repeat(1499, Heads)
         });
 

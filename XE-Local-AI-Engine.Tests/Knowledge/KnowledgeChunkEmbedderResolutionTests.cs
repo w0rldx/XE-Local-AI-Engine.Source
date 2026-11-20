@@ -269,7 +269,10 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     public async Task IsEmbeddingModelBlockedAsync_WhenTheInventoryReadFails_IsTrue()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        var embedder = CreateEmbedder(new CapturingProvider(Descriptor(ConfiguredName)) { ThrowOnListModels = true },
+        var embedder = CreateEmbedder(new CapturingProvider(Descriptor(ConfiguredName))
+            {
+                ThrowOnListModels = true
+            },
             supervisor: supervisor,
             pinnedModel: ConfiguredName);
 
@@ -339,7 +342,10 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         providerResolver.ResolveProvider(Arg.Any<string>()).Returns(provider);
 
         return new KnowledgeChunkEmbedder(providerResolver,
-            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings { KnowledgeEmbeddingModelName = pinnedModel })),
+            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings
+            {
+                KnowledgeEmbeddingModelName = pinnedModel
+            })),
             new KnowledgeEmbeddingPrefixer(),
             options,
             supervisor ?? Substitute.For<ILlamaServerProcessSupervisor>());

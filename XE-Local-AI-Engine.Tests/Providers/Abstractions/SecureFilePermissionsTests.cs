@@ -86,7 +86,10 @@ public sealed class SecureFilePermissionsTests
         await File.WriteAllTextAsync(kept, "previous");
 
         var thrown = await AssertEx.ThrowsAsync<Exception>(async () =>
-            await SecureFilePermissions.WriteJsonAtomicAsync(path, new[] { "next" }, JsonSerializerOptions.Default, CancellationToken.None));
+            await SecureFilePermissions.WriteJsonAtomicAsync(path, new[]
+            {
+                "next"
+            }, JsonSerializerOptions.Default, CancellationToken.None));
 
         AssertEx.True(thrown is IOException or UnauthorizedAccessException, $"The failed rename surfaces as an I/O error, not {thrown.GetType()}.");
         AssertEx.Equal("previous", await File.ReadAllTextAsync(kept));

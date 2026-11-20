@@ -681,12 +681,14 @@ public sealed class WorkSessionServiceTests
     {
         public bool HasCapacity => true;
 
-        public bool TryStart(Guid sessionId) => false;
+        public bool TryStart(Guid sessionId) =>
+            false;
 
         public ValueTask<bool> TryStopAsync(Guid sessionId, WorkSessionStopReason reason, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(false);
 
-        public bool IsRunning(Guid sessionId) => false;
+        public bool IsRunning(Guid sessionId) =>
+            false;
     }
 
     /// <summary>Tool-capable unless the model's name says otherwise; cloud only for the explicitly cloud-named ones.</summary>

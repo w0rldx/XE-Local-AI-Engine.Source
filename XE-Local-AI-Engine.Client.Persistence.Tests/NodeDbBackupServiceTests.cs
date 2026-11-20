@@ -410,6 +410,7 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         var result = await command.ExecuteScalarAsync();
         return Convert.ToInt32(result, CultureInfo.InvariantCulture) > 0;
     }
+
     private sealed class FixedTimeProvider : TimeProvider
     {
         private readonly DateTimeOffset _now;

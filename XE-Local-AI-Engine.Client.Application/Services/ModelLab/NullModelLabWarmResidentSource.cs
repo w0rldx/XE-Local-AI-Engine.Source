@@ -5,8 +5,10 @@ namespace XE_Local_AI_Engine.Client.Services.ModelLab;
 public sealed class NullModelLabWarmResidentSource : IModelLabWarmResidentSource
 {
     /// <inheritdoc />
-    public ModelLabWarmResident? GetResident() => null;
+    public ModelLabWarmResident? GetResident() =>
+        null;
 
     /// <inheritdoc />
-    public Task<ModelLabEjectOutcome> EjectAsync(CancellationToken cancellationToken) => Task.FromResult(ModelLabEjectOutcome.Gone);
+    public Task<ModelLabEjectOutcome> EjectAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(ModelLabEjectOutcome.Gone);
 }

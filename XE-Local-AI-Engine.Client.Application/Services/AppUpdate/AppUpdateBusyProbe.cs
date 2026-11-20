@@ -69,14 +69,16 @@ public sealed class AppUpdateBusyProbe
         var items = new List<AppUpdateBusyItem>();
 
         // Only the exclusive kinds: shared holders never surface through the gate's UX read. An idle Model Lab worker is evictable, not busy work.
-        AppUpdateBusyKind? gpuKind = _idlePreemption.IsIdlePreemptible ? null : _gpuWorkGate.ExclusiveKind switch
-        {
-            GpuWorkKind.TrainingRun => AppUpdateBusyKind.TrainingRun,
-            GpuWorkKind.EvaluationRun => AppUpdateBusyKind.EvaluationRun,
-            GpuWorkKind.Export => AppUpdateBusyKind.TrainingExport,
-            GpuWorkKind.ModelLabExperiment => AppUpdateBusyKind.ModelLabExperiment,
-            _ => null
-        };
+        AppUpdateBusyKind? gpuKind = _idlePreemption.IsIdlePreemptible
+            ? null
+            : _gpuWorkGate.ExclusiveKind switch
+            {
+                GpuWorkKind.TrainingRun => AppUpdateBusyKind.TrainingRun,
+                GpuWorkKind.EvaluationRun => AppUpdateBusyKind.EvaluationRun,
+                GpuWorkKind.Export => AppUpdateBusyKind.TrainingExport,
+                GpuWorkKind.ModelLabExperiment => AppUpdateBusyKind.ModelLabExperiment,
+                _ => null
+            };
         if (gpuKind is { } kind)
         {
             items.Add(new AppUpdateBusyItem

@@ -5,13 +5,13 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
 using XE_Local_AI_Engine.Tests.Providers.Training;
 using XE_Local_AI_Engine.Tests.Testing;
-using static XE_Local_AI_Engine.Tests.Providers.Training.LinuxTrainingProcessGroupTests;
+using static Providers.Training.LinuxTrainingProcessGroupTests;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>

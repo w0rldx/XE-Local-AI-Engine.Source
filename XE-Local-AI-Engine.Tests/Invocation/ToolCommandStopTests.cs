@@ -79,19 +79,20 @@ public sealed class ToolCommandStopTests
         return provider;
     }
 
-    private static SandboxHandle Handle() => new()
-    {
-        ProviderName = "fake",
-        SandboxId = "sandbox-1",
-        AttachKey = new SandboxAttachKey
+    private static SandboxHandle Handle() =>
+        new()
         {
-            OwnerUserId = "owner-1",
-            NodeId = "node-1",
             ProviderName = "fake",
-            RuntimeProfile = "default",
+            SandboxId = "sandbox-1",
+            AttachKey = new SandboxAttachKey
+            {
+                OwnerUserId = "owner-1",
+                NodeId = "node-1",
+                ProviderName = "fake",
+                RuntimeProfile = "default",
+                ManifestVersion = 1
+            },
+            CreatedAt = DateTimeOffset.UnixEpoch,
             ManifestVersion = 1
-        },
-        CreatedAt = DateTimeOffset.UnixEpoch,
-        ManifestVersion = 1
-    };
+        };
 }

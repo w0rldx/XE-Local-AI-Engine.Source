@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
 {
     internal static readonly TimeSpan GroupLeaderTimeout = TimeSpan.FromSeconds(2);
+
     /// <summary>How many unreadable stat reads a live child gets before the spawn settles for the last trusted one.</summary>
     internal const int UnreadableStatRetries = 3;
 

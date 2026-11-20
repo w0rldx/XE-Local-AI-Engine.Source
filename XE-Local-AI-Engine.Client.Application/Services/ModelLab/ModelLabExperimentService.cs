@@ -76,6 +76,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
 
     /// <summary>Receipt files not proven gone, with what an unverified eviction kept for each (nothing for the startup sweep's). Under the job lock.</summary>
     private readonly Dictionary<string, UnresolvedReceipt> _unresolvedReceipts = new(StringComparer.Ordinal);
+
     private ActiveJob? _active;
     private bool _receiptScanFailed;
     private ModelLabGpuSession? _session;

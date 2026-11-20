@@ -185,7 +185,11 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
 
         AssertEx.Equal(KnowledgeIngestionRunOutcome.Deferred, await ownerRun.WaitAsync(TimeSpan.FromSeconds(30)));
         AssertEx.Equal(KnowledgeIngestionRunOutcome.Deferred, await waiterRun.WaitAsync(TimeSpan.FromSeconds(30)), "A run coalesced onto the vetoed embed waits too.");
-        foreach (var documentId in new[] { owner, waiter })
+        foreach (var documentId in new[]
+                 {
+                     owner,
+                     waiter
+                 })
         {
             var row = AssertEx.NotNull(await ReadAsync(databasePath, documentId));
             AssertEx.Equal(nameof(KnowledgeDocumentStatus.Pending), row.Status);
@@ -328,7 +332,11 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
         AssertEx.Equal(KnowledgeIngestionRunOutcome.Completed, await ownerRun.WaitAsync(TimeSpan.FromSeconds(30)));
         AssertEx.Equal(KnowledgeIngestionRunOutcome.Completed, await waiterRun.WaitAsync(TimeSpan.FromSeconds(30)), "An outage is not an eject: the waiter must not park.");
         AssertEx.Equal(2, Volatile.Read(ref sharedCalls), "The waiter retries the shared chunk itself, once.");
-        foreach (var documentId in new[] { owner, waiter })
+        foreach (var documentId in new[]
+                 {
+                     owner,
+                     waiter
+                 })
         {
             var row = AssertEx.NotNull(await ReadAsync(databasePath, documentId));
             AssertEx.Equal(nameof(KnowledgeDocumentStatus.Failed), row.Status);
@@ -412,9 +420,15 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
         providerResolver.ResolveProvider(Arg.Any<string>()).Returns(provider);
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.IsBackgroundLaunchBlocked(Arg.Any<string>(), Arg.Any<ModelRole>()).Returns(true);
-        var options = Options.Create(new KnowledgeBaseOptions { EmbeddingProviderName = LlamaServerProviderConstants.ProviderName });
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingProviderName = LlamaServerProviderConstants.ProviderName
+        });
         var embedder = new KnowledgeChunkEmbedder(providerResolver,
-            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings { KnowledgeEmbeddingModelName = "removed-embed.gguf" })),
+            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings
+            {
+                KnowledgeEmbeddingModelName = "removed-embed.gguf"
+            })),
             new KnowledgeEmbeddingPrefixer(),
             options,
             supervisor);
@@ -478,7 +492,10 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
         int maxConcurrentIngestions = 1)
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var options = Options.Create(new KnowledgeBaseOptions { MaxConcurrentIngestions = maxConcurrentIngestions });
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            MaxConcurrentIngestions = maxConcurrentIngestions
+        });
         var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
         blobStore.ReadBytesAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<byte[]?>([1, 2, 3]));
         var extractor = Substitute.For<IDocumentTextExtractor>();
@@ -548,12 +565,26 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
     {
         var document = new IngestionDocument("test-document");
         var section = new IngestionDocumentSection();
-        section.Elements.Add(new IngestionDocumentHeader("Alpha") { Text = "Alpha", Level = 1 });
-        section.Elements.Add(new IngestionDocumentParagraph("Shared body text.") { Text = "Shared body text." });
+        section.Elements.Add(new IngestionDocumentHeader("Alpha")
+        {
+            Text = "Alpha",
+            Level = 1
+        });
+        section.Elements.Add(new IngestionDocumentParagraph("Shared body text.")
+        {
+            Text = "Shared body text."
+        });
         if (withExtraChunk)
         {
-            section.Elements.Add(new IngestionDocumentHeader("Beta") { Text = "Beta", Level = 1 });
-            section.Elements.Add(new IngestionDocumentParagraph("Extra body text.") { Text = "Extra body text." });
+            section.Elements.Add(new IngestionDocumentHeader("Beta")
+            {
+                Text = "Beta",
+                Level = 1
+            });
+            section.Elements.Add(new IngestionDocumentParagraph("Extra body text.")
+            {
+                Text = "Extra body text."
+            });
         }
 
         document.Sections.Add(section);
@@ -598,7 +629,12 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
             VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, $status, $reason, 0, 'nomic-embed-text', $attempts, 1, 1);
             """;
         command.Parameters.AddWithValue("$id", documentId);
-        command.Parameters.AddWithValue("$name", new byte[] { 1, 2, 3 });
+        command.Parameters.AddWithValue("$name", new byte[]
+        {
+            1,
+            2,
+            3
+        });
         command.Parameters.AddWithValue("$hash", "hash-" + documentId.ToString("N"));
         command.Parameters.AddWithValue("$path", documentId.ToString("D") + ".txt");
         command.Parameters.AddWithValue("$status", status.ToString());

@@ -72,5 +72,8 @@ public sealed class ExternalEndpointGuardHandlerTests
     }
 
     private static CountingHttpMessageHandler NewCountingHandler() =>
-        new(() => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") });
+        new(() => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{}")
+        });
 }

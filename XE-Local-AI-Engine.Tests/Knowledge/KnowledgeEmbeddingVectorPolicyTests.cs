@@ -233,8 +233,7 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
                 gemma,
                 KnowledgeEmbeddingVectorMode.Matryoshka512),
             "A corpus embedded with nomic's prefixes under EmbeddingGemma must be reindexed, never mixed with tagged vectors.");
-        AssertEx.True(KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy(
-                $"{NomicV15}@{Revision}::layernorm-population-eps1e-5-truncate-l2:v1:512",
+        AssertEx.True(KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy($"{NomicV15}@{Revision}::layernorm-population-eps1e-5-truncate-l2:v1:512",
                 512,
                 nomic,
                 KnowledgeEmbeddingVectorMode.Matryoshka512),

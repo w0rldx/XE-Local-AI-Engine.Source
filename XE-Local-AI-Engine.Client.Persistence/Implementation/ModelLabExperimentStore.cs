@@ -242,6 +242,7 @@ public sealed class ModelLabExperimentStore : IModelLabExperimentStore
 
     private long Now() =>
         _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
     private static ModelLabExperimentRecord ToRecord(ModelLabExperiment row) =>
         new()
         {

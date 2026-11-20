@@ -217,7 +217,13 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(3), root.GetProperty("traceByteCap").GetInt32());
         AssertEx.Equal("[6,12,18]", root.GetProperty("layers").GetRawText());
         AssertEx.Equal(Prompt, root.GetProperty("prompt").GetString());
-        foreach (var attentionField in new[] { "attentionPath", "attentionLayers", "attentionTopKeys", "attentionByteCap" })
+        foreach (var attentionField in new[]
+                 {
+                     "attentionPath",
+                     "attentionLayers",
+                     "attentionTopKeys",
+                     "attentionByteCap"
+                 })
         {
             AssertEx.False(root.TryGetProperty(attentionField, out _), $"A trace without attention leaves {attentionField} out, so the script sees all four absent.");
         }

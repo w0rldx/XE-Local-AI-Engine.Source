@@ -219,8 +219,8 @@ internal sealed class NodeChatMessageCommands
                     var message = request.Messages[index];
                     messageIds[index] = Guid.NewGuid();
                     contents[index] = dbContext.EncryptMessageContent(assistant[index] ? message.Content : message.Content.Trim(), conversationId, messageIds[index]);
-                    metadata[index] = dbContext.EncryptMessageMetadata(
-                        SerializeMetadata(metadataJson: null, reasoning: null, assistant[index] ? message.Model : null, inputTokens: null, outputTokens: null, totalTokens: null,
+                    metadata[index] = dbContext.EncryptMessageMetadata(SerializeMetadata(metadataJson: null, reasoning: null, assistant[index] ? message.Model : null, inputTokens: null,
+                            outputTokens: null, totalTokens: null,
                             reasoningTokens: null, parts: null, agentDefinitionId: null, agentName: null, reasoningEffort: null, imported: assistant[index]),
                         conversationId,
                         messageIds[index]);

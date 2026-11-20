@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 
-using XE_Local_AI_Engine.Client.Common;
 using System.Globalization;
+using XE_Local_AI_Engine.Client.Common;
 
 /// <summary>
 ///     Applies a distiller delta to a state document: mints ids, links supersessions, retires entries and enforces the

@@ -22,9 +22,15 @@ public enum LinuxProcStatOutcome
 /// <remarks>The fields are meaningful only when <see cref="Outcome" /> is <see cref="LinuxProcStatOutcome.Parsed" />.</remarks>
 public sealed class LinuxProcStat
 {
-    public static readonly LinuxProcStat Missing = new() { Outcome = LinuxProcStatOutcome.Missing };
+    public static readonly LinuxProcStat Missing = new()
+    {
+        Outcome = LinuxProcStatOutcome.Missing
+    };
 
-    public static readonly LinuxProcStat Unreadable = new() { Outcome = LinuxProcStatOutcome.Unreadable };
+    public static readonly LinuxProcStat Unreadable = new()
+    {
+        Outcome = LinuxProcStatOutcome.Unreadable
+    };
 
     public required LinuxProcStatOutcome Outcome { get; init; }
 

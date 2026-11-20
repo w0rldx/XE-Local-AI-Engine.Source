@@ -354,7 +354,12 @@ public sealed class ImageServerSupervisorTests
             MaxLoadedProcesses = 3
         };
         await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time);
-        foreach (var model in new[] { "sd15", "flux", "sdxl" })
+        foreach (var model in new[]
+                 {
+                     "sd15",
+                     "flux",
+                     "sdxl"
+                 })
         {
             await supervisor.EnsureRunningAsync(model, CancellationToken.None);
             time.Advance(TimeSpan.FromMinutes(1));
@@ -431,7 +436,12 @@ public sealed class ImageServerSupervisorTests
             MaxLoadedProcesses = 3
         };
         await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time, residencyNotifier: notifier);
-        foreach (var model in new[] { "sd15", "flux", "sdxl" })
+        foreach (var model in new[]
+                 {
+                     "sd15",
+                     "flux",
+                     "sdxl"
+                 })
         {
             await supervisor.EnsureRunningAsync(model, CancellationToken.None);
             time.Advance(TimeSpan.FromMinutes(1));
@@ -494,7 +504,12 @@ public sealed class ImageServerSupervisorTests
             MaxLoadedProcesses = 3
         };
         await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time, residencyNotifier: notifier);
-        foreach (var model in new[] { "sd15", "flux", "sdxl" })
+        foreach (var model in new[]
+                 {
+                     "sd15",
+                     "flux",
+                     "sdxl"
+                 })
         {
             await supervisor.EnsureRunningAsync(model, CancellationToken.None);
             time.Advance(TimeSpan.FromMinutes(1));

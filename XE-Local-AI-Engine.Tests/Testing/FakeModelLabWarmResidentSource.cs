@@ -14,7 +14,8 @@ internal sealed class FakeModelLabWarmResidentSource : IModelLabWarmResidentSour
 
     public int EjectCalls => Volatile.Read(ref _ejectCalls);
 
-    public ModelLabWarmResident? GetResident() => Resident;
+    public ModelLabWarmResident? GetResident() =>
+        Resident;
 
     public Task<ModelLabEjectOutcome> EjectAsync(CancellationToken cancellationToken)
     {

@@ -487,8 +487,20 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         {
             Reports =
             [
-                new PullProgress { ModelName = canonical, Status = "downloading", CompletedBytes = 3, TotalBytes = 9 },
-                new PullProgress { ModelName = canonical, Status = "downloading", CompletedBytes = 7, TotalBytes = 9 }
+                new PullProgress
+                {
+                    ModelName = canonical,
+                    Status = "downloading",
+                    CompletedBytes = 3,
+                    TotalBytes = 9
+                },
+                new PullProgress
+                {
+                    ModelName = canonical,
+                    Status = "downloading",
+                    CompletedBytes = 7,
+                    TotalBytes = 9
+                }
             ]
         };
         var coordinator = BuildCoordinator(transaction, new InMemoryCoordinatedModelProviderMapStore(), operations: operations);

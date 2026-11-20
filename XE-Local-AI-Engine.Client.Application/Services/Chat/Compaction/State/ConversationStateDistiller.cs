@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 
-using XE_Local_AI_Engine.Client.Common;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -9,6 +8,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;

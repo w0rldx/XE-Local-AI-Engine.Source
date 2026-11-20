@@ -487,7 +487,8 @@ internal sealed class ModelLabGpuSession : IGpuIdleHolder
     {
         if (!verified && receiptPath is not null)
         {
-            _logger.LogError("The Model Lab worker for {RepoId} was not seen to exit, so it may still hold GPU memory. Its reservation and receipt are kept, and Model Lab refuses new starts until it is gone.",
+            _logger.LogError(
+                "The Model Lab worker for {RepoId} was not seen to exit, so it may still hold GPU memory. Its reservation and receipt are kept, and Model Lab refuses new starts until it is gone.",
                 RepoId);
             byte[]? receipt;
             lock (_sync)

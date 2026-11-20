@@ -889,11 +889,14 @@ public sealed class SupervisorOperatorEjectVetoTests
             _throwOnDispose = throwOnDispose;
         }
 
-        public ProcessLaunchAdmissionSnapshot Snapshot(string modelName, ModelRole role) => _inner.Snapshot(modelName, role);
+        public ProcessLaunchAdmissionSnapshot Snapshot(string modelName, ModelRole role) =>
+            _inner.Snapshot(modelName, role);
 
-        public IProcessLaunchAdmissionLease? Acquire(ProcessLaunchAdmission admission) => _inner.Acquire(admission);
+        public IProcessLaunchAdmissionLease? Acquire(ProcessLaunchAdmission admission) =>
+            _inner.Acquire(admission);
 
-        public bool TryAcquire(ProcessLaunchAdmission admission, [NotNullWhen(true)] out IProcessLaunchAdmissionLease? lease) => _inner.TryAcquire(admission, out lease);
+        public bool TryAcquire(ProcessLaunchAdmission admission, [NotNullWhen(true)] out IProcessLaunchAdmissionLease? lease) =>
+            _inner.TryAcquire(admission, out lease);
 
         public bool TryBeginLaunch(string modelName, ModelRole role, out ProcessLaunchAdmission? admission, [NotNullWhen(true)] out IProcessLaunchTicket? ticket)
         {

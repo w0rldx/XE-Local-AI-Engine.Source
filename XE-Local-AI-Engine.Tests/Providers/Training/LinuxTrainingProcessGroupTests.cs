@@ -439,7 +439,13 @@ public sealed class LinuxTrainingProcessGroupTests
             static _ => throw new InvalidOperationException("A group probe reads no stat."),
             static (_, _) => throw new InvalidOperationException("No probe may target init's, the caller's or the host's group."));
 
-        foreach (var group in new[] { -5, 0, 1, LinuxTrainingProcessInspector.HostProcessGroupId })
+        foreach (var group in new[]
+                 {
+                     -5,
+                     0,
+                     1,
+                     LinuxTrainingProcessInspector.HostProcessGroupId
+                 })
         {
             AssertEx.True(inspector.ProcessGroupHasMembers(group), $"Group {group} can never be proven empty.");
         }

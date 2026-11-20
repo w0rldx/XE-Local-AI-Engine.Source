@@ -27,7 +27,8 @@ public sealed class EmbeddingModelProfileTests
     [Arguments("nomic-ai/nomic-embed-text-v1.5-GGUF:F16", "nomic", "search_document: ", "search_query: ", "mean", null)]
     [Arguments("ggml-org/embeddinggemma-2-GGUF:Q8_0", "embeddinggemma", "title: none | text: ", "task: search result | query: ", "mean", "prompt-embeddinggemma+pool-mean:v1")]
     [Arguments("CompendiumLabs/bge-m3-gguf:F16", "bge-m3", "", "", "cls", "prompt-none+pool-cls:v1")]
-    [Arguments("Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "qwen3-embedding", "", "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:", "last", "prompt-qwen3-embedding+pool-last:v1")]
+    [Arguments("Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "qwen3-embedding", "", "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:", "last",
+        "prompt-qwen3-embedding+pool-last:v1")]
     [Arguments("my-embed:Q8_0", "plain", "", "", "mean", "prompt-none+pool-mean:v1")]
     public void For_PinsEachProfilesPromptPoolingAndTag(string modelName, string id, string documentPrefix, string queryPrefix, string pooling, string? tag)
     {

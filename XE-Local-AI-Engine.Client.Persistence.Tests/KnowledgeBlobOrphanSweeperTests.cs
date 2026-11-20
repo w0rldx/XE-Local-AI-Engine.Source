@@ -380,6 +380,7 @@ public sealed class KnowledgeBlobOrphanSweeperTests : IDisposable
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
     }
+
     // Wraps the real store and fails the delete of one nominated document, reproducing a file the OS refuses to remove
     // without faking the enumeration or the row probe around it.
     private sealed class ThrowingDeleteBlobStore : IKnowledgeDocumentBlobStore

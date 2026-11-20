@@ -603,6 +603,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
     }
+
     private static void AssertBytesEqual(byte[] expected, byte[] actual, string message)
     {
         AssertEx.True(expected.SequenceEqual(actual), message);

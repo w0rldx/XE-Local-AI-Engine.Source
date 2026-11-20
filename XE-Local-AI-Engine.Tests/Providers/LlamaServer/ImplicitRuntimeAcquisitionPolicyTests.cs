@@ -240,5 +240,8 @@ public sealed class ImplicitRuntimeAcquisitionPolicyTests
     }
 
     private static CountingHttpMessageHandler NewCountingHandler() =>
-        new(() => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray()) });
+        new(() => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray())
+        });
 }

@@ -34,7 +34,8 @@ public sealed class ToolCommandStopRegistration : IDisposable
 
     internal string ExecutionId { get; }
 
-    internal void BeginStop() => _ = Interlocked.Increment(ref _pendingStops);
+    internal void BeginStop() =>
+        _ = Interlocked.Increment(ref _pendingStops);
 
     internal void EndStop(bool stopped)
     {

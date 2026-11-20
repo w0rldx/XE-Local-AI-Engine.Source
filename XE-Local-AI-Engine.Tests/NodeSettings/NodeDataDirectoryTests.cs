@@ -20,7 +20,10 @@ using OS = TUnit.Core.Enums.OS;
 public sealed class NodeDataDirectoryTests : IDisposable
 {
     // The node-settings store's serializer options.
-    private static readonly JsonSerializerOptions NodeSettingsSerializerOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly JsonSerializerOptions NodeSettingsSerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = true
+    };
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-node-data-dir-tests", Guid.NewGuid().ToString("N"));
 

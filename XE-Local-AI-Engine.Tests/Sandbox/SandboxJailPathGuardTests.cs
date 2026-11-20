@@ -141,8 +141,7 @@ public sealed class SandboxJailPathGuardTests : IDisposable
         var target = Path.Combine(workspace, "secret.txt");
 
         // In-root control: the same path reads while its directory is real.
-        AssertEx.Equal("in-jail", Encoding.UTF8.GetString(
-            await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(_jailRoot, target, int.MaxValue, CancellationToken.None)));
+        AssertEx.Equal("in-jail", Encoding.UTF8.GetString(await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(_jailRoot, target, int.MaxValue, CancellationToken.None)));
 
         using var outside = new TempDir();
         await File.WriteAllTextAsync(Path.Combine(outside.Path, "secret.txt"), "OUTSIDE-THE-JAIL");

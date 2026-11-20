@@ -115,7 +115,8 @@ public sealed class ExternalModelContextBudgetTests
     {
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
         _ = cloudFactory.IsCloudProviderSelected(Arg.Any<string?>()).Returns(false);
-        return new LocalRuntimeWarmer(resolver, cloudFactory, trust, Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate(), NoOpGpuIdleHolderPreemption.Instance);
+        return new LocalRuntimeWarmer(resolver, cloudFactory, trust, Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate(),
+            NoOpGpuIdleHolderPreemption.Instance);
     }
 
     private static async Task<LocalRuntimePreparationResult> PrepareAsync(LocalRuntimeWarmer warmer)

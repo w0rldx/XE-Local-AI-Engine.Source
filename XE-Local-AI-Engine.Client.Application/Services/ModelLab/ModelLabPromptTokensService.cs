@@ -83,12 +83,15 @@ public sealed class ModelLabPromptTokensService : IModelLabPromptTokensService
         return new ModelLabPromptTokens
         {
             RenderedPrompt = rendered,
-            Tokens = [.. listed.Select(token => new ModelLabPromptToken
-            {
-                Id = token.Id,
-                Piece = token.Piece,
-                Special = special.Contains(token.Id)
-            })],
+            Tokens =
+            [
+                .. listed.Select(token => new ModelLabPromptToken
+                {
+                    Id = token.Id,
+                    Piece = token.Piece,
+                    Special = special.Contains(token.Id)
+                })
+            ],
             TokenCount = tokens.Count,
             Truncated = tokens.Count > listed.Count
         };

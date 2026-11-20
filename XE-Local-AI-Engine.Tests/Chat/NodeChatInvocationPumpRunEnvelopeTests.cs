@@ -434,8 +434,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
 
-        await persistence.Received(1).TerminalizeAssistantMessageAsync(
-            Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
                 request.Status == "cancelled" && request.Error == Reason && request.FailureCategory == FailureCategory.ModelEjected),
             Arg.Any<CancellationToken>());
     }

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.ModelLab;
 
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
@@ -30,7 +31,8 @@ public sealed class ModelLabScriptRunnerTests
         var events = NewEvents();
         var id = Guid.NewGuid();
 
-        var running = Runner(process, events, TimeProvider.System, new ModelLabJobOptions()).RunAsync(id, Path.Combine(work.Path, "job"), JobJson(work.Path), Script, static _ => Task.CompletedTask, CancellationToken.None);
+        var running = Runner(process, events, TimeProvider.System, new ModelLabJobOptions())
+            .RunAsync(id, Path.Combine(work.Path, "job"), JobJson(work.Path), Script, static _ => Task.CompletedTask, CancellationToken.None);
         await process.Spawned.WaitAsync(TestBudgets.Contended);
         process.Finish([.. CompleteRun.Select(line => Stamped(line, process.Request!.RunToken))], exitCode: 0);
         var run = await running.WaitAsync(TestBudgets.Contended);
@@ -48,10 +50,10 @@ public sealed class ModelLabScriptRunnerTests
         var events = NewEvents();
         var id = Guid.NewGuid();
 
-        var running = Runner(process, events, TimeProvider.System, new ModelLabJobOptions()).RunAsync(id, Path.Combine(work.Path, "job"), JobJson(work.Path), Script, static _ => Task.CompletedTask, CancellationToken.None);
+        var running = Runner(process, events, TimeProvider.System, new ModelLabJobOptions())
+            .RunAsync(id, Path.Combine(work.Path, "job"), JobJson(work.Path), Script, static _ => Task.CompletedTask, CancellationToken.None);
         await process.Spawned.WaitAsync(TestBudgets.Contended);
-        process.Finish(
-        [
+        process.Finish([
             Stamped(Handshake, process.Request!.RunToken),
             Stamped("""{"event":"handshake","contractVersion":1}""", ForeignToken),
             Stamped("""{"event":"phase","phase":"tracing"}""", ForeignToken),
@@ -87,8 +89,8 @@ public sealed class ModelLabScriptRunnerTests
         using var process = new SilentProcess(clock);
 
         var run = await Runner(process, NewEvents(), clock, options)
-            .RunAsync(Guid.NewGuid(), Path.Combine(work.Path, "job"), JobJson(work.Path), Script, static _ => Task.CompletedTask, CancellationToken.None)
-            .WaitAsync(TestBudgets.Contended);
+                        .RunAsync(Guid.NewGuid(), Path.Combine(work.Path, "job"), JobJson(work.Path), Script, static _ => Task.CompletedTask, CancellationToken.None)
+                        .WaitAsync(TestBudgets.Contended);
 
         AssertEx.True(process.Killed.Task.IsCompleted);
         AssertEx.Equal("The Model Lab script stopped reporting and was terminated.", run.FailureReason);
@@ -102,7 +104,7 @@ public sealed class ModelLabScriptRunnerTests
 
     /// <summary>The paths <see cref="ScriptedProcess" /> writes its result files to.</summary>
     private static byte[] JobJson(string directory) =>
-        Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string>(StringComparer.Ordinal)
+        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["tracePath"] = Path.Combine(directory, "trace.jsonl"),
             ["resultPath"] = Path.Combine(directory, "result.json")

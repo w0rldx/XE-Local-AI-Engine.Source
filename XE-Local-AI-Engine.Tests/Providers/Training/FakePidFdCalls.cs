@@ -35,8 +35,7 @@ internal sealed class FakePidFdCalls
         };
 
     /// <summary>The non-zero numeric signals sent: the calls a pinned or verified path must never make.</summary>
-    public IEnumerable<string> NumericSignals =>
-        Calls.Where(static call => call.StartsWith("kill ", StringComparison.Ordinal) && !call.EndsWith(" 0", StringComparison.Ordinal));
+    public IEnumerable<string> NumericSignals => Calls.Where(static call => call.StartsWith("kill ", StringComparison.Ordinal) && !call.EndsWith(" 0", StringComparison.Ordinal));
 
     public LinuxPidFd Open(int pid)
     {

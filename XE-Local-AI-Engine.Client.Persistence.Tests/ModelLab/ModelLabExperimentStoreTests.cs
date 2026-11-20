@@ -364,7 +364,11 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
         AssertEx.Equal(ModelLabExperimentUpdateOutcome.Updated, await store.SetPinnedAsync(first, pinned: false, maxPinned: 2));
         AssertEx.Equal(ModelLabExperimentUpdateOutcome.Updated, await store.SetPinnedAsync(third, pinned: true, maxPinned: 2));
         context.ChangeTracker.Clear();
-        AssertEx.Equal(string.Join(',', new[] { second, third }.OrderBy(static id => id)),
+        AssertEx.Equal(string.Join(',', new[]
+            {
+                second,
+                third
+            }.OrderBy(static id => id)),
             string.Join(',', (await store.ListAsync()).Where(static row => row.IsPinned).Select(static row => row.Id).OrderBy(static id => id)));
     }
 

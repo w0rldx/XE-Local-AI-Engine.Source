@@ -328,7 +328,14 @@ public sealed class KnowledgeIngestionWorkerTests
         await worker.StartAsync(CancellationToken.None);
 
         var expectedChecks = 0;
-        foreach (var seconds in new[] { 60, 120, 240, 300, 300 })
+        foreach (var seconds in new[]
+                 {
+                     60,
+                     120,
+                     240,
+                     300,
+                     300
+                 })
         {
             await AssertEx.EventuallyAsync(() => Volatile.Read(ref checks) == expectedChecks && time.ArmedTimerCount == 1, PollTimeout, "exactly one wake is armed");
             time.Advance(TimeSpan.FromSeconds(seconds - 1));
