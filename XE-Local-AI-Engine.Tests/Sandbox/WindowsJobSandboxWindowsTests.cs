@@ -129,41 +129,22 @@ public sealed class WindowsJobSandboxWindowsTests
     /// <summary>One core's worth under a two-processor affinity: the rate is against the WHOLE system, not the processors a member may use.</summary>
     /// <remarks>
     ///     <c>start /affinity 3</c> pins powershell from creation, so this test host never runs under a changed affinity (ADR 0025, CPU
-    ///     rule). The denominator is read in this unrestricted host, where the system and affinity counts agree, so this test cannot
-    ///     catch <c>WindowsJobApi.GetSystemProcessorCount</c> turning affinity-relative.
+    ///     rule). The same spinners in a job without a CPU rate must first use more than 1.5 cores, or the runner cannot show the cap. The
+    ///     denominator is read in this unrestricted host, where the system and affinity counts agree, so this test cannot catch
+    ///     <c>WindowsJobApi.GetSystemProcessorCount</c> turning affinity-relative.
     /// </remarks>
     [Test]
     public async Task TheCpuCeiling_HoldsOneCore_UnderRestrictedAffinity()
     {
         var system = new WindowsJobLauncher().SystemProcessorCount;
         AssertEx.True(system >= 2, $"this test needs at least two logical processors; the host has {system}");
-        const string spinners = "1..2 | ForEach-Object { [powershell]::Create().AddScript('[Console]::Out.WriteLine(''spinning''); [Console]::Out.Flush(); while ($true) {}').BeginInvoke() } | Out-Null; Start-Sleep 60";
-        using var process = Launch($"cmd /d /c start \"\" /b /wait /affinity 3 powershell -NoProfile -NonInteractive -Command \"{spinners}\"",
-            WindowsJobLimits.Map(4096, 64, 1, system));
-        try
-        {
-            // Both spinners announce themselves once they run, so the window below measures spinning, not powershell's start. One reader:
-            // a second one could miss a line the first already buffered.
-            using (var reader = new StreamReader(process.StandardOutput, leaveOpen: true))
-            using (var announced = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
-            {
-                AssertEx.Equal("spinning", await reader.ReadLineAsync(announced.Token));
-                AssertEx.Equal("spinning", await reader.ReadLineAsync(announced.Token));
-            }
 
-            // real-timer: a CPU measurement window, not a wait for an event; the job's CPU time is read at both ends of it.
-            var before = JobCpuTime(process.Job);
-            var clock = Stopwatch.StartNew();
-            await Task.Delay(TimeSpan.FromSeconds(4));
-            var cores = (JobCpuTime(process.Job) - before).TotalSeconds / clock.Elapsed.TotalSeconds;
+        var uncapped = await SpinnerCoresAsync(WindowsJobLimits.Map(4096, 64, null, system));
+        AssertEx.True(uncapped > 1.5, $"without a CPU rate the spinners used only {uncapped:F2} cores, so this runner cannot show a one-core ceiling: a test-environment failure, not a pass");
 
-            AssertEx.True(cores > 0.3, $"the spinners used {cores:F2} cores; the measurement saw no work");
-            AssertEx.True(cores <= 1.35, $"the job used {cores:F2} cores under a one-core ceiling");
-        }
-        finally
-        {
-            process.Terminate();
-        }
+        var cores = await SpinnerCoresAsync(WindowsJobLimits.Map(4096, 64, 1, system));
+        AssertEx.True(cores > 0.3, $"the spinners used {cores:F2} cores; the measurement saw no work");
+        AssertEx.True(cores <= 1.35, $"the job used {cores:F2} cores under a one-core ceiling");
     }
 
     /// <summary>Raw UTF-8 bytes a tool writes come back as the same text: the job path decodes UTF-8, as the MXC path does (ADR 0025).</summary>
@@ -226,20 +207,17 @@ public sealed class WindowsJobSandboxWindowsTests
                     errors.Add(line);
                 }
             });
-        var held = IntPtr.Zero;
         try
         {
             var clock = Stopwatch.StartNew();
-            var exitCode = await child.WaitForExitAsync(CancellationToken.None);
+            // Bounded from outside, so a drain that never ends fails here instead of hanging the run.
+            var wait = child.WaitForExitAsync(CancellationToken.None);
+            await AssertEx.CompletesAsync(wait, MxcChildProcess.PumpDrainBudget + TimeSpan.FromSeconds(60), "the wait never returned: the held read was not cancelled");
+            var exitCode = await wait;
             var returnedAfter = clock.Elapsed;
-            lock (errors)
-            {
-                held = errors.Select(static line => long.TryParse(line, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? checked((IntPtr)value) : IntPtr.Zero)
-                             .FirstOrDefault(static value => value != IntPtr.Zero);
-            }
 
             AssertEx.Equal(0, exitCode, $"the root could not hand its stdout over: {string.Join(" | ", errors)}");
-            AssertEx.True(held != IntPtr.Zero, "the root reported no duplicated handle");
+            AssertEx.True(HeldHandle() != IntPtr.Zero, "the root reported no duplicated handle");
             AssertEx.True(returnedAfter >= MxcChildProcess.PumpDrainBudget - TimeSpan.FromSeconds(1), $"returned after {returnedAfter}, before the held pipe's drain budget");
             AssertEx.True(returnedAfter <= MxcChildProcess.PumpDrainBudget + TimeSpan.FromSeconds(30), $"returned after {returnedAfter}: the held read was not cancelled");
             lock (output)
@@ -253,9 +231,20 @@ public sealed class WindowsJobSandboxWindowsTests
         }
         finally
         {
+            // Read here too, so a failed wait still closes the duplicated handle.
+            var held = HeldHandle();
             if (held != IntPtr.Zero)
             {
                 _ = CloseHandle(held);
+            }
+        }
+
+        IntPtr HeldHandle()
+        {
+            lock (errors)
+            {
+                return errors.Select(static line => long.TryParse(line, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? checked((IntPtr)value) : IntPtr.Zero)
+                             .FirstOrDefault(static value => value != IntPtr.Zero);
             }
         }
     }
@@ -414,6 +403,34 @@ public sealed class WindowsJobSandboxWindowsTests
             Arguments = ["-NoProfile", "-NonInteractive", "-Command", script],
             Timeout = TimeSpan.FromSeconds(60)
         };
+
+    // Two powershell spinners pinned to processors 0 and 1 in a job with these limits: the cores the job uses over a 4 s window.
+    private static async Task<double> SpinnerCoresAsync(WindowsJobLimits limits)
+    {
+        const string spinners = "1..2 | ForEach-Object { [powershell]::Create().AddScript('[Console]::Out.WriteLine(''spinning''); [Console]::Out.Flush(); while ($true) {}').BeginInvoke() } | Out-Null; Start-Sleep 60";
+        using var process = Launch($"cmd /d /c start \"\" /b /wait /affinity 3 powershell -NoProfile -NonInteractive -Command \"{spinners}\"", limits);
+        try
+        {
+            // Both spinners announce themselves once they run, so the window below measures spinning, not powershell's start. One reader:
+            // a second one could miss a line the first already buffered.
+            using (var reader = new StreamReader(process.StandardOutput, leaveOpen: true))
+            using (var announced = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+            {
+                AssertEx.Equal("spinning", await reader.ReadLineAsync(announced.Token));
+                AssertEx.Equal("spinning", await reader.ReadLineAsync(announced.Token));
+            }
+
+            // real-timer: a CPU measurement window, not a wait for an event; the job's CPU time is read at both ends of it.
+            var before = JobCpuTime(process.Job);
+            var clock = Stopwatch.StartNew();
+            await Task.Delay(TimeSpan.FromSeconds(4));
+            return (JobCpuTime(process.Job) - before).TotalSeconds / clock.Elapsed.TotalSeconds;
+        }
+        finally
+        {
+            process.Terminate();
+        }
+    }
 
     private static WindowsJobProcess Launch(string commandLine, WindowsJobLimits limits) =>
         new WindowsJobLauncher().Start(StartInfo(commandLine), limits);

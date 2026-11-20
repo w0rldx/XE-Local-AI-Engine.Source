@@ -23,10 +23,10 @@ public sealed partial class WindowsJobCeilingsProbeTests
         AssertEx.True(result.Supported, result.Reason);
         AssertEx.Null(result.Reason);
         AssertEx.Equal(16, result.SystemProcessorCount);
-        AssertEx.Equal(4, api.Started.Count);
+        AssertEx.Equal(5, api.Started.Count);
         // Every control runs under the probe's own small job, the CPU rate included, and through the one launcher.
-        AssertEx.Equal(2, api.Calls.Count(static call => call == "TryCommit"));
-        AssertEx.Equal(4, api.Calls.Count(static call => call == "SetCpuRate"));
+        AssertEx.Equal(3, api.Calls.Count(static call => call == "TryCommit"));
+        AssertEx.Equal(5, api.Calls.Count(static call => call == "SetCpuRate"));
         AssertEx.Equal(0, api.OpenHandles);
         await Task.CompletedTask;
     }
@@ -35,7 +35,7 @@ public sealed partial class WindowsJobCeilingsProbeTests
     public async Task ACommitInsideTheLimitFailing_IsUnsupported()
     {
         var api = HonestHost();
-        api.Commit = static _ => 8;
+        api.Commit = static (_, _) => 8;
 
         AssertUnsupported(WindowsJobCeilingsProbe.Measure(new WindowsJobLauncher(api), Cmd), "commit inside a 256 MB job failed (error 8)");
         await Task.CompletedTask;
@@ -45,7 +45,7 @@ public sealed partial class WindowsJobCeilingsProbeTests
     public async Task ACommitPastTheLimitSucceeding_IsUnsupported()
     {
         var api = HonestHost();
-        api.Commit = static _ => 0;
+        api.Commit = static (_, _) => 0;
 
         AssertUnsupported(WindowsJobCeilingsProbe.Measure(new WindowsJobLauncher(api), Cmd), "the job memory limit is not enforced");
         await Task.CompletedTask;
@@ -55,9 +55,23 @@ public sealed partial class WindowsJobCeilingsProbeTests
     public async Task ACommitPastTheLimitFailingForAnotherReason_IsUnsupported()
     {
         var api = HonestHost();
-        api.Commit = static bytes => bytes < 100UL * 1_048_576 ? 0 : 5;
+        api.Commit = static (bytes, _) => bytes < 100UL * 1_048_576 ? 0 : 5;
 
         AssertUnsupported(WindowsJobCeilingsProbe.Measure(new WindowsJobLauncher(api), Cmd), "not ERROR_COMMITMENT_LIMIT");
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task APastLimitCommitThatFailsUnderAWiderLimitToo_IsInconclusive_NotProved()
+    {
+        // Host-wide commit exhaustion: the commit fails with ERROR_COMMITMENT_LIMIT whatever the job's limit.
+        var api = HonestHost();
+        api.Commit = static (bytes, _) => bytes <= 256UL * 1_048_576 ? 0 : 1455;
+
+        var result = WindowsJobCeilingsProbe.Measure(new WindowsJobLauncher(api), Cmd);
+
+        AssertUnsupported(result, "a 512 MB commit inside a 1024 MB job also failed (error 1455), so the result is inconclusive");
+        AssertEx.Equal(0, api.OpenHandles);
         await Task.CompletedTask;
     }
 
@@ -128,12 +142,12 @@ public sealed partial class WindowsJobCeilingsProbeTests
         await Task.CompletedTask;
     }
 
-    // A host whose job behaves: the commit holder runs until terminated, a commit past 256 MB fails with ERROR_COMMITMENT_LIMIT, and a
-    // cmd chain exits 7 exactly when its depth fits the 4-process cap.
+    // A host whose job behaves: the commit holder runs until terminated, a commit past the job's memory limit fails with
+    // ERROR_COMMITMENT_LIMIT, and a cmd chain exits 7 exactly when its depth fits the job's cap.
     private static FakeWindowsJobApi HonestHost() =>
         new()
         {
-            Commit = static bytes => bytes <= 256UL * 1_048_576 ? 0 : 1455,
+            Commit = static (bytes, limit) => bytes <= limit ? 0 : 1455,
             ExitCodeUnderCap = static (start, cap) => IsHolder(start) ? null : ChainExit(start, cap)
         };
 

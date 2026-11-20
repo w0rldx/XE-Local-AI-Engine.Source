@@ -192,6 +192,22 @@ public sealed class MxcChildProcessTests
     }
 
     [Test]
+    public async Task PumpLinesAsync_NeverCutsALineOnAHighSurrogate_WhenItsLowHalfArrivesInTheNextRead()
+    {
+        // The budget is a whole number of 4096-char reads, so the pair's high half fills the budget and its low half opens the next read.
+        var text = new string('x', MxcChildProcess.MaxPendingLineChars - 1) + "\U0001F600tail\nnext";
+        var lines = new List<string>();
+
+        var incomplete = await MxcChildProcess.PumpLinesAsync(new MemoryStream(Encoding.UTF8.GetBytes(text)), lines.Add, CancellationToken.None);
+
+        AssertEx.Equal(2, lines.Count);
+        AssertEx.False(char.IsHighSurrogate(lines[0][^1]), "a cut line must not end on an unpaired high surrogate");
+        AssertEx.Equal(MxcChildProcess.MaxPendingLineChars - 1, lines[0].Length);
+        AssertEx.Equal("next", lines[1]);
+        AssertEx.True(incomplete, "a cut line makes the stream incomplete");
+    }
+
+    [Test]
     public async Task PumpLinesAsync_WhenTheReadFailsAfterACompleteLine_ReportsIncomplete()
     {
         var lines = new List<string>();

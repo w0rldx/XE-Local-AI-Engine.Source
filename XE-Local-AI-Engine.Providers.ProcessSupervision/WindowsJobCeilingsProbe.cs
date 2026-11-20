@@ -5,8 +5,8 @@ using System.Globalization;
 
 /// <summary>Proves the plain-path job ceilings on this host through the SAME <see cref="WindowsJobLauncher" /> every command uses (ADR 0025).</summary>
 /// <remarks>
-///     A commit under the job limit succeeds and one past it fails with the commitment-limit error; a chain inside the cap runs, and one
-///     past it cannot start its last member while the same chain under a wider cap can. Every launch reads every limit back, so a refused
+///     A commit under the job limit succeeds and one past it fails with the commitment-limit error while the same commit under a wider
+///     limit succeeds; a chain inside the cap runs, and one past it cannot start its last member while the same chain under a wider cap can. Every launch reads every limit back, so a refused
 ///     CPU rate or a launcher-breaking ancestor job fails a control. Only the system <c>cmd.exe</c> runs, and any failure is an unsupported
 ///     result with its reason. The result is cached for the process (ADR 0025).
 /// </remarks>
@@ -25,6 +25,10 @@ public static class WindowsJobCeilingsProbe
 
     // The control for the past-cap chain: the same five-deep chain under a cap it fits in must run, so its failure under four is the cap's.
     internal const int WideProcessLimit = 8;
+
+    // The control for the past-limit commit: ERROR_COMMITMENT_LIMIT also means host-wide commit exhaustion, so the same commit must
+    // succeed under a limit it fits in before its failure under 256 MB counts as the job's.
+    internal const int WideMemoryMb = 1024;
 
     // ERROR_COMMITMENT_LIMIT: the error a commit past JOB_OBJECT_LIMIT_JOB_MEMORY returns (ADR 0025, Context).
     internal const int CommitmentLimitError = 1455;
@@ -48,7 +52,9 @@ public static class WindowsJobCeilingsProbe
 
             var limits = WindowsJobLimits.Map(ProbeMemoryMb, ProbeProcessLimit, cpuCount: 1, processors);
             var wide = WindowsJobLimits.Map(ProbeMemoryMb, WideProcessLimit, cpuCount: 1, processors);
+            var wideMemory = WindowsJobLimits.Map(WideMemoryMb, ProbeProcessLimit, cpuCount: 1, processors);
             return MeasureCommit(launcher, commandInterpreter, limits)
+                   ?? MeasureCommitControl(launcher, commandInterpreter, wideMemory)
                    ?? MeasureChain(launcher, commandInterpreter, limits, ProbeProcessLimit, ChainInsideCap, expectStart: true)
                    ?? MeasureChain(launcher, commandInterpreter, wide, WideProcessLimit, ChainPastCap, expectStart: true)
                    ?? MeasureChain(launcher, commandInterpreter, limits, ProbeProcessLimit, ChainPastCap, expectStart: false)
@@ -67,8 +73,7 @@ public static class WindowsJobCeilingsProbe
 
     private static WindowsJobProbeResult? MeasureCommit(WindowsJobLauncher launcher, string commandInterpreter, WindowsJobLimits limits)
     {
-        // An interactive cmd reading its open stdin stays alive and idle while the engine commits inside its job.
-        using var holder = launcher.Start(StartInfo(commandInterpreter, ["/d", "/q", "/k"]) with { RedirectStandardInput = true }, limits);
+        using var holder = StartCommitHolder(launcher, commandInterpreter, limits);
         try
         {
             if (!holder.TryCommit(UnderLimitCommitBytes, out var underError))
@@ -90,6 +95,25 @@ public static class WindowsJobCeilingsProbe
             holder.Terminate();
         }
     }
+
+    private static WindowsJobProbeResult? MeasureCommitControl(WindowsJobLauncher launcher, string commandInterpreter, WindowsJobLimits wide)
+    {
+        using var holder = StartCommitHolder(launcher, commandInterpreter, wide);
+        try
+        {
+            return holder.TryCommit(PastLimitCommitBytes, out var error)
+                ? null
+                : Unsupported(Invariant($"a {PastLimitCommitBytes / 1_048_576} MB commit inside a {WideMemoryMb} MB job also failed (error {error}), so the result is inconclusive: the commitment-limit failure may be host-wide commit exhaustion, not the job's"));
+        }
+        finally
+        {
+            holder.Terminate();
+        }
+    }
+
+    // An interactive cmd reading its open stdin stays alive and idle while the engine commits inside its job.
+    private static WindowsJobProcess StartCommitHolder(WindowsJobLauncher launcher, string commandInterpreter, WindowsJobLimits limits) =>
+        launcher.Start(StartInfo(commandInterpreter, ["/d", "/q", "/k"]) with { RedirectStandardInput = true }, limits);
 
     private static WindowsJobProbeResult? MeasureChain(WindowsJobLauncher launcher,
         string commandInterpreter,

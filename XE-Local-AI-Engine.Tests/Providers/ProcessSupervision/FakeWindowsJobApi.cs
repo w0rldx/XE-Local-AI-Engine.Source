@@ -38,13 +38,17 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
     /// <summary>When set, replaces <see cref="ExitCodeFor" /> with an answer that also sees the job's active-process cap.</summary>
     public Func<WindowsJobStartInfo, uint, int?>? ExitCodeUnderCap { get; set; }
 
-    /// <summary>Answers a commit of the given bytes with the Win32 error it fails with, or 0 when it succeeds.</summary>
-    public Func<ulong, int> Commit { get; set; } = static _ => 0;
+    /// <summary>Answers a commit of the given bytes under the last job's memory limit with the Win32 error it fails with, or 0.</summary>
+    public Func<ulong, ulong, int> Commit { get; set; } = static (_, _) => 0;
 
     /// <summary>What a created process writes to stdout before it exits.</summary>
     public string StandardOutputText { get; set; } = string.Empty;
 
     public FakePipe? LastStandardInput { get; private set; }
+
+    public ObservedReader? LastStandardOutput { get; private set; }
+
+    public ObservedReader? LastStandardError { get; private set; }
 
     /// <summary>A process outside the job keeps the child's stdout open: it never reaches end of stream, not even on terminate.</summary>
     public bool HoldStandardOutput { get; set; }
@@ -127,14 +131,16 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
 
         var error = new FakePipe();
         error.Complete();
+        LastStandardOutput = new ObservedReader(output.Reader);
+        LastStandardError = new ObservedReader(error.Reader);
         return new WindowsJobChild
         {
             Process = process,
             Thread = Issue("thread"),
             ProcessId = 4242,
             StandardInput = StandardInputFailsOnDispose ? new FailingDisposeStream() : LastStandardInput.Writer,
-            StandardOutput = output.Reader,
-            StandardError = error.Reader
+            StandardOutput = LastStandardOutput,
+            StandardError = LastStandardError
         };
     }
 
@@ -192,7 +198,7 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
     public bool TryCommit(SafeHandle process, ulong bytes, out int error)
     {
         Calls.Add(nameof(TryCommit));
-        error = Commit(bytes);
+        error = Commit(bytes, _set.JobMemoryLimit);
         return error == 0;
     }
 
@@ -240,6 +246,81 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
         public override bool IsInvalid => false;
 
         protected override bool ReleaseHandle() => true;
+    }
+
+    /// <summary>A pipe's read end that counts the reads started on it and completes <see cref="Ended" /> once a read returns end of stream.</summary>
+    internal sealed class ObservedReader : Stream
+    {
+        private readonly Stream _inner;
+        private int _readsStarted;
+
+        public ObservedReader(Stream inner)
+        {
+            _inner = inner;
+        }
+
+        public int ReadsStarted => Volatile.Read(ref _readsStarted);
+
+        public TaskCompletionSource Ended { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _readsStarted);
+            return Observe(await _inner.ReadAsync(buffer, cancellationToken));
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            Interlocked.Increment(ref _readsStarted);
+            return Observe(_inner.Read(buffer, offset, count));
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+
+        private int Observe(int read)
+        {
+            if (read == 0)
+            {
+                Ended.TrySetResult();
+            }
+
+            return read;
+        }
     }
 
     /// <summary>An in-memory pipe whose read end reaches end of stream only once the writer completes.</summary>

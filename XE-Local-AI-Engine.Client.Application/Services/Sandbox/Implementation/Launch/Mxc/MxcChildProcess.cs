@@ -259,9 +259,13 @@ public sealed class MxcChildProcess : IDisposable
                         }
                         else
                         {
-                            // Never end a cut line on half a surrogate pair.
-                            var kept = room > 0 && char.IsHighSurrogate(text[room - 1]) ? room - 1 : room;
-                            line.Append(text[..kept]);
+                            // Never end a cut line on half a surrogate pair, whether its high half came in this read or the last.
+                            line.Append(text[..room]);
+                            if (line.Length > 0 && char.IsHighSurrogate(line[^1]))
+                            {
+                                line.Length--;
+                            }
+
                             onLine(line.ToString());
                             line.Clear();
                             discarding = true;
