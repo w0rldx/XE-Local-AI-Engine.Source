@@ -26,15 +26,28 @@ internal sealed class WindowsJobChild : IDisposable
         return Process;
     }
 
+    /// <summary>Closes every owned handle; a close that throws (stdin flushing into an exited reader) never skips the others.</summary>
     public void Dispose()
     {
-        StandardInput.Dispose();
-        StandardOutput.Dispose();
-        StandardError.Dispose();
-        Thread.Dispose();
-        if (!_processReleased)
+        try
         {
-            Process.Dispose();
+            StandardInput.Dispose();
+        }
+        finally
+        {
+            try
+            {
+                StandardOutput.Dispose();
+                StandardError.Dispose();
+            }
+            finally
+            {
+                Thread.Dispose();
+                if (!_processReleased)
+                {
+                    Process.Dispose();
+                }
+            }
         }
     }
 }

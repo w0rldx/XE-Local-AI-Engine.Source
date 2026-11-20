@@ -274,4 +274,29 @@ public sealed class WindowsJobLauncherTests
         AssertEx.True(api.IssuedHandles == 0 || api.Terminations == 1, "a created job is terminated on a failed setup");
         AssertEx.Equal(0, api.OpenHandles, "a failed setup leaves no handle open");
     }
+
+    [Test]
+    public void AChildWhoseStdinCloseThrows_StillClosesEveryOtherHandle()
+    {
+        using var process = new Microsoft.Win32.SafeHandles.SafeWaitHandle(new IntPtr(1), ownsHandle: false);
+        using var thread = new Microsoft.Win32.SafeHandles.SafeWaitHandle(new IntPtr(2), ownsHandle: false);
+        var stdout = new MemoryStream();
+        var stderr = new MemoryStream();
+        using var child = new WindowsJobChild
+        {
+            Process = process,
+            Thread = thread,
+            ProcessId = 1,
+            StandardInput = new FakeWindowsJobApi.FailingDisposeStream(),
+            StandardOutput = stdout,
+            StandardError = stderr
+        };
+
+        _ = AssertEx.Throws<IOException>(child.Dispose);
+
+        AssertEx.False(stdout.CanRead, "stdout must be closed although stdin's close threw");
+        AssertEx.False(stderr.CanRead, "stderr must be closed although stdin's close threw");
+        AssertEx.True(thread.IsClosed, "the thread handle must be closed although stdin's close threw");
+        AssertEx.True(process.IsClosed, "the process handle must be closed although stdin's close threw");
+    }
 }

@@ -227,20 +227,33 @@ public sealed class MxcChildProcess : IDisposable
     {
         // Yield first so a synchronously completing stream cannot run the whole pump inside the constructor.
         await Task.Yield();
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false);
-        var buffer = new char[4096];
+        await using var source = stream;
+        // Each completed read is decoded at once: a reader that buffers ahead would hold a line back until more bytes or the end came.
+        var decoder = Encoding.UTF8.GetDecoder();
+        var bytes = new byte[4096];
+        var buffer = new char[Encoding.UTF8.GetMaxCharCount(bytes.Length)];
         var line = new StringBuilder();
+        var atStart = true;
         var discarding = false;
         var afterCarriageReturn = false;
         var incomplete = false;
         try
         {
-            int read;
-            while ((read = await reader.ReadAsync(buffer, cancellationToken)) > 0)
+            var ended = false;
+            while (!ended)
             {
-                var chunk = buffer.AsSpan(0, read);
+                var count = await source.ReadAsync(bytes, cancellationToken);
+                ended = count == 0;
+                var chunk = buffer.AsSpan(0, decoder.GetChars(bytes, 0, count, buffer, 0, flush: ended));
+                if (atStart && !chunk.IsEmpty)
+                {
+                    // The UTF-8 preamble is skipped, as a StreamReader skips it.
+                    atStart = false;
+                    chunk = chunk[0] == '\uFEFF' ? chunk[1..] : chunk;
+                }
+
                 // A "\r\n" split across two reads is one terminator.
-                if (afterCarriageReturn && chunk[0] == '\n')
+                if (afterCarriageReturn && !chunk.IsEmpty && chunk[0] == '\n')
                 {
                     chunk = chunk[1..];
                 }

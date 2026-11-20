@@ -841,10 +841,10 @@ public sealed class WindowsJobSandboxWindowsTests
         var lowest = engineAffinity & (~engineAffinity + 1);
         AssertEx.NotEqual(engineAffinity, lowest, $"this test needs at least two logical processors; the host's mask is 0x{engineAffinity:X}");
         var hostPriority = GetPriorityClass(engine.SafeHandle);
-        AssertEx.NotEqual(IdlePriorityClass, hostPriority, "the injected priority class must differ from this host's");
-        AssertEx.NotEqual(BelowNormalPriorityClass, hostPriority, "the injected priority class must differ from this host's");
-        var restricted = new WindowsJobScheduling { AffinityMask = lowest, SystemAffinityMask = systemAffinity, PriorityClass = IdlePriorityClass };
-        var unrestricted = new WindowsJobScheduling { AffinityMask = systemAffinity, SystemAffinityMask = systemAffinity, PriorityClass = BelowNormalPriorityClass };
+        // Runners start test hosts at other classes than Normal, so the two injected classes are picked to differ from this host's.
+        uint[] injected = [.. new[] { IdlePriorityClass, BelowNormalPriorityClass, NormalPriorityClass }.Where(priority => priority != hostPriority).Take(2)];
+        var restricted = new WindowsJobScheduling { AffinityMask = lowest, SystemAffinityMask = systemAffinity, PriorityClass = injected[0] };
+        var unrestricted = new WindowsJobScheduling { AffinityMask = systemAffinity, SystemAffinityMask = systemAffinity, PriorityClass = injected[1] };
 
         using var first = launcher.Start(StartInfo("cmd /d /q /k"), limits);
         api.Report = _ => restricted;
@@ -856,13 +856,13 @@ public sealed class WindowsJobSandboxWindowsTests
             AssertEx.Equal(engineAffinity, api.Read[0].AffinityMask, "the first launch read the engine's current affinity");
             AssertEx.Equal(hostPriority, api.Read[0].PriorityClass, "the first launch read the engine's current priority class");
             AssertEx.Equal(lowest.ToString("X", CultureInfo.InvariantCulture), string.Join(',', api.Affinities.Select(static mask => mask.ToString("X", CultureInfo.InvariantCulture))), "only the restricted report set an affinity, exactly as reported");
-            AssertEx.Equal(string.Join(',', hostPriority, IdlePriorityClass, BelowNormalPriorityClass), string.Join(',', api.Priorities), "each launch set the priority class reported then");
+            AssertEx.Equal(string.Join(',', hostPriority, injected[0], injected[1]), string.Join(',', api.Priorities), "each launch set the priority class reported then");
             AssertEx.Equal(engineAffinity, AffinityOf(native.Commands[0]), "the first command runs under another affinity");
             AssertEx.Equal(hostPriority, GetPriorityClass(native.Commands[0]), "the first command runs under another priority class");
             AssertEx.Equal(lowest, AffinityOf(native.Commands[1]), "the second command kept the helper's snapshot, not the engine's report");
-            AssertEx.Equal(IdlePriorityClass, GetPriorityClass(native.Commands[1]), "the second command kept the helper's priority, not the engine's report");
+            AssertEx.Equal(injected[0], GetPriorityClass(native.Commands[1]), "the second command kept the helper's priority, not the engine's report");
             AssertEx.Equal(engineAffinity, AffinityOf(native.Commands[2]), "an unrestricted report left the third command on the whole system");
-            AssertEx.Equal(BelowNormalPriorityClass, GetPriorityClass(native.Commands[2]), "the third command kept the helper's priority, not the engine's report");
+            AssertEx.Equal(injected[1], GetPriorityClass(native.Commands[2]), "the third command kept the helper's priority, not the engine's report");
             AssertEx.Equal(1, native.Helpers.Count, "every command came from one handle parent");
         }
         finally
@@ -964,6 +964,7 @@ public sealed class WindowsJobSandboxWindowsTests
     private const int TokenIntegrityLevel = 25;
     private const uint IdlePriorityClass = 0x40;
     private const uint BelowNormalPriorityClass = 0x4000;
+    private const uint NormalPriorityClass = 0x20;
 
     /// <summary>Three engine-owned child ends, as <c>WindowsJobApi.CreateSuspended</c> would hand them over.</summary>
     private sealed class TestPipeEnds : IDisposable

@@ -232,6 +232,36 @@ public sealed class MxcChildProcessTests
     }
 
     [Test]
+    public async Task PumpLinesAsync_DeliversALineThatFillsOneRead_WhileItsWriterStaysOpen()
+    {
+        // 1024 bytes ending in a newline, then silence: a reader buffering ahead would wait for more bytes before returning the line.
+        var pipe = new Pipe();
+        await pipe.Writer.WriteAsync(Encoding.ASCII.GetBytes(new string('x', 1023) + "\n"));
+        var lines = new List<string>();
+        using var stop = new CancellationTokenSource();
+
+        var pump = MxcChildProcess.PumpLinesAsync(pipe.Reader.AsStream(), line =>
+        {
+            lock (lines)
+            {
+                lines.Add(line);
+            }
+        }, stop.Token);
+
+        await AssertEx.EventuallyAsync(() =>
+        {
+            lock (lines)
+            {
+                return lines.Count == 1;
+            }
+        }, TestBudgets.Contended, "the completed line must be delivered while the writer is still open");
+        await stop.CancelAsync();
+        _ = await pump;
+        AssertEx.Equal(1023, lines[0].Length);
+        await pipe.Writer.CompleteAsync();
+    }
+
+    [Test]
     public async Task UnpumpedStreams_AreExposedRaw_AndIdIsTheOsPid()
     {
         var output = new MemoryStream("raw"u8.ToArray());
