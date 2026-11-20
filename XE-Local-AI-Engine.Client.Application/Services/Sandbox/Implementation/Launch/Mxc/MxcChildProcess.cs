@@ -185,10 +185,10 @@ public sealed class MxcChildProcess : IDisposable
             return;
         }
 
-        // A pump still reading at the deadline is cut, even when the close then reads as a clean end of stream. Closing ends the native
-        // read, so each pump delivers its pending partial line before the caller reads the capture.
-        _standardOutputCut = _standardOutputPump is { IsCompleted: false };
-        _standardErrorCut = _standardErrorPump is { IsCompleted: false };
+        // A pump still reading at a deadline is cut for good, even when the close then reads as a clean end of stream. Closing ends the
+        // native read, so each pump delivers its pending partial line before the caller reads the capture.
+        _standardOutputCut |= _standardOutputPump is { IsCompleted: false };
+        _standardErrorCut |= _standardErrorPump is { IsCompleted: false };
         foreach (var closer in _closers)
         {
             closer.Close();
