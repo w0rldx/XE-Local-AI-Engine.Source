@@ -222,6 +222,25 @@ internal static partial class WindowsJobNative
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetProcessAffinityMask(IntPtr hProcess, out nuint lpProcessAffinityMask, out nuint lpSystemAffinityMask);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetProcessAffinityMask(SafeHandle hProcess, nuint dwProcessAffinityMask);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial uint GetPriorityClass(IntPtr hProcess);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetPriorityClass(SafeHandle hProcess, uint dwPriorityClass);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool DuplicateHandle(IntPtr hSourceProcessHandle,
         SafeHandle hSourceHandle,
         IntPtr hTargetProcessHandle,

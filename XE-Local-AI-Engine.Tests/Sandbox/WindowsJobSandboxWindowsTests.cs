@@ -797,7 +797,7 @@ public sealed class WindowsJobSandboxWindowsTests
     }
 
     [Test]
-    public async Task ACommand_RunsWithTheEnginesUserSessionIntegrityAndAffinity()
+    public async Task ACommand_RunsWithTheEnginesUserSessionIntegrityAffinityAndPriority()
     {
         using var native = new RecordingLaunchNative();
         using var parent = new WindowsJobHandleParent(native);
@@ -815,10 +815,57 @@ public sealed class WindowsJobSandboxWindowsTests
             AssertEx.True(GetProcessAffinityMask(engine.SafeHandle, out var engineAffinity, out _), "the engine's affinity");
             AssertEx.True(GetProcessAffinityMask(command, out var commandAffinity, out _), "the command's affinity");
             AssertEx.Equal(engineAffinity, commandAffinity, "the command runs under another affinity");
+            AssertEx.Equal(GetPriorityClass(engine.SafeHandle), GetPriorityClass(command), "the command runs under another priority class");
         }
         finally
         {
             process.Terminate();
+        }
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>Two launches through one handle parent: each command gets the affinity and priority the engine reports at its own launch.</summary>
+    /// <remarks>The second report is injected through the seam, so this host's own affinity never changes.</remarks>
+    [Test]
+    public async Task EachCommand_GetsTheAffinityAndPriorityTheEngineReportsAtItsLaunch()
+    {
+        using var native = new RecordingLaunchNative();
+        using var parent = new WindowsJobHandleParent(native);
+        var api = new EngineSchedulingApi(new WindowsJobApi(parent));
+        var launcher = new WindowsJobLauncher(api);
+        var limits = WindowsJobLimits.Map(2048, 64, null, Environment.ProcessorCount);
+        using var engine = Process.GetCurrentProcess();
+        AssertEx.True(GetProcessAffinityMask(engine.SafeHandle, out var engineAffinity, out _), "the engine's affinity");
+        var injected = new WindowsJobScheduling
+        {
+            AffinityMask = engineAffinity & (~engineAffinity + 1),
+            PriorityClass = IdlePriorityClass
+        };
+        AssertEx.NotEqual(IdlePriorityClass, GetPriorityClass(engine.SafeHandle), "the injected priority class must differ from this host's");
+
+        using var first = launcher.Start(StartInfo("cmd /d /q /k"), limits);
+        api.Report = _ => injected;
+        using var second = launcher.Start(StartInfo("cmd /d /q /k"), limits);
+        try
+        {
+            AssertEx.Equal(engineAffinity, api.Read[0].AffinityMask, "the first launch read the engine's current affinity");
+            AssertEx.Equal(GetPriorityClass(engine.SafeHandle), api.Read[0].PriorityClass, "the first launch read the engine's current priority class");
+            AssertEx.Equal(api.Read[0], api.Set[0], "the first command was set to what the engine reported at its launch");
+            AssertEx.Equal(injected, api.Set[1], "the second command was set to what the engine reported at its launch");
+            AssertEx.Equal(2, api.Set.Count);
+            AssertEx.True(GetProcessAffinityMask(native.Commands[0], out var firstAffinity, out _), "the first command's affinity");
+            AssertEx.True(GetProcessAffinityMask(native.Commands[1], out var secondAffinity, out _), "the second command's affinity");
+            AssertEx.Equal(engineAffinity, firstAffinity, "the first command runs under another affinity");
+            AssertEx.Equal(GetPriorityClass(engine.SafeHandle), GetPriorityClass(native.Commands[0]), "the first command runs under another priority class");
+            AssertEx.Equal(injected.AffinityMask, secondAffinity, "the second command kept the helper's snapshot, not the engine's report");
+            AssertEx.Equal(injected.PriorityClass, GetPriorityClass(native.Commands[1]), "the second command kept the helper's priority, not the engine's report");
+            AssertEx.Equal(1, native.Helpers.Count, "both commands came from one handle parent");
+        }
+        finally
+        {
+            first.Terminate();
+            second.Terminate();
         }
 
         await Task.CompletedTask;
@@ -905,6 +952,7 @@ public sealed class WindowsJobSandboxWindowsTests
     private const uint TokenQuery = 0x0008;
     private const int TokenUser = 1;
     private const int TokenIntegrityLevel = 25;
+    private const uint IdlePriorityClass = 0x40;
 
     /// <summary>Three engine-owned child ends, as <c>WindowsJobApi.CreateSuspended</c> would hand them over.</summary>
     private sealed class TestPipeEnds : IDisposable
@@ -1087,6 +1135,63 @@ public sealed class WindowsJobSandboxWindowsTests
         public uint TotalTerminatedProcesses;
     }
 
+    /// <summary>The real native calls; records each engine scheduling read and each set, and can report another engine value.</summary>
+    private sealed class EngineSchedulingApi : IWindowsJobApi
+    {
+        private readonly WindowsJobApi _real;
+
+        public EngineSchedulingApi(WindowsJobApi real)
+        {
+            _real = real;
+        }
+
+        /// <summary>Turns the engine's real values into the ones reported to the launcher.</summary>
+        public Func<WindowsJobScheduling, WindowsJobScheduling> Report { get; set; } = static real => real;
+
+        public List<WindowsJobScheduling> Read { get; } = [];
+
+        public List<WindowsJobScheduling> Set { get; } = [];
+
+        public int GetSystemProcessorCount() => _real.GetSystemProcessorCount();
+
+        public SafeHandle CreateJob() => _real.CreateJob();
+
+        public void SetExtendedLimits(SafeHandle job, WindowsJobLimits limits) => _real.SetExtendedLimits(job, limits);
+
+        public void SetCpuRate(SafeHandle job, uint cpuRate) => _real.SetCpuRate(job, cpuRate);
+
+        public WindowsJobLimits QueryLimits(SafeHandle job) => _real.QueryLimits(job);
+
+        public WindowsJobChild CreateSuspended(SafeHandle job, WindowsJobStartInfo startInfo) => _real.CreateSuspended(job, startInfo);
+
+        public bool IsProcessInJob(SafeHandle process, SafeHandle job) => _real.IsProcessInJob(process, job);
+
+        public WindowsJobScheduling GetEngineScheduling()
+        {
+            var real = _real.GetEngineScheduling();
+            Read.Add(real);
+            return Report(real);
+        }
+
+        public void SetScheduling(SafeHandle process, WindowsJobScheduling scheduling)
+        {
+            Set.Add(scheduling);
+            _real.SetScheduling(process, scheduling);
+        }
+
+        public void Resume(SafeHandle thread) => _real.Resume(thread);
+
+        public void Terminate(SafeHandle job) => _real.Terminate(job);
+
+        public string? TerminateAndConfirm(SafeHandle process, int processId) => _real.TerminateAndConfirm(process, processId);
+
+        public Task WaitForExitAsync(SafeHandle process) => _real.WaitForExitAsync(process);
+
+        public int GetExitCode(SafeHandle process) => _real.GetExitCode(process);
+
+        public bool TryCommit(SafeHandle process, ulong bytes, out int error) => _real.TryCommit(process, bytes, out error);
+    }
+
     /// <summary>The real native calls, except that the child is created inside a decoy job instead of the command's.</summary>
     private sealed class OutsideTheJobApi : IWindowsJobApi, IDisposable
     {
@@ -1124,6 +1229,10 @@ public sealed class WindowsJobSandboxWindowsTests
         }
 
         public bool IsProcessInJob(SafeHandle process, SafeHandle job) => _real.IsProcessInJob(process, job);
+
+        public WindowsJobScheduling GetEngineScheduling() => _real.GetEngineScheduling();
+
+        public void SetScheduling(SafeHandle process, WindowsJobScheduling scheduling) => _real.SetScheduling(process, scheduling);
 
         public void Resume(SafeHandle thread) => throw new InvalidOperationException("a child that failed its membership check must never be resumed");
 
@@ -1174,6 +1283,10 @@ public sealed class WindowsJobSandboxWindowsTests
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetProcessAffinityMask(SafeHandle hProcess, out nuint lpProcessAffinityMask, out nuint lpSystemAffinityMask);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern uint GetPriorityClass(SafeHandle hProcess);
 
     [DllImport("advapi32.dll", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]

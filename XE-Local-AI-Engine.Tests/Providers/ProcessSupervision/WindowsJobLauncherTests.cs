@@ -96,11 +96,35 @@ public sealed class WindowsJobLauncherTests
 
         using var process = new WindowsJobLauncher(api).Start(Command, limits);
 
-        AssertEx.Equal("CreateJob,SetExtendedLimits,SetCpuRate,QueryLimits,CreateSuspended,IsProcessInJob,WaitForExitAsync,Resume",
+        AssertEx.Equal("CreateJob,SetExtendedLimits,SetCpuRate,QueryLimits,CreateSuspended,IsProcessInJob,GetEngineScheduling,SetScheduling,WaitForExitAsync,Resume",
             string.Join(',', api.Calls));
         AssertEx.Equal(Command, api.Started[0]);
         await process.WaitForExitAsync(CancellationToken.None);
         AssertEx.Equal(0, process.ExitCode);
+    }
+
+    /// <summary>Each launch reads the engine's affinity and priority class anew and sets exactly those on its suspended command.</summary>
+    [Test]
+    public async Task EachLaunch_SetsTheEnginesCurrentAffinityAndPriority_BeforeTheResume()
+    {
+        var api = new FakeWindowsJobApi { EngineScheduling = new WindowsJobScheduling { AffinityMask = 0x3, PriorityClass = 0x4000 } };
+        var launcher = new WindowsJobLauncher(api);
+
+        using (launcher.Start(Command, WindowsJobLimits.Map(2048, 64, null, 16)))
+        {
+            AssertEx.True(api.Calls.IndexOf("SetScheduling") < api.Calls.IndexOf("Resume"), "the scheduling is set while the command is suspended");
+        }
+
+        api.EngineScheduling = new WindowsJobScheduling { AffinityMask = 0x5, PriorityClass = 0x8000 };
+        using (launcher.Start(Command, WindowsJobLimits.Map(2048, 64, null, 16)))
+        {
+            AssertEx.Equal(2, api.Calls.Count(static call => call == "GetEngineScheduling"), "the engine's values are read at every launch");
+        }
+
+        AssertEx.Equal(new WindowsJobScheduling { AffinityMask = 0x3, PriorityClass = 0x4000 }, api.SetSchedulings[0]);
+        AssertEx.Equal(new WindowsJobScheduling { AffinityMask = 0x5, PriorityClass = 0x8000 }, api.SetSchedulings[1]);
+        AssertEx.Equal(2, api.SetSchedulings.Count);
+        await Task.CompletedTask;
     }
 
     [Test]
@@ -121,6 +145,8 @@ public sealed class WindowsJobLauncherTests
     [Arguments("QueryLimits")]
     [Arguments("CreateSuspended")]
     [Arguments("IsProcessInJob")]
+    [Arguments("GetEngineScheduling")]
+    [Arguments("SetScheduling")]
     [Arguments("WaitForExitAsync")]
     [Arguments("Resume")]
     public async Task ASetupFailure_RefusesTheLaunch_NeverResumes_AndClosesEveryHandle(string step)

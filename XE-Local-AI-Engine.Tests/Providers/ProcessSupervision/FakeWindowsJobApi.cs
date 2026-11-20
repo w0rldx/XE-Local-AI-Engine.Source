@@ -74,6 +74,12 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
 
     public int Terminations { get; private set; }
 
+    /// <summary>What <see cref="GetEngineScheduling" /> reports as the engine's current affinity and priority class.</summary>
+    public WindowsJobScheduling EngineScheduling { get; set; } = new() { AffinityMask = 0xF, PriorityClass = 0x20 };
+
+    /// <summary>Every scheduling applied to a created process, in order.</summary>
+    public List<WindowsJobScheduling> SetSchedulings { get; } = [];
+
     /// <summary>The limits the last job was configured with, the CPU rate included.</summary>
     public WindowsJobLimits LastSetLimits => _set;
 
@@ -154,6 +160,18 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
     {
         Step(nameof(IsProcessInJob));
         return Member;
+    }
+
+    public WindowsJobScheduling GetEngineScheduling()
+    {
+        Step(nameof(GetEngineScheduling));
+        return EngineScheduling;
+    }
+
+    public void SetScheduling(SafeHandle process, WindowsJobScheduling scheduling)
+    {
+        Step(nameof(SetScheduling));
+        SetSchedulings.Add(scheduling);
     }
 
     public void Resume(SafeHandle thread)

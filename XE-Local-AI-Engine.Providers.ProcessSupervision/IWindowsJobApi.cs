@@ -26,6 +26,12 @@ internal interface IWindowsJobApi
 
     bool IsProcessInJob(SafeHandle process, SafeHandle job);
 
+    /// <summary>The engine's current process affinity mask and priority class.</summary>
+    WindowsJobScheduling GetEngineScheduling();
+
+    /// <summary>Sets a still suspended process's affinity mask and priority class.</summary>
+    void SetScheduling(SafeHandle process, WindowsJobScheduling scheduling);
+
     void Resume(SafeHandle thread);
 
     void Terminate(SafeHandle job);

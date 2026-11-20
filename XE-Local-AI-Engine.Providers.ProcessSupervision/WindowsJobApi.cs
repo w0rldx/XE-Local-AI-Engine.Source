@@ -142,6 +142,41 @@ internal sealed class WindowsJobApi : IWindowsJobApi
         return member;
     }
 
+    public WindowsJobScheduling GetEngineScheduling()
+    {
+        if (!WindowsJobNative.GetProcessAffinityMask(WindowsJobNative.GetCurrentProcess(), out var affinityMask, out _))
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
+
+        // Zero: the engine's threads span several processor groups and no one mask describes them; refusing beats narrowing a command.
+        if (affinityMask == 0)
+        {
+            throw new InvalidOperationException("the engine's threads span several processor groups, so it has no affinity mask a command can follow");
+        }
+
+        var priorityClass = WindowsJobNative.GetPriorityClass(WindowsJobNative.GetCurrentProcess());
+        if (priorityClass == 0)
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
+
+        return new WindowsJobScheduling
+        {
+            AffinityMask = affinityMask,
+            PriorityClass = priorityClass
+        };
+    }
+
+    public void SetScheduling(SafeHandle process, WindowsJobScheduling scheduling)
+    {
+        if (!WindowsJobNative.SetProcessAffinityMask(process, scheduling.AffinityMask)
+            || !WindowsJobNative.SetPriorityClass(process, scheduling.PriorityClass))
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
+    }
+
     public void Resume(SafeHandle thread)
     {
         if (WindowsJobNative.ResumeThread(thread) == uint.MaxValue)
