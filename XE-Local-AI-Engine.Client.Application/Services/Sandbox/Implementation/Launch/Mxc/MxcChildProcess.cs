@@ -31,6 +31,8 @@ public sealed class MxcChildProcess : IDisposable
     private readonly Task<bool>? _standardErrorPump;
     private readonly Task<bool>? _standardOutputPump;
     private readonly TimeProvider _timeProvider;
+    private bool _standardErrorCut;
+    private bool _standardOutputCut;
 
     public MxcChildProcess(IMxcProcess process,
         TimeProvider timeProvider,
@@ -88,10 +90,10 @@ public sealed class MxcChildProcess : IDisposable
     public int? ExitCode => _process.TryGetExitCode(out var exitCode) ? exitCode : null;
 
     /// <summary>The stdout pump is still reading, or finished cutting or losing a line (<see cref="PumpLinesAsync" />).</summary>
-    public bool StandardOutputIncomplete => _standardOutputPump is { IsCompletedSuccessfully: false } or { Result: true };
+    public bool StandardOutputIncomplete => _standardOutputCut || _standardOutputPump is { IsCompletedSuccessfully: false } or { Result: true };
 
     /// <summary>As <see cref="StandardOutputIncomplete" />, for stderr.</summary>
-    public bool StandardErrorIncomplete => _standardErrorPump is { IsCompletedSuccessfully: false } or { Result: true };
+    public bool StandardErrorIncomplete => _standardErrorCut || _standardErrorPump is { IsCompletedSuccessfully: false } or { Result: true };
 
     /// <summary>
     ///     Waits for exit and for every pumped stream to reach end of stream, at most <see cref="PumpDrainBudget" /> after exit; returns
@@ -183,8 +185,10 @@ public sealed class MxcChildProcess : IDisposable
             return;
         }
 
-        // Closing ends the native read, so the pumps end on the closed pipe (end of stream or an I/O error they swallow) and deliver a
-        // pending partial line before the caller reads the capture.
+        // A pump still reading at the deadline is cut, even when the close then reads as a clean end of stream. Closing ends the native
+        // read, so each pump delivers its pending partial line before the caller reads the capture.
+        _standardOutputCut = _standardOutputPump is { IsCompleted: false };
+        _standardErrorCut = _standardErrorPump is { IsCompleted: false };
         foreach (var closer in _closers)
         {
             closer.Close();
@@ -293,7 +297,7 @@ public sealed class MxcChildProcess : IDisposable
                 }
             }
         }
-        catch (Exception exception) when (exception is IOException or ObjectDisposedException or OperationCanceledException)
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException or OperationCanceledException or MxcException)
         {
             // The read stopped before end of stream (the drain budget closed or cancelled it, or the pipe failed): whatever followed is lost.
             incomplete = true;

@@ -28,7 +28,6 @@ internal sealed class JailState
     /// <summary>The sentinel <see cref="GetOrCaptureOccupancyBaseline" /> starts from; any real measurement is >= 0.</summary>
     private const long NotYetMeasured = -1;
 
-    private SandboxLaunchPolicy _launchPolicy;
     private long _maxJailDiskBytes;
     private long _occupancyBaseline = NotYetMeasured;
 
@@ -40,7 +39,7 @@ internal sealed class JailState
     {
         Handle = handle;
         JailRoot = jailRoot;
-        _launchPolicy = launchPolicy;
+        LaunchPolicy = launchPolicy;
         PreserveJailRoot = preserveJailRoot;
         _maxJailDiskBytes = maxJailDiskBytes is { } ceiling && ceiling > 0 ? ceiling : InheritsNodeCeiling;
     }
@@ -49,12 +48,8 @@ internal sealed class JailState
 
     public string JailRoot { get; }
 
-    /// <summary>The containment the NEXT command runs under: resolved at create time; a later attach changes only its ceilings.</summary>
-    /// <remarks>
-    ///     Read from the command path without the registry lock while an attach may be replacing it, hence the volatile read of one
-    ///     immutable record; a command takes the policy it read at launch for its whole run.
-    /// </remarks>
-    public SandboxLaunchPolicy LaunchPolicy => Volatile.Read(ref _launchPolicy);
+    /// <summary>The containment resolved at create time and applied to every command this sandbox runs.</summary>
+    public SandboxLaunchPolicy LaunchPolicy { get; }
 
     public bool PreserveJailRoot { get; }
 
@@ -119,37 +114,6 @@ internal sealed class JailState
                 return;
             }
         }
-    }
-
-    /// <summary>
-    ///     Applies an attach's ceilings (resource limits and thread limit) to future commands, tighter or looser, once the attach asks for
-    ///     the same containment this sandbox was created with; otherwise refuses it.
-    /// </summary>
-    /// <remarks>
-    ///     Ceilings are an operator-tuned governor (ADR 0025), so a changed setting reaches a live sandbox. Network denial, role, isolation
-    ///     and the AppContainer boundary are the sandbox's boundary: every holder of the handle shares it, so an attach can never change
-    ///     it, and one asking for a different boundary is refused rather than served a weaker one. The read-only trees, binds and private
-    ///     root stay the creator's: they were resolved against this jail at create. Callers hold the registry lock.
-    /// </remarks>
-    /// <exception cref="SandboxHandleInvalidException">The attach asks for a different boundary than the sandbox has.</exception>
-    public void FollowCeilings(SandboxLaunchPolicy requested)
-    {
-        ArgumentNullException.ThrowIfNull(requested);
-        var current = LaunchPolicy;
-        if (requested.DenyNetworkEgress != current.DenyNetworkEgress
-            || requested.Isolation != current.Isolation
-            || requested.AppContainerBoundary is null != current.AppContainerBoundary is null
-            || !string.Equals(requested.Role, current.Role, StringComparison.Ordinal))
-        {
-            throw new SandboxHandleInvalidException("The existing sandbox was created with a different network, isolation or role boundary than the attach request asks for.");
-        }
-
-        Volatile.Write(ref _launchPolicy,
-            current with
-            {
-                ResourceLimits = requested.ResourceLimits,
-                ThreadLimit = requested.ThreadLimit
-            });
     }
 
     /// <summary>

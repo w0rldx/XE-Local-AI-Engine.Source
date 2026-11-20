@@ -398,7 +398,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             if (process.TimedOut)
             {
                 // MXC enforced the same timeout inside its own wait and reaped the tree: the same shape as the engine's timeout below.
-                return NotCompleted(request.ExecutionId, "Command timed out.", startedAt, standardOutputBuilder.ToString());
+                // Read before the text, as on the completed path.
+                var timedOutOutputIncomplete = process.StandardOutputIncomplete;
+                return NotCompleted(request.ExecutionId, "Command timed out.", startedAt, standardOutputBuilder.ToString()) with
+                {
+                    StandardOutputTruncated = standardOutputBuilder.IsTruncated || timedOutOutputIncomplete
+                };
             }
 
             // Read before the text: a pump still running past its close grace may finish after the copy, and must not read as complete.

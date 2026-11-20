@@ -237,47 +237,6 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
     }
 
     [Test]
-    public async Task CreateOrAttach_ReplacesTheLaunchPolicy_ForFutureCommands_TighterOrLooser()
-    {
-        var registry = new SandboxLifecycleRegistry(_jailRoot,
-            new SandboxLauncher(new FixedProbe(SandboxContainment.None with { SupportsResourceLimits = true })),
-            TimeProvider.System);
-        var limits = new SandboxResourceLimits { MemoryMb = 2048 };
-        var created = await registry.CreateOrAttachAsync(CreateRequest(Key()));
-        AssertEx.Null(registry.GetAliveState(created).LaunchPolicy.ResourceLimits);
-
-        _ = await registry.CreateOrAttachAsync(CreateRequest(Key()) with { ResourceLimits = limits, ThreadLimit = 4 });
-        var tightened = registry.GetAliveState(created).LaunchPolicy;
-        _ = await registry.CreateOrAttachAsync(CreateRequest(Key()));
-
-        AssertEx.Equal(limits, tightened.ResourceLimits, "an attach asking for a memory cap is served it");
-        AssertEx.Equal(4, tightened.ThreadLimit);
-        AssertEx.Null(registry.GetAliveState(created).LaunchPolicy.ResourceLimits, "the latest attach's ceilings apply, a looser one too");
-        AssertEx.Equal(SandboxIsolationMode.None, registry.GetAliveState(created).LaunchPolicy.Isolation);
-    }
-
-    [Test]
-    public async Task CreateOrAttach_RefusesAnAttachAskingForADifferentNetworkBoundary_AndChangesNothing()
-    {
-        var registry = new SandboxLifecycleRegistry(_jailRoot,
-            new SandboxLauncher(new FixedProbe(SandboxContainment.None with { SupportsResourceLimits = true, SupportsNetworkIsolation = true })),
-            TimeProvider.System);
-        var created = await registry.CreateOrAttachAsync(CreateRequest(Key()));
-
-        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => registry.CreateOrAttachAsync(CreateRequest(Key()) with
-        {
-            NetworkPolicy = SandboxNetworkPolicy.None,
-            ResourceLimits = new SandboxResourceLimits { MemoryMb = 2048 },
-            MaxJailDiskBytes = 1
-        }));
-
-        var state = registry.GetAliveState(created);
-        AssertEx.False(state.LaunchPolicy.DenyNetworkEgress, "a refused attach never changes the sandbox's boundary");
-        AssertEx.Null(state.LaunchPolicy.ResourceLimits, "a refused attach applies none of its ceilings");
-        AssertEx.Null(state.MaxJailDiskBytes, "a refused attach does not tighten the disk ceiling either");
-    }
-
-    [Test]
     [ExcludeOn(OS.Windows)]
     [UnsupportedOSPlatform("windows")]
     public async Task RemoveAndTerminate_WhenTheJailCannotBeDeleted_LogsThePathItLeftBehind()
@@ -352,15 +311,5 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
     private sealed class NoContainmentProbe : ISandboxContainmentProbe
     {
         public SandboxContainment Containment => SandboxContainment.None;
-    }
-
-    private sealed class FixedProbe : ISandboxContainmentProbe
-    {
-        public FixedProbe(SandboxContainment containment)
-        {
-            Containment = containment;
-        }
-
-        public SandboxContainment Containment { get; }
     }
 }

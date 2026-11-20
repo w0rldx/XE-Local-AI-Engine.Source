@@ -24,6 +24,8 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
     private readonly CancellationTokenSource _readsCancelled = new();
     private readonly Task<bool> _standardErrorPump;
     private readonly Task<bool>? _standardOutputPump;
+    private bool _standardErrorCut;
+    private bool _standardOutputCut;
     private readonly TimeProvider _timeProvider;
 
     public WindowsJobSandboxChildProcess(WindowsJobProcess process,
@@ -60,9 +62,9 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
 
     public int? ExitCode => _process.ExitCode;
 
-    public bool StandardOutputIncomplete => _standardOutputPump is { IsCompletedSuccessfully: false } or { Result: true };
+    public bool StandardOutputIncomplete => _standardOutputCut || _standardOutputPump is { IsCompletedSuccessfully: false } or { Result: true };
 
-    public bool StandardErrorIncomplete => _standardErrorPump is { IsCompletedSuccessfully: false } or { Result: true };
+    public bool StandardErrorIncomplete => _standardErrorCut || _standardErrorPump is { IsCompletedSuccessfully: false } or { Result: true };
 
     public IReadOnlyList<string> Warnings => [];
 
@@ -125,6 +127,8 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
 
         // A process outside the job holds a pipe: cancelling the overlapped reads ends the pumps at once, and each delivers its pending
         // partial line before the caller reads the capture.
+        _standardOutputCut = _standardOutputPump is { IsCompleted: false };
+        _standardErrorCut = _standardErrorPump is { IsCompleted: false };
         await _readsCancelled.CancelAsync();
         await MxcChildProcess.AwaitClosedPumpsAsync(drained, _timeProvider);
     }

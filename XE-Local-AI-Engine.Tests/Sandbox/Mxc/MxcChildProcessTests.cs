@@ -130,6 +130,7 @@ public sealed class MxcChildProcessTests
         await AssertEx.CompletesAsync(wait, TestBudgets.Contended, "the wait must return once the drain budget is spent");
         AssertEx.Equal(4, await wait);
         closer.Received(1).Close();
+        AssertEx.True(child.StandardOutputIncomplete, "a stream closed under its pump at the deadline is cut, though the close read as end of stream");
     }
 
     [Test]
@@ -199,6 +200,18 @@ public sealed class MxcChildProcessTests
     }
 
     [Test]
+    public async Task PumpLinesAsync_WhenTheSdkReadFails_DeliversThePartialLine_AndReportsIncomplete()
+    {
+        var lines = new List<string>();
+        await using var stream = new FailsAtEndStream("a\nparti"u8.ToArray(), new MxcException(ErrorCode.BackendError, "the pipe is closed"));
+
+        var incomplete = await MxcChildProcess.PumpLinesAsync(stream, lines.Add, CancellationToken.None);
+
+        AssertEx.Equal("a|parti", string.Join('|', lines), "the SDK's own read failure ends the pump like a broken pipe, never faults it");
+        AssertEx.True(incomplete);
+    }
+
+    [Test]
     public async Task UnpumpedStreams_AreExposedRaw_AndIdIsTheOsPid()
     {
         var output = new MemoryStream("raw"u8.ToArray());
@@ -229,10 +242,18 @@ public sealed class MxcChildProcessTests
     }
 
     /// <summary>Yields its bytes, then fails the next read as a broken pipe would, never reaching end of stream.</summary>
-    private sealed class FailsAtEndStream(byte[] bytes) : MemoryStream(bytes)
+    private sealed class FailsAtEndStream : MemoryStream
     {
+        private readonly Exception _failure;
+
+        public FailsAtEndStream(byte[] bytes, Exception? failure = null)
+            : base(bytes)
+        {
+            _failure = failure ?? new IOException("the pipe broke");
+        }
+
         public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
-            Position < Length ? base.ReadAsync(buffer, cancellationToken) : ValueTask.FromException<int>(new IOException("the pipe broke"));
+            Position < Length ? base.ReadAsync(buffer, cancellationToken) : ValueTask.FromException<int>(_failure);
 
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
             ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
