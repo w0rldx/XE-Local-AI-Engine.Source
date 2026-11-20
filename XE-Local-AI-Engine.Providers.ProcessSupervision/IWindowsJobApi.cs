@@ -17,6 +17,12 @@ internal interface IWindowsJobApi
 
     void SetCpuRate(SafeHandle job, uint cpuRate);
 
+    /// <summary>Creates a completion port and associates it with <paramref name="job" />, so the job's limit messages queue on it.</summary>
+    SafeHandle AssociateCompletionPort(SafeHandle job);
+
+    /// <summary>Dequeues every message already queued on <paramref name="port" />, without waiting: whether one was <paramref name="message" />.</summary>
+    bool ReceivedMessage(SafeHandle port, uint message);
+
     /// <summary>Reads the extended limits and the CPU rate back; an unexpected CPU control flag set throws.</summary>
     WindowsJobLimits QueryLimits(SafeHandle job);
 

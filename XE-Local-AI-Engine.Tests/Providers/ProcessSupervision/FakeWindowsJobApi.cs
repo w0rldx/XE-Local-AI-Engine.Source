@@ -16,6 +16,8 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
     private readonly Dictionary<SafeHandle, int> _exitCodes = [];
     private readonly Dictionary<SafeHandle, List<SafeHandle>> _members = [];
     private readonly Dictionary<SafeHandle, FakePipe> _pendingOutputs = [];
+    private readonly Dictionary<SafeHandle, SafeHandle> _ports = [];
+    private readonly Dictionary<SafeHandle, List<uint>> _queued = [];
     private WindowsJobLimits _set;
 
     public List<string> Calls { get; } = [];
@@ -37,6 +39,12 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
 
     /// <summary>When set, replaces <see cref="ExitCodeFor" /> with an answer that also sees the job's active-process cap.</summary>
     public Func<WindowsJobStartInfo, uint, int?>? ExitCodeUnderCap { get; set; }
+
+    /// <summary>Whether a created process hits its job's active-process cap: a job with a port then queues the limit message on it.</summary>
+    public Func<WindowsJobStartInfo, uint, bool> HitsActiveProcessLimit { get; set; } = static (_, _) => false;
+
+    /// <summary>Runs before every recorded step, by its <see cref="Calls" /> name: a test blocks a native step here.</summary>
+    public Action<string>? BeforeStep { get; set; }
 
     /// <summary>Answers a commit of the given bytes under the last job's memory limit with the Win32 error it fails with, or 0.</summary>
     public Func<ulong, ulong, int> Commit { get; set; } = static (_, _) => 0;
@@ -114,6 +122,23 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
         };
     }
 
+    public SafeHandle AssociateCompletionPort(SafeHandle job)
+    {
+        Step(nameof(AssociateCompletionPort));
+        var port = Issue("port");
+        _ports[job] = port;
+        _queued[port] = [];
+        return port;
+    }
+
+    public bool ReceivedMessage(SafeHandle port, uint message)
+    {
+        Step(nameof(ReceivedMessage));
+        var received = _queued[port].Contains(message);
+        _queued[port].Clear();
+        return received;
+    }
+
     public WindowsJobLimits QueryLimits(SafeHandle job)
     {
         Step(nameof(QueryLimits));
@@ -130,6 +155,10 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
         LastStandardInput = new FakePipe();
         _exits[process] = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _members[job].Add(process);
+        if (_ports.TryGetValue(job, out var port) && HitsActiveProcessLimit(startInfo, _set.ActiveProcessLimit))
+        {
+            _queued[port].Add(WindowsJobCeilingsProbe.ActiveProcessLimitMessage);
+        }
         var answer = ExitCodeUnderCap is null ? ExitCodeFor(startInfo) : ExitCodeUnderCap(startInfo, _set.ActiveProcessLimit);
         if (answer is { } exitCode)
         {
@@ -246,6 +275,7 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
     private void Step(string name)
     {
         Calls.Add(name);
+        BeforeStep?.Invoke(name);
         if (string.Equals(FailAt, name, StringComparison.Ordinal))
         {
             throw new Win32Exception(5, $"injected failure at {name}");

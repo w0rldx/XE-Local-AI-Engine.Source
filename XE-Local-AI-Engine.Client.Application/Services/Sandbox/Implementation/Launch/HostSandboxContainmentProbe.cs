@@ -59,6 +59,7 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     private readonly ILogger<HostSandboxContainmentProbe> _logger;
     private readonly IMxcSandboxRuntime? _mxcRuntime;
     private readonly Func<WindowsJobProbeResult> _windowsJobProbe;
+    private readonly TimeProvider _timeProvider;
 
     // The logger is optional so tests can construct the probe directly; ActivatorUtilities injects it in production.
     public HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger = null)
@@ -66,7 +67,8 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             HostSandboxFilesystemIsolationProbe.Measure,
             OperatingSystem.IsWindows() ? new MxcSandboxRuntime() : null,
             OperatingSystem.IsWindows,
-            MeasureWindowsJobs)
+            MeasureWindowsJobs,
+            TimeProvider.System)
     {
         var own = _containment;
         _containment = LazyInitializer.EnsureInitialized(ref processContainment, () => own);
@@ -76,22 +78,25 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     // network results survive intact. Instances built here keep their own cache, never the process-wide one.
     internal HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger,
         Func<IReadOnlyDictionary<string, string>, SandboxFilesystemIsolationProbeResult> filesystemProbe)
-        : this(logger, filesystemProbe, mxcRuntime: null, OperatingSystem.IsWindows, MeasureWindowsJobs)
+        : this(logger, filesystemProbe, mxcRuntime: null, OperatingSystem.IsWindows, MeasureWindowsJobs, TimeProvider.System)
     {
     }
 
-    // The MXC runtime, the Job Object probe and the OS test are injectable so a Linux test drives the Windows branch through fakes; the
+    // The MXC runtime, the Job Object probe, its deadline's clock and the OS test are injectable so a Linux test drives the Windows branch through fakes; the
     // branch reaches the SDK and kernel32 only through those seams, so nothing Windows-only runs on the test host.
     internal HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger,
         Func<IReadOnlyDictionary<string, string>, SandboxFilesystemIsolationProbeResult> filesystemProbe,
         IMxcSandboxRuntime? mxcRuntime,
         Func<bool> isWindows,
-        Func<WindowsJobProbeResult> windowsJobProbe)
+        Func<WindowsJobProbeResult> windowsJobProbe,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(filesystemProbe);
         ArgumentNullException.ThrowIfNull(isWindows);
         ArgumentNullException.ThrowIfNull(windowsJobProbe);
+        ArgumentNullException.ThrowIfNull(timeProvider);
         _windowsJobProbe = windowsJobProbe;
+        _timeProvider = timeProvider;
         _logger = logger ?? NullLogger<HostSandboxContainmentProbe>.Instance;
         _filesystemProbe = filesystemProbe;
         _mxcRuntime = mxcRuntime;
@@ -250,12 +255,36 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     }
 
     /// <summary>Runs the Job Object controls inside their OWN guard, so a failure there withdraws the ceilings and nothing else.</summary>
-    /// <remarks>Never downgrades silently: a throw is an unsupported result with its reason (ADR 0025).</remarks>
+    /// <remarks>
+    ///     Never downgrades silently: a throw, or no result by the probe's deadline, is an unsupported result with its reason (ADR 0025).
+    ///     The deadline bounds a native step that never returns, so the first containment query and every caller waiting on its cache
+    ///     are not held by it. A probe that returns after it still disposes every job and process it started; only its result is dropped.
+    /// </remarks>
     private WindowsJobProbeResult MeasureWindowsJobCeilings()
     {
+        var probe = Task.Run(_windowsJobProbe, CancellationToken.None);
         try
         {
-            return _windowsJobProbe();
+            // Synchronous by contract (one cached measurement behind ISandboxContainmentProbe); the wait is bounded by the deadline.
+#pragma warning disable MA0045
+            return probe.WaitAsync(WindowsJobCeilingsProbe.Deadline, _timeProvider, CancellationToken.None).GetAwaiter().GetResult();
+#pragma warning restore MA0045
+        }
+        catch (TimeoutException timeout) when (!ReferenceEquals(timeout, probe.Exception?.InnerException))
+        {
+            // The deadline's own timeout, not one the probe threw.
+            var seconds = WindowsJobCeilingsProbe.Deadline.TotalSeconds;
+            _ = probe.ContinueWith(late => _logger.LogWarning(late.Exception,
+                    "The Windows Job Object ceilings probe finished after its {Seconds} s deadline; resource ceilings stay unavailable.",
+                    seconds),
+                CancellationToken.None,
+                TaskContinuationOptions.None,
+                TaskScheduler.Default);
+            return new WindowsJobProbeResult
+            {
+                Supported = false,
+                Reason = $"the Windows Job Object ceilings probe did not finish within {seconds} s"
+            };
         }
         catch (Exception exception)
         {

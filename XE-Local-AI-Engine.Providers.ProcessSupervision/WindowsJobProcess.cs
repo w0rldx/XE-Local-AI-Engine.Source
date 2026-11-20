@@ -14,13 +14,15 @@ public sealed class WindowsJobProcess : IDisposable
     private readonly WindowsJobChild _child;
     private readonly Task _exited;
     private readonly SafeHandle _job;
+    private readonly SafeHandle? _completionPort;
     private int? _exitCode;
 
-    internal WindowsJobProcess(IWindowsJobApi api, SafeHandle job, WindowsJobChild child)
+    internal WindowsJobProcess(IWindowsJobApi api, SafeHandle job, WindowsJobChild child, SafeHandle? completionPort = null)
     {
         _api = api;
         _job = job;
         _child = child;
+        _completionPort = completionPort;
         _exited = api.WaitForExitAsync(child.Process);
     }
 
@@ -85,11 +87,16 @@ public sealed class WindowsJobProcess : IDisposable
         {
             // The kill-on-close job is the backstop for every member: it is closed even if a pipe end fails to close.
             _job.Dispose();
+            _completionPort?.Dispose();
         }
     }
 
     /// <summary>The job handle, for the Windows tests' membership and read-back checks.</summary>
     internal SafeHandle Job => _job;
+
+    /// <summary>Whether the job has queued <paramref name="message" /> on its completion port; false when it was started without one.</summary>
+    internal bool ReceivedLimitMessage(uint message) =>
+        _completionPort is { } port && _api.ReceivedMessage(port, message);
 
     /// <summary>The probe's commit control: commits and frees <paramref name="bytes" /> inside the job.</summary>
     internal bool TryCommit(ulong bytes, out int error) =>

@@ -27,6 +27,8 @@ public sealed partial class WindowsJobCeilingsProbeTests
         // Every control runs under the probe's own small job, the CPU rate included, and through the one launcher.
         AssertEx.Equal(3, api.Calls.Count(static call => call == "TryCommit"));
         AssertEx.Equal(5, api.Calls.Count(static call => call == "SetCpuRate"));
+        // Only the past-cap chain needs its job's limit message, so only its job gets a completion port.
+        AssertEx.Equal(1, api.Calls.Count(static call => call == "AssociateCompletionPort"));
         AssertEx.Equal(0, api.OpenHandles);
         await Task.CompletedTask;
     }
@@ -107,9 +109,26 @@ public sealed partial class WindowsJobCeilingsProbeTests
     }
 
     [Test]
+    public async Task APastCapChainThatFailsWithoutTheLimitMessage_IsInconclusive_NotProved()
+    {
+        // The chain exits 1 as a capped chain would, but the job never reported its active-process limit: the failure may be another.
+        var api = HonestHost();
+        api.HitsActiveProcessLimit = static (_, _) => false;
+
+        var result = WindowsJobCeilingsProbe.Measure(new WindowsJobLauncher(api), Cmd);
+
+        AssertUnsupported(result,
+            "a chain of 5 processes inside a 4-process job exited 1 without the job reporting JOB_OBJECT_MSG_ACTIVE_PROCESS_LIMIT, so the result is inconclusive");
+        AssertEx.Equal(1, api.Calls.Count(static call => call == "ReceivedMessage"));
+        AssertEx.Equal(0, api.OpenHandles);
+        await Task.CompletedTask;
+    }
+
+    [Test]
     [Arguments("CreateJob")]
     [Arguments("SetCpuRate")]
     [Arguments("CreateSuspended")]
+    [Arguments("AssociateCompletionPort")]
     public async Task ALauncherFailure_IsUnsupported_WithItsMessage_AndLeavesNoHandle(string step)
     {
         var api = HonestHost();
@@ -143,12 +162,13 @@ public sealed partial class WindowsJobCeilingsProbeTests
     }
 
     // A host whose job behaves: the commit holder runs until terminated, a commit past the job's memory limit fails with
-    // ERROR_COMMITMENT_LIMIT, and a cmd chain exits 7 exactly when its depth fits the job's cap.
+    // ERROR_COMMITMENT_LIMIT, and a cmd chain exits 7 exactly when its depth fits the job's cap, else its job reports the limit.
     private static FakeWindowsJobApi HonestHost() =>
         new()
         {
             Commit = static (bytes, limit) => bytes <= limit ? 0 : 1455,
-            ExitCodeUnderCap = static (start, cap) => IsHolder(start) ? null : ChainExit(start, cap)
+            ExitCodeUnderCap = static (start, cap) => IsHolder(start) ? null : ChainExit(start, cap),
+            HitsActiveProcessLimit = static (start, cap) => !IsHolder(start) && ChainDepth().Count(start.CommandLine) > cap
         };
 
     // A chain runs to its exit code exactly when its depth fits the job's cap.

@@ -5,9 +5,11 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Mxc.Sdk.V1;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
+using XE_Local_AI_Engine.Tests.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -165,6 +167,57 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
     }
 
     [Test]
+    public async Task AStalledJobProbe_IsCutOffAtItsDeadline_KeepsTheBoundary_AndItsLateRunLeavesNoHandle()
+    {
+        // The real probe over the fake native seam, with its first process create stalled until the test lets it go.
+        var api = new FakeWindowsJobApi();
+        var stalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim();
+        api.BeforeStep = step =>
+        {
+            if (step == "CreateSuspended" && stalled.TrySetResult())
+            {
+                release.Wait();
+            }
+        };
+        var time = new ManualTimeProvider();
+        var logger = new RecordingLogger<HostSandboxContainmentProbe>();
+        var probe = new HostSandboxContainmentProbe(logger,
+            _ => throw new InvalidOperationException("the bwrap probe must not run on the Windows branch"),
+            Runtime(Probe(IsolationTier.AppContainerDacl)),
+            isWindows: static () => true,
+            () => WindowsJobCeilingsProbe.Measure(new WindowsJobLauncher(api), @"C:\Windows\System32\cmd.exe"),
+            time);
+        try
+        {
+            var measuring = Task.Run(() => probe.Containment);
+            await AssertEx.CompletesAsync(stalled.Task, TestBudgets.Contended, "the probe must reach its first process create");
+            await AssertEx.EventuallyAsync(() => time.ArmedTimerCount > 0, TestBudgets.Contended, "the probe's deadline must be armed");
+            await AssertEx.StaysIncompleteAsync(measuring, "the containment result waits for the job probe until its deadline");
+            time.Advance(WindowsJobCeilingsProbe.Deadline);
+
+            await AssertEx.CompletesAsync(measuring, TestBudgets.Contended, "the containment result must return at the deadline");
+            var containment = await measuring;
+            AssertEx.False(containment.SupportsResourceLimits);
+            AssertEx.Null(containment.WindowsJobProcessorCount);
+            AssertEx.Contains(containment.ResourceLimitsUnavailableReason, "the Windows Job Object ceilings probe did not finish within 90 s");
+            AssertEx.True(containment.SupportsAppContainerBoundary, "a stalled job probe must not erase the measured boundary");
+            AssertEx.Equal("AppContainerDacl", AssertEx.NotNull(containment.AppContainerBoundary).Tier);
+        }
+        finally
+        {
+            release.Set();
+        }
+
+        // The late run finishes its controls and closes every job, process and pipe handle it opened.
+        await AssertEx.EventuallyAsync(() => logger.AllText.Contains("finished after its 90 s deadline", StringComparison.Ordinal),
+            TestBudgets.Contended,
+            "the late probe must finish once its native step returns");
+        AssertEx.True(api.IssuedHandles > 0, "the late run must have opened handles for this check to mean anything");
+        AssertEx.Equal(0, api.OpenHandles, "the late probe leaked a handle");
+    }
+
+    [Test]
     public async Task DescribeMissingHostPrep_NamesBothCommands_WhenBothAreMissing()
     {
         var reason = HostSandboxContainmentProbe.DescribeMissingHostPrep(["run wxc-host-prep prepare-system-drive", NullDeviceWarning]);
@@ -182,7 +235,8 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
             _ => throw new InvalidOperationException("the bwrap probe must not run on the Windows branch"),
             mxcRuntime,
             isWindows: static () => true,
-            jobProbe ?? (static () => JobsUnsupported));
+            jobProbe ?? (static () => JobsUnsupported),
+            TimeProvider.System);
         return probe.Containment;
     }
 

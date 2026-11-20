@@ -175,15 +175,17 @@ public sealed class WindowsJobSandboxWindowsTests
     }
 
     /// <summary>
-    ///     A process outside the job holding stdout open ends the command at the drain budget, the unterminated line the root printed is
-    ///     still delivered and marks stdout incomplete, and both pumps finish.
+    ///     A process outside the job holding stdout open does not hold the command: the held read is cancelled, the unterminated line the
+    ///     root printed is still delivered and marks stdout incomplete, and both pumps finish.
     /// </summary>
     /// <remarks>
     ///     The root duplicates its own stdout into this test host, which is outside the job, then exits. Windows documents cancelling a
-    ///     blocked read on another thread for overlapped I/O, so the engine reads stdout and stderr overlapped (ADR 0025).
+    ///     blocked read on another thread for overlapped I/O, so the engine reads stdout and stderr overlapped (ADR 0025). No elapsed-time
+    ///     bound: a wall clock here also counts PowerShell's startup and <c>Add-Type</c>. The exact drain interval is proven on a manual clock
+    ///     by <c>WindowsJobSandboxChildProcessTests</c>.
     /// </remarks>
     [Test]
-    public async Task AStdoutHeldOutsideTheJob_EndsAtTheDrainBudget_DeliversThePendingLine_AndBothPumpsFinish()
+    public async Task AStdoutHeldOutsideTheJob_IsCancelled_DeliversThePendingLine_AndBothPumpsFinish()
     {
         var script = """
                      Add-Type -Name K -Namespace XeTest -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n); [DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr OpenProcess(uint access, bool inherit, int pid); [DllImport("kernel32.dll", SetLastError = true)] public static extern bool DuplicateHandle(IntPtr sourceProcess, IntPtr source, IntPtr targetProcess, out IntPtr target, uint access, bool inherit, uint options); [DllImport("kernel32.dll")] public static extern IntPtr GetCurrentProcess();'
@@ -215,17 +217,13 @@ public sealed class WindowsJobSandboxWindowsTests
             });
         try
         {
-            var clock = Stopwatch.StartNew();
             // Bounded from outside, so a drain that never ends fails here instead of hanging the run.
             var wait = child.WaitForExitAsync(CancellationToken.None);
             await AssertEx.CompletesAsync(wait, MxcChildProcess.PumpDrainBudget + TimeSpan.FromSeconds(60), "the wait never returned: the held read was not cancelled");
             var exitCode = await wait;
-            var returnedAfter = clock.Elapsed;
 
             AssertEx.Equal(0, exitCode, $"the root could not hand its stdout over: {string.Join(" | ", errors)}");
-            AssertEx.True(HeldHandle() != IntPtr.Zero, "the root reported no duplicated handle");
-            AssertEx.True(returnedAfter >= MxcChildProcess.PumpDrainBudget - TimeSpan.FromSeconds(1), $"returned after {returnedAfter}, before the held pipe's drain budget");
-            AssertEx.True(returnedAfter <= MxcChildProcess.PumpDrainBudget + TimeSpan.FromSeconds(30), $"returned after {returnedAfter}: the held read was not cancelled");
+            AssertEx.True(HeldHandle() != IntPtr.Zero, "the root reported no duplicated handle, so nothing held stdout");
             lock (output)
             {
                 AssertEx.Equal("partial", string.Join('|', output), "the unterminated line is delivered before the wait returns");
@@ -1176,6 +1174,10 @@ public sealed class WindowsJobSandboxWindowsTests
 
         public WindowsJobLimits QueryLimits(SafeHandle job) => _real.QueryLimits(job);
 
+        public SafeHandle AssociateCompletionPort(SafeHandle job) => _real.AssociateCompletionPort(job);
+
+        public bool ReceivedMessage(SafeHandle port, uint message) => _real.ReceivedMessage(port, message);
+
         public WindowsJobChild CreateSuspended(SafeHandle job, WindowsJobStartInfo startInfo) => _real.CreateSuspended(job, startInfo);
 
         public bool IsProcessInJob(SafeHandle process, SafeHandle job) => _real.IsProcessInJob(process, job);
@@ -1240,6 +1242,10 @@ public sealed class WindowsJobSandboxWindowsTests
         public void SetCpuRate(SafeHandle job, uint cpuRate) => _real.SetCpuRate(job, cpuRate);
 
         public WindowsJobLimits QueryLimits(SafeHandle job) => _real.QueryLimits(job);
+
+        public SafeHandle AssociateCompletionPort(SafeHandle job) => _real.AssociateCompletionPort(job);
+
+        public bool ReceivedMessage(SafeHandle port, uint message) => _real.ReceivedMessage(port, message);
 
         public WindowsJobChild CreateSuspended(SafeHandle job, WindowsJobStartInfo startInfo)
         {

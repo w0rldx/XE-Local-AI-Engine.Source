@@ -74,6 +74,58 @@ internal sealed class WindowsJobApi : IWindowsJobApi
             });
     }
 
+    [SuppressMessage("Sonar Code Smell",
+        "S3869:SafeHandle instances should not use DangerousGetHandle",
+        Justification = "JOBOBJECT_ASSOCIATE_COMPLETION_PORT takes the raw port value; the SafeHandle is AddRef'd for the whole call.")]
+    public SafeHandle AssociateCompletionPort(SafeHandle job)
+    {
+        SafeHandle? owned = WindowsJobNative.CreateIoCompletionPort(WindowsJobNative.InvalidHandleValue, IntPtr.Zero, completionKey: 0, numberOfConcurrentThreads: 1);
+        var added = false;
+        try
+        {
+            if (owned.IsInvalid)
+            {
+                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            }
+
+            owned.DangerousAddRef(ref added);
+            WindowsJobNative.SetInformation(job,
+                WindowsJobNative.JobObjectAssociateCompletionPortInformation,
+                new WindowsJobNative.JOBOBJECT_ASSOCIATE_COMPLETION_PORT
+                {
+                    CompletionKey = IntPtr.Zero,
+                    CompletionPort = owned.DangerousGetHandle()
+                });
+            owned.DangerousRelease();
+            added = false;
+            var port = owned;
+            owned = null;
+            return port;
+        }
+        finally
+        {
+            if (added)
+            {
+                owned?.DangerousRelease();
+            }
+
+            owned?.Dispose();
+        }
+    }
+
+    public bool ReceivedMessage(SafeHandle port, uint message)
+    {
+        // A job posts each message as a successful packet with the message id as the byte count, so a zero wait returns false only
+        // once the queue is empty.
+        var received = false;
+        while (WindowsJobNative.GetQueuedCompletionStatus(port, out var id, out _, out _, dwMilliseconds: 0))
+        {
+            received |= id == message;
+        }
+
+        return received;
+    }
+
     public WindowsJobLimits QueryLimits(SafeHandle job)
     {
         var extended = WindowsJobNative.QueryInformation<WindowsJobNative.JOBOBJECT_EXTENDED_LIMIT_INFORMATION>(job,

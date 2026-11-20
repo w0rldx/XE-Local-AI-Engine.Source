@@ -43,11 +43,14 @@ can open its owner with `VM_WRITE`, `CREATE_THREAD` and `TERMINATE`.
    - Advertised only after a performed probe: `WindowsJobCeilingsProbe` runs controls through the same launcher (a commit
      under the limit succeeds and one past it fails with `ERROR_COMMITMENT_LIMIT` while the same commit under a wider limit
      succeeds, since that error also means host-wide commit exhaustion; a process chain inside the cap runs, and one past it
-     does not while the same chain under a wider cap does). A failure, an inconclusive control included, withdraws the
+     does not, with its job reporting `JOB_OBJECT_MSG_ACTIVE_PROCESS_LIMIT` on a completion port, while the same chain under a
+     wider cap does; that message's delivery is not guaranteed, so its absence is inconclusive). A failure, an inconclusive control included, withdraws the
      ceilings with its reason and never anything else. The probe runs once per engine process, on the startup path: five
      short `cmd.exe` launches (the first also creates the handle parent), the three process chains each bounded by a 30 s wait, so a healthy host pays well under a
      second, a contended one (a first antivirus scan, a model load) is not misread as unsupported, and a hung control
-     costs at most about 90 s. A wrong exit code is a verdict and is never retried. Its result is cached until the engine
+     costs at most about 90 s. The engine stops waiting for the whole probe after those 90 s, so a native step that never
+     returns withdraws the ceilings instead of holding the first containment query; a probe that returns later still closes
+     every job and process it started. A wrong exit code is a verdict and is never retried. Its result is cached until the engine
      restarts, so a failed probe leaves the ceilings off until then.
    - Output is read overlapped. Windows documents cancelling a blocked read on another thread only for overlapped I/O
      (`CancelIoEx`; synchronous I/O needs `CancelSynchronousIo` on the reading thread), so stdout and stderr are named-pipe

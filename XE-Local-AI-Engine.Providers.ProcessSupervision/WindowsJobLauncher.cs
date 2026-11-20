@@ -34,11 +34,19 @@ public sealed class WindowsJobLauncher
     /// <summary>Starts <paramref name="startInfo" /> inside a fresh job carrying exactly <paramref name="limits" />.</summary>
     /// <exception cref="Win32Exception">A native step failed; nothing was started.</exception>
     /// <exception cref="InvalidOperationException">A read-back differed or the process was not a member; nothing ran.</exception>
-    public WindowsJobProcess Start(WindowsJobStartInfo startInfo, WindowsJobLimits limits)
+    public WindowsJobProcess Start(WindowsJobStartInfo startInfo, WindowsJobLimits limits) =>
+        Start(startInfo, limits, completionPort: false);
+
+    /// <summary>
+    ///     As <see cref="Start(WindowsJobStartInfo, WindowsJobLimits)" />; with <paramref name="completionPort" /> the job reports its limit
+    ///     messages to a port associated before the process exists (<see cref="WindowsJobProcess.ReceivedLimitMessage" />).
+    /// </summary>
+    internal WindowsJobProcess Start(WindowsJobStartInfo startInfo, WindowsJobLimits limits, bool completionPort)
     {
         ArgumentNullException.ThrowIfNull(startInfo);
 
         SafeHandle? job = null;
+        SafeHandle? port = null;
         WindowsJobChild? child = null;
         try
         {
@@ -56,6 +64,8 @@ public sealed class WindowsJobLauncher
                 throw new InvalidOperationException($"the Windows job read back {Describe(readBack)} instead of {Describe(limits)}");
             }
 
+            // Associated while the job is still empty, so no message about its processes can be missed.
+            port = completionPort ? _api.AssociateCompletionPort(job) : null;
             child = _api.CreateSuspended(job, startInfo);
             if (!_api.IsProcessInJob(child.Process, job))
             {
@@ -74,12 +84,15 @@ public sealed class WindowsJobLauncher
 
             if (!startInfo.RedirectStandardInput)
             {
-                // Closed before the resume, so a failure here is a refusal with nothing run, never the engine's own stdin.
+                // Closed before the resume, so a failure here is a refusal with nothing run, never the engine's own stdin. Start is
+                // synchronous by contract.
+#pragma warning disable MA0045
                 child.StandardInput.Dispose();
+#pragma warning restore MA0045
             }
 
             // The exit wait is registered while the process is still suspended, so a failure there leaves nothing that ran.
-            var process = new WindowsJobProcess(_api, job, child);
+            var process = new WindowsJobProcess(_api, job, child, port);
             _api.Resume(child.Thread);
             child.Thread.Dispose();
             return process;
@@ -95,6 +108,7 @@ public sealed class WindowsJobLauncher
 
             child?.Dispose();
             job?.Dispose();
+            port?.Dispose();
             if (unconfirmed is null)
             {
                 throw;

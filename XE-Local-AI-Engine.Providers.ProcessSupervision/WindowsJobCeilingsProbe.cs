@@ -5,10 +5,10 @@ using System.Globalization;
 
 /// <summary>Proves the plain-path job ceilings on this host through the SAME <see cref="WindowsJobLauncher" /> every command uses (ADR 0025).</summary>
 /// <remarks>
-///     A commit under the job limit succeeds and one past it fails with the commitment-limit error while the same commit under a wider
-///     limit succeeds; a chain inside the cap runs, and one past it cannot start its last member while the same chain under a wider cap can. Every launch reads every limit back, so a refused
+///     A commit under the job limit succeeds and one past it fails with ERROR_COMMITMENT_LIMIT while the same commit under a wider
+///     limit succeeds; a chain inside the cap runs, and one past it cannot start its last member (its job reports the limit) while the same chain under a wider cap can. Every launch reads every limit back, so a refused
 ///     CPU rate or a launcher-breaking ancestor job fails a control. Only the system <c>cmd.exe</c> runs; the first launch also creates the
-///     handle parent, and any failure, its own included, is an unsupported result with its reason. The result is cached for the process (ADR 0025).
+///     handle parent, and any failure, its own too, is an unsupported result with its reason. The result is cached for the process.
 /// </remarks>
 public static class WindowsJobCeilingsProbe
 {
@@ -33,7 +33,13 @@ public static class WindowsJobCeilingsProbe
     // ERROR_COMMITMENT_LIMIT: the error a commit past JOB_OBJECT_LIMIT_JOB_MEMORY returns (ADR 0025, Context).
     internal const int CommitmentLimitError = 1455;
 
+    // JOB_OBJECT_MSG_ACTIVE_PROCESS_LIMIT (winnt.h): the job's completion-port message for a process refused by its active-process limit.
+    internal const uint ActiveProcessLimitMessage = 3;
+
     private static readonly TimeSpan ControlTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>How long a caller waits for the whole probe: the three chain waits' own bounds together (ADR 0025).</summary>
+    public static readonly TimeSpan Deadline = ControlTimeout * 3;
 
     /// <summary>Runs the controls with the host's own <c>cmd.exe</c>.</summary>
     public static WindowsJobProbeResult Measure(WindowsJobLauncher launcher) =>
@@ -130,7 +136,7 @@ public static class WindowsJobCeilingsProbe
         }
 
         arguments.AddRange(["/d", "/c", "exit", ChainExitCode.ToString(CultureInfo.InvariantCulture)]);
-        using var chain = launcher.Start(StartInfo(commandInterpreter, arguments), limits);
+        using var chain = launcher.Start(StartInfo(commandInterpreter, arguments), limits, completionPort: !expectStart);
         try
         {
             // The containment probe is synchronous by contract (one cached measurement behind ISandboxContainmentProbe); the wait is
@@ -149,14 +155,18 @@ public static class WindowsJobCeilingsProbe
         }
 
         var started = chain.ExitCode == ChainExitCode;
-        if (started == expectStart)
+        if (started != expectStart)
         {
-            return null;
+            return Unsupported(expectStart
+                ? Invariant($"a chain of {depth} processes inside a {cap}-process job exited {chain.ExitCode}, not {ChainExitCode}")
+                : Invariant($"a chain of {depth} processes ran inside a {cap}-process job, so the active-process limit is not enforced"));
         }
 
-        return Unsupported(expectStart
-            ? Invariant($"a chain of {depth} processes inside a {cap}-process job exited {chain.ExitCode}, not {ChainExitCode}")
-            : Invariant($"a chain of {depth} processes ran inside a {cap}-process job, so the active-process limit is not enforced"));
+        // Any other exit code may be any failure: only the job's own limit message attributes it to the cap. Its delivery is not
+        // guaranteed (Learn, JOBOBJECT_ASSOCIATE_COMPLETION_PORT), so a missing message is inconclusive, not proof either way.
+        return expectStart || chain.ReceivedLimitMessage(ActiveProcessLimitMessage)
+            ? null
+            : Unsupported(Invariant($"a chain of {depth} processes inside a {cap}-process job exited {chain.ExitCode} without the job reporting JOB_OBJECT_MSG_ACTIVE_PROCESS_LIMIT, so the result is inconclusive: the failure may not be the cap's"));
     }
 
     private static WindowsJobStartInfo StartInfo(string commandInterpreter, IEnumerable<string> arguments)

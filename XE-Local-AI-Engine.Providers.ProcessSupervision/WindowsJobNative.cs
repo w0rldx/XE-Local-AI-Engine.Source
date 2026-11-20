@@ -14,6 +14,7 @@ using Microsoft.Win32.SafeHandles;
 [SupportedOSPlatform("windows")]
 internal static partial class WindowsJobNative
 {
+    public const int JobObjectAssociateCompletionPortInformation = 7;
     public const int JobObjectExtendedLimitInformation = 9;
     public const int JobObjectCpuRateControlInformation = 15;
 
@@ -44,6 +45,8 @@ internal static partial class WindowsJobNative
     public const uint PageReadWrite = 0x04;
 
     public const ushort AllProcessorGroups = 0xFFFF;
+
+    public static readonly IntPtr InvalidHandleValue = -1;
 
     // PROC_THREAD_ATTRIBUTE_PARENT_PROCESS, _HANDLE_LIST and _JOB_LIST (ProcThreadAttributeJobList = 13 | PROC_THREAD_ATTRIBUTE_INPUT).
     public static readonly IntPtr ProcThreadAttributeParentProcess = 0x0002_0000;
@@ -279,6 +282,19 @@ internal static partial class WindowsJobNative
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial SafeFileHandle CreateIoCompletionPort(IntPtr fileHandle, IntPtr existingCompletionPort, nuint completionKey, uint numberOfConcurrentThreads);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetQueuedCompletionStatus(SafeHandle completionPort,
+        out uint lpNumberOfBytesTransferred,
+        out nuint lpCompletionKey,
+        out IntPtr lpOverlapped,
+        uint dwMilliseconds);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     public static partial IntPtr VirtualAllocEx(SafeHandle hProcess, IntPtr lpAddress, nuint dwSize, uint flAllocationType, uint flProtect);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
@@ -323,6 +339,14 @@ internal static partial class WindowsJobNative
         public UIntPtr JobMemoryLimit;
         public UIntPtr PeakProcessMemoryUsed;
         public UIntPtr PeakJobMemoryUsed;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    [SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Win32 interop struct — name mirrors the native layout exactly.")]
+    public struct JOBOBJECT_ASSOCIATE_COMPLETION_PORT
+    {
+        public IntPtr CompletionKey;
+        public IntPtr CompletionPort;
     }
 
     // ControlFlags, then the CpuRate member of the native union (Weight and MinRate/MaxRate share its four bytes).
