@@ -148,6 +148,22 @@ public sealed class WindowsJobLauncherTests
         await Task.CompletedTask;
     }
 
+    /// <summary>The membership kill hands the held process handle over without duplicating it; an unconfirmed exit joins the failure.</summary>
+    [Test]
+    public void AFailedMembershipCheck_TransfersTheProcessHandle_AndReportsAnUnconfirmedExit()
+    {
+        var api = new FakeWindowsJobApi { Member = false, UnconfirmedExit = "; the command (pid 4242) was ended but its exit not confirmed" };
+
+        var failure = AssertEx.Throws<InvalidOperationException>(() => new WindowsJobLauncher(api).Start(Command, WindowsJobLimits.Map(2048, 64, 2, 16)));
+
+        AssertEx.Contains(failure.Message, "not a member");
+        AssertEx.Contains(failure.Message, "exit not confirmed");
+        AssertEx.True(failure.InnerException is InvalidOperationException, "the original failure is kept as the cause");
+        var held = AssertEx.NotNull(api.HeldProcesses.SingleOrDefault());
+        AssertEx.False(held.IsClosed, "the child's Dispose never closes a process handle it handed over");
+        AssertEx.Equal(1, api.OpenHandles, "everything but the held process handle is closed");
+    }
+
     [Test]
     public async Task ATerminateFailureDuringCleanup_IsSwallowed_AndTheOriginalFailureIsReported()
     {

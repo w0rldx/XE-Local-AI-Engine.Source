@@ -17,12 +17,24 @@ internal sealed class WindowsJobChild : IDisposable
 
     public required Stream StandardError { get; init; }
 
+    private bool _processReleased;
+
+    /// <summary>Hands the process handle to a new owner; <see cref="Dispose" /> then closes only the thread and the streams.</summary>
+    public SafeHandle ReleaseProcess()
+    {
+        _processReleased = true;
+        return Process;
+    }
+
     public void Dispose()
     {
         StandardInput.Dispose();
         StandardOutput.Dispose();
         StandardError.Dispose();
         Thread.Dispose();
-        Process.Dispose();
+        if (!_processReleased)
+        {
+            Process.Dispose();
+        }
     }
 }

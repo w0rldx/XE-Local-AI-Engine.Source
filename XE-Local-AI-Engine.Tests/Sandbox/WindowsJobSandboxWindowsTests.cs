@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Options;
+using Microsoft.Win32.SafeHandles;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
@@ -370,6 +371,575 @@ public sealed class WindowsJobSandboxWindowsTests
         }
     }
 
+    /// <summary>
+    ///     The negative control for the handle guarantee: a <c>Process.Start</c> inside the launch window inherits the test's own inheritable
+    ///     handle but none of the command's three pipe ends (ADR 0025, the handle parent).
+    /// </summary>
+    /// <remarks>
+    ///     The control pipe proves the bystander really inherited what was inheritable; its break after the bystander's exit ties it to that
+    ///     process. A sandbox end the bystander held would keep the engine's stdout or stderr read from breaking, or stdin writable.
+    /// </remarks>
+    [Test]
+    public async Task AConcurrentProcessStart_InheritsNoSandboxPipeEnd()
+    {
+        var owned = new List<IDisposable>();
+        SafeFileHandle? controlRead = null, controlWrite = null;
+        Process? bystander = null;
+        try
+        {
+            using var process = StartInsideTheHandleWindow("cmd /d /c exit 0",
+                () =>
+                {
+                    AssertEx.True(WindowsJobNative.CreatePipe(out controlRead, out controlWrite, IntPtr.Zero, 0), $"control pipe ({Marshal.GetLastPInvokeError()})");
+                    AssertEx.True(SetHandleInformation(controlWrite, HandleFlagInherit, HandleFlagInherit), $"control inherit flag ({Marshal.GetLastPInvokeError()})");
+                    bystander = Process.Start(new ProcessStartInfo("ping", "-n 600 127.0.0.1") { UseShellExecute = false, CreateNoWindow = true });
+                    controlWrite.Dispose();
+                },
+                owned);
+
+            var control = AssertEx.NotNull(controlRead);
+            AssertEx.Equal(0, PeekError(control), "control: the bystander did not inherit the test's inheritable handle, so it proves nothing");
+            await AssertEx.CompletesAsync(process.WaitForExitAsync(CancellationToken.None), TimeSpan.FromSeconds(30), "the command did not exit");
+            await AssertEx.EventuallyAsync(() => ActiveMembers(process.Job) == 0, Settle, "the command's job still has members");
+
+            AssertEx.Equal(ErrorBrokenPipe, PeekError(((FileStream)process.StandardOutput).SafeFileHandle), "stdout: another process still holds the command's stdout write end");
+            AssertEx.Equal(ErrorBrokenPipe, PeekError(((FileStream)process.StandardError).SafeFileHandle), "stderr: another process still holds the command's stderr write end");
+            var written = WriteFile(((FileStream)process.StandardInput).SafeFileHandle, [0x41], 1, out _, IntPtr.Zero);
+            var stdinError = written ? 0 : Marshal.GetLastPInvokeError();
+            AssertEx.True(stdinError is ErrorNoData or ErrorBrokenPipe, $"stdin: a one-byte write returned {stdinError}, so another process still holds the command's stdin read end");
+
+            var started = AssertEx.NotNull(bystander);
+            started.Kill();
+            await AssertEx.CompletesAsync(started.WaitForExitAsync(), TimeSpan.FromSeconds(30), "the bystander did not exit");
+            AssertEx.Equal(ErrorBrokenPipe, PeekError(control), "the control pipe outlived the bystander, so the bystander was not what held it");
+        }
+        finally
+        {
+            if (bystander is { HasExited: false })
+            {
+                bystander.Kill();
+            }
+
+            bystander?.Dispose();
+            controlRead?.Dispose();
+            controlWrite?.Dispose();
+            DisposeAll(owned);
+        }
+    }
+
+    /// <summary>The command gets exactly its three streams, through helper-local values the forwarder made differ from every engine value.</summary>
+    [Test]
+    public async Task TheChild_GetsExactlyItsThreeStreams_FromTheHandleParent()
+    {
+        using var native = new RecordingLaunchNative { AvoidEngineValues = true };
+        using var parent = new WindowsJobHandleParent(native);
+        var baseline = -1;
+        var sentinelReads = new List<SafeFileHandle>();
+        var sentinel = IntPtr.Zero;
+        native.Before = call =>
+        {
+            if (call == "Park#1")
+            {
+                baseline = HandleCount(native.Helpers[^1]);
+            }
+            else if (call == "CreateCommand#1")
+            {
+                // Inheritable in the helper but not in the list: the command must not get it.
+                AssertEx.True(WindowsJobNative.CreatePipe(out var sentinelRead, out var sentinelWrite, IntPtr.Zero, 0), "sentinel pipe");
+                sentinelReads.Add(sentinelRead);
+                AssertEx.True(WindowsJobNative.DuplicateHandle(WindowsJobNative.GetCurrentProcess(), sentinelWrite, AssertEx.NotNull(native.HelperArgument), out sentinel, 0, true, WindowsJobNative.DuplicateSameAccess),
+                    $"sentinel duplicate ({Marshal.GetLastPInvokeError()})");
+                sentinelWrite.Dispose();
+            }
+        };
+        var marker = "IN-" + Guid.NewGuid().ToString("N");
+        using var process = new WindowsJobLauncher(new WindowsJobApi(parent)).Start(StartInfo("cmd /d /v:on /c \"set /p L=&echo OUT:!L!&1>&2 echo ERR:!L!\""),
+            WindowsJobLimits.Map(2048, 64, null, Environment.ProcessorCount));
+        try
+        {
+            native.ReleaseReservations();
+            AssertEx.True(WindowsJobNative.DuplicateHandle(native.Helpers[^1], sentinel, IntPtr.Zero, IntPtr.Zero, 0, false, WindowsJobNative.DuplicateCloseSource), "sentinel close");
+
+            AssertEx.Equal(3, native.ParkedValues.Count);
+            AssertEx.Equal(string.Join(',', native.ParkedValues), string.Join(',', native.Listed.Single()), "the handle list and hStd* carry the three final parked values, in order");
+            for (var index = 0; index < 3; index++)
+            {
+                AssertEx.NotEqual(native.EngineEnds[index], native.ParkedValues[index], "a parked value equals its engine value, so the test cannot tell them apart");
+            }
+
+            AssertEx.False(WaitSignalled(native.Commands[0], TimeSpan.Zero), "the command must still be waiting on stdin");
+            AssertEx.Equal(0u, Available(((FileStream)process.StandardOutput).SafeFileHandle), "the command wrote before it was given input");
+            AssertEx.Equal(ErrorBrokenPipe, PeekError(sentinelReads.Single()), "the command inherited a helper handle outside its list");
+
+            await process.StandardInput.WriteAsync(System.Text.Encoding.ASCII.GetBytes(marker + "\r\n"));
+            await process.StandardInput.FlushAsync();
+            await process.StandardInput.DisposeAsync();
+            using var answer = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var stdout = new StreamReader(process.StandardOutput);
+            using var stderr = new StreamReader(process.StandardError);
+            var output = stdout.ReadToEndAsync(answer.Token);
+            var error = stderr.ReadToEndAsync(answer.Token);
+            await AssertEx.CompletesAsync(Task.WhenAll(output, error), TimeSpan.FromSeconds(30), "stdout/stderr did not answer");
+            await AssertEx.CompletesAsync(process.WaitForExitAsync(CancellationToken.None), TimeSpan.FromSeconds(30), "the command did not exit");
+
+            AssertEx.Equal("OUT:" + marker, (await output).TrimEnd('\r', '\n', ' '));
+            AssertEx.Equal("ERR:" + marker, (await error).TrimEnd('\r', '\n', ' '));
+            AssertEx.Equal(0, process.ExitCode);
+            AssertEx.Equal(baseline, HandleCount(native.Helpers[^1]), "the helper keeps a handle the launch put there");
+        }
+        finally
+        {
+            process.Terminate();
+            foreach (var sentinelRead in sentinelReads)
+            {
+                sentinelRead.Dispose();
+            }
+        }
+    }
+
+    [Test]
+    public async Task TheJobHierarchy_PutsTheHelperInTheParentJob_AndTheCommandInBoth()
+    {
+        using var native = new RecordingLaunchNative();
+        using var parent = new WindowsJobHandleParent(native);
+        using var process = new WindowsJobLauncher(new WindowsJobApi(parent)).Start(StartInfo("cmd /d /q /k"), WindowsJobLimits.Map(2048, 64, null, Environment.ProcessorCount));
+        try
+        {
+            var parentJob = AssertEx.NotNull(native.ParentJob);
+            AssertEx.True(InJob(native.Helpers[0], parentJob), "the helper is not in the parent job");
+            AssertEx.False(InJob(native.Helpers[0], process.Job), "the helper is in a command's job");
+            AssertEx.True(InJob(native.Commands[0], process.Job), "the command is not in its job");
+            AssertEx.True(InJob(native.Commands[0], parentJob), "the command is not under the parent job");
+            foreach (var handle in new[] { AssertEx.NotNull(native.HelperArgument), AssertEx.NotNull(native.ParentJobArgument) })
+            {
+                AssertEx.True(GetHandleInformation(handle, out var flags), $"GetHandleInformation failed ({Marshal.GetLastPInvokeError()})");
+                AssertEx.Equal(0u, flags & HandleFlagInherit, "a handle-parent handle is inheritable in the engine");
+            }
+        }
+        finally
+        {
+            process.Terminate();
+        }
+
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task KillingOneCommand_AndReplacingTheHelper_LeavesTheOtherUsable()
+    {
+        using var native = new RecordingLaunchNative();
+        using var parent = new WindowsJobHandleParent(native);
+        var launcher = new WindowsJobLauncher(new WindowsJobApi(parent));
+        var limits = WindowsJobLimits.Map(2048, 64, null, Environment.ProcessorCount);
+        using var killed = launcher.Start(StartInfo("cmd /d /q /k"), limits);
+        using var survivor = launcher.Start(StartInfo("cmd /d /v:on /c \"set /p L=&echo OUT:!L!&exit 5\""), limits);
+        try
+        {
+            killed.Terminate();
+            await AssertEx.CompletesAsync(killed.WaitForExitAsync(CancellationToken.None), Settle, "the killed command did not exit");
+            AssertEx.True(WindowsJobNative.TerminateProcess(native.Helpers[0], 1), "terminating the helper");
+            AssertEx.True(WaitSignalled(native.Helpers[0], Settle), "the helper did not exit");
+
+            await survivor.StandardInput.WriteAsync("x\r\n"u8.ToArray());
+            await survivor.StandardInput.DisposeAsync();
+            AssertEx.Equal("OUT:x", (await ReadLineAsync(survivor.StandardOutput)).Trim());
+            await AssertEx.CompletesAsync(survivor.WaitForExitAsync(CancellationToken.None), Settle, "the survivor did not exit");
+            AssertEx.Equal(5, survivor.ExitCode);
+
+            using var next = launcher.Start(StartInfo("cmd /d /c exit 0"), limits);
+            await AssertEx.CompletesAsync(next.WaitForExitAsync(CancellationToken.None), Settle, "the next launch did not run");
+            AssertEx.Equal(2, native.Helpers.Count, "a new helper replaces the dead one");
+            AssertEx.False(WaitSignalled(native.Helpers[1], TimeSpan.Zero), "the new helper is alive");
+        }
+        finally
+        {
+            killed.Terminate();
+            survivor.Terminate();
+        }
+    }
+
+    [Test]
+    public async Task ClosingTheParentJob_EndsTheHelperAndEveryCommand()
+    {
+        using var native = new RecordingLaunchNative();
+        var parent = new WindowsJobHandleParent(native);
+        var launcher = new WindowsJobLauncher(new WindowsJobApi(parent));
+        var limits = WindowsJobLimits.Map(2048, 64, null, Environment.ProcessorCount);
+        var first = launcher.Start(StartInfo("cmd /d /q /k"), limits);
+        var second = launcher.Start(StartInfo("cmd /d /q /k"), limits);
+        try
+        {
+            AssertEx.False(WaitSignalled(native.Commands[0], TimeSpan.Zero) || WaitSignalled(native.Commands[1], TimeSpan.Zero), "both commands are alive before the close");
+
+            // Only the parent job closes: both wrappers and their kill-on-close jobs stay open and unterminated.
+            parent.Dispose();
+            native.CloseParentJobCopy();
+
+            AssertEx.True(WaitSignalled(native.Helpers[0], TimeSpan.FromSeconds(10)), "the helper outlived the parent job");
+            AssertEx.True(WaitSignalled(native.Commands[0], TimeSpan.FromSeconds(10)), "the first command outlived the parent job");
+            AssertEx.True(WaitSignalled(native.Commands[1], TimeSpan.FromSeconds(10)), "the second command outlived the parent job");
+        }
+        finally
+        {
+            first.Dispose();
+            second.Dispose();
+        }
+
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task AHelperThatDiedBetweenLaunches_IsReplaced()
+    {
+        using var native = new RecordingLaunchNative();
+        using var parent = new WindowsJobHandleParent(native);
+        var launcher = new WindowsJobLauncher(new WindowsJobApi(parent));
+        var limits = WindowsJobLimits.Map(2048, 64, null, Environment.ProcessorCount);
+        using (var first = launcher.Start(StartInfo("cmd /d /c exit 0"), limits))
+        {
+            await AssertEx.CompletesAsync(first.WaitForExitAsync(CancellationToken.None), Settle, "the first command did not exit");
+        }
+
+        AssertEx.True(WindowsJobNative.TerminateProcess(native.Helpers[0], 1), "terminating the helper");
+        AssertEx.True(WaitSignalled(native.Helpers[0], Settle), "the helper did not exit");
+        using var second = launcher.Start(StartInfo("cmd /d /c exit 4"), limits);
+        await AssertEx.CompletesAsync(second.WaitForExitAsync(CancellationToken.None), Settle, "the second command did not exit");
+
+        AssertEx.Equal(4, second.ExitCode);
+        AssertEx.Equal(2, native.Helpers.Count);
+        AssertEx.Equal(1, native.ParentJobsCreated, "the replacement lives in the same parent job");
+    }
+
+    [Test]
+    public async Task AHelperThatDiesInsideTheLaunchWindow_RefusesTheLaunch_AndTheNextRuns()
+    {
+        using var native = new RecordingLaunchNative();
+        using var parent = new WindowsJobHandleParent(native);
+        native.Before = call =>
+        {
+            if (call == "Park#2")
+            {
+                AssertEx.True(WindowsJobNative.TerminateProcess(native.Helpers[0], 1), "terminating the helper");
+                AssertEx.True(WaitSignalled(native.Helpers[0], Settle), "the helper did not exit");
+            }
+        };
+        var launcher = new WindowsJobLauncher(new WindowsJobApi(parent));
+        var limits = WindowsJobLimits.Map(2048, 64, null, Environment.ProcessorCount);
+        var marker = Path.Combine(Path.GetTempPath(), "xe-helper-died-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var refused = AssertEx.Throws<InvalidOperationException>(() => launcher.Start(StartInfo($"cmd /d /c echo x>\"{marker}\""), limits));
+            AssertEx.Contains(refused.Message, "the handle parent");
+            AssertEx.False(File.Exists(marker), "the command ran although its helper died inside the launch");
+
+            using var next = launcher.Start(StartInfo("cmd /d /c exit 0"), limits);
+            await AssertEx.CompletesAsync(next.WaitForExitAsync(CancellationToken.None), Settle, "the next launch did not run");
+            AssertEx.Equal(2, native.Helpers.Count);
+        }
+        finally
+        {
+            File.Delete(marker);
+        }
+    }
+
+    /// <summary>A failure at each step of a launch leaves no process, and no launch proceeds while an ended process has not exited.</summary>
+    /// <remarks>
+    ///     Each case drives <c>WindowsJobApi.CreateSuspended</c> (or the handle parent) directly with a test-owned kill-on-close job and the
+    ///     parent job held open and unterminated until after the exit assertions, so only the launch's own kill can end a command.
+    /// </remarks>
+    [Test]
+    [Arguments("helper-verification")]
+    [Arguments("partial-park")]
+    [Arguments("missing-executable")]
+    [Arguments("post-create")]
+    [Arguments("unconfirmed-exit")]
+    [Arguments("child-construction")]
+    [Arguments("membership-kill")]
+    public async Task AFailureAtEachStep_LeavesNoProcess_AndNoNewLaunchBeforeExitIsConfirmed(string step)
+    {
+        using var native = new RecordingLaunchNative();
+        using var parent = new WindowsJobHandleParent(native);
+        var api = new WindowsJobApi(parent);
+        using var job = api.CreateJob();
+        api.SetExtendedLimits(job, WindowsJobLimits.Map(2048, 64, null, Environment.ProcessorCount));
+        var baseline = -1;
+        var marker = Path.Combine(Path.GetTempPath(), "xe-step-" + Guid.NewGuid().ToString("N"));
+        var command = StartInfo("cmd /d /q /k");
+        native.Before = call =>
+        {
+            if (call == "Park#1")
+            {
+                baseline = HandleCount(native.Helpers[^1]);
+            }
+
+            var fails = step switch
+            {
+                "helper-verification" => call == "IsProcessInJob#1",
+                "partial-park" => call == "Park#2",
+                "post-create" or "unconfirmed-exit" => call == "Unpark#1",
+                _ => false
+            };
+            if (fails)
+            {
+                throw new System.ComponentModel.Win32Exception(31, "injected by the test");
+            }
+        };
+        try
+        {
+            switch (step)
+            {
+                case "helper-verification":
+                    _ = AssertEx.Throws<InvalidOperationException>(() => api.CreateSuspended(job, command));
+                    AssertEx.True(WaitSignalled(native.Helpers[0], TimeSpan.FromSeconds(5)), "the unverified helper did not exit");
+                    api.CreateSuspended(job, command).Dispose();
+                    AssertEx.Equal(2, native.Helpers.Count);
+                    AssertEx.Equal(1, native.ParentJobsCreated, "the next helper lives in the same parent job");
+                    break;
+                case "partial-park":
+                case "missing-executable":
+                    var failing = step == "partial-park" ? command : StartInfo(@"C:\xe-definitely-missing\tool.exe");
+                    _ = AssertEx.Throws<InvalidOperationException>(() => api.CreateSuspended(job, failing));
+                    AssertEx.Empty(native.Commands, "a command was created");
+                    AssertEx.Equal(baseline, HandleCount(native.Helpers[0]), "a parked value stayed in the helper");
+                    AssertEx.False(WaitSignalled(native.Helpers[0], TimeSpan.Zero), "a live helper is kept after a plain failure");
+                    break;
+                case "post-create":
+                    _ = AssertEx.Throws<InvalidOperationException>(() => api.CreateSuspended(job, command));
+                    AssertEx.True(WaitSignalled(native.Commands[0], TimeSpan.FromSeconds(5)), "the created command was not ended by the launch");
+                    AssertEx.True(WaitSignalled(native.Helpers[0], TimeSpan.FromSeconds(5)), "the suspect helper was not retired");
+                    break;
+                case "unconfirmed-exit":
+                    native.HoldCommands = true;
+                    AssertEx.Contains(AssertEx.Throws<InvalidOperationException>(() => api.CreateSuspended(job, command)).Message, "exit not confirmed");
+                    native.Before = null;
+                    var refused = AssertEx.Throws<InvalidOperationException>(() => api.CreateSuspended(job, StartInfo($"cmd /d /c echo x>\"{marker}\"")));
+                    AssertEx.Contains(refused.Message, "has not exited");
+                    AssertEx.False(File.Exists(marker), "a launch ran beside an unconfirmed process");
+                    native.ReleaseHolds();
+                    native.HoldCommands = false;
+                    api.CreateSuspended(job, command).Dispose();
+                    AssertEx.True(WaitSignalled(native.Commands[0], TimeSpan.Zero), "the held command had not exited when it was released");
+                    break;
+                case "child-construction":
+                    WindowsJobCreatedProcess? adopted = null;
+                    using (var ends = new TestPipeEnds())
+                    {
+                        _ = AssertEx.Throws<IOException>(() => parent.CreateCommand(job, command, ends.Stdin, ends.Stdout, ends.Stderr, created =>
+                        {
+                            adopted = created;
+                            throw new IOException("injected by the test");
+                        }));
+                    }
+
+                    AssertEx.True(WaitSignalled(native.Commands[0], TimeSpan.FromSeconds(5)), "the command was not ended after its child failed to build");
+                    var handedOver = AssertEx.NotNull(adopted);
+                    AssertEx.True(handedOver.Thread.IsClosed, "the thread handle is closed");
+                    AssertEx.True(handedOver.Process.IsClosed, "the process handle is released after a confirmed exit");
+                    break;
+                default:
+                    native.HoldCommands = true;
+                    using (var outside = new OutsideTheJobApi(api))
+                    {
+                        var failure = AssertEx.Throws<InvalidOperationException>(() => new WindowsJobLauncher(outside).Start(command, WindowsJobLimits.Map(2048, 64, null, Environment.ProcessorCount)));
+                        AssertEx.Contains(failure.Message, "not a member");
+                        AssertEx.Contains(failure.Message, "exit not confirmed");
+                        AssertEx.Contains(AssertEx.Throws<InvalidOperationException>(() => api.CreateSuspended(job, command)).Message, "has not exited");
+                        native.ReleaseHolds();
+                        native.HoldCommands = false;
+                        api.CreateSuspended(job, command).Dispose();
+                        AssertEx.True(WaitSignalled(native.Commands[0], TimeSpan.Zero), "the outside command had not exited when it was released");
+                    }
+
+                    break;
+            }
+
+            api.Terminate(job);
+            await AssertEx.EventuallyAsync(() => ActiveMembers(job) == 0, Settle, "the test job still has members");
+            var liveHelpers = native.Helpers.Count(static helper => !WaitSignalled(helper, TimeSpan.Zero));
+            await AssertEx.EventuallyAsync(() => ActiveMembers(AssertEx.NotNull(native.ParentJob)) == liveHelpers, Settle, "the parent job holds a process besides its live helpers");
+        }
+        finally
+        {
+            native.ReleaseHolds();
+            File.Delete(marker);
+            try
+            {
+                api.Terminate(job);
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // Already terminated above; closing the kill-on-close job is the backstop.
+            }
+        }
+    }
+
+    [Test]
+    public async Task AHandleParentThatCannotBeVerified_WithdrawsTheCeilings_WithItsReason()
+    {
+        using var native = new RecordingLaunchNative
+        {
+            Before = static call =>
+            {
+                if (call == "IsProcessInJob#1")
+                {
+                    throw new System.ComponentModel.Win32Exception(31, "injected by the test");
+                }
+            }
+        };
+        using var parent = new WindowsJobHandleParent(native);
+
+        var result = WindowsJobCeilingsProbe.Measure(new WindowsJobLauncher(new WindowsJobApi(parent)));
+
+        AssertEx.False(result.Supported);
+        AssertEx.Contains(AssertEx.NotNull(result.Reason), "the handle parent");
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task ACommand_RunsWithTheEnginesUserSessionIntegrityAndAffinity()
+    {
+        using var native = new RecordingLaunchNative();
+        using var parent = new WindowsJobHandleParent(native);
+        using var process = new WindowsJobLauncher(new WindowsJobApi(parent)).Start(StartInfo("cmd /d /q /k"), WindowsJobLimits.Map(2048, 64, null, Environment.ProcessorCount));
+        try
+        {
+            using var engine = Process.GetCurrentProcess();
+            var command = native.Commands[0];
+
+            AssertEx.Equal(TokenSid(engine.SafeHandle, TokenUser), TokenSid(command, TokenUser), "the command runs as another user");
+            AssertEx.Equal(TokenSid(engine.SafeHandle, TokenIntegrityLevel), TokenSid(command, TokenIntegrityLevel), "the command runs at another integrity level");
+            AssertEx.True(ProcessIdToSessionId((uint)Environment.ProcessId, out var engineSession), "the engine's session id");
+            AssertEx.True(ProcessIdToSessionId((uint)process.Id, out var commandSession), "the command's session id");
+            AssertEx.Equal(engineSession, commandSession, "the command runs in another session");
+            AssertEx.True(GetProcessAffinityMask(engine.SafeHandle, out var engineAffinity, out _), "the engine's affinity");
+            AssertEx.True(GetProcessAffinityMask(command, out var commandAffinity, out _), "the command's affinity");
+            AssertEx.Equal(engineAffinity, commandAffinity, "the command runs under another affinity");
+        }
+        finally
+        {
+            process.Terminate();
+        }
+
+        await Task.CompletedTask;
+    }
+
+    // The negative control enters the launch window only through here, so it runs against another launcher by swapping this body.
+    private static WindowsJobProcess StartInsideTheHandleWindow(string commandLine, Action insideWindow, List<IDisposable> owned)
+    {
+        var native = new RecordingLaunchNative();
+        owned.Add(native);
+        var parent = new WindowsJobHandleParent(native);
+        owned.Add(parent);
+        native.Before = call =>
+        {
+            if (call == "CreateCommand#1")
+            {
+                insideWindow();
+            }
+        };
+        return new WindowsJobLauncher(new WindowsJobApi(parent)).Start(StartInfo(commandLine), WindowsJobLimits.Map(2048, 64, null, Environment.ProcessorCount));
+    }
+
+    private static void DisposeAll(List<IDisposable> owned)
+    {
+        for (var index = owned.Count - 1; index >= 0; index--)
+        {
+            owned[index].Dispose();
+        }
+    }
+
+    private static int PeekError(SafeHandle pipe) =>
+        PeekNamedPipe(pipe, IntPtr.Zero, 0, IntPtr.Zero, out _, IntPtr.Zero) ? 0 : Marshal.GetLastPInvokeError();
+
+    private static uint Available(SafeHandle pipe)
+    {
+        AssertEx.True(PeekNamedPipe(pipe, IntPtr.Zero, 0, IntPtr.Zero, out var available, IntPtr.Zero), $"PeekNamedPipe failed ({Marshal.GetLastPInvokeError()})");
+        return available;
+    }
+
+    private static bool WaitSignalled(SafeHandle process, TimeSpan timeout) =>
+        WindowsJobNative.WaitForSingleObject(process, (uint)timeout.TotalMilliseconds) == 0;
+
+    private static bool InJob(SafeHandle process, SafeHandle job)
+    {
+        if (!WindowsJobNative.IsProcessInJob(process, job, out var member))
+        {
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError());
+        }
+
+        return member;
+    }
+
+    private static int HandleCount(SafeHandle process)
+    {
+        AssertEx.True(GetProcessHandleCount(process, out var count), $"GetProcessHandleCount failed ({Marshal.GetLastPInvokeError()})");
+        return checked((int)count);
+    }
+
+    private static uint ActiveMembers(SafeHandle job) =>
+        WindowsJobNative.QueryInformation<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>(job, JobObjectBasicAccountingInformation).ActiveProcesses;
+
+    // TOKEN_USER and TOKEN_MANDATORY_LABEL both start with the SID pointer of a SID_AND_ATTRIBUTES.
+    private static string TokenSid(SafeHandle process, int informationClass)
+    {
+        AssertEx.True(OpenProcessToken(process, TokenQuery, out var token), $"OpenProcessToken failed ({Marshal.GetLastPInvokeError()})");
+        using (token)
+        {
+            _ = GetTokenInformation(token, informationClass, IntPtr.Zero, 0, out var length);
+            var buffer = Marshal.AllocHGlobal(length);
+            try
+            {
+                AssertEx.True(GetTokenInformation(token, informationClass, buffer, length, out _), $"GetTokenInformation failed ({Marshal.GetLastPInvokeError()})");
+                return new System.Security.Principal.SecurityIdentifier(Marshal.ReadIntPtr(buffer)).Value;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+    }
+
+    private const int ErrorBrokenPipe = 109;
+    private const int ErrorNoData = 232;
+    private const uint TokenQuery = 0x0008;
+    private const int TokenUser = 1;
+    private const int TokenIntegrityLevel = 25;
+
+    /// <summary>Three engine-owned child ends, as <c>WindowsJobApi.CreateSuspended</c> would hand them over.</summary>
+    private sealed class TestPipeEnds : IDisposable
+    {
+        private readonly List<SafeFileHandle> _handles = [];
+
+        public TestPipeEnds()
+        {
+            Stdin = Pipe(readEnd: true);
+            Stdout = Pipe(readEnd: false);
+            Stderr = Pipe(readEnd: false);
+        }
+
+        public SafeFileHandle Stdin { get; }
+
+        public SafeFileHandle Stdout { get; }
+
+        public SafeFileHandle Stderr { get; }
+
+        public void Dispose()
+        {
+            foreach (var handle in _handles)
+            {
+                handle.Dispose();
+            }
+        }
+
+        private SafeFileHandle Pipe(bool readEnd)
+        {
+            AssertEx.True(WindowsJobNative.CreatePipe(out var read, out var write, IntPtr.Zero, 0), $"CreatePipe failed ({Marshal.GetLastPInvokeError()})");
+            _handles.Add(read);
+            _handles.Add(write);
+            return readEnd ? read : write;
+        }
+    }
+
     private const uint HandleFlagInherit = 0x1;
 
     private static ProcessSandboxRuntimeProvider Provider() =>
@@ -519,11 +1089,17 @@ public sealed class WindowsJobSandboxWindowsTests
     /// <summary>The real native calls, except that the child is created inside a decoy job instead of the command's.</summary>
     private sealed class OutsideTheJobApi : IWindowsJobApi, IDisposable
     {
-        private readonly WindowsJobApi _real = new();
+        private readonly WindowsJobApi _real;
         private readonly SafeHandle _decoy;
 
         public OutsideTheJobApi()
+            : this(new WindowsJobApi())
         {
+        }
+
+        public OutsideTheJobApi(WindowsJobApi real)
+        {
+            _real = real;
             _decoy = _real.CreateJob();
         }
 
@@ -552,7 +1128,7 @@ public sealed class WindowsJobSandboxWindowsTests
 
         public void Terminate(SafeHandle job) => _real.Terminate(job);
 
-        public void TerminateProcess(SafeHandle process) => _real.TerminateProcess(process);
+        public string? TerminateAndConfirm(SafeHandle process, int processId) => _real.TerminateAndConfirm(process, processId);
 
         public Task WaitForExitAsync(SafeHandle process) => _real.WaitForExitAsync(process);
 
@@ -567,4 +1143,44 @@ public sealed class WindowsJobSandboxWindowsTests
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetHandleInformation(SafeHandle hObject, uint dwMask, uint dwFlags);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PeekNamedPipe(SafeHandle hNamedPipe, IntPtr lpBuffer, uint nBufferSize, IntPtr lpBytesRead, out uint lpTotalBytesAvail, IntPtr lpBytesLeftThisMessage);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool WriteFile(SafeHandle hFile, byte[] lpBuffer, uint nNumberOfBytesToWrite, out uint lpNumberOfBytesWritten, IntPtr lpOverlapped);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetProcessHandleCount(SafeHandle hProcess, out uint pdwHandleCount);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ProcessIdToSessionId(uint dwProcessId, out uint pSessionId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetProcessAffinityMask(SafeHandle hProcess, out nuint lpProcessAffinityMask, out nuint lpSystemAffinityMask);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool OpenProcessToken(SafeHandle processHandle, uint desiredAccess, out SafeAccessTokenHandle tokenHandle);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetTokenInformation(SafeAccessTokenHandle tokenHandle, int tokenInformationClass, IntPtr tokenInformation, int tokenInformationLength, out int returnLength);
 }

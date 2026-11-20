@@ -59,6 +59,12 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
     /// <summary>Reading an exited process's exit code throws a <see cref="Win32Exception" />.</summary>
     public bool ExitCodeFails { get; set; }
 
+    /// <summary>When set, a direct terminate never confirms the exit: the process handle is held and this reason returned.</summary>
+    public string? UnconfirmedExit { get; set; }
+
+    /// <summary>The process handles a direct terminate took over without a confirmed exit.</summary>
+    public List<SafeHandle> HeldProcesses { get; } = [];
+
     /// <summary>The processes terminated directly, not through their job.</summary>
     public int ProcessTerminations { get; private set; }
 
@@ -187,12 +193,20 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
     public int GetExitCode(SafeHandle process) =>
         ExitCodeFails ? throw new Win32Exception(6, "injected: the exit code could not be read") : _exitCodes[process];
 
-    public void TerminateProcess(SafeHandle process)
+    public string? TerminateAndConfirm(SafeHandle process, int processId)
     {
-        Calls.Add(nameof(TerminateProcess));
+        Calls.Add(nameof(TerminateAndConfirm));
         ProcessTerminations++;
         _exitCodes.TryAdd(process, 1);
         _exits[process].TrySetResult();
+        if (UnconfirmedExit is { } reason)
+        {
+            HeldProcesses.Add(process);
+            return reason;
+        }
+
+        process.Dispose();
+        return null;
     }
 
     public bool TryCommit(SafeHandle process, ulong bytes, out int error)

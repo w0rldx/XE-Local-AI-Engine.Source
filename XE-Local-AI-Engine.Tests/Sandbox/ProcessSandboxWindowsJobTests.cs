@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
@@ -102,6 +103,62 @@ public sealed class ProcessSandboxWindowsJobTests
         AssertRefused(result, api, markers);
         AssertEx.Equal(string.Equals(step, "Resume", StringComparison.Ordinal), api.Calls.Contains("Resume"));
         await provider.KillAsync(handle);
+    }
+
+    /// <summary>A launch failure after a passed probe refuses the command: one job launch, no plain fallback, nothing run.</summary>
+    [Test]
+    public async Task APostProbeLaunchFailure_IsARefusal_WithNoSecondLaunch()
+    {
+        var api = new FakeWindowsJobApi { FailAt = "CreateSuspended" };
+        using var provider = Provider(api);
+        var handle = await provider.CreateOrAttachAsync(Request());
+        var marker = Path.Combine(Path.GetTempPath(), "xe-job-refusal-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var result = await provider.ExecuteAsync(handle, WritesMarker("post-probe", marker));
+
+            AssertEx.True(result.LaunchFailed, "a failed job launch refuses the command");
+            AssertEx.Contains(result.StandardError, "inside its Windows job");
+            AssertEx.Equal(1, api.Calls.Count(static call => call == "CreateSuspended"), "the command is launched once, never retried");
+            AssertEx.False(File.Exists(marker), "the command ran outside its job");
+        }
+        finally
+        {
+            File.Delete(marker);
+            await provider.KillAsync(handle);
+        }
+    }
+
+    /// <summary>A host whose probe failed advertises no ceilings: under <c>low</c> a plain command runs on the plain path, never the job launcher.</summary>
+    [Test]
+    public async Task AFailedProbe_UnderLow_RunsThePlainProcessPath()
+    {
+        var api = new FakeWindowsJobApi();
+        using var provider = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()),
+            TimeProvider.System,
+            logger: null,
+            new SandboxLauncher(new FixedProbe(SandboxContainment.None)),
+            new CountingMarkerStore(),
+            windowsJobLauncher: new WindowsJobLauncher(api));
+        var ceilings = SandboxResourceCeilings.Resolve(SandboxWorkloads.AgentHome, provider.Capabilities, new ComputeOptions(), new LocalContainerOptions());
+        AssertEx.Null(ceilings, "without the probe's flag no ceiling is asked for");
+        AssertEx.False(SandboxSecurityProfilePolicy.Refuses(SandboxWorkloads.AgentHome, provider.Capabilities, SandboxSecurityProfile.Low, configRequiresEgressDenial: false));
+        var handle = await provider.CreateOrAttachAsync(Request() with { ResourceLimits = ceilings });
+        var marker = Path.Combine(Path.GetTempPath(), "xe-job-plain-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var result = await provider.ExecuteAsync(handle, WritesMarker("plain", marker));
+
+            AssertEx.True(result.Completed, result.StandardError);
+            AssertEx.Equal(0, result.ExitCode, result.StandardError);
+            AssertEx.True(File.Exists(marker), "the plain command ran");
+            AssertEx.Empty(api.Calls);
+        }
+        finally
+        {
+            File.Delete(marker);
+            await provider.KillAsync(handle);
+        }
     }
 
     [Test]
@@ -232,6 +289,11 @@ public sealed class ProcessSandboxWindowsJobTests
             Arguments = arguments,
             Timeout = TimeSpan.FromSeconds(30)
         };
+
+    private static SandboxCommandRequest WritesMarker(string id, string marker) =>
+        OperatingSystem.IsWindows()
+            ? Command(id, "cmd.exe", "/d", "/c", $"echo x>{marker}")
+            : Command(id, "sh", "-c", $"echo x > '{marker}'");
 
     private sealed class FixedProbe : ISandboxContainmentProbe
     {

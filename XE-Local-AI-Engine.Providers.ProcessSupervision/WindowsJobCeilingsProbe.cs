@@ -7,8 +7,8 @@ using System.Globalization;
 /// <remarks>
 ///     A commit under the job limit succeeds and one past it fails with the commitment-limit error while the same commit under a wider
 ///     limit succeeds; a chain inside the cap runs, and one past it cannot start its last member while the same chain under a wider cap can. Every launch reads every limit back, so a refused
-///     CPU rate or a launcher-breaking ancestor job fails a control. Only the system <c>cmd.exe</c> runs, and any failure is an unsupported
-///     result with its reason. The result is cached for the process (ADR 0025).
+///     CPU rate or a launcher-breaking ancestor job fails a control. Only the system <c>cmd.exe</c> runs; the first launch also creates the
+///     handle parent, and any failure, its own included, is an unsupported result with its reason. The result is cached for the process (ADR 0025).
 /// </remarks>
 public static class WindowsJobCeilingsProbe
 {

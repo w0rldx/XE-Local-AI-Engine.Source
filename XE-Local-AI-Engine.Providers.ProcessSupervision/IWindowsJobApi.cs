@@ -30,8 +30,11 @@ internal interface IWindowsJobApi
 
     void Terminate(SafeHandle job);
 
-    /// <summary>Terminates one process directly: the only kill that reaches a child its job does not hold.</summary>
-    void TerminateProcess(SafeHandle process);
+    /// <summary>
+    ///     Terminates one process directly, the only kill that reaches a child its job does not hold, and takes ownership of its handle:
+    ///     null once its exit is confirmed, else why it is held, and until it exits no new job launch proceeds.
+    /// </summary>
+    string? TerminateAndConfirm(SafeHandle process, int processId);
 
     /// <summary>Completes when the process has exited; owns whatever it waits on, so the caller may close its handles at any time.</summary>
     Task WaitForExitAsync(SafeHandle process);

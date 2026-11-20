@@ -5,23 +5,32 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using System.Text;
 using Microsoft.Win32.SafeHandles;
 
 /// <summary>The real <see cref="IWindowsJobApi" />: kernel32, nothing else.</summary>
 /// <remarks>
-///     Handle rules (ADR 0025): every pipe is created non-inheritable. The three child ends become inheritable only inside
-///     <see cref="LaunchLock" />, around the one <c>CreateProcessW</c> whose <c>PROC_THREAD_ATTRIBUTE_HANDLE_LIST</c> names exactly them, and
-///     the engine's copies are closed right after. The parent ends are never inheritable; stdout and stderr are read overlapped. .NET's
-///     own <c>Process.Start</c> inherits every inheritable handle under a lock no other code can take, so a concurrent start inside that
-///     window can still inherit a child end; the cost is a delayed end of output, which the reader's cancellable drain budget bounds.
+///     Handle rules (ADR 0025): every pipe end is created non-inheritable and stays so in the engine for its whole life. The three child
+///     ends reach the command only as inheritable duplicates parked in <see cref="WindowsJobHandleParent" />'s helper, so a concurrent
+///     <c>Process.Start</c> inherits none of them. The engine's copies are closed right after the create; stdout and stderr are read
+///     overlapped.
 /// </remarks>
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsJobApi : IWindowsJobApi
 {
     private const uint PipeBufferBytes = 65_536;
 
-    private static readonly Lock LaunchLock = new();
+    private readonly WindowsJobHandleParent _handleParent;
+
+    public WindowsJobApi()
+        : this(WindowsJobHandleParent.Shared)
+    {
+    }
+
+    internal WindowsJobApi(WindowsJobHandleParent handleParent)
+    {
+        ArgumentNullException.ThrowIfNull(handleParent);
+        _handleParent = handleParent;
+    }
 
     public int GetSystemProcessorCount() =>
         (int)WindowsJobNative.GetActiveProcessorCount(WindowsJobNative.AllProcessorGroups);
@@ -89,56 +98,30 @@ internal sealed class WindowsJobApi : IWindowsJobApi
 
     [SuppressMessage("Reliability",
         "CA2000:Dispose objects before losing scope",
-        Justification = "The parent ends and the process and thread handles are owned by the returned child; every failure path disposes all of them.")]
+        Justification = "The parent ends are owned by the returned child; every failure path disposes all of them, and the handle parent owns the process until the child exists.")]
     public WindowsJobChild CreateSuspended(SafeHandle job, WindowsJobStartInfo startInfo)
     {
         ArgumentNullException.ThrowIfNull(startInfo);
         SafeFileHandle? stdinRead = null, stdinWrite = null, stdoutRead = null, stdoutWrite = null, stderrRead = null, stderrWrite = null;
-        SafeProcessHandle? process = null;
-        SafeWaitHandle? thread = null;
         try
         {
             CreatePipe(out stdinRead, out stdinWrite);
             CreateOverlappedReadPipe(out stdoutRead, out stdoutWrite);
             CreateOverlappedReadPipe(out stderrRead, out stderrWrite);
-
-            uint processId;
-            lock (LaunchLock)
+            try
             {
-                try
-                {
-                    MakeInheritable(stdinRead);
-                    MakeInheritable(stdoutWrite);
-                    MakeInheritable(stderrWrite);
-                    var created = CreateProcess(job, startInfo, stdinRead, stdoutWrite, stderrWrite);
-                    // Owned at once, before anything else here can throw.
-                    process = new SafeProcessHandle(created.hProcess, ownsHandle: true);
-                    thread = new SafeWaitHandle(created.hThread, ownsHandle: true);
-                    processId = created.dwProcessId;
-                }
-                finally
-                {
-                    // The child holds its own copies now; the engine's must not outlive this window.
-                    stdinRead.Dispose();
-                    stdoutWrite.Dispose();
-                    stderrWrite.Dispose();
-                }
+                return _handleParent.CreateCommand(job, startInfo, stdinRead, stdoutWrite, stderrWrite, created => Adopt(created, stdinWrite, stdoutRead, stderrRead));
             }
-
-            return new WindowsJobChild
+            finally
             {
-                Process = process,
-                Thread = thread,
-                ProcessId = checked((int)processId),
-                StandardInput = new FileStream(stdinWrite, FileAccess.Write, bufferSize: 4096, isAsync: false),
-                StandardOutput = new FileStream(stdoutRead, FileAccess.Read, bufferSize: 4096, isAsync: true),
-                StandardError = new FileStream(stderrRead, FileAccess.Read, bufferSize: 4096, isAsync: true)
-            };
+                // The command holds its own copies now; the engine's must not outlive the launch.
+                stdinRead.Dispose();
+                stdoutWrite.Dispose();
+                stderrWrite.Dispose();
+            }
         }
         catch
         {
-            thread?.Dispose();
-            process?.Dispose();
             stdinRead?.Dispose();
             stdinWrite?.Dispose();
             stdoutRead?.Dispose();
@@ -221,13 +204,8 @@ internal sealed class WindowsJobApi : IWindowsJobApi
         return unchecked((int)exitCode);
     }
 
-    public void TerminateProcess(SafeHandle process)
-    {
-        if (!WindowsJobNative.TerminateProcess(process, uExitCode: 1))
-        {
-            throw new Win32Exception(Marshal.GetLastPInvokeError());
-        }
-    }
+    public string? TerminateAndConfirm(SafeHandle process, int processId) =>
+        _handleParent.TerminateAndConfirm(process, processId);
 
     public bool TryCommit(SafeHandle process, ulong bytes, out int error)
     {
@@ -292,139 +270,35 @@ internal sealed class WindowsJobApi : IWindowsJobApi
         }
     }
 
-    private static void MakeInheritable(SafeHandle handle)
+    // Every partial stream is disposed on a failure here; the handle parent then ends the command it still owns.
+    private static WindowsJobChild Adopt(WindowsJobCreatedProcess created, SafeFileHandle stdinWrite, SafeFileHandle stdoutRead, SafeFileHandle stderrRead)
     {
-        if (!WindowsJobNative.SetHandleInformation(handle, WindowsJobNative.HandleFlagInherit, WindowsJobNative.HandleFlagInherit))
-        {
-            throw new Win32Exception(Marshal.GetLastPInvokeError());
-        }
-    }
-
-    [SuppressMessage("Sonar Code Smell",
-        "S3869:SafeHandle instances should not use DangerousGetHandle",
-        Justification = "PROC_THREAD_ATTRIBUTE_JOB_LIST, PROC_THREAD_ATTRIBUTE_HANDLE_LIST and STARTUPINFO take raw handle values; each SafeHandle is AddRef'd for the whole call and released only after the attribute list is deleted.")]
-    private static WindowsJobNative.PROCESS_INFORMATION CreateProcess(SafeHandle job,
-        WindowsJobStartInfo startInfo,
-        SafeHandle stdin,
-        SafeHandle stdout,
-        SafeHandle stderr)
-    {
-        var commandLine = (startInfo.CommandLine + '\0').ToCharArray();
-        var environment = BuildEnvironmentBlock(startInfo.Environment);
-        var workingDirectory = string.IsNullOrEmpty(startInfo.WorkingDirectory) ? null : startInfo.WorkingDirectory;
-
-        nint size = 0;
-        _ = WindowsJobNative.InitializeProcThreadAttributeList(IntPtr.Zero, dwAttributeCount: 2, dwFlags: 0, ref size);
-        // Allocated inside the try, so a failed allocation frees the earlier ones; FreeHGlobal of IntPtr.Zero does nothing.
-        IntPtr attributes = IntPtr.Zero, jobs = IntPtr.Zero, inherited = IntPtr.Zero;
-        var initialized = false;
-        bool jobRef = false, stdinRef = false, stdoutRef = false, stderrRef = false;
+        FileStream? input = null, output = null, error = null;
         try
         {
-            attributes = Marshal.AllocHGlobal(size);
-            // Both arrays must outlive the attribute list, which stores their addresses.
-            jobs = Marshal.AllocHGlobal(IntPtr.Size);
-            inherited = Marshal.AllocHGlobal(3 * IntPtr.Size);
-            job.DangerousAddRef(ref jobRef);
-            stdin.DangerousAddRef(ref stdinRef);
-            stdout.DangerousAddRef(ref stdoutRef);
-            stderr.DangerousAddRef(ref stderrRef);
-            if (!WindowsJobNative.InitializeProcThreadAttributeList(attributes, dwAttributeCount: 2, dwFlags: 0, ref size))
+            input = new FileStream(stdinWrite, FileAccess.Write, bufferSize: 4096, isAsync: false);
+            output = new FileStream(stdoutRead, FileAccess.Read, bufferSize: 4096, isAsync: true);
+            error = new FileStream(stderrRead, FileAccess.Read, bufferSize: 4096, isAsync: true);
+            return new WindowsJobChild
             {
-                throw new Win32Exception(Marshal.GetLastPInvokeError());
-            }
-
-            initialized = true;
-            Marshal.WriteIntPtr(jobs, job.DangerousGetHandle());
-            Marshal.WriteIntPtr(inherited, 0, stdin.DangerousGetHandle());
-            Marshal.WriteIntPtr(inherited, IntPtr.Size, stdout.DangerousGetHandle());
-            Marshal.WriteIntPtr(inherited, 2 * IntPtr.Size, stderr.DangerousGetHandle());
-            if (!WindowsJobNative.UpdateProcThreadAttribute(attributes, 0, WindowsJobNative.ProcThreadAttributeJobList, jobs, IntPtr.Size, IntPtr.Zero, IntPtr.Zero)
-                || !WindowsJobNative.UpdateProcThreadAttribute(attributes,
-                    0,
-                    WindowsJobNative.ProcThreadAttributeHandleList,
-                    inherited,
-                    3 * IntPtr.Size,
-                    IntPtr.Zero,
-                    IntPtr.Zero))
-            {
-                throw new Win32Exception(Marshal.GetLastPInvokeError());
-            }
-
-            var startup = new WindowsJobNative.STARTUPINFOEXW
-            {
-                StartupInfo = new WindowsJobNative.STARTUPINFOW
-                {
-                    cb = (uint)Marshal.SizeOf<WindowsJobNative.STARTUPINFOEXW>(),
-                    dwFlags = WindowsJobNative.StartfUseStdHandles,
-                    hStdInput = stdin.DangerousGetHandle(),
-                    hStdOutput = stdout.DangerousGetHandle(),
-                    hStdError = stderr.DangerousGetHandle()
-                },
-                lpAttributeList = attributes
+                Process = created.Process,
+                Thread = created.Thread,
+                ProcessId = created.ProcessId,
+                StandardInput = input,
+                StandardOutput = output,
+                StandardError = error
             };
-
-            // Never a UI-limited job and never a breakaway flag: the job's own flags are the whole story.
-            const uint flags = WindowsJobNative.CreateSuspended
-                               | WindowsJobNative.CreateUnicodeEnvironment
-                               | WindowsJobNative.ExtendedStartupInfoPresent
-                               | WindowsJobNative.CreateNoWindow;
-            if (!WindowsJobNative.CreateProcessW(lpApplicationName: null,
-                    commandLine,
-                    IntPtr.Zero,
-                    IntPtr.Zero,
-                    bInheritHandles: true,
-                    flags,
-                    environment,
-                    workingDirectory,
-                    ref startup,
-                    out var created))
-            {
-                throw new Win32Exception(Marshal.GetLastPInvokeError());
-            }
-
-            return created;
         }
-        finally
+        catch
         {
-            if (initialized)
-            {
-                WindowsJobNative.DeleteProcThreadAttributeList(attributes);
-            }
-
-            Marshal.FreeHGlobal(inherited);
-            Marshal.FreeHGlobal(jobs);
-            Marshal.FreeHGlobal(attributes);
-            ReleaseIf(stderr, stderrRef);
-            ReleaseIf(stdout, stdoutRef);
-            ReleaseIf(stdin, stdinRef);
-            ReleaseIf(job, jobRef);
+            // Nothing was written through these streams, so a synchronous dispose only closes their handles.
+#pragma warning disable MA0045
+            input?.Dispose();
+            output?.Dispose();
+            error?.Dispose();
+#pragma warning restore MA0045
+            throw;
         }
-    }
-
-    private static void ReleaseIf(SafeHandle handle, bool added)
-    {
-        if (added)
-        {
-            handle.DangerousRelease();
-        }
-    }
-
-    // NAME=value\0 ... \0, sorted case-insensitively as Windows and .NET's Process sort the block.
-    private static char[] BuildEnvironmentBlock(IReadOnlyDictionary<string, string> environment)
-    {
-        var builder = new StringBuilder();
-        foreach (var name in environment.Keys.Order(StringComparer.OrdinalIgnoreCase))
-        {
-            builder.Append(name).Append('=').Append(environment[name]).Append('\0');
-        }
-
-        if (builder.Length == 0)
-        {
-            builder.Append('\0');
-        }
-
-        return builder.Append('\0').ToString().ToCharArray();
     }
 
     private sealed class ProcessExitWaitHandle : WaitHandle

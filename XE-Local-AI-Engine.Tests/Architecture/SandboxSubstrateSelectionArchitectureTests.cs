@@ -391,6 +391,78 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
         AssertEx.Equal(SandboxToolchainLimits.DefaultPidsLimit, derived.PidsLimit);
     }
 
+    /// <summary>No job-launched command's pipe end is ever inheritable in the engine (ADR 0025): the job launcher's interop never asks for one.</summary>
+    /// <remarks>
+    ///     Over the comment- and literal-stripped <c>WindowsJob*.cs</c> files, on <c>WindowsJobNative.</c> call sites: no handle-flag or
+    ///     inheritable-share name, null security attributes on every pipe and file create, and a literal <c>false</c> inherit argument on
+    ///     every <c>DuplicateHandle</c> except the one in <c>WindowsJobLaunchNative.Park</c>, which duplicates into the helper.
+    /// </remarks>
+    [Test]
+    public void TheJobLauncher_NeverMakesASandboxPipeEndInheritableInTheEngine()
+    {
+        string[] banned = ["SetHandleInformation", "HandleFlagInherit", "HANDLE_FLAG_INHERIT", "SECURITY_ATTRIBUTES", "HandleInheritability.Inheritable", "FileShare.Inheritable"];
+        var files = Directory.GetFiles(Path.Combine(RepositoryPaths.Root, "XE-Local-AI-Engine.Providers.ProcessSupervision"), "WindowsJob*.cs", SearchOption.TopDirectoryOnly);
+        var violations = new List<string>();
+        var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+        var inheritable = new List<string>();
+        foreach (var path in files)
+        {
+            var name = Path.GetFileName(path);
+            var code = SourceCommentStripper.StripCommentsAndLiterals(File.ReadAllText(path));
+            violations.AddRange(banned.Where(token => code.Contains(token, StringComparison.Ordinal)).Select(token => $"{name} names {token}"));
+            foreach (var call in NativeCalls(code))
+            {
+                var callee = call.Callee;
+                var offset = call.Offset;
+                seen[callee] = seen.GetValueOrDefault(callee) + 1;
+                var index = callee switch
+                {
+                    "CreatePipe" => 2,
+                    "CreateNamedPipeW" => 7,
+                    "CreateFileW" => 3,
+                    "DuplicateHandle" => 5,
+                    _ => -1
+                };
+                if (index < 0)
+                {
+                    continue;
+                }
+
+                var parameter = callee switch
+                {
+                    "CreatePipe" => "lpPipeAttributes",
+                    "DuplicateHandle" => "bInheritHandle",
+                    _ => "lpSecurityAttributes"
+                };
+                var value = Argument(call.Arguments, index, parameter);
+                if (callee != "DuplicateHandle")
+                {
+                    if (value != "IntPtr.Zero")
+                    {
+                        violations.Add($"{name}: {callee} passes '{value}' security attributes, not IntPtr.Zero");
+                    }
+                }
+                else if (value == "true")
+                {
+                    inheritable.Add(InsideMethod(code, "IntPtr Park(", offset) && name == "WindowsJobLaunchNative.cs" ? "Park" : $"{name} at offset {offset}");
+                }
+                else if (value != "false")
+                {
+                    violations.Add($"{name}: a DuplicateHandle inherit argument is '{value}', not a literal false");
+                }
+            }
+        }
+
+        AssertEx.Empty(violations, string.Join(Environment.NewLine, violations));
+        AssertEx.Equal("Park", string.Join(',', inheritable), "exactly one inheritable duplicate, the one into the helper in WindowsJobLaunchNative.Park");
+        foreach (var callee in new[] { "CreatePipe", "CreateNamedPipeW", "CreateFileW" })
+        {
+            AssertEx.True(seen.GetValueOrDefault(callee) >= 1, $"the scan saw no {callee} call, so it checked nothing");
+        }
+
+        AssertEx.True(seen.GetValueOrDefault("DuplicateHandle") >= 3, "the scan must see the exit wait's, the park's and the unpark's DuplicateHandle");
+    }
+
     /// <summary>
     ///     The effective toolchain ceilings on THIS host: unset configuration derives from the machine, and whatever it
     ///     derives must itself clear the floors the operator-facing validator enforces. A host whose derived default
@@ -522,6 +594,15 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
         public SandboxContainment Containment { get; }
     }
 
+    private sealed class NativeCallSite
+    {
+        public required string Callee { get; init; }
+
+        public required List<string> Arguments { get; init; }
+
+        public required int Offset { get; init; }
+    }
+
     private sealed class FixedPreviewPolicy : IExecutionPreviewPolicy
     {
         public FixedPreviewPolicy(bool enabled)
@@ -530,6 +611,107 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
         }
 
         public bool PreviewMechanismsEnabled { get; }
+    }
+
+    // Every WindowsJobNative.Name( call site: its name, its top-level arguments and the offset of its name.
+    private static IEnumerable<NativeCallSite> NativeCalls(string code)
+    {
+        const string qualifier = "WindowsJobNative.";
+        for (var at = code.IndexOf(qualifier, StringComparison.Ordinal); at >= 0; at = code.IndexOf(qualifier, at + 1, StringComparison.Ordinal))
+        {
+            var start = at + qualifier.Length;
+            var end = start;
+            while (end < code.Length && (char.IsLetterOrDigit(code[end]) || code[end] == '_'))
+            {
+                end++;
+            }
+
+            var open = end;
+            while (open < code.Length && char.IsWhiteSpace(code[open]))
+            {
+                open++;
+            }
+
+            if (open < code.Length && code[open] == '(')
+            {
+                yield return new NativeCallSite
+                {
+                    Callee = code[start..end],
+                    Arguments = SplitArguments(code, open),
+                    Offset = start
+                };
+            }
+        }
+    }
+
+    private static List<string> SplitArguments(string code, int open)
+    {
+        var arguments = new List<string>();
+        var depth = 0;
+        var from = open + 1;
+        for (var index = open; index < code.Length; index++)
+        {
+            switch (code[index])
+            {
+                case '(' or '[' or '{':
+                    depth++;
+                    break;
+                case ')' or ']' or '}':
+                    depth--;
+                    if (depth == 0)
+                    {
+                        arguments.Add(code[from..index].Trim());
+                        return arguments;
+                    }
+
+                    break;
+                case ',' when depth == 1:
+                    arguments.Add(code[from..index].Trim());
+                    from = index + 1;
+                    break;
+            }
+        }
+
+        return arguments;
+    }
+
+    // The named argument if the call names it, else the positional one.
+    private static string Argument(List<string> arguments, int index, string parameter)
+    {
+        var named = arguments.Find(argument => argument.StartsWith(parameter + ":", StringComparison.Ordinal));
+        if (named is not null)
+        {
+            return named[(parameter.Length + 1)..].Trim();
+        }
+
+        return index < arguments.Count ? arguments[index] : string.Empty;
+    }
+
+    private static bool InsideMethod(string code, string signature, int offset)
+    {
+        var declaration = code.IndexOf(signature, StringComparison.Ordinal);
+        if (declaration < 0)
+        {
+            return false;
+        }
+
+        var open = code.IndexOf('{', declaration);
+        var depth = 0;
+        for (var index = open; index < code.Length; index++)
+        {
+            depth += code[index] switch
+            {
+                '{' => 1,
+                '}' => -1,
+                _ => 0
+            };
+            if (depth == 0)
+            {
+                return offset > open && offset < index;
+            }
+        }
+
+        return false;
     }
 
     private static IEnumerable<(string Name, SandboxRequirements Requirements)> EnumerateDeclarations()

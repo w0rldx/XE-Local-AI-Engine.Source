@@ -34,8 +34,8 @@ internal static partial class WindowsJobNative
     public const uint GenericWrite = 0x4000_0000;
     public const uint OpenExisting = 3;
     public const int ErrorPipeConnected = 535;
-    public const uint HandleFlagInherit = 0x1;
     public const uint Synchronize = 0x0010_0000;
+    public const uint DuplicateCloseSource = 0x1;
     public const uint DuplicateSameAccess = 0x2;
 
     public const uint MemCommit = 0x1000;
@@ -45,7 +45,8 @@ internal static partial class WindowsJobNative
 
     public const ushort AllProcessorGroups = 0xFFFF;
 
-    // PROC_THREAD_ATTRIBUTE_HANDLE_LIST and PROC_THREAD_ATTRIBUTE_JOB_LIST (ProcThreadAttributeJobList = 13 | PROC_THREAD_ATTRIBUTE_INPUT).
+    // PROC_THREAD_ATTRIBUTE_PARENT_PROCESS, _HANDLE_LIST and _JOB_LIST (ProcThreadAttributeJobList = 13 | PROC_THREAD_ATTRIBUTE_INPUT).
+    public static readonly IntPtr ProcThreadAttributeParentProcess = 0x0002_0000;
     public static readonly IntPtr ProcThreadAttributeHandleList = 0x0002_0002;
     public static readonly IntPtr ProcThreadAttributeJobList = 0x0002_000D;
 
@@ -170,11 +171,6 @@ internal static partial class WindowsJobNative
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool SetHandleInformation(SafeHandle hObject, uint dwMask, uint dwFlags);
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool InitializeProcThreadAttributeList(IntPtr lpAttributeList, int dwAttributeCount, int dwFlags, ref nint lpSize);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
@@ -233,6 +229,34 @@ internal static partial class WindowsJobNative
         uint dwDesiredAccess,
         [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle,
         uint dwOptions);
+
+    /// <summary>Duplicates an engine handle into another process: the result is a value in THAT process's table, so it is never wrapped.</summary>
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool DuplicateHandle(IntPtr hSourceProcessHandle,
+        SafeHandle hSourceHandle,
+        SafeHandle hTargetProcessHandle,
+        out IntPtr lpTargetHandle,
+        uint dwDesiredAccess,
+        [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle,
+        uint dwOptions);
+
+    /// <summary>Acts on a value in another process's table; with <see cref="DuplicateCloseSource" /> and no target it closes that value.</summary>
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool DuplicateHandle(SafeHandle hSourceProcessHandle,
+        IntPtr hSourceHandle,
+        IntPtr hTargetProcessHandle,
+        IntPtr lpTargetHandle,
+        uint dwDesiredAccess,
+        [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle,
+        uint dwOptions);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial uint WaitForSingleObject(SafeHandle hHandle, uint dwMilliseconds);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
