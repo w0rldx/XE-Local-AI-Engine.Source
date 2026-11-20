@@ -5,5 +5,7 @@ public enum CreatedJobKind
 {
     TrainingRun,
     DatasetBuild,
-    ImageJob
+    ImageJob,
+    ModelLabExperiment,
+    BaseArtifactDownload
 }

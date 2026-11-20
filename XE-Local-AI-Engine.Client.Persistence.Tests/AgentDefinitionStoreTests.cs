@@ -26,7 +26,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     public async Task AddAsync_ThenReadBackInNewContext_DecryptsInstructionsAndDescription()
     {
         var databasePath = GetDatabasePath("roundtrip.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid definitionId;
         await using (var writeContext = CreateContext(databasePath, keyHolder))
@@ -65,7 +65,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     public async Task AddAsync_WithNullDescription_RoundTripsNull()
     {
         var databasePath = GetDatabasePath("null-description.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid definitionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -92,7 +92,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     public async Task AddAsync_WithNonDefaultConfig_RoundTripsKindReasoningAndToolConfig()
     {
         var databasePath = GetDatabasePath("config.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid definitionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -139,7 +139,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     public async Task DatabaseFile_AfterAdd_DoesNotContainPlaintextInstructionsOrDescription()
     {
         var databasePath = GetDatabasePath("ciphertext.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var instructions = "SECRET-PROMPT-" + Guid.NewGuid().ToString("N");
         var description = "SECRET-DESC-" + Guid.NewGuid().ToString("N");
 
@@ -166,7 +166,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     public async Task UpdateAsync_WhenConfigFieldChanges_BumpsVersionAndUpdatedAt()
     {
         var databasePath = GetDatabasePath("version-bump.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(1_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -192,7 +192,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     public async Task UpdateAsync_WhenOnlyNameOrDescriptionChanges_DoesNotBumpVersion()
     {
         var databasePath = GetDatabasePath("no-bump.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(2_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -220,7 +220,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     public async Task UpdateAsync_WhenToolApprovalsReorderedButUnchanged_DoesNotBumpVersion()
     {
         var databasePath = GetDatabasePath("approvals-reorder.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(3_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -284,7 +284,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     public async Task UpdateAsync_WhenIdMissing_ReturnsNull()
     {
         var databasePath = GetDatabasePath("update-missing.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -299,7 +299,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     public async Task DeleteAsync_RemovesRow()
     {
         var databasePath = GetDatabasePath("delete.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -318,7 +318,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     {
         const string seedSlug = "default-assistant";
         var databasePath = GetDatabasePath("seed-slug.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid seededId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -356,7 +356,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     public async Task AddAsync_DefaultAllowedSkillIds_RoundTripsAsEmpty()
     {
         var databasePath = GetDatabasePath("skills-default.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid definitionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -382,7 +382,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     public async Task AddAndUpdate_AllowedSkillIds_RoundTripsAndChangeBumpsVersion()
     {
         var databasePath = GetDatabasePath("skills-assigned.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(5_000);
         var firstSkill = Guid.NewGuid();
         var secondSkill = Guid.NewGuid();
@@ -436,7 +436,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     public async Task GetByIdAsync_WhenInstructionsTampered_FailsAuthenticatedDecryption()
     {
         var databasePath = GetDatabasePath("tamper.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid definitionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -461,7 +461,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     public async Task ListAsync_WithOneTamperedDefinition_ListsTheOthersAndKeepsTheDetailReadStrict()
     {
         var databasePath = GetDatabasePath("tamper-list.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid goodId;
         Guid badId;
@@ -545,11 +545,6 @@ public sealed class AgentDefinitionStoreTests : IDisposable
         return Path.Combine(_rootPath, fileName);
     }
 
-    private static byte[] CreateKeyMaterial()
-    {
-        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
-    }
-
     private static bool ContainsSubsequence(byte[] source, byte[] needle)
     {
         if (needle.Length == 0)
@@ -578,55 +573,5 @@ public sealed class AgentDefinitionStoreTests : IDisposable
         }
 
         return false;
-    }
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private long _milliseconds;
-
-        public MutableTimeProvider(long initialMilliseconds)
-        {
-            _milliseconds = initialMilliseconds;
-        }
-
-        public void Advance(long milliseconds)
-        {
-            _milliseconds += milliseconds;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return DateTimeOffset.FromUnixTimeMilliseconds(_milliseconds);
-        }
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
     }
 }

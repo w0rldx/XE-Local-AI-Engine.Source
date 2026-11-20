@@ -15,6 +15,7 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { SavedExperimentComparison } from "@/features/modelLab/components/SavedExperimentComparison";
 import { TraceCheckpointForm } from "@/features/modelLab/components/TraceCheckpointForm";
 import { TraceExperimentView } from "@/features/modelLab/components/TraceExperimentView";
@@ -80,6 +81,32 @@ export function TraceExperiments({ intent, onJump }: TraceExperimentsProps) {
 		},
 	});
 	const pin = useMutation({ ...setModelLabExperimentPinMutation(), onSuccess: refreshList });
+	const { confirm } = useConfirm();
+	const confirmCancel = async (experimentId: string): Promise<void> => {
+		const confirmed = await confirm({
+			title: t("pages.modelLab.trace.cancelConfirm.title", "Cancel this experiment?"),
+			description: t("pages.modelLab.trace.cancelConfirm.description", "The running experiment stops before it finishes."),
+			confirmationText: t("pages.modelLab.trace.cancel", "Cancel experiment"),
+			cancellationText: t("pages.modelLab.trace.cancelConfirm.keep", "Keep running"),
+		});
+		if (confirmed) {
+			cancel.mutate({ path: { experimentId } });
+		}
+	};
+	const confirmDelete = async (experimentId: string): Promise<void> => {
+		const confirmed = await confirm({
+			title: t("pages.modelLab.trace.deleteConfirm.title", "Delete this experiment?"),
+			description: t(
+				"pages.modelLab.trace.deleteConfirm.description",
+				"The saved run and what it recorded are deleted from this node, pinned or not. This cannot be undone.",
+			),
+			confirmationText: t("pages.modelLab.trace.delete", "Delete"),
+			cancellationText: t("common.cancel", "Cancel"),
+		});
+		if (confirmed) {
+			remove.mutate({ path: { experimentId } });
+		}
+	};
 
 	if (list.status === "pending") {
 		return null;
@@ -122,7 +149,7 @@ export function TraceExperiments({ intent, onJump }: TraceExperimentsProps) {
 								variant="light"
 								size="xs"
 								loading={cancel.isPending}
-								onClick={() => cancel.mutate({ path: { experimentId: activeId } })}
+								onClick={() => confirmCancel(activeId)}
 								data-testid="model-lab-cancel"
 							>
 								{t("pages.modelLab.trace.cancel", "Cancel experiment")}
@@ -275,7 +302,7 @@ export function TraceExperiments({ intent, onJump }: TraceExperimentsProps) {
 															color="gray"
 															disabled={experiment.id === activeId}
 															aria-label={t("pages.modelLab.trace.delete", "Delete")}
-															onClick={() => remove.mutate({ path: { experimentId: experiment.id } })}
+															onClick={() => confirmDelete(experiment.id)}
 														>
 															<IconTrash size={16} />
 														</ActionIcon>

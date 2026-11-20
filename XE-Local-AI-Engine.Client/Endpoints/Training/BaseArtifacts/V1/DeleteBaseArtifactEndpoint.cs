@@ -38,6 +38,10 @@ public sealed class DeleteBaseArtifactEndpoint : Endpoint<BaseArtifactByIdReques
                 await Send.ResultAsync(BaseArtifactBlockedEndpointSupport.Blocked("in-use-by-experiment",
                     "A Model Lab experiment is tracing this checkpoint. Wait for it to finish, or cancel it, before deleting the checkpoint."));
                 return;
+            case BaseArtifactDeleteOutcome.WorkerNotConfirmed:
+                await Send.ResultAsync(BaseArtifactBlockedEndpointSupport.Blocked("worker-not-confirmed",
+                    "A Model Lab worker was stopped but its exit was not confirmed, so it may still hold this checkpoint's files and GPU memory. Stop that process if it still runs, then delete the checkpoint again."));
+                return;
             case BaseArtifactDeleteOutcome.Deleted:
                 await Send.NoContentAsync(ct);
                 return;

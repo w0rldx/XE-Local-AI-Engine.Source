@@ -7,16 +7,16 @@ import {
 	invalidateInferenceProfileMutation,
 	listInferenceProfilesOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { toBenchmarkResult, toInferenceProfileViews } from "@/features/model-fit/models/InferenceProfileMappers";
 import type { InferenceBenchmarkResult } from "@/features/model-fit/models/InferenceProfileModels";
-import { modelFitInvalidationKey } from "@/features/model-fit/queries/useModelFit";
 
 // Server state for the Inference Optimizer operator surface. The list read uses the generated hey-api
 // `*Options()` (which wires the shared axios instance + TanStack Query AbortSignal automatically), with a
 // `select` that maps the optional-field generated response to the domain
 // view-models. The four mutations dispatch the domain variables to the generated mutationFn's `{ body }` envelope
 // (mirroring useRefreshRecommendations) and each invalidates the profiles list on success via the shared
-// `modelFitInvalidationKey` partial-`_id` match. Errors are surfaced by the panel (toast), not here — matching the
+// `operationInvalidationKey` partial-`_id` match. Errors are surfaced by the panel (toast), not here — matching the
 // recommendations page convention where the component owns the toast in the mutate onError callback.
 
 // The operationId of the list read, equal to the generated SDK fn name; the generated query key is
@@ -46,7 +46,7 @@ export function useExploreInferenceProfile() {
 			const options = exploreInferenceProfileMutation();
 			await options.mutationFn?.({ body: { modelName: variables.modelName, role: variables.role } }, undefined as never);
 		},
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(inferenceProfileQueryIds.list) }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: operationInvalidationKey(inferenceProfileQueryIds.list) }),
 	});
 }
 
@@ -77,7 +77,7 @@ export function useBenchmarkInferenceProfile() {
 			);
 			return toBenchmarkResult(response);
 		},
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(inferenceProfileQueryIds.list) }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: operationInvalidationKey(inferenceProfileQueryIds.list) }),
 	});
 }
 
@@ -89,7 +89,7 @@ export function useFreezeInferenceProfile() {
 			const options = freezeInferenceProfileMutation();
 			await options.mutationFn?.({ body: { profileId: variables.profileId } }, undefined as never);
 		},
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(inferenceProfileQueryIds.list) }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: operationInvalidationKey(inferenceProfileQueryIds.list) }),
 	});
 }
 
@@ -101,6 +101,6 @@ export function useInvalidateInferenceProfile() {
 			const options = invalidateInferenceProfileMutation();
 			await options.mutationFn?.({ body: { profileId: variables.profileId } }, undefined as never);
 		},
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(inferenceProfileQueryIds.list) }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: operationInvalidationKey(inferenceProfileQueryIds.list) }),
 	});
 }

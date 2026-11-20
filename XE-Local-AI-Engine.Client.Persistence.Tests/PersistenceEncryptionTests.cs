@@ -38,7 +38,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var toolArgs = Encoding.UTF8.GetBytes("{\"prompt\":\"hello\"}");
         var toolResult = Encoding.UTF8.GetBytes("{\"status\":\"ok\"}");
 
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using (var writeContext = CreateContext(databasePath, keyHolder))
         {
@@ -101,7 +101,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var messageContentText = "raw-file-message-" + Guid.NewGuid().ToString("N");
         var metadataText = "raw-file-metadata-" + Guid.NewGuid().ToString("N");
 
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using (var context = CreateContext(databasePath, keyHolder))
         {
@@ -142,7 +142,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var conversationId = Guid.NewGuid();
         const string titleText = "ef-path-title-sentinel";
 
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using (var context = CreateContext(databasePath, keyHolder))
         {
@@ -180,7 +180,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var conversationId = Guid.NewGuid();
         const string titleText = "raw-sql-path-title-sentinel";
 
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using (var context = CreateContext(databasePath, keyHolder))
         {
@@ -229,7 +229,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var definitionMetadata = Encoding.UTF8.GetBytes("{\"mode\":\"create\",\"userBrief\":\"definition-provenance-sentinel\"}");
         var skillMetadata = Encoding.UTF8.GetBytes("{\"mode\":\"improve\",\"userBrief\":\"skill-provenance-sentinel\"}");
 
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using (var context = CreateContext(databasePath, keyHolder))
         {
@@ -289,7 +289,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         // encryption path must leave it alone rather than sealing an empty payload.
         var databasePath = GetDatabasePath("generation-metadata-null.sqlite");
 
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using (var context = CreateContext(databasePath, keyHolder))
         {
@@ -332,7 +332,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var databasePath = GetDatabasePath("unmodified-column.sqlite");
         var instructions = Encoding.UTF8.GetBytes("You are an unchanged agent.");
 
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using (var context = CreateContext(databasePath, keyHolder))
         {
@@ -385,7 +385,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var id = Guid.NewGuid();
         var instructions = Encoding.UTF8.GetBytes("You are a duplicate agent.");
 
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using (var context = CreateContext(databasePath, keyHolder))
         {
@@ -559,7 +559,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
     [Test]
     public void ChatModelEntityTypes_WhenScanned_AreAllInvisibleOutsideThePersistenceAssembly()
     {
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         using var context = CreateContext(GetDatabasePath("entity-visibility.sqlite"), keyHolder);
         var persistenceAssembly = typeof(NodeChatDbContext).Assembly;
 
@@ -602,11 +602,6 @@ public sealed class PersistenceEncryptionTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
-    }
-
-    private static byte[] CreateKeyMaterial()
-    {
-        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private static void AssertBytesEqual(byte[] expected, byte[] actual, string message)
@@ -667,35 +662,5 @@ public sealed class PersistenceEncryptionTests : IDisposable
         }
 
         return output.ToArray()[..outputLength];
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
     }
 }

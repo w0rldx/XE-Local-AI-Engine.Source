@@ -106,6 +106,12 @@ public sealed class InvocationState
 
     public FailureCategory? FailureCategory { get; set; }
 
+    /// <summary>A cancellation the user did not ask for (an operator eject vetoed its load): the chat shows <see cref="Error" /> for it.</summary>
+    public bool ShowCancelReason { get; set; }
+
+    /// <summary>The error the chat persists and streams: none for a plain cancel, which is an outcome the user chose.</summary>
+    public string? ChatError => Status == InvocationStatus.Cancelled && !ShowCancelReason ? null : Error;
+
     public string? ModelUsed { get; set; }
 
     /// <summary>The LAST provider round's prompt tokens, not the turn's sum.</summary>
@@ -276,6 +282,7 @@ public sealed class InvocationState
             CompletedAt = CompletedAt,
             Error = Error,
             FailureCategory = FailureCategory,
+            ShowCancelReason = ShowCancelReason,
             ModelUsed = ModelUsed,
             InputTokens = InputTokens,
             OutputTokens = OutputTokens,

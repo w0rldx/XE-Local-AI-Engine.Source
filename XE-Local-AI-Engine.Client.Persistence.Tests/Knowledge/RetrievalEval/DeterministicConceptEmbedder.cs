@@ -138,8 +138,6 @@ internal sealed class SingleProviderResolver : ILocalModelProviderResolver
         _provider = provider;
     }
 
-    public int MaxLoadedProcesses => 1;
-
     public ILocalModelProvider DefaultProvider => _provider;
 
     public ILocalModelProvider ResolveProvider(string providerName) =>
@@ -163,8 +161,6 @@ internal sealed class SingleProviderResolver : ILocalModelProviderResolver
 /// </summary>
 internal sealed class UnavailableProviderResolver : ILocalModelProviderResolver
 {
-    public int MaxLoadedProcesses => 1;
-
     public ILocalModelProvider DefaultProvider => throw new InvalidOperationException("No embedding provider is available in this scenario.");
 
     public ILocalModelProvider ResolveProvider(string providerName) =>

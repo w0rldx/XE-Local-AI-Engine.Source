@@ -5,16 +5,20 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     section.
 /// </summary>
 /// <remarks>
-///     Defaults target the shipped node-local embedding model (<c>nomic-embed-text</c> via the llama.cpp provider) and a
-///     conservative single-document-at-a-time ingestion budget, so a batch upload cannot exhaust CPU, RAM or VRAM. The
-///     search path reuses <see cref="EmbeddingModelName" /> and <see cref="EmbeddingProviderName" /> to build the query
-///     vector and to filter same-model chunk vectors.
+///     Defaults keep embedding on the node-local llama.cpp provider, with the model <see cref="IEmbeddingModelResolver" />
+///     resolves, and a conservative single-document-at-a-time ingestion budget, so a batch upload cannot exhaust CPU,
+///     RAM or VRAM. The search path reuses <see cref="EmbeddingModelName" /> and <see cref="EmbeddingProviderName" /> to
+///     build the query vector and to filter same-model chunk vectors.
 /// </remarks>
 public sealed class KnowledgeBaseOptions
 {
     public const string Section = "KnowledgeBase";
 
     /// <summary>Node-local embedding model that builds chunk vectors and the search query vector.</summary>
+    /// <remarks>
+    ///     A placeholder that no installed GGUF name equals: with nothing pinned and no exact match installed,
+    ///     <see cref="IEmbeddingModelResolver" /> picks through <see cref="RecommendedEmbeddingModel.PickInstalled" />.
+    /// </remarks>
     public string EmbeddingModelName { get; set; } = "nomic-embed-text";
 
     /// <summary>
@@ -204,7 +208,7 @@ public sealed class KnowledgeBaseOptions
     ///     primary size lever, with <see cref="MaxChunkChars" /> kept as a hard character ceiling.
     /// </summary>
     /// <remarks>
-    ///     Default 512 fits the shipped <c>nomic-embed-text</c> embedder's 2048-token window with generous margin for the
+    ///     Default 512 fits the smallest window in the embedding profile table (nomic's 2048 tokens) with margin for the
     ///     heading prefix and the model's own special tokens, and preserves the ~2000-character / ~500-token ASCII chunk
     ///     granularity so existing corpora chunk identically. A discoverable resolved context window overrides it
     ///     downward; a larger one never enlarges chunks past it. Changing it affects only newly ingested or reindexed

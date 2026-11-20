@@ -56,6 +56,13 @@ internal sealed record class ModelLabExperiment
 
     public long? TraceByteCount { get; set; }
 
+    /// <summary>A trace's attention rows, a second blob in the same scope. Null when the trace recorded none.</summary>
+    public Guid? AttentionBlobId { get; set; }
+
+    public string? AttentionSha256 { get; set; }
+
+    public long? AttentionByteCount { get; set; }
+
     /// <summary>Encrypted UTF-8: the operator's own note on the run.</summary>
     public byte[]? Notes { get; set; }
 

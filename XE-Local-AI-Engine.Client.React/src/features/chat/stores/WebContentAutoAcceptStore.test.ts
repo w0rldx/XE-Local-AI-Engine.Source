@@ -2,7 +2,7 @@
 
 import { renderHook } from "@testing-library/react";
 import { act } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
 	adoptWebContentAutoAcceptDraft,
@@ -48,5 +48,43 @@ describe("WebContentAutoAcceptStore draft slot", () => {
 
 		expect(isWebContentAutoAccepted("conv-adopted")).toBe(false);
 		expect(storedChoices()).toEqual([]);
+	});
+});
+
+describe("useWebContentAutoAccept storage reads", () => {
+	afterEach(() => {
+		forgetWebContentAutoAccept("conv-read-once");
+		forgetWebContentAutoAccept("conv-other");
+		localStorage.clear();
+	});
+
+	it("reads a conversation's stored choice once, not on every render, and again for another conversation", () => {
+		localStorage.setItem("xe-node-chat-web-auto:conv-read-once", "true");
+		const getItem = vi.spyOn(Storage.prototype, "getItem");
+		const reads = (conversationId: string) =>
+			getItem.mock.calls.filter(([key]) => key === `xe-node-chat-web-auto:${conversationId}`).length;
+
+		const hook = renderHook(({ conversationId }) => useWebContentAutoAccept(conversationId), {
+			initialProps: { conversationId: "conv-read-once" },
+		});
+		hook.rerender({ conversationId: "conv-read-once" });
+		hook.rerender({ conversationId: "conv-read-once" });
+
+		expect(hook.result.current).toBe(true);
+		expect(reads("conv-read-once")).toBe(1);
+
+		hook.rerender({ conversationId: "conv-other" });
+
+		expect(hook.result.current).toBe(false);
+		expect(reads("conv-other")).toBe(1);
+	});
+
+	it("shows a choice made after the first read", () => {
+		const hook = renderHook(() => useWebContentAutoAccept("conv-read-once"));
+		const setter = renderHook(() => useSetWebContentAutoAccept());
+
+		act(() => setter.result.current("conv-read-once", true));
+
+		expect(hook.result.current).toBe(true);
 	});
 });

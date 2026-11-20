@@ -92,7 +92,7 @@ public sealed class TrainingRunStartupReaperTests
     public void Matches_WhenTheRunTokenIsAbsent_IsFalse() =>
         AssertEx.False(TrainingProcessReaper.Matches(Receipt, LiveFacts() with
             {
-                RunToken = null
+                RunToken = string.Empty
             }),
             "A child whose environment carries no token is not one this host launched.");
 
@@ -126,6 +126,30 @@ public sealed class TrainingRunStartupReaperTests
         AssertEx.Equal(Receipt.StartTicks, inspector.SignalledStartTicks[0], "The kill must stay bound to the validated identity.");
         await store.Received(1).SetLaunchReceiptAsync(runId, Arg.Is<ReadOnlyMemory<byte>?>(static value => !value.HasValue),
             Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>A kill deferred by an operational failure learned nothing about the process, so its receipt stays for the next startup.</summary>
+    [Test]
+    public async Task Reap_WhenTheKillIsDeferred_KeepsTheReceiptAndStillRecovers()
+    {
+        var runId = Guid.NewGuid();
+        var store = StoreWith([
+            new TrainingRunLaunchReceipt
+            {
+                RunId = runId,
+                LaunchReceiptJson = Serialize(Receipt)
+            }
+        ]);
+        var inspector = new FakeTrainingProcessInspector(LiveFacts())
+        {
+            PresenceAfterKill = TrainingProcessPresence.Deferred
+        };
+
+        await Reaper(store, inspector).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(Receipt.RunToken, inspector.SignalledRunTokens.Single(), "Each signal re-verifies the recorded run token.");
+        await store.DidNotReceive().SetLaunchReceiptAsync(runId, Arg.Any<ReadOnlyMemory<byte>?>(), Arg.Any<CancellationToken>());
+        _ = await store.Received(1).RecoverOnStartupAsync(Arg.Any<CancellationToken>());
     }
 
     /// <summary>

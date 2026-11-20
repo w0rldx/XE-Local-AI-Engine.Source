@@ -13,7 +13,7 @@ public sealed class StableDiffusionBinaryManagerTests
     [Test]
     public async Task EnsureBinary_CorruptDownload_RetriesOnce_ThenSurfacesSanitizedFailure()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-sdcpp-test");
         // The handler always returns bytes that cannot match the pinned SHA256 → forced corruption on every attempt.
         using var handler = new CountingHttpMessageHandler(static () => new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -35,7 +35,7 @@ public sealed class StableDiffusionBinaryManagerTests
     [Test]
     public async Task EnsureBinary_CachedBinaryPresent_ReusedOffline_NoDownload()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-sdcpp-test");
         var pin = StableDiffusionReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, SdGpuBackend.Cpu)!;
         var serverPath = Path.Combine(cache.Path, "stable-diffusion.cpp", StableDiffusionReleasePins.PinnedTag, "cpu", pin.ServerRelativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
@@ -57,7 +57,7 @@ public sealed class StableDiffusionBinaryManagerTests
     [Test]
     public async Task EnsureBinary_BringYourOwnOverride_ServesConfiguredBinary_NoDownload()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-sdcpp-test");
         var byoPath = Path.Combine(cache.Path, "byo-sd-server");
         await File.WriteAllTextAsync(byoPath, "operator-built-sd-server");
 
@@ -84,7 +84,7 @@ public sealed class StableDiffusionBinaryManagerTests
     [Test]
     public async Task EnsureBinary_BrokenOverride_ThrowsSanitized_NoFallThroughToAcquisition()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-sdcpp-test");
         var overrideOptions = new StableDiffusionServerRuntimeOverrideOptions
         {
             ServerPath = Path.Combine(cache.Path, "does-not-exist-sd-server"),
@@ -98,31 +98,5 @@ public sealed class StableDiffusionBinaryManagerTests
 
         await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => manager.EnsureBinaryAsync(SdGpuBackend.Cuda, CancellationToken.None));
         AssertEx.Equal(expected: 0, handler.CallCount);
-    }
-
-    private sealed class TempCacheDir : IDisposable
-    {
-        public TempCacheDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-sdcpp-test-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
-        }
     }
 }

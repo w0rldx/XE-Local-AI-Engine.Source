@@ -71,7 +71,7 @@ public sealed class KnowledgeUploadEndpointTests
 
         AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
         await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, "the knowledge-base upload");
-        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The file exceeds the maximum upload size of 1 MB.");
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The file exceeds the maximum upload size of 1 MiB.");
         AssertEx.Empty(dispatcher.Enqueued);
     }
 

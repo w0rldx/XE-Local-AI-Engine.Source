@@ -33,7 +33,7 @@ public sealed class ImageModelSetDownloadTests
     [Test]
     public async Task EnsureModel_WithSizedParts_ReportsOneMonotonicBarAgainstTheSetTotal()
     {
-        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var models = new TempDirectory("xe-hf-test");
         using var handler = FileServingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
@@ -80,7 +80,7 @@ public sealed class ImageModelSetDownloadTests
     {
         // A set total is only honest when EVERY part declared a size. Summing the known ones would report a total the
         // transfer overshoots, and a bar that passes 100% is worse than one that admits it cannot compute a percentage.
-        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var models = new TempDirectory("xe-hf-test");
         using var handler = FileServingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
@@ -101,7 +101,7 @@ public sealed class ImageModelSetDownloadTests
     [Test]
     public async Task EnsureModel_WhenAnEarlierPartIsAlreadyCompleteOnDisk_ReusesItInsteadOfRefetching()
     {
-        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var models = new TempDirectory("xe-hf-test");
         using var handler = FileServingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
@@ -124,7 +124,7 @@ public sealed class ImageModelSetDownloadTests
         // Length is the only cheap check available (hashing a 13 GB weight would cost a large fraction of the transfer
         // it avoids), so a length that disagrees with the declared size means the file is truncated or stale — the one
         // case where reusing it would silently install a corrupt model.
-        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var models = new TempDirectory("xe-hf-test");
         using var handler = FileServingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
@@ -143,7 +143,7 @@ public sealed class ImageModelSetDownloadTests
     {
         // Without a declared size a truncated leftover is indistinguishable from a complete file, so there is nothing to
         // check against and the part is re-downloaded — the behavior that predates reuse.
-        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var models = new TempDirectory("xe-hf-test");
         using var handler = FileServingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
@@ -162,7 +162,7 @@ public sealed class ImageModelSetDownloadTests
     {
         // A curated set that later gained a part (Qwen-Image's LlmVision projector) must be completable by installing it
         // again: the installed set is not a reason to skip the request, and its existing files are not re-fetched.
-        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var models = new TempDirectory("xe-hf-test");
         using var handler = FileServingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
@@ -181,7 +181,7 @@ public sealed class ImageModelSetDownloadTests
     [Test]
     public async Task EnsureModel_WhenNoPartIsOnDisk_DownloadsEveryPart()
     {
-        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var models = new TempDirectory("xe-hf-test");
         using var handler = FileServingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
@@ -199,7 +199,7 @@ public sealed class ImageModelSetDownloadTests
         // A file-set is not always published in one place. Qwen-Image is the case that forced this: the quantized
         // diffusion transformer and the VAE ship in one repo while the Qwen2.5-VL text encoder ships in another, so with
         // one set-level repo id the model cannot be installed at all. Each part therefore resolves its own source.
-        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var models = new TempDirectory("xe-hf-test");
         var requestedUrls = new List<string>();
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((request, _) =>
         {

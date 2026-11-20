@@ -24,7 +24,7 @@ public sealed class CudaToolkitLocatorTests
     [Test]
     public void FindNvccOutsidePath_WhenPathAlreadyResolvesNvcc_AnswersNothingToCorrect()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-cuda-locator");
         WriteExecutable(temp.Path, "nvcc");
 
         // A CUDA root that WOULD answer, to prove PATH is what short-circuits rather than the absence of a candidate.
@@ -40,7 +40,7 @@ public sealed class CudaToolkitLocatorTests
     [Test]
     public void FindNvccOutsidePath_WhenNvccIsOnlyUnderTheConfiguredRoot_ReturnsThatAbsolutePath()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-cuda-locator");
         var cudaBin = CreateCudaRoot(temp.Path, withNvcc: true);
         using var path = new EnvironmentScope("PATH", temp.Path);
         using var cudaHome = new EnvironmentScope("CUDA_HOME", Path.GetDirectoryName(cudaBin));
@@ -52,7 +52,7 @@ public sealed class CudaToolkitLocatorTests
     [Test]
     public void FindNvccOutsidePath_WhenCudaPathIsSetInsteadOfCudaHome_StillFindsTheToolkit()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-cuda-locator");
         var cudaBin = CreateCudaRoot(temp.Path, withNvcc: true);
         using var path = new EnvironmentScope("PATH", temp.Path);
         using var cudaHome = new EnvironmentScope("CUDA_HOME", value: null);
@@ -69,7 +69,7 @@ public sealed class CudaToolkitLocatorTests
     [Test]
     public void FindNvccOutsidePath_WhenTheConfiguredRootHasNoNvcc_DoesNotFallBackToTheConventionalRoot()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-cuda-locator");
         _ = CreateCudaRoot(temp.Path, withNvcc: false);
         using var path = new EnvironmentScope("PATH", temp.Path);
         using var cudaHome = new EnvironmentScope("CUDA_HOME", Path.Combine(temp.Path, "cuda"));
@@ -85,7 +85,7 @@ public sealed class CudaToolkitLocatorTests
     [Test]
     public void FindNvccOutsidePath_IgnoresARelativeCudaRoot()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-cuda-locator");
         var cudaBin = CreateCudaRoot(temp.Path, withNvcc: true);
         using var path = new EnvironmentScope("PATH", temp.Path);
         using var cudaHome = new EnvironmentScope("CUDA_HOME", Path.GetRelativePath(Environment.CurrentDirectory, Path.GetDirectoryName(cudaBin)!));
@@ -129,28 +129,5 @@ public sealed class CudaToolkitLocatorTests
 
         public void Dispose() =>
             Environment.SetEnvironmentVariable(_name, _original);
-    }
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public TempDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-cuda-locator-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                Directory.Delete(Path, recursive: true);
-            }
-            catch (Exception)
-            {
-                /* Best-effort test cleanup. */
-            }
-        }
     }
 }

@@ -51,15 +51,18 @@ export function usagePercent(usage: MemoryUsage): number {
 export type ResidentRuntime = XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentKindDto;
 export type RuntimeResidentState = XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentStateDto;
 
-// A stable-diffusion.cpp or whisper.cpp process the engine holds in memory. Both runtimes eject as a whole, so a row
-// carries no role. `modelId` is null while the process is still starting (or whisper is switching models); `backend`
-// is only ever set for transcription.
+// A stable-diffusion.cpp, whisper.cpp or Model Lab worker process the engine holds in memory. Each runtime ejects as a
+// whole, so a row carries no role. `modelId` is null while the process is still starting (or whisper is switching
+// models); `backend` is only ever set for transcription.
 export interface RuntimeResident {
 	readonly runtime: ResidentRuntime;
 	readonly modelId: string | null;
 	readonly state: RuntimeResidentState;
 	readonly backend: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto | null;
 	readonly canEject: boolean;
+	// GPU memory the Model Lab worker's model allocated at load (torch's own count, not the driver's); null for the other
+	// runtimes and before the worker's first Ready.
+	readonly vramBytes: number | null;
 }
 
 export function toRuntimeResidents(dto: XeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentsResponse): RuntimeResident[] {
@@ -69,5 +72,6 @@ export function toRuntimeResidents(dto: XeLocalAiEngineClientEndpointsModelFitV1
 		state: item.state,
 		backend: item.backend ?? null,
 		canEject: item.canEject,
+		vramBytes: item.vramBytes ?? null,
 	}));
 }

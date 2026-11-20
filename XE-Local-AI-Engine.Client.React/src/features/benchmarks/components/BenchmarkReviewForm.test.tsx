@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BenchmarkReviewForm } from "@/features/benchmarks/components/BenchmarkReviewForm";
 import type { BenchmarkRubricCriterion, BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkJudgeFixture, benchmarkRunDetailFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkJudgeFixture, benchmarkRunDetailFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 afterEach(cleanup);

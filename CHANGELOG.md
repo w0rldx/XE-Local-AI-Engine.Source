@@ -22,6 +22,30 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 > The source version identity in `eng/ReleaseVersion.props` still reads `1.0.0-rc.2` — the version that has already
 > shipped. It is bumped when the next release is cut, at which point this section takes that version's heading.
 
+> **Breaking (pre-release): each embedding model is embedded with its own prompt format and pooling.** The format and
+> pooling now come from the model's name (nomic, EmbeddingGemma, bge-m3, or plain text with mean pooling for anything
+> else) and are part of the stored vector identity.
+> - A knowledge base indexed with any embedder other than nomic reindexes once. Until the scheduled reconcile (its first
+>   run is one interval after start, 60 minutes by default) or a manual corpus reindex (`ReindexCorpusEndpoint`, the
+>   Knowledge Base reindex action), search ranks those documents lexically and reports `EmbedderChanged`. Nomic nodes
+>   are unaffected.
+> - An external app that embeds with bge-m3 through the node's embeddings proxy now gets CLS-pooled vectors, which do
+>   not compare with the vectors it stored before: re-embed them.
+> - A per-model launch-argument override can no longer set `--embedding`/`--embeddings`, `--pooling` or
+>   `--rerank`/`--reranking`: a save naming one is refused, and a stored override has them stripped at spawn.
+>   `LLAMA_ARG_EMBEDDINGS`, `LLAMA_ARG_POOLING` and `LLAMA_ARG_RERANKING` are removed from the `llama-server` child
+>   environment.
+
+> **Breaking (pre-release): Qwen3-Embedding gets its own profile, and semantic memory dedup is off by default.**
+> - Qwen3-Embedding now embeds with last-token pooling over the end-of-text token the pinned llama.cpp appends, and
+>   its queries carry Qwen's search instruction. A knowledge base indexed with it reindexes once (lexical search with
+>   `EmbedderChanged` until then), and an external app that embeds with Qwen3 through the embeddings proxy must
+>   re-embed the vectors it stored.
+> - Semantic memory dedup (`MemoryExtraction:SemanticDedupEnabled`) now defaults to `false`; the lexical dedup of
+>   exact normalized duplicates always runs. A calibration over four embedders found that a one-word contradiction of a
+>   lesson scores as close as a true duplicate, so the cosine layer would drop lessons that reverse a live memory. Set
+>   `MemoryExtraction:SemanticDedupEnabled=true` to re-enable it; its threshold stays 0.92.
+
 > **Breaking (pre-release): Dev Workflows is retired (ADR 0023).** Graph Workflows runs development work through its
 > `DevTask` node instead; start from the Graph samples "Development intake" (`dev-intake`) and `research-plan-approval`.
 > - The upgrade drops every stored Dev Workflow row without export: definitions, runs, work items and rule sets, plus the
@@ -132,6 +156,14 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Model Lab: a logit lens in the trace stepper.** Every Qwen3.5 trace now reads each block through the model's own
+  final norm and output head at every generated step: top 5 tokens, the chosen token's probability and rank, and the
+  readout's entropy, labelled as a derived analysis. The last block is the model's real output. New
+  `GET model-lab/experiments/{id}/lens`.
+- **Model Lab: step through a saved trace and see real attention.** A trace's result can be replayed token by token
+  (blocks, candidates). A Qwen3.5 trace started with **Record attention** also stores each full-attention head's
+  strongest 32 positions per generated token, recomputed beside the SDPA kernel so the output stays unchanged; linear
+  blocks show that they have no attention matrix. New `GET model-lab/experiments/{id}/attention/{layer}`.
 - **A shorter first run** — a fresh install asks for the account, the recovery code and the external-access choice only,
   with "Step n of 3" on each screen. It starts in Simple mode with the Low sandbox profile; after the first answer a card
   offers both choices once, and both stay in Node settings. An install that already chose keeps its choice.
@@ -401,7 +433,7 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 - **Skipped catalog models named on the model advisor** — when a refresh could not read a catalog model's repository in time, the advisor page names those models under the snapshot status and says a later refresh may bring them back.
 - **"Gated" badge on Model Recommendations** — a model whose Hugging Face repository is gated carries a "Gated" badge; its tooltip says downloading needs the license accepted on Hugging Face and an access token in Node Settings, and that without a token the size estimate rests on the file size alone.
 - **Fit hint on the "Tested by the authors" list** — the fit badge has a tooltip: it compares the tested file's size with this machine's free memory (the Model Recommendations page does the detailed sizing), and on a "Won't fit" row it says Download opens the picker with smaller quants.
-- **Nomic Embed Text v1.5 in the curated catalog** — the knowledge base's one-click embedding model (`nomic-ai/nomic-embed-text-v1.5-GGUF`, tier A) is now listed under embedding; catalog version `2026.10.4`.
+- **Nomic Embed Text v1.5 in the curated catalog** — `nomic-ai/nomic-embed-text-v1.5-GGUF` (tier A) is now listed under embedding; catalog version `2026.10.4`.
 - **Windows sandbox boundary (Preview)** — on Windows, Sandboxed stdio MCP servers can run inside an AppContainer through
   Microsoft's MXC SDK (`Microsoft.Mxc.Sdk` 1.0.0): one writable jail, engine-granted read-only trees, no access to the user
   profile, node data or engine directory, no network. Off by default; an operator turns it on with the new **execution
@@ -424,6 +456,22 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Model Lab trace contract 5; traces turn generation watermarking off.** A watermark processor would change scores
+  after the trace records them. Cached PyTorch source indexes are rebuilt once.
+- **Model Lab trace contract 4.** The host and `modellab.py` move together; cached PyTorch source indexes are rebuilt once.
+- **Model Lab reads block kinds from `full_attention_interval`** when a Qwen3.5 config has no `layer_types`, so the
+  default steering layer of such a checkpoint is now a full-attention block, as it already was for configs that list them.
+- **EmbeddingGemma 2 Q8_0 is the recommended embedding model.** The knowledge base's one-click download installs
+  `ggml-org/embeddinggemma-2-GGUF:Q8_0` (~310 MB, weights only, no image projector) instead of nomic-embed-text v1.5.
+  It changes what a fresh node downloads; a node with a pinned embedder keeps it. A node with nothing pinned now picks
+  the recommended model first, then another quant of it, then any installed embedder by name, so installing
+  EmbeddingGemma 2 there moves it (a corpus indexed before pins existed reindexes visibly). The model catalog
+  (2026.11.17) lists EmbeddingGemma 2 as the one-click embedder.
+- **A model's kind is read from the model name, not its owner.** `CompendiumLabs/bge-m3-gguf` is now an embedding
+  model: it leaves the chat picker and can be pinned or picked as the knowledge-base embedder. An unpinned,
+  never-indexed node with nomic and bge-m3 installed (and no EmbeddingGemma 2) now embeds with bge-m3.
+- **The scheduling grid script launches each embedder with its own profile** (`--pooling` and input format), not
+  nomic's.
 - **Model catalog 2026.11.6: Laya is the recommended decision model (English), Kev-4B the one for German inputs, Julia-1
   moves to tier B.**
 - **Tool catalog entries carry `isAvailableOnNode`**; the agent tool picker disables a tool this node cannot run and labels it

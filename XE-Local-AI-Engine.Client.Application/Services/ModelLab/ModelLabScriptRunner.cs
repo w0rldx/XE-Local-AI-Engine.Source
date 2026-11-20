@@ -26,6 +26,53 @@ internal sealed class ModelLabScriptRunner
         _timeProvider = timeProvider;
     }
 
+    /// <summary>Where every Model Lab job and serving worker gets its own directory; the startup sweep deletes it whole.</summary>
+    public static string WorkRoot(INodeDataDirectory dataDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        return Path.Combine(dataDirectory.Root, "model-lab", "work");
+    }
+
+    /// <summary>The watchdog over one script or one serving worker's job; <paramref name="exitGrace" /> is the bound after a stop or a closed output.</summary>
+    public static TrainingScriptWatchdog NewWatchdog(ModelLabJobOptions options, TimeSpan exitGrace, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return new TrainingScriptWatchdog(options.InactivityTimeout,
+            options.MaxDuration,
+            exitGrace,
+            timeProvider,
+            silentReason: "The Model Lab script stopped reporting and was terminated.",
+            overrunReason: "The Model Lab script exceeded its maximum duration and was terminated.",
+            noExitReason: "The Model Lab script stopped responding after closing its output and was terminated.",
+            killedExitCode: -1);
+    }
+
+    /// <summary>Republishes a phase or progress frame as the experiment's event; every other frame publishes nothing.</summary>
+    public static void PublishFrame(ITrainingRunEventBuffer events, Guid id, TrainingStdioEvent parsed)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(parsed);
+        switch (parsed.Kind)
+        {
+            case TrainingStdioEventKind.Phase:
+                _ = events.Append(id, TrainingRunEventKind.Phase, new TrainingRunPayload
+                {
+                    Phase = parsed.Phase
+                });
+                break;
+            case TrainingStdioEventKind.Progress:
+                _ = events.Append(id, TrainingRunEventKind.Progress, new TrainingRunPayload
+                {
+                    Step = parsed.Step,
+                    TotalSteps = parsed.TotalSteps,
+                    VramBytes = parsed.VramBytes
+                });
+                break;
+            default:
+                break;
+        }
+    }
+
     /// <param name="id">The experiment, which is also the id its events carry.</param>
     /// <param name="workDirectory">The job's owner-only directory, created here.</param>
     /// <param name="jobJson">The job file's content, which holds plaintext prompts.</param>
@@ -45,26 +92,20 @@ internal sealed class ModelLabScriptRunner
         // Owner-only by itself: the directory's own mode is best-effort, and this file holds the plaintext prompt.
         await SecureFilePermissions.WriteAllBytesAtomicAsync(jobPath, jobJson, CancellationToken.None);
 
+        var runToken = Guid.NewGuid().ToString("N");
         using var handle = _spawner.Spawn(new TrainingSpawnRequest
         {
             ExecutablePath = script.Interpreter,
             Arguments = [script.ScriptPath, "--config", jobPath],
             WorkingDirectory = workDirectory,
-            RunToken = Guid.NewGuid().ToString("N")
+            RunToken = runToken
         });
 
         // Durable before the first line is read: a host that dies now must still be able to prove which process is this job's.
         await saveReceipt(JsonSerializer.SerializeToUtf8Bytes(TrainingProcessReaper.ToPersisted(handle.Receipt), TrainingJson.Options));
 
         var state = new StreamState();
-        var watchdog = new TrainingScriptWatchdog(_options.InactivityTimeout,
-            _options.MaxDuration,
-            _options.ExitGracePeriod,
-            _timeProvider,
-            silentReason: "The Model Lab script stopped reporting and was terminated.",
-            overrunReason: "The Model Lab script exceeded its maximum duration and was terminated.",
-            noExitReason: "The Model Lab script stopped responding after closing its output and was terminated.",
-            killedExitCode: -1);
+        var watchdog = NewWatchdog(_options, _options.ExitGracePeriod, _timeProvider);
         var stop = stopToken.Register(() =>
         {
             watchdog.MarkStopRequested();
@@ -76,7 +117,8 @@ internal sealed class ModelLabScriptRunner
         {
             await foreach (var line in handle.ReadOutputAsync(CancellationToken.None))
             {
-                if (TrainingRunStdioParser.ParseOrNull(line) is { } parsed)
+                // A frame counts only with this spawn's token: any other line, a foreign frame too, is output for the diagnostic tail.
+                if (TrainingRunStdioParser.ParseOrNull(line) is { } parsed && string.Equals(parsed.Token, runToken, StringComparison.Ordinal))
                 {
                     watchdog.MarkEvent();
                     Apply(id, state, watchdog, parsed, handle.KillGroup);
@@ -117,18 +159,8 @@ internal sealed class ModelLabScriptRunner
 
                 break;
             case TrainingStdioEventKind.Phase:
-                _ = _events.Append(id, TrainingRunEventKind.Phase, new TrainingRunPayload
-                {
-                    Phase = parsed.Phase
-                });
-                break;
             case TrainingStdioEventKind.Progress:
-                _ = _events.Append(id, TrainingRunEventKind.Progress, new TrainingRunPayload
-                {
-                    Step = parsed.Step,
-                    TotalSteps = parsed.TotalSteps,
-                    VramBytes = parsed.VramBytes
-                });
+                PublishFrame(_events, id, parsed);
                 break;
             case TrainingStdioEventKind.Done:
                 state.Done = true;
@@ -140,6 +172,7 @@ internal sealed class ModelLabScriptRunner
                 break;
             case TrainingStdioEventKind.Heartbeat:
             case TrainingStdioEventKind.Artifact:
+            case TrainingStdioEventKind.Ready:
             default:
                 break;
         }
@@ -165,22 +198,22 @@ internal sealed class ModelLabScriptRunner
         {
             if (cancelRequested || State.ScriptCancelled || ExitCode == TrainingRunExecutor.CancelledExitCode)
             {
-                return ModelLabExperimentService.Cancelled();
+                return ModelLabExperimentCompletion.Cancelled();
             }
 
             if (FailureReason is { } reason)
             {
-                return ModelLabExperimentService.Finished(ModelLabExperimentStatus.Failed, reason);
+                return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, reason);
             }
 
             if (State.ErrorMessage is { Length: > 0 } error)
             {
-                return ModelLabExperimentService.Finished(ModelLabExperimentStatus.Failed, State.WithLastOutput(error));
+                return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, State.WithLastOutput(error));
             }
 
             if (!State.HandshakeSeen || !State.Done || ExitCode != 0)
             {
-                return ModelLabExperimentService.Finished(ModelLabExperimentStatus.Failed, State.WithLastOutput($"The Model Lab script exited with status {ExitCode}."));
+                return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, State.WithLastOutput($"The Model Lab script exited with status {ExitCode}."));
             }
 
             return null;

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Data.Common;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -53,23 +54,7 @@ internal sealed class NodeChatConversationCommands
                 // A new conversation inherits the bound agent's default-temporary-chat flag, read inline on the same
                 // connection so no store is injected into the raw-SQL write path. Unbound defaults to false.
                 var memoryExcluded = await ReadAgentDefaultTemporaryChatAsync(dbContext, request.AgentDefinitionId, token);
-
-                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-                command.CommandText = """
-                                      INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, agent_definition_id, memory_excluded, kind)
-                                      VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, $agent_definition_id, $memory_excluded, $kind);
-                                      """;
-                AddParameter(command, "$conversation_id", conversationId);
-                AddParameter(command, "$title", EncryptTitle(request.Title, dbContext, conversationId));
-                AddParameter(command, "$user_id", request.UserId);
-                AddParameter(command, "$created_at_utc", createdAtUtc);
-                AddParameter(command, "$last_seen_utc", createdAtUtc);
-                AddParameter(command, "$origin", request.Origin);
-                AddParameter(command, "$agent_definition_id", request.AgentDefinitionId);
-                AddParameter(command, "$memory_excluded", memoryExcluded ? 1 : 0);
-                AddParameter(command, "$kind", request.Kind);
-                await OpenIfNeededAsync(command.Connection, token);
-                await command.ExecuteNonQueryAsync(token);
+                await InsertConversationRowAsync(dbContext, transaction: null, conversationId, request, memoryExcluded, token);
 
                 return new NodeChatConversationDto
                 {
@@ -86,6 +71,33 @@ internal sealed class NodeChatConversationCommands
                 };
             },
             cancellationToken);
+    }
+
+    /// <summary>Inserts the conversation row, last seen at its creation, on the caller's connection and transaction.</summary>
+    internal static async Task InsertConversationRowAsync(NodeChatDbContext dbContext,
+        DbTransaction? transaction,
+        Guid conversationId,
+        NodeChatCreateConversationRequest request,
+        bool memoryExcluded,
+        CancellationToken cancellationToken)
+    {
+        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+                              INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, agent_definition_id, memory_excluded, kind)
+                              VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, $agent_definition_id, $memory_excluded, $kind);
+                              """;
+        AddParameter(command, "$conversation_id", conversationId);
+        AddParameter(command, "$title", EncryptTitle(request.Title, dbContext, conversationId));
+        AddParameter(command, "$user_id", request.UserId);
+        AddParameter(command, "$created_at_utc", request.CreatedAtUtc);
+        AddParameter(command, "$last_seen_utc", request.CreatedAtUtc);
+        AddParameter(command, "$origin", request.Origin);
+        AddParameter(command, "$agent_definition_id", request.AgentDefinitionId);
+        AddParameter(command, "$memory_excluded", memoryExcluded ? 1 : 0);
+        AddParameter(command, "$kind", request.Kind);
+        await OpenIfNeededAsync(command.Connection, cancellationToken);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     /// <summary>

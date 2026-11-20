@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { listComparisonsQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import type { ComparisonReport } from "@/features/training/models/ComparisonModels";
+import { acceptConfirm, cancelConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const { comparisonsMock } = vi.hoisted(() => ({
@@ -84,7 +87,12 @@ describe("ComparisonsPage", () => {
 	});
 
 	it("renders comparison accuracy and benchmark values from a report", async () => {
-		renderWithProviders(<ComparisonsPage />, { withRouter: true });
+		renderWithProviders(
+			<ConfirmProvider>
+				<ComparisonsPage />
+			</ConfirmProvider>,
+			{ withRouter: true },
+		);
 
 		expect(await screen.findByRole("heading", { name: "Base versus tuned" })).toBeTruthy();
 		expect(screen.getByText("instruction")).toBeTruthy();
@@ -95,7 +103,12 @@ describe("ComparisonsPage", () => {
 	});
 
 	it("keeps both report tables inside their own scroll containers", async () => {
-		renderWithProviders(<ComparisonsPage />, { withRouter: true });
+		renderWithProviders(
+			<ConfirmProvider>
+				<ComparisonsPage />
+			</ConfirmProvider>,
+			{ withRouter: true },
+		);
 		const tables = await Promise.all(
 			["training-comparison-accuracy-table", "training-comparison-benchmark-table"].map((testId) => screen.findByTestId(testId)),
 		);
@@ -104,15 +117,49 @@ describe("ComparisonsPage", () => {
 		}
 	});
 
-	it("deletes a report with its identifier and expected version", async () => {
-		renderWithProviders(<ComparisonsPage />, { withRouter: true });
+	it("deletes a report with its identifier and expected version once the operator confirms, and nothing on cancel", async () => {
+		renderWithProviders(
+			<ConfirmProvider>
+				<ComparisonsPage />
+			</ConfirmProvider>,
+			{ withRouter: true },
+		);
+		const button = await screen.findByRole("button", { name: "Delete" });
 
-		fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+		const dialog = await openConfirm(button, "Delete this comparison report?");
+		expect(dialog.textContent).toContain("'Base versus tuned' is deleted.");
+		await cancelConfirm(button);
+		expect(deleteMutate).not.toHaveBeenCalled();
 
-		expect(deleteMutate).toHaveBeenCalledOnce();
+		await openConfirm(button, "Delete this comparison report?");
+		acceptConfirm();
+
+		await waitFor(() => expect(deleteMutate).toHaveBeenCalledOnce());
 		expect(deleteMutate).toHaveBeenCalledWith(
 			{ path: { comparisonId: "comparison-1" }, body: { expectedVersion: 7 } },
 			expect.objectContaining({ onError: expect.any(Function) }),
+		);
+	});
+
+	it("sends the version the list holds when the operator confirms, not the one seen at the click", async () => {
+		const { queryClient } = renderWithProviders(
+			<ConfirmProvider>
+				<ComparisonsPage />
+			</ConfirmProvider>,
+			{ withRouter: true },
+		);
+		const button = await screen.findByRole("button", { name: "Delete" });
+
+		await openConfirm(button, "Delete this comparison report?");
+		// A refetch lands while the dialog is open and bumps the report's version.
+		queryClient.setQueryData(listComparisonsQueryKey(), { items: [{ id: "comparison-1", version: 8 }] });
+		acceptConfirm();
+
+		await waitFor(() =>
+			expect(deleteMutate).toHaveBeenCalledWith(
+				{ path: { comparisonId: "comparison-1" }, body: { expectedVersion: 8 } },
+				expect.objectContaining({ onError: expect.any(Function) }),
+			),
 		);
 	});
 });

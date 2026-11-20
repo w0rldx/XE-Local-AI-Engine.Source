@@ -1,6 +1,7 @@
 import { useCombobox } from "@mantine/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { isImeComposing } from "@/core/ui/models/ImeComposition";
 import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 import {
 	getSlashCommandQuery,
@@ -64,7 +65,7 @@ export function useSlashCommandAutocomplete(input: UseSlashCommandAutocompleteIn
 
 	const onKeyDown = useCallback(
 		(event: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
-			if (!opened || event.nativeEvent.isComposing || input.isComposing) {
+			if (!opened || isImeComposing(event) || input.isComposing) {
 				return false;
 			}
 			if (event.key === "Enter" && event.shiftKey) {

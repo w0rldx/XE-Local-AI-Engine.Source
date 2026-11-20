@@ -3,11 +3,11 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 
 import { listGraphWorkflowRunEventsInfiniteOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { type FeedOptions, feedQuerySettings } from "@/core/api/QueryKeys";
 import type {
 	GraphWorkflowRunEventResponse,
 	ListGraphWorkflowRunEventsResponse,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
-import { type FeedOptions, feedQuerySettings } from "@/features/graphWorkflows/queries/useGraphWorkflows";
 
 /** One ascending, deduplicated trail plus the first page's truncation flag. See {@link useGraphWorkflowRunEvents}. */
 export interface GraphWorkflowEventFeed {

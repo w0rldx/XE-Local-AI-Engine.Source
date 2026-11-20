@@ -6,8 +6,10 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
+using XE_Local_AI_Engine.Tests.Capacity;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -108,6 +110,47 @@ public sealed class DatasetGenerationHostedServiceTests
         await harness.Executor.DidNotReceiveWithAnyArgs().ExecuteAsync(default!, default);
     }
 
+    /// <summary>The queue peeks before the gate, so an empty poll never asks it: a refusal there would evict an idle Model Lab worker over nothing.</summary>
+    [Test]
+    public async Task ExecuteAsync_WhenNothingIsQueued_NeverAsksTheGate_SoAnIdleGpuHolderStays()
+    {
+        await using var holders = new IdleHolderHarness();
+        var holder = await holders.AdmitIdleAsync();
+        using var harness = new Harness
+        {
+            Gate = holders.Gate
+        };
+        harness.Signal.CancelOnWaitNumber = 2;
+
+        await harness.RunToIdleAsync();
+
+        AssertEx.Equal(expected: 2, harness.PeekCount, "Two empty polls ran.");
+        AssertEx.Equal(expected: 0, holder.PreemptionRequestCount, "An empty poll raised GPU demand.");
+        AssertEx.Equal(FakeGpuIdleHolder.HolderState.Idle, holder.State);
+    }
+
+    /// <summary>The control: queued work does ask the gate, and its refusal evicts the idle worker so the next poll admits.</summary>
+    [Test]
+    public async Task ExecuteAsync_WhenWorkIsQueued_ARefusalEvictsAnIdleGpuHolder_AndTheWorkRuns()
+    {
+        await using var holders = new IdleHolderHarness();
+        var holder = await holders.AdmitIdleAsync();
+        using var harness = new Harness
+        {
+            Gate = holders.Gate
+        };
+        var work = Work();
+        harness.Enqueue(work);
+        // The refused poll parks once; the eviction has released by the time the second poll asks again.
+        harness.Signal.OnWait = () => holder.Released;
+        harness.Signal.CancelOnWaitNumber = 2;
+
+        await harness.RunToIdleAsync();
+
+        AssertEx.Equal(expected: 1, holder.EvictionCount);
+        await harness.Executor.Received(1).ExecuteAsync(work, Arg.Any<CancellationToken>());
+    }
+
     private static async Task<DatasetGenerationClaimedWork?> CancelThenThrowAsync(CancellationTokenSource cancellation)
     {
         await cancellation.CancelAsync();
@@ -155,6 +198,12 @@ public sealed class DatasetGenerationHostedServiceTests
         {
             Store.RecoverOnStartupAsync(Arg.Any<CancellationToken>())
                  .Returns(_ => Task.FromResult<IReadOnlyList<Guid>>([]));
+            Store.HasQueuedWorkAsync(Arg.Any<CancellationToken>())
+                 .Returns(_ =>
+                 {
+                     PeekCount++;
+                     return Task.FromResult(_queued.Count > 0 || FirstClaimBehavior is not null);
+                 });
             Store.ClaimNextAsync(Arg.Any<CancellationToken>())
                  .Returns(_ =>
                  {
@@ -182,6 +231,10 @@ public sealed class DatasetGenerationHostedServiceTests
         public CancellationTokenSource Cancellation { get; } = new();
         public int ClaimCount { get; private set; }
 
+        public int PeekCount { get; private set; }
+
+        public IGpuWorkGate Gate { get; set; } = new GpuWorkGate();
+
         /// <summary>Scripts the FIRST claim only; every later claim falls back to the queue.</summary>
         public Func<Task<DatasetGenerationClaimedWork?>>? FirstClaimBehavior { get; set; }
 
@@ -206,7 +259,7 @@ public sealed class DatasetGenerationHostedServiceTests
             using var service = new DatasetGenerationHostedService(_provider.GetRequiredService<IServiceScopeFactory>(),
                 Signal,
                 Events,
-                new GpuWorkGate(),
+                Gate,
                 Options.Create(new DatasetGenerationQueueOptions
                 {
                     PollInterval = TimeSpan.FromMilliseconds(10)
@@ -229,12 +282,20 @@ public sealed class DatasetGenerationHostedServiceTests
         /// <summary>Which park stops the loop. Raised when a test needs the consumer to survive an idle poll first.</summary>
         public int CancelOnWaitNumber { get; set; } = 1;
 
+        /// <summary>Awaited on every park, for a test that needs something to have happened before the next poll.</summary>
+        public Func<Task>? OnWait { get; set; }
+
         public void Wake()
         {
         }
 
         public async Task<bool> WaitAsync(TimeSpan timeout, CancellationToken cancellationToken)
         {
+            if (OnWait is { } onWait)
+            {
+                await onWait().WaitAsync(TestBudgets.Contended, cancellationToken);
+            }
+
             WaitCount++;
             if (Cancellation is { } cancellation && WaitCount >= CancelOnWaitNumber)
             {

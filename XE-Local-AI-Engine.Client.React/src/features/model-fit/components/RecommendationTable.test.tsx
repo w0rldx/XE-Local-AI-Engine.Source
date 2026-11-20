@@ -2,6 +2,7 @@
 
 import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import i18next from "i18next";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -102,8 +103,9 @@ describe("RecommendationTable", () => {
 		});
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
 		cleanup();
+		await i18next.changeLanguage("en");
 	});
 
 	it("shows a Download button only for a not-installed row with a model name and calls onDownload with that row", () => {
@@ -207,9 +209,9 @@ describe("RecommendationTable", () => {
 
 		renderTable(<RecommendationTable recommendations={[row]} />);
 
-		// 6144 MB → 6.0 GB, 4096 MB → 4.0 GB (formatMemoryMb).
-		expect(screen.getByText("6.0 GB")).toBeTruthy();
-		expect(screen.getByText("4.0 GB")).toBeTruthy();
+		// 6144 MiB → 6.0 GiB, 4096 MiB → 4.0 GiB (formatMemoryMb).
+		expect(screen.getByText("6.0 GiB")).toBeTruthy();
+		expect(screen.getByText("4.0 GiB")).toBeTruthy();
 	});
 
 	it("shows every row including catalog-only ones (no hiding) and marks the non-downloadable ones", () => {
@@ -404,8 +406,8 @@ describe("RecommendationTable", () => {
 
 		renderTable(<RecommendationTable recommendations={[withPerToken]} />);
 
-		// 640 B/token is 0.6 KB: the line reports KB, and the quant it was computed with, lower-cased.
-		expect(screen.getByTestId("model-fit-kv-per-token-1").textContent).toBe("MLA \u00b7 0.6 KB/token (q8_0 KV)");
+		// 640 B/token is 0.6 KiB: the line reports KiB, and the quant it was computed with, lower-cased.
+		expect(screen.getByTestId("model-fit-kv-per-token-1").textContent).toBe("MLA \u00b7 0.6 KiB/token (q8_0 KV)");
 	});
 
 	it("renders the KV-per-token line without an arch tag when the row carries no attention tag", () => {
@@ -414,7 +416,31 @@ describe("RecommendationTable", () => {
 		renderTable(<RecommendationTable recommendations={[noArch]} />);
 
 		// No tag means no separator either: the line starts at the figure rather than with a dangling middle dot.
-		expect(screen.getByTestId("model-fit-kv-per-token-1").textContent).toBe("0.6 KB/token (q8_0 KV)");
+		expect(screen.getByTestId("model-fit-kv-per-token-1").textContent).toBe("0.6 KiB/token (q8_0 KV)");
+	});
+
+	it("localizes only the number in the fixed-unit KiB/token, GiB and required-memory figures", async () => {
+		await i18next.changeLanguage("de");
+		const row = makeRecommendation({
+			rank: 1,
+			kvBytesPerToken: 640,
+			kvBytesPerTokenQuant: "Q8_0",
+			attentionArch: null,
+			kvQuant: "Q8_0",
+			kvQuantEstimatedGb: 10.965,
+			kvQuantHeadroomGb: 3.1,
+			kvQuantFits: true,
+			kvQuantRequiresFlashAttention: true,
+			requiredRamMb: 6656,
+		});
+
+		renderTable(<RecommendationTable recommendations={[row]} />);
+
+		// The unit stays in the key's text; the decimal follows the UI language.
+		expect(screen.getByTestId("model-fit-kv-per-token-1").textContent).toBe("0,6 KiB/token (q8_0 KV)");
+		expect(screen.getByTestId("model-fit-kv-quant-hint-1").textContent).toBe("≈ 11,0 GiB with Q8_0 KV cache");
+		// 6656 MiB → 6,5 GiB (formatMemoryMb).
+		expect(screen.getByText("6,5 GiB")).toBeTruthy();
 	});
 
 	it("withholds the KV-per-token line when the figure has no quant label", () => {

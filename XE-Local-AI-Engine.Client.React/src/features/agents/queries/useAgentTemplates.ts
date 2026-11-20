@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { agentDefinitionsInvalidationKey, agentDefinitionsQueryIds } from "@/core/agents/queries/useAgentDefinitions";
+import { agentDefinitionsQueryIds } from "@/core/agents/queries/useAgentDefinitions";
 import {
 	importAgentTemplatesMutation,
 	listAgentTemplatesOptions,
 	listAgentTemplatesQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 
 // Server state for the starter-agent gallery. Reads use the generated hey-api `listAgentTemplatesOptions()` (which
 // wires the shared axios instance + TanStack Query AbortSignal automatically). The import mutation invalidates BOTH the
@@ -32,7 +33,7 @@ export function useImportAgentTemplates() {
 			Promise.all([
 				// Newly-seeded agents are ordinary definitions — refetch the definitions list so they appear.
 				queryClient.invalidateQueries({
-					queryKey: agentDefinitionsInvalidationKey(agentDefinitionsQueryIds.list),
+					queryKey: operationInvalidationKey(agentDefinitionsQueryIds.list),
 				}),
 				// Refetch the templates list so each summary's `alreadyImported` flag (and the disabled checkbox) updates.
 				queryClient.invalidateQueries({ queryKey: listAgentTemplatesQueryKey() }),

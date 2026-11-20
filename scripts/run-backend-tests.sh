@@ -4,9 +4,10 @@
 # Layers, top to bottom (each is a section below):
 #   lock          re-runs itself through with-build-lock.sh unless the lock is already held
 #   build         one Release build of the solution (skipped by NO_BUILD=1)
-#   fail-fast     the Architecture namespace alone under assembly-guard.sh; red exits 1 here
+#   fail-fast     the Architecture namespace is listed here; its run starts with the lanes below
 #   sizing        lib/test-sizing.sh turns free RAM into JOBS for the batched lane
-#   lanes         concurrent: XE-Local-AI-Engine.Tests via run-tests-memory-safe.sh (which sources
+#   lanes         concurrent: the Architecture run (red stops the other lanes and exits 1)
+#                 | XE-Local-AI-Engine.Tests via run-tests-memory-safe.sh (which sources
 #                 lib/test-sizing.sh too) | every other enrolled project via dotnet test --no-build
 #                 | contracts via run-release-contract-tests.sh when scripts/, publish/ or workflows changed
 #   history row   one line appended to <main checkout>/.tmp/gate-history.log, then the exit code
@@ -49,15 +50,19 @@
 #   test lanes, so it rarely lengthens the gate.
 #
 # Fail-fast: Architecture conventions first
-#   After the build and before any lane, the Architecture namespace of XE-Local-AI-Engine.Tests runs
-#   alone (`--list-tests` first, so a filter that matches nothing is a failure, then the run under the
-#   assembly guard). Red: the failing tests, their classes and one "RULE: <text>" line each (the first
-#   sentence of the test's `/// <summary>`, else the class's, else "(no summary)") are printed with
-#   "FAIL-FAST: Architecture conventions red; long lanes not run" and the gate exits 1 without starting
-#   a lane. The pre-lane is not a row of the summary table or of the history line; the batched lane
-#   still runs that namespace as one of its batches, because run-tests-memory-safe.sh has no exclusion
-#   knob (one short batch among the module's ~100). Skipped with --siblings-only (no batched module) and
-#   with XE_GATE_FAIL_FAST=0.
+#   After the build and before any lane, the Architecture namespace of XE-Local-AI-Engine.Tests is
+#   listed (`--list-tests`): a filter that matches nothing fails here, "long lanes not run". The run
+#   itself, under the assembly guard, is one more background process group started with the lanes, so
+#   its ~40 s no longer sit between the build and the critical batched lane; it is waited on first and
+#   judged in this shell. Red: the failing tests, their classes and one "RULE: <text>" line each (the
+#   first sentence of the test's `/// <summary>`, else the class's, else "(no summary)") are printed with
+#   "FAIL-FAST: Architecture conventions red; long lanes stopped", the lanes are stopped as a cancel
+#   stops them (see "Cancellation"), their results are discarded so the history row has empty lanes as
+#   before, and the gate exits 1. Under XE_TEST_PROFILE=low-memory the run stays serial, before any
+#   lane ("long lanes not run"). The pre-lane is not a row of the summary table or of the history
+#   line; the batched lane still runs that namespace as one of its batches, because
+#   run-tests-memory-safe.sh has no exclusion knob (one short batch among the module's ~100). Skipped
+#   with --siblings-only (no batched module) and with XE_GATE_FAIL_FAST=0.
 #
 # Gate history
 #   Every run that got past argument parsing appends ONE tab-separated line to the MAIN checkout's
@@ -126,6 +131,9 @@
 #   a sibling coverage run an unwrapped concurrent build is NOT detected, so such a run has weaker
 #   contamination detection than the plain gate. The build lock still covers every cooperating shell,
 #   and the batched module's lane keeps its own guard.
+#   The Architecture pre-lane guards only the batched module's own bin (`--root`, the tree the runner
+#   snapshots for itself): it runs beside the siblings, and in coverage mode their instrumentation
+#   would void a --test-bins guard every time. That bin is never instrumented (the runner copies it).
 #
 # Cancellation
 #   In a terminal, Ctrl-C just works: the signal goes to the whole foreground process group, which is
@@ -142,10 +150,10 @@
 #   making it asynchronous so it could forward signals would silently set SIGINT and SIGQUIT to
 #   ignored in every command it wraps, which is the POSIX rule for asynchronous commands.
 #
-#   However the signal arrives, the handler here terminates each lane's process GROUP, waits out a
-#   bounded grace period, escalates survivors to KILL and reaps them before this script exits. The
-#   lock itself belongs to the wrapper, so it is released when the wrapper exits, which in a
-#   group-wide signal is not ordered after the reap. That is accepted: a cancelled run has no verdict
+#   However the signal arrives, the handler here terminates each lane's process GROUP (the Architecture
+#   pre-lane's included), waits out a bounded grace period, escalates survivors to KILL and reaps them
+#   before this script exits. The lock itself belongs to the wrapper, so it is released when the
+#   wrapper exits, which in a group-wide signal is not ordered after the reap. That is accepted: a cancelled run has no verdict
 #   to protect, and a dying test host only READS the assemblies a new lock holder might rewrite —
 #   except under COVERAGE_DIR, where a killed host never restores the ones its instrumentation
 #   rewrote, so a cancelled coverage run leaves that project's output tree to the next build.
@@ -159,7 +167,7 @@
 #
 # Env knobs:
 #   XE_TEST_PROFILE   unset: JOBS sized from free RAM (scripts/lib/test-sizing.sh), i.e.
-#                     clamp(1, 16 or 10, floor((MemAvailable − 5 − 4) / 1.5)) in GB, printed as a
+#                     clamp(1, 16, 12 or 10, floor((MemAvailable − 5 − 4) / 1.0)) in GB, printed as a
 #                     ">> Sizing:" line and exported to the runner; at JOBS=1 the sibling widths also
 #                     drop to 1, but the lanes stay concurrent. low-memory: default JOBS=1, PAR=1
 #                     and sibling width 1, and run every project lane sequentially. Explicit JOBS,
@@ -197,6 +205,8 @@
 #   69   — could not acquire the build lock (from with-build-lock.sh); nothing was run
 #   75   — CONTAMINATED: assemblies changed under a run; the result is void, re-run it. Never a
 #          red and never a green.
+#   Precedence when several apply: 75 from any source (a lane or the Architecture guard) > a cancel
+#   (130/143) > the Architecture fail-fast red > a lane red, hollow or without a summary.
 set -uo pipefail
 
 # Resolved BEFORE the cd below, because $BASH_SOURCE is whatever spelling the caller used: after the
@@ -404,6 +414,9 @@ RESULTS_ROOT="${COVERAGE_DIR:-$REPO/.tmp/backend-test-results}"
 # which still evaluates the project.
 export MSBUILDDISABLENODEREUSE=1
 export NUGET_PACKAGES="${NUGET_PACKAGES:-$HOME/.nuget/packages}"
+# Telemetry is overhead in every test process and no verdict reads it. The runner sets the same pair for
+# callers that start it directly.
+export TESTINGPLATFORM_TELEMETRY_OPTOUT=1 DOTNET_CLI_TELEMETRY_OPTOUT=1
 
 # Auto-enrolment from the solution, same rule as the workflow: every *.Tests[.X] project except the
 # E2E suite (Playwright browsers + an SPA build; it has its own opt-in runner).
@@ -550,6 +563,9 @@ if [[ -z "${NO_BUILD:-}" ]]; then
     GATE_REASON=build
     exit 1
   fi
+  # Again after the build: idle compiler and MSBuild nodes hold RAM that the sizing below would otherwise
+  # give to batches.
+  dotnet build-server shutdown >/dev/null 2>&1 || true
   GATE_BUILT=1
 fi
 
@@ -602,47 +618,69 @@ summary_rule() {
 # The Architecture pre-lane — see "Fail-fast" in the header. The filter is the batched runner's own
 # per-namespace form, so it selects exactly the tests of that namespace's batch.
 ARCH_FILTER="/*/XE_Local_AI_Engine.Tests.Architecture/*/*"
-run_architecture_fail_fast() {
-  local exe="$REPO/$BATCHED_MODULE/bin/Release/net10.0/$BATCHED_MODULE" log="$RESULTS_ROOT/architecture-fail-fast.log"
-  local rc p name class
+ARCH_EXE="$REPO/$BATCHED_MODULE/bin/Release/net10.0/$BATCHED_MODULE"
+ARCH_LOG="$RESULTS_ROOT/architecture-fail-fast.log"
+list_architecture() {
+  local rc
   progress ">> Fail-fast: Architecture conventions ($ARCH_FILTER; XE_GATE_FAIL_FAST=0 skips)"
-  [[ -x "$exe" ]] || { echo "ERROR: test host not found at $exe (build first)." >&2; exit 1; }
-  TUNIT_DISABLE_HTML_REPORTER=1 "$exe" --list-tests --treenode-filter "$ARCH_FILTER" >"$log" 2>&1
+  [[ -x "$ARCH_EXE" ]] || { echo "ERROR: test host not found at $ARCH_EXE (build first)." >&2; exit 1; }
+  TUNIT_DISABLE_HTML_REPORTER=1 "$ARCH_EXE" --list-tests --treenode-filter "$ARCH_FILTER" >"$ARCH_LOG" 2>&1
   rc=$?
   if (( rc != 0 )); then
-    sed 's/^/[architecture] /' "$log" >&2
+    sed 's/^/[architecture] /' "$ARCH_LOG" >&2
     echo "ERROR: --list-tests for $ARCH_FILTER exited $rc (8 = the filter matched no test)." >&2
     echo "FAIL-FAST: Architecture conventions red; long lanes not run" >&2
     GATE_REASON=fail-fast
     exit 1
   fi
-  env -u XE_BUILD_LOCK_HELD TUNIT_DISABLE_HTML_REPORTER=1 "$REPO/scripts/assembly-guard.sh" guard --test-bins -- \
-    "$exe" --treenode-filter "$ARCH_FILTER" --maximum-parallel-tests "${PAR:-1}" >>"$log" 2>&1
+}
+# Guarded by the batched module's own bin only: see "Contamination guard" in the header.
+run_architecture() {
+  local rc
+  env -u XE_BUILD_LOCK_HELD TUNIT_DISABLE_HTML_REPORTER=1 "$REPO/scripts/assembly-guard.sh" guard \
+    --root "$(dirname "$ARCH_EXE")" -- "$ARCH_EXE" --treenode-filter "$ARCH_FILTER" \
+    --maximum-parallel-tests "${PAR:-1}" >>"$ARCH_LOG" 2>&1
   rc=$?
+  # Concurrent run only: finish_cancel reads it, so a void that lands before the verdict outranks a cancel.
+  [[ -z "$LANE_DIR" ]] || echo "$rc" >"$LANE_DIR/architecture.rc"
+  return "$rc"
+}
+# Judges the run that exited <rc>: 0 green, 75 void, 1 red (with FAILED TEST, FAILED CLASS and RULE lines).
+# <lanes> ends the FAIL-FAST line: "not run" or "stopped".
+architecture_verdict() {
+  local rc="$1" lanes="$2" p name class
   if (( rc == 75 )); then
-    sed 's/^/[architecture] /' "$log" >&2
+    sed 's/^/[architecture] /' "$ARCH_LOG" >&2
     echo "RESULT VOID: assemblies changed under the Architecture pre-lane (assembly-guard exit 75). Re-run the gate." >&2
-    exit 75
+    return 75
   fi
-  p="$(grep -oE 'succeeded: *[0-9]+' "$log" | grep -oE '[0-9]+' | tail -1)"
-  if (( rc == 0 && ${p:-0} > 0 )) && grep -qE 'Passed!' "$log"; then
+  p="$(grep -oE 'succeeded: *[0-9]+' "$ARCH_LOG" | grep -oE '[0-9]+' | tail -1)"
+  if (( rc == 0 && ${p:-0} > 0 )) && grep -qE 'Passed!' "$ARCH_LOG"; then
     progress ">> Fail-fast: Architecture green ($p passed)"
     return 0
   fi
-  sed 's/^/[architecture] /' "$log" >&2
-  print_failed_tests "$log"
+  sed 's/^/[architecture] /' "$ARCH_LOG" >&2
+  print_failed_tests "$ARCH_LOG"
   while IFS= read -r name; do
     class="$(grep -rlw -- "${name%%(*}" "$REPO/$BATCHED_MODULE/Architecture" --include='*.cs' 2>/dev/null | head -1)"
     if [[ -n "$class" ]]; then echo "FAILED CLASS: $(basename "$class" .cs)" >&2
     else echo "FAILED CLASS: ? (no source matched $name)" >&2; fi
     echo "RULE: $(summary_rule "$class" "${name%%(*}")" >&2
-  done < <(sed -nE 's/^[[:space:]]*failed (.+) \([0-9][^()]*\)[[:space:]]*$/\1/p' "$log" | sort -u)
-  echo "FAIL-FAST: Architecture conventions red; long lanes not run" >&2
+  done < <(sed -nE 's/^[[:space:]]*failed (.+) \([0-9][^()]*\)[[:space:]]*$/\1/p' "$ARCH_LOG" | sort -u)
+  echo "FAIL-FAST: Architecture conventions red; long lanes $lanes" >&2
   GATE_REASON=fail-fast
-  exit 1
+  return 1
 }
+ARCH_CONCURRENT=""
 if [[ -z "$SIBLINGS_ONLY" && "${XE_GATE_FAIL_FAST:-1}" != 0 ]]; then
-  run_architecture_fail_fast
+  list_architecture
+  # low-memory runs every lane alone, so the pre-lane keeps its serial place before them.
+  if [[ -n "$LOW_MEMORY" ]]; then
+    run_architecture
+    architecture_verdict $? "not run" || exit
+  else
+    ARCH_CONCURRENT=1
+  fi
 fi
 
 # Lanes are background processes, so results travel through files, not shell globals. Removed by
@@ -692,7 +730,8 @@ cancel_lanes() {
 }
 
 # Cancellation is requested by a signal and COMPLETED here, so that a lane started microseconds
-# before the signal is still cancelled: see LAUNCHING below.
+# before the signal is still cancelled: see LAUNCHING below. A red or void Architecture pre-lane stops
+# the lanes through here too, with CANCEL_STATUS 1 or 75.
 finish_cancel() {
   local module rc status="$CANCEL_STATUS"
   cancel_lanes
@@ -704,6 +743,9 @@ finish_cancel() {
     read -r _ _ rc _ <"$LANE_DIR/$module.result"
     [[ "$rc" == 75 ]] && status=75
   done
+  [[ -f "$LANE_DIR/architecture.rc" && "$(<"$LANE_DIR/architecture.rc")" == 75 ]] && status=75
+  # 1 is only ever the fail-fast stop: its row records no lane, as when fail-fast ran before the lanes.
+  (( status != 1 )) || rm -f "${LANE_DIR:?}"/*.result "${LANE_DIR:?}"/*.skips
   exit "$status"
 }
 
@@ -834,6 +876,14 @@ done
 # hand. Job control also un-ignores SIGINT and SIGQUIT for these lanes, which bash sets to ignored in
 # an asynchronous command: without it a lane could not be interrupted at all.
 set -m
+# The Architecture pre-lane: cancellable like a lane (LANE_PIDS), but not a row (LANES). See "Fail-fast".
+if [[ -n "$ARCH_CONCURRENT" ]]; then
+  LAUNCHING=1
+  run_architecture </dev/null &
+  LANE_PIDS[architecture]=$!
+  LAUNCHING=0
+  (( CANCEL_STATUS )) && finish_cancel
+fi
 if [[ -z "$SIBLINGS_ONLY" ]]; then
   progress ">> Lane: $BATCHED_MODULE through scripts/run-tests-memory-safe.sh"
   LANES+=("$BATCHED_MODULE")
@@ -865,6 +915,15 @@ if [[ -n "$CONTRACT_LANE" ]]; then
   [[ -z "$LOW_MEMORY" ]] || wait "${LANE_PIDS[$CONTRACT_LANE]}"
 fi
 set +m
+
+# Judged before any lane is waited on, in this shell, so GATE_REASON, GATE_FAILED and GATE_FLAKES land here.
+if [[ -n "$ARCH_CONCURRENT" ]]; then
+  wait "${LANE_PIDS[architecture]}"
+  arch_rc=$?
+  # Reaped: a later cancel must not signal a process group id the kernel may already have reused.
+  unset 'LANE_PIDS[architecture]'
+  architecture_verdict "$arch_rc" stopped || { CANCEL_STATUS=$?; finish_cancel; }
+fi
 
 for module in "${LANES[@]}"; do wait "${LANE_PIDS[$module]}"; done
 

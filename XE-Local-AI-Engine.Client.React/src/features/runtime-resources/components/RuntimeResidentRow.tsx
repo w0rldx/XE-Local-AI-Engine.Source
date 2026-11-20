@@ -1,8 +1,14 @@
-import { Badge, Button, Group, Stack, Text } from "@mantine/core";
+import { Badge, Group, Stack, Text } from "@mantine/core";
 import { IconPlayerEject } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import type { RuntimeResident, RuntimeResidentState } from "@/features/runtime-resources/models/RuntimeResourcesModels";
+import { humanizeBytes } from "@/core/formatting/BytesFormatting";
+import { FocusableDisabledButton } from "@/core/ui/components/FocusableDisabledButton/FocusableDisabledButton";
+import type {
+	ResidentRuntime,
+	RuntimeResident,
+	RuntimeResidentState,
+} from "@/features/runtime-resources/models/RuntimeResourcesModels";
 
 const stateColors: Record<RuntimeResidentState, string> = {
 	starting: "yellow",
@@ -17,12 +23,21 @@ interface RuntimeResidentRowProps {
 	readonly onEject: () => void;
 }
 
-// One image or transcription process in the widget. The eject unloads the whole runtime, never one model, which is
-// why the accessible name names the runtime rather than the model.
+// One image, transcription or Model Lab process in the widget. The eject unloads the whole runtime, never one model,
+// which is why the accessible name names the runtime rather than the model.
 export function RuntimeResidentRow({ resident, ejecting, onEject }: RuntimeResidentRowProps) {
 	const { t } = useTranslation();
-	const isImage = resident.runtime === "image";
 	const key = resident.modelId ?? "starting";
+	const runtimeLabels: Record<ResidentRuntime, string> = {
+		image: t("runtimeResources.runtime.image", "Images"),
+		transcription: t("runtimeResources.runtime.transcription", "Transcription"),
+		modelLab: t("runtimeResources.runtime.modelLab", "Model Lab"),
+	};
+	const ejectLabels: Record<ResidentRuntime, string> = {
+		image: t("runtimeResources.ejectImageRuntime", "Eject image runtime"),
+		transcription: t("runtimeResources.ejectTranscriptionRuntime", "Eject transcription runtime"),
+		modelLab: t("runtimeResources.ejectModelLabRuntime", "Eject Model Lab worker"),
+	};
 
 	return (
 		<Group justify="space-between" wrap="nowrap" gap="xs" data-testid={`runtime-resources-row-${resident.runtime}-${key}`}>
@@ -32,9 +47,7 @@ export function RuntimeResidentRow({ resident, ejecting, onEject }: RuntimeResid
 				</Text>
 				<Group gap={4}>
 					<Badge size="xs" variant="outline" color="gray">
-						{isImage
-							? t("runtimeResources.runtime.image", "Images")
-							: t("runtimeResources.runtime.transcription", "Transcription")}
+						{runtimeLabels[resident.runtime]}
 					</Badge>
 					{resident.backend === null ? null : (
 						<Badge size="xs" variant="outline">
@@ -45,25 +58,29 @@ export function RuntimeResidentRow({ resident, ejecting, onEject }: RuntimeResid
 						{t(`runtimeResources.state.${resident.state}`)}
 					</Badge>
 				</Group>
+				{resident.vramBytes === null ? null : (
+					<Text size="xs" c="dimmed">
+						{t("runtimeResources.vramAllocated", "{{size}} GPU memory allocated", {
+							size: humanizeBytes(resident.vramBytes),
+						})}
+					</Text>
+				)}
 			</Stack>
-			<Button
+			<FocusableDisabledButton
 				size="compact-xs"
 				variant="light"
 				color="red"
 				leftSection={<IconPlayerEject size={12} />}
-				loading={ejecting}
+				loaderSize={12}
 				// A starting or exited process has nothing to unload yet (or any more); `canEject` mirrors the server's 409.
-				disabled={!resident.canEject || ejecting || resident.state === "starting" || resident.state === "exited"}
+				blocked={!resident.canEject || resident.state === "starting" || resident.state === "exited"}
+				pending={ejecting}
 				onClick={onEject}
-				aria-label={
-					isImage
-						? t("runtimeResources.ejectImageRuntime", "Eject image runtime")
-						: t("runtimeResources.ejectTranscriptionRuntime", "Eject transcription runtime")
-				}
+				aria-label={ejectLabels[resident.runtime]}
 				data-testid={`runtime-resources-eject-${resident.runtime}`}
 			>
 				{t("pages.loadedModels.llamaCpp.eject", "Eject")}
-			</Button>
+			</FocusableDisabledButton>
 		</Group>
 	);
 }

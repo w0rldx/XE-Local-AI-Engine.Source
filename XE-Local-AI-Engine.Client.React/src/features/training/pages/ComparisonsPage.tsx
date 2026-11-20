@@ -1,13 +1,17 @@
 import { Button, Stack } from "@mantine/core";
 import { IconGitCompare, IconPlus } from "@tabler/icons-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { listComparisonsQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
+import { cachedItemVersion } from "@/core/api/QueryKeys";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { ComparisonCreateDialog } from "@/features/training/components/ComparisonCreateDialog";
 import { ComparisonReportCard } from "@/features/training/components/ComparisonReportCard";
@@ -19,6 +23,8 @@ import { useComparisonReports, useDeleteComparison } from "@/features/training/q
  */
 export function ComparisonsPage() {
 	const { t } = useTranslation();
+	const { confirm } = useConfirm();
+	const queryClient = useQueryClient();
 	const [creating, setCreating] = useState(false);
 	const reportsQuery = useComparisonReports();
 	const deleteMutation = useDeleteComparison();
@@ -56,9 +62,27 @@ export function ComparisonsPage() {
 					reports.map((report) => (
 						<ComparisonReportCard
 							key={report.id}
-							onDelete={() =>
+							onDelete={async () => {
+								const confirmed = await confirm({
+									title: t("training.comparisons.list.deleteConfirm.title", "Delete this comparison report?"),
+									description: t(
+										"training.comparisons.list.deleteConfirm.description",
+										"'{{name}}' is deleted. This cannot be undone.",
+										{ name: report.name },
+									),
+									confirmationText: t("training.comparisons.list.delete", "Delete"),
+									cancellationText: t("common.cancel", "Cancel"),
+								});
+								if (!confirmed) {
+									return;
+								}
 								deleteMutation.mutate(
-									{ path: { comparisonId: report.id }, body: { expectedVersion: report.version } },
+									{
+										path: { comparisonId: report.id },
+										body: {
+											expectedVersion: cachedItemVersion(queryClient, listComparisonsQueryKey(), report.id, report.version),
+										},
+									},
 									{
 										onError: (error) =>
 											toast.error(
@@ -68,8 +92,8 @@ export function ComparisonsPage() {
 												),
 											),
 									},
-								)
-							}
+								);
+							}}
 							report={report}
 						/>
 					))

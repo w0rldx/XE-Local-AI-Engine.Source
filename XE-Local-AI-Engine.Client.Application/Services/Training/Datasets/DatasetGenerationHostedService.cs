@@ -66,14 +66,22 @@ public sealed class DatasetGenerationHostedService : BackgroundService
             }
 
             DatasetGenerationClaimedWork? work = null;
-            var admitted = _gpuWorkGate.TryBeginShared(GpuWorkKind.DatasetGeneration, out var admission);
+            IDisposable? admission = null;
+            var refused = false;
             try
             {
-                if (admitted)
+                await using (var claimScope = _scopeFactory.CreateAsyncScope())
                 {
-                    await using var claimScope = _scopeFactory.CreateAsyncScope();
                     var store = claimScope.ServiceProvider.GetRequiredService<ITrainingDatasetStore>();
-                    work = await store.ClaimNextAsync(stoppingToken);
+                    // Peeked first: an empty poll never touches the gate, whose refusal would evict an idle Model Lab worker over nothing.
+                    if (await store.HasQueuedWorkAsync(stoppingToken))
+                    {
+                        refused = !_gpuWorkGate.TryBeginShared(GpuWorkKind.DatasetGeneration, out admission);
+                        if (!refused)
+                        {
+                            work = await store.ClaimNextAsync(stoppingToken);
+                        }
+                    }
                 }
 
                 if (work is not null)
@@ -109,7 +117,7 @@ public sealed class DatasetGenerationHostedService : BackgroundService
 
             if (work is null)
             {
-                await WaitAsync(!admitted && GateRetryInterval < _pollInterval ? GateRetryInterval : _pollInterval, stoppingToken);
+                await WaitAsync(refused && GateRetryInterval < _pollInterval ? GateRetryInterval : _pollInterval, stoppingToken);
             }
         }
     }

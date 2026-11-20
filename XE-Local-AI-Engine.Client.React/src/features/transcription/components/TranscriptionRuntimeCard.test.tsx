@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { getTranscriptionRuntimeStatusQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
 import en from "@/locales/en.json";
 import { domainErrorRoute, jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -63,11 +64,12 @@ function runtimeBody(
 		effectiveModelId?: string;
 		vadInstalled?: boolean;
 		backend?: "cpu" | "cuda";
+		state?: "stopped" | "ready";
 	} = {},
 ) {
 	return {
 		enabled: true,
-		state: "stopped",
+		state: overrides.state ?? "stopped",
 		backend: overrides.backend ?? null,
 		binarySource: null,
 		binaryVersion: null,
@@ -183,8 +185,8 @@ describe("TranscriptionRuntimeCard", () => {
 
 		const hint = await screen.findByTestId("transcription-models-recommendation");
 		expect(hint.textContent).toContain("Recommended for this computer: base");
-		// The CUDA figure, not the RAM one: 838_860_800 bytes renders as 800 MB.
-		expect(hint.textContent).toContain("800 MB");
+		// The CUDA figure, not the RAM one: 838_860_800 bytes renders as 800 MiB.
+		expect(hint.textContent).toContain("800 MiB");
 		expect(hint.textContent).toContain("CUDA");
 	});
 
@@ -495,5 +497,69 @@ describe("TranscriptionRuntimeCard", () => {
 
 		expect(await screen.findByTestId("transcription-runtime-managed")).toBeTruthy();
 		expect(screen.queryByTestId("transcription-runtime-cpu-hint")).toBeNull();
+	});
+	describe("Eject", () => {
+		function serveCard(state: "stopped" | "ready", onEject: () => Promise<void> | void = () => undefined) {
+			server.use(
+				jsonRoute("get", "transcription/runtime", runtimeBody({ state })),
+				recommendationRoute(),
+				jsonRoute("get", "transcription/models", modelList([model("base", 147_951_465, { installed: true })])),
+				http.post(localApiPath("transcription/runtime/eject"), async () => {
+					await onEject();
+					return HttpResponse.json(runtimeBody());
+				}),
+			);
+		}
+
+		// The daemon stopping under a focused Eject blocks it by push; it must keep focus and swallow the press.
+		it("keeps a focused Eject focusable when a push stops the runtime, and sends nothing on click, Enter or Space", async () => {
+			let ejects = 0;
+			serveCard("ready", () => {
+				ejects += 1;
+			});
+			const { queryClient } = renderWithProviders(<TranscriptionRuntimeCard />);
+			const eject = await screen.findByTestId("transcription-runtime-eject");
+			expect(eject.hasAttribute("aria-disabled")).toBe(false);
+			eject.focus();
+
+			server.use(jsonRoute("get", "transcription/runtime", runtimeBody({ state: "stopped" })));
+			await queryClient.invalidateQueries({ queryKey: getTranscriptionRuntimeStatusQueryKey() });
+			await waitFor(() => expect(eject.getAttribute("aria-disabled")).toBe("true"));
+			fireEvent.click(eject);
+			for (const key of ["Enter", " "]) {
+				fireEvent.keyDown(eject, { key });
+				fireEvent.keyUp(eject, { key });
+				// jsdom does not turn the key into a click; a browser does, and that click is what the button swallows.
+				fireEvent.click(eject);
+			}
+
+			expect(eject).toHaveProperty("disabled", false);
+			expect(document.activeElement).toBe(eject);
+			expect(ejects).toBe(0);
+		});
+
+		it("shows a loader on a pending Eject, keeps focus on it and ignores a repeat", async () => {
+			let ejects = 0;
+			let answer!: () => void;
+			const answered = new Promise<void>((resolve) => {
+				answer = resolve;
+			});
+			serveCard("ready", async () => {
+				ejects += 1;
+				await answered;
+			});
+			renderWithProviders(<TranscriptionRuntimeCard />);
+			const eject = await screen.findByTestId("transcription-runtime-eject");
+			eject.focus();
+			fireEvent.click(eject);
+
+			await waitFor(() => expect(eject.getAttribute("aria-busy")).toBe("true"));
+			expect(eject.querySelector(".mantine-Loader-root")).not.toBeNull();
+			fireEvent.click(eject);
+			expect(document.activeElement).toBe(eject);
+			answer();
+			await waitFor(() => expect(eject.hasAttribute("aria-busy")).toBe(false));
+			expect(ejects).toBe(1);
+		});
 	});
 });

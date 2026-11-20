@@ -14,6 +14,9 @@ using XE_Local_AI_Engine.Client.Services.Vault.Implementation;
 
 public sealed partial class Program
 {
+    /// <summary>Exit code: the requested port is in use, at the startup probe or because another process took it before the host bound it.</summary>
+    internal const int PortInUseExitCode = 6;
+
     /// <summary>Exit code: the unlock page's port stayed taken after an unlock, so the real host did not start on a new origin.</summary>
     private const int UnlockPortLostExitCode = 7;
 

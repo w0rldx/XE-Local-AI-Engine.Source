@@ -12,6 +12,7 @@ public sealed class KnowledgeFailureReasonCodesTests
     [Test]
     [Arguments(DocumentTextExtractor.UnreadableReason, "unreadable-file")]
     [Arguments(KnowledgeIngestionService.TimedOutReason, "timed-out")]
+    [Arguments(KnowledgeIngestionService.WaitingForEmbeddingModelReason, "embedding-model-ejected")]
     [Arguments(KnowledgeChunkEmbedder.EmbeddingUnavailableReason, "embedding-unavailable")]
     [Arguments(KnowledgeDocumentCatalogService.InterruptedRepeatedlyReason, "interrupted-repeatedly")]
     public void CodeOf_FixedReason_ReturnsItsTranslatableCode(string reason, string expected)
@@ -36,7 +37,7 @@ public sealed class KnowledgeFailureReasonCodesTests
     [Test]
     public void FixedReasons_AreDiscovered()
     {
-        AssertEx.Equal(16, FixedReasons().Count());
+        AssertEx.Equal(17, FixedReasons().Count());
     }
 
     [Test]

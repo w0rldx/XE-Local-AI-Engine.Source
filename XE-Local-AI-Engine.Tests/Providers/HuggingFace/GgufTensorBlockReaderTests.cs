@@ -249,7 +249,7 @@ public sealed class GgufTensorBlockReaderTests
     [Test]
     public async Task ReadFile_MissingFile_ReturnsUnreadableFailure()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
 
         var result = await GgufTensorBlockReader.ReadFileAsync(dir.FilePath("never-downloaded.gguf"), CancellationToken.None);
 

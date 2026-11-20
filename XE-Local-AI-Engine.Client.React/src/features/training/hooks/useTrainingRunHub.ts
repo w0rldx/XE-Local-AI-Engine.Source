@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { useRunStreamSubscription } from "@/core/api/signalr/useRunStreamSubscription";
+import { trainingRunStream, useRunStreamSubscription } from "@/core/api/signalr/useRunStreamSubscription";
 import type { TrainingRunLiveProgress } from "@/features/training/models/TrainingModels";
 import { applyRunEvent, emptyTrainingRunProgress } from "@/features/training/models/TrainingModels";
 
@@ -16,7 +16,7 @@ export function useTrainingRunHub(runId: string | null, onResync: () => void): T
 		setSnapshot({ runId, progress: emptyTrainingRunProgress });
 	}, [runId]);
 
-	useRunStreamSubscription(runId, {
+	useRunStreamSubscription(trainingRunStream, runId, {
 		onResync,
 		onEvent: (event, gap) => {
 			if (gap) {

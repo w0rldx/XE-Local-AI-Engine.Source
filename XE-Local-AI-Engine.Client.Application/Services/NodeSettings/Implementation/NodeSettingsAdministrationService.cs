@@ -11,8 +11,10 @@ using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
-internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministrationService
+internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministrationService, IDisposable
 {
     private const string AutoEffortFastModelNotLocalMessage =
         "The fast model for automatic reasoning effort must be an installed node-local model.";
@@ -34,6 +36,8 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
     // sides use the same instance; it is deliberately NOT the store's (private) one.
     private static readonly JsonSerializerOptions ComparisonSerializerOptions = JsonSerializerOptions.Web;
 
+    // Commit and apply are one step, so the running process limits always come from the LAST committed record.
+    private readonly SemaphoreSlim _commitGate = new(initialCount: 1, maxCount: 1);
     private readonly DefaultModelSelectionPolicy _defaultModelSelectionPolicy;
     private readonly IGgufModelStore _ggufModelStore;
     private readonly ILocalModelProviderResolver _localModelProviderResolver;
@@ -44,6 +48,8 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
     private readonly IKnowledgeModelPrewarmer _knowledgeModelPrewarmer;
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly INodeSettingsStore _store;
+    private readonly LlamaServerSupervisorOptions _llamaSupervisorOptions;
+    private readonly StableDiffusionRuntimeOptions _imageRuntimeOptions;
 
     public NodeSettingsAdministrationService(INodeSettingsStore store,
         INodeRuntimeSettings runtimeSettings,
@@ -54,8 +60,14 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         IOptions<KnowledgeBaseOptions> knowledgeOptions,
         IKnowledgeModelPrewarmer knowledgeModelPrewarmer,
         IServiceScopeFactory scopeFactory,
+        LlamaServerSupervisorOptions llamaSupervisorOptions,
+        StableDiffusionRuntimeOptions imageRuntimeOptions,
         ILogger<NodeSettingsAdministrationService> logger)
     {
+        ArgumentNullException.ThrowIfNull(llamaSupervisorOptions);
+        _llamaSupervisorOptions = llamaSupervisorOptions;
+        ArgumentNullException.ThrowIfNull(imageRuntimeOptions);
+        _imageRuntimeOptions = imageRuntimeOptions;
         ArgumentNullException.ThrowIfNull(scopeFactory);
         _scopeFactory = scopeFactory;
         ArgumentNullException.ThrowIfNull(knowledgeOptions);
@@ -77,6 +89,9 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         _runtimeSettings = runtimeSettings;
         _store = store;
     }
+
+    public void Dispose() =>
+        _commitGate.Dispose();
 
     public async Task<StoredNodeSettings> GetTrustedSettingsAsync(CancellationToken cancellationToken = default) =>
         await _store.LoadAsync(cancellationToken) ?? new StoredNodeSettings();
@@ -157,7 +172,8 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
                 SpeculativeDraftGpuLayers = patch.SpeculativeDraftGpuLayers ?? record.SpeculativeDraftGpuLayers,
                 KvCacheType = TrimWhenProvided(patch.KvCacheType, record.KvCacheType),
                 RerankerModelName = TrimWhenProvided(patch.RerankerModelName, record.RerankerModelName),
-                AutoEffortFastModelName = TrimWhenProvided(patch.AutoEffortFastModelName, record.AutoEffortFastModelName)
+                AutoEffortFastModelName = TrimWhenProvided(patch.AutoEffortFastModelName, record.AutoEffortFastModelName),
+                ModelLabWarmIdleSeconds = patch.ModelLabWarmIdleSeconds ?? record.ModelLabWarmIdleSeconds
             };
         }
 
@@ -261,23 +277,38 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
             // Read-modify-write under the store's own lock, never a load here and a save there: the file is written WHOLE, so the projection
             // is re-applied to the LATEST record, MachineKey included (IMachineKeyProvider races every save on this node).
             var changedUnderTheValidation = false;
-            var persisted = await _store.UpdateAsync(latest =>
-                {
-                    changedUnderTheValidation = !SameExceptMachineKey(latest, validatedAgainst);
-                    if (changedUnderTheValidation)
+            StoredNodeSettings persisted;
+            await _commitGate.WaitAsync(cancellationToken);
+            try
+            {
+                persisted = await _store.UpdateAsync(latest =>
                     {
-                        // Nothing may be projected onto a record this attempt never validated — on the last
-                        // attempt as much as the first. Returning `latest` costs one redundant, byte-identical write.
-                        return latest;
-                    }
+                        changedUnderTheValidation = !SameExceptMachineKey(latest, validatedAgainst);
+                        if (changedUnderTheValidation)
+                        {
+                            // Nothing may be projected onto a record this attempt never validated — on the last
+                            // attempt as much as the first. Returning `latest` costs one redundant, byte-identical write.
+                            return latest;
+                        }
 
-                    return apply(latest) with
-                    {
-                        MachineKey = latest.MachineKey,
-                        TranscriptionSelectedModelId = latest.TranscriptionSelectedModelId
-                    };
-                },
-                cancellationToken);
+                        return apply(latest) with
+                        {
+                            MachineKey = latest.MachineKey,
+                            TranscriptionSelectedModelId = latest.TranscriptionSelectedModelId
+                        };
+                    },
+                    cancellationToken);
+
+                // No token from here: a client that disconnects after the commit must not leave the node on the old limits.
+                if (!changedUnderTheValidation)
+                {
+                    ApplyProcessLimits(persisted);
+                }
+            }
+            finally
+            {
+                _commitGate.Release();
+            }
 
             if (changedUnderTheValidation)
             {
@@ -301,6 +332,21 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         _logger.LogWarning("Node settings changed under this save on all {AttemptLimit} attempts. Nothing was written.",
             MaxSaveAttempts);
         return NodeSettingsAdministrationResult.Conflict(validatedAgainst);
+    }
+
+    /// <summary>Writes the process caps and idle TTLs of the committed record into the options the running supervisors read.</summary>
+    /// <remarks>
+    ///     Resolved from <paramref name="committed" /> itself (stored &gt; configuration seed &gt; default, the startup resolution), never re-read
+    ///     through the tolerant loader, which can answer defaults on an I/O error. This save is the only writer of these four options on a running
+    ///     node, so an unrelated save re-asserts the committed values (normally the ones already held).
+    /// </remarks>
+    private void ApplyProcessLimits(StoredNodeSettings committed)
+    {
+        var effective = _runtimeSettings.ResolveEffectiveValues(committed);
+        _llamaSupervisorOptions.MaxLoadedProcesses = effective.LlamaMaxLoadedProcesses;
+        _llamaSupervisorOptions.IdleTimeToLive = effective.LlamaIdleTimeToLive;
+        _imageRuntimeOptions.MaxLoadedProcesses = effective.ImageMaxLoadedProcesses;
+        _imageRuntimeOptions.IdleTimeToLive = effective.ImageIdleTimeToLive;
     }
 
     /// <summary>Whether the write-time record still is the one that was validated.</summary>
@@ -431,6 +477,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
             SpeculativeDraftGpuLayers = settings.SpeculativeDraftGpuLayers,
             KvCacheType = settings.KvCacheType,
             RerankerModelName = settings.RerankerModelName,
-            AutoEffortFastModelName = settings.AutoEffortFastModelName
+            AutoEffortFastModelName = settings.AutoEffortFastModelName,
+            ModelLabWarmIdleSeconds = settings.ModelLabWarmIdleSeconds
         };
 }

@@ -167,9 +167,10 @@ public sealed class LlamaCppRuntimeOrchestrationService
     ///     Ejects one running <c>(model, role)</c> process. Graceful by default — in-flight work is given a bounded drain
     ///     window and the process is left running when it does not drain; <paramref name="force" /> tears it down anyway.
     /// </summary>
+    /// <remarks>An operator eject: Background work cannot reload the model until a user-waited load does.</remarks>
     public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct)
     {
-        return _supervisor.EjectAsync(modelName, role, force, ct);
+        return _supervisor.EjectAsync(modelName, role, force, ct, operatorRequested: true);
     }
 
     /// <summary>One row per running <c>(model, role)</c> process — the only seam the running-models list is derived from.</summary>

@@ -52,7 +52,7 @@ public sealed class ConversationUploadEndpointTests
         // The form reader's multipart limit must not trip before the handler and answer "malformed form data".
         AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
         await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, "the chat attachment upload");
-        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The file exceeds the maximum upload size of 1 MB.");
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The file exceeds the maximum upload size of 1 MiB.");
     }
 
     [Test]

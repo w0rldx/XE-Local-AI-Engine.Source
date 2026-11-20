@@ -123,8 +123,6 @@ export const playbookActionFormSchema = z.object({
 	priority: z.number().int(),
 });
 
-export type PlaybookActionFormSchema = z.infer<typeof playbookActionFormSchema>;
-
 // Empty form values for adding a new action. New actions default to Enabled at the end of the current order;
 // the caller supplies the next priority so a fresh action sorts after the existing ones.
 export function emptyPlaybookActionForm(nextPriority = 0): PlaybookActionFormValues {

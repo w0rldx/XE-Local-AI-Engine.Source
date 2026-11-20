@@ -4,10 +4,11 @@ import { useCallback, useState } from "react";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { uploadKnowledgeDocument } from "@/core/api/generated";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { toast } from "@/core/ui/notifications/Toast";
-import { KNOWLEDGE_DEFAULT_COLLECTION_ID, isAcceptedKnowledgeFile } from "@/features/knowledge/models/KnowledgeModels";
+import { isAcceptedKnowledgeFile, KNOWLEDGE_DEFAULT_COLLECTION_ID } from "@/features/knowledge/models/KnowledgeModels";
 import { knowledgeErrorMessage } from "@/features/knowledge/queries/KnowledgeErrorMessage";
-import { knowledgeInvalidationKey, knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
+import { knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
 
 export interface KnowledgePendingUpload {
 	readonly tempId: string;
@@ -53,7 +54,7 @@ export function useKnowledgeUpload(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 						}
 					},
 				});
-				await queryClient.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listDocuments) });
+				await queryClient.invalidateQueries({ queryKey: operationInvalidationKey(knowledgeQueryIds.listDocuments) });
 				// A deduplicated upload matched an already-indexed document by content hash — no new work was queued.
 				if (data.deduplicated) {
 					toast.info(

@@ -31,6 +31,12 @@ internal sealed class LocalModelProxyForwarder
 
     private const int StreamCopyBufferSize = 16 * 1024;
 
+    /// <summary>
+    ///     The most of an upstream Messages error body the proxy reads to re-wrap it. The child's own errors are a few
+    ///     hundred bytes; a longer body is cut here and, no longer parseable, answers with the status-only message.
+    /// </summary>
+    private const int MaxUpstreamErrorBodyBytes = 64 * 1024;
+
     private const string UpstreamGoneMessage =
         "The local model runtime stopped while streaming this response (it may have been ejected). Try again shortly.";
 
@@ -292,7 +298,7 @@ internal sealed class LocalModelProxyForwarder
                     context.Response.Headers.RetryAfter = upstreamResponse.Headers.RetryAfter?.ToString() ?? "5";
                 }
 
-                var upstreamError = await upstreamResponse.Content.ReadAsByteArrayAsync(ct);
+                var upstreamError = await ReadUpstreamErrorBodyAsync(upstreamResponse.Content, ct);
                 await WriteErrorAsync(context, format, statusCode, ReadUpstreamErrorMessage(upstreamError, statusCode), "invalid_request_error", ct);
                 return;
             }
@@ -522,6 +528,42 @@ internal sealed class LocalModelProxyForwarder
         }
 
         return false;
+    }
+
+    /// <summary>
+    ///     Reads at most <see cref="MaxUpstreamErrorBodyBytes" /> of an upstream error body within one
+    ///     <see cref="_upstreamIdleTimeout" />, so a child that stalls or streams an endless error cannot hold the inference lease.
+    /// </summary>
+    /// <remarks>
+    ///     The headers already named the status, so a stalled body yields an empty one and the caller still gets that
+    ///     status with the status-only message. A caller disconnect still throws.
+    /// </remarks>
+    private async Task<byte[]> ReadUpstreamErrorBodyAsync(HttpContent content, CancellationToken ct)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(_upstreamIdleTimeout);
+        var buffer = new byte[MaxUpstreamErrorBodyBytes];
+        var total = 0;
+        try
+        {
+            await using var stream = await content.ReadAsStreamAsync(deadline.Token);
+            while (total < buffer.Length)
+            {
+                var read = await stream.ReadAsync(buffer.AsMemory(total), deadline.Token);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                total += read;
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return [];
+        }
+
+        return buffer[..total];
     }
 
     /// <summary>

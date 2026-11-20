@@ -60,7 +60,7 @@ describe("useNodeInfo", () => {
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		expect(result.current.data).toEqual(nodeInfo);
 		expect(buildIssueUrl(result.current.data as typeof nodeInfo, undefined, "x")).toBe(
-			"https://github.com/acme/xe/issues/new?template=bug_report.yml&title=Problem%20report&version=1.0.0-rc.3%2Babc1234&os=Linux&hardware=CPU%3A%20AMD%20Ryzen%209%207950X%20(16%20cores)%20%2F%20GPU%3A%20NVIDIA%20GeForce%20RTX%205090%20(32%20GB)%20%2F%20RAM%3A%2064%20GB",
+			"https://github.com/acme/xe/issues/new?template=bug_report.yml&title=Problem%20report&version=1.0.0-rc.3%2Babc1234&os=Linux&hardware=CPU%3A%20AMD%20Ryzen%209%207950X%20(16%20cores)%20%2F%20GPU%3A%20NVIDIA%20GeForce%20RTX%205090%20(32%20GiB)%20%2F%20RAM%3A%2064%20GiB",
 		);
 	});
 });

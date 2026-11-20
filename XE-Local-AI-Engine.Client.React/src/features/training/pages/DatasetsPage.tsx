@@ -8,10 +8,13 @@ import {
 	IconShieldCheck,
 	IconTrash,
 } from "@tabler/icons-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { listTrainingDatasetsQueryKey, listTrainingDefinitionsQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
+import { cachedItemVersion } from "@/core/api/QueryKeys";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
@@ -19,6 +22,7 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { StickyBar } from "@/core/ui/components/StickyBar/StickyBar";
 import { scrollStuckTabsToTop } from "@/core/ui/components/StickyBar/StickyTabsScroll";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { DatasetSampleReview } from "@/features/training/components/DatasetSampleReview";
 import { DefinitionEditorDialog } from "@/features/training/components/DefinitionEditorDialog";
@@ -45,6 +49,8 @@ type DatasetsTab = "definitions" | "datasets" | "mocks";
  */
 export function DatasetsPage() {
 	const { t } = useTranslation();
+	const { confirm } = useConfirm();
+	const queryClient = useQueryClient();
 	const [tab, setTab] = useState<DatasetsTab>("datasets");
 	const tabsRef = useRef<HTMLDivElement>(null);
 	const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
@@ -197,12 +203,32 @@ export function DatasetsPage() {
 											color="red"
 											leftSection={<IconTrash size={14} />}
 											loading={deleteDefinition.isPending}
-											onClick={() =>
-												deleteDefinition.mutate(
-													{ definitionId: definition.id, expectedVersion: definition.version },
-													{ onError: requestFailed },
-												)
-											}
+											onClick={async () => {
+												const confirmed = await confirm({
+													title: t("training.definitions.deleteConfirm.title", "Delete this dataset definition?"),
+													description: t(
+														"training.definitions.deleteConfirm.description",
+														"'{{name}}' is deleted. This cannot be undone.",
+														{ name: definition.name },
+													),
+													confirmationText: t("training.definitions.delete", "Delete"),
+													cancellationText: t("common.cancel", "Cancel"),
+												});
+												if (confirmed) {
+													deleteDefinition.mutate(
+														{
+															definitionId: definition.id,
+															expectedVersion: cachedItemVersion(
+																queryClient,
+																listTrainingDefinitionsQueryKey(),
+																definition.id,
+																definition.version,
+															),
+														},
+														{ onError: requestFailed },
+													);
+												}
+											}}
 											size="compact-xs"
 											variant="subtle"
 										>
@@ -234,12 +260,32 @@ export function DatasetsPage() {
 										isSelected={dataset.id === selectedDatasetId}
 										onSelect={() => setSelectedDatasetId(dataset.id === selectedDatasetId ? null : dataset.id)}
 										onCancel={() => cancelDataset.mutate({ datasetId: dataset.id }, { onError: requestFailed })}
-										onDelete={() =>
-											deleteDataset.mutate(
-												{ datasetId: dataset.id, expectedVersion: dataset.version },
-												{ onError: requestFailed },
-											)
-										}
+										onDelete={async () => {
+											const confirmed = await confirm({
+												title: t("training.datasets.deleteConfirm.title", "Delete this dataset?"),
+												description: t(
+													"training.datasets.deleteConfirm.description",
+													"'{{name}}' and its samples are deleted. This cannot be undone.",
+													{ name: dataset.name },
+												),
+												confirmationText: t("training.datasets.delete", "Delete"),
+												cancellationText: t("common.cancel", "Cancel"),
+											});
+											if (confirmed) {
+												deleteDataset.mutate(
+													{
+														datasetId: dataset.id,
+														expectedVersion: cachedItemVersion(
+															queryClient,
+															listTrainingDatasetsQueryKey(),
+															dataset.id,
+															dataset.version,
+														),
+													},
+													{ onError: requestFailed },
+												);
+											}
+										}}
 										onExport={(format) =>
 											exportDataset.mutate(
 												{ datasetId: dataset.id, format },

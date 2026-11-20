@@ -228,6 +228,7 @@ describe("IntegrationTriggersPage", () => {
 
 		fireEvent.change(screen.getByTestId("integration-trigger-form-name"), { target: { value: "lights" } });
 		fireEvent.change(screen.getByTestId("integration-trigger-form-display-name"), { target: { value: "Lights" } });
+		expect(screen.getByRole("radiogroup", { name: "Target" })).toBeTruthy();
 		fireEvent.click(screen.getByRole("radio", { name: "Graph workflow" }));
 		expect(screen.queryByTestId("integration-trigger-form-agent")).toBeNull();
 		fireEvent.click(screen.getByTestId("integration-trigger-form-graph"));

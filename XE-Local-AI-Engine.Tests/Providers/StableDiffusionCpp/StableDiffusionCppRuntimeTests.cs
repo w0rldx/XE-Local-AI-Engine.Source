@@ -279,6 +279,55 @@ public sealed class StableDiffusionCppRuntimeTests
     }
 
     [Test]
+    public async Task Generate_DaemonReplacedBetweenEnsureAndLease_SubmitsOnlyToTheNewDaemon()
+    {
+        // An idle reap or a lowered cap can replace the daemon right after the ensure returned its endpoint; a job submitted there
+        // would reach a dead port, or a process that is being killed.
+        var replacement = new Uri("http://127.0.0.1:18201/");
+        using var handler = new RuntimeHandler((_, route) => route switch
+        {
+            "img_gen" => Json(HttpStatusCode.Accepted, """{"id":"job-1","status":"queued"}"""),
+            "job" => Json(HttpStatusCode.OK, """{"status":"completed","result":{"images":[{"b64_json":"AQID","seed":1}]}}"""),
+            _ => Status(HttpStatusCode.OK)
+        });
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var supervisor = new FakeImageServerSupervisor(BaseAddress)
+        {
+            ReplacementAfterFirstEnsure = replacement
+        };
+        var runtime = new StableDiffusionCppRuntime(supervisor, new SdServerJobClient(http), new ImageServerProgressBroker(), NullLogger<StableDiffusionCppRuntime>.Instance);
+
+        await runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, supervisor.EnsureCount, "the stale endpoint must be ensured again");
+        AssertEx.Equal(expected: 1, handler.ImgGenCalls);
+        AssertEx.True(handler.Ports.Count > 0 && handler.Ports.All(port => port == replacement.Port), $"every request must reach the new daemon, got ports [{string.Join(", ", handler.Ports)}]");
+    }
+
+    [Test]
+    public async Task Generate_NoLease_FailsRetryably()
+    {
+        using var handler = new RuntimeHandler((_, route) => route switch
+        {
+            "img_gen" => Json(HttpStatusCode.Accepted, """{"id":"job-1","status":"queued"}"""),
+            "job" => Json(HttpStatusCode.OK, """{"status":"completed","result":{"images":[{"b64_json":"AQID","seed":1}]}}"""),
+            _ => Status(HttpStatusCode.OK)
+        });
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var supervisor = new FakeImageServerSupervisor(BaseAddress)
+        {
+            RefusesLeases = true
+        };
+        var runtime = new StableDiffusionCppRuntime(supervisor, new SdServerJobClient(http), new ImageServerProgressBroker(), NullLogger<StableDiffusionCppRuntime>.Instance);
+
+        var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
+
+        AssertEx.Contains(exception.Message, "Try again", StringComparison.Ordinal);
+        AssertEx.Equal(expected: 2, supervisor.EnsureCount, "one bounded re-ensure, then the failure");
+        AssertEx.Equal(expected: 0, handler.Ports.Count, "nothing may be submitted without a lease on the daemon");
+    }
+
+    [Test]
     public void Bound_TruncatesLongForeignErrorText()
     {
         var bounded = StableDiffusionCppRuntime.Bound(new string('x', 1000));
@@ -364,17 +413,27 @@ public sealed class StableDiffusionCppRuntimeTests
         return new HttpResponseMessage(code);
     }
 
-    /// <summary>Fake supervisor: returns a fixed endpoint and records ensure/restart/evict calls; never spawns a process.</summary>
+    /// <summary>
+    ///     Fake supervisor: one daemon at a fixed endpoint, records ensure/restart/evict calls and grants a job lease only on the
+    ///     endpoint of the current daemon; never spawns a process.
+    /// </summary>
     private sealed class FakeImageServerSupervisor : IImageServerSupervisor
     {
         private readonly Uri _baseAddress;
         private readonly IImageServerJobLease? _lease;
+        private ImageServerEndpoint? _current;
 
         public FakeImageServerSupervisor(Uri baseAddress, IImageServerJobLease? lease = null)
         {
             _baseAddress = baseAddress;
             _lease = lease;
         }
+
+        /// <summary>When set, the daemon the first ensure returned is replaced right after, by one at this address.</summary>
+        public Uri? ReplacementAfterFirstEnsure { get; init; }
+
+        /// <summary>Refuses every lease, as for a daemon torn down after each ensure.</summary>
+        public bool RefusesLeases { get; init; }
 
         public int EnsureCount { get; private set; }
 
@@ -385,22 +444,28 @@ public sealed class StableDiffusionCppRuntimeTests
         public Task<ImageServerEndpoint> EnsureRunningAsync(string modelName, CancellationToken ct)
         {
             EnsureCount++;
-            return Task.FromResult(new ImageServerEndpoint
+            var ensured = _current ??= Endpoint(modelName, _baseAddress);
+            if (EnsureCount == 1 && ReplacementAfterFirstEnsure is { } replacement)
             {
-                ModelName = modelName,
-                BaseAddress = _baseAddress
-            });
+                _current = Endpoint(modelName, replacement);
+            }
+
+            return Task.FromResult(ensured);
         }
 
         public Task<ImageServerEndpoint> RestartAsync(string modelName, CancellationToken ct)
         {
             RestartCount++;
-            return Task.FromResult(new ImageServerEndpoint
+            _current = Endpoint(modelName, _baseAddress);
+            return Task.FromResult(_current);
+        }
+
+        private static ImageServerEndpoint Endpoint(string modelName, Uri baseAddress) =>
+            new()
             {
                 ModelName = modelName,
-                BaseAddress = _baseAddress
-            });
-        }
+                BaseAddress = baseAddress
+            };
 
         public Task EvictAsync(string modelName, CancellationToken ct)
         {
@@ -431,10 +496,10 @@ public sealed class StableDiffusionCppRuntimeTests
             });
         }
 
-        // Null unless a test supplies a lease: the runtime then proceeds leaseless, exactly as against a genuinely absent daemon.
-        public bool TryAcquireJobLease(string modelName, [NotNullWhen(true)] out IImageServerJobLease? lease)
+        // A stale endpoint, one the current daemon did not hand out, gets no lease, exactly as the real supervisor refuses it.
+        public bool TryAcquireJobLease(ImageServerEndpoint endpoint, [NotNullWhen(true)] out IImageServerJobLease? lease)
         {
-            lease = _lease;
+            lease = RefusesLeases || !ReferenceEquals(endpoint, _current) ? null : _lease ?? new FakeJobLease();
             return lease is not null;
         }
 
@@ -494,8 +559,12 @@ public sealed class StableDiffusionCppRuntimeTests
 
         public int CancelCalls { get; private set; }
 
+        /// <summary>The port of every request, in arrival order.</summary>
+        public List<int> Ports { get; } = [];
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            Ports.Add(request.RequestUri?.Port ?? -1);
             var path = request.RequestUri?.AbsolutePath ?? string.Empty;
             string route;
             if (path.EndsWith("/img_gen", StringComparison.Ordinal))

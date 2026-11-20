@@ -73,8 +73,9 @@ Linux CUDA source build, the build order, and the never-persist-audio rule — a
 `WhisperServerProcessSupervisor` owns **one** resident `whisper-server`: a node has one selected transcription model
 and the server serializes every request on a single mutex, so a second daemon could not serve anyone faster. Readiness
 is a port accept followed by the server's health route; a 503 there means "loading a model" and keeps the poll going,
-which also covers an in-place model switch. GPU loads serialize through the shared `IGpuModelLoadAdmission` gate, and
-no `whisper-server` flag, route or JSON shape escapes `Providers.WhisperCpp` — the engine sees `IWhisperTranscriber`
+which also covers an in-place model switch. GPU loads serialize through the shared `IGpuModelLoadAdmission` gate. Whisper takes neither `IGpuWorkGate` nor the
+llama runtime-mutation lease, so before a GPU load it asks an idle warm Model Lab worker to leave
+(`IGpuIdleHolderPreemption.WaitForReleaseAsync`, up to 30 s) and then loads either way ([Training](18-training.md)). No `whisper-server` flag, route or JSON shape escapes `Providers.WhisperCpp` — the engine sees `IWhisperTranscriber`
 and `IWhisperServerSupervisor` and nothing else.
 
 `WhisperModelCatalog` is a static table of seven Whisper weights plus the pinned Silero VAD file

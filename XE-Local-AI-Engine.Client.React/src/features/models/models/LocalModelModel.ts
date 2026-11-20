@@ -3,6 +3,7 @@
 // responses into these view-models live in LocalModelMappers.ts.
 
 import type { XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin } from "@/core/api/generated";
+import { formatBytes } from "@/core/formatting/BytesFormatting";
 
 export interface LocalModelViewModel {
 	modelName: string;
@@ -30,16 +31,7 @@ export function formatModelSize(sizeBytes: number | null | undefined): string {
 	if (sizeBytes === null || sizeBytes === undefined || !Number.isFinite(sizeBytes) || sizeBytes < 0) {
 		return emptyModelValue;
 	}
-
-	if (sizeBytes >= 1_073_741_824) {
-		return `${(sizeBytes / 1_073_741_824).toFixed(1)} GB`;
-	}
-
-	if (sizeBytes >= 1_048_576) {
-		return `${(sizeBytes / 1_048_576).toFixed(1)} MB`;
-	}
-
-	return `${(sizeBytes / 1024).toFixed(1)} KB`;
+	return formatBytes(sizeBytes);
 }
 
 export function formatModelModifiedDate(modifiedAtUtc: number | null | undefined): string {

@@ -2,16 +2,37 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import {
 	mergeSourceBuildLogs,
+	type SourceBuildLogEntry,
 	sourceBuildIdentity,
 	sourceBuildLogEntries,
-	type SourceBuildLogEntry,
 } from "@/features/node-settings/models/SourceBuildModels";
-import { localRuntimeInvalidationKey, localRuntimeQueryIds } from "@/features/node-settings/queries/useLocalRuntime";
+import { imageRuntimeQueryIds } from "@/features/node-settings/queries/useImageRuntime";
+import { localRuntimeQueryIds } from "@/features/node-settings/queries/useLocalRuntime";
 
-const statusChanged = "llamaCppSourceBuild.statusChanged";
+// One source-build hub: where it lives, the event it pushes, and the queries a terminal event or a reconnect makes
+// stale (the build status and the runtime it installs).
+interface SourceBuildStream {
+	readonly hubPath: string;
+	readonly statusChanged: string;
+	readonly staleQueryIds: readonly string[];
+}
+
+export const llamaCppSourceBuildStream: SourceBuildStream = {
+	hubPath: "model-fit/llamacpp/source-build/hub",
+	statusChanged: "llamaCppSourceBuild.statusChanged",
+	staleQueryIds: [localRuntimeQueryIds.sourceBuildStatus, localRuntimeQueryIds.llamaCppRuntime],
+};
+
+export const imageRuntimeSourceBuildStream: SourceBuildStream = {
+	hubPath: "images/runtime/source-build/hub",
+	statusChanged: "stableDiffusionCppSourceBuild.statusChanged",
+	staleQueryIds: [imageRuntimeQueryIds.sourceBuildStatus, imageRuntimeQueryIds.runtime],
+};
+
 const eventSchema = z.object({
 	phase: z.string(),
 	appendedLogStartSequence: z.number().int().nonnegative(),
@@ -38,7 +59,7 @@ const emptyState = {
 	buildIdentity: null as string | null,
 };
 
-export function useSourceBuildHub(enabled = true) {
+export function useSourceBuildHub(stream: SourceBuildStream, enabled = true) {
 	const queryClient = useQueryClient();
 	const [state, setState] = useState(emptyState);
 	const reset = useCallback(() => setState(emptyState), []);
@@ -47,7 +68,12 @@ export function useSourceBuildHub(enabled = true) {
 		if (!enabled) {
 			return undefined;
 		}
-		const hub = acquireHubConnection("model-fit/llamacpp/source-build/hub");
+		const hub = acquireHubConnection(stream.hubPath);
+		const invalidate = (): void => {
+			for (const queryId of stream.staleQueryIds) {
+				queryClient.invalidateQueries({ queryKey: operationInvalidationKey(queryId) }).catch(() => undefined);
+			}
+		};
 		const handler = (payload: unknown): void => {
 			const parsed = eventSchema.safeParse(payload);
 			if (!parsed.success) {
@@ -66,30 +92,20 @@ export function useSourceBuildHub(enabled = true) {
 				};
 			});
 			if (event.terminal) {
-				queryClient
-					.invalidateQueries({ queryKey: localRuntimeInvalidationKey(localRuntimeQueryIds.sourceBuildStatus) })
-					.catch(() => undefined);
-				queryClient
-					.invalidateQueries({ queryKey: localRuntimeInvalidationKey(localRuntimeQueryIds.llamaCppRuntime) })
-					.catch(() => undefined);
+				invalidate();
 			}
 		};
-		hub.connection.on(statusChanged, handler);
+		hub.connection.on(stream.statusChanged, handler);
 		const unregisterReconnected = hub.onReconnected(() => {
 			setState(emptyState);
-			queryClient
-				.invalidateQueries({ queryKey: localRuntimeInvalidationKey(localRuntimeQueryIds.sourceBuildStatus) })
-				.catch(() => undefined);
-			queryClient
-				.invalidateQueries({ queryKey: localRuntimeInvalidationKey(localRuntimeQueryIds.llamaCppRuntime) })
-				.catch(() => undefined);
+			invalidate();
 		});
 		return () => {
 			unregisterReconnected();
-			hub.connection.off(statusChanged, handler);
+			hub.connection.off(stream.statusChanged, handler);
 			hub.release();
 		};
-	}, [enabled, queryClient]);
+	}, [stream, enabled, queryClient]);
 
 	return { ...state, reset };
 }

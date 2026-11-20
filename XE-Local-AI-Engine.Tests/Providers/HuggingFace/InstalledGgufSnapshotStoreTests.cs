@@ -17,7 +17,7 @@ public sealed class InstalledGgufSnapshotStoreTests
     [Test]
     public async Task LoadVerified_AcceptsLegacyUppercaseRegistrySha()
     {
-        using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var directory = new TempDirectory("xe-hf-test");
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
         var entry = await SeedAsync(directory.Path, registry, Convert.ToHexString);
@@ -34,7 +34,7 @@ public sealed class InstalledGgufSnapshotStoreTests
     [Test]
     public async Task LoadVerified_StillRejectsADifferentRegistrySha()
     {
-        using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var directory = new TempDirectory("xe-hf-test");
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
         var entry = await SeedAsync(directory.Path, registry, static _ => new string('a', 64));
@@ -49,7 +49,7 @@ public sealed class InstalledGgufSnapshotStoreTests
     [Test]
     public async Task LoadVerified_ReHashesOnlyWhenTheMemberFileChanged()
     {
-        using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var directory = new TempDirectory("xe-hf-test");
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
         var entry = await SeedAsync(directory.Path, registry, Convert.ToHexStringLower);
@@ -75,7 +75,7 @@ public sealed class InstalledGgufSnapshotStoreTests
     [Test]
     public async Task LoadVerified_AcquiredEntry_ValidatesTheSidecarAgainstTheMemoisedDigest()
     {
-        using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var directory = new TempDirectory("xe-hf-test");
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
         var entry = await SeedAcquiredAsync(directory.Path, registry);
@@ -97,7 +97,7 @@ public sealed class InstalledGgufSnapshotStoreTests
     [Test]
     public async Task LoadVerified_AcquiredEntry_StillRejectsAMismatchedSidecarOnAMemoHit()
     {
-        using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var directory = new TempDirectory("xe-hf-test");
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
         var entry = await SeedAcquiredAsync(directory.Path, registry);
@@ -136,7 +136,7 @@ public sealed class InstalledGgufSnapshotStoreTests
     [Test]
     public async Task LoadVerified_AcquiredEntry_ReHashesOnceWhenTheWeightTimestampMoves()
     {
-        using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var directory = new TempDirectory("xe-hf-test");
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
         var entry = await SeedAcquiredAsync(directory.Path, registry);

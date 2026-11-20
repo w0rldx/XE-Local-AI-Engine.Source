@@ -24,7 +24,22 @@ public enum TrainingRuntimeInstallOutcome
     Started = 0,
     AlreadyRunning = 1,
     InsufficientDisk = 2,
-    MissingPrerequisites = 3
+    MissingPrerequisites = 3,
+
+    /// <summary>The caller's admission check found a GPU job running from the runtime; nothing started.</summary>
+    GpuJobRunning = 4
+}
+
+/// <summary>What a remove request did.</summary>
+public enum TrainingRuntimeRemoveOutcome
+{
+    Removed = 0,
+
+    /// <summary>An install is in flight; nothing was deleted.</summary>
+    AlreadyRunning = 1,
+
+    /// <summary>The caller's admission check found a GPU job running from the runtime; nothing was deleted.</summary>
+    GpuJobRunning = 2
 }
 
 public sealed class TrainingRuntimeInstallResult
@@ -112,12 +127,23 @@ public sealed class TrainingRuntimeStatus
 /// </remarks>
 public interface ITrainingRuntimeService
 {
-    Task<TrainingRuntimeInstallResult> InstallAsync(CancellationToken ct);
+    /// <summary>Starts a runtime install, or reports the refusal that stopped it from starting.</summary>
+    /// <param name="admitAsync">
+    ///     Awaited inside the start transaction AFTER the non-ready phase is published; <see langword="false" /> restores
+    ///     the prior phase and starts nothing. Null admits.
+    /// </param>
+    /// <param name="ct">Cancels the start transaction, never the detached install.</param>
+    Task<TrainingRuntimeInstallResult> InstallAsync(Func<CancellationToken, Task<bool>>? admitAsync, CancellationToken ct);
 
     TrainingRuntimeStatus GetStatus();
 
     /// <summary>Removes the installed runtime and its state record. Refused while an install is in flight.</summary>
-    Task<bool> RemoveAsync(CancellationToken ct);
+    /// <param name="admitAsync">
+    ///     Awaited AFTER the <see cref="TrainingRuntimePhase.Removing" /> phase is published and before anything is
+    ///     deleted; <see langword="false" /> restores the prior phase and deletes nothing. Null admits.
+    /// </param>
+    /// <param name="ct">Cancels the wait for the start transaction.</param>
+    Task<TrainingRuntimeRemoveOutcome> RemoveAsync(Func<CancellationToken, Task<bool>>? admitAsync, CancellationToken ct);
 
     /// <summary>Requests cancellation of an in-flight install. Returns false when nothing is running.</summary>
     bool Cancel();

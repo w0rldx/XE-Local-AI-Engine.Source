@@ -22,8 +22,8 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
     private const int MinHeadingLevel = 1;
     private const int MaxHeadingLevel = 6;
 
-    // Tokens reserved off a resolved embedding window before it becomes the chunk budget: the "search_document: " intent
-    // prefix the embedder prepends plus the model's own special tokens, so embedded text never reaches the raw window.
+    // Tokens reserved off a resolved embedding window before it becomes the chunk budget: the profile's document prefix the
+    // embedder prepends plus the model's own special tokens, so embedded text never reaches the raw window.
     private const int EmbeddingWindowReserveTokens = 32;
 
     // Floor for the per-chunk token budget when a resolved window is very small, so a tiny/misconfigured window cannot

@@ -106,7 +106,8 @@ public sealed class NodeChatRestartRecoveryService
             cancellationToken);
     }
 
-    // Terminal assistant rows inside the retention window that have no run envelope yet, with the model decrypted from their metadata.
+    // Terminal assistant rows inside the retention window that have no run envelope yet, with the model decrypted from their metadata. An imported
+    // reply is skipped: its metadata records that no run happened on this node, so it never gets an envelope.
     private static async Task<IReadOnlyList<EnvelopelessRow>> ReadEnvelopelessRowsAsync(NodeChatDbContext dbContext,
         DbTransaction transaction,
         long backfillSinceUtc,
@@ -141,6 +142,12 @@ public sealed class NodeChatRestartRecoveryService
             var metadataJson = await reader.IsDBNullAsync(ordinal: 5, cancellationToken)
                 ? null
                 : dbContext.DecryptMessageMetadata(await reader.GetFieldValueAsync<byte[]>(ordinal: 5, cancellationToken), conversationId, messageId);
+            var metadata = NodeChatMetadataSerializer.DeserializeMetadata(metadataJson);
+            if (metadata.Imported == true)
+            {
+                continue;
+            }
+
             rows.Add(new EnvelopelessRow
             {
                 MessageId = messageId,
@@ -148,7 +155,7 @@ public sealed class NodeChatRestartRecoveryService
                 RequestId = await reader.IsDBNullAsync(ordinal: 2, cancellationToken) ? null : Guid.Parse(reader.GetString(2)),
                 AgentDefinitionId = await reader.IsDBNullAsync(ordinal: 3, cancellationToken) ? null : Guid.Parse(reader.GetString(3)),
                 Status = reader.GetString(4),
-                Model = NodeChatMetadataSerializer.DeserializeMetadata(metadataJson).Model
+                Model = metadata.Model
             });
         }
 

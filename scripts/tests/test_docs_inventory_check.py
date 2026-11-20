@@ -131,18 +131,6 @@ Do the thing; it prevents the failure. Authority: a test.
 Also short.
 """
 
-SCRIPTS_README_MD = """# scripts/
-
-## Scripts
-
-- [`alpha.sh`](alpha.sh) — One line.
-- [`beta.py`](beta.py) — One line.
-
-## Subfolders
-
-- [`lib/`](lib/) — Holds nothing.
-"""
-
 PROPOSED_TOPIC_MD = """# Proposed
 
 ### PROPOSED: a long pending rule
@@ -194,7 +182,9 @@ class DocsInventoryCheckTests(unittest.TestCase):
         (scripts / "lib").mkdir(parents=True)
         for name in ("alpha.sh", "beta.py"):
             (scripts / name).write_text("#!/usr/bin/env bash\n# One line.\n", encoding="utf-8")
-        (scripts / "README.md").write_text(SCRIPTS_README_MD, encoding="utf-8")
+        # The generated preamble links the dev-stop guide.
+        (scripts / "README-dev-stop.md").write_text("# Stopping\n", encoding="utf-8")
+        (scripts / "README.md").write_text(MODULE.render_scripts_readme(scripts), encoding="utf-8")
 
         # main() runs check_markdown_links over `git ls-files`, so the miniature repository is a git repository.
         if shutil.which("git") is None:
@@ -370,6 +360,28 @@ class DocsInventoryCheckTests(unittest.TestCase):
             ],
             [item.render() for item in result.missing],
         )
+
+    def test_scripts_readme_reports_a_drifted_line_when_every_row_is_present(self) -> None:
+        root = self.make_repo()
+        (root / "scripts" / "alpha.sh").write_text("#!/usr/bin/env bash\n# A new header.\n", encoding="utf-8")
+
+        result = MODULE.check_scripts_readme(root)
+
+        self.assertEqual(
+            [
+                "STALE scripts-readme: scripts/README.md: differs from the generated index; "
+                "re-run scripts/generate-scripts-readme.py"
+            ],
+            [item.render() for item in result.missing],
+        )
+
+    def test_scripts_readme_reports_a_stale_subfolder_file_list(self) -> None:
+        root = self.make_repo()
+        (root / "scripts" / "lib" / "proc-tree.sh").write_text("# helper\n", encoding="utf-8")
+
+        result = MODULE.check_scripts_readme(root)
+
+        self.assertEqual(["README.md"], [item.name for item in result.missing])
 
     def test_scripts_readme_raises_when_scripts_holds_no_script(self) -> None:
         root = self.make_repo()

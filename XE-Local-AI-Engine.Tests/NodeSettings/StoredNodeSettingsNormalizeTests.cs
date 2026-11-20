@@ -639,6 +639,21 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    [Arguments(0, 0)]
+    [Arguments(3600, 3600)]
+    [Arguments(-1, null)]
+    [Arguments(3601, null)]
+    public async Task ModelLabWarmIdleSeconds_KeepsTheRange_AndDropsAnOutOfRangeValueToTheDefault(int stored, int? expected)
+    {
+        var reloaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            ModelLabWarmIdleSeconds = stored
+        });
+
+        AssertEx.Equal(expected, reloaded.ModelLabWarmIdleSeconds);
+    }
+
+    [Test]
     public async Task DetachedGraceSeconds_AbsentFromAnOldFile_StaysNull()
     {
         // A node-settings.json written before the field existed must deserialize to null — and then re-seed to 300 —
@@ -1111,6 +1126,56 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
 
         AssertEx.Null(await store.LoadStrictAsync());
         AssertEx.Null((await store.LoadAsync()).ExternalAccessProfile);
+    }
+
+    [Test]
+    public async Task LoadStrictAsync_WhenTheFileHoldsANullDocument_ReturnsNull()
+    {
+        // A null document carries no stored value, so it must not read as a valid default record (keep-warm off, for one).
+        await WriteSettingsJsonAsync("null");
+        using var store = NewStore();
+
+        AssertEx.Null(await store.LoadStrictAsync());
+        AssertEx.Null((await store.LoadAsync()).ExternalAccessProfile);
+    }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task LoadStrictAsync_WhenTheDirectoryCannotBeSearched_ReturnsNull()
+    {
+        await WriteSettingsJsonAsync("{ \"keepModelWarmEnabled\": true }");
+        var settingsPath = Path.Combine(_root, "node-settings.json");
+        File.SetUnixFileMode(_root, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        try
+        {
+            if (CanOpen(settingsPath))
+            {
+                Skip.Test("BLOCKED: this account bypasses file permissions (root), so a directory without search permission cannot be produced.");
+            }
+
+            using var store = NewStore();
+
+            // The file is there but cannot be reached: an existence probe answers false, and the store must not read that as a fresh node.
+            AssertEx.Null(await store.LoadStrictAsync());
+        }
+        finally
+        {
+            File.SetUnixFileMode(_root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    private static bool CanOpen(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     [Test]

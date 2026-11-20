@@ -638,6 +638,15 @@ public sealed record StoredNodeSettings
     /// <summary>1 TiB, the retention validator's ceiling.</summary>
     public const long MaxAgentHomeRunRetentionMaxTotalBytes = 1024L * 1024 * 1024 * 1024;
 
+    /// <summary>Seconds an idle Model Lab worker stays warm (five minutes).</summary>
+    public const int DefaultModelLabWarmIdleSeconds = 300;
+
+    /// <summary>0 turns warming off: the worker exits after each job.</summary>
+    public const int MinModelLabWarmIdleSeconds = 0;
+
+    /// <summary>One hour: a checkpoint held longer pins its VRAM against every other GPU job.</summary>
+    public const int MaxModelLabWarmIdleSeconds = 3600;
+
     /// <summary>Node-level master flag for the client voice (TTS) feature. Default (absent) is off.</summary>
     public const bool DefaultVoiceFeatureEnabled = false;
 
@@ -759,10 +768,10 @@ public sealed record StoredNodeSettings
     /// <summary>Hugging Face disk-guard safety margin in bytes (developer-only). Seed: <c>HuggingFace:DiskMarginBytes</c>.</summary>
     public long? HuggingFaceDiskMarginBytes { get; init; }
 
-    /// <summary>Max concurrently-loaded llama.cpp processes before spawn rejects. Seed: 3.</summary>
+    /// <summary>Max concurrently-loaded llama.cpp processes before spawn rejects. Seed: 3. A save applies it to the running supervisor.</summary>
     public int? LlamaMaxLoadedProcesses { get; init; }
 
-    /// <summary>Idle TTL (seconds) after which an unused llama.cpp process is reaped. Seed: 900.</summary>
+    /// <summary>Idle TTL (seconds) after which an unused llama.cpp process is reaped. Seed: 900. A save applies it to the running supervisor.</summary>
     public int? LlamaIdleTimeToLiveSeconds { get; init; }
 
     /// <summary>
@@ -860,11 +869,11 @@ public sealed record StoredNodeSettings
     ///     The knowledge-base embedding model pin: the installed embedding model NAME every chunk and query vector is built with.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" /> (default) resolves <c>KnowledgeBase:EmbeddingModelName</c>, else the first installed
-    ///     embedding-named model. The node writes it once, after the first successful index commit or at startup when the
-    ///     indexed corpus names exactly one installed model; only an operator save changes it, naming an installed embedding
-    ///     model or clearing it while nothing is Indexed. A missing pinned model never falls back: search stays lexical and
-    ///     reports <c>EmbedderChanged</c>. Read live per resolve.
+    ///     <see langword="null" /> (default) resolves <c>KnowledgeBase:EmbeddingModelName</c>, else the installed embedder
+    ///     <c>RecommendedEmbeddingModel.PickInstalled</c> chooses. The node writes it once, after the first successful index
+    ///     commit; only an operator save changes it, naming an installed embedding model or clearing it while nothing is
+    ///     Indexed. A missing pinned model never falls back: search stays lexical and reports <c>EmbedderChanged</c>. Read
+    ///     live per resolve.
     /// </remarks>
     public string? KnowledgeEmbeddingModelName { get; init; }
 
@@ -1048,7 +1057,7 @@ public sealed record StoredNodeSettings
     /// <summary>Share of RAM, in percent, the context allocator keeps free. Seed: 15. Same restart and fingerprint rules as <see cref="LlamaGpuReservePercent" />.</summary>
     public int? LlamaRamReservePercent { get; init; }
 
-    /// <summary>Idle TTL (seconds) of an sd-server daemon. Seed: <c>StableDiffusionRuntime:IdleTimeToLive</c> (900). Applies on the next node restart.</summary>
+    /// <summary>Idle TTL (seconds) of an sd-server daemon. Seed: <c>StableDiffusionRuntime:IdleTimeToLive</c> (900). A save applies it to the running supervisor.</summary>
     public int? ImageIdleTimeToLiveSeconds { get; init; }
 
     /// <summary>Model-fit safety margin in percent of weights + KV. Seed: 12. Read per estimate, so a save applies to the next fit.</summary>
@@ -1300,7 +1309,7 @@ public sealed record StoredNodeSettings
     /// <summary>Scheduled-job run history window in days. Seed: <c>Scheduler:HistoryRetentionDays</c> (30). Read per sweep.</summary>
     public int? SchedulerHistoryRetentionDays { get; init; }
 
-    /// <summary>sd-server processes kept loaded at once. Seed: <c>StableDiffusionRuntime:MaxLoadedProcesses</c> (1). Applies on the next node restart.</summary>
+    /// <summary>sd-server processes kept loaded at once. Seed: <c>StableDiffusionRuntime:MaxLoadedProcesses</c> (1). A save applies it to the running supervisor.</summary>
     public int? ImageMaxLoadedProcesses { get; init; }
 
     /// <summary>Whether sd-server keeps the text encoder on the GPU. Seed: <c>StableDiffusionRuntime:TextEncoderOnGpu</c> (off). Applies on the next node restart.</summary>
@@ -1344,6 +1353,9 @@ public sealed record StoredNodeSettings
 
     /// <summary>AgentHome runs byte ceiling, 0 = no byte limit. Seed: <c>AgentHome:RunRetention:MaxTotalBytes</c> (2 GiB). Read per sweep.</summary>
     public long? AgentHomeRunRetentionMaxTotalBytes { get; init; }
+
+    /// <summary>Seconds an idle Model Lab worker stays warm, 0 = off. Default <see cref="DefaultModelLabWarmIdleSeconds" />. Read at each idle transition.</summary>
+    public int? ModelLabWarmIdleSeconds { get; init; }
 
     /// <summary>Whether Development Mode is on. Seed: <c>Development:Enabled</c> (on). Applies after a node restart.</summary>
     public bool? DevelopmentEnabled { get; init; }

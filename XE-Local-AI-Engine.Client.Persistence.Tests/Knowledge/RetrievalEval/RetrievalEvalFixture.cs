@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Hermetic, model-free retrieval-eval fixture. It ingests a small labeled corpus of synthetic markdown
@@ -160,14 +161,14 @@ internal sealed class RetrievalEvalFixture : IDisposable
             IKnowledgeDocumentBlobStore blobStore = sourcePathOf is null
                 ? memoryStore
                 : new KnowledgeDocumentBlobStore(repositoryServices!.GetRequiredService<IServiceScopeFactory>(),
-                    new FixedNodeDataDirectory(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(databasePath))!, Path.GetFileNameWithoutExtension(databasePath) + "-data")),
+                    new FakeNodeDataDirectory(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(databasePath))!, Path.GetFileNameWithoutExtension(databasePath) + "-data")),
                     keyHolder,
                     TimeProvider.System);
             var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance);
             var chunkingService = new HeaderBoundaryChunkingService(optionsWrapper);
             var providerResolver = new SingleProviderResolver(embeddingProvider);
             var embedder = new KnowledgeChunkEmbedder(providerResolver, new EmbeddingModelResolver(optionsWrapper, new FakeNodeSettingsStore(new StoredNodeSettings())),
-                new KnowledgeEmbeddingPrefixer(), optionsWrapper);
+                new KnowledgeEmbeddingPrefixer(), optionsWrapper, Substitute.For<ILlamaServerProcessSupervisor>());
             var indexWriter = new KnowledgeIndexWriter(ingestionContext, TimeProvider.System);
             var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
             var ingestionService = new KnowledgeIngestionService(ingestionContext,
@@ -214,19 +215,19 @@ internal sealed class RetrievalEvalFixture : IDisposable
         return new RetrievalEvalFixture(databasePath, keyHolder, options, embeddingProvider, documentIdsByKey);
     }
 
-    /// <summary>The distinct (vector width, vector identity) pairs the ingested chunk vectors were stored with.</summary>
-    public async Task<IReadOnlyList<(long Dim, string Identity)>> ReadVectorShapesAsync(CancellationToken cancellationToken)
+    /// <summary>The distinct (vector width, vector identity) pairs the ingested chunk vectors were stored with, each with its vector count.</summary>
+    public async Task<IReadOnlyList<(long Dim, string Identity, long Count)>> ReadVectorShapesAsync(CancellationToken cancellationToken)
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(_databasePath, _keyHolder);
         var connection = context.Database.GetDbConnection();
         await OpenAsync(connection, cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT DISTINCT dim, vector_identity FROM knowledge_chunk_vectors;";
+        command.CommandText = "SELECT dim, vector_identity, COUNT(*) FROM knowledge_chunk_vectors GROUP BY dim, vector_identity;";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var shapes = new List<(long, string)>();
+        var shapes = new List<(long, string, long)>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            shapes.Add((reader.GetInt64(0), reader.GetString(1)));
+            shapes.Add((reader.GetInt64(0), reader.GetString(1), reader.GetInt64(2)));
         }
 
         return shapes;
@@ -410,17 +411,6 @@ internal sealed class RetrievalEvalFixture : IDisposable
         parameter.ParameterName = name;
         parameter.Value = value;
         _ = command.Parameters.Add(parameter);
-    }
-
-    private sealed class FixedNodeDataDirectory : INodeDataDirectory
-    {
-        public FixedNodeDataDirectory(string root)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(root);
-            Root = root;
-        }
-
-        public string Root { get; }
     }
 
     /// <summary>In-memory blob source: the ingestion service reads the raw document bytes from here by id.</summary>

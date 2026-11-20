@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 
 using System.Globalization;
+using XE_Local_AI_Engine.Client.Common;
 
 /// <summary>
 ///     Applies a distiller delta to a state document: mints ids, links supersessions, retires entries and enforces the
@@ -65,7 +66,7 @@ public static class ConversationStateReducer
             {
                 Id = id,
                 Category = proposed.Category,
-                Value = ConversationSummarizer.TruncateAtRuneBoundary(value, MaxValueChars),
+                Value = TextTruncation.TruncateAtRuneBoundary(value, MaxValueChars),
                 SourceSequences = proposed.SourceSequences.Distinct().Order().ToList(),
                 CreatedAtSequence = atSequence
             });

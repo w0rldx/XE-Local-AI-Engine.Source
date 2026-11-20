@@ -391,6 +391,13 @@ slot mid-call cancels it on a token linked to the drain-deadline token. The job 
 window; the lexical dedup absorbs any candidate the cancelled attempt already wrote, and a yield is logged at
 Information, never as a failure. Only a drain-deadline cancel ends the job.
 
+Dedup is lexical (normalized text and scope) and always on. The embedding-cosine layer on top of it,
+`MemorySemanticDeduplicator`, is off by default (`MemoryExtractionOptions.SemanticDedupEnabled`): measured embedders
+score a one-word contradiction of a lesson as close as a true duplicate, so a cosine threshold would drop lessons that
+contradict a live memory (`MemoryDedupCalibrationLiveTests`). An operator may enable it with
+`MemoryExtraction:SemanticDedupEnabled=true`; it then drops a candidate at or above `SemanticDedupSimilarityThreshold`
+(default 0.92).
+
 The shutdown drain, the post-deadline grace and the abandoned-job accounting are on the reference page. See [the reference page](reference/04-application-services.md#27-post-run-adaptive-memory-the-extraction-workers-shutdown-contract).
 
 ---

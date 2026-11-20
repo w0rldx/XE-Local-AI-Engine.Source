@@ -24,6 +24,7 @@ import {
 	startDevelopmentNextActionMutation,
 	stopDevelopmentAttemptCommandMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { toast } from "@/core/ui/notifications/Toast";
 import {
 	type DevelopmentProjectDetail,
@@ -44,10 +45,6 @@ export const developmentQueryIds = {
 	getArtifact: "getDevelopmentArtifact",
 } as const;
 
-export function developmentInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
-
 export function useDevelopmentCapability() {
 	return useQuery({
 		...getDevelopmentCapabilityOptions(),
@@ -66,7 +63,7 @@ export function useConfirmDevelopmentContainerRuntime() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		...confirmDevelopmentContainerRuntimeMutation(),
-		onSettled: () => queryClient.invalidateQueries({ queryKey: developmentInvalidationKey(developmentQueryIds.capability) }),
+		onSettled: () => queryClient.invalidateQueries({ queryKey: operationInvalidationKey(developmentQueryIds.capability) }),
 	});
 }
 
@@ -176,10 +173,10 @@ export function useRegisterDevelopmentRepository() {
 		onSuccess: () =>
 			Promise.all([
 				queryClient.invalidateQueries({
-					queryKey: developmentInvalidationKey(developmentQueryIds.listRepositories),
+					queryKey: operationInvalidationKey(developmentQueryIds.listRepositories),
 				}),
 				queryClient.invalidateQueries({
-					queryKey: developmentInvalidationKey(developmentQueryIds.detectRepositoryProfile),
+					queryKey: operationInvalidationKey(developmentQueryIds.detectRepositoryProfile),
 				}),
 			]),
 	});
@@ -191,7 +188,7 @@ export function useRegisterDevelopmentTemplate() {
 		...registerDevelopmentTemplateMutation(),
 		onSuccess: () =>
 			queryClient.invalidateQueries({
-				queryKey: developmentInvalidationKey(developmentQueryIds.listTemplates),
+				queryKey: operationInvalidationKey(developmentQueryIds.listTemplates),
 			}),
 	});
 }
@@ -202,7 +199,7 @@ export function useRemoveDevelopmentTemplate() {
 		...removeDevelopmentTemplateMutation(),
 		onSuccess: () =>
 			queryClient.invalidateQueries({
-				queryKey: developmentInvalidationKey(developmentQueryIds.listTemplates),
+				queryKey: operationInvalidationKey(developmentQueryIds.listTemplates),
 			}),
 	});
 }
@@ -217,10 +214,10 @@ export function useCreateDevelopmentRepositoryFromTemplate() {
 		onSuccess: () =>
 			Promise.all([
 				queryClient.invalidateQueries({
-					queryKey: developmentInvalidationKey(developmentQueryIds.listRepositories),
+					queryKey: operationInvalidationKey(developmentQueryIds.listRepositories),
 				}),
 				queryClient.invalidateQueries({
-					queryKey: developmentInvalidationKey(developmentQueryIds.detectRepositoryProfile),
+					queryKey: operationInvalidationKey(developmentQueryIds.detectRepositoryProfile),
 				}),
 			]),
 	});
@@ -229,7 +226,7 @@ export function useCreateDevelopmentRepositoryFromTemplate() {
 async function invalidateDevelopment(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
 	await Promise.all(
 		Object.values(developmentQueryIds).map((operationId) =>
-			queryClient.invalidateQueries({ queryKey: developmentInvalidationKey(operationId) }),
+			queryClient.invalidateQueries({ queryKey: operationInvalidationKey(operationId) }),
 		),
 	);
 }

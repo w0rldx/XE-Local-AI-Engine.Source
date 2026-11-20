@@ -153,7 +153,7 @@ export function NodeSettingsAgentWorkspacesCard(props: NodeSettingsAdvancedField
 	)} ${liveReload}`;
 	const sizeDescription = t(
 		"pages.nodeSettings.fields.megabytesPositive",
-		"A positive size in MB. Changes take effect without restarting the node.",
+		"A positive size in MiB. Changes take effect without restarting the node.",
 	);
 	const specs: NumericFieldSpec[] = [
 		{
@@ -180,7 +180,7 @@ export function NodeSettingsAgentWorkspacesCard(props: NodeSettingsAdvancedField
 			field: "agentHomeMaxSelectedFolderBytes",
 			label: t("pages.nodeSettings.fields.agentHomeMaxSelectedFolderBytes.label", "AgentHome max selected folder size"),
 			description: sizeDescription,
-			suffix: " MB",
+			suffix: " MiB",
 			min: 0,
 			decimalScale: 2,
 			testId: "node-settings-agenthome-max-folder-bytes",
@@ -189,7 +189,7 @@ export function NodeSettingsAgentWorkspacesCard(props: NodeSettingsAdvancedField
 			field: "agentHomeMaxPatchBytes",
 			label: t("pages.nodeSettings.fields.agentHomeMaxPatchBytes.label", "AgentHome max patch size"),
 			description: sizeDescription,
-			suffix: " MB",
+			suffix: " MiB",
 			min: 0,
 			decimalScale: 2,
 			testId: "node-settings-agenthome-max-patch-bytes",
@@ -254,7 +254,7 @@ export function NodeSettingsAgentWorkspacesCard(props: NodeSettingsAdvancedField
 					"Oldest runs are deleted until all runs fit; 0 sets no limit. Applies to the next sweep.",
 				)}
 				bounds={props.bounds.agentHomeRunRetentionMaxTotalBytes}
-				unit="GB"
+				unit="GiB"
 				wireUnit={t("pages.nodeSettings.fields.bytesShort", "B")}
 				form={props.form}
 				errors={props.errors}

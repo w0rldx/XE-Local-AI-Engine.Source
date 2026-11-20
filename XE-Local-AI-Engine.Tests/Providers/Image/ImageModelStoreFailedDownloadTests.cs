@@ -22,7 +22,7 @@ public sealed class ImageModelStoreFailedDownloadTests
     [Test]
     public async Task EnsureModel_WhenTheWeightFileIsNotFound_ThrowsAndLeavesNoOrphanDirectory()
     {
-        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var models = new TempDirectory("xe-hf-test");
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) => new HttpResponseMessage(HttpStatusCode.NotFound));
         using var http = new HttpClient(handler, disposeHandler: false);
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
@@ -42,7 +42,7 @@ public sealed class ImageModelStoreFailedDownloadTests
     [Test]
     public async Task EnsureModel_WhenAPartialDownloadExists_KeepsTheDirectorySoTheNextAttemptCanResume()
     {
-        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var models = new TempDirectory("xe-hf-test");
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) => new HttpResponseMessage(HttpStatusCode.NotFound));
         using var http = new HttpClient(handler, disposeHandler: false);
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);

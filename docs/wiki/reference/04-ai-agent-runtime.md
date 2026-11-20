@@ -524,7 +524,7 @@ conversation's call fails typed rather than silently sharing a session.
 **Result projection.** `McpToolResultProjectionAIFunction` (`AI.Agent/Tools/Implementation/`) turns the raw
 `CallToolResult` into the text the model reads: text blocks joined, one `structuredContent` copy unless a text
 block already mirrors it, an `isError` result prefixed `[tool error: tool_reported]`, and an image or audio block
-replaced by a placeholder such as `[image image/png, 34 KB]`. The binary block rides beside that string
+replaced by a placeholder such as `[image image/png, 34 KiB]`. The binary block rides beside that string
 (`ToolResultMedia`), so the chat persists it as an `image` part under the call's card; the model never receives
 the base64. The projection sits inside the result budget, so the budget measures what the model reads. The budget
 (`ToolResultBudget.Truncate`, shared by every registry) keeps three quarters head and one quarter tail with a

@@ -39,6 +39,10 @@ public interface IDockerRuntimeClient : IAsyncDisposable
     Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken = default);
 
     /// <summary>Run one command inside a running container and capture its bounded output.</summary>
+    /// <remarks>
+    ///     A cancel throws, except for a <see cref="DockerExecutionRequest.StopMarkerDirectory" /> command that started: that one is
+    ///     stopped and returned as <see cref="DockerExecutionOutcome.Stopped" />, whichever token was cancelled.
+    /// </remarks>
     Task<DockerExecutionOutcome> ExecuteAsync(string containerId, DockerExecutionRequest request, CancellationToken cancellationToken = default);
 }
 
@@ -199,6 +203,12 @@ public sealed record DockerExecutionRequest
 
     /// <summary>Optional observer fed each output line as it is read, past the capture ceiling too; it never changes the outcome.</summary>
     public ISandboxOutputObserver? OutputObserver { get; init; }
+
+    /// <summary>
+    ///     A writable in-container directory for the identity file that lets a cancel end the command and its descendants;
+    ///     null runs the command unwrapped, and a cancel then only abandons its stream.
+    /// </summary>
+    public string? StopMarkerDirectory { get; init; }
 }
 
 /// <summary>The outcome of one in-container command.</summary>
@@ -218,4 +228,13 @@ public sealed record DockerExecutionOutcome
 
     /// <summary>Whether standard-error bytes were discarded after the ceiling.</summary>
     public required bool StandardErrorTruncated { get; init; }
+
+    /// <summary>The cancel arrived while a stoppable command ran: the output is what it printed before, and the exit code is -1.</summary>
+    public bool Stopped { get; init; }
+
+    /// <summary>
+    ///     With <see cref="Stopped" />: the command's session is empty and the daemon lists no process outside the container's init and
+    ///     the sessions of the client's other execs in flight.
+    /// </summary>
+    public bool StopConfirmed { get; init; }
 }

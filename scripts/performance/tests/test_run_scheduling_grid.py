@@ -303,6 +303,45 @@ class SchedulingGridTests(unittest.TestCase):
             mocked.call_args_list[1].args[2],
         )
 
+    def test_embedding_profile_matches_the_file_stem_only(self):
+        cases = {
+            "/models/nomic-embed-text-v1.5.f16.gguf": ("search_document: ", "mean"),
+            "/models/embeddinggemma-2-Q8_0.gguf": ("title: none | text: ", "mean"),
+            "/models/bge-m3-q8_0.gguf": ("", "cls"),
+            "/models/my-embed.gguf": ("", "mean"),
+            "/models/Qwen3-Embedding-0.6B-Q8_0.gguf": ("", "last"),
+            "/models/Qwen3-Embedding-4B-Q4_K_M.gguf": ("", "last"),
+            "/models/Qwen3-0.6B-Q8_0.gguf": ("", "mean"),
+            # The owner directory names a profile token, the file does not: plain, like the C# owner rule.
+            "/models/nomic-embed-text/other-model-Q8_0.gguf": ("", "mean"),
+            "/models/bge-m3/my-embed.gguf": ("", "mean"),
+        }
+        for path, expected in cases.items():
+            with self.subTest(path=path):
+                self.assertEqual(expected, grid.embedding_profile(path))
+
+    def test_launch_argv_carries_the_profile_pooling(self):
+        self.assertEqual(
+            ["--embeddings", "--pooling", "cls"],
+            grid.role_argv("embedding", Path("/models/bge-m3-q8_0.gguf")),
+        )
+        self.assertEqual(
+            ["--embeddings", "--pooling", "mean"],
+            grid.role_argv("embedding", Path("/models/nomic-embed-text-v1.5.f16.gguf")),
+        )
+        self.assertEqual(
+            ["--rerank", "--pooling", "rank"],
+            grid.role_argv("reranker", Path("/models/bge-reranker-v2-m3-Q4_K_M.gguf")),
+        )
+
+    def test_tokenize_parses_special_tokens_like_the_embeddings_route(self):
+        with patch.object(grid, "post", return_value={"tokens": [1, 2, 3]}) as mocked:
+            count = grid.tokenize(19300, "hello world")
+        self.assertEqual(3, count)
+        self.assertEqual("/tokenize", mocked.call_args.args[1])
+        self.assertIs(True, mocked.call_args.args[2]["parse_special"])
+        self.assertIs(True, mocked.call_args.args[2]["add_special"])
+
     def test_actual_request_preflight_records_role_route(self):
         embedding = grid.actual_request_preflight(
             lambda _port, _items: {"data": [1]},

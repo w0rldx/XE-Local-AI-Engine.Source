@@ -46,8 +46,9 @@ internal sealed class ToolCommandOutput : IDisposable
         _toolCallId = toolCallId;
         _label = label is null ? null : RedactLabel(label, workspaceRoot);
         _output = new LiveCommandOutput(Limits, workspaceRoot, OnBatch, turn.TimeProvider, turn.Logger);
-        Report([], skippedLines: 0, running: true, exitCode: null, replace: true);
+        // Registered before it is announced, so a stop sent on the announcement always finds the command.
         _stopRegistration = turn.StopRegistry.Register(turn.MessageId, toolCallId, provider, handle, executionId);
+        Report([], skippedLines: 0, running: true, exitCode: null, replace: true);
     }
 
     /// <summary>The observer to set on the command's <see cref="SandboxCommandRequest.OutputObserver" />.</summary>

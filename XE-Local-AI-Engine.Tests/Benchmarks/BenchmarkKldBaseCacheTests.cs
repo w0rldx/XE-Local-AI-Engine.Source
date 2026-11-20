@@ -97,8 +97,8 @@ public sealed class BenchmarkKldBaseCacheTests : IDisposable
 
         var refusal = AssertEx.Throws<BenchmarkExecutionException>(() => cache.EnsureSpaceFor(5L * 1024 * 1024 * 1024));
 
-        AssertEx.True(refusal.Message.Contains("5.4 GB", StringComparison.Ordinal), $"The refusal must name what it needs; got {refusal.Message}.");
-        AssertEx.True(refusal.Message.Contains("12.9 GB", StringComparison.Ordinal), $"...and what is free; got {refusal.Message}.");
+        AssertEx.True(refusal.Message.Contains("about 5 GiB", StringComparison.Ordinal), $"The refusal must name what it needs; got {refusal.Message}.");
+        AssertEx.True(refusal.Message.Contains("only 12 GiB is free", StringComparison.Ordinal), $"...and what is free; got {refusal.Message}.");
 
         // Comfortably inside the headroom: the guard exists to stop a 100 %-full volume, not to stop measuring.
         cache.EnsureSpaceFor(1L * 1024 * 1024 * 1024);

@@ -24,6 +24,7 @@ const { toastMock } = vi.hoisted(() => ({
 
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
+import { getTranscriptionRuntimeStatusQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { WhisperRuntimeSourceBuildCard } from "@/features/node-settings/components/WhisperRuntimeSourceBuildCard";
 
@@ -367,7 +368,7 @@ describe("WhisperRuntimeSourceBuildCard", () => {
 		// that is the only way out of the refusal rather than leaving the operator to find it on another page.
 		expect(await screen.findByTestId("whisper-runtime-activity")).toBeTruthy();
 		const eject = await screen.findByRole("button", { name: copy.eject });
-		expect((eject as HTMLButtonElement).disabled).toBe(false);
+		expect(eject.hasAttribute("aria-disabled")).toBe(false);
 		await waitFor(() => expect((screen.getByRole("button", { name: copy.build }) as HTMLButtonElement).disabled).toBe(true));
 	});
 
@@ -545,5 +546,67 @@ describe("WhisperRuntimeSourceBuildCard", () => {
 
 		fireEvent.click(screen.getByLabelText(copy.riskAcknowledgement));
 		await waitFor(() => expect((screen.getByRole("button", { name: copy.build }) as HTMLButtonElement).disabled).toBe(false));
+	});
+	// A transcription starting under a focused Eject blocks it by push; it must keep focus and swallow the press.
+	it("keeps a focused Eject focusable when a push blocks it, and sends nothing on click, Enter or Space", async () => {
+		let ejects = 0;
+		server.use(
+			runtimeRoute({ activity: { residentProcessCount: 1, isBusy: true } }),
+			prerequisitesRoute(satisfiedPrerequisites, true),
+			statusRoute(),
+			http.post(localApiPath("transcription/runtime/eject"), () => {
+				ejects += 1;
+				return HttpResponse.json({ ejected: true });
+			}),
+		);
+		const { queryClient } = renderWithProviders(<WhisperRuntimeSourceBuildCard />);
+		const eject = await screen.findByRole("button", { name: copy.eject });
+		expect(eject.hasAttribute("aria-disabled")).toBe(false);
+		eject.focus();
+
+		server.use(runtimeRoute({ activity: { residentProcessCount: 1, activeTranscriptionCount: 1, isBusy: true } }));
+		await queryClient.invalidateQueries({ queryKey: getTranscriptionRuntimeStatusQueryKey() });
+		await waitFor(() => expect(eject.getAttribute("aria-disabled")).toBe("true"));
+		fireEvent.click(eject);
+		for (const key of ["Enter", " "]) {
+			fireEvent.keyDown(eject, { key });
+			fireEvent.keyUp(eject, { key });
+			// jsdom does not turn the key into a click; a browser does, and that click is what the button swallows.
+			fireEvent.click(eject);
+		}
+
+		expect(eject).toHaveProperty("disabled", false);
+		expect(document.activeElement).toBe(eject);
+		expect(ejects).toBe(0);
+	});
+
+	it("shows a loader on a pending Eject, keeps focus on it and ignores a repeat", async () => {
+		let ejects = 0;
+		let answer!: () => void;
+		const answered = new Promise<void>((resolve) => {
+			answer = resolve;
+		});
+		server.use(
+			runtimeRoute({ activity: { residentProcessCount: 1, isBusy: true } }),
+			prerequisitesRoute(satisfiedPrerequisites, true),
+			statusRoute(),
+			http.post(localApiPath("transcription/runtime/eject"), async () => {
+				ejects += 1;
+				await answered;
+				return HttpResponse.json({ ejected: true });
+			}),
+		);
+		renderWithProviders(<WhisperRuntimeSourceBuildCard />);
+		const eject = await screen.findByRole("button", { name: copy.eject });
+		eject.focus();
+		fireEvent.click(eject);
+
+		await waitFor(() => expect(eject.getAttribute("aria-busy")).toBe("true"));
+		expect(eject.querySelector(".mantine-Loader-root")).not.toBeNull();
+		fireEvent.click(eject);
+		expect(document.activeElement).toBe(eject);
+		answer();
+		await waitFor(() => expect(eject.hasAttribute("aria-busy")).toBe(false));
+		expect(ejects).toBe(1);
 	});
 });

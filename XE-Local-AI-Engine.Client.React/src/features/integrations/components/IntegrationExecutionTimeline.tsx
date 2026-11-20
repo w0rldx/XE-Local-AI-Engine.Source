@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { isRecord } from "@/core/models/JsonRecord";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { formatFailureCategory } from "@/features/integrations/components/IntegrationFormatters";
@@ -31,7 +32,7 @@ function parseDetail(detailJson: string | null): EventDetail | null {
 	}
 	try {
 		const parsed: unknown = JSON.parse(detailJson);
-		return typeof parsed === "object" && parsed !== null ? (parsed as EventDetail) : null;
+		return isRecord(parsed) ? (parsed as EventDetail) : null;
 	} catch {
 		return null;
 	}

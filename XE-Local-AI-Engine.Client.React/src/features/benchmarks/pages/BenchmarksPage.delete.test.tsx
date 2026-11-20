@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { delay, http, HttpResponse } from "msw";
+import { delay, HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Deleting a project is a page behavior, not a component one: the node refuses the delete while any run exists, and
@@ -19,8 +19,10 @@ vi.mock("@/core/ui/notifications/Toast", () => ({
 // A selected run mounts the live pane, which opens a SignalR hub; it has its own suite.
 vi.mock("@/features/benchmarks/hooks/useBenchmarkRunHub", () => ({ useBenchmarkRunHub: hubMock }));
 
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { noBenchmarkRunLiveOverlay } from "@/features/benchmarks/models/BenchmarkModels";
 import { BenchmarksPage } from "@/features/benchmarks/pages/BenchmarksPage";
+import { acceptConfirm, cancelConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -131,7 +133,11 @@ describe("BenchmarksPage project delete", () => {
 	it("names the project and what goes with it in the confirmation", async () => {
 		pageRoutes([projectRow(projectId, "Summarisation")], [projectDetail(projectId, "Summarisation")]);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByTestId("benchmark-project-delete"));
 
@@ -149,7 +155,11 @@ describe("BenchmarksPage project delete", () => {
 	it("uses the singular sentence for a project with one task item", async () => {
 		pageRoutes([projectRow(projectId, "Summarisation")], [projectDetail(projectId, "Summarisation")], 1);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByTestId("benchmark-project-delete"));
 
@@ -173,7 +183,11 @@ describe("BenchmarksPage project delete", () => {
 			}),
 		);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByTestId("benchmark-project-delete"));
 
@@ -200,7 +214,11 @@ describe("BenchmarksPage project delete", () => {
 			}),
 		);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByTestId("benchmark-project-delete"));
 
@@ -227,7 +245,11 @@ describe("BenchmarksPage project delete", () => {
 			}),
 		);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByTestId("benchmark-project-delete"));
 		fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
@@ -255,7 +277,11 @@ describe("BenchmarksPage project delete", () => {
 			}),
 		);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByTestId("benchmark-project-delete"));
 		fireEvent.click(await screen.findByTestId("benchmark-project-delete-accept"));
@@ -285,7 +311,11 @@ describe("BenchmarksPage project delete", () => {
 			),
 		);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByTestId("benchmark-project-delete"));
 		fireEvent.click(await screen.findByTestId("benchmark-project-delete-accept"));
@@ -306,7 +336,11 @@ describe("BenchmarksPage project delete", () => {
 			runRow("11111111-0000-4000-8000-000000000003", projectId, "Cancelled"),
 		]);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		const button = await screen.findByTestId("benchmark-project-delete");
 		await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
@@ -322,7 +356,11 @@ describe("BenchmarksPage project delete", () => {
 			runRow("11111111-0000-4000-8000-000000000001", projectId, "Succeeded"),
 		]);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByTestId("benchmark-project-delete"));
 
@@ -337,7 +375,11 @@ describe("BenchmarksPage project delete", () => {
 			runRow("11111111-0000-4000-8000-000000000002", projectId, "Running"),
 		]);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		const button = await screen.findByTestId("benchmark-project-delete");
 		await waitFor(() => expect(button.hasAttribute("disabled")).toBe(true));
@@ -364,7 +406,11 @@ describe("BenchmarksPage project delete", () => {
 			problemDetailsRoute("get", `benchmarks/projects/${projectId}/items`, 500, { detail: "The item store is offline." }),
 		);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByTestId("benchmark-project-delete"));
 
@@ -375,5 +421,58 @@ describe("BenchmarksPage project delete", () => {
 		).toBeTruthy();
 		expect(screen.getByText("Its 2 runs go with it, including every result, transcript and judge verdict.")).toBeTruthy();
 		expect(screen.queryByText(/0 task items/)).toBeNull();
+	});
+});
+
+describe("BenchmarksPage run delete from the runs table", () => {
+	beforeEach(() => {
+		hubMock.mockReturnValue({ parts: [], overlay: noBenchmarkRunLiveOverlay, isConnected: false, isReconnecting: false });
+	});
+	afterEach(cleanup);
+
+	it("names the suite's results view choice", async () => {
+		const run = runRow("11111111-0000-4000-8000-000000000001", projectId, "Succeeded");
+		pageRoutes([projectRow(projectId, "Summarisation", { runCount: 1 })], [projectDetail(projectId, "Summarisation")], 2, [run]);
+
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
+
+		expect(await screen.findByRole("radiogroup", { name: "Show results as" })).toBe(screen.getByTestId("benchmark-ranking-view"));
+	});
+
+	it("deletes a terminal run with its expected version only once the operator confirms, and nothing on cancel", async () => {
+		const run = runRow("11111111-0000-4000-8000-000000000001", projectId, "Succeeded");
+		const deleteBodies: unknown[] = [];
+		pageRoutes([projectRow(projectId, "Summarisation", { runCount: 1 })], [projectDetail(projectId, "Summarisation")], 1, [run]);
+		server.use(
+			http.delete(localApiPath(`benchmarks/runs/${run.id}`), async ({ request }) => {
+				deleteBodies.push(await request.json());
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
+		const actions = await screen.findByTestId(`benchmark-run-actions-${run.id}`);
+
+		// The menu item holds the focus when it is activated, as it does for a keyboard user: the dialog then opens over
+		// an element that leaves with the menu, and the focus must still come back to the row's actions button.
+		actions.focus();
+		fireEvent.click(actions);
+		await openConfirm(await screen.findByRole("menuitem", { name: "Delete terminal run" }), "Delete this run?");
+		await cancelConfirm(actions);
+		expect(deleteBodies).toEqual([]);
+
+		fireEvent.click(actions);
+		fireEvent.click(await screen.findByRole("menuitem", { name: "Delete terminal run" }));
+		await screen.findByRole("dialog", { name: "Delete this run?" });
+		acceptConfirm();
+		await waitFor(() => expect(deleteBodies).toEqual([{ expectedVersion: 3 }]));
 	});
 });

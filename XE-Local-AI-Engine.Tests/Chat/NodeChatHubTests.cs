@@ -209,8 +209,8 @@ public sealed class NodeChatHubTests
         });
 
         AssertEx.Contains(exception.Message, "Your message is too large");
-        AssertEx.Contains(exception.Message, "257 KB");
-        AssertEx.Contains(exception.Message, "limit 256 KB");
+        AssertEx.Contains(exception.Message, "257 KiB");
+        AssertEx.Contains(exception.Message, "limit 256 KiB");
         AssertEx.Contains(exception.Message, "Attach large documents as files instead.");
         AssertEx.False(recorder.Invoked, "an over-cap send must be rejected before the stream service persists the user turn");
         AssertEx.False(exception.Message.Contains("aaaa", StringComparison.Ordinal), "the rejection must not echo the message content");
@@ -276,7 +276,7 @@ public sealed class NodeChatHubTests
             }
         });
 
-        AssertEx.Contains(exception.Message, "limit 1 KB");
+        AssertEx.Contains(exception.Message, "limit 1 KiB");
         AssertEx.False(recorder.Invoked);
     }
 
@@ -307,7 +307,7 @@ public sealed class NodeChatHubTests
             }
         });
 
-        AssertEx.Contains(exception.Message, "limit 700 KB");
+        AssertEx.Contains(exception.Message, "limit 700 KiB");
         AssertEx.Equal(HubConnectionState.Connected, connection.State, "the refusal ends one stream, not the connection.");
         AssertEx.False(recorder.Invoked);
     }

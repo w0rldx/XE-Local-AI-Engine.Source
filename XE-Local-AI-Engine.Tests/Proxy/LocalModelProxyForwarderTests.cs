@@ -232,7 +232,7 @@ public sealed class LocalModelProxyForwarderTests
     {
         // The child exited/refused after provisioning — an HttpRequestException before any response bytes. This must map
         // to the same retryable 503 as an at-capacity spawn, not fall through to a generic 500.
-        using var upstream = new ThrowingHandler();
+        using var upstream = new ThrowingHttpMessageHandler(new HttpRequestException("connection refused"));
         var forwarder = CreateForwarder(out _, out _, upstream);
         var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
 
@@ -607,6 +607,76 @@ public sealed class LocalModelProxyForwarderTests
     }
 
     [Test]
+    public async Task MessagesSurface_WhenTheUpstreamErrorBodyStalls_AnswersTheStatusWithinTheDeadlineAndReleasesTheLease()
+    {
+        // Headers arrive, then the child goes silent mid-error. The forwarding client has an infinite timeout, so without
+        // a deadline on the body read the forward would hang and hold the inference lease an eject waits on.
+        using var upstream = new BodyHandler(HttpStatusCode.BadRequest, "application/json", new StallingStream());
+        var forwarder = CreateForwarder(out _, out var supervisor, upstream, idleTimeout: TimeSpan.FromMilliseconds(150));
+        var lease = GrantLease(supervisor);
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out var responseBody);
+
+        // WaitAsync turns a regression (the hang returning) into a fast, legible failure instead of a stuck test run.
+        await forwarder.ForwardMessagesAsync(context).WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssertEx.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        using var document = JsonDocument.Parse(responseBody.ToArray());
+        AssertEx.Equal("The local model runtime answered HTTP 400.", document.RootElement.GetProperty("error").GetProperty("message").GetString());
+        lease.Received(1).Dispose();
+    }
+
+    [Test]
+    public async Task MessagesSurface_WhenTheUpstreamErrorBodyIsOversized_ReadsOnlyUpToTheCapAndReleasesTheLease()
+    {
+        // A valid JSON error far past the cap, on an unseekable stream so the response carries no Content-Length to
+        // refuse it by: the proxy must stop reading at the cap instead of buffering the whole body into memory.
+        const int bodyBytes = 4 * 1024 * 1024;
+        const string head = "{\"error\":{\"message\":\"";
+        const string tail = "\"}}";
+        var body = Encoding.UTF8.GetBytes(head + new string('x', bodyBytes - head.Length - tail.Length) + tail);
+        var stream = new UnseekableStream(body);
+        using var upstream = new BodyHandler(HttpStatusCode.InternalServerError, "application/json", stream);
+        var forwarder = CreateForwarder(out _, out var supervisor, upstream);
+        var lease = GrantLease(supervisor);
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out var responseBody);
+
+        await forwarder.ForwardMessagesAsync(context);
+
+        AssertEx.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
+        using var document = JsonDocument.Parse(responseBody.ToArray());
+        AssertEx.Equal("The local model runtime answered HTTP 500.", document.RootElement.GetProperty("error").GetProperty("message").GetString());
+        AssertEx.True(stream.BytesRead <= 64 * 1024, $"The error body read must stop at its cap; it read {stream.BytesRead} bytes.");
+        lease.Received(1).Dispose();
+    }
+
+    [Test]
+    public async Task MessagesSurface_WhenTheCallerDisconnectsDuringTheUpstreamErrorBody_PropagatesTheCancellationAndReleasesTheLease()
+    {
+        // The deadline is far away, so only the caller's own disconnect can end this read. It must surface as the
+        // caller's cancellation, not be mistaken for the deadline and answered with an error body nobody reads.
+        var stalling = new StallingStream();
+        using var upstream = new BodyHandler(HttpStatusCode.BadRequest, "application/json", stalling);
+        var forwarder = CreateForwarder(out _, out var supervisor, upstream, idleTimeout: TimeSpan.FromMinutes(5));
+        var lease = GrantLease(supervisor);
+        using var caller = new CancellationTokenSource();
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out var responseBody);
+        context.Features.Set<IHttpRequestLifetimeFeature>(new HttpRequestLifetimeFeature
+        {
+            RequestAborted = caller.Token
+        });
+
+        var forward = forwarder.ForwardMessagesAsync(context);
+        await stalling.ReadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await caller.CancelAsync();
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => forward.WaitAsync(TimeSpan.FromSeconds(5)));
+        // Nothing was answered: not the upstream's status, and no error envelope.
+        AssertEx.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        AssertEx.Equal(0L, responseBody.Length);
+        lease.Received(1).Dispose();
+    }
+
+    [Test]
     [Arguments("responses")]
     [Arguments("chat/completions")]
     public async Task OpenAiSurfaces_UpstreamJsonError_IsRelayedVerbatim(string route)
@@ -673,7 +743,7 @@ public sealed class LocalModelProxyForwarderTests
     /// <summary>Drives one route into a failure the proxy answers itself, and parses what it wrote.</summary>
     private static async Task<FailureResult> RunFailureAsync(string route, string failure)
     {
-        HttpMessageHandler upstream = failure == "connection-refused" ? new ThrowingHandler() : Idle();
+        HttpMessageHandler upstream = failure == "connection-refused" ? new ThrowingHttpMessageHandler(new HttpRequestException("connection refused")) : Idle();
         var forwarder = CreateForwarder(out _, out var supervisor, upstream);
         if (failure == "cannot-provision")
         {
@@ -716,6 +786,13 @@ public sealed class LocalModelProxyForwarderTests
         {
             Body.Dispose();
         }
+    }
+
+    private static ILlamaServerInferenceLease GrantLease(ILlamaServerProcessSupervisor supervisor)
+    {
+        var lease = Substitute.For<ILlamaServerInferenceLease>();
+        supervisor.TryAcquireInferenceLease(InstalledModel, ModelRole.Chat).Returns(LlamaServerLeaseAcquisition.Granted(lease));
+        return lease;
     }
 
     private static CapturingHandler Idle()
@@ -830,15 +907,6 @@ public sealed class LocalModelProxyForwarderTests
         }
     }
 
-    /// <summary>Stands in for a child that exited or refused the connection: the send itself fails.</summary>
-    private sealed class ThrowingHandler : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            return Task.FromException<HttpResponseMessage>(new HttpRequestException("connection refused"));
-        }
-    }
-
     /// <summary>Stands in for a child that sends response headers then goes silent without closing the socket.</summary>
     private sealed class StallingHandler : HttpMessageHandler
     {
@@ -849,6 +917,31 @@ public sealed class LocalModelProxyForwarderTests
                 Content = new StreamContent(new StallingStream())
             };
             response.Content.Headers.ContentType = new MediaTypeHeaderValue("text/event-stream");
+            return Task.FromResult(response);
+        }
+    }
+
+    /// <summary>Stands in for a child whose response body is the given stream.</summary>
+    private sealed class BodyHandler : HttpMessageHandler
+    {
+        private readonly HttpStatusCode _statusCode;
+        private readonly string _contentType;
+        private readonly Stream _body;
+
+        public BodyHandler(HttpStatusCode statusCode, string contentType, Stream body)
+        {
+            _statusCode = statusCode;
+            _contentType = contentType;
+            _body = body;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = new HttpResponseMessage(_statusCode)
+            {
+                Content = new StreamContent(_body)
+            };
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue(_contentType);
             return Task.FromResult(response);
         }
     }
@@ -935,6 +1028,8 @@ public sealed class LocalModelProxyForwarderTests
     /// <summary>A readable stream whose reads never complete until the read's own token is cancelled (the idle deadline).</summary>
     private sealed class StallingStream : Stream
     {
+        public TaskCompletionSource ReadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public override bool CanRead => true;
 
         public override bool CanSeek => false;
@@ -951,8 +1046,60 @@ public sealed class LocalModelProxyForwarderTests
 
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
+            ReadStarted.TrySetResult();
             await Task.Delay(Timeout.Infinite, cancellationToken);
             return 0;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+    }
+
+    /// <summary>A finite body that cannot report its length, as a chunked response cannot: <see cref="StreamContent" /> then sends no Content-Length.</summary>
+    private sealed class UnseekableStream : Stream
+    {
+        private readonly byte[] _data;
+
+        public UnseekableStream(byte[] data)
+        {
+            _data = data;
+        }
+
+        public int BytesRead { get; private set; }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            var count = Math.Min(buffer.Length, _data.Length - BytesRead);
+            _data.AsSpan(BytesRead, count).CopyTo(buffer.Span);
+            BytesRead += count;
+            return ValueTask.FromResult(count);
         }
 
         public override int Read(byte[] buffer, int offset, int count) =>

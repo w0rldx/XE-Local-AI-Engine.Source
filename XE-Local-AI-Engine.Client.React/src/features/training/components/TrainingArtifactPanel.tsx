@@ -1,8 +1,12 @@
 import { Button, Group, Stack, Text } from "@mantine/core";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { listTrainingArtifactsQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
+import { cachedItemVersion } from "@/core/api/QueryKeys";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { ComparisonCreateDialog } from "@/features/training/components/ComparisonCreateDialog";
 import { TrainingArtifactExportDialog } from "@/features/training/components/TrainingArtifactExportDialog";
@@ -37,6 +41,8 @@ interface TrainingArtifactPanelProps {
  */
 export function TrainingArtifactPanel({ runId, exportPhase, onExportStarted }: TrainingArtifactPanelProps) {
 	const { t } = useTranslation();
+	const { confirm } = useConfirm();
+	const queryClient = useQueryClient();
 	const [exportOpen, setExportOpen] = useState(false);
 	const [kind, setKind] = useState<TrainingArtifactKindValue>("MergedGguf");
 	const [quantType, setQuantType] = useState<string>(defaultTrainingExportQuantization);
@@ -119,11 +125,27 @@ export function TrainingArtifactPanel({ runId, exportPhase, onExportStarted }: T
 							setPromoting(selected);
 							setModelName("");
 						},
-						remove: (selected) =>
-							remove.mutate(
-								{ path: { artifactId: selected.id }, body: { expectedVersion: selected.version } },
-								{ onError: failed },
-							),
+						remove: async (selected) => {
+							const confirmed = await confirm({
+								title: t("training.artifacts.deleteConfirm.title", "Delete this artifact?"),
+								description: t(
+									"training.artifacts.deleteConfirm.description",
+									"'{{name}}' is deleted from this node. This cannot be undone.",
+									{ name: selected.fileName },
+								),
+								confirmationText: t("training.artifacts.delete", "Delete"),
+								cancellationText: t("common.cancel", "Cancel"),
+							});
+							if (confirmed) {
+								const expectedVersion = cachedItemVersion(
+									queryClient,
+									listTrainingArtifactsQueryKey({ path: { runId } }),
+									selected.id,
+									selected.version,
+								);
+								remove.mutate({ path: { artifactId: selected.id }, body: { expectedVersion } }, { onError: failed });
+							}
+						},
 						retryCleanup: (selected) =>
 							discardQuality.mutate(
 								{

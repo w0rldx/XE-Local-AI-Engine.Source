@@ -15,6 +15,7 @@ import {
 	startLlamaCppSourceBuildMutation,
 	updateLlamaCppRuntimeMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { toLlamaCppRuntimeStatus } from "@/features/node-settings/models/LocalRuntimeMappers";
 import type { LlamaCppVariant } from "@/features/node-settings/models/LocalRuntimeModels";
 import { toSourceBuildPrerequisites, toSourceBuildStatus } from "@/features/node-settings/models/SourceBuildMappers";
@@ -34,13 +35,8 @@ export const localRuntimeQueryIds = {
 	sourceBuildStatus: "getLlamaCppSourceBuildStatus",
 } as const;
 
-/** Builds the partial generated-query-key filter that matches every cached variant of one local-runtime endpoint. */
-export function localRuntimeInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
-
 function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId: string): Promise<void> {
-	return queryClient.invalidateQueries({ queryKey: localRuntimeInvalidationKey(operationId) });
+	return queryClient.invalidateQueries({ queryKey: operationInvalidationKey(operationId) });
 }
 
 // Ensures (selects/downloads) a llama.cpp binary variant. Invalidates the runtime-status query so the merged card

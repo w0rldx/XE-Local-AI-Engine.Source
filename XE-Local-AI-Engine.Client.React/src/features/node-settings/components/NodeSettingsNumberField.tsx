@@ -21,7 +21,7 @@ interface Props {
 	readonly description?: string;
 	// Wire-unit bounds; the display scale of the field converts them.
 	readonly bounds: NumericBounds;
-	// The display unit ("minutes", "%", "GB"...) and, for a scaled field, the short wire unit used when a bound is not a
+	// The display unit ("minutes", "%", "GiB"...) and, for a scaled field, the short wire unit used when a bound is not a
 	// clean display value.
 	readonly unit?: string;
 	readonly wireUnit?: string;

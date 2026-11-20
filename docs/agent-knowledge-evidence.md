@@ -295,7 +295,7 @@ in four tests. `ResolveBindUrl_WhenPersistedPortIsTaken_FallsBackToDynamicBind` 
 `ResolveBindUrl_WhenPersistedPortIsFree_RebindsThatPort` and `PersistThenResolve_RoundTripsToTheSameLoopbackUrl` need
 the number free when `DesktopPortStore` probes it and want the retry form. Not converted because they are synchronous.
 
-The engine CLI's exit code 6 is the `DesktopPortStore.IsPortAvailable` branch of `Program`; the CLI never falls back to another port.
+The engine CLI exits 6 both from the `DesktopPortStore.IsPortAvailable` branch of `Program` and when another process takes the port between that probe and Kestrel's bind (`PortInUseFailure` in the top-level catch); the CLI never falls back to another port.
 
 ### The full Tests module balloons to ~3.5 GB — it is a framework leak, not a fixture bug
 
@@ -309,6 +309,13 @@ refuses per-context differences in provider-constant options such as `ConfigureW
 loaded machine with `/usr/bin/time` peak RSS: `Endpoints.Benchmarks.V1` at width 1 peaked at 3.3 GB cached, 674 MB
 with `NodeEfInternalServices`; `DevWorkflows.Materialization` at width 1 took 463 s uncached per scope, 55 s now.
 A low `DOTNET_GCHeapHardLimit` is not a valid leak verdict: size-cap tests allocate large payloads.
+Measured 2026-11-17, Release: each test host built the NodeChat model again (about 100 ms of first-scope work), and a
+runtime model passed through `UseModel` alone made `MigrateAsync` slower, because EF 10's migrator runs
+`HasPendingModelChanges()` and builds a design-time model unless `PendingModelChangesWarning` is ignored. With the
+process-shared model source and that ignore, `TestServerWebAppFactoryTimingTests` (two interleaved runs per build,
+10 hosts each) put the `EnsureApp` median at 640 ms on the parent commit and 452 ms with the change. A weak-reference
+probe over four sequential hosts showed every host getting the same model instance, and the same hosts collected
+(all but the first and last) with and without the change, so the shared model adds no per-host retention.
 
 Why the fixture rules exist: `WebApplicationFactory<Program>`'s `HostingListener` roots every host; the per-host JSON options exist for MEAI's descriptor cache; `AddRateLimiter` creates an undisposed replenishment timer per host, which is why `ConfigureServices` captures plain ints rather than `builder`. `scripts/run-tests-memory-safe.sh` is the runner these measurements came from.
 
@@ -727,6 +734,10 @@ A judge requiring a 16,384-token window was down-tiered during one tight-VRAM ad
 ### Knowledge retrieval evidence
 
 Managed cosine outperformed sqlite-vec through the measured 100k-row corpus; sqlite-vec's default `vec0` remained brute-force. For pooled llama-server roles, ordinary ~2,000-character markdown chunks measured roughly 520–680 real tokens and failed the default 512 physical micro-batch even when `-c` was larger. Raising `-b/-ub` to effective context fixed ingestion; chat was excluded because causal decode splits normally.
+
+- 2026-11-16, embedder comparison (opt-in retrieval eval, corpus revision 2, 134 labelled queries, 81 of them German or semantic code): EmbeddingGemma 2 Q8_0 over nomic v1.5 F16, F0 nDCG@5 +0.088 (paired 95% CI +0.047 to +0.134), German +0.150, semantic code +0.049; with the reranker +0.076. BF16 vs Q8_0 Δ −0.001. Costs: about half nomic's ingest throughput, +60–180 MiB embedder VRAM, 768-d vectors (1.5× nomic's 512-d storage). An earlier "no gain" trial scored 14 reranked English queries and is not comparable.
+- 2026-11-17, Qwen3-Embedding EOS under the pinned llama.cpp (b12014), 0.6B Q8_0 and 4B Q4_K_M: the loader dump shows `tokenizer.ggml.add_eos_token = true`; `/tokenize` with special tokens ends `hello world` in `<|endoftext|>` (151643) once; the embedding reports 3 prompt tokens, matching. Retrieval eval, `qwen3-embedding` profile vs `plain` on the same 0.6B file: F0 nDCG@5 +0.079 (95% CI +0.046 to +0.116).
+- 2026-11-17, memory dedup calibration (`MemoryDedupCalibrationLiveTests`, raw lesson text, English and German): the AUC separating duplicates from near-misses (one-word contradictions) was 0.35–0.47 for nomic v1.5 F16, EmbeddingGemma 2 Q8_0, bge-m3 F16 and Qwen3-Embedding 0.6B Q8_0, i.e. no better than chance; near-misses often scored at or above 0.92 (EmbeddingGemma 2 near-miss median 0.92–0.94). No threshold passed the rule, so semantic memory dedup ships off by default.
 
 ### Training live-gate incidents
 

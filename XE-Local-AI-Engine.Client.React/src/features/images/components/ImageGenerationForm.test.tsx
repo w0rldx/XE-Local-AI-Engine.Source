@@ -352,7 +352,9 @@ describe("ImageGenerationForm edit mode", () => {
 
 	it("offers the model's modes, and reference drops the strength and asks for the change", () => {
 		const { onSubmit } = renderEdit([qwenEdit]);
-		expect(screen.getByTestId("image-form-edit-mode")).toBeTruthy();
+		expect(screen.getByRole("radiogroup", { name: en.pages.images.edit.modeLabel })).toBe(
+			screen.getByTestId("image-form-edit-mode"),
+		);
 
 		fireEvent.click(screen.getByRole("radio", { name: en.pages.images.edit.modes.reference }));
 

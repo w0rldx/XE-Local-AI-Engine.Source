@@ -3,10 +3,10 @@ import { IconFileImport, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { humanizeBytes } from "@/core/model-downloads/models/DownloadRateEstimate";
+import { ggufFailureText } from "@/core/model-downloads/models/GgufAcquisitionErrors";
 import type { GgufAcquisitionStatus } from "@/core/model-downloads/models/GgufAcquisitionModels";
 import { isCancellableAcquisitionPhase } from "@/core/model-downloads/models/GgufAcquisitionModels";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { importErrorMessage } from "@/features/models/models/GgufImportErrors";
 
 interface ImportProgressPanelProps {
 	readonly operations: readonly GgufAcquisitionStatus[];
@@ -63,7 +63,7 @@ export function ImportProgressPanel({ operations, onCancel, cancellingOperationI
 						) : null}
 						{status.phase === "Failed" ? (
 							<InlineErrorAlert
-								message={importErrorMessage(t, status.errorCode)}
+								message={ggufFailureText(t, status)}
 								title={t("pages.models.gguf.import.failed", "Import failed")}
 							/>
 						) : null}

@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Images.Implementation;
 
 using System.Collections.Concurrent;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -27,6 +29,9 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAsyncDisposable
 {
     private const int MaxEchoedModelNameLength = 120;
+
+    // Any exclusive holder refuses an image: a training run, an evaluation, an export or a Model Lab experiment.
+    internal const string GpuBusyMessage = "Other GPU work is using the GPU. Try again once it finishes.";
 
     // Minimum gap between two pushed step updates for one job, protecting the socket from a fast GPU sampling several steps per second. Milestones — the initial
     // push, every terminal push and every generation-phase transition — bypass it and are never delayed or dropped; only the step counter within a phase is limited.
@@ -50,6 +55,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     private readonly ILogger<ImageJobCoordinator> _logger;
     private readonly IImageRuntimeActivityGate _runtimeActivityGate;
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly IGpuIdleHolderPreemption _idlePreemption;
     private readonly ILlamaServerProcessSupervisor _llamaSupervisor;
     private readonly IImageModelRegistry _modelRegistry;
 
@@ -89,10 +95,13 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         ILogger<ImageJobCoordinator> logger,
         IImageRuntimeActivityGate runtimeActivityGate,
         IGpuWorkGate gpuWorkGate,
+        IGpuIdleHolderPreemption idlePreemption,
         ILlamaServerProcessSupervisor llamaSupervisor,
         IImageModelRegistry modelRegistry,
         IJobCreatedPublisher jobCreated)
     {
+        ArgumentNullException.ThrowIfNull(idlePreemption);
+        _idlePreemption = idlePreemption;
         ArgumentNullException.ThrowIfNull(jobCreated);
         _jobCreated = jobCreated;
         ArgumentNullException.ThrowIfNull(modelRegistry);
@@ -396,9 +405,10 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
             // A training run holds the whole GPU (decision #13). Admission sits here, after the slot is held and before the runtime is called: a run can begin while this job
             // still waits behind another, so this is the only point at which it is definitely about to allocate VRAM. HELD through generation — checking then releasing would let a run admit.
-            if (!_gpuWorkGate.TryBeginShared(GpuWorkKind.ImageJob, out gpuAdmission))
+            gpuAdmission = await _gpuWorkGate.BeginSharedOrNullAsync(_idlePreemption, GpuWorkKind.ImageJob, token);
+            if (gpuAdmission is null)
             {
-                await FailJobAsync(jobId, new ImageJobFailure(ImageJobFailureReason.TrainingRunning, "A training run is using the GPU. Try again once it finishes."));
+                await FailJobAsync(jobId, new ImageJobFailure(ImageJobFailureReason.TrainingRunning, GpuBusyMessage));
                 return;
             }
 
@@ -414,7 +424,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
             // Deliberately NOT Progress<T>: with no SynchronizationContext it queues callbacks to the thread pool, so ordered step reports arrive out of order and, since seq is
             // assigned here on the delivery side, a reordered pair gets ASCENDING seqs — the client's monotonic dedupe then accepts a stale step and the bar walks backwards.
-            var progress = new SynchronousProgress(update => OnRuntimeProgress(jobId, update));
+            var progress = new SynchronousProgress<ImageGenProgress>(update => OnRuntimeProgress(jobId, update));
             var result = await _runtime.GenerateAsync(request, progress, token);
 
             // Persist the image encrypted-at-rest BEFORE marking the job succeeded.
@@ -482,8 +492,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     ///     <see langword="false" /> when one is serving a request: the job is refused rather than launched into an out-of-memory.
     /// </summary>
     /// <remarks>
-    ///     Uses the operator eject (graceful, never forced), the path the top-bar eject takes. Busy is read first so a busy process is
-    ///     never marked evicting, which would refuse new chat requests for the whole drain window.
+    ///     Uses the graceful eject the top-bar eject takes, but not as an operator: it leaves no mark, so background work may reload the model.
+    ///     Busy is read first so a busy process is never marked evicting, which would refuse new chat requests for the whole drain window.
     /// </remarks>
     private async Task<bool> FreeLlamaServerVramAsync(Guid jobId, CancellationToken token)
     {
@@ -497,7 +507,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         foreach (var process in residents)
         {
             // A request starting between the list and this eject is drained for EjectDrainTimeout, then refuses the job; a non-draining try-evict on the supervisor if that bites.
-            var outcome = await _llamaSupervisor.EjectAsync(process.ModelName, process.Role, force: false, token);
+            var outcome = await _llamaSupervisor.EjectAsync(process.ModelName, process.Role, force: false, token, operatorRequested: false);
             if (outcome == LlamaServerEjectOutcome.TimedOutStillBusy)
             {
                 return false;
@@ -856,25 +866,6 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             SecondsPerIteration = null,
             EstimatedRemainingMs = null
         };
-    }
-
-    /// <summary>
-    ///     An <see cref="IProgress{T}" /> that invokes its handler inline on the reporting thread. See the comment at
-    ///     its only construction site for why <see cref="Progress{T}" /> is unusable here.
-    /// </summary>
-    private sealed class SynchronousProgress : IProgress<ImageGenProgress>
-    {
-        private readonly Action<ImageGenProgress> _handler;
-
-        public SynchronousProgress(Action<ImageGenProgress> handler)
-        {
-            _handler = handler;
-        }
-
-        public void Report(ImageGenProgress value)
-        {
-            _handler(value);
-        }
     }
 
     /// <summary>A per-job ordered, bounded event log for late-subscriber replay.</summary>

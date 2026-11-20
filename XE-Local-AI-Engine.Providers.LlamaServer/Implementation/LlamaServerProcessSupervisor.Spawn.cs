@@ -77,8 +77,9 @@ public sealed partial class LlamaServerProcessSupervisor
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperatorEjectedException)
             {
+                // An operator-eject veto propagates as-is: an expected skip, never restarted, wrapped or logged as a failed start.
                 lastError = ex;
             }
         }
@@ -140,6 +141,12 @@ public sealed partial class LlamaServerProcessSupervisor
         var inputs = await PrepareLaunchInputsAsync(key, resolveArgs, applyLaunchPolicy, admission, benchmarkPolicy, ct).ConfigureAwait(false);
         var variant = inputs.Variant;
 
+        // Every consumer of this process shares the fallback, so the one spawn says it once.
+        if (key.Role == ModelRole.Embedding && EmbeddingModelProfile.For(key.ModelName) is { IsFallback: true } fallback)
+        {
+            _logger.LogInformation("No known embedding profile for {ModelName}: plain input, {Pooling} pooling.", key.ModelName, fallback.Pooling);
+        }
+
         // Serializes the spawn-through-readiness window of GPU-backed loads process-wide; CPU loads bypass. Acquired HERE, immediately before the cap decision that
         // may evict, and spanning BOTH plan attempts below. On the GPU load-admission gate, see wiki 03, section Spawn attempt sequencing.
         using var admissionTicket = variant == GpuVariant.Cpu
@@ -167,6 +174,7 @@ public sealed partial class LlamaServerProcessSupervisor
             IProcessTreeHandle? handle = null;
             long? readinessStartedTimestamp = null;
             var readinessRecorded = false;
+            var reachedReadiness = false;
             var automaticCapture = applyLaunchPolicy ? new LlamaServerBoundedStartupCapture() : null;
 
             // Latches llama.cpp's layer-placement banner out of the streamed startup output. Deliberately NOT read off automaticCapture: that buffer is bounded and
@@ -207,6 +215,7 @@ public sealed partial class LlamaServerProcessSupervisor
                     key.ModelName, key.Role, handle.ProcessId, port, LlamaServerLaunchArgumentComposer.DescribeLaunchPlan(candidate.Plan));
 
                 await WaitForReadyOrExitAsync(handle, spec.BaseAddress, inputs.ReadinessTimeout, ct).ConfigureAwait(false);
+                reachedReadiness = true;
                 var readinessDuration = _timeProvider.GetElapsedTime(readinessStartedTimestamp.Value);
                 _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms (readiness budget {BudgetSeconds:F0}s).",
                     key.ModelName, key.Role, handle.ProcessId, readinessDuration.TotalMilliseconds, inputs.ReadinessTimeout.TotalSeconds);
@@ -231,6 +240,20 @@ public sealed partial class LlamaServerProcessSupervisor
                 // RegisterReadyProcessAsync published the Ready observation as its last step; latch it, which is what keeps the catch paths from recording a second one.
                 readinessRecorded = true;
                 return running;
+            }
+            catch (OperatorEjectedException)
+            {
+                // Publication was vetoed by an operator eject: clean up and propagate, with no port-race check, safe fallback or down-tier.
+                RecordIncompleteReadinessAttempt(LlamaServerReadinessOutcome.Cancelled);
+                await TearDownRefusedAttemptAsync(key, handle, port).ConfigureAwait(false);
+
+                // The safe config still reached readiness where the optimized one failed: that verdict holds whether or not the eject let the process publish.
+                if (isSafeRetry && reachedReadiness)
+                {
+                    await RecordVetoedSafeRetryVerdictAsync(key, variant, candidate, ct).ConfigureAwait(false);
+                }
+
+                throw;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -624,6 +647,7 @@ public sealed partial class LlamaServerProcessSupervisor
         CancellationToken ct)
     {
         var variant = inputs.Variant;
+        var inflight = profilingOwned ? null : _inflightSpawns.GetValueOrDefault(key);
         var expertsOffloaded = PinsExpertsToCpu(spec.Arguments);
         var placement = RecordObservedLayerPlacement(key, variant, placementSniffer, expertsOffloaded);
 
@@ -671,7 +695,8 @@ public sealed partial class LlamaServerProcessSupervisor
                     candidate.Plan,
                     key.Role,
                     inputs.LaunchTuning.ChatCacheReuse,
-                    inputs.LaunchTuning.ChatCacheRamMiB),
+                    inputs.LaunchTuning.ChatCacheRamMiB,
+                    EmbeddingModelProfile.For(key.ModelName).Pooling),
                 new LlamaServerLaunchAuxAssets(!string.IsNullOrWhiteSpace(inputs.AdapterFilePath),
                     !string.IsNullOrWhiteSpace(inputs.ProjectorFilePath),
                     !string.IsNullOrWhiteSpace(inputs.Speculative.DraftModelPath)),
@@ -699,9 +724,19 @@ public sealed partial class LlamaServerProcessSupervisor
             AwaitingFirstLease = true,
 
             // The spawn's in-flight record is still registered here; it carries the mark past a transient caller that cancelled its wait.
-            IsTransient = !profilingOwned && _inflightSpawns.TryGetValue(key, out var inflight) && inflight.IsTransient
+            IsTransient = inflight is { IsTransient: true }
         };
-        _processes[key] = running;
+
+        // Profiling neither consults nor clears an operator-eject mark; every other spawn publishes through the veto, before any residency notification.
+        if (profilingOwned)
+        {
+            _processes[key] = running;
+        }
+        else
+        {
+            PublishOrVeto(key, running, inflight);
+        }
+
         _residencyNotifier.NotifyChanged();
         _ = ResidencyExitNotification.TickOnExitAsync(handle.WaitForExitAsync(Timeout.InfiniteTimeSpan, _shutdownCts.Token),
             _residencyNotifier,
@@ -723,7 +758,7 @@ public sealed partial class LlamaServerProcessSupervisor
     ///     optimized config is the culprit for THIS backend; records it, keyed on the node's CURRENT KV selection.
     /// </summary>
     /// <remarks>
-    ///     Runs after the <c>_processes</c> registration, and is safe there because the policy absorbs a verdict it
+    ///     Runs after the <c>_processes</c> registration (or a vetoed publication's teardown), safe because the policy absorbs a verdict it
     ///     cannot persist (see <see cref="ILlamaServerLaunchPolicy" />). On why, see wiki 03, section Spawn attempt
     ///     sequencing, under the safe-retry verdict.
     /// </remarks>
@@ -753,12 +788,117 @@ public sealed partial class LlamaServerProcessSupervisor
         }
     }
 
+    /// <summary>
+    ///     Records the safe-retry verdict of a candidate whose publication an operator eject vetoed, within
+    ///     <see cref="VetoedSafeRetryVerdictBudget" />, so a slow or failing store never holds or replaces the veto.
+    /// </summary>
+    private async Task RecordVetoedSafeRetryVerdictAsync(ProcessKey key, GpuVariant variant, LlamaServerLaunchCandidate candidate, CancellationToken ct)
+    {
+        // On its own task, so a store that blocks synchronously before its first await is bounded too; an abandoned write finishes or fails on its own.
+        var verdict = Task.Run(() => RecordSafeRetryVerdictAsync(key, variant, candidate, ct), CancellationToken.None);
+        _ = verdict.ContinueWith(static faulted => _ = faulted.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        try
+        {
+            await verdict.WaitAsync(VetoedSafeRetryVerdictBudget, _timeProvider, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (ct.IsCancellationRequested)
+        {
+            _logger.LogDebug(ex, "The safe-retry verdict for vetoed model {ModelName} role {Role} was not recorded: the supervisor is shutting down.",
+                key.ModelName, key.Role);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "The safe-retry verdict for vetoed model {ModelName} role {Role} was not recorded for backend {Variant}.",
+                key.ModelName, key.Role, variant);
+        }
+    }
+
     /// <summary>Tree-kills and disposes a failed attempt's child, if it started, and frees its reserved port.</summary>
     private async Task TearDownFailedAttemptAsync(IProcessTreeHandle? handle, int port)
     {
         handle?.TreeKill();
         handle?.Dispose();
         await _reaper.ReleaseReservedPortAsync(port).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Tears down an attempt whose publication was vetoed, each step on its own, so a failing step never skips the rest
+    ///     or replaces the refusal with a retryable start failure.
+    /// </summary>
+    /// <remarks>
+    ///     The kill counts only once the child is seen to exit within <see cref="VetoedKillExitWait" />: a kill can throw,
+    ///     or return while the child lives. Until then the reaper holds the handle and its port, so the child still counts
+    ///     against the cap, and every reap retries the kill.
+    /// </remarks>
+    private async Task TearDownRefusedAttemptAsync(ProcessKey key, IProcessTreeHandle? handle, int port)
+    {
+        if (handle is not null && !await KillAndConfirmExitAsync(key, handle).ConfigureAwait(false))
+        {
+            _logger.LogWarning("The vetoed llama-server for model {ModelName} role {Role} (pid {ProcessId}) did not exit after its kill; it keeps its slot until it does.",
+                key.ModelName, key.Role, handle.ProcessId);
+            await _reaper.HoldUntilExitedAsync(key, handle, port).ConfigureAwait(false);
+        }
+        else
+        {
+            try
+            {
+                handle?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                LogRefusedTeardownFailure(ex, key, "dispose");
+            }
+
+            try
+            {
+                await _reaper.ReleaseReservedPortAsync(port).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                LogRefusedTeardownFailure(ex, key, "port release");
+            }
+        }
+
+        try
+        {
+            _layerPlacementReport.Remove(key.Role, key.ModelName);
+        }
+        catch (Exception ex)
+        {
+            LogRefusedTeardownFailure(ex, key, "layer placement removal");
+        }
+    }
+
+    /// <summary>Kills <paramref name="handle" /> and reports whether its exit was seen; a throwing kill or exit wait reads as not seen.</summary>
+    private async Task<bool> KillAndConfirmExitAsync(ProcessKey key, IProcessTreeHandle handle)
+    {
+        try
+        {
+            handle.TreeKill();
+        }
+        catch (Exception ex)
+        {
+            LogRefusedTeardownFailure(ex, key, "kill");
+        }
+
+        try
+        {
+            return handle.HasExited || await handle.WaitForExitAsync(VetoedKillExitWait, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            LogRefusedTeardownFailure(ex, key, "exit wait");
+            return false;
+        }
+    }
+
+    private void LogRefusedTeardownFailure(Exception ex, ProcessKey key, string step)
+    {
+        _logger.LogWarning(ex, "Tearing down the vetoed llama-server load for model {ModelName} role {Role} failed at the {Step} step; the refusal still stands.",
+            key.ModelName, key.Role, step);
     }
 
     /// <summary>

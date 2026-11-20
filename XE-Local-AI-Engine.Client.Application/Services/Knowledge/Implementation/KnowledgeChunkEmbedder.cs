@@ -5,6 +5,8 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Default <see cref="IKnowledgeChunkEmbedder" />: resolves the provider named by
@@ -43,21 +45,25 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IEmbeddingModelResolver _embeddingModelResolver;
     private readonly IKnowledgeEmbeddingPrefixer _prefixer;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
 
     public KnowledgeChunkEmbedder(ILocalModelProviderResolver providerResolver,
         IEmbeddingModelResolver embeddingModelResolver,
         IKnowledgeEmbeddingPrefixer prefixer,
-        IOptions<KnowledgeBaseOptions> options)
+        IOptions<KnowledgeBaseOptions> options,
+        ILlamaServerProcessSupervisor supervisor)
     {
         ArgumentNullException.ThrowIfNull(providerResolver);
         ArgumentNullException.ThrowIfNull(embeddingModelResolver);
         ArgumentNullException.ThrowIfNull(prefixer);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(supervisor);
 
         _providerResolver = providerResolver;
         _embeddingModelResolver = embeddingModelResolver;
         _prefixer = prefixer;
         _options = options.Value;
+        _supervisor = supervisor;
     }
 
     public async Task<KnowledgeEmbeddingResult> EmbedAsync(IReadOnlyList<string> chunkContents, CancellationToken cancellationToken)
@@ -81,11 +87,21 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         // Resolve the configured embedding name ONCE to a model actually installed here, and return it so the ingestion lane
         // stamps the exact producing model; the search lane resolves identically, keeping chunk and query vectors comparable.
         var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
+
+        // A removed pinned model can never load; asking for it would only meet a stale eject mark and park the run again.
+        if (resolution.PinnedModelMissing)
+        {
+            throw new KnowledgeIngestionException(EmbeddingUnavailableReason);
+        }
+
         var embeddingModelName = resolution.Name;
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {
             ModelName = embeddingModelName,
-            ProviderName = _options.EmbeddingProviderName
+            ProviderName = _options.EmbeddingProviderName,
+
+            // No user waits on ingestion, so an operator's eject keeps this load out (typed veto) until a user reloads it.
+            ResidencyIntent = ModelResidencyIntent.Background
         });
 
         var batchSize = Math.Max(1, _options.MaxEmbeddingBatchSize);
@@ -104,7 +120,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
             for (var index = 0; index < count; index++)
             {
                 // Prepend the document-intent prefix only on the text handed to the generator — never into stored content.
-                batch.Add(_prefixer.ForDocument(chunkContents[offset + index]));
+                batch.Add(_prefixer.ForDocument(resolution, chunkContents[offset + index]));
             }
 
             IReadOnlyList<Embedding<float>>? generated = null;
@@ -224,6 +240,27 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         {
             return null;
         }
+    }
+
+    public async Task<bool> IsEmbeddingModelBlockedAsync(CancellationToken cancellationToken)
+    {
+        // Eject marks exist only on the llama.cpp supervisor; any other provider never vetoes a background load.
+        if (!string.Equals(_options.EmbeddingProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
+        var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
+
+        // A pinned model the inventory proved removed waits on nothing: the run fails with the missing-model reason instead.
+        if (resolution.PinnedModelMissing)
+        {
+            return false;
+        }
+
+        // Any other unconfident name (failed inventory, nothing matched) may not be the marked model: unknown reads as blocked.
+        return !resolution.IsConfident || _supervisor.IsBackgroundLaunchBlocked(resolution.Name, ModelRole.Embedding);
     }
 
     private ILocalModelProvider ResolveProvider()

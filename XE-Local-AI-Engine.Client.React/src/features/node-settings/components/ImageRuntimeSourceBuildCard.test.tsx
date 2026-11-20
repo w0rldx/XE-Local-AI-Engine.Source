@@ -37,6 +37,7 @@ const { state } = vi.hoisted(() => ({
 		cancel: vi.fn(),
 		remove: vi.fn(),
 		eject: vi.fn(),
+		ejectPending: false,
 		prerequisiteArgs: vi.fn(),
 		statusArgs: vi.fn(),
 		runtimeArgs: vi.fn(),
@@ -73,6 +74,7 @@ vi.mock("react-i18next", () => ({
 				"pages.nodeSettings.imageRuntime.sourceBuild.cancel": "Cancel",
 				"pages.nodeSettings.imageRuntime.sourceBuild.eject": "Eject image processes",
 				"pages.nodeSettings.imageRuntime.sourceBuild.remove": "Remove",
+				"pages.nodeSettings.imageRuntime.sourceBuild.removeConfirmTitle": "Remove the managed runtime?",
 			};
 			return labels[key] ?? key;
 		},
@@ -106,11 +108,12 @@ vi.mock("@/features/node-settings/queries/useImageRuntime", () => ({
 }));
 
 vi.mock("@/core/loaded-models/queries/useEjectRuntimes", () => ({
-	useEjectImageRuntime: () => ({ mutate: state.eject, isPending: false }),
+	useEjectImageRuntime: () => ({ mutate: state.eject, isPending: state.ejectPending }),
 }));
 
-vi.mock("@/features/node-settings/hooks/useImageRuntimeSourceBuildHub", () => ({
-	useImageRuntimeSourceBuildHub: () => ({
+vi.mock("@/features/node-settings/hooks/useSourceBuildHub", () => ({
+	imageRuntimeSourceBuildStream: {},
+	useSourceBuildHub: () => ({
 		phase: null,
 		logEntries: [],
 		error: null,
@@ -119,15 +122,25 @@ vi.mock("@/features/node-settings/hooks/useImageRuntimeSourceBuildHub", () => ({
 	}),
 }));
 
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { ImageRuntimeSourceBuildCard } from "@/features/node-settings/components/ImageRuntimeSourceBuildCard";
+import { acceptConfirm, cancelConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
-function renderCard(): void {
-	render(
+function card() {
+	return (
 		<MantineProvider env="test" theme={testMantineTheme}>
-			<ImageRuntimeSourceBuildCard />
-		</MantineProvider>,
+			<ConfirmProvider>
+				<ImageRuntimeSourceBuildCard />
+			</ConfirmProvider>
+		</MantineProvider>
 	);
+}
+
+function renderCard(): () => void {
+	const { rerender } = render(card());
+	// A push or a mutation state change, replayed: the mocked hooks read `state` again on the next render.
+	return () => rerender(card());
 }
 
 /**
@@ -183,6 +196,7 @@ describe("ImageRuntimeSourceBuildCard", () => {
 				isBusy: false,
 			},
 		};
+		state.ejectPending = false;
 		vi.clearAllMocks();
 	});
 
@@ -313,8 +327,12 @@ describe("ImageRuntimeSourceBuildCard", () => {
 		expect(screen.getByText("The managed binary failed integrity verification.")).toBeTruthy();
 		const remove = screen.getByRole("button", { name: "Remove" }) as HTMLButtonElement;
 		expect(remove.disabled).toBe(false);
-		fireEvent.click(remove);
-		expect(state.remove).toHaveBeenCalledWith(undefined, expect.any(Object));
+		await openConfirm(remove, "Remove the managed runtime?");
+		await cancelConfirm(remove);
+		expect(state.remove).not.toHaveBeenCalled();
+		await openConfirm(remove, "Remove the managed runtime?");
+		acceptConfirm();
+		await waitFor(() => expect(state.remove).toHaveBeenCalledWith(undefined, expect.any(Object)));
 		// A rebuild is now offered beside the removal — the record is invalid, not the toolchain.
 		expect(screen.getByRole("button", { name: "Rebuild" })).toBeTruthy();
 	});
@@ -343,8 +361,8 @@ describe("ImageRuntimeSourceBuildCard", () => {
 		};
 		renderCard();
 
-		const eject = screen.getByRole("button", { name: "Eject image processes" }) as HTMLButtonElement;
-		expect(eject.disabled).toBe(false);
+		const eject = screen.getByRole("button", { name: "Eject image processes" });
+		expect(eject.hasAttribute("aria-disabled")).toBe(false);
 		fireEvent.click(eject);
 		expect(state.eject).toHaveBeenCalledWith(undefined, expect.any(Object));
 		expect((screen.getByRole("button", { name: "Remove" }) as HTMLButtonElement).disabled).toBe(true);
@@ -454,7 +472,9 @@ describe("ImageRuntimeSourceBuildCard", () => {
 		// the surviving draft below prove nothing.
 		const card = () => (
 			<MantineProvider env="test" theme={testMantineTheme}>
-				<ImageRuntimeSourceBuildCard />
+				<ConfirmProvider>
+					<ImageRuntimeSourceBuildCard />
+				</ConfirmProvider>
 			</MantineProvider>
 		);
 		const { rerender } = render(card());
@@ -511,9 +531,47 @@ describe("ImageRuntimeSourceBuildCard", () => {
 		expect((screen.getByRole("button", { name: "Rebuild" }) as HTMLButtonElement).disabled).toBe(true);
 		expect((screen.getByRole("button", { name: "Remove" }) as HTMLButtonElement).disabled).toBe(true);
 
-		const eject = screen.getByRole("button", { name: "Eject image processes" }) as HTMLButtonElement;
-		expect(eject.disabled).toBe(false);
+		const eject = screen.getByRole("button", { name: "Eject image processes" });
+		expect(eject.hasAttribute("aria-disabled")).toBe(false);
 		fireEvent.click(eject);
 		expect(state.eject).toHaveBeenCalledWith(undefined, expect.any(Object));
+	});
+	// A job or spawn starting under a focused Eject blocks it by push; it must keep focus and swallow the press.
+	it("keeps a focused Eject focusable when a push blocks it, and sends nothing on click, Enter or Space", () => {
+		state.runtime = { managedRuntime: null, activity: { ...state.runtime.activity, residentProcessCount: 1 } };
+		const pushed = renderCard();
+		const eject = screen.getByRole("button", { name: "Eject image processes" });
+		eject.focus();
+
+		state.runtime = { managedRuntime: null, activity: { ...state.runtime.activity, activeJobCount: 1, isBusy: true } };
+		pushed();
+		fireEvent.click(eject);
+		for (const key of ["Enter", " "]) {
+			fireEvent.keyDown(eject, { key });
+			fireEvent.keyUp(eject, { key });
+			// jsdom does not turn the key into a click; a browser does, and that click is what the button swallows.
+			fireEvent.click(eject);
+		}
+
+		expect(eject.getAttribute("aria-disabled")).toBe("true");
+		expect(eject).toHaveProperty("disabled", false);
+		expect(document.activeElement).toBe(eject);
+		expect(state.eject).not.toHaveBeenCalled();
+	});
+
+	it("shows a loader on a pending Eject and keeps focus on it", () => {
+		state.runtime = { managedRuntime: null, activity: { ...state.runtime.activity, residentProcessCount: 1 } };
+		const pushed = renderCard();
+		const eject = screen.getByRole("button", { name: "Eject image processes" });
+		eject.focus();
+
+		state.ejectPending = true;
+		pushed();
+		fireEvent.click(eject);
+
+		expect(eject.getAttribute("aria-busy")).toBe("true");
+		expect(eject.querySelector(".mantine-Loader-root")).not.toBeNull();
+		expect(document.activeElement).toBe(eject);
+		expect(state.eject).not.toHaveBeenCalled();
 	});
 });

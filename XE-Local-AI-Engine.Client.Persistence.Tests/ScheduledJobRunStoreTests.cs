@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
-using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -821,8 +820,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
     private static INodeSqliteKeyHolder CreateKeyHolder()
     {
-        var key = Enumerable.Range(start: 0, count: 32).Select(static v => (byte)(v + 1)).ToArray();
-        return new FixedNodeSqliteKeyHolder(key);
+        return new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
     }
 
     private static ScheduledJobRunInput CreateRunInput(Guid scheduledJobId, ScheduledRunStatus status)
@@ -847,54 +845,4 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
             LastSeenUtc = 1,
             Kind = kind
         };
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private long _milliseconds;
-
-        public MutableTimeProvider(long initialMilliseconds)
-        {
-            _milliseconds = initialMilliseconds;
-        }
-
-        public void Advance(long milliseconds)
-        {
-            _milliseconds += milliseconds;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return DateTimeOffset.FromUnixTimeMilliseconds(_milliseconds);
-        }
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
-    }
 }

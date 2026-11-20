@@ -12,7 +12,7 @@ public sealed class ImageModelRegistryTests
     [Test]
     public async Task ImageModelRegistry_FileSet_ResolvesAllParts()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-image-reg");
         var flux = WriteFileSet(dir.Path,
             ("flux1-schnell.gguf", ImageModelPartRole.Diffusion),
             ("ae.safetensors", ImageModelPartRole.Vae),
@@ -34,7 +34,7 @@ public sealed class ImageModelRegistryTests
     [Test]
     public async Task ImageModelRegistry_DropsEntry_WhenAnyPartFileMissing()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-image-reg");
         var sd15 = WriteFileSet(dir.Path, ("sd15.gguf", ImageModelPartRole.Diffusion));
 
         using var registry = new ImageModelRegistry(Options(dir.Path), NullLogger<ImageModelRegistry>.Instance);
@@ -50,7 +50,7 @@ public sealed class ImageModelRegistryTests
     [Test]
     public async Task ImageModelRegistry_UpsertOverAnUnreadableManifest_RefusesAndLeavesItUntouched()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-image-reg");
         using var registry = new ImageModelRegistry(Options(dir.Path), NullLogger<ImageModelRegistry>.Instance);
         await registry.UpsertAsync(WriteSinglePartModel(dir.Path, "a"), CancellationToken.None);
         var manifestPath = Path.Combine(dir.Path, ImageModelRegistry.ManifestFileName);
@@ -68,7 +68,7 @@ public sealed class ImageModelRegistryTests
     [Test]
     public async Task ImageModelRegistry_UpsertWhileAnotherModelsPartIsMissing_KeepsThatModelRegistered()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-image-reg");
         using var registry = new ImageModelRegistry(Options(dir.Path), NullLogger<ImageModelRegistry>.Instance);
         var a = WriteSinglePartModel(dir.Path, "a");
         await registry.UpsertAsync(a, CancellationToken.None);
@@ -151,31 +151,5 @@ public sealed class ImageModelRegistryTests
         {
             ModelsDirectory = path
         };
-    }
-
-    private sealed class TempDir : IDisposable
-    {
-        public TempDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-image-reg-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
-        }
     }
 }

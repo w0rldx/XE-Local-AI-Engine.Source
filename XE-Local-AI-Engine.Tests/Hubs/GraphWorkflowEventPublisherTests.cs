@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Hubs;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -48,6 +49,33 @@ public sealed class GraphWorkflowEventPublisherTests
         var publisher = new GraphWorkflowEventPublisher(hubContext);
 
         _ = await AssertEx.ThrowsAsync<ArgumentOutOfRangeException>(() => publisher.PublishAsync(Guid.NewGuid(), sequence: 1, (GraphWorkflowChangeKind)99));
+    }
+
+    /// <summary>The operations feed joins no run group, so a run's status goes to every connection, named as the run list spells it.</summary>
+    [Test]
+    [Arguments(GraphWorkflowRunStatus.WaitingForApproval, "WaitingForApproval")]
+    [Arguments(GraphWorkflowRunStatus.Running, "Running")]
+    [Arguments(GraphWorkflowRunStatus.Cancelled, "Cancelled")]
+    public async Task PublishRunStatusAsync_BroadcastsTheRunIdAndStatusToEveryConnection(GraphWorkflowRunStatus status, string expected)
+    {
+        var runId = Guid.NewGuid();
+        var all = Substitute.For<IClientProxy>();
+        var clients = Substitute.For<IHubClients>();
+        clients.All.Returns(all);
+        var hubContext = Substitute.For<IHubContext<GraphWorkflowRunHub>>();
+        hubContext.Clients.Returns(clients);
+        var publisher = new GraphWorkflowEventPublisher(hubContext);
+
+        await publisher.PublishRunStatusAsync(runId, status);
+
+        await all.Received(1)
+                 .SendCoreAsync("graphWorkflowRunStatusChanged",
+                     Arg.Is<object?[]>(arguments => arguments.Length == 1
+                                                    && arguments[0] is GraphWorkflowRunStatusChanged
+                                                    && ((GraphWorkflowRunStatusChanged)arguments[0]!).RunId == runId
+                                                    && ((GraphWorkflowRunStatusChanged)arguments[0]!).Status == expected),
+                     Arg.Any<CancellationToken>());
+        _ = clients.DidNotReceive().Group(Arg.Any<string>());
     }
 
     [Test]

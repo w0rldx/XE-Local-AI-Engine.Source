@@ -36,4 +36,10 @@ public interface ILlamaServerPooledLaunchAdmission
         bool mayUnloadIdleModels,
         Func<IReadOnlyCollection<string>, CancellationToken, Task<IdleChatEvictionResult>> evictIdleModel,
         CancellationToken ct);
+
+    /// <summary>
+    ///     The chat model names no load and no lowered loaded-model cap may unload: the keep-warm model while keep-warm is on; the
+    ///     same names <see cref="AdmitChatAsync" /> hands its <c>evictIdleModel</c> callback.
+    /// </summary>
+    Task<IReadOnlyCollection<string>> GetProtectedChatModelsAsync(CancellationToken ct);
 }

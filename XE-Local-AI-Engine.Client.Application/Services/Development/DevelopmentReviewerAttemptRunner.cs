@@ -118,7 +118,8 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                     Options.Create(_options),
                     _timeProvider,
                     maxOutputTokens,
-                    _options.MaxToolCalls);
+                    _options.MaxToolCalls,
+                    _logger);
             // The same fresh tree validation judged, never the coder's worktree with its ignored files.
             var tree = await _workspaceProvider.PrepareValidationAsync(session, repository, evidence.Patch, timeout.Token);
             treeHandle = tree.SandboxHandle;

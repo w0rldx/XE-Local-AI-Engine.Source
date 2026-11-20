@@ -2,13 +2,16 @@ namespace XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 using System.Globalization;
 using System.Runtime.InteropServices;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <summary>Process identity read out of <c>/proc</c>, canonical paths and <c>kill(2)</c>, for the spawn-receipt reap.</summary>
 /// <remarks>Every member is Linux-only and returns null / false on a read failure rather than throwing.</remarks>
 internal static partial class LinuxProcFs
 {
-    /// <summary>Parent pid (field 4), process group (field 5) and start time (field 22) of <c>/proc/[pid]/stat</c>, or null when unreadable.</summary>
+    private const int Enosys = 38;
+
+    /// <summary>State (field 3), parent pid (field 4), process group (field 5) and start time (field 22) of <c>/proc/[pid]/stat</c>, or null when unreadable.</summary>
     public static ProcessStat? ReadStatOrNull(int processId)
     {
         if (processId <= 0 || !OperatingSystem.IsLinux())
@@ -16,40 +19,10 @@ internal static partial class LinuxProcFs
             return null;
         }
 
-        string raw;
-        try
-        {
-            // Forced sync: reached from the synchronous startup reaper and scanner contracts; the source is procfs, which never blocks on a device.
-#pragma warning disable MA0045 // Contract-forced: sync reaper/scanner contracts, procfs read.
-            raw = File.ReadAllText(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/stat"));
-#pragma warning restore MA0045
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-
-        // Field 2 (comm) is parenthesized and may contain spaces and parentheses, so the rest is located from the LAST ')'. Tokens then start at
-        // field 3 (state), putting ppid at index 1, pgrp at index 2 and starttime at index 19.
-        var commEnd = raw.LastIndexOf(')');
-        if (commEnd < 0 || commEnd + 2 >= raw.Length)
-        {
-            return null;
-        }
-
-        var fields = raw[(commEnd + 2)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        const int parentIndex = 1;
-        const int groupIndex = 2;
-        const int startTimeIndex = 19;
-        if (fields.Length <= startTimeIndex
-            || !int.TryParse(fields[parentIndex], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parent)
-            || !int.TryParse(fields[groupIndex], NumberStyles.Integer, CultureInfo.InvariantCulture, out var group)
-            || !long.TryParse(fields[startTimeIndex], NumberStyles.Integer, CultureInfo.InvariantCulture, out var startTicks))
-        {
-            return null;
-        }
-
-        return new ProcessStat(parent, group, startTicks);
+        var read = LinuxProcStat.Read(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/stat"));
+        return read.Outcome == LinuxProcStatOutcome.Parsed
+            ? new ProcessStat(read.ParentProcessId, read.ProcessGroupId, read.StartTicks, read.Exited)
+            : null;
     }
 
     /// <summary>
@@ -101,9 +74,16 @@ internal static partial class LinuxProcFs
         }
     }
 
-    /// <summary>Sends <paramref name="signal" /> to <paramref name="pid" /> (a negative pid is the process group). Returns true when the kernel accepted it.</summary>
-    public static bool Signal(int pid, int signal) =>
-        OperatingSystem.IsLinux() && Kill(pid, signal) == 0;
+    /// <summary>Sends <paramref name="signal" /> to <paramref name="pid" /> (a negative pid is the process group). Returns 0 when the kernel accepted it, else the errno (ENOSYS off Linux).</summary>
+    public static int Signal(int pid, int signal)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return Enosys;
+        }
+
+        return Kill(pid, signal) == 0 ? 0 : Marshal.GetLastPInvokeError();
+    }
 
     // char *realpath(const char *path, char *resolved_path); — a null resolved_path makes libc allocate the result.
     [LibraryImport("libc", EntryPoint = "realpath", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]

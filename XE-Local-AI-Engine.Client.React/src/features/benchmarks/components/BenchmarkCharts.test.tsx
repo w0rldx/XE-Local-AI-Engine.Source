@@ -4,13 +4,13 @@ import { cleanup, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import BenchmarkCharts from "@/features/benchmarks/components/BenchmarkCharts";
-import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
 import type { BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
+import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkFidelityFixture,
 	benchmarkRunDetailFixture,
 	benchmarkRunSummaryFixture,
-} from "@/features/benchmarks/models/BenchmarkTestFixtures";
+} from "@/features/benchmarks/test/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const run = (overrides: Partial<BenchmarkRunSummary> = {}): BenchmarkRunSummary =>

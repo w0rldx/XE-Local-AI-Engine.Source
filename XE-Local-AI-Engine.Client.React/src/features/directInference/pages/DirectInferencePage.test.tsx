@@ -13,6 +13,7 @@ import {
 	directInferenceMaxKeptLogprobEntries,
 } from "@/core/directInference/DirectInferenceModels";
 import { DirectInferencePage } from "@/features/directInference/pages/DirectInferencePage";
+import { holdAnimationFrames } from "@/test/HoldAnimationFrames";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -432,6 +433,55 @@ describe("DirectInferencePage", () => {
 		expect(screen.getByTestId("direct-inference-output").textContent).toBe("second");
 		expect(screen.queryByText("negotiation failed")).toBeNull();
 		expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
+	});
+
+	it("commits streamed events on the next frame, not per event", async () => {
+		stubModels();
+		hub.state.hang = true;
+		hub.state.events = [{ type: "delta", textDelta: "Hel" }] satisfies DirectInferenceEvent[];
+		renderWithProviders(<DirectInferencePage />);
+		const frames = holdAnimationFrames();
+
+		await fillAndSend();
+		await waitFor(() => expect(hub.connection.stream).toHaveBeenCalledTimes(1));
+		expect(screen.getByTestId("direct-inference-output").textContent).not.toBe("Hel");
+		frames.runFrame();
+		expect(screen.getByTestId("direct-inference-output").textContent).toBe("Hel");
+	});
+
+	it("shows the last streamed events when the run completes, without waiting for a frame", async () => {
+		stubModels();
+		hub.state.events = [
+			{ type: "delta", textDelta: "Hel" },
+			{ type: "delta", textDelta: "lo" },
+			{ type: "done" },
+		] satisfies DirectInferenceEvent[];
+		renderWithProviders(<DirectInferencePage />);
+		holdAnimationFrames();
+
+		await fillAndSend();
+
+		await waitFor(() => expect(screen.getByTestId("direct-inference-output").textContent).toBe("Hello"));
+		expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+	});
+
+	it("shows the events no frame committed yet when Stop ends the run", async () => {
+		stubModels();
+		hub.state.hang = true;
+		hub.state.events = [
+			{ type: "delta", textDelta: "Hel" },
+			{ type: "delta", textDelta: "lo" },
+		] satisfies DirectInferenceEvent[];
+		renderWithProviders(<DirectInferencePage />);
+		holdAnimationFrames();
+
+		await fillAndSend();
+		await waitFor(() => expect(hub.connection.stream).toHaveBeenCalledTimes(1));
+		expect(screen.getByTestId("direct-inference-output").textContent).not.toBe("Hello");
+
+		fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+		await waitFor(() => expect(screen.getByTestId("direct-inference-output").textContent).toBe("Hello"));
 	});
 
 	it("cancels a running request when the page unmounts", async () => {

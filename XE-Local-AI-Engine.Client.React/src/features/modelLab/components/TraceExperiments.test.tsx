@@ -3,11 +3,15 @@
 // The Trace tab against stubbed routes (MSW): the other-platform explanation, a refusal before any download, the flow to a saved
 // trace, a refused start, and Cancel on a running job.
 
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import i18next from "i18next";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { TraceExperiments } from "@/features/modelLab/components/TraceExperiments";
+import { loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
+import { acceptConfirm, cancelConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -79,7 +83,10 @@ const preflightBase = {
 	defaultSteeringLayer: 15,
 	ggufEmbeddingLength: 1024,
 	ggufBlockCount: 24,
-	licenseConfirmationText: "The base checkpoint declares the license 'apache-2.0'.",
+	metadataPresent: true,
+	// The server's canonical English text (LicenseGateService.BuildModelLabText); the English page renders the same words.
+	licenseConfirmationText:
+		"The base checkpoint 'Qwen/Qwen3.5-0.8B' declares the license 'apache-2.0'. I confirm I am permitted to download these weights and to run experiments on them.",
 	refusal: null,
 	refusalMessage: null,
 };
@@ -137,7 +144,11 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 
 		expect((await screen.findByTestId("model-lab-unsupported")).textContent).toContain("Linux only");
 		expect(screen.queryByTestId("model-lab-check")).toBeNull();
@@ -156,11 +167,56 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 		await pickCheckpoint();
 
 		expect((await screen.findByTestId("model-lab-refusal")).textContent).toContain("cannot fit this card");
 		expect(screen.queryByTestId("model-lab-download")).toBeNull();
+	});
+
+	it("shows the license confirmation in German, keeps the English original reachable, and translates its refusal", async () => {
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json(emptyList)),
+			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
+			http.post(localApiPath("model-lab/checkpoint-download"), () =>
+				HttpResponse.json({
+					// The server's message for this code is the English confirmation.
+					preflight: { ...preflightBase, refusal: "LicenseNotConfirmed", refusalMessage: preflightBase.licenseConfirmationText },
+					baseArtifactId: null,
+					artifactStatus: null,
+				}),
+			),
+		);
+		const german =
+			"Der Basis-Checkpoint „Qwen/Qwen3.5-0.8B“ deklariert die Lizenz „apache-2.0“. Ich bestätige, dass ich diese Gewichte herunterladen und Experimente damit durchführen darf.";
+
+		try {
+			renderWithProviders(
+				<ConfirmProvider>
+					<TraceExperiments />
+				</ConfirmProvider>,
+			);
+			await pickCheckpoint();
+			await screen.findByTestId("model-lab-license");
+			await loadModelLabStrings("de");
+			await act(() => i18next.changeLanguage("de"));
+
+			fireEvent.click(screen.getByRole("checkbox", { name: german }));
+			const original = screen.getByTestId("model-lab-license-original");
+			expect(original.getAttribute("aria-label")).toMatch(/Englisches Original/);
+			fireEvent.focus(original);
+			expect(await screen.findByText(preflightBase.licenseConfirmationText)).toBeTruthy();
+
+			fireEvent.click(screen.getByTestId("model-lab-download"));
+			expect((await screen.findByTestId("model-lab-refusal")).textContent).toBe(german);
+		} finally {
+			await act(() => i18next.changeLanguage("en"));
+		}
 	});
 
 	it("needs the license confirmed, then downloads, and a loaded model's refusal reads as its message", async () => {
@@ -201,11 +257,18 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 		await pickCheckpoint();
 
 		const download = await screen.findByTestId("model-lab-download");
 		expect((download as HTMLButtonElement).disabled).toBe(true);
+		// In English the label is the recorded text itself, so there is no original to offer.
+		expect(screen.getByRole("checkbox", { name: preflightBase.licenseConfirmationText })).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-license-original")).toBeNull();
 		fireEvent.click(screen.getByRole("checkbox"));
 		fireEvent.click(download);
 		await waitFor(() => expect(downloads).toHaveLength(1));
@@ -230,10 +293,21 @@ describe("TraceExperiments", () => {
 			}),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 
 		expect((await screen.findByTestId("model-lab-chat-wait")).textContent).toContain("wait");
-		fireEvent.click(screen.getByTestId("model-lab-cancel"));
+		const button = screen.getByTestId("model-lab-cancel");
+		await openConfirm(button, "Cancel this experiment?");
+		fireEvent.click(screen.getByRole("button", { name: "Keep running" }));
+		await waitFor(() => expect(document.activeElement).toBe(button));
+		expect(cancelled).toEqual([]);
+
+		await openConfirm(button, "Cancel this experiment?");
+		acceptConfirm();
 		await waitFor(() => expect(cancelled).toEqual([experimentId]));
 	});
 
@@ -255,7 +329,11 @@ describe("TraceExperiments", () => {
 			}),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 		fireEvent.click(screen.getByTestId("model-lab-check"));
@@ -290,7 +368,11 @@ describe("TraceExperiments", () => {
 			}),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 		fireEvent.click(screen.getByTestId("model-lab-check"));
@@ -314,6 +396,87 @@ describe("TraceExperiments", () => {
 		fireEvent.click(screen.getByTestId("model-lab-start"));
 		await waitFor(() => expect(starts).toHaveLength(3));
 		expect(starts[2]).not.toHaveProperty("layers");
+	});
+
+	it("sends Record attention only while it is on, and shows the server's refusal of it", async () => {
+		const starts: Record<string, unknown>[] = [];
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json(emptyList)),
+			http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ items: [artifactRow("Ready")] })),
+			http.get(localApiPath("training/base-artifacts/:artifactId"), () => HttpResponse.json(artifactRow("Ready"))),
+			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
+			http.post(localApiPath("model-lab/experiments"), async ({ request }) => {
+				starts.push((await request.json()) as Record<string, unknown>);
+				return HttpResponse.json(
+					{
+						reason: "AttentionUnavailable",
+						message: "This checkpoint has more than 32 heads, so its attention is not recorded.",
+					},
+					{ status: 409 },
+				);
+			}),
+		);
+
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
+		await chooseOption(/Installed GGUF/, gguf);
+		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
+		fireEvent.click(screen.getByTestId("model-lab-check"));
+		fireEvent.click(await screen.findByRole("checkbox", { name: preflightBase.licenseConfirmationText }));
+		fireEvent.change(await screen.findByRole("textbox", { name: /Prompt/ }), { target: { value: "hello" } });
+
+		const record = screen.getByRole("switch", { name: "Record attention" }) as HTMLInputElement;
+		expect(record.checked).toBe(false);
+		expect(record.disabled).toBe(false);
+		expect(screen.getByRole("button", { name: "About Record attention" })).toBeTruthy();
+		fireEvent.click(screen.getByTestId("model-lab-start"));
+		await waitFor(() => expect(starts).toHaveLength(1));
+		expect(starts[0]).not.toHaveProperty("recordAttention");
+
+		fireEvent.click(record);
+		fireEvent.click(screen.getByTestId("model-lab-start"));
+		await waitFor(() => expect(starts).toHaveLength(2));
+		expect(starts[1]).toMatchObject({ recordAttention: true });
+		expect((await screen.findByTestId("model-lab-start-refused")).textContent).toBe(
+			"This checkpoint has more than 32 heads, so its attention is not recorded.",
+		);
+
+		fireEvent.click(record);
+		fireEvent.click(screen.getByTestId("model-lab-start"));
+		await waitFor(() => expect(starts).toHaveLength(3));
+		expect(starts[2]).not.toHaveProperty("recordAttention");
+	});
+
+	it("offers no Record attention for a checkpoint without a full-attention block, and says why", async () => {
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json(emptyList)),
+			http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ items: [artifactRow("Ready")] })),
+			http.get(localApiPath("training/base-artifacts/:artifactId"), () => HttpResponse.json(artifactRow("Ready"))),
+			http.post(localApiPath("model-lab/checkpoint-preflight"), () =>
+				HttpResponse.json({ ...preflightBase, checkpointLayerTypes: Array.from({ length: 24 }, () => "linear_attention") }),
+			),
+		);
+
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
+		await chooseOption(/Installed GGUF/, gguf);
+		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
+		fireEvent.click(screen.getByTestId("model-lab-check"));
+		fireEvent.click(await screen.findByRole("checkbox", { name: preflightBase.licenseConfirmationText }));
+
+		// Mantine renders the description inside the label, so the reason ends the switch's name.
+		const record = (await screen.findByRole("switch", { name: /^Record attention/ })) as HTMLInputElement;
+		expect(record.disabled).toBe(true);
+		expect(record.checked).toBe(false);
+		expect(screen.getByText("This checkpoint has no full-attention block, so there is no attention to record.")).toBeTruthy();
 	});
 
 	it("marks a steering row in the list, and only that one", async () => {
@@ -345,7 +508,11 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 
 		expect(await screen.findAllByTestId("model-lab-steering-badge")).toHaveLength(1);
 	});
@@ -357,7 +524,11 @@ describe("TraceExperiments", () => {
 			http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ title: "Nope" }, { status: 500 })),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 
 		expect(await screen.findByTestId("model-lab-saved-failed")).toBeTruthy();
 	});
@@ -371,7 +542,11 @@ describe("TraceExperiments", () => {
 			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 
@@ -395,11 +570,16 @@ describe("TraceExperiments", () => {
 			}),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 		fireEvent.click(screen.getByTestId("model-lab-check"));
 		fireEvent.click(await screen.findByRole("checkbox"));
+		expect(await screen.findByRole("radiogroup", { name: "Kind of run" })).toBe(screen.getByTestId("model-lab-job-kind"));
 		fireEvent.click(await screen.findByRole("radio", { name: "Steering" }));
 
 		expect((await screen.findByTestId("model-lab-steering-layer-kind")).textContent).toBe("Layer 15 of 23: full attention.");
@@ -427,7 +607,11 @@ describe("TraceExperiments", () => {
 			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 		fireEvent.click(screen.getByTestId("model-lab-check"));
@@ -492,7 +676,11 @@ describe("TraceExperiments", () => {
 			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 		fireEvent.click(screen.getByTestId("model-lab-check"));
@@ -519,7 +707,11 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 		await pickCheckpoint();
 		fireEvent.click(await screen.findByRole("checkbox"));
 		fireEvent.click(screen.getByTestId("model-lab-download"));
@@ -565,7 +757,11 @@ describe("TraceExperiments", () => {
 			http.get(localApiPath(`model-lab/experiments/${experimentId}`), () => HttpResponse.json(row())),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 		fireEvent.click(await screen.findByRole("button", { name: "Qwen/Qwen3.5-0.8B" }));
 		await screen.findByTestId("model-lab-trace-view");
 		expect(screen.queryByText("The script failed.")).toBeNull();
@@ -612,8 +808,18 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(<TraceExperiments />);
-		fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
+		const button = await screen.findByRole("button", { name: "Delete" });
+		await openConfirm(button, "Delete this experiment?");
+		await cancelConfirm(button);
+		expect(screen.queryByTestId("model-lab-delete-refused")).toBeNull();
+
+		await openConfirm(button, "Delete this experiment?");
+		acceptConfirm();
 
 		expect((await screen.findByTestId("model-lab-delete-refused")).textContent).toContain("next start");
 	});
@@ -667,7 +873,11 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 		fireEvent.click(await screen.findByRole("button", { name: "Qwen/Qwen3.5-0.8B" }));
 
 		expect((await screen.findByTestId("model-lab-trace-measured")).textContent).toContain("Measured");
@@ -712,7 +922,11 @@ describe("TraceExperiments", () => {
 			}),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 
 		expect((await screen.findByTestId("model-lab-retention")).textContent).toContain("1 of 20 pinned");
 		expect(screen.getAllByTestId("model-lab-pinned-badge")).toHaveLength(1);
@@ -747,7 +961,11 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(<TraceExperiments />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
 		const compare = await screen.findByTestId("model-lab-compare-button");
 		const boxes = screen.getAllByRole("checkbox");
 		const reason = () => screen.queryByTestId("model-lab-compare-reason")?.textContent;
@@ -781,7 +999,11 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(<TraceExperiments intent={{ tab: "trace", nonce: 1, experimentId }} />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments intent={{ tab: "trace", nonce: 1, experimentId }} />
+			</ConfirmProvider>,
+		);
 
 		expect((await screen.findByTestId("model-lab-trace-view")).textContent).toContain("Opened from Architecture");
 	});

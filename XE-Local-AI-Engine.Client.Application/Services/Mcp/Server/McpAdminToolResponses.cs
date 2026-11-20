@@ -478,6 +478,7 @@ internal static class McpAdminWireNames
             NodeSettingsField.HuggingFaceDefaultQuant => "hugging_face_default_quant",
             NodeSettingsField.RerankerModelName => "reranker_model_name",
             NodeSettingsField.KnowledgeEmbeddingModelName => "knowledge_embedding_model_name",
+            NodeSettingsField.ModelLabWarmIdleSeconds => "model_lab_warm_idle_seconds",
             _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown node-settings field.")
         };
 
@@ -502,6 +503,7 @@ internal static class McpAdminWireNames
             nameof(NodeSettingsAgenticPatch.KvCacheType) => "kv_cache_type",
             nameof(NodeSettingsAgenticPatch.RerankerModelName) => "reranker_model_name",
             nameof(NodeSettingsAgenticPatch.AutoEffortFastModelName) => "auto_effort_fast_model_name",
+            nameof(NodeSettingsAgenticPatch.ModelLabWarmIdleSeconds) => "model_lab_warm_idle_seconds",
             _ => throw new ArgumentOutOfRangeException(nameof(propertyName), propertyName, "Unknown agentic settings property.")
         };
 }

@@ -5,20 +5,23 @@ A script's line is the first sentence of its header's first paragraph: the comme
 (shellcheck directives skipped) for a shell script, the docstring (else that comment block) for a Python script,
 with a leading "<name> — " dropped. A subfolder's line is the first prose line of its README.md, else the list of
 its files.
-Idempotent: a second run writes the same bytes. `scripts/docs-inventory-check.py` (check `scripts-readme`) fails
-when a top-level script has no row or a row names no script; re-run this after adding, removing or renaming one.
+Idempotent: a second run writes the same bytes. `--check` compares instead of writing: it never touches the file
+and exits 1 when the README differs from what this would write. `scripts/docs-inventory-check.py` (check
+`scripts-readme`) runs the same comparison; re-run this after adding, removing, renaming or re-describing a script
+or a subfolder file.
 
-Exit codes: 0 written, 1 a top-level script has no header line to index.
+Exit codes: 0 written (or, with --check, up to date), 1 a top-level script has no header line to index or, with
+--check, the README is stale, 2 usage error.
 """
 
 from __future__ import annotations
 
+import argparse
 import ast
 import sys
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
-README = SCRIPTS_DIR / "README.md"
 SCRIPT_SUFFIXES = (".sh", ".py")
 FOLDER_FILES_SHOWN = 6
 
@@ -107,13 +110,24 @@ def render(scripts_dir: Path) -> tuple[str, list[str]]:
     return text, headerless
 
 
-def main() -> int:
-    text, headerless = render(SCRIPTS_DIR)
+def main(argv: list[str] | None = None, scripts_dir: Path = SCRIPTS_DIR) -> int:
+    parser = argparse.ArgumentParser(prog="generate-scripts-readme", description="Regenerate scripts/README.md.")
+    parser.add_argument("--check", action="store_true", help="exit 1 when the README is stale; never write it")
+    args = parser.parse_args(argv)
+    readme = scripts_dir / "README.md"
+    shown = f"{scripts_dir.name}/README.md"
+    text, headerless = render(scripts_dir)
     if headerless:
         print(f"generate-scripts-readme: no header line in {', '.join(headerless)}", file=sys.stderr)
         return 1
-    README.write_text(text, encoding="utf-8")
-    print(f"generate-scripts-readme: wrote {README.relative_to(SCRIPTS_DIR.parent).as_posix()}")
+    if args.check:
+        if readme.is_file() and readme.read_bytes() == text.encode("utf-8"):
+            print(f"generate-scripts-readme: {shown} is up to date")
+            return 0
+        print(f"generate-scripts-readme: {shown} is stale; re-run scripts/generate-scripts-readme.py", file=sys.stderr)
+        return 1
+    readme.write_bytes(text.encode("utf-8"))
+    print(f"generate-scripts-readme: wrote {shown}")
     return 0
 
 

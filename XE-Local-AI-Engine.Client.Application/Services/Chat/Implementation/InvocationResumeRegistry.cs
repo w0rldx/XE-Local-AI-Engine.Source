@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Sandbox.LiveOutput;
 
 /// <summary>
 ///     Live-invocation tracker backing reconnect and resume.
@@ -408,13 +409,13 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             OccurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
             Content = content ?? state.StreamedContent,
             Reasoning = string.IsNullOrEmpty(state.StreamedThinkingContent) ? null : state.StreamedThinkingContent,
-            Error = state.Error,
+            Error = state.ChatError,
             Model = state.ModelUsed,
             InputTokens = inputTokens,
             OutputTokens = outputTokens,
             TotalTokens = totalTokens,
             ReasoningTokens = reasoningTokens,
-            FailureCategory = state.Status == InvocationStatus.Failed ? state.FailureCategory?.ToString() : null
+            FailureCategory = ChatTerminalProjection.ChatFailureCategory(state)?.ToString()
         };
     }
 
@@ -806,7 +807,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     private sealed class CallOutputTail
     {
         // The same budget as the persisted tail, so a resumed card shows what a reload after completion shows.
-        private const int MaxTailChars = 16 * 1024;
+        private const int MaxTailChars = LiveCommandOutputLimits.DefaultMaxTailChars;
 
         private readonly Queue<NodeChatToolOutputLine> _lines = new();
         private int _chars;

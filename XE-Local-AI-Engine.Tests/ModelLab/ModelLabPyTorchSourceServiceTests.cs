@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.ModelLab;
 
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -59,7 +61,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         using (var job = JsonDocument.Parse(script.LastJob!))
         {
             AssertEx.Equal("source", job.RootElement.GetProperty("kind").GetString()!);
-            AssertEx.Equal(expected: 3, job.RootElement.GetProperty("contractVersion").GetInt32());
+            AssertEx.Equal(expected: ModelLabTraceSpec.ContractVersion, job.RootElement.GetProperty("contractVersion").GetInt32());
             AssertEx.Equal(ModelLabTraceSpec.MaxResultBytes, job.RootElement.GetProperty("maxResultBytes").GetInt32());
         }
 
@@ -73,7 +75,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         AssertEx.Equal("checkpoint", index.Source.Kind);
         AssertEx.Equal("Qwen/Qwen3.5-0.8B", index.Source.RepoId);
         AssertEx.Equal(lab.ArtifactId, index.Source.BaseArtifactId!.Value);
-        AssertEx.Equal($"{Sha256(ModelLabExperimentServiceTests.LabHost.Config)}-5.17.0-2.13.0+cpu-3", index.IndexId);
+        AssertEx.Equal($"{Sha256(ModelLabExperimentServiceTests.LabHost.Config)}-5.17.0-2.13.0+cpu-{ModelLabTraceSpec.ContractVersion}", index.IndexId);
         AssertEx.Equal("Qwen3_5ForCausalLM", index.Index.ModelClass);
         AssertEx.Null(index.Index.DeclaredArchitectures, "A config with no architectures declares none.");
         AssertEx.Empty(Directory.EnumerateFileSystemEntries(lab.WorkRoot), "No work directory survives the job.");
@@ -134,7 +136,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         _ = await AssertEx.ThrowsAsync<ModelLabPyTorchIndexNotFoundException>(() => lab.Service.GetLastAsync(ModelLabExperimentServiceTests.Gguf, CancellationToken.None));
         var second = await lab.Service.BuildAsync(lab.CheckpointRequest(), CancellationToken.None);
         AssertEx.Equal(expected: 2, script.SpawnCount);
-        AssertEx.True(second.Index!.IndexId.EndsWith("-2.14.0+cpu-3", StringComparison.Ordinal), second.Index.IndexId);
+        AssertEx.True(second.Index!.IndexId.EndsWith($"-2.14.0+cpu-{ModelLabTraceSpec.ContractVersion}", StringComparison.Ordinal), second.Index.IndexId);
         AssertEx.NotEqual(first.Index!.IndexId, second.Index.IndexId);
     }
 
@@ -330,7 +332,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         AssertEx.True(File.Exists(Path.GetFullPath(Path.Combine(runtime.SitePackages, "transformers", EscapingFile))), "The escaping name points at a real file with the listed hash.");
         await lab.ExpectSourceAsync(ModelLabPyTorchRefusal.SourceNotInIndex, indexId, EscapingFile);
         await lab.ExpectSourceAsync(ModelLabPyTorchRefusal.SourceNotInIndex, "../" + indexId, ModelingFile);
-        await lab.ExpectSourceAsync(ModelLabPyTorchRefusal.SourceNotInIndex, new string('a', 64) + "-5.17.0-2.13.0+cpu-3", ModelingFile);
+        await lab.ExpectSourceAsync(ModelLabPyTorchRefusal.SourceNotInIndex, new string('a', 64) + $"-5.17.0-2.13.0+cpu-{ModelLabTraceSpec.ContractVersion}", ModelingFile);
         await lab.ExpectSourceAsync(ModelLabPyTorchRefusal.SourceTooLarge, indexId, "big.py");
 
         runtime.SetTorchVersion("2.14.0+cpu");
@@ -494,7 +496,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         {
             get
             {
-                var root = ModelLabExperimentService.WorkRoot(DataDirectory);
+                var root = ModelLabScriptRunner.WorkRoot(DataDirectory);
                 _ = Directory.CreateDirectory(root);
                 return root;
             }
@@ -732,7 +734,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
             var configDirectory = job.RootElement.GetProperty("configDirectory").GetString()!;
             LastConfigFiles = [.. Directory.GetFiles(configDirectory).Select(static path => Path.GetFileName(path))];
             LastConfig = File.ReadAllText(Path.Combine(configDirectory, "config.json"));
-            var handle = new Handle(this, job.RootElement.GetProperty("resultPath").GetString()!);
+            var handle = new Handle(this, job.RootElement.GetProperty("resultPath").GetString()!, request.RunToken);
             Started.TrySetResult();
             return handle;
         }
@@ -741,11 +743,13 @@ public sealed class ModelLabPyTorchSourceServiceTests
         {
             private readonly ScriptedSourceJob _owner;
             private readonly string _resultPath;
+            private readonly string _runToken;
 
-            public Handle(ScriptedSourceJob owner, string resultPath)
+            public Handle(ScriptedSourceJob owner, string resultPath, string runToken)
             {
                 _owner = owner;
                 _resultPath = resultPath;
+                _runToken = runToken;
             }
 
             public TrainingLaunchReceipt Receipt { get; } = new()
@@ -771,8 +775,20 @@ public sealed class ModelLabPyTorchSourceServiceTests
 
                 foreach (var line in _owner.Lines)
                 {
-                    yield return line;
+                    yield return Stamped(line);
                 }
+            }
+
+            /// <summary>A frame carries the spawn's token, as the script's do; one that names a token keeps it.</summary>
+            private string Stamped(string line)
+            {
+                if (!line.StartsWith('{') || JsonNode.Parse(line) is not JsonObject frame || frame.ContainsKey("token"))
+                {
+                    return line;
+                }
+
+                frame["token"] = _runToken;
+                return frame.ToJsonString();
             }
 
             public Task<int> WaitForExitAsync(CancellationToken cancellationToken) =>
@@ -788,6 +804,14 @@ public sealed class ModelLabPyTorchSourceServiceTests
 
             public void Dispose()
             {
+            }
+
+            public ConcurrentQueue<string> WrittenLines { get; } = new();
+
+            public Task WriteLineAsync(string line, CancellationToken cancellationToken)
+            {
+                WrittenLines.Enqueue(line);
+                return Task.CompletedTask;
             }
         }
     }

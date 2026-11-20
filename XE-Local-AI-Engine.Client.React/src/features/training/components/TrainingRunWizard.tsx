@@ -2,10 +2,10 @@ import { Badge, Button, Checkbox, Group, NumberInput, Select, Stack, Text } from
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatBytes } from "@/core/formatting/BytesFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import type { TrainingRunOptionsView } from "@/features/training/models/TrainingModels";
-import { formatBytes } from "@/features/training/models/TrainingModels";
 import { useTrainingDatasets } from "@/features/training/queries/useTrainingDatasets";
 import { useBaseArtifacts } from "@/features/training/queries/useTrainingQueries";
 import { useCreateTrainingRun, useTrainingRunDefaults } from "@/features/training/queries/useTrainingRuns";

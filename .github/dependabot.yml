@@ -69,6 +69,9 @@ updates:
       timezone: Europe/Berlin
     target-branch: develop
     open-pull-requests-limit: 1
+    # CPU torch for the Model Lab lens test is pinned by hand to the training lock's version.
+    ignore:
+      - dependency-name: torch
 
   - package-ecosystem: npm
     directory: /XE-Local-AI-Engine.Client.React

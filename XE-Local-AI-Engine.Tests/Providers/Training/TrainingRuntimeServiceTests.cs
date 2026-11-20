@@ -27,7 +27,7 @@ public sealed class TrainingRuntimeServiceTests
     {
         using var harness = new Harness(SucceedingRunner());
 
-        var result = await harness.Service.InstallAsync(CancellationToken.None);
+        var result = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         AssertEx.Equal(TrainingRuntimeInstallOutcome.Started, result.Outcome);
         await harness.Service.DrainAsync(CancellationToken.None);
 
@@ -70,7 +70,7 @@ public sealed class TrainingRuntimeServiceTests
         try
         {
             using var harness = new Harness(SucceedingRunner());
-            _ = await harness.Service.InstallAsync(CancellationToken.None);
+            _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
             await harness.Service.DrainAsync(CancellationToken.None);
 
             var sync = AssertEx.NotNull(harness.Runner.Invocations
@@ -97,7 +97,7 @@ public sealed class TrainingRuntimeServiceTests
         using var harness = new Harness(SucceedingRunner());
         File.Delete(Path.Combine(harness.ScriptsDirectory, "uv.lock"));
 
-        _ = await harness.Service.InstallAsync(CancellationToken.None);
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
 
         var status = harness.Service.GetStatus();
@@ -112,7 +112,7 @@ public sealed class TrainingRuntimeServiceTests
     {
         using var harness = new Harness(SucceedingRunner("""{"contractVersion":99,"ready":true,"cudaAvailable":true}"""));
 
-        _ = await harness.Service.InstallAsync(CancellationToken.None);
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
 
         var status = harness.Service.GetStatus();
@@ -128,7 +128,7 @@ public sealed class TrainingRuntimeServiceTests
     {
         using var harness = new Harness(SucceedingRunner("""{"contractVersion":1,"ready":false,"cudaAvailable":false,"python":"3.14.10"}"""));
 
-        _ = await harness.Service.InstallAsync(CancellationToken.None);
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
 
         AssertEx.Contains(harness.Service.GetStatus().SanitizedError, "GPU");
@@ -142,7 +142,7 @@ public sealed class TrainingRuntimeServiceTests
             """{"contractVersion":1,"ready":false,"cudaAvailable":true,"errors":{"unsloth":"RuntimeError: PyTorch and torchvision were compiled with different CUDA major versions"}}""";
         using var harness = new Harness(SucceedingRunner(handshake));
 
-        _ = await harness.Service.InstallAsync(CancellationToken.None);
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
 
         var error = AssertEx.NotNull(harness.Service.GetStatus().SanitizedError, "A failed verification must record a reason.");
@@ -158,7 +158,7 @@ public sealed class TrainingRuntimeServiceTests
         using var harness = new Harness(SucceedingRunner());
 
         // Land a working runtime first.
-        _ = await harness.Service.InstallAsync(CancellationToken.None);
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
         var active = TrainingRuntimeLayout.ActiveVenv(harness.CacheRoot);
         var marker = Path.Combine(active, "previous-runtime.marker");
@@ -181,7 +181,7 @@ public sealed class TrainingRuntimeServiceTests
             return 0;
         }));
 
-        _ = await breaking.Service.InstallAsync(CancellationToken.None);
+        _ = await breaking.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await breaking.Service.DrainAsync(CancellationToken.None);
 
         var status = breaking.Service.GetStatus();
@@ -206,7 +206,7 @@ public sealed class TrainingRuntimeServiceTests
     public async Task Install_WhenTheStateWriteFailsAfterTheSwap_RestoresBothThePreviousRuntimeAndItsStateRecord()
     {
         using var harness = new Harness(SucceedingRunner());
-        _ = await harness.Service.InstallAsync(CancellationToken.None);
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
         var marker = Path.Combine(TrainingRuntimeLayout.ActiveVenv(harness.CacheRoot), "previous-runtime.marker");
         await File.WriteAllTextAsync(marker, "the working runtime");
@@ -231,7 +231,7 @@ public sealed class TrainingRuntimeServiceTests
         }));
         cancelling = breaking.Service;
 
-        _ = await breaking.Service.InstallAsync(CancellationToken.None);
+        _ = await breaking.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await breaking.Service.DrainAsync(CancellationToken.None);
 
         var status = breaking.Service.GetStatus();
@@ -257,11 +257,11 @@ public sealed class TrainingRuntimeServiceTests
     public async Task Install_WhenAReprovisionFailsBeforeAdopting_KeepsThePreviousRuntimeUsable()
     {
         using var harness = new Harness(SucceedingRunner());
-        _ = await harness.Service.InstallAsync(CancellationToken.None);
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
 
         using var breaking = harness.Restart(SucceedingRunner("""{"contractVersion":99,"ready":true,"cudaAvailable":true}"""));
-        _ = await breaking.Service.InstallAsync(CancellationToken.None);
+        _ = await breaking.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await breaking.Service.DrainAsync(CancellationToken.None);
 
         var status = breaking.Service.GetStatus();
@@ -276,10 +276,10 @@ public sealed class TrainingRuntimeServiceTests
     public async Task Remove_DeletesTheVenvAndTheStateRecord()
     {
         using var harness = new Harness(SucceedingRunner());
-        _ = await harness.Service.InstallAsync(CancellationToken.None);
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
 
-        AssertEx.True(await harness.Service.RemoveAsync(CancellationToken.None));
+        AssertEx.Equal(TrainingRuntimeRemoveOutcome.Removed, await harness.Service.RemoveAsync(admitAsync: null, CancellationToken.None));
 
         var status = harness.Service.GetStatus();
         AssertEx.Equal(TrainingRuntimePhase.Idle, status.Phase);
@@ -294,11 +294,11 @@ public sealed class TrainingRuntimeServiceTests
     public async Task Remove_NeverDeletesFromTheSharedStore()
     {
         using var harness = new Harness(SucceedingRunner());
-        _ = await harness.Service.InstallAsync(CancellationToken.None);
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
         var storeFiles = Directory.GetFiles(harness.Toolchain.Root, "*", SearchOption.AllDirectories);
 
-        AssertEx.True(await harness.Service.RemoveAsync(CancellationToken.None));
+        AssertEx.Equal(TrainingRuntimeRemoveOutcome.Removed, await harness.Service.RemoveAsync(admitAsync: null, CancellationToken.None));
 
         AssertEx.NotEmpty(storeFiles);
         AssertEx.True(storeFiles.All(File.Exists), "The shared store is machine-global; a feature remove never deletes from it.");
@@ -311,7 +311,7 @@ public sealed class TrainingRuntimeServiceTests
     {
         using var harness = new Harness(SucceedingRunner());
 
-        _ = await harness.Service.InstallAsync(CancellationToken.None);
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
 
         AssertEx.Equal(TrainingRuntimePhase.Ready, harness.Service.GetStatus().Phase);
@@ -344,7 +344,7 @@ public sealed class TrainingRuntimeServiceTests
             return 0;
         }));
 
-        _ = await breaking.Service.InstallAsync(CancellationToken.None);
+        _ = await breaking.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await breaking.Service.DrainAsync(CancellationToken.None);
 
         AssertEx.NotNull(breaking.Service.GetStatus().SanitizedError, "The adopt must have failed for this test to mean anything.");
@@ -356,12 +356,12 @@ public sealed class TrainingRuntimeServiceTests
     public async Task Install_WhenPrerequisitesFail_RefusesAndDistinguishesDiskFromEverythingElse()
     {
         using var disk = new Harness(SucceedingRunner(), StubPrerequisiteProbe.Unsatisfied(TrainingRuntimePrerequisiteKeys.FreeDisk));
-        var diskResult = await disk.Service.InstallAsync(CancellationToken.None);
+        var diskResult = await disk.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         AssertEx.Equal(TrainingRuntimeInstallOutcome.InsufficientDisk, diskResult.Outcome);
         AssertEx.NotNull(diskResult.Prerequisites, "A refusal must carry the report that explains it.");
 
         using var driver = new Harness(SucceedingRunner(), StubPrerequisiteProbe.Unsatisfied(TrainingRuntimePrerequisiteKeys.NvidiaDriver));
-        var driverResult = await driver.Service.InstallAsync(CancellationToken.None);
+        var driverResult = await driver.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         AssertEx.Equal(TrainingRuntimeInstallOutcome.MissingPrerequisites, driverResult.Outcome);
 
         // Nothing may be touched on a refused install.
@@ -378,7 +378,7 @@ public sealed class TrainingRuntimeServiceTests
         using var uvDownloads = new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) => new HttpResponseMessage(HttpStatusCode.NotFound));
         using var harness = new Harness(SucceedingRunner(), uvDownloads: uvDownloads);
 
-        _ = await harness.Service.InstallAsync(CancellationToken.None);
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
 
         var status = harness.Service.GetStatus();
@@ -404,6 +404,93 @@ public sealed class TrainingRuntimeServiceTests
         // A backup with no active means the swap died between the two moves; the parked runtime is the good one.
         AssertEx.True(File.Exists(Path.Combine(TrainingRuntimeLayout.ActiveVenv(harness.CacheRoot), "marker")));
         AssertEx.False(Directory.Exists(staging), "An unadopted staging tree carries nothing worth keeping.");
+    }
+
+    /// <summary>
+    ///     The install publishes its non-ready phase BEFORE it asks the admission, and a refusal puts the runtime back as it
+    ///     was: Ready, nothing started, nothing run, the prior phase re-published.
+    /// </summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Install_WhenTheAdmissionRefuses_RestoresThePhase_AndStartsNothing()
+    {
+        using var harness = new Harness(SucceedingRunner());
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
+        await harness.Service.DrainAsync(CancellationToken.None);
+        var invocations = harness.Runner.Invocations.Count;
+        TrainingRuntimePhase? phaseDuringAdmission = null;
+
+        var result = await harness.Service.InstallAsync(_ =>
+        {
+            phaseDuringAdmission = harness.Service.GetStatus().Phase;
+            return Task.FromResult(result: false);
+        }, CancellationToken.None);
+        await harness.Service.DrainAsync(CancellationToken.None);
+
+        AssertEx.Equal(TrainingRuntimeInstallOutcome.GpuJobRunning, result.Outcome);
+        AssertEx.Equal(TrainingRuntimePhase.AcquiringUv, phaseDuringAdmission, "The phase is published before the admission is asked.");
+        var status = harness.Service.GetStatus();
+        AssertEx.Equal(TrainingRuntimePhase.Ready, status.Phase);
+        AssertEx.False(status.IsRunning);
+        AssertEx.NotNull(status.Installed);
+        AssertEx.Equal(invocations, harness.Runner.Invocations.Count, "A refused install runs no step.");
+        AssertEx.Equal(nameof(TrainingRuntimePhase.Ready), harness.Publisher.Events[^1].Phase, "The prior phase is re-published.");
+    }
+
+    /// <summary>A cancelled admission is a refusal too: the prior phase is restored and re-published, and the cancellation still reaches the caller.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Remove_WhenTheAdmissionIsCancelled_RepublishesThePriorPhase_AndRethrows()
+    {
+        using var harness = new Harness(SucceedingRunner());
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
+        await harness.Service.DrainAsync(CancellationToken.None);
+        var published = harness.Publisher.Events.Count;
+
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() =>
+            harness.Service.RemoveAsync(static _ => Task.FromException<bool>(new OperationCanceledException()), CancellationToken.None));
+
+        AssertEx.Equal(TrainingRuntimePhase.Ready, harness.Service.GetStatus().Phase);
+        var events = harness.Publisher.Events;
+        AssertEx.Equal(published + 1, events.Count, "The restore is published before the throw leaves, so no page keeps showing Removing.");
+        AssertEx.Equal(nameof(TrainingRuntimePhase.Ready), events[^1].Phase);
+        AssertEx.True(events[^1].Terminal);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Remove_WhenTheAdmissionRefuses_DeletesNothing()
+    {
+        using var harness = new Harness(SucceedingRunner());
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
+        await harness.Service.DrainAsync(CancellationToken.None);
+        TrainingRuntimePhase? phaseDuringAdmission = null;
+
+        var outcome = await harness.Service.RemoveAsync(_ =>
+        {
+            phaseDuringAdmission = harness.Service.GetStatus().Phase;
+            return Task.FromResult(result: false);
+        }, CancellationToken.None);
+
+        AssertEx.Equal(TrainingRuntimeRemoveOutcome.GpuJobRunning, outcome);
+        AssertEx.Equal(TrainingRuntimePhase.Removing, phaseDuringAdmission, "The phase is published before the admission is asked.");
+        AssertEx.Equal(TrainingRuntimePhase.Ready, harness.Service.GetStatus().Phase);
+        AssertEx.True(Directory.Exists(TrainingRuntimeLayout.VenvRoot(harness.CacheRoot)), "A refused remove deletes no venv.");
+        AssertEx.True(File.Exists(TrainingRuntimeLayout.StatePath(harness.CacheRoot)), "A refused remove keeps the state record.");
+        AssertEx.NotNull(harness.Service.ResolveInterpreterPath());
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Install_WhenTheAdmissionAdmits_Runs()
+    {
+        using var harness = new Harness(SucceedingRunner());
+
+        var result = await harness.Service.InstallAsync(static _ => Task.FromResult(result: true), CancellationToken.None);
+        await harness.Service.DrainAsync(CancellationToken.None);
+
+        AssertEx.Equal(TrainingRuntimeInstallOutcome.Started, result.Outcome);
+        AssertEx.Equal(TrainingRuntimePhase.Ready, harness.Service.GetStatus().Phase);
     }
 
     private sealed class Harness : IDisposable

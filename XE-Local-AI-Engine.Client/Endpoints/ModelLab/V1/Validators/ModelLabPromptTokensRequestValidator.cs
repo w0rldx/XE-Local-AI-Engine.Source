@@ -5,6 +5,7 @@ using FastEndpoints;
 using FluentValidation;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Validators;
+using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
 /// <summary>The model-name grammar, and the same per-message size cap the Next token run itself passed in <c>LocalChatHub.StreamDirectInference</c>.</summary>
 public sealed class ModelLabPromptTokensRequestValidator : Validator<ModelLabPromptTokensRequest>
@@ -27,10 +28,10 @@ public sealed class ModelLabPromptTokensRequestValidator : Validator<ModelLabPro
 
     private void WithinMessageSizeCap(string? content, FluentValidation.ValidationContext<ModelLabPromptTokensRequest> context)
     {
-        var maxSizeKb = Resolve<IOptions<Configuration.SecurityOptions>>().Value.MaxMessageSizeKb;
+        var maxSizeKb = Resolve<IOptions<SecurityOptions>>().Value.MaxMessageSizeKb;
         if (content is not null && Encoding.UTF8.GetByteCount(content) > maxSizeKb * 1024)
         {
-            context.AddFailure($"A prompt can be at most {maxSizeKb} KB.");
+            context.AddFailure($"A prompt can be at most {maxSizeKb} KiB.");
         }
     }
 }

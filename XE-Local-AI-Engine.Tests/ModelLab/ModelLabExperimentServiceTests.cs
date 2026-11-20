@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.ModelLab;
 
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Channels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -16,7 +18,10 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
+using XE_Local_AI_Engine.Client.Services.Common;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -27,6 +32,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
+using XE_Local_AI_Engine.Tests.Capacity;
 using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -82,6 +88,119 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.False(Directory.Exists(host.WorkDirectory(id)), "No plaintext work directory survives the job.");
     }
 
+    /// <summary>The operations feed of every open tab learns of a start from this broadcast; a refused start announces nothing.</summary>
+    [Test]
+    public async Task AStart_IsAnnouncedOnce_AndARefusedOneNot()
+    {
+        using var process = new ScriptedProcess();
+        var jobs = Substitute.For<IJobCreatedPublisher>();
+        await using var host = await LabHost.StartAsync(process, configure: services =>
+        {
+            services.RemoveAll<IJobCreatedPublisher>();
+            services.AddSingleton(jobs);
+        });
+
+        var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+        AssertEx.True(start.ExperimentId.HasValue, start.RefusalMessage ?? "The job should have started.");
+        var id = start.ExperimentId!.Value;
+        var refused = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+
+        AssertEx.Equal(ModelLabStartRefusal.Busy, refused.Refusal!.Value);
+        await jobs.Received(1).PublishCreatedAsync(CreatedJobKind.ModelLabExperiment, id, Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 1, jobs.ReceivedCalls().Count(), "Only the start that ran is announced.");
+        await process.Spawned.WaitAsync(TestBudgets.Contended);
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+    }
+
+    /// <summary>
+    ///     The self-preemption guard on the node's real DI: a holder registered before the admission (as the warm session
+    ///     registers) sees no demand from the job's own gate and lease. The lease call at the end proves the wiring is live.
+    /// </summary>
+    [Test]
+    public async Task AColdAdmission_ThroughTheRealGateChain_RaisesNoDemand()
+    {
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process);
+        var broker = host.Services.GetRequiredService<GpuIdleHolderBroker>();
+        var holder = new FakeGpuIdleHolder(static () => Task.CompletedTask);
+        broker.Register(holder);
+        try
+        {
+            var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+
+            AssertEx.True(start.ExperimentId.HasValue, start.RefusalMessage ?? "The job should have started.");
+            await process.Spawned.WaitAsync(TestBudgets.Contended);
+            AssertEx.Equal(expected: 0, holder.PreemptionRequestCount, "The job's own gate or lease raised demand.");
+            process.Finish(CompleteRun, exitCode: 0);
+            await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+
+            await using var ordinary = await host.Supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
+            AssertEx.NotNull(ordinary);
+            AssertEx.Equal(expected: 1, holder.PreemptionRequestCount, "An ordinary lease on the same supervisor does raise demand.");
+        }
+        finally
+        {
+            broker.Deregister(holder);
+        }
+    }
+
+    /// <summary>
+    ///     A runtime install publishes its phase first and then sees a held lease as a running job. A start whose lease lands
+    ///     after that publish must therefore read the phase again under the lease and refuse, giving everything back.
+    /// </summary>
+    [Test]
+    public async Task AStart_WhoseLeaseLandsAfterARuntimeInstallPublishedItsPhase_IsRefused_AndGivesEverythingBack()
+    {
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process);
+        host.Runtime.GetStatus().Returns(_ => RuntimeStatus(host.Supervisor.IsKeepWarmSuppressed() ? TrainingRuntimePhase.AcquiringUv : TrainingRuntimePhase.Ready));
+
+        var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+
+        AssertEx.Equal(ModelLabStartRefusal.RuntimeUnavailable, start.Refusal!.Value);
+        AssertEx.Equal(ModelLabExperimentService.RuntimeChangingMessage, start.RefusalMessage);
+        AssertEx.Null(process.Request, "Nothing was spawned.");
+        AssertEx.Null(host.Gate.ExclusiveKind, "The gate comes back.");
+        AssertEx.False(host.Supervisor.IsKeepWarmSuppressed(), "The lease comes back, so the install's own check sees nothing running.");
+        AssertEx.Equal(expected: 0L, host.Ledger.Reserved.GpuBytes);
+        AssertEx.Empty(await host.Service.ListAsync(CancellationToken.None));
+    }
+
+    /// <summary>A runtime being installed or removed may still exist; "not installed" would send the operator to install what is already coming.</summary>
+    [Test]
+    [Arguments(TrainingRuntimePhase.AcquiringUv)]
+    [Arguments(TrainingRuntimePhase.ProvisioningPython)]
+    [Arguments(TrainingRuntimePhase.InstallingPackages)]
+    [Arguments(TrainingRuntimePhase.Verifying)]
+    [Arguments(TrainingRuntimePhase.Removing)]
+    public async Task AStart_WhileTheRuntimeIsChanging_IsRefusedAsChanging_NotAsMissing(TrainingRuntimePhase phase)
+    {
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process);
+        host.Runtime.GetStatus().Returns(RuntimeStatus(phase));
+
+        var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+
+        AssertEx.Equal(ModelLabStartRefusal.RuntimeUnavailable, start.Refusal!.Value);
+        AssertEx.Equal(ModelLabExperimentService.RuntimeChangingMessage, start.RefusalMessage);
+        AssertEx.Null(host.Gate.ExclusiveKind, "Refused before the gate.");
+    }
+
+    [Test]
+    public async Task AStart_WithNoRuntimeInstalled_IsRefusedAsNotInstalled()
+    {
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process);
+        host.Runtime.GetStatus().Returns(RuntimeStatus(TrainingRuntimePhase.Idle));
+        host.Runtime.ResolveInterpreterPath().Returns((string?)null);
+
+        var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+
+        AssertEx.Equal(ModelLabStartRefusal.RuntimeUnavailable, start.Refusal!.Value);
+        AssertEx.Contains(start.RefusalMessage!, "is not installed", StringComparison.Ordinal);
+    }
+
     [Test]
     public async Task TheJobFile_CarriesTheFixedSpec_AndTheQuarterPoints_WhenTheRequestNamesNoLayers()
     {
@@ -98,10 +217,24 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(3), root.GetProperty("traceByteCap").GetInt32());
         AssertEx.Equal("[6,12,18]", root.GetProperty("layers").GetRawText());
         AssertEx.Equal(Prompt, root.GetProperty("prompt").GetString());
+        foreach (var attentionField in new[]
+                 {
+                     "attentionPath",
+                     "attentionLayers",
+                     "attentionTopKeys",
+                     "attentionByteCap"
+                 })
+        {
+            AssertEx.False(root.TryGetProperty(attentionField, out _), $"A trace without attention leaves {attentionField} out, so the script sees all four absent.");
+        }
+
         AssertEx.Equal("modellab.py", Path.GetFileName(process.Request!.Arguments[0]));
+        AssertEx.Equal("--serve", process.Request.Arguments[1]);
+        AssertEx.True(process.Request.RedirectStandardInput, "A serving worker reads its commands from stdin.");
+        AssertEx.False(string.IsNullOrEmpty(root.GetProperty("modelKey").GetString()), "The job names the model the worker holds.");
         if (OperatingSystem.IsLinux())
         {
-            AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(process.Request.Arguments[2]), "It holds the plaintext prompt.");
+            AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(process.JobFilePath!), "It holds the plaintext prompt.");
         }
 
         process.Finish(CompleteRun, exitCode: 0);
@@ -161,7 +294,7 @@ public sealed class ModelLabExperimentServiceTests
     {
         using var process = new ScriptedProcess
         {
-            TraceContent = new string('x', ModelLabTraceSpec.TraceByteCapFor(3) + 1)
+            TraceContent = new string('x', ModelLabTraceSpec.TraceByteCapFor(3) + ModelLabTraceSpec.LensByteCapFor(24) + 1)
         };
         await using var host = await LabHost.StartAsync(process);
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
@@ -201,16 +334,17 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.True(start.ExperimentId.HasValue);
     }
 
-    /// <summary>Every block of the 24: the store must keep what the scaled cap allows, which is far past the three-layer cap, and nothing past it.</summary>
+    /// <summary>Every block of the 24: the store must keep what the scaled cap and the lens cap allow, which is far past the three-layer cap, and nothing past it.</summary>
     [Test]
     [Arguments(0, ModelLabExperimentStatus.Succeeded)]
     [Arguments(1, ModelLabExperimentStatus.Failed)]
     public async Task AFullDepthTrace_IsKeptUpToItsScaledCap_AndNotPastIt(int bytesOverCap, ModelLabExperimentStatus expected)
     {
         var cap = ModelLabTraceSpec.TraceByteCapFor(24);
+        var fileCap = cap + ModelLabTraceSpec.LensByteCapFor(24);
         using var process = new ScriptedProcess
         {
-            TraceContent = new string('x', cap + bytesOverCap)
+            TraceContent = new string('x', fileCap + bytesOverCap)
         };
         await using var host = await LabHost.StartAsync(process);
 
@@ -229,7 +363,7 @@ public sealed class ModelLabExperimentServiceTests
 
         var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(expected, record.Status, record.ErrorMessage ?? "no error");
-        AssertEx.Equal(bytesOverCap == 0 ? (long)cap : null, record.TraceByteCount);
+        AssertEx.Equal(bytesOverCap == 0 ? (long)fileCap : null, record.TraceByteCount);
     }
 
     [Test]
@@ -309,7 +443,6 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.Equal((24 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(24));
         AssertEx.Equal((32 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(32));
         AssertEx.Equal((64 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(64));
-        AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(ModelLabTraceSpec.MaxTraceLayers), ModelLabTraceSpec.MaxTraceByteCap);
         AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.TraceByteCapFor(0));
         AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.TraceByteCapFor(ModelLabTraceSpec.MaxTraceLayers + 1));
     }
@@ -345,7 +478,7 @@ public sealed class ModelLabExperimentServiceTests
         };
         await using var host = await LabHost.StartAsync(process, new ModelLabJobOptions
         {
-            ExitGracePeriod = TimeSpan.FromMilliseconds(50)
+            CancelAcknowledgementTimeout = TimeSpan.FromMilliseconds(50)
         });
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         await process.Spawned.WaitAsync(TestBudgets.Contended);
@@ -413,11 +546,11 @@ public sealed class ModelLabExperimentServiceTests
     {
         using var process = new ScriptedProcess
         {
-            IgnoresStop = true
+            IgnoresStop = true,
+            ServeHandshake = $"{{\"event\":\"handshake\",\"contractVersion\":{ModelLabTraceSpec.ContractVersion + 1},\"serve\":true}}"
         };
         await using var host = await LabHost.StartAsync(process);
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
-        process.Say($"{{\"event\":\"handshake\",\"contractVersion\":{ModelLabTraceSpec.ContractVersion + 1}}}");
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
         AssertEx.True(process.Killed);
@@ -456,7 +589,7 @@ public sealed class ModelLabExperimentServiceTests
         await using var host = await LabHost.StartAsync(process, new ModelLabJobOptions
         {
             MaxDuration = TimeSpan.FromMilliseconds(50),
-            ExitGracePeriod = TimeSpan.FromMilliseconds(200)
+            CancelAcknowledgementTimeout = TimeSpan.FromMilliseconds(200)
         });
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
@@ -476,7 +609,7 @@ public sealed class ModelLabExperimentServiceTests
         };
         await using var host = await LabHost.StartAsync(process, new ModelLabJobOptions
         {
-            ExitGracePeriod = TimeSpan.FromMilliseconds(50)
+            CancelAcknowledgementTimeout = TimeSpan.FromMilliseconds(50)
         });
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         await process.Spawned.WaitAsync(TestBudgets.Contended);
@@ -670,6 +803,7 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.Equal(ModelLabCheckpointRefusal.LicenseNotConfirmed, refused.Preflight.Refusal!.Value);
         AssertEx.Null(refused.BaseArtifactId);
         AssertEx.True(refused.Preflight.RefusalMessage!.Contains("declares the license 'apache-2.0'", StringComparison.Ordinal), refused.Preflight.RefusalMessage);
+        AssertEx.True(refused.Preflight.MetadataPresent, "The page translates this refusal from the preflight's facts, so they ride along with it.");
         await host.Checkpoints.DidNotReceive().DownloadAsync(Arg.Is<BaseCheckpointManifest>(manifest => manifest.Files.Any(file => file.Role == BaseCheckpointFileRole.Weights)),
             Arg.Any<string>(),
             Arg.Any<IProgress<PullProgress>?>(),
@@ -711,7 +845,9 @@ public sealed class ModelLabExperimentServiceTests
     public async Task Retention_NeverTrimsAPinnedRun_ButAManualDeleteStillRemovesIt()
     {
         using var process = new ScriptedProcess();
-        await using var host = await LabHost.StartAsync(process);
+        // Rows are ordered by a millisecond timestamp: on the system clock two quick seeds can tie, and the tie-break by
+        // id then decides at random which of them is the oldest.
+        await using var host = await LabHost.StartAsync(process, configure: static services => services.AddSingleton<TimeProvider>(new StrictlyIncreasingClock()));
         var pinned = Guid.NewGuid();
         await host.SeedFinishedAsync(pinned);
         AssertEx.Equal(ModelLabExperimentUpdateOutcome.Updated, await host.Service.SetPinnedAsync(pinned, pinned: true, CancellationToken.None));
@@ -738,6 +874,16 @@ public sealed class ModelLabExperimentServiceTests
 
         AssertEx.Equal(ModelLabExperimentDeleteOutcome.Deleted, await host.Service.DeleteAsync(pinned, CancellationToken.None));
         AssertEx.False(Directory.Exists(pinnedScope), "A manual delete takes a pinned run's blobs too.");
+    }
+
+    /// <summary>Wall time that moves forward by a millisecond on every read, so rows created in a row never share a timestamp; timers stay real.</summary>
+    private sealed class StrictlyIncreasingClock : TimeProvider
+    {
+        private readonly DateTimeOffset _start = System.GetUtcNow();
+        private long _reads;
+
+        public override DateTimeOffset GetUtcNow() =>
+            _start.AddMilliseconds(Interlocked.Increment(ref _reads));
     }
 
     [Test]
@@ -845,7 +991,11 @@ public sealed class ModelLabExperimentServiceTests
         var buffer = host.Services.GetRequiredService<ITrainingRunEventBuffer>();
         string? state = null;
         Guid? activeAtEvent = Guid.NewGuid();
-        GpuWorkKind? gateAtEvent = GpuWorkKind.ImageJob;
+        var residentAtEvent = new ModelLabWarmResident
+        {
+            State = RuntimeResidentState.Active,
+            ModelId = "unset"
+        };
         var workDirectoryAtEvent = true;
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         var id = start.ExperimentId!.Value;
@@ -855,7 +1005,7 @@ public sealed class ModelLabExperimentServiceTests
             {
                 state = published;
                 activeAtEvent = host.Service.ActiveExperimentId;
-                gateAtEvent = host.Gate.ExclusiveKind;
+                residentAtEvent = host.Service.GetResident();
                 workDirectoryAtEvent = Directory.Exists(host.WorkDirectory(id));
             }
         };
@@ -865,7 +1015,9 @@ public sealed class ModelLabExperimentServiceTests
 
         AssertEx.Equal(expectedState, state!);
         AssertEx.Null(activeAtEvent, "A list read after the event must not name the finished job.");
-        AssertEx.Null(gateAtEvent, "A start right after the event must be admitted.");
+        // A start right after the event is admitted: it awaits the eviction under way, which never waits on a job.
+        AssertEx.Null(residentAtEvent, "The session has left Active, here for the eviction warm time 0 asks for.");
+        AssertEx.Null(host.Gate.ExclusiveKind, "The job's end waits for the eviction to give the gate back.");
         AssertEx.False(workDirectoryAtEvent, "The plaintext goes before the job announces its end.");
         AssertEx.True(buffer.Replay(id, afterSequence: 0).ResetRequired, "The buffer is still evicted, after the last event.");
     }
@@ -1181,11 +1333,7 @@ public sealed class ModelLabExperimentServiceTests
     public async Task ACheckpointDeletedBeforeTheGateWasTaken_IsRefused_AfterTheGate()
     {
         using var process = new ScriptedProcess();
-        await using var host = await LabHost.StartAsync(process, configure: static services =>
-        {
-            services.RemoveAll<IGpuWorkGate>();
-            services.AddSingleton<IGpuWorkGate>(static provider => new GateWithHook(ActivatorUtilities.CreateInstance<GpuWorkGate>(provider)));
-        });
+        await using var host = await LabHost.StartAsync(process, configure: GateWithHook.Install);
         ((GateWithHook)host.Gate).BeforeBegin = async () =>
         {
             await using var scope = host.Services.CreateAsyncScope();
@@ -1224,6 +1372,20 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.Equal("hi", read.Text);
         AssertEx.Null(ModelLabTraceSpec.ReadResultOrNull("{not json}"u8.ToArray()));
     }
+
+    private static TrainingRuntimeStatus RuntimeStatus(TrainingRuntimePhase phase) =>
+        new()
+        {
+            Phase = phase,
+            IsRunning = phase is not (TrainingRuntimePhase.Ready or TrainingRuntimePhase.Idle or TrainingRuntimePhase.Failed),
+            Terminal = phase is TrainingRuntimePhase.Ready or TrainingRuntimePhase.Idle or TrainingRuntimePhase.Failed,
+            LogLines = [],
+            LogStartSequence = 0,
+            SanitizedError = null,
+            Installed = null,
+            StartedAtUtc = null,
+            CompletedAtUtc = null
+        };
 
     private static object TraceBody(LabHost host, int[] layers) =>
         new
@@ -1357,10 +1519,11 @@ public sealed class ModelLabExperimentServiceTests
             _inner.RecoverOnStartupAsync(cancellationToken);
     }
 
-    /// <summary>The real gate, with a step just before it is taken: the last moment a delete can pass the guard.</summary>
-    private sealed class GateWithHook : IGpuWorkGate
+    /// <summary>The real gate, with a step just before it is taken (the last moment a delete can pass the guard) and one as an exclusive hold goes.</summary>
+    internal sealed class GateWithHook : IGpuWorkGate
     {
         private readonly IGpuWorkGate _inner;
+        private int _exclusiveAttempts;
 
         public GateWithHook(IGpuWorkGate inner)
         {
@@ -1369,25 +1532,66 @@ public sealed class ModelLabExperimentServiceTests
 
         public Func<Task>? BeforeBegin { get; set; }
 
+        /// <summary>Runs just before an exclusive hold is given back, while the gate still shows it.</summary>
+        public Action? BeforeExclusiveRelease { get; set; }
+
+        public int ExclusiveAttempts => Volatile.Read(ref _exclusiveAttempts);
+
         public GpuWorkKind? ExclusiveKind => _inner.ExclusiveKind;
 
         public IReadOnlyList<GpuWorkKind> Holders => _inner.Holders;
 
+        public static void Install(IServiceCollection services)
+        {
+            services.RemoveAll<IGpuWorkGate>();
+            services.AddSingleton<IGpuWorkGate>(static provider => new GateWithHook(ActivatorUtilities.CreateInstance<GpuWorkGate>(provider)));
+        }
+
         public bool TryBeginExclusive(GpuWorkKind kind, [NotNullWhen(true)] out IDisposable? handle)
         {
+            Interlocked.Increment(ref _exclusiveAttempts);
             BeforeBegin?.Invoke().GetAwaiter().GetResult();
-            return _inner.TryBeginExclusive(kind, out handle);
+            if (!_inner.TryBeginExclusive(kind, out var inner))
+            {
+                handle = null;
+                return false;
+            }
+
+            handle = new Hold(inner, this);
+            return true;
         }
 
         public bool TryBeginShared(GpuWorkKind kind, [NotNullWhen(true)] out IDisposable? handle) =>
             _inner.TryBeginShared(kind, out handle);
+
+        private sealed class Hold : IDisposable
+        {
+            private readonly IDisposable _inner;
+            private readonly GateWithHook _gate;
+            private int _disposed;
+
+            public Hold(IDisposable inner, GateWithHook gate)
+            {
+                _inner = inner;
+                _gate = gate;
+            }
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                {
+                    _gate.BeforeExclusiveRelease?.Invoke();
+                    _inner.Dispose();
+                }
+            }
+        }
     }
 
     /// <summary>A real test host, with one artifact Ready and an installed GGUF that pairs with it.</summary>
     internal sealed class LabHost : IAsyncDisposable
     {
         public const string Config =
-            """{"model_type":"qwen3_5","text_config":{"hidden_size":1024,"num_hidden_layers":24,"layer_types":["linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention"]}}""";
+            """{"model_type":"qwen3_5","text_config":{"hidden_size":1024,"num_hidden_layers":24,"num_attention_heads":8,"layer_types":["linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention"]}}""";
 
         private readonly TestServerWebAppFactory _factory;
         private readonly Guid _artifactId;
@@ -1419,13 +1623,17 @@ public sealed class ModelLabExperimentServiceTests
         public string DataRoot => Services.GetRequiredService<INodeDataDirectory>().Root;
 
         public string WorkDirectory(Guid id) =>
-            Path.Combine(ModelLabExperimentService.WorkRoot(Services.GetRequiredService<INodeDataDirectory>()), id.ToString("N"));
+            Path.Combine(ModelLabScriptRunner.WorkRoot(Services.GetRequiredService<INodeDataDirectory>()), id.ToString("N"));
 
-        public static async Task<LabHost> StartAsync(ScriptedProcess process,
+        /// <param name="warmIdleSeconds">The node's warm time; 0, the default here, makes every job one-shot as before warming existed.</param>
+        public static async Task<LabHost> StartAsync(ITrainingProcessSpawner process,
             ModelLabJobOptions? options = null,
             ILlamaServerProcessSupervisor? supervisor = null,
             long availableVramBytes = Card,
-            Action<IServiceCollection>? configure = null)
+            Action<IServiceCollection>? configure = null,
+            string config = Config,
+            int ggufBlockCount = 24,
+            int warmIdleSeconds = 0)
         {
             var interpreter = Path.Combine(Path.GetTempPath(), "python-" + Guid.NewGuid().ToString("N"));
             var runtime = Substitute.For<ITrainingRuntimeService>();
@@ -1469,7 +1677,7 @@ public sealed class ModelLabExperimentServiceTests
                 ModelName = null,
                 ParamCount = null,
                 FileType = null,
-                BlockCount = 24,
+                BlockCount = ggufBlockCount,
                 NextnPredictLayers = null,
                 Alignment = null,
                 AttentionHeadCount = null,
@@ -1526,7 +1734,11 @@ public sealed class ModelLabExperimentServiceTests
 #pragma warning restore CA2000
             _ = factory.Server;
 
-            var artifactId = await SeedReadyArtifactAsync(factory.Services);
+            _ = await factory.Services.GetRequiredService<INodeSettingsStore>().UpdateAsync(settings => settings with
+            {
+                ModelLabWarmIdleSeconds = warmIdleSeconds
+            });
+            var artifactId = await SeedReadyArtifactAsync(factory.Services, config);
             return new LabHost(factory, artifactId, runtime, checkpoints);
         }
 
@@ -1583,18 +1795,32 @@ public sealed class ModelLabExperimentServiceTests
             return record.Id;
         }
 
-        public async ValueTask DisposeAsync() =>
-            await _factory.DisposeAsync();
+        /// <summary>The test factory runs no hosted service, so the stop the host would make is made here: an idle worker's lease would hold up teardown for its warm time.</summary>
+        public async ValueTask DisposeAsync()
+        {
+            try
+            {
+                await Service.StopAsync(CancellationToken.None);
+            }
+            finally
+            {
+                await _factory.DisposeAsync();
+            }
+        }
 
-        private static async Task<Guid> SeedReadyArtifactAsync(IServiceProvider services)
+        /// <summary>A second Ready checkpoint: the same model at another revision, so it pairs with the same GGUF.</summary>
+        public Task<Guid> SeedOtherReadyArtifactAsync() =>
+            SeedReadyArtifactAsync(Services, Config, "0000000000000000000000000000000000000002");
+
+        private static async Task<Guid> SeedReadyArtifactAsync(IServiceProvider services, string config, string revision = "2fc06364715b967f1860aea9cf38778875588b17")
         {
             await using var scope = services.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<ITrainingBaseArtifactStore>();
-            var record = await store.StartDownloadAsync("Qwen/Qwen3.5-0.8B", "2fc06364715b967f1860aea9cf38778875588b17");
+            var record = await store.StartDownloadAsync("Qwen/Qwen3.5-0.8B", revision);
             var directory = Path.Combine(services.GetRequiredService<INodeDataDirectory>().Root, "training", "base", record.Id.ToString());
             Directory.CreateDirectory(directory);
             var configPath = Path.Combine(directory, "config.json");
-            await File.WriteAllTextAsync(configPath, Config);
+            await File.WriteAllTextAsync(configPath, config);
             var files = JsonSerializer.SerializeToUtf8Bytes(new[]
             {
                 new BaseArtifactFileView("Config", "config.json", configPath, 100, null),
@@ -1607,13 +1833,26 @@ public sealed class ModelLabExperimentServiceTests
     }
 
     /// <summary>A scripted <c>modellab.py</c>: it stays running until the test finishes it, and writes the files the job file names.</summary>
+    /// <remarks>
+    ///     Spawned with <c>--serve</c> it speaks contract 6 on its own: the handshake at spawn, every protocol line stamped with the spawn's
+    ///     token and the job's id, a <c>ready</c> after a terminal frame, a cancelled <c>done</c> on a cancel and an exit on an evict.
+    /// </remarks>
     internal sealed class ScriptedProcess : ITrainingProcessSpawner, ITrainingProcessHandle
     {
+        private static readonly string[] JobEvents = ["phase", "progress", "heartbeat", "done", "error"];
+
         private readonly TaskCompletionSource _spawned = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource<int> _exit = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Channel<string> _output = Channel.CreateUnbounded<string>();
+        private readonly Channel<RunCommand> _runs = Channel.CreateUnbounded<RunCommand>();
+        private volatile RunCommand? _current;
 
         public string TraceContent { get; init; } = "{\"footer\":true,\"truncated\":false,\"records\":0,\"dropped\":0,\"payloadBytes\":0,\"cap\":262144}\n";
+
+        /// <summary>Written when the job names an attention file; null leaves it unwritten.</summary>
+        public string? AttentionContent { get; init; } = "{\"footer\":true,\"truncated\":false,\"records\":0,\"dropped\":0,\"payloadBytes\":0,\"cap\":262144}\n";
+
+        public string TraceResult { get; init; } = """{"promptTokens":3,"tokens":[{"id":9,"text":"hi"}],"text":"hi","seconds":0.5,"peakVramBytes":10,"blockCount":24}""";
 
         public byte[] VectorContent { get; init; } = "the-steering-vector-bytes"u8.ToArray();
 
@@ -1622,17 +1861,62 @@ public sealed class ModelLabExperimentServiceTests
         public string DerivedResult { get; init; } =
             """{"seconds":1.5,"peakVramBytes":10,"blockCount":24,"steering":{"layer":15,"layerKind":"F","referenceNorm":3.9,"differenceNorm":0.8,"vectorNorm":1.95,"randomSeed":1234,"loadSeconds":2.5}}""";
 
+        /// <summary>Ignores a SIGTERM, a cancel and an evict: only a kill ends it.</summary>
         public bool IgnoresStop { get; init; }
 
+        /// <summary>False for a process a kill does not end either, whose exit is never seen.</summary>
+        public bool ExitsOnKill { get; init; } = true;
+
+        /// <summary>Set: an evict exits only once this completes, so a test can catch the session while it is evicting.</summary>
+        public TaskCompletionSource? HoldExitOnEvict { get; init; }
+
+        public volatile bool EvictRequested;
+
+        /// <summary>The handshake a serving spawn says first; null for the stamped contract-6 one.</summary>
+        public string? ServeHandshake { get; init; }
+
+        /// <summary>A clean job ends without its <c>ready</c>, as a worker stuck releasing memory would.</summary>
+        public bool WithholdsReady { get; init; }
+
+        /// <summary>A clean job's process exits right after its <c>ready</c> line, before any evict.</summary>
+        public bool ExitsAfterReady { get; init; }
+
+        /// <summary>Runs as the <c>run</c> command arrives, once the job is current, so a test can say lines straight after it.</summary>
+        public Action<ScriptedProcess>? OnRun { get; init; }
+
+        /// <summary>Throws from the spawn, as a spawner that cannot start the process does.</summary>
+        public bool FailsToSpawn { get; init; }
+
+        /// <summary>
+        ///     An exit leaves the output open, as a descendant holding the pipe would; <see cref="WaitForExitAsync" /> then waits for
+        ///     that pipe too, as <c>Process.WaitForExitAsync</c> does, while <see cref="WaitForGroupExitAsync" /> does not.
+        /// </summary>
+        public bool OutputOutlivesExit { get; init; }
+
+        /// <summary>
+        ///     After the exit the output never runs dry, as a descendant writing without pause would: the reader keeps yielding lines
+        ///     whatever its token says, as <c>ChannelReader.ReadAllAsync</c> does while its buffer holds lines.
+        /// </summary>
+        public bool OutputFloodsAfterExit { get; init; }
+
+        /// <summary>The reader of the output stopped: the stream ended, or its reader was cancelled.</summary>
+        public volatile bool OutputReadEnded;
+
+        /// <summary>The script has a job: the spawn, or under <c>--serve</c> the first <c>run</c> command.</summary>
         public Task Spawned => _spawned.Task;
 
         public TrainingSpawnRequest? Request { get; private set; }
+
+        public bool IsServing => Request?.Arguments.Contains("--serve") == true;
+
+        /// <summary>The current job's id as its frames carry it, or null before the first <c>run</c>.</summary>
+        public string? JobId => _current?.JobId;
 
         public volatile bool StopRequested;
 
         public volatile bool Killed;
 
-        public TrainingLaunchReceipt Receipt { get; } = new()
+        public TrainingLaunchReceipt Receipt { get; init; } = new()
         {
             Pid = 4242,
             Pgid = 4242,
@@ -1641,31 +1925,167 @@ public sealed class ModelLabExperimentServiceTests
             RunToken = "token"
         };
 
+        public ConcurrentQueue<string> WrittenLines { get; } = new();
+
+        public bool HasExited => _exit.Task.IsCompleted;
+
         public ITrainingProcessHandle Spawn(TrainingSpawnRequest request)
         {
+            if (Request is not null)
+            {
+                throw new InvalidOperationException("A scripted process is spawned once; use a ScriptedSpawner for more.");
+            }
+
             Request = request;
-            _spawned.TrySetResult();
+            if (FailsToSpawn)
+            {
+                throw new InvalidOperationException("The scripted spawn failed.");
+            }
+
+            if (IsServing)
+            {
+                Say(ServeHandshake ?? $"{{\"event\":\"handshake\",\"contractVersion\":{ModelLabTraceSpec.ContractVersion},\"serve\":true}}");
+            }
+            else
+            {
+                _spawned.TrySetResult();
+            }
+
             return this;
         }
 
-        public string ReadJobFile() =>
-            File.ReadAllText(Request!.Arguments[2]);
+        /// <summary>The current job's file: the last <c>run</c> command's, or the one-shot spawn's.</summary>
+        public string? JobFilePath => _current?.Config ?? (IsServing ? null : Request?.Arguments[2]);
 
+        public string ReadJobFile() =>
+            File.ReadAllText(JobFilePath!);
+
+        /// <summary>Says a line as it is; under <c>--serve</c> a protocol frame is stamped with the token, and a job frame with the current job.</summary>
         public void Say(string line) =>
+            _output.Writer.TryWrite(Stamp(line, _current?.JobId));
+
+        /// <summary>Says a line exactly as given, with no stamp.</summary>
+        public void SayRaw(string line) =>
             _output.Writer.TryWrite(line);
 
         public void CloseOutput() =>
             _output.Writer.TryComplete();
 
-        /// <summary>Waits for the spawn, writes the result files as the script would, then says the lines and exits.</summary>
+        /// <summary>Waits for the next job, writes the result files as the script would, then says the lines; see <see cref="PlayJobAsync" />.</summary>
         public void Finish(IReadOnlyList<string> lines, int exitCode) =>
-            _ = FinishAsync(lines, exitCode);
+            _ = PlayJobAsync(lines, exitCode);
+
+        /// <summary>
+        ///     Under <c>--serve</c>: the handshake was said at spawn, so handshake lines are skipped; a clean job (exit 0 after a terminal frame)
+        ///     ends with <c>ready</c> and the process stays up, anything else ends the process with <paramref name="exitCode" />.
+        /// </summary>
+        private async Task PlayJobAsync(IReadOnlyList<string> lines, int exitCode)
+        {
+            string config;
+            string? jobId = null;
+            if (IsServingOrPending())
+            {
+                var run = await _runs.Reader.ReadAsync();
+                config = run.Config;
+                jobId = run.JobId;
+            }
+            else
+            {
+                await Spawned;
+                config = Request!.Arguments[2];
+            }
+
+            using (var job = JsonDocument.Parse(await File.ReadAllTextAsync(config)))
+            {
+                if (job.RootElement.TryGetProperty("vectorPath", out var vectorPath))
+                {
+                    await File.WriteAllBytesAsync(vectorPath.GetString()!, VectorContent);
+                    await File.WriteAllBytesAsync(job.RootElement.GetProperty("randomVectorPath").GetString()!, RandomVectorContent);
+                    await File.WriteAllTextAsync(job.RootElement.GetProperty("resultPath").GetString()!, DerivedResult);
+                }
+                else
+                {
+                    await File.WriteAllTextAsync(job.RootElement.GetProperty("tracePath").GetString()!, TraceContent);
+                    await File.WriteAllTextAsync(job.RootElement.GetProperty("resultPath").GetString()!, TraceResult);
+                    if (AttentionContent is not null && job.RootElement.TryGetProperty("attentionPath", out var attentionPath))
+                    {
+                        await File.WriteAllTextAsync(attentionPath.GetString()!, AttentionContent);
+                    }
+                }
+            }
+
+            if (!IsServing)
+            {
+                foreach (var line in lines)
+                {
+                    SayRaw(line);
+                }
+
+                End(exitCode);
+                return;
+            }
+
+            var terminal = false;
+            foreach (var line in lines)
+            {
+                var name = EventOf(line);
+                if (name == "handshake")
+                {
+                    continue;
+                }
+
+                terminal |= name is "done" or "error";
+                SayRaw(Stamp(line, jobId));
+            }
+
+            if (exitCode == 0 && terminal)
+            {
+                if (!WithholdsReady)
+                {
+                    SayRaw(Stamp("""{"event":"ready","vramBytes":1000,"reservedBytes":2000}""", jobId));
+                }
+
+                if (ExitsAfterReady)
+                {
+                    End(exitCode: 0);
+                }
+            }
+            else
+            {
+                End(exitCode);
+            }
+        }
+
+        /// <summary>Waits for the <c>run</c> command of job number <paramref name="ordinal" />, counted from 1.</summary>
+        public Task WaitForRunAsync(int ordinal) =>
+            AssertEx.EventuallyAsync(() => WrittenLines.Count(static line => line.Contains("\"op\":\"run\"", StringComparison.Ordinal)) >= ordinal,
+                TestBudgets.Contended, $"Run command {ordinal} reached the script.");
 
         public IAsyncEnumerable<string> ReadOutputAsync(CancellationToken cancellationToken) =>
-            ReadAsync(cancellationToken);
+            OutputFloodsAfterExit ? FloodAfterExitAsync(cancellationToken) : ReadAsync(cancellationToken);
 
-        public Task<int> WaitForExitAsync(CancellationToken cancellationToken) =>
-            _exit.Task.WaitAsync(cancellationToken);
+        public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)
+        {
+            var exitCode = await _exit.Task.WaitAsync(cancellationToken);
+            if (OutputOutlivesExit)
+            {
+                await _output.Reader.Completion.WaitAsync(cancellationToken);
+            }
+
+            return exitCode;
+        }
+
+        public async Task<int?> WaitForGroupExitAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await _exit.Task.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return null;
+            }
+        }
 
         public void RequestStop()
         {
@@ -1679,51 +2099,186 @@ public sealed class ModelLabExperimentServiceTests
         public void KillGroup()
         {
             Killed = true;
-            End(exitCode: 137);
+            if (ExitsOnKill)
+            {
+                End(exitCode: 137);
+            }
         }
 
         public void Dispose()
         {
-            End(exitCode: 137);
+            if (ExitsOnKill)
+            {
+                End(exitCode: 137);
+            }
         }
 
-        private async Task FinishAsync(IReadOnlyList<string> lines, int exitCode)
+        public Task WriteLineAsync(string line, CancellationToken cancellationToken)
         {
-            await Spawned;
-            using var job = JsonDocument.Parse(ReadJobFile());
-            if (job.RootElement.TryGetProperty("vectorPath", out var vectorPath))
+            WrittenLines.Enqueue(line);
+            using var command = JsonDocument.Parse(line);
+            var root = command.RootElement;
+            switch (root.GetProperty("op").GetString())
             {
-                await File.WriteAllBytesAsync(vectorPath.GetString()!, VectorContent);
-                await File.WriteAllBytesAsync(job.RootElement.GetProperty("randomVectorPath").GetString()!, RandomVectorContent);
-                await File.WriteAllTextAsync(job.RootElement.GetProperty("resultPath").GetString()!, DerivedResult);
-            }
-            else
-            {
-                await File.WriteAllTextAsync(job.RootElement.GetProperty("tracePath").GetString()!, TraceContent);
-                await File.WriteAllTextAsync(job.RootElement.GetProperty("resultPath").GetString()!,
-                    """{"promptTokens":3,"tokens":[{"id":9,"text":"hi"}],"text":"hi","seconds":0.5,"peakVramBytes":10,"blockCount":24}""");
+                case "run":
+                    var run = new RunCommand
+                    {
+                        JobId = root.GetProperty("jobId").GetString()!,
+                        Config = root.GetProperty("config").GetString()!
+                    };
+                    _current = run;
+                    _runs.Writer.TryWrite(run);
+                    _spawned.TrySetResult();
+                    OnRun?.Invoke(this);
+                    break;
+                case "cancel":
+                    StopRequested = true;
+                    if (!IgnoresStop && root.GetProperty("jobId").GetString() == _current?.JobId)
+                    {
+                        Say("""{"event":"done","cancelled":true}""");
+                        Say("""{"event":"ready","vramBytes":1000,"reservedBytes":2000}""");
+                    }
+
+                    break;
+                case "evict":
+                    EvictRequested = true;
+                    if (HoldExitOnEvict is { } hold)
+                    {
+                        _ = hold.Task.ContinueWith(_ => End(exitCode: 0), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+                    }
+                    else if (!IgnoresStop)
+                    {
+                        End(exitCode: 0);
+                    }
+
+                    break;
             }
 
-            foreach (var line in lines)
+            return Task.CompletedTask;
+        }
+
+        private bool IsServingOrPending() =>
+            Request is null || IsServing;
+
+        private string Stamp(string line, string? jobId)
+        {
+            if (!IsServing || EventOf(line) is not { } name || JsonNode.Parse(line) is not JsonObject frame)
             {
-                Say(line);
+                return line;
             }
 
-            End(exitCode);
+            if (!frame.ContainsKey("token"))
+            {
+                frame["token"] = Request!.RunToken;
+            }
+
+            if (jobId is not null && JobEvents.Contains(name) && !frame.ContainsKey("jobId"))
+            {
+                frame["jobId"] = jobId;
+            }
+
+            return frame.ToJsonString();
+        }
+
+        private static string? EventOf(string line)
+        {
+            if (!line.StartsWith('{'))
+            {
+                return null;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(line);
+                return document.RootElement.TryGetProperty("event", out var name) ? name.GetString() : null;
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
         }
 
         private void End(int exitCode)
         {
-            _output.Writer.TryComplete();
+            if (!OutputOutlivesExit)
+            {
+                _output.Writer.TryComplete();
+            }
+
             _exit.TrySetResult(exitCode);
         }
 
         private async IAsyncEnumerable<string> ReadAsync([EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            await foreach (var line in _output.Reader.ReadAllAsync(cancellationToken))
+            try
             {
-                yield return line;
+                await foreach (var line in _output.Reader.ReadAllAsync(cancellationToken))
+                {
+                    yield return line;
+                }
             }
+            finally
+            {
+                OutputReadEnded = true;
+            }
+        }
+
+        private async IAsyncEnumerable<string> FloodAfterExitAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            try
+            {
+                while (!_exit.Task.IsCompleted)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (_output.Reader.TryRead(out var line))
+                    {
+                        yield return line;
+                        continue;
+                    }
+
+                    _ = await Task.WhenAny(_output.Reader.WaitToReadAsync(cancellationToken).AsTask(), _exit.Task);
+                }
+
+                // Never dry and never checking the token: only the consumer, or a kill, stops it.
+                while (!Killed)
+                {
+                    yield return "stray output from a descendant";
+                    await Task.Yield();
+                }
+            }
+            finally
+            {
+                OutputReadEnded = true;
+            }
+        }
+
+        private sealed class RunCommand
+        {
+            public required string JobId { get; init; }
+
+            public required string Config { get; init; }
+        }
+    }
+
+    /// <summary>Hands out one scripted process per spawn, in order, so a test can follow an eviction and the next cold start.</summary>
+    internal sealed class ScriptedSpawner : ITrainingProcessSpawner
+    {
+        private readonly ScriptedProcess[] _processes;
+        private int _spawned;
+
+        public ScriptedSpawner(params ScriptedProcess[] processes)
+        {
+            _processes = processes;
+        }
+
+        public int SpawnCount => Volatile.Read(ref _spawned);
+
+        public ITrainingProcessHandle Spawn(TrainingSpawnRequest request)
+        {
+            var next = Interlocked.Increment(ref _spawned) - 1;
+            return next < _processes.Length
+                ? _processes[next].Spawn(request)
+                : throw new InvalidOperationException($"Spawn {next + 1} has no scripted process.");
         }
     }
 }

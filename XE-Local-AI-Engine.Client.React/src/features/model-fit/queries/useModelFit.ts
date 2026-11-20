@@ -8,6 +8,7 @@ import {
 	refreshModelCatalogMutation,
 	refreshRecommendationsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { toHardwareProfile, toLatestRecommendations, toModelFitCatalogInfo } from "@/features/model-fit/models/ModelFitMappers";
 import type { ModelFitRecommendationFilters, ModelFitUseCase } from "@/features/model-fit/models/ModelFitModels";
 
@@ -27,11 +28,6 @@ export const modelFitQueryIds = {
 	latest: "getLatestRecommendations",
 	catalog: "getModelCatalogInfo",
 } as const;
-
-/** Builds the partial generated-query-key filter that matches every cached variant of one model-fit endpoint. */
-export function modelFitInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
 
 export function useLatestRecommendations(filters: ModelFitRecommendationFilters) {
 	return useQuery({
@@ -76,7 +72,7 @@ export function useRefreshRecommendations() {
 			const options = refreshRecommendationsMutation();
 			return await options.mutationFn?.({ body: { ...variables } }, undefined as never);
 		},
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.latest) }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: operationInvalidationKey(modelFitQueryIds.latest) }),
 	});
 }
 
@@ -99,6 +95,6 @@ export function useRefreshModelFitCatalog() {
 			const options = refreshModelCatalogMutation();
 			return await options.mutationFn?.({}, undefined as never);
 		},
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.catalog) }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: operationInvalidationKey(modelFitQueryIds.catalog) }),
 	});
 }

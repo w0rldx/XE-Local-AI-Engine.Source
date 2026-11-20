@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net;
 using System.Text;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Client.Services.Models.Implementation;
@@ -78,9 +79,33 @@ public sealed class ModelLabCheckpointPreflightServiceTests : IDisposable
         AssertEx.Equal(Commit, result.Revision!, "The answer names the commit the branch resolved to.");
         AssertEx.Equal(Weights9B, result.WeightBytes!.Value);
         AssertEx.Equal("apache-2.0", result.License!);
+        AssertEx.True(result.MetadataPresent, "A live Hub answer always carries licensing metadata.");
         AssertEx.Equal(expected: 4096, result.CheckpointHiddenSize!.Value);
         AssertEx.Equal(expected: 32, result.CheckpointBlockCount!.Value);
         AssertEx.Equal(expected: 1, _fileRequests, "Only config.json may be transferred before the operator commits to the download.");
+    }
+
+    /// <summary>The page shows a translation, so the English text and its hash are the evidence: a reword here invalidates consent recorded under the old words.</summary>
+    [Test]
+    public async Task TheConfirmationText_AndItsHash_StayTheCanonicalEnglish()
+    {
+        GgufHeader(embeddingLength: 4096, blockCount: 32);
+        using var files = Files(Config9B);
+
+        var result = await Service(files, Weights9B).CheckAsync("Qwen/Qwen3.5-9B", "main", Gguf, CancellationToken.None);
+        var confirmation = new LicenseGateService(Substitute.For<ITrainingBaseArtifactStore>(), TimeProvider.System).BuildConfirmation(new TrainingLicenseGateView
+        {
+            BaseArtifactId = Guid.Empty,
+            RepoId = result.RepoId,
+            License = result.License,
+            IsGated = result.IsGated,
+            MetadataPresent = result.MetadataPresent,
+            ConfirmationText = result.LicenseConfirmationText!
+        });
+
+        AssertEx.Equal("The base checkpoint 'Qwen/Checkpoint' declares the license 'apache-2.0'. I confirm I am permitted to download these weights and to run experiments on them.",
+            result.LicenseConfirmationText!);
+        AssertEx.Equal("0bbc7c065adf2c1a81b7e2d1f78996c2f1dfd74895cc45d315b0602d8552142f", confirmation.ConfirmationTextSha256);
     }
 
     [Test]
@@ -280,6 +305,37 @@ public sealed class ModelLabCheckpointPreflightServiceTests : IDisposable
 
         AssertEx.Null(result.Refusal, result.RefusalMessage);
         AssertEx.Equal(LicenseGateService.BuildModelLabText("Qwen/Saved", "apache-2.0", isGated: false, metadataPresent: true), result.LicenseConfirmationText!);
+        AssertEx.True(result.MetadataPresent);
+    }
+
+    /// <summary>transformers builds a Qwen3.5 config with no <c>layer_types</c> from its interval, so the node must name the same blocks full.</summary>
+    [Test]
+    [Arguments(""","num_attention_heads":8""", "3,7,11,15,19,23", 8)]
+    [Arguments(""","full_attention_interval":6""", "5,11,17,23", null)]
+    [Arguments(""","layer_types":["full_attention","linear_attention"]""", "0", null)]
+    public async Task BlockKinds_AreTheConfigsOwn_OrDerivedFromItsInterval(string extra, string fullBlocks, int? heads)
+    {
+        GgufHeader(embeddingLength: 1024, blockCount: 24);
+        using var files = Files(Config08B);
+        var config = $$$"""{"model_type":"qwen3_5","text_config":{"hidden_size":1024,"num_hidden_layers":24{{{extra}}}}}""";
+
+        var result = await Service(files, Weights08B).CheckDownloadedAsync(Saved(config, license: null), Gguf, CancellationToken.None);
+
+        AssertEx.Null(result.Refusal, result.RefusalMessage);
+        var types = result.CheckpointLayerTypes!;
+        AssertEx.Equal(fullBlocks, string.Join(',', Enumerable.Range(0, types.Count).Where(layer => types[layer] == "full_attention")));
+        AssertEx.Equal(heads, result.CheckpointAttentionHeads);
+    }
+
+    [Test]
+    public async Task AModelTypeTheScriptDoesNotKnow_GetsNoDerivedBlockKinds()
+    {
+        GgufHeader(embeddingLength: 1024, blockCount: 24);
+        using var files = Files(Config08B);
+
+        var result = await Service(files, Weights08B).CheckDownloadedAsync(Saved(ConfigOfType("gpt2"), license: null), Gguf, CancellationToken.None);
+
+        AssertEx.Null(result.CheckpointLayerTypes, "The interval rule is Qwen3.5's; another layout's blocks are not guessed.");
     }
 
     /// <summary>The operator must confirm the same words <c>CreateRowAsync</c> records and hashes for this artifact.</summary>
@@ -293,6 +349,7 @@ public sealed class ModelLabCheckpointPreflightServiceTests : IDisposable
 
         AssertEx.Equal(LicenseGateService.BuildModelLabText("Qwen/Saved", license: null, isGated: false, metadataPresent: false), result.LicenseConfirmationText!);
         AssertEx.Contains(result.LicenseConfirmationText!, "no license metadata", StringComparison.Ordinal);
+        AssertEx.False(result.MetadataPresent, "The page builds its translated sentence from this flag.");
     }
 
     private static string ConfigOfType(string modelType) =>

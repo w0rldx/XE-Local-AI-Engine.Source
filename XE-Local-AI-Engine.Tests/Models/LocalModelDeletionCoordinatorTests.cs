@@ -171,7 +171,7 @@ public sealed class LocalModelDeletionCoordinatorTests
     private static async Task<TestContext> CreateContextAsync()
     {
 #pragma warning disable CA2000 // Ownership of both fixtures is transferred to the returned async-disposable TestContext.
-        var directory = new GgufStoreTestInfrastructure.TempModelsDir();
+        var directory = new TempDirectory("xe-hf-test");
 #pragma warning restore CA2000
         try
         {
@@ -315,7 +315,7 @@ public sealed class LocalModelDeletionCoordinatorTests
 
     private sealed record TestContext : IAsyncDisposable
     {
-        public required GgufStoreTestInfrastructure.TempModelsDir Directory { get; init; }
+        public required TempDirectory Directory { get; init; }
 
         public required GgufModelRegistry Registry { get; init; }
 

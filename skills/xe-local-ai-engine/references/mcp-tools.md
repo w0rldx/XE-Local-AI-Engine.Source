@@ -29,7 +29,7 @@ the 1.x line, and a breaking change waits for the next major version. A `preview
 | `delete_model` | agentic | stable | Delete an installed model through coordinated deletion. | `model_name`. |
 | `set_default_model` | agentic | stable | Select an installed local model as node default. | `model_name`. |
 | `get_node_settings` | agentic | stable | Read the restricted core node-settings view. | Never returns secrets or unrestricted settings. |
-| `update_node_settings` | agentic | stable | Apply a partial update to the exact 18-field allowlist. | See **Settings allowlist** below. |
+| `update_node_settings` | agentic | stable | Apply a partial update to the exact 19-field allowlist. | See **Settings allowlist** below. |
 | `get_agent` | agentic | stable | Get a saved agent by id or exact name. | `agent_id`. |
 | `create_agent` | agentic | stable | Validate and create a saved agent. | Required `name`, `instructions`; optional definition/provenance fields. |
 | `update_agent` | agentic | stable | Fully replace a saved agent by id or exact name. | `agent_id`, required `name`, `instructions`, plus the complete optional definition. |
@@ -75,15 +75,23 @@ the 1.x line, and a breaking change waits for the next major version. A `preview
 
 ## Settings allowlist
 
-`update_node_settings` accepts only these 18 optional fields:
+`update_node_settings` accepts only these 19 optional fields:
 
 `default_model_name`, `enable_tools`, `tool_capable_models`, `hugging_face_default_quant`,
 `llama_max_loaded_processes`, `llama_idle_time_to_live_seconds`, `keep_model_warm_enabled`,
 `keep_model_warm_model_name`, `keep_model_warm_interval_seconds`,
 `max_message_request_timeout_seconds`, `chat_cache_reuse`, `speculative_mode`,
 `speculative_draft_model_name`, `speculative_draft_max_tokens`,
-`speculative_draft_gpu_layers`, `kv_cache_type`, `reranker_model_name`, and
-`auto_effort_fast_model_name`.
+`speculative_draft_gpu_layers`, `kv_cache_type`, `reranker_model_name`,
+`auto_effort_fast_model_name`, and `model_lab_warm_idle_seconds`.
+
+`model_lab_warm_idle_seconds` (0–3600, default 300) is how long an idle Model Lab worker keeps its
+checkpoint loaded; 0 turns warming off.
+
+`llama_max_loaded_processes` and `llama_idle_time_to_live_seconds` apply to the running node as soon as the update is
+saved; no restart is needed. A lower cap has a side effect: the next reap pass (passes run at most 30 seconds apart)
+unloads idle chat models above it, least recently used first, sparing a model in use, one just loaded and the keep-warm model. A run
+between turns holds no model, so its next turn can then be refused with "cap reached".
 
 `auto_effort_fast_model_name` is refused unless it names an installed node-local llama.cpp model and
 the node keeps at least two loaded-process slots: it is the model an `auto` reasoning-effort turn may

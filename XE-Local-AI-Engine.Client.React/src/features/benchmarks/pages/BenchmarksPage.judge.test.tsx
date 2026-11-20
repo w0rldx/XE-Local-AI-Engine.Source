@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The judge-change flow is the one page behavior that cannot be tested through a component: the node answers the
@@ -13,6 +13,7 @@ const { hubMock, toastErrorMock } = vi.hoisted(() => ({ hubMock: vi.fn(), toastE
 vi.mock("@/features/benchmarks/hooks/useBenchmarkRunHub", () => ({ useBenchmarkRunHub: hubMock }));
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: { error: toastErrorMock, success: vi.fn(), info: vi.fn() } }));
 
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { noBenchmarkRunLiveOverlay } from "@/features/benchmarks/models/BenchmarkModels";
 import { BenchmarksPage } from "@/features/benchmarks/pages/BenchmarksPage";
 import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
@@ -142,7 +143,11 @@ describe("BenchmarksPage judge changes", () => {
 			}),
 		);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByRole("button", { name: "Edit judge" }, fanIn));
 		fireEvent.click(await screen.findByRole("button", { name: "Save judge" }));
@@ -175,7 +180,11 @@ describe("BenchmarksPage judge changes", () => {
 			),
 		);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByRole("button", { name: "Edit judge" }, fanIn));
 		fireEvent.click(await screen.findByRole("button", { name: "Save judge" }));
@@ -198,7 +207,11 @@ describe("BenchmarksPage judge changes", () => {
 			),
 		);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByRole("button", { name: "Edit judge" }, fanIn));
 		fireEvent.click(await screen.findByRole("button", { name: "Save judge" }));
@@ -218,7 +231,11 @@ describe("BenchmarksPage judge changes", () => {
 			}),
 		);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		const banner = await screen.findByTestId("benchmark-judge-prompt-outdated", undefined, fanIn);
 		expect(banner.textContent).toContain("Judge prompt version outdated");
@@ -231,7 +248,11 @@ describe("BenchmarksPage judge changes", () => {
 	it("does not warn when the stored judge prompt version is current", async () => {
 		baseRoutes();
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		await screen.findByRole("button", { name: "Edit judge" }, fanIn);
 		expect(screen.queryByTestId("benchmark-judge-prompt-outdated")).toBeNull();
@@ -247,7 +268,11 @@ describe("BenchmarksPage judge changes", () => {
 			}),
 		);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByTestId("benchmark-rejudge-all", undefined, fanIn));
 		fireEvent.click(await screen.findByTestId("benchmark-rejudge-confirm-accept"));
@@ -259,7 +284,11 @@ describe("BenchmarksPage judge changes", () => {
 	it("disables the project re-judge while a judging is active", async () => {
 		baseRoutes(runRow({ judge: { state: "running", policyRevision: 1, policyCurrent: true, executionCurrent: false } }));
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		expect(((await screen.findByTestId("benchmark-rejudge-all", undefined, fanIn)) as HTMLButtonElement).disabled).toBe(true);
 	});

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -392,7 +393,7 @@ public sealed class DevelopmentCommandLiveOutputTests : IDisposable
     }
 
     private DevelopmentAttemptLiveProgress Live() =>
-        new(_snapshot, _broker, Options.Create(OptionsValue()), _clock, maxOutputTokens: 2048, maxToolCalls: 16);
+        new(_snapshot, _broker, Options.Create(OptionsValue()), _clock, maxOutputTokens: 2048, maxToolCalls: 16, NullLogger.Instance);
 
     private DevelopmentWorkspaceTools CreateTools(DevelopmentWorkspaceSession session,
         DevelopmentAttemptLiveProgress? liveProgress,

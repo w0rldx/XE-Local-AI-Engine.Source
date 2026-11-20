@@ -101,7 +101,7 @@ describe("NodeBackupsCard", () => {
 		renderCard();
 
 		expect(await screen.findByText(snapshotName)).toBeTruthy();
-		expect(screen.getByText("2 MB")).toBeTruthy();
+		expect(screen.getByText("2 MiB")).toBeTruthy();
 		expect(screen.getByText(/Automatic backup at this start: failed .*disk full/)).toBeTruthy();
 	});
 

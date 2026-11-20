@@ -88,6 +88,42 @@ public sealed class ApplicationHubWireTests
         AssertEx.Contains(WriteFrame(imageFrames.Single().Message), "\"kind\":\"ImageJob\"");
     }
 
+    /// <summary>Model Lab experiments and base checkpoint downloads ride the training-run hub, which the operations feed already leases.</summary>
+    [Test]
+    public async Task ModelLabAndCheckpointPushes_GoToEveryConnectionOfTheTrainingRunHub()
+    {
+        var (runs, runFrames) = CapturingHubContext<TrainingRunHub>();
+        var (datasets, datasetFrames) = CapturingHubContext<DatasetGenerationHub>();
+        var (images, imageFrames) = CapturingHubContext<ImageJobHub>();
+        var publisher = new JobCreatedPublisher(runs, datasets, images, new RecordingLogger<JobCreatedPublisher>());
+
+        await publisher.PublishCreatedAsync(CreatedJobKind.ModelLabExperiment, FirstId);
+        await publisher.PublishCreatedAsync(CreatedJobKind.BaseArtifactDownload, SecondId);
+        await publisher.PublishEndedAsync(CreatedJobKind.BaseArtifactDownload, SecondId);
+
+        AssertEx.Equal("job.created,job.created,job.ended", string.Join(',', runFrames.Select(frame => frame.Message.Target)));
+        AssertEx.True(runFrames.All(frame => frame.Group is null), "every frame goes to all connections, not a group.");
+        AssertEx.Equal("{\"type\":1,\"target\":\"job.ended\",\"arguments\":[{\"id\":\"22222222-2222-4222-8222-222222222222\",\"kind\":\"BaseArtifactDownload\"}]}"
+                       + RecordSeparator,
+            WriteFrame(runFrames[2].Message));
+        AssertEx.Contains(WriteFrame(runFrames[0].Message), "\"kind\":\"ModelLabExperiment\"");
+        AssertEx.Empty(datasetFrames);
+        AssertEx.Empty(imageFrames);
+    }
+
+    [Test]
+    public async Task GraphWorkflowRunStatusPush_KeepsItsWireFrame()
+    {
+        var (hubContext, sent) = CapturingHubContext<GraphWorkflowRunHub>();
+        var publisher = new GraphWorkflowEventPublisher(hubContext);
+
+        await publisher.PublishRunStatusAsync(FirstId, GraphWorkflowRunStatus.WaitingForApproval);
+
+        AssertEx.Equal("{\"type\":1,\"target\":\"graphWorkflowRunStatusChanged\",\"arguments\":[{\"runId\":\"11111111-1111-4111-8111-111111111111\",\"status\":\"WaitingForApproval\"}]}"
+                       + RecordSeparator,
+            WriteFrame(sent.Single().Message));
+    }
+
     [Test]
     public async Task StableDiffusionCppSourceBuildStatusPush_KeepsItsWireFrame()
     {

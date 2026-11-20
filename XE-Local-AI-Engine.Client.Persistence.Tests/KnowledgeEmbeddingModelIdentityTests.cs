@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using System.Runtime.InteropServices;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DataIngestion;
@@ -15,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     The RESOLVED embedding model name (from <see cref="IEmbeddingModelResolver" />) — not the configured name — is the
@@ -39,10 +41,13 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M@inventory-v1:b50b9fd9ef78aa8769635ac7b6324c438a2d9c3cb827854dd1383a282fbdf6a1::native:v1:768";
 
     private const string BgeNativeIdentity =
-        "bge-m3@inventory-v1:26e50285285b6c8f2a6d22cc6a650c14303f9c7b74bfcbd19aa0a111a48d7faa::native:v1:768";
+        "bge-m3@inventory-v1:26e50285285b6c8f2a6d22cc6a650c14303f9c7b74bfcbd19aa0a111a48d7faa::prompt-none+pool-cls:v1+native:v1:768";
 
     // Sorts before the nomic GGUF, so it wins the no-pin fallback once installed beside it.
     private const string SecondEmbedderName = "ggml-org/embeddinggemma-2-GGUF:BF16";
+
+    // The EmbeddingGemma profile's identity tag; a corpus indexed before profiles existed carries none.
+    private const string GemmaIdentityTag = "prompt-embeddinggemma+pool-mean:v1";
 
     private const int Dimensions = 768;
 
@@ -763,8 +768,179 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), await ReadStatusAsync(databasePath, indexedId));
     }
 
+    [Test]
+    public async Task ResetStale_UntaggedEmbeddingGemmaCorpusIsRequeued_WhileANomicCorpusStaysIndexed()
+    {
+        var gemmaDatabase = GetDatabasePath("catalog-gemma-untagged.sqlite");
+        var nomicDatabase = GetDatabasePath("catalog-nomic-unchanged.sqlite");
+        var untaggedId = Guid.NewGuid();
+        var taggedId = Guid.NewGuid();
+        var nomicId = Guid.NewGuid();
+        var gemma = await ResolveGemmaAsync();
 
-    private static KnowledgeIngestionService CreateIngestionService(NodeChatDbContext context, INodeSettingsStore? settingsStore = null)
+        await MigrateAsync(gemmaDatabase);
+        await MigrateAsync(nomicDatabase);
+        await SeedDocumentAsync(gemmaDatabase, untaggedId, SecondEmbedderName, KnowledgeDocumentStatus.Indexed, UntaggedGemmaIdentity(gemma), Dimensions);
+        await SeedDocumentAsync(gemmaDatabase, taggedId, SecondEmbedderName, KnowledgeDocumentStatus.Indexed, TaggedGemmaIdentity(gemma), Dimensions);
+        // The nomic row carries the pre-profile identity literal: nomic has no tag, so nothing about it changed.
+        await SeedDocumentAsync(nomicDatabase, nomicId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed);
+
+        IReadOnlyList<Guid> gemmaReset;
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(gemmaDatabase, _keyHolder))
+        {
+            gemmaReset = await CreateGemmaCatalogService(context).ResetStaleDocumentsToPendingAsync(CancellationToken.None);
+        }
+
+        IReadOnlyList<Guid> nomicReset;
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(nomicDatabase, _keyHolder))
+        {
+            nomicReset = await CreateCatalogService(context).ResetStaleDocumentsToPendingAsync(CancellationToken.None);
+        }
+
+        AssertEx.True(gemma.IsConfident, "the stale check runs only on a confident resolution.");
+        AssertEx.Equal(untaggedId, gemmaReset.Single(), "only the corpus indexed without the profile tag goes stale.");
+        AssertEx.Equal(KnowledgeDocumentStatus.Pending.ToString(), await ReadStatusAsync(gemmaDatabase, untaggedId));
+        AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), await ReadStatusAsync(gemmaDatabase, taggedId), "control: the tagged identity is current.");
+        AssertEx.Empty(nomicReset, "a nomic corpus keeps its identity across the profile change.");
+        AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), await ReadStatusAsync(nomicDatabase, nomicId));
+    }
+
+    [Test]
+    public async Task SearchAsync_BeforeTheReset_ServesAnUntaggedGemmaCorpusLexicallyAsLastKnownGood()
+    {
+        var databasePath = GetDatabasePath("search-gemma-untagged.sqlite");
+        var documentId = Guid.NewGuid();
+        var chunkId = Guid.NewGuid();
+        var gemma = await ResolveGemmaAsync();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId, SecondEmbedderName, KnowledgeDocumentStatus.Indexed, UntaggedGemmaIdentity(gemma), Dimensions);
+        await SeedChunkAsync(databasePath, documentId, chunkId, "gemma lexical content");
+        await SeedVectorAsync(databasePath, documentId, chunkId, UntaggedGemmaIdentity(gemma));
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var vectorSearch = new ManagedCosineVectorSearch(context);
+        var underOldIdentity = await SearchGemmaVectorsAsync(vectorSearch, UntaggedGemmaIdentity(gemma));
+        var underCurrentIdentity = await SearchGemmaVectorsAsync(vectorSearch, TaggedGemmaIdentity(gemma));
+        var result = await CreateGemmaSearchService(context, vectorSearch, chunkId, documentId)
+            .SearchAsync(new KnowledgeSearchRequest
+            {
+                Query = "gemma lexical content",
+                Limit = 5
+            }, CancellationToken.None);
+
+        AssertEx.Equal(chunkId, underOldIdentity.Single().ChunkId, "control: the stored vector matches the query vector under its own identity.");
+        AssertEx.Empty(underCurrentIdentity, "the vector arm must never serve an untagged vector under the tagged identity.");
+        var hit = result.Results.Single();
+        AssertEx.Equal(KnowledgeDocumentStatus.Indexed, hit.DocumentStatus);
+        AssertEx.True(hit.ServingLastKnownGood, "a hit built with the untagged identity is last-known-good until the reindex.");
+        AssertEx.Equal(nameof(KnowledgeSearchDegradation.EmbedderChanged), string.Join(",", result.Degradations),
+            "the query embedded, so the response is not LexicalOnly; the identity mismatch is promoted once.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheReplacementEmbedFails_KeepsTheOldIdentityAndServesItAsLastKnownGood()
+    {
+        var databasePath = GetDatabasePath("ingestion-gemma-failed-replacement.sqlite");
+        var documentId = Guid.NewGuid();
+        var chunkId = Guid.NewGuid();
+        var gemma = await ResolveGemmaAsync();
+        var untagged = UntaggedGemmaIdentity(gemma);
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId, SecondEmbedderName, KnowledgeDocumentStatus.Indexed, untagged, Dimensions);
+        await SeedChunkAsync(databasePath, documentId, chunkId, "gemma lexical content");
+        await SeedVectorAsync(databasePath, documentId, chunkId, untagged);
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            _ = await CreateGemmaCatalogService(context).ResetStaleDocumentsToPendingAsync(CancellationToken.None);
+        }
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            var failing = new FixedEmbeddingProvider(Descriptor(SecondEmbedderName))
+            {
+                FailGenerate = true
+            };
+            await CreateIngestionService(context, providerResolver: CreateProviderResolver(failing), resolverStore: PinnedStore(SecondEmbedderName))
+                .RunAsync(documentId, CancellationToken.None);
+        }
+
+        AssertEx.Equal(KnowledgeDocumentStatus.Failed.ToString(), await ReadStatusAsync(databasePath, documentId));
+        AssertEx.Equal(untagged, (await ReadDocumentVectorIdentityAsync(databasePath, documentId)).Identity);
+        AssertEx.Equal(untagged, (await ReadVectorIdentitiesAsync(databasePath, documentId)).Single().Identity,
+            "a failed replacement writes no vector, so the document never holds two identities.");
+
+        await using var searchContext = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var vectorSearch = new ManagedCosineVectorSearch(searchContext);
+        var underCurrentIdentity = await SearchGemmaVectorsAsync(vectorSearch, TaggedGemmaIdentity(gemma));
+        var result = await CreateGemmaSearchService(searchContext, vectorSearch, chunkId, documentId)
+            .SearchAsync(new KnowledgeSearchRequest
+            {
+                Query = "gemma lexical content",
+                Limit = 5
+            }, CancellationToken.None);
+
+        AssertEx.Empty(underCurrentIdentity, "the old vector stays out of the vector arm.");
+        var hit = result.Results.Single();
+        AssertEx.Equal(KnowledgeDocumentStatus.Failed, hit.DocumentStatus);
+        AssertEx.True(hit.ServingLastKnownGood, "the failed document's old chunks are served as last-known-good.");
+        AssertEx.Equal(nameof(KnowledgeSearchDegradation.EmbedderChanged), string.Join(",", result.Degradations));
+    }
+
+    private static async Task<EmbeddingModelResolution> ResolveGemmaAsync() =>
+        await new EmbeddingModelResolver(Options.Create(new KnowledgeBaseOptions()), PinnedStore(SecondEmbedderName))
+            .ResolveAsync(new FixedEmbeddingProvider(Descriptor(SecondEmbedderName)), CancellationToken.None);
+
+    // The identity a gemma corpus got before profiles existed, and the one it gets now; both spelled out, not derived.
+    private static string UntaggedGemmaIdentity(EmbeddingModelResolution gemma) =>
+        $"{gemma.Name}@{gemma.RevisionFingerprint}::native:v1:{Dimensions}";
+
+    private static string TaggedGemmaIdentity(EmbeddingModelResolution gemma) =>
+        $"{gemma.Name}@{gemma.RevisionFingerprint}::{GemmaIdentityTag}+native:v1:{Dimensions}";
+
+    // The query vector the fake generator returns, so a stored copy would score ~1 if the identity filter let it through.
+    private static float[] QueryVector()
+    {
+        var vector = new float[Dimensions];
+        Array.Fill(vector, 0.1f);
+        return vector;
+    }
+
+    private static Task<IReadOnlyList<VectorSearchHit>> SearchGemmaVectorsAsync(ManagedCosineVectorSearch vectorSearch, string identity) =>
+        vectorSearch.SearchAsync(QueryVector(), SecondEmbedderName, identity, Dimensions, 10, documentId: null, CancellationToken.None);
+
+    private static KnowledgeDocumentCatalogService CreateGemmaCatalogService(NodeChatDbContext context)
+    {
+        var options = Options.Create(new KnowledgeBaseOptions());
+        return new KnowledgeDocumentCatalogService(context,
+            CreateProviderResolver(new FixedEmbeddingProvider(Descriptor(SecondEmbedderName))),
+            new EmbeddingModelResolver(options, PinnedStore(SecondEmbedderName)),
+            options,
+            TimeProvider.System);
+    }
+
+    // A gemma-pinned node with the real vector search; the lexical arm returns the seeded chunk.
+    private static KnowledgeSearchService CreateGemmaSearchService(NodeChatDbContext context, IVectorSearch vectorSearch, Guid chunkId, Guid documentId) =>
+        CreateSearchService(context,
+            vectorSearch,
+            CreateProviderResolver(new FixedEmbeddingProvider(Descriptor(SecondEmbedderName))),
+            ftsHits:
+            [
+                new FtsSearchHit
+                {
+                    ChunkId = chunkId,
+                    DocumentId = documentId,
+                    Bm25Score = -1.0
+                }
+            ],
+            settingsStore: PinnedStore(SecondEmbedderName));
+
+    private static KnowledgeIngestionService CreateIngestionService(NodeChatDbContext context,
+        INodeSettingsStore? settingsStore = null,
+        ILocalModelProviderResolver? providerResolver = null,
+        INodeSettingsStore? resolverStore = null)
     {
         var options = Options.Create(new KnowledgeBaseOptions());
 
@@ -790,7 +966,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             blobStore,
             extractor,
             new HeaderBoundaryChunkingService(options),
-            CreateEmbedder(options),
+            CreateEmbedder(options, providerResolver, resolverStore),
             new KnowledgeIndexWriter(context, TimeProvider.System),
             Substitute.For<IKnowledgeIndexingNotifier>(),
             TimeProvider.System,
@@ -862,12 +1038,15 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         return vectorSearch;
     }
 
-    private static KnowledgeChunkEmbedder CreateEmbedder(IOptions<KnowledgeBaseOptions> options)
+    private static KnowledgeChunkEmbedder CreateEmbedder(IOptions<KnowledgeBaseOptions> options,
+        ILocalModelProviderResolver? providerResolver = null,
+        INodeSettingsStore? resolverStore = null)
     {
-        return new KnowledgeChunkEmbedder(CreateResolvingProviderResolver(),
-            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
+        return new KnowledgeChunkEmbedder(providerResolver ?? CreateResolvingProviderResolver(),
+            new EmbeddingModelResolver(options, resolverStore ?? new FakeNodeSettingsStore(new StoredNodeSettings())),
             new KnowledgeEmbeddingPrefixer(),
-            options);
+            options,
+            Substitute.For<ILlamaServerProcessSupervisor>());
     }
 
     // A provider resolver whose provider installs the GGUF embedding model (so the resolver picks the GGUF name, which
@@ -906,8 +1085,17 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
-    private async Task SeedDocumentAsync(string databasePath, Guid documentId, string embeddingModel, KnowledgeDocumentStatus status)
+    private async Task SeedDocumentAsync(string databasePath,
+        Guid documentId,
+        string embeddingModel,
+        KnowledgeDocumentStatus status,
+        string? vectorIdentity = null,
+        int vectorDimension = 0)
     {
+        var isResolvedIndexed = status == KnowledgeDocumentStatus.Indexed && string.Equals(embeddingModel, ResolvedGgufName, StringComparison.Ordinal);
+        var identity = vectorIdentity ?? (isResolvedIndexed ? ResolvedVectorIdentity : KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
+        var defaultDimension = isResolvedIndexed ? 512 : 0;
+        var dimension = vectorIdentity is null ? defaultDimension : vectorDimension;
         byte[] encryptedName;
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
@@ -931,12 +1119,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         command.Parameters.AddWithValue("$path", documentId.ToString("D") + ".txt");
         command.Parameters.AddWithValue("$status", status.ToString());
         command.Parameters.AddWithValue("$model", embeddingModel);
-        command.Parameters.AddWithValue("$identity",
-            status == KnowledgeDocumentStatus.Indexed && string.Equals(embeddingModel, ResolvedGgufName, StringComparison.Ordinal)
-                ? ResolvedVectorIdentity
-                : KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
-        command.Parameters.AddWithValue("$dim",
-            status == KnowledgeDocumentStatus.Indexed && string.Equals(embeddingModel, ResolvedGgufName, StringComparison.Ordinal) ? 512 : 0);
+        command.Parameters.AddWithValue("$identity", identity);
+        command.Parameters.AddWithValue("$dim", dimension);
         command.Parameters.AddWithValue("$parser", KnowledgeIndexVersions.Parser);
         command.Parameters.AddWithValue("$chunker", KnowledgeIndexVersions.Chunker);
         _ = await command.ExecuteNonQueryAsync();
@@ -979,6 +1163,28 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         command.Parameters.AddWithValue("$chunk", chunkId);
         command.Parameters.AddWithValue("$document", documentId);
         command.Parameters.AddWithValue("$content", content);
+        _ = await command.ExecuteNonQueryAsync();
+    }
+
+    // Stored the way KnowledgeIndexWriter stores it (L2-normalized), under the gemma model and the given identity.
+    private static async Task SeedVectorAsync(string databasePath, Guid documentId, Guid chunkId, string identity)
+    {
+        var embedding = MemoryMarshal.AsBytes<float>(QueryVector()).ToArray();
+        _ = KnowledgeVectorMath.NormalizeBytesInPlace(embedding);
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            INSERT INTO knowledge_chunk_vectors (chunk_id, document_id, dim, embedding, embedding_model, vector_identity)
+            VALUES ($chunk, $document, $dim, $blob, $model, $identity);
+            """;
+        command.Parameters.AddWithValue("$chunk", chunkId);
+        command.Parameters.AddWithValue("$document", documentId);
+        command.Parameters.AddWithValue("$dim", Dimensions);
+        command.Parameters.AddWithValue("$blob", embedding);
+        command.Parameters.AddWithValue("$model", SecondEmbedderName);
+        command.Parameters.AddWithValue("$identity", identity);
         _ = await command.ExecuteNonQueryAsync();
     }
 
@@ -1093,6 +1299,9 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         public int GenerateCallCount => Volatile.Read(ref _generateCallCount);
 
+        /// <summary>When set, every embed call fails like an unreachable embedding server.</summary>
+        public bool FailGenerate { get; init; }
+
         public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection) =>
             new FixedGenerator(this);
 
@@ -1131,6 +1340,11 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
                 CancellationToken cancellationToken = default)
             {
                 Interlocked.Increment(ref _owner._generateCallCount);
+                if (_owner.FailGenerate)
+                {
+                    throw new HttpRequestException("embedding server unreachable");
+                }
+
                 var embeddings = values.Select(static _ =>
                 {
                     var vector = new float[Dimensions];

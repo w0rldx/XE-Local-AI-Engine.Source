@@ -21,6 +21,7 @@ internal sealed class DevelopmentAttemptLiveProgress
     private readonly IDevelopmentAttemptLiveBroker _broker;
     private readonly DevelopmentProgressDetector _detector;
     private readonly DevelopmentExecutionSnapshot _execution;
+    private readonly ILogger _logger;
     private readonly int _maxContextTokens;
     private readonly int _maxProviderRounds;
     private readonly int _maxToolCalls;
@@ -49,7 +50,8 @@ internal sealed class DevelopmentAttemptLiveProgress
         IOptions<DevelopmentOptions> options,
         TimeProvider timeProvider,
         int maxOutputTokens,
-        int maxToolCalls)
+        int maxToolCalls,
+        ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(execution);
         _execution = execution;
@@ -58,6 +60,8 @@ internal sealed class DevelopmentAttemptLiveProgress
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _detector = new DevelopmentProgressDetector(options, timeProvider);
         _maxProviderRounds = Math.Max(1, maxToolCalls + 1);
         _maxToolCalls = maxToolCalls;
@@ -149,7 +153,8 @@ internal sealed class DevelopmentAttemptLiveProgress
         return new LiveCommandOutput(CommandOutputLimits,
             workspaceRoot,
             batch => CommandOutput(commandId, executionId, batch),
-            _timeProvider);
+            _timeProvider,
+            _logger);
     }
 
     public void UntrackCommand(string executionId) =>

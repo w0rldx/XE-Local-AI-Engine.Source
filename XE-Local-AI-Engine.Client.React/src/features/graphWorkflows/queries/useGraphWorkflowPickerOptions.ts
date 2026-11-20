@@ -9,8 +9,8 @@ import {
 	listGraphWorkflowToolsOptions,
 	listLocalModelsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import type { FeedOptions } from "@/core/api/QueryKeys";
 import { EXTERNAL_PROVIDER, LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
-import type { FeedOptions } from "@/features/graphWorkflows/queries/useGraphWorkflows";
 
 /**
  * The tools a Tool node may name. Already filtered server-side to the runnable envelope (`ReadLocal` and no composed

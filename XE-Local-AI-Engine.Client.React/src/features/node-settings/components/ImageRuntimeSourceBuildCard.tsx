@@ -5,13 +5,15 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useEjectImageRuntime } from "@/core/loaded-models/queries/useEjectRuntimes";
+import { FocusableDisabledButton } from "@/core/ui/components/FocusableDisabledButton/FocusableDisabledButton";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CudaBuildLogView } from "@/features/node-settings/components/CudaBuildLogView";
 import { SourceBuildFormDisclosure } from "@/features/node-settings/components/SourceBuildFormDisclosure";
 import { SourceBuildPrerequisiteList } from "@/features/node-settings/components/SourceBuildPrerequisiteList";
-import { useImageRuntimeSourceBuildHub } from "@/features/node-settings/hooks/useImageRuntimeSourceBuildHub";
 import { useSourceBuildFormDisclosure } from "@/features/node-settings/hooks/useSourceBuildFormDisclosure";
+import { imageRuntimeSourceBuildStream, useSourceBuildHub } from "@/features/node-settings/hooks/useSourceBuildHub";
 import type {
 	ImageRuntimeSourceBackend,
 	ImageRuntimeSourceBuildDraft,
@@ -36,6 +38,7 @@ const officialRepository = "https://github.com/leejet/stable-diffusion.cpp";
 
 export function ImageRuntimeSourceBuildCard() {
 	const { t } = useTranslation();
+	const { confirm } = useConfirm();
 	const [backend, setBackend] = useState<ImageRuntimeSourceBackend>("cpu");
 	const [source, setSource] = useState<"official" | "custom">("official");
 	const [repository, setRepository] = useState("");
@@ -47,13 +50,13 @@ export function ImageRuntimeSourceBuildCard() {
 	const cancel = useCancelImageRuntimeSourceBuild();
 	const remove = useRemoveImageRuntimeSourceBuild();
 	const eject = useEjectImageRuntime();
-	const hub = useImageRuntimeSourceBuildHub();
+	const hub = useSourceBuildHub(imageRuntimeSourceBuildStream);
 
 	const managed = runtime.data?.managedRuntime;
 	// The installed runtime's identity. `installedAtUtc` moves only when a build actually installs a new runtime, so a
 	// refetch of this status (a new object every time, and this query is refetched around every build and eject) leaves
-	// it unchanged. Seeding the draft off the object identity instead — which is what an effect keyed on `managed` did —
-	// wiped whatever backend, repository or commit the operator had just typed on the next refetch. Adjusted during
+	// it unchanged. Seeding the draft off the object identity instead would wipe whatever backend,
+	// repository or commit the operator had just typed on the next refetch. Adjusted during
 	// render rather than in an effect so the seeded values are on the first paint, not one paint later.
 	const managedIdentity = managed?.installedAtUtc ?? null;
 	const [seededIdentity, setSeededIdentity] = useState<number | null>(null);
@@ -189,11 +192,12 @@ export function ImageRuntimeSourceBuildCard() {
 							</Button>
 						) : null}
 						{activity.residentProcessCount > 0 ? (
-							<Button
+							<FocusableDisabledButton
 								variant="light"
 								leftSection={<IconPlayerEject size={16} />}
-								disabled={!canEjectImageRuntime(activity)}
-								loading={eject.isPending}
+								loaderSize={16}
+								blocked={!canEjectImageRuntime(activity)}
+								pending={eject.isPending}
 								onClick={() =>
 									eject.mutate(undefined, {
 										onError: (error) => showError(error, "pages.nodeSettings.imageRuntime.sourceBuild.ejectError"),
@@ -201,7 +205,7 @@ export function ImageRuntimeSourceBuildCard() {
 								}
 							>
 								{t("pages.nodeSettings.imageRuntime.sourceBuild.eject")}
-							</Button>
+							</FocusableDisabledButton>
 						) : null}
 						{managed ? (
 							<Button
@@ -210,11 +214,20 @@ export function ImageRuntimeSourceBuildCard() {
 								leftSection={<IconTrash size={16} />}
 								disabled={isBuilding || activity.isBusy}
 								loading={remove.isPending}
-								onClick={() =>
+								onClick={async () => {
+									const confirmed = await confirm({
+										title: t("pages.nodeSettings.imageRuntime.sourceBuild.removeConfirmTitle"),
+										description: t("pages.nodeSettings.imageRuntime.sourceBuild.removeConfirmBody"),
+										confirmationText: t("pages.nodeSettings.imageRuntime.sourceBuild.removeConfirm"),
+										cancellationText: t("common.cancel"),
+									});
+									if (!confirmed) {
+										return;
+									}
 									remove.mutate(undefined, {
 										onError: (error) => showError(error, "pages.nodeSettings.imageRuntime.sourceBuild.removeError"),
-									})
-								}
+									});
+								}}
 							>
 								{t("pages.nodeSettings.imageRuntime.sourceBuild.remove")}
 							</Button>

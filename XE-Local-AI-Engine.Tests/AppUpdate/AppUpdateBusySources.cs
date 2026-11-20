@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
@@ -51,6 +52,8 @@ internal sealed class AppUpdateBusySources
     }
 
     public IGpuWorkGate GpuWorkGate { get; } = Substitute.For<IGpuWorkGate>();
+
+    public IGpuIdleHolderPreemption IdlePreemption { get; } = Substitute.For<IGpuIdleHolderPreemption>();
 
     public IInvocationRunner InvocationRunner { get; } = Substitute.For<IInvocationRunner>();
 
@@ -116,6 +119,7 @@ internal sealed class AppUpdateBusySources
         // The real container stands in for the host's scope factory; only the scoped work-session service is read.
         var services = new ServiceCollection().AddScoped(_ => WorkSessions).BuildServiceProvider();
         return new AppUpdateBusyProbe(GpuWorkGate,
+            IdlePreemption,
             InvocationRunner,
             GgufDownloads,
             ImageModelDownloads,

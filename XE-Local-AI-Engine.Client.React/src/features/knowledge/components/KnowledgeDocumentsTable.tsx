@@ -1,7 +1,8 @@
 import { ActionIcon, Badge, Group, Stack, Text, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconEye, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { IconAlertTriangle, IconEye, IconHourglass, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { formatBytes } from "@/core/formatting/BytesFormatting";
 import { ResponsiveTable, type ResponsiveTableColumn } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import {
 	TablePaginationFooter,
@@ -10,7 +11,6 @@ import {
 import { KnowledgeLastKnownGoodBadge } from "@/features/knowledge/components/KnowledgeLastKnownGoodBadge";
 import { KnowledgeStatusBadge } from "@/features/knowledge/components/KnowledgeStatusBadge";
 import {
-	formatKnowledgeBytes,
 	formatKnowledgeTimestamp,
 	type KnowledgeDocument,
 	knowledgeFailureReasonKey,
@@ -56,6 +56,15 @@ export function KnowledgeDocumentsTable({
 								{document.failureReasonCode
 									? t(knowledgeFailureReasonKey(document.failureReasonCode), { defaultValue: document.failureReason })
 									: document.failureReason}
+							</Text>
+						</Group>
+					) : null}
+					{/* A row parked while its embedding model is unloaded stays Pending and says why it waits. */}
+					{document.status === "Pending" && document.failureReasonCode === "embedding-model-ejected" ? (
+						<Group gap={4} wrap="nowrap" c="dimmed">
+							<IconHourglass size={13} />
+							<Text size="xs" c="dimmed" truncate="end" data-testid={`knowledge-waiting-${document.documentId}`}>
+								{t(knowledgeFailureReasonKey(document.failureReasonCode), { defaultValue: document.failureReason })}
 							</Text>
 						</Group>
 					) : null}
@@ -118,7 +127,7 @@ export function KnowledgeDocumentsTable({
 		{
 			key: "size",
 			header: t("pages.knowledgeBase.table.size", "Size"),
-			cell: (document) => formatKnowledgeBytes(document.sizeBytes),
+			cell: (document) => formatBytes(document.sizeBytes),
 		},
 		{
 			key: "created",

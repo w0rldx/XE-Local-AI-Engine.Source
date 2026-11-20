@@ -43,17 +43,22 @@ public sealed class ToolCommandStopRegistry
         }
 
         // Marked before the cancel, which can return the tool its result before this method resumes.
-        registration.StopRequested = true;
+        registration.BeginStop();
+        var stopped = false;
         try
         {
             await registration.Provider.CancelCommandAsync(registration.Handle, registration.ExecutionId, cancellationToken);
+            stopped = true;
             return true;
         }
         catch (SandboxHandleInvalidException)
         {
             // The command finished and its sandbox went away between the lookup and the cancel.
-            registration.StopRequested = false;
             return false;
+        }
+        finally
+        {
+            registration.EndStop(stopped);
         }
     }
 

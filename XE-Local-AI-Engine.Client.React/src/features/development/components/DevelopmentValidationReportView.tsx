@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { ValidationCommandCard } from "@/core/ui/components/ValidationCommandCard/ValidationCommandCard";
+import { ValidationCommandCard } from "@/features/development/components/ValidationCommandCard";
 import type { DevelopmentArtifact } from "@/features/development/models/DevelopmentModels";
 import {
 	type DevelopmentTestOutcome,
@@ -78,7 +78,7 @@ function shortHash(value: string | undefined): string {
 }
 
 /**
- * The parse-failure half of a test outcome. The counts half is the shared `ValidationCommandCard`; this stays local
+ * The parse-failure half of a test outcome. The counts half is `ValidationCommandCard`; this stays here
  * because "no test project" is the registered-repository policy case, not a broken adapter: it reads as a reduced
  * guarantee, whereas every other parse failure reads as a failed run.
  */

@@ -405,3 +405,124 @@ describe("ChatMessageList Continue after a cut-off answer", () => {
 		expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
 	});
 });
+
+describe("ChatMessageList stream phase announcements", () => {
+	beforeEach(() => {
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: vi.fn().mockImplementation((query: string) => ({
+				matches: false,
+				media: query,
+				onchange: null,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+				dispatchEvent: vi.fn(),
+			})),
+		});
+		Object.defineProperty(window, "ResizeObserver", {
+			writable: true,
+			value: class ResizeObserverMock {
+				observe = vi.fn();
+
+				unobserve = vi.fn();
+
+				disconnect = vi.fn();
+			},
+		});
+		Element.prototype.scrollIntoView = vi.fn();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	function stream(overrides: Partial<ChatStreamingState> = {}): ChatStreamingState {
+		return { conversationId: "conversation-1", messageId: "assistant-1", content: "", isActive: true, ...overrides };
+	}
+
+	function list(streamingMessage: ChatStreamingState | undefined, convo: ChatConversationModel = conversation([userMessage()])) {
+		return (
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<ChatMessageList conversation={convo} streamingMessage={streamingMessage} />
+			</MantineProvider>
+		);
+	}
+
+	function region(container: HTMLElement): HTMLElement {
+		return container.querySelector('[role="status"][aria-live="polite"]') as HTMLElement;
+	}
+
+	it("speaks each phase once through the one polite region and never a token", () => {
+		const { container, rerender } = render(list(undefined));
+		rerender(list(stream({ isQueued: true })));
+		const regions = container.querySelectorAll('[aria-live="polite"]');
+		expect(regions).toHaveLength(1);
+		const region = regions[0] as HTMLElement;
+		expect(region.getAttribute("role")).toBe("status");
+		const mutations = new MutationObserver(() => undefined);
+		mutations.observe(region, { childList: true, characterData: true, subtree: true });
+		const step = (next: ChatStreamingState): number => {
+			rerender(list(next));
+			return mutations.takeRecords().length;
+		};
+
+		expect(region.textContent).toBe(
+			"Queued — starts after the node's current chat, work session step, benchmark or training run",
+		);
+		expect(step(stream({ runtimePhase: "loading_model" }))).toBeGreaterThan(0);
+		expect(region.textContent).toBe("Loading model…");
+		expect(step(stream({ runtimePhase: "loading_model", runtimePhaseChangedAtUtc: "2026-06-04T00:00:02.000Z" }))).toBe(0);
+		expect(step(stream({ content: "The", runtimePhase: "generating" }))).toBeGreaterThan(0);
+		expect(region.textContent).toBe("Receiving response");
+		// Tokens keep arriving; the region's text does not change, so nothing more is spoken.
+		expect(step(stream({ content: "The answer", runtimePhase: "generating" }))).toBe(0);
+		expect(step(stream({ content: "The answer is 42.", runtimePhase: "generating" }))).toBe(0);
+		expect(step(stream({ content: "The answer is 42.", isActive: false }))).toBeGreaterThan(0);
+		expect(region.textContent).toBe("Response finished");
+		mutations.disconnect();
+	});
+
+	it("adopts the phase a conversation shows on mount and on a switch back without speaking it", () => {
+		const finished = stream({ content: "The answer", isActive: false });
+		const other: ChatConversationModel = { ...conversation([]), id: "conversation-2" };
+		const { container, rerender } = render(list(finished));
+		expect(region(container).textContent).toBe("");
+
+		rerender(list(finished, other));
+		const mutations = new MutationObserver(() => undefined);
+		mutations.observe(region(container), { childList: true, characterData: true, subtree: true });
+		rerender(list(finished));
+
+		expect(region(container).textContent).toBe("");
+		expect(mutations.takeRecords()).toHaveLength(0);
+		mutations.disconnect();
+
+		// The next turn in the shown conversation is a transition seen on screen, so it is spoken.
+		rerender(list(stream({ messageId: "assistant-2", content: "Next" })));
+		expect(region(container).textContent).toBe("Receiving response");
+	});
+
+	it("stays silent for a turn already streaming when the conversation opens", () => {
+		const { container } = render(list(stream({ content: "Half an ans" })));
+
+		expect(region(container).textContent).toBe("");
+	});
+
+	it("says a stopped reply stopped, not finished", () => {
+		const live = stream({ content: "Partial" });
+		const { container, rerender } = render(list(undefined));
+		rerender(list(live));
+		const cancelledTurn = failedAssistantMessage({ status: "cancelled", error: undefined, content: "Partial" });
+
+		rerender(list({ ...live, isActive: false }, conversation([userMessage(), cancelledTurn])));
+
+		expect(region(container).textContent).toBe("Generation stopped");
+	});
+
+	it("speaks nothing for a failed turn, whose error alert announces itself", () => {
+		const { container, rerender } = render(list(stream({ content: "Partial" })));
+		rerender(list(stream({ content: "Partial", isActive: false, error: "Stream timed out." })));
+
+		expect(container.querySelector('[role="status"][aria-live="polite"]')?.textContent).toBe("");
+	});
+});

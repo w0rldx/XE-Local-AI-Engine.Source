@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using System.Text.Json;
 
 /// <summary>
 ///     Narrows a secret-bearing file on disk to the current user only: an explicit, inheritance-free Windows ACL, or
@@ -52,19 +53,7 @@ public static class SecureFilePermissions
         var tempPath = string.Concat(path, ".", Guid.NewGuid().ToString("N"), ".tmp");
         try
         {
-            var options = new FileStreamOptions
-            {
-                Mode = FileMode.CreateNew,
-                Access = FileAccess.Write,
-                Share = FileShare.None,
-                Options = FileOptions.Asynchronous
-            };
-            if (!OperatingSystem.IsWindows())
-            {
-                options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-            }
-
-            var stream = new FileStream(tempPath, options);
+            var stream = CreateOwnerOnly(tempPath, FileMode.CreateNew);
             await using (stream.ConfigureAwait(false))
             {
                 await stream.WriteAsync(content, cancellationToken).ConfigureAwait(false);
@@ -84,6 +73,39 @@ public static class SecureFilePermissions
             BestEffortFile.TryDeleteFile(tempPath);
             throw;
         }
+    }
+
+    /// <summary>
+    ///     Serializes <paramref name="value" /> and replaces <paramref name="path" /> with it through
+    ///     <see cref="WriteAllBytesAtomicAsync" />: same guarantees, a failed or cancelled write keeps the previous file.
+    /// </summary>
+    public static Task WriteJsonAtomicAsync<T>(string path, T value, JsonSerializerOptions options, CancellationToken cancellationToken) =>
+        WriteAllBytesAtomicAsync(path, JsonSerializer.SerializeToUtf8Bytes(value, options), cancellationToken);
+
+    /// <summary>
+    ///     Opens <paramref name="path" /> for exclusive writing (<see cref="FileShare.None" />) with <paramref name="mode" />, a file it
+    ///     creates being owner-only (0600) on Linux/macOS in the create call itself, so it is never briefly world-readable.
+    /// </summary>
+    /// <remarks>
+    ///     <see cref="FileStreamOptions.UnixCreateMode" /> is unsupported on Windows, so there the file is a plain create and the per-user
+    ///     data-directory ACL governs access; <see cref="Apply" /> narrows it further where a caller needs that. The mode applies only to a
+    ///     file this call creates: an existing file keeps its permissions.
+    /// </remarks>
+    public static FileStream CreateOwnerOnly(string path, FileMode mode)
+    {
+        var options = new FileStreamOptions
+        {
+            Mode = mode,
+            Access = FileAccess.Write,
+            Share = FileShare.None,
+            Options = FileOptions.Asynchronous
+        };
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        return new FileStream(path, options);
     }
 
     /// <summary>

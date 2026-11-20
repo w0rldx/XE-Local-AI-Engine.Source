@@ -177,6 +177,14 @@ class DependabotGroupContractTests(unittest.TestCase):
                     self.assertEqual(self.uv_update[key], matching[0][key], key)
                 self.assertNotIn("groups", matching[0])
 
+    def test_root_tooling_torch_is_left_to_the_training_pin(self) -> None:
+        root = [
+            u
+            for u in load_yaml(DEPENDABOT)["updates"]
+            if u.get("package-ecosystem") == "uv" and u.get("directory") == "/"
+        ]
+        self.assertEqual([{"dependency-name": "torch"}], root[0]["ignore"])
+
     def test_release_age_policy_is_compatible_with_dependabot(self) -> None:
         self.assertEqual(10080, self.pnpm_workspace["minimumReleaseAge"])
         self.assertFalse(self.pnpm_workspace["minimumReleaseAgeStrict"])

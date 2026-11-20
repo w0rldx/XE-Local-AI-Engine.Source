@@ -237,9 +237,9 @@ public sealed record ChatStreamEvent
     public NodeChatThroughputDto? Throughput { get; init; }
 
     /// <summary>
-    ///     On a terminal event only: the <c>FailureCategory</c> enum name of a failed turn, so a client
-    ///     can show a localized headline above the raw <see cref="Error" /> text. Null when the turn did not fail or
-    ///     carried no category.
+    ///     On a terminal event only: the <c>FailureCategory</c> enum name of a failed turn, or of a cancelled turn whose reason is
+    ///     shown (an eject), so a client can show a localized headline above the raw <see cref="Error" /> text. Null otherwise,
+    ///     a plain Stop included.
     /// </summary>
     public string? FailureCategory { get; init; }
 

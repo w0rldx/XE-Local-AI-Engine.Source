@@ -40,6 +40,9 @@ public sealed class StartModelLabExperimentRequest
 
     /// <summary>The distinct blocks a trace records, in any order. Left out, the three quarter points; not allowed with <see cref="Steering" />.</summary>
     public IReadOnlyList<int>? Layers { get; init; }
+
+    /// <summary>A trace also records each step's attention row at up to eight full-attention blocks the node picks. Not allowed with <see cref="Steering" />.</summary>
+    public bool RecordAttention { get; init; }
 }
 
 public sealed class StartModelLabExperimentResponse
@@ -148,6 +151,114 @@ public sealed class ModelLabTraceRecordResponse
     public required IReadOnlyList<int> TopIndices { get; init; }
 
     public required IReadOnlyList<double?> TopValues { get; init; }
+}
+
+public sealed class ModelLabExperimentAttentionRouteRequest
+{
+    public Guid ExperimentId { get; init; }
+
+    public int Layer { get; init; }
+}
+
+/// <summary>One head of one attention row: the kept keys, most weight first, and the weight of every key left out.</summary>
+public sealed class ModelLabAttentionHeadResponse
+{
+    /// <summary>Key positions in the prompt-plus-generated sequence.</summary>
+    public required IReadOnlyList<int> Keys { get; init; }
+
+    /// <summary>Fractions of the row, matching <see cref="Keys" />, rounded down to four decimals.</summary>
+    public required IReadOnlyList<double> Weights { get; init; }
+
+    public required double Rest { get; init; }
+}
+
+/// <summary>The query row of the position that predicted generated token <see cref="Step" />.</summary>
+public sealed class ModelLabAttentionRowResponse
+{
+    public required int Step { get; init; }
+
+    public required int QueryPosition { get; init; }
+
+    /// <summary>Indexed by query head.</summary>
+    public required IReadOnlyList<ModelLabAttentionHeadResponse> Heads { get; init; }
+}
+
+public sealed class ModelLabAttentionResponse
+{
+    public required int Layer { get; init; }
+
+    public required int Heads { get; init; }
+
+    public required int KvHeads { get; init; }
+
+    public required int TopKeys { get; init; }
+
+    public required IReadOnlyList<ModelLabAttentionRowResponse> Rows { get; init; }
+
+    /// <summary>True when the run's byte cap dropped rows, at this block or another.</summary>
+    public required bool Truncated { get; init; }
+
+    public required int DroppedRecords { get; init; }
+}
+
+/// <summary>One block's lens readout at one step: the model's final norm and output layer applied to that block's output.</summary>
+public sealed class ModelLabLensBlockResponse
+{
+    public required int Layer { get; init; }
+
+    /// <summary>The readout's top token ids, most probable first; their texts are in <see cref="ModelLabLensResponse.Texts" />.</summary>
+    public required IReadOnlyList<int> Ids { get; init; }
+
+    /// <summary>Natural-log probabilities matching <see cref="Ids" />, rounded down to four decimals; null, here and below, where not finite.</summary>
+    public required IReadOnlyList<double?> Logprobs { get; init; }
+
+    /// <summary>The generated token's logprob in this readout.</summary>
+    public required double? ChosenLogprob { get; init; }
+
+    /// <summary>1 for the most probable; tokens tied with the generated one share the better rank. Null where <see cref="ChosenLogprob" /> is.</summary>
+    public required int? ChosenRank { get; init; }
+
+    /// <summary>The readout's entropy in nats, to three decimals: 0 when one token holds all the mass, at most ln <see cref="ModelLabLensResponse.VocabSize" />.</summary>
+    public required double? Entropy { get; init; }
+}
+
+public sealed class ModelLabLensStepResponse
+{
+    public required int Step { get; init; }
+
+    /// <summary>One per block, in <see cref="ModelLabLensResponse.Layers" /> order.</summary>
+    public required IReadOnlyList<ModelLabLensBlockResponse> Blocks { get; init; }
+}
+
+public sealed class ModelLabLensTextResponse
+{
+    public required int Id { get; init; }
+
+    /// <summary>What the tokenizer decodes the id to on its own, cut to 64 escaped bytes.</summary>
+    public required string Text { get; init; }
+}
+
+/// <summary>A derived analysis of a saved trace, not what the model computed: only the last block's output reached the output layer.</summary>
+public sealed class ModelLabLensResponse
+{
+    public required IReadOnlyList<int> Layers { get; init; }
+
+    public required int TopTokens { get; init; }
+
+    public required bool TiedEmbeddings { get; init; }
+
+    public required int VocabSize { get; init; }
+
+    /// <summary>From step 0, in order; a truncated lens keeps a prefix.</summary>
+    public required IReadOnlyList<ModelLabLensStepResponse> Steps { get; init; }
+
+    /// <summary>Each distinct top id once.</summary>
+    public required IReadOnlyList<ModelLabLensTextResponse> Texts { get; init; }
+
+    /// <summary>True when the lens cap dropped steps; the trace's own records are not affected.</summary>
+    public required bool Truncated { get; init; }
+
+    public required int DroppedSteps { get; init; }
 }
 
 public sealed class ModelLabTraceResponse

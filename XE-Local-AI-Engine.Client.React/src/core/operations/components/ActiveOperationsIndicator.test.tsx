@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GgufAcquisitionStatus } from "@/core/model-downloads/models/GgufAcquisitionModels";
 import { ActiveOperationsIndicator } from "@/core/operations/components/ActiveOperationsIndicator";
+import type { Operation } from "@/core/operations/models/OperationModels";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The source feeds are hub-backed hooks with their own tests; the merge and normalization between them and the chip
@@ -12,6 +13,7 @@ import { renderWithProviders } from "@/test/RenderWithProviders";
 const sources = vi.hoisted(() => ({
 	gguf: new Map<string, unknown>(),
 	runtime: undefined as unknown,
+	waiting: [] as unknown[],
 }));
 
 vi.mock("@/core/model-downloads/queries/useGgufAcquisitions", () => ({
@@ -20,6 +22,20 @@ vi.mock("@/core/model-downloads/queries/useGgufAcquisitions", () => ({
 vi.mock("@/core/runtime-acquisition/hooks/useRuntimeAcquisitionHub", () => ({
 	useRuntimeAcquisitionHub: () => sources.runtime,
 }));
+// The polled graph-run source has its own tests; here it hands the chip one waiting row.
+vi.mock("@/core/operations/hooks/useJobOperations", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@/core/operations/hooks/useJobOperations")>()),
+	useWaitingGraphRunOperations: () => sources.waiting,
+}));
+
+const waitingRun: Operation = {
+	id: "graph-run:run-9",
+	kind: "graph-run",
+	label: "A workflow waits for your decision",
+	progress: { kind: "indeterminate" },
+	state: "waiting",
+	href: { to: "/graph-workflows", search: { definitionId: "def-1", runId: "run-9" } },
+};
 
 function downloads(...entries: Partial<GgufAcquisitionStatus>[]) {
 	sources.gguf = new Map(
@@ -46,6 +62,7 @@ function downloads(...entries: Partial<GgufAcquisitionStatus>[]) {
 beforeEach(() => {
 	sources.gguf = new Map();
 	sources.runtime = undefined;
+	sources.waiting = [];
 });
 
 afterEach(cleanup);
@@ -101,6 +118,22 @@ describe("ActiveOperationsIndicator", () => {
 		expect(chip.textContent).toBe("Action required");
 		expect(chip.getAttribute("data-state")).toBe("failed");
 		expect(chip.getAttribute("href")).toBe("/");
+	});
+
+	it("asks for the user while a row waits, ahead of running work but behind a failure", async () => {
+		downloads({});
+		sources.waiting = [waitingRun];
+		const view = renderWithProviders(<ActiveOperationsIndicator />, { route: "/chat" });
+
+		const chip = await screen.findByTestId("active-operations-indicator");
+		expect(chip.textContent).toBe("1 waiting for you");
+		expect(chip.getAttribute("data-state")).toBe("waiting");
+		expect(chip.querySelector(".tabler-icon-hand-stop")).not.toBeNull();
+		view.unmount();
+
+		downloads({ phase: "Failed" });
+		renderWithProviders(<ActiveOperationsIndicator />, { route: "/chat" });
+		expect((await screen.findByTestId("active-operations-indicator")).getAttribute("data-state")).toBe("failed");
 	});
 
 	it("hides on Home, where the Activity card shows the same operations", async () => {

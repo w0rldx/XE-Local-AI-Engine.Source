@@ -180,7 +180,7 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
     }
 
     /// <summary>When set, <see cref="RemoveContainerAsync" /> throws it instead of removing. Lets a test prove one failed removal does not stop the sweep.</summary>
-    public Func<string, DockerRuntimeException?>? RemovalFailure { get; set; }
+    public Func<string, Exception?>? RemovalFailure { get; set; }
 
     public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken = default)
     {
@@ -204,6 +204,7 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
         cancellationToken.ThrowIfCancellationRequested();
         var record = GetRecord(containerId);
         _executed.Enqueue(request);
+        OnExecute?.Invoke(request);
 
         var key = BuildCommandKey(request);
         if (_scriptedCommands.TryGetValue(key, out var scripted))
@@ -263,17 +264,27 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
     /// <summary>Register a deterministic outcome for an executable plus space-joined arguments.</summary>
     public void RegisterCommand(string commandLine, long exitCode, string standardOutput = "", string standardError = "")
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
-
-        _scriptedCommands[commandLine] = new DockerExecutionOutcome
-        {
-            ExitCode = exitCode,
-            StandardOutput = standardOutput,
-            StandardError = standardError,
-            StandardOutputTruncated = false,
-            StandardErrorTruncated = false
-        };
+        RegisterCommand(commandLine,
+            new DockerExecutionOutcome
+            {
+                ExitCode = exitCode,
+                StandardOutput = standardOutput,
+                StandardError = standardError,
+                StandardOutputTruncated = false,
+                StandardErrorTruncated = false
+            });
     }
+
+    /// <summary>Register the whole outcome, a stopped one included, for an executable plus space-joined arguments.</summary>
+    public void RegisterCommand(string commandLine, DockerExecutionOutcome outcome)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
+        ArgumentNullException.ThrowIfNull(outcome);
+        _scriptedCommands[commandLine] = outcome;
+    }
+
+    /// <summary>Runs on every exec after it is recorded, before its outcome is chosen: a test cancels a caller's token here.</summary>
+    public Action<DockerExecutionRequest>? OnExecute { get; set; }
 
     private static string BuildCommandKey(DockerExecutionRequest request)
     {

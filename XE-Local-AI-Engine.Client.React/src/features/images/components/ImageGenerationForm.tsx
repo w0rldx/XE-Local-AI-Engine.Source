@@ -251,6 +251,7 @@ export function ImageGenerationForm({
 
 					{editModes.length > 1 ? (
 						<SegmentedControl
+							aria-label={t("pages.images.edit.modeLabel", "Edit mode")}
 							data={editModeData}
 							value={values.editMode ?? editModes[0]}
 							onChange={(value) => setValues((current) => ({ ...current, editMode: value as ImageEditMode }))}

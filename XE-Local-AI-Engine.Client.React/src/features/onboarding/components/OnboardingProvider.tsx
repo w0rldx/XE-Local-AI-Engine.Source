@@ -1,9 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { EventData } from "react-joyride";
-import { ACTIONS, EVENTS, Joyride, STATUS } from "react-joyride";
 
 import { getAiAcknowledgementOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
@@ -28,6 +27,11 @@ const TOUR_Z_INDEX = 1000;
 const TARGET_WAIT_TIMEOUT_MS = 3000;
 const MAX_TARGET_RETRIES = 4;
 
+// react-joyride is fetched when the first tour starts, not with the authenticated shell. The event checks below compare
+// against the library's string literals (typed by `EventData`), because a value import of its constants would pull
+// the whole module back into the shell chunk.
+const Joyride = lazy(() => import("react-joyride").then((module) => ({ default: module.Joyride })));
+
 /* eslint-disable react-doctor/no-adjust-state-on-prop-change, react-doctor/no-chain-state-updates -- the optional welcome invitation and real milestone advancement react to authenticated backend/cache state. */
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
@@ -38,6 +42,8 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	const { modelItems, selectedModelName, eligibleStepIds } = useQuickStartReadiness(isAuthenticated);
 	const [active, setActive] = useState<ActiveTutorial | null>(null);
 	const [welcomeOpen, setWelcomeOpen] = useState(false);
+	// Stays true after the first tour, so the loaded Joyride keeps its instance and is stopped with `run`, not unmounted.
+	const [tourRequested, setTourRequested] = useState(false);
 	const welcomeHandledRef = useRef(false);
 	const targetRetryCountRef = useRef(0);
 	const autoAdvanceArmedRef = useRef(false);
@@ -80,6 +86,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 			navigateToStep(tutorialId, stepId);
 			writeTutorialProgress(definition.persistenceKey, stepId);
 			progress.refreshProgress();
+			setTourRequested(true);
 			setActive({ tutorialId, stepIds: frozenStepIds, stepId });
 		},
 		[active, eligibleStepIds, navigateToStep, progress.refreshProgress],
@@ -228,15 +235,15 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 				return;
 			}
 			const { action, index, status, type } = data;
-			if (type === EVENTS.TOUR_END || status === STATUS.FINISHED || status === STATUS.SKIPPED) {
-				finish(status === STATUS.SKIPPED || action === ACTIONS.SKIP ? "skipped" : "completed");
+			if (type === "tour:end" || status === "finished" || status === "skipped") {
+				finish(status === "skipped" || action === "skip" ? "skipped" : "completed");
 				return;
 			}
-			if (action === ACTIONS.CLOSE) {
+			if (action === "close") {
 				finish("skipped");
 				return;
 			}
-			if (type === EVENTS.TARGET_NOT_FOUND) {
+			if (type === "error:target_not_found") {
 				if (targetRetryCountRef.current < MAX_TARGET_RETRIES) {
 					targetRetryCountRef.current += 1;
 					navigateToStep(active.tutorialId, active.stepId);
@@ -255,12 +262,12 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 				}
 				return;
 			}
-			if (type === EVENTS.STEP_AFTER) {
-				if (action !== ACTIONS.PREV && index >= active.stepIds.length - 1) {
+			if (type === "step:after") {
+				if (action !== "prev" && index >= active.stepIds.length - 1) {
 					finish("completed");
 					return;
 				}
-				const nextIndex = Math.max(0, Math.min(index + (action === ACTIONS.PREV ? -1 : 1), active.stepIds.length - 1));
+				const nextIndex = Math.max(0, Math.min(index + (action === "prev" ? -1 : 1), active.stepIds.length - 1));
 				const nextStepId = active.stepIds[nextIndex];
 				if (nextStepId) {
 					goToStep(nextStepId);
@@ -301,16 +308,20 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
 	return (
 		<OnboardingContext.Provider value={contextValue}>
-			<Joyride
-				steps={steps}
-				run={active !== null}
-				stepIndex={stepIndex}
-				continuous={true}
-				onEvent={handleEvent}
-				locale={locale}
-				// The library's fixed 380 px leaves a phone no slack, so any boundary inset pushes the tooltip off screen.
-				options={{ zIndex: TOUR_Z_INDEX, buttons: ["back", "skip", "primary"], width: "min(380px, calc(100vw - 40px))" }}
-			/>
+			{tourRequested ? (
+				<Suspense fallback={null}>
+					<Joyride
+						steps={steps}
+						run={active !== null}
+						stepIndex={stepIndex}
+						continuous={true}
+						onEvent={handleEvent}
+						locale={locale}
+						// The library's fixed 380 px leaves a phone no slack, so any boundary inset pushes the tooltip off screen.
+						options={{ zIndex: TOUR_Z_INDEX, buttons: ["back", "skip", "primary"], width: "min(380px, calc(100vw - 40px))" }}
+					/>
+				</Suspense>
+			) : null}
 			<WelcomeTourDialog
 				opened={welcomeOpen}
 				hasProgress={quickStartHasProgress}

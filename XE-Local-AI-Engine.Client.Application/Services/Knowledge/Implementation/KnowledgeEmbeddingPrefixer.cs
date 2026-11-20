@@ -1,23 +1,24 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+
 /// <summary>
-///     Default <see cref="IKnowledgeEmbeddingPrefixer" /> for the <c>search_document:</c> / <c>search_query:</c> intent
-///     prefixes used by asymmetric embedding models. Stateless and thread-safe — safe to register as a singleton.
+///     Default <see cref="IKnowledgeEmbeddingPrefixer" />: formats through the <see cref="EmbeddingModelProfile" /> of the
+///     resolved model name. Stateless and thread-safe — safe to register as a singleton.
 /// </summary>
 public sealed class KnowledgeEmbeddingPrefixer : IKnowledgeEmbeddingPrefixer
 {
-    private const string DocumentPrefix = "search_document: ";
-    private const string QueryPrefix = "search_query: ";
-
-    public string ForDocument(string content)
+    public string ForDocument(EmbeddingModelResolution resolution, string content)
     {
+        ArgumentNullException.ThrowIfNull(resolution);
         ArgumentNullException.ThrowIfNull(content);
-        return string.Concat(DocumentPrefix, content);
+        return string.Concat(EmbeddingModelProfile.For(resolution.Name).DocumentPrefix, content);
     }
 
-    public string ForQuery(string query)
+    public string ForQuery(EmbeddingModelResolution resolution, string query)
     {
+        ArgumentNullException.ThrowIfNull(resolution);
         ArgumentNullException.ThrowIfNull(query);
-        return string.Concat(QueryPrefix, query);
+        return string.Concat(EmbeddingModelProfile.For(resolution.Name).QueryPrefix, query);
     }
 }

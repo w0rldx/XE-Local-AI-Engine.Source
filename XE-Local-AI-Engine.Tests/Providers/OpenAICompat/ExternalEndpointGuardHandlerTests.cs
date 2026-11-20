@@ -40,7 +40,7 @@ public sealed class ExternalEndpointGuardHandlerTests
     public async Task SendAsync_ToAnOffBaseTarget_IsRefusedBeforeItReachesTheTransport()
     {
 #pragma warning disable CA2000 // The probe transfers to the guard, which transfers to the HttpClient this scope disposes.
-        var probe = new CountingHandler();
+        var probe = NewCountingHandler();
         using var client = new HttpClient(new ExternalEndpointGuardHandler(PinnedBase, probe), disposeHandler: true);
 #pragma warning restore CA2000
 
@@ -53,7 +53,7 @@ public sealed class ExternalEndpointGuardHandlerTests
     public async Task SendAsync_ToAnOnBaseTarget_ReachesTheTransport()
     {
 #pragma warning disable CA2000 // The probe transfers to the guard, which transfers to the HttpClient this scope disposes.
-        var probe = new CountingHandler();
+        var probe = NewCountingHandler();
         using var client = new HttpClient(new ExternalEndpointGuardHandler(PinnedBase, probe), disposeHandler: true);
 #pragma warning restore CA2000
 
@@ -71,19 +71,9 @@ public sealed class ExternalEndpointGuardHandlerTests
 #pragma warning restore CA2000
     }
 
-    private sealed class CountingHandler : HttpMessageHandler
-    {
-        private int _callCount;
-
-        public int CallCount => Volatile.Read(ref _callCount);
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    private static CountingHttpMessageHandler NewCountingHandler() =>
+        new(() => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            _ = Interlocked.Increment(ref _callCount);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent("{}")
-            });
-        }
-    }
+            Content = new StringContent("{}")
+        });
 }

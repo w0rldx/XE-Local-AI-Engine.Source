@@ -19,7 +19,8 @@ internal static class RuntimeResidentsMapper
                     ModelId = resident.ModelId,
                     State = resident.State.ToDto(),
                     Backend = resident.Backend?.ToDto(),
-                    CanEject = resident.CanEject
+                    CanEject = resident.CanEject,
+                    VramBytes = resident.VramBytes
                 })
             ]
         };
@@ -31,6 +32,7 @@ internal static class RuntimeResidentsMapper
         {
             RuntimeResidentKind.Image => RuntimeResidentKindDto.Image,
             RuntimeResidentKind.Transcription => RuntimeResidentKindDto.Transcription,
+            RuntimeResidentKind.ModelLab => RuntimeResidentKindDto.ModelLab,
             _ => throw new ArgumentOutOfRangeException(nameof(runtime), runtime, "Unknown resident runtime.")
         };
     }

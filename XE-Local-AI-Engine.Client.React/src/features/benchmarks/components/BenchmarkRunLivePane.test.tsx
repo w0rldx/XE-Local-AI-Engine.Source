@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The live pane's only own logic is wiring: pick the run out of the query, hand the hub's parts to the presentational
@@ -16,8 +16,10 @@ const { hubMock, toastErrorMock } = vi.hoisted(() => ({
 vi.mock("@/features/benchmarks/hooks/useBenchmarkRunHub", () => ({ useBenchmarkRunHub: hubMock }));
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: { error: toastErrorMock, success: vi.fn(), info: vi.fn() } }));
 
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
 import { noBenchmarkRunLiveOverlay } from "@/features/benchmarks/models/BenchmarkModels";
+import { acceptConfirm, cancelConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { domainErrorRoute, jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -91,7 +93,11 @@ describe("BenchmarkRunLivePane", () => {
 		});
 		server.use(http.get(localApiPath(`benchmarks/runs/${runId}`), () => HttpResponse.json(runRow())));
 
-		renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarkRunLivePane runId={runId} />
+			</ConfirmProvider>,
+		);
 
 		expect(await screen.findByText("Persisted answer")).toBeTruthy();
 		// Run-level metadata comes from the read, not from the hub.
@@ -104,7 +110,11 @@ describe("BenchmarkRunLivePane", () => {
 			problemDetailsRoute("get", `benchmarks/runs/${runId}`, 500, { title: "Server Error", detail: "The run store is offline." }),
 		);
 
-		renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarkRunLivePane runId={runId} />
+			</ConfirmProvider>,
+		);
 
 		expect(await screen.findByText("The run store is offline.")).toBeTruthy();
 		expect(toastErrorMock).not.toHaveBeenCalled();
@@ -120,7 +130,11 @@ describe("BenchmarkRunLivePane", () => {
 		});
 		server.use(http.get(localApiPath(`benchmarks/runs/${runId}`), () => HttpResponse.json(runRow())));
 
-		renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarkRunLivePane runId={runId} />
+			</ConfirmProvider>,
+		);
 
 		expect(await screen.findByText("Streaming answer")).toBeTruthy();
 		expect(screen.queryByText("Persisted answer")).toBeNull();
@@ -136,12 +150,42 @@ describe("BenchmarkRunLivePane", () => {
 			}),
 		);
 
-		renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarkRunLivePane runId={runId} />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByTestId("benchmark-score-preset-100"));
 
 		await waitFor(() => expect(observedBody).toEqual({ score: 100, expectedVersion: 3 }));
 		expect(toastErrorMock).not.toHaveBeenCalled();
+	});
+
+	it("deletes the terminal run with its expected version only once the operator confirms, and nothing on cancel", async () => {
+		const deleteBodies: unknown[] = [];
+		server.use(
+			http.get(localApiPath(`benchmarks/runs/${runId}`), () => HttpResponse.json(runRow())),
+			http.delete(localApiPath(`benchmarks/runs/${runId}`), async ({ request }) => {
+				deleteBodies.push(await request.json());
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarkRunLivePane runId={runId} />
+			</ConfirmProvider>,
+		);
+		const remove = await screen.findByRole("button", { name: "Delete terminal run" });
+
+		await openConfirm(remove, "Delete this run?");
+		await cancelConfirm(remove);
+		expect(deleteBodies).toEqual([]);
+
+		await openConfirm(remove, "Delete this run?");
+		acceptConfirm();
+		await waitFor(() => expect(deleteBodies).toEqual([{ expectedVersion: 3 }]));
 	});
 
 	// A losing score race is the expected failure of the optimistic-concurrency contract, and it IS a mutation result —
@@ -155,7 +199,11 @@ describe("BenchmarkRunLivePane", () => {
 			}),
 		);
 
-		renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarkRunLivePane runId={runId} />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByTestId("benchmark-score-preset-25"));
 
@@ -172,7 +220,11 @@ describe("BenchmarkRunLivePane", () => {
 			}),
 		);
 
-		renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarkRunLivePane runId={runId} />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByTestId("benchmark-score-clear"));
 
@@ -190,7 +242,11 @@ describe("BenchmarkRunLivePane", () => {
 		});
 		server.use(http.get(localApiPath(`benchmarks/runs/${runId}`), () => HttpResponse.json(runRow())));
 
-		renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarkRunLivePane runId={runId} />
+			</ConfirmProvider>,
+		);
 
 		expect((await screen.findByTestId("benchmark-judge-state")).textContent).toBe("Judging");
 	});
@@ -206,7 +262,11 @@ describe("BenchmarkRunLivePane", () => {
 			}),
 		);
 
-		renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarkRunLivePane runId={runId} />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByRole("button", { name: "Re-judge run" }));
 
@@ -246,7 +306,11 @@ describe("BenchmarkRunLivePane", () => {
 				}),
 			);
 
-			renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+			renderWithProviders(
+				<ConfirmProvider>
+					<BenchmarkRunLivePane runId={runId} />
+				</ConfirmProvider>,
+			);
 
 			fireEvent.change(await screen.findByTestId("benchmark-review-overall"), { target: { value: "64" } });
 			expect(screen.queryByTestId("benchmark-score-save")).toBeNull();
@@ -281,7 +345,11 @@ describe("BenchmarkRunLivePane", () => {
 				}),
 			);
 
-			renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+			renderWithProviders(
+				<ConfirmProvider>
+					<BenchmarkRunLivePane runId={runId} />
+				</ConfirmProvider>,
+			);
 
 			fireEvent.click(await screen.findByTestId("benchmark-review-reject"));
 			// The judging moved under the pane, so the run is re-read rather than left showing an open form.
@@ -319,7 +387,11 @@ describe("BenchmarkRunLivePane", () => {
 				),
 			);
 
-			renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+			renderWithProviders(
+				<ConfirmProvider>
+					<BenchmarkRunLivePane runId={runId} />
+				</ConfirmProvider>,
+			);
 
 			expect((await screen.findByTestId("benchmark-score-judge-only")).textContent).toContain("not reviewable");
 			expect(screen.queryByTestId("benchmark-score-save")).toBeNull();
@@ -342,7 +414,11 @@ describe("BenchmarkRunLivePane", () => {
 				),
 			);
 
-			renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+			renderWithProviders(
+				<ConfirmProvider>
+					<BenchmarkRunLivePane runId={runId} />
+				</ConfirmProvider>,
+			);
 
 			fireEvent.click(await screen.findByTestId("benchmark-review-reject"));
 
@@ -373,7 +449,11 @@ describe("BenchmarkRunLivePane", () => {
 				}),
 			);
 
-			renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+			renderWithProviders(
+				<ConfirmProvider>
+					<BenchmarkRunLivePane runId={runId} />
+				</ConfirmProvider>,
+			);
 			fireEvent.click(await screen.findByTestId("benchmark-review-reject"));
 
 			const stored = await screen.findByTestId("benchmark-review-stored");

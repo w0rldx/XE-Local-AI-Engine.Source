@@ -105,7 +105,7 @@ internal sealed class ExternalAppCatalogCacheStore : IExternalAppCatalogCacheSto
             // has never installed an external app.
             Directory.CreateDirectory(Path.GetDirectoryName(_cachePath)!);
 
-            await using var fileStream = CreateOwnerOnly(_cachePath);
+            await using var fileStream = SecureFilePermissions.CreateOwnerOnly(_cachePath, FileMode.Create);
             await JsonSerializer.SerializeAsync(fileStream, cache, SerializerOptions, cancellationToken);
         }
         catch (IOException exception)
@@ -124,27 +124,5 @@ internal sealed class ExternalAppCatalogCacheStore : IExternalAppCatalogCacheSto
         {
             _lock.Release();
         }
-    }
-
-    /// <summary>
-    ///     Opens a truncating write stream for <paramref name="path" />, created with owner-only (0600) permissions
-    ///     atomically on non-Windows (mirrors <c>ModelCatalogCacheStore.CreateOwnerOnly</c>); Windows relies on the
-    ///     per-user data-directory ACL.
-    /// </summary>
-    private static FileStream CreateOwnerOnly(string path)
-    {
-        var options = new FileStreamOptions
-        {
-            Mode = FileMode.Create,
-            Access = FileAccess.Write,
-            Share = FileShare.None
-        };
-
-        if (!OperatingSystem.IsWindows())
-        {
-            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        }
-
-        return new FileStream(path, options);
     }
 }

@@ -22,7 +22,7 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task PrepareAndCommit_ProjectorPair_PublishesAllArtifactsAndExactFingerprints()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, index) => Download(index == 0 ? WeightBytes : ProjectorBytes));
         using var http = new HttpClient(handler);
@@ -55,7 +55,7 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task ResolveAndCommit_WeightsOnlyRequest_NeverScansForAProjectorAndCommitsNoProjectorFacts()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => Download(WeightBytes));
         using var http = new HttpClient(handler);
@@ -98,7 +98,7 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task Prepare_ProjectorFailsAfterTheWeightVerified_KeepsTheWeightResumableAndTheRetryDoesNotRefetchIt()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         var projectorFails = true;
         var weightRequests = 0;
@@ -148,7 +148,7 @@ public sealed class GgufDownloadTransactionTests
     public async Task Prepare_ProjectorPair_ReportsLiveProgressAgainstTheSameTotalAnInterruptedRowCarries()
     {
         // The live row and the interrupted row both report the whole set (weight + projector), not the weight alone.
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         var projectorFails = true;
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((request, _) =>
@@ -188,7 +188,7 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task Commit_ProjectorDestinationAppearsAfterPrepare_ReturnsPartialReceiptForSafeRollback()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, index) => Download(index == 0 ? WeightBytes : ProjectorBytes));
         using var http = new HttpClient(handler);
@@ -220,7 +220,7 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task Commit_PostRenameRegistryFailure_ReturnsOwnedReceiptForApplicationRollback()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => Download(WeightBytes));
         using var http = new HttpClient(handler);
@@ -250,7 +250,7 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task RollbackAndDiscard_ReportOwnedArtifactsThatCouldNotBeDeleted()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => Download(WeightBytes));
         using var http = new HttpClient(handler);
@@ -285,7 +285,7 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task Resolve_ProjectorWithoutExactHash_FailsBeforeAnyArtifactIsReserved()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => throw new InvalidOperationException("No bytes may be requested."));
         using var http = new HttpClient(handler);
@@ -307,7 +307,7 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task Prepare_InterruptedDownload_KeepsOneSingleSuffixPartialThatTheNextPrepareResumes()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         options.MaxDownloadRetries = 0;
         const int prefix = 6;
@@ -353,7 +353,7 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task ListInterrupted_CrashDuringTheProjectorPhase_KeepsTheRow()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => throw new InvalidOperationException("no request expected"));
         using var http = new HttpClient(handler);
@@ -374,7 +374,7 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task ListInterrupted_IntentWithNothingLeftBehind_DeletesTheIntent()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => throw new InvalidOperationException("no request expected"));
         using var http = new HttpClient(handler);
@@ -402,7 +402,7 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task Prepare_Cancelled_DeletesThePartialAndItsResumeCursors()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         using var cts = new CancellationTokenSource();
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => Interrupted(WeightBytes, cutAt: 6, () =>
@@ -428,7 +428,7 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task Prepare_CancellationTheOperatorDidNotRequest_KeepsThePartialAndItsResumeCursors()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
         // An idle timeout or a torn-down transport surfaces as a cancellation the caller's token never asked for.
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>

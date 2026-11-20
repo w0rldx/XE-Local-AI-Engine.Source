@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import { delay, HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { UploadedImageList } from "@/features/images/components/UploadedImageList";
 import en from "@/locales/en.json";
 import { localApiPath } from "@/test/msw/Handlers";
@@ -27,7 +28,11 @@ describe("UploadedImageList", () => {
 	it("reports a failed list instead of inviting an upload", async () => {
 		server.use(http.get(localApiPath("images/uploads"), () => HttpResponse.json({}, { status: 500 })));
 
-		renderWithProviders(<UploadedImageList />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<UploadedImageList />
+			</ConfirmProvider>,
+		);
 
 		const alert = await screen.findByTestId("uploaded-images-error");
 		expect(alert.textContent).toContain(en.pages.images.uploads.listError);
@@ -37,7 +42,11 @@ describe("UploadedImageList", () => {
 	it("invites an upload once an empty list has loaded", async () => {
 		server.use(http.get(localApiPath("images/uploads"), () => HttpResponse.json({ items: [], totalCount: 0 })));
 
-		renderWithProviders(<UploadedImageList />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<UploadedImageList />
+			</ConfirmProvider>,
+		);
 
 		expect((await screen.findByTestId("uploaded-images-empty")).textContent).toBe(en.pages.images.uploads.empty);
 		expect(screen.queryByTestId("uploaded-images-error")).toBeNull();
@@ -51,7 +60,11 @@ describe("UploadedImageList", () => {
 			}),
 		);
 
-		renderWithProviders(<UploadedImageList />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<UploadedImageList />
+			</ConfirmProvider>,
+		);
 
 		expect(await screen.findByTestId("uploaded-images-loading")).toBeTruthy();
 		expect(screen.queryByTestId("uploaded-images-empty")).toBeNull();
@@ -69,7 +82,11 @@ describe("UploadedImageList", () => {
 			),
 		);
 
-		renderWithProviders(<UploadedImageList />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<UploadedImageList />
+			</ConfirmProvider>,
+		);
 
 		expect(await screen.findAllByTestId("uploaded-image-card")).toHaveLength(1);
 	});
@@ -89,7 +106,11 @@ describe("UploadedImageList", () => {
 			}),
 		);
 
-		renderWithProviders(<UploadedImageList />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<UploadedImageList />
+			</ConfirmProvider>,
+		);
 
 		const pagination = await screen.findByTestId("uploaded-images-pagination");
 		expect(screen.getByTestId("uploaded-images-pagination-range").textContent).toContain("1–10 of 12");

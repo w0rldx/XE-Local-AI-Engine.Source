@@ -144,7 +144,7 @@ export function DevelopmentConsentGate({ children }: DevelopmentConsentGateProps
 							<List.Item>
 								{t(
 									"pages.development.consent.processLimits",
-									"CPU, memory and process-count ceilings are requested for these commands wherever this node can enforce them (the isolation panel shows whether it does): all logical cores, 75% of memory with a 4 GB floor, and 4096 processes by default, and an operator can override them. Where the host cannot impose them, no ceiling applies and a runaway command is bounded only by its timeout and the machine.",
+									"CPU, memory and process-count ceilings are requested for these commands wherever this node can enforce them (the isolation panel shows whether it does): all logical cores, 75% of memory with a 4 GiB floor, and 4096 processes by default, and an operator can override them. Where the host cannot impose them, no ceiling applies and a runaway command is bounded only by its timeout and the machine.",
 								)}
 							</List.Item>
 						</>

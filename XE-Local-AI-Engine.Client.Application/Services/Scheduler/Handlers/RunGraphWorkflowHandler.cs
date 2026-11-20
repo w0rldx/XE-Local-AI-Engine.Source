@@ -141,8 +141,7 @@ public sealed class RunGraphWorkflowHandler : IScheduledJobHandler
                 if (_timeProvider.GetUtcNow() >= deadline)
                 {
                     await CancelQuietlyAsync(runService, runId);
-                    throw new ScheduledJobExecutionException(string.Create(CultureInfo.InvariantCulture,
-                        $"Graph workflow run {runId} did not finish within {parameters.TimeoutSeconds} s and was cancelled."));
+                    throw new ScheduledJobExecutionException(TimeoutMessage(detail, parameters.TimeoutSeconds));
                 }
 
                 await Task.Delay(PollInterval, _timeProvider, cancellationToken);
@@ -228,6 +227,23 @@ public sealed class RunGraphWorkflowHandler : IScheduledJobHandler
                 context.Summary = $"Graph workflow run {run.Id} completed{outcomeText} (request {requestId}).";
                 break;
         }
+    }
+
+    /// <summary>A run parked on a decision names the nodes it waited at, so the operator knows the timeout was an unanswered approval.</summary>
+    private static string TimeoutMessage(GraphWorkflowRunDetail detail, int timeoutSeconds)
+    {
+        var run = detail.Run;
+        if (run.Status != GraphWorkflowRunStatus.WaitingForApproval)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"Graph workflow run {run.Id} did not finish within {timeoutSeconds} s and was cancelled.");
+        }
+
+        var waiting = string.Join(", ", detail.NodeRuns
+                                              .Where(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.WaitingForApproval)
+                                              .Select(static nodeRun => $"'{nodeRun.NodeKey}'"));
+        var at = waiting.Length == 0 ? string.Empty : $" at node {waiting}";
+        return string.Create(CultureInfo.InvariantCulture,
+            $"Graph workflow run {run.Id} waited for a decision{at} and did not finish within {timeoutSeconds} s, so it was cancelled.");
     }
 
     /// <summary>The operator-declared outcome label of the End node that succeeded; its result is model text and stays out of the summary.</summary>

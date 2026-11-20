@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.NodeSettings;
 
 using System.Runtime.Versioning;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -18,6 +19,12 @@ using OS = TUnit.Core.Enums.OS;
 [Category(TestCategories.Unit)]
 public sealed class NodeDataDirectoryTests : IDisposable
 {
+    // The node-settings store's serializer options.
+    private static readonly JsonSerializerOptions NodeSettingsSerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = true
+    };
+
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-node-data-dir-tests", Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -118,6 +125,29 @@ public sealed class NodeDataDirectoryTests : IDisposable
         var loaded = await store.LoadAsync();
         AssertEx.Equal("my-model", loaded.DefaultModelName);
         AssertEx.Equal(expected: 120, loaded.MaxMessageRequestTimeoutSeconds);
+    }
+
+    [Test]
+    public async Task NodeSettingsStore_WritesTheSameBytesAsAStreamingSerializeOfTheSavedSettings()
+    {
+        var dataDir = Path.Combine(_root, "data");
+        Directory.CreateDirectory(dataDir);
+        using var store = new NodeSettingsStore(new FakeNodeDataDirectory(dataDir), NullLogger<NodeSettingsStore>.Instance);
+        await store.SaveAsync(new StoredNodeSettings
+        {
+            DefaultModelName = "modèl-ü \"quoted\"",
+            MaxMessageRequestTimeoutSeconds = 120
+        });
+
+        var written = await File.ReadAllBytesAsync(Path.Combine(dataDir, "node-settings.json"));
+
+        // The file format is pinned to what a streaming serialize with the store's options writes: UTF-8 without a BOM, indented, no
+        // trailing newline. The saved value is read back so the comparison is against the normalized settings the store persisted.
+        var loaded = await store.LoadAsync();
+        using var expected = new MemoryStream();
+        await JsonSerializer.SerializeAsync(expected, loaded, NodeSettingsSerializerOptions);
+        AssertEx.Equal(Convert.ToHexString(expected.ToArray()), Convert.ToHexString(written));
+        AssertEx.Equal((byte)'{', written[0], "No BOM: the file starts with the JSON object.");
     }
 
     [Test]

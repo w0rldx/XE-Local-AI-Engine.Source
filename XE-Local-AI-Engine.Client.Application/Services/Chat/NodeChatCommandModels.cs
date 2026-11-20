@@ -113,6 +113,32 @@ public sealed class NodeChatInsertMessageIfAbsentResult
     public required bool Inserted { get; init; }
 }
 
+/// <summary>One chat of an import file, written as a NEW Origin=Local chat under fresh ids.</summary>
+public sealed class NodeChatImportConversationRequest
+{
+    public required string? Title { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required bool Archived { get; init; }
+
+    /// <summary>The messages in order, each written Completed.</summary>
+    public required IReadOnlyList<NodeChatImportMessage> Messages { get; init; }
+}
+
+public sealed class NodeChatImportMessage
+{
+    /// <summary><c>user</c> or <c>assistant</c>.</summary>
+    public required string Role { get; init; }
+
+    public required string Content { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    /// <summary>Kept on an assistant message only, as an ordinary insert keeps it.</summary>
+    public string? Model { get; init; }
+}
+
 public sealed class NodeChatCreateAssistantPlaceholderRequest
 {
     public required Guid ConversationId { get; init; }
@@ -199,7 +225,8 @@ public sealed class NodeChatTerminalizeMessageRequest
     // The turn's throughput facts. Null preserves any existing value, as ContextWindow does.
     public NodeChatThroughputDto? Throughput { get; init; }
 
-    // The category of a failed turn, persisted as its enum name in the metadata blob. Null preserves any existing value.
+    // The category of a failed turn, or of a cancelled one whose reason is shown, persisted as its enum name in the metadata blob.
+    // Null preserves any existing value.
     public FailureCategory? FailureCategory { get; init; }
 }
 

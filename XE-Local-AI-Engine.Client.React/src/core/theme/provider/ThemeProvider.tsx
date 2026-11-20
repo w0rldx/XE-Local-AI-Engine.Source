@@ -11,6 +11,7 @@ import {
 	defaultVariantColorsResolver,
 	localStorageColorSchemeManager,
 	MantineProvider,
+	type PaginationProps,
 	PasswordInput,
 	Popover,
 	parseThemeColor,
@@ -26,6 +27,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { sourceThemeConfiguration } from "@/core/theme/config/ThemeConfiguration";
+import { tooltipDefaultProps } from "@/core/theme/config/TooltipDefaults";
 import classes from "@/core/theme/provider/ThemeProvider.module.css";
 import type { ThemeProviderProperties } from "@/core/theme/provider/ThemeProvider.types";
 import { colorSchemeStorageKey, useThemeStore } from "@/core/theme/stores/ThemeStore";
@@ -81,6 +83,12 @@ export function ThemeProvider({ children }: ThemeProviderProperties) {
 	const secondaryMain = themeConfiguration.palette.secondary.main;
 	const secondaryOutline = themeConfiguration.palette.secondary.outline;
 	const breakpoints = themeConfiguration.breakpoints.values;
+	const paginationControlLabels = {
+		first: t("common.pagination.first"),
+		previous: t("common.pagination.previous"),
+		next: t("common.pagination.next"),
+		last: t("common.pagination.last"),
+	};
 
 	const variantColorResolver: VariantColorsResolver = (input) => {
 		const defaultResolvedColors = defaultVariantColorsResolver(input);
@@ -106,6 +114,8 @@ export function ThemeProvider({ children }: ThemeProviderProperties) {
 		fontFamily: themeConfiguration.typography.fontFamily,
 		primaryColor: "primary",
 		variantColorResolver,
+		// Every Mantine transition (overlays, Collapse, Tooltip) is skipped under the OS reduced-motion setting.
+		respectReducedMotion: true,
 		components: {
 			// App-wide section-card look. Call sites can still opt out (withBorder={false}) or pick another
 			// radius/padding; the defaults just make the common case the consistent case.
@@ -184,6 +194,15 @@ export function ThemeProvider({ children }: ThemeProviderProperties) {
 					closeButtonLabel: t("common.close"),
 				},
 			}),
+			// This entry and the Pagination one are plain objects rather than `X.extend(...)`: a value import would pull
+			// both components into the boot chunk.
+			Tooltip: { defaultProps: tooltipDefaultProps },
+			// Mantine's first/previous/next/last controls are icon-only buttons with no accessible name.
+			Pagination: {
+				defaultProps: {
+					getControlProps: (control) => ({ "aria-label": paginationControlLabels[control] }),
+				} satisfies Partial<PaginationProps>,
+			},
 			// Mantine hardcodes the English "Toggle password visibility" on the eye button, so a German operator heard
 			// English. Defaulted here for every PasswordInput; a call site that passes its own props replaces it.
 			PasswordInput: PasswordInput.extend({

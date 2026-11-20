@@ -25,7 +25,7 @@ public sealed class WhisperCppBinaryManagerTests
     [Test]
     public async Task EnsureBinary_CorruptDownload_RetriesOnce_ThenSurfacesSanitizedFailure()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-whispercpp-test");
         // Bytes that cannot match the pinned digest: forced corruption on every attempt.
         using var handler = new CountingHttpMessageHandler(static () => new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -49,7 +49,7 @@ public sealed class WhisperCppBinaryManagerTests
     {
         // The same pipeline as above, but the payload is a REAL archive whose single flipped byte breaks the digest —
         // which is what brief test 1 asks for: a valid-looking asset must still be rejected on its hash.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-whispercpp-test");
         var pin = WhisperCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, WhisperBackend.Cpu)!;
         var archive = BuildTarGz(pin.ServerRelativePath, "fake-whisper-server");
         archive[^1] ^= 0xFF;
@@ -72,7 +72,7 @@ public sealed class WhisperCppBinaryManagerTests
     {
         // The Linux asset is a .tar.gz, unlike every stable-diffusion.cpp asset. The manager must extract it and find
         // whisper-server at the pinned path inside the single top-level directory.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-whispercpp-test");
         var pin = WhisperCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, WhisperBackend.Cpu)!;
         var archive = BuildTarGz(pin.ServerRelativePath, "fake-whisper-server");
 
@@ -108,7 +108,7 @@ public sealed class WhisperCppBinaryManagerTests
     [Test]
     public async Task EnsureBinary_CachedBinaryPresent_ReusedOffline_NoDownload()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-whispercpp-test");
         var pin = WhisperCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, WhisperBackend.Cpu)!;
         var serverPath = Path.Combine(cache.Path, "whisper.cpp", WhisperCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
@@ -129,7 +129,7 @@ public sealed class WhisperCppBinaryManagerTests
     [Test]
     public async Task EnsureBinary_BringYourOwnOverride_ServesConfiguredBinary_NoDownload()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-whispercpp-test");
         var byoPath = Path.Combine(cache.Path, "byo-whisper-server");
         await File.WriteAllTextAsync(byoPath, "operator-built-whisper-server");
         MakeExecutable(byoPath);
@@ -158,7 +158,7 @@ public sealed class WhisperCppBinaryManagerTests
     [Test]
     public async Task EnsureBinary_BrokenOverride_ThrowsSanitized_NoFallThroughToAcquisition()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-whispercpp-test");
         var overrideOptions = new WhisperServerRuntimeOverrideOptions
         {
             ServerPath = Path.Combine(cache.Path, "does-not-exist-whisper-server"),
@@ -182,7 +182,7 @@ public sealed class WhisperCppBinaryManagerTests
     public async Task EnsureBinary_OverrideNotExecutable_ThrowsSanitized()
     {
         // A path that exists but cannot be executed would otherwise surface much later as an opaque spawn failure.
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-whispercpp-test");
         var byoPath = Path.Combine(cache.Path, "not-executable-whisper-server");
         await File.WriteAllTextAsync(byoPath, "operator-built-whisper-server");
         File.SetUnixFileMode(byoPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
@@ -210,7 +210,7 @@ public sealed class WhisperCppBinaryManagerTests
     [Test]
     public async Task EnsureBinary_TombstonedManagedRecord_Throws_NeverFallsBackToPrebuilt()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-whispercpp-test");
         var store = new StubInstalledRuntimeStore(new ManagedRuntimeState<WhisperBackend>(ManagedRuntimeValidity.Invalid,
             WhisperBackend.Cuda,
             WhisperCppSourceBuildRequestValidation.OfficialRepository,
@@ -243,7 +243,7 @@ public sealed class WhisperCppBinaryManagerTests
     [Test]
     public async Task EnsureBinary_ManagedRecordForAnotherBackend_Throws_NeverServesContradictingBytes()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-whispercpp-test");
         var store = new StubInstalledRuntimeStore(new ManagedRuntimeState<WhisperBackend>(ManagedRuntimeValidity.Active,
             WhisperBackend.Cuda,
             WhisperCppSourceBuildRequestValidation.OfficialRepository,
@@ -275,7 +275,7 @@ public sealed class WhisperCppBinaryManagerTests
     [Test]
     public async Task EnsureBinary_ManagedRecordWithAMissingBinary_IsTombstonedAndTheSignalCleared()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-whispercpp-test");
         var store = new StubInstalledRuntimeStore(new ManagedRuntimeState<WhisperBackend>(ManagedRuntimeValidity.Active,
             WhisperBackend.Cuda,
             WhisperCppSourceBuildRequestValidation.OfficialRepository,
@@ -384,32 +384,6 @@ public sealed class WhisperCppBinaryManagerTests
         {
             _state = null;
             return Task.CompletedTask;
-        }
-    }
-
-    private sealed class TempCacheDir : IDisposable
-    {
-        public TempCacheDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-whispercpp-test-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
         }
     }
 }

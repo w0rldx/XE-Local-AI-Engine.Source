@@ -18,7 +18,7 @@ import {
 	toBenchmarkTaskItem,
 	toBenchmarkTaskItemKind,
 } from "@/features/benchmarks/models/BenchmarkTaskItems";
-import { benchmarkTaskItemFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkTaskItemFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 
 describe("toBenchmarkTaskItem", () => {
 	it("maps every member the node sends", () => {

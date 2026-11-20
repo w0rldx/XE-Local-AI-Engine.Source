@@ -58,7 +58,6 @@ public sealed class RetentionSweeperService : BackgroundService
         ArgumentNullException.ThrowIfNull(writer);
         _writer = writer;
         ArgumentNullException.ThrowIfNull(options);
-        ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         _runtimeSettings = runtimeSettings;

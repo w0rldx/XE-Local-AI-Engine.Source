@@ -107,6 +107,9 @@ public sealed class ModelLabExperimentStore : IModelLabExperimentStore
         row.TraceBlobId = completion.TraceBlobId ?? row.TraceBlobId;
         row.TraceSha256 = completion.TraceSha256 ?? row.TraceSha256;
         row.TraceByteCount = completion.TraceByteCount ?? row.TraceByteCount;
+        row.AttentionBlobId = completion.AttentionBlobId ?? row.AttentionBlobId;
+        row.AttentionSha256 = completion.AttentionSha256 ?? row.AttentionSha256;
+        row.AttentionByteCount = completion.AttentionByteCount ?? row.AttentionByteCount;
         row.LaunchReceiptJson = null;
         row.UpdatedAtUtc = Now();
         _ = await _dbContext.SaveChangesAsync(cancellationToken);
@@ -239,6 +242,7 @@ public sealed class ModelLabExperimentStore : IModelLabExperimentStore
 
     private long Now() =>
         _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
     private static ModelLabExperimentRecord ToRecord(ModelLabExperiment row) =>
         new()
         {
@@ -256,6 +260,9 @@ public sealed class ModelLabExperimentStore : IModelLabExperimentStore
             TraceBlobId = row.TraceBlobId,
             TraceSha256 = row.TraceSha256,
             TraceByteCount = row.TraceByteCount,
+            AttentionBlobId = row.AttentionBlobId,
+            AttentionSha256 = row.AttentionSha256,
+            AttentionByteCount = row.AttentionByteCount,
             Notes = row.Notes is { } notes ? Encoding.UTF8.GetString(notes) : null,
             IsPinned = row.IsPinned,
             AppVersion = row.AppVersion,

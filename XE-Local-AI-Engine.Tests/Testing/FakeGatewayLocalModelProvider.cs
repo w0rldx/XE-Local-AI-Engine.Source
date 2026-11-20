@@ -18,7 +18,7 @@ public sealed class FakeGatewayLocalModelProvider : ILocalModelProvider
     public const string ChatModel = "qwen3.5:0.8b";
 
     /// <summary>The model a test host embeds with.</summary>
-    public const string EmbeddingModel = "qwen3-embedding:0.6b";
+    public const string EmbeddingModel = "fake-embed:test";
 
     /// <summary>What an unscripted reply starts with; the rest is the last user message.</summary>
     public const string EchoPrefix = "[fake-gateway]";

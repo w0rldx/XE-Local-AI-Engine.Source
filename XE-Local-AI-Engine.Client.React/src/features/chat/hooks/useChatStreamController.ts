@@ -6,6 +6,7 @@ import type { AgentOption } from "@/core/agents/models/AgentOption";
 import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import type { ModelOption } from "@/core/models/ModelOption";
+import { type StreamCommitScheduler, useStreamCommitScheduler } from "@/core/streaming/useStreamCommitScheduler";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { StreamWatchdogError, streamWatchdogNotice } from "@/features/chat/api/NodeChatStreamGuard";
 import {
@@ -15,7 +16,6 @@ import {
 	applyNodeChatStreamEvent,
 	markNodeChatStreamTerminated,
 } from "@/features/chat/api/NodeChatStreamState";
-import { type StreamCommitScheduler, useStreamCommitScheduler } from "@/features/chat/hooks/useStreamCommitScheduler";
 import {
 	inFlightAssistantMessageId,
 	stampVariantGroup,

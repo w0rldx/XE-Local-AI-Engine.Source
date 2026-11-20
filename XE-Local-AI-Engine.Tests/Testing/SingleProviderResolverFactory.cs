@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </summary>
 internal static class SingleProviderResolverFactory
 {
-    public static ILocalModelProviderResolver Create(ILocalModelProvider provider, int maxLoadedProcesses = 8)
+    public static ILocalModelProviderResolver Create(ILocalModelProvider provider)
     {
         ArgumentNullException.ThrowIfNull(provider);
 
@@ -23,6 +23,6 @@ internal static class SingleProviderResolverFactory
         services.AddScoped<ICoordinatedModelProviderMapStore>(_ => new InMemoryCoordinatedModelProviderMapStore());
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        return new LocalModelProviderResolver([provider], scopeFactory, provider.ProviderName, maxLoadedProcesses, TimeProvider.System);
+        return new LocalModelProviderResolver([provider], scopeFactory, provider.ProviderName, TimeProvider.System);
     }
 }

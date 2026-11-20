@@ -33,7 +33,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
     [Test]
     public async Task EnsureFile_DestinationAlreadyMatchesTheCatalogue_ReportsCompletedWithoutTouchingTheNetwork()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var destination = dir.FilePath("ggml-silero.bin");
         await File.WriteAllBytesAsync(destination, SharedBytes);
         using var harness = new Harness(dir);
@@ -57,7 +57,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
         // What an attempt that died at the commit step leaves on disk: a complete .part and its range sidecar beside a published file,
         // orphaned by an attempt that died at the commit step. The destination is already published, so those bytes
         // are dead weight rather than resume state, and leaving them means every later run carries the wreckage.
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var destination = dir.FilePath("ggml-silero.bin");
         await File.WriteAllBytesAsync(destination, SharedBytes);
         var partPath = destination + ".part";
@@ -78,7 +78,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
         // Present but not what the catalog pins — a truncated copy, an upstream re-upload, or a foreign file under
         // our name. Reusing it would install bytes the runtime cannot load; leaving it would fail the commit guard
         // forever. It is replaced.
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var destination = dir.FilePath("ggml-silero.bin");
         await File.WriteAllBytesAsync(destination, Encoding.UTF8.GetBytes("not the pinned weights"));
         using var harness = new Harness(dir);
@@ -95,7 +95,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
     {
         // The size check is only the cheap gate; the digest is what decides. A corrupt file of exactly the right
         // length must not pass as installed.
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var destination = dir.FilePath("ggml-silero.bin");
         var sameLengthDifferentBytes = Encoding.UTF8.GetBytes(new string(c: 'x', count: SharedBytes.Length));
         await File.WriteAllBytesAsync(destination, sameLengthDifferentBytes);
@@ -113,7 +113,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
         // The live defect in miniature, driven through the real store and the real download client: install one model
         // (shared file + its weight), then install a second (the same shared file + a different weight). Before the
         // fix the second install died on the shared file's commit guard and never requested its weight at all.
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         using var harness = new Harness(dir);
         var shared = dir.FilePath("ggml-silero.bin");
         var firstWeight = dir.FilePath("ggml-base.bin");
@@ -154,7 +154,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
         private readonly HttpClient _resolveHttp;
         private readonly GgufStoreTestInfrastructure.ScriptedHandler _resolveHandler;
 
-        public Harness(GgufStoreTestInfrastructure.TempModelsDir dir)
+        public Harness(TempDirectory dir)
         {
             Handler = new GgufStoreTestInfrastructure.ScriptedHandler((request, _) =>
             {

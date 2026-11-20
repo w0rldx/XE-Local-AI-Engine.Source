@@ -278,7 +278,7 @@ Mark it with a `// real-timer:` comment naming why, so a later reader does not "
 ### Model-dependent behaviour → FakeOpenAiGateway
 
 Unless `RUN_LOCAL_INTEGRATION=true`, the fixture starts a `FakeOpenAiGatewayServer` with
-`FakeGatewayLocalModelProvider.DefaultOptions()`: the models `qwen3.5:0.8b` and `qwen3-embedding:0.6b`, any other
+`FakeGatewayLocalModelProvider.DefaultOptions()`: the models `qwen3.5:0.8b` and `fake-embed:test`, any other
 model id served too (`AllowUnlistedModels`), and an unscripted reply that echoes the last user message after
 `EchoPrefix`. `FakeGatewayLocalModelProvider` registers as the host's `llamacpp` provider and builds real
 OpenAI-compatible clients over real HTTP; warming and unloading are no-ops, because there is no process.

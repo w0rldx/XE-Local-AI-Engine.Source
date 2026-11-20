@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -123,6 +124,32 @@ public sealed class InvocationFailureClassifierTests
 
         AssertEx.Equal(FailureCategory.InsufficientCapacity, classification.Category);
         AssertEx.Equal(refusal, classification.Message);
+    }
+
+    // A user-waited load the supervisor vetoed because the operator ejected the model after it began: an operator action, not a load failure.
+    [Test]
+    public void MapFailure_OperatorEjected_IsModelEjectedWithItsMessage()
+    {
+        const string refusal = "The model was ejected by the operator; it reloads when it is next used directly.";
+
+        var classification = InvocationFailureClassifier.MapFailure(new OperatorEjectedException(refusal));
+
+        AssertEx.Equal(FailureCategory.ModelEjected, classification.Category);
+        AssertEx.Equal(refusal, classification.Message);
+    }
+
+    // The model unloaded under a running request (a force eject, by the operator or an image job): the outer type wins over the
+    // transport failure it wraps, which would otherwise read as an unreachable provider.
+    [Test]
+    public void MapFailure_ModelEjectedMidRequest_IsModelEjectedWithItsMessage()
+    {
+        var exception = new LlamaServerModelEjectedException(DeferredLlamaServerChatClient.ModelEjectedMessage,
+            new HttpRequestException(HttpRequestError.ConnectionError, "connection reset"));
+
+        var classification = InvocationFailureClassifier.MapFailure(exception);
+
+        AssertEx.Equal(FailureCategory.ModelEjected, classification.Category);
+        AssertEx.Equal(DeferredLlamaServerChatClient.ModelEjectedMessage, classification.Message);
     }
 
     // A launch naming a missing model is not a capacity problem: it gets the not-installed category and the shared fixed sentence.

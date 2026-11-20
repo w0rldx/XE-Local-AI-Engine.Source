@@ -19,7 +19,7 @@ public sealed class ManagedRuntimeStoreTests
     [Test]
     public async Task WhisperStore_ReadsAndRewritesTheCurrentFileFormatByteForByte()
     {
-        using var root = new TempRoot();
+        using var root = new TempDirectory("xe-managed-store-test");
         WriteFixture(root.Path, "whisper.cpp", backend: 1,
             WhisperCppSourceBuildRequestValidation.OfficialRepository, WhisperCppReleasePins.PinnedSourceCommitSha);
         var before = ReadFixture(root.Path, "whisper.cpp");
@@ -37,7 +37,7 @@ public sealed class ManagedRuntimeStoreTests
     [Test]
     public async Task ImageStore_ReadsAndRewritesTheCurrentFileFormatByteForByte()
     {
-        using var root = new TempRoot();
+        using var root = new TempDirectory("xe-managed-store-test");
         WriteFixture(root.Path, "stable-diffusion.cpp", backend: 2,
             StableDiffusionCppSourceBuildRequestValidation.OfficialRepository, StableDiffusionReleasePins.PinnedSourceCommitSha);
         var before = ReadFixture(root.Path, "stable-diffusion.cpp");
@@ -56,7 +56,7 @@ public sealed class ManagedRuntimeStoreTests
     public async Task WhisperStore_RejectsAVulkanBackendTheImageStoreAccepts()
     {
         // whisper.cpp has no Vulkan build, so a record naming backend 2 is not one this node could have written.
-        using var root = new TempRoot();
+        using var root = new TempDirectory("xe-managed-store-test");
         WriteFixture(root.Path, "whisper.cpp", backend: 2,
             WhisperCppSourceBuildRequestValidation.OfficialRepository, WhisperCppReleasePins.PinnedSourceCommitSha);
         using var store = new WhisperInstalledRuntimeStore(root.Path);
@@ -67,7 +67,7 @@ public sealed class ManagedRuntimeStoreTests
     [Test]
     public async Task Write_ThenRead_RoundTripsActiveRecord()
     {
-        using var root = new TempRoot();
+        using var root = new TempDirectory("xe-managed-store-test");
         using var store = new WhisperInstalledRuntimeStore(root.Path);
         var state = WhisperActiveState(root.Path);
 
@@ -84,7 +84,7 @@ public sealed class ManagedRuntimeStoreTests
     [Test]
     public async Task Read_NothingWritten_ReturnsNull()
     {
-        using var root = new TempRoot();
+        using var root = new TempDirectory("xe-managed-store-test");
         using var store = new WhisperInstalledRuntimeStore(root.Path);
 
         AssertEx.Null(await store.ReadAsync(CancellationToken.None));
@@ -93,7 +93,7 @@ public sealed class ManagedRuntimeStoreTests
     [Test]
     public async Task Read_CorruptStateFile_FallsBackToDesiredRecordAsTombstone()
     {
-        using var root = new TempRoot();
+        using var root = new TempDirectory("xe-managed-store-test");
         using var store = new WhisperInstalledRuntimeStore(root.Path);
         await store.WriteAsync(WhisperActiveState(root.Path), CancellationToken.None);
 
@@ -113,7 +113,7 @@ public sealed class ManagedRuntimeStoreTests
     [Test]
     public async Task Read_SemanticallyInvalidStateFile_DegradesToATombstone()
     {
-        using var root = new TempRoot();
+        using var root = new TempDirectory("xe-managed-store-test");
         using var store = new WhisperInstalledRuntimeStore(root.Path);
         await store.WriteAsync(WhisperActiveState(root.Path), CancellationToken.None);
 
@@ -132,7 +132,7 @@ public sealed class ManagedRuntimeStoreTests
     [Test]
     public async Task Write_SemanticallyInvalidState_Throws()
     {
-        using var root = new TempRoot();
+        using var root = new TempDirectory("xe-managed-store-test");
         using var store = new WhisperInstalledRuntimeStore(root.Path);
 
         // Active but with no build path and no digest: nothing could ever resolve from it.
@@ -148,7 +148,7 @@ public sealed class ManagedRuntimeStoreTests
     [Test]
     public async Task Write_OfficialSourceWithAForeignCommit_Throws()
     {
-        using var root = new TempRoot();
+        using var root = new TempDirectory("xe-managed-store-test");
         using var store = new WhisperInstalledRuntimeStore(root.Path);
 
         // The official selection is pinned by the engine, so a record claiming Official at some other revision is not
@@ -164,7 +164,7 @@ public sealed class ManagedRuntimeStoreTests
     [Test]
     public async Task Delete_RemovesBothRecords()
     {
-        using var root = new TempRoot();
+        using var root = new TempDirectory("xe-managed-store-test");
         using var store = new WhisperInstalledRuntimeStore(root.Path);
         await store.WriteAsync(WhisperActiveState(root.Path), CancellationToken.None);
 
@@ -177,7 +177,7 @@ public sealed class ManagedRuntimeStoreTests
     [Test]
     public async Task ImageStore_CorruptActiveRecord_ReturnsInvalidDesiredSelectionTombstone()
     {
-        using var temp = new TempRoot();
+        using var temp = new TempDirectory("xe-managed-store-test");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         await store.WriteAsync(ImageActiveState(temp.Path), CancellationToken.None);
         var statePath = Path.Combine(temp.Path, "stable-diffusion.cpp", "installed-runtime.json");
@@ -193,7 +193,7 @@ public sealed class ManagedRuntimeStoreTests
     [Test]
     public async Task ImageStore_SemanticallyInvalidEnums_FallBackToDesiredSelectionTombstone()
     {
-        using var temp = new TempRoot();
+        using var temp = new TempDirectory("xe-managed-store-test");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         await store.WriteAsync(ImageActiveState(temp.Path), CancellationToken.None);
         var statePath = Path.Combine(temp.Path, "stable-diffusion.cpp", "installed-runtime.json");
@@ -280,30 +280,4 @@ public sealed class ManagedRuntimeStoreTests
             Path.Combine(cacheRoot, "stable-diffusion.cpp", "managed", "cuda", StableDiffusionReleasePins.PinnedSourceCommitSha, "build", "bin"),
             new string('a', 64),
             DateTimeOffset.UtcNow);
-
-    private sealed class TempRoot : IDisposable
-    {
-        public TempRoot()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-managed-store-test-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
-        }
-    }
 }

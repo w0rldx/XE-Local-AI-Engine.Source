@@ -145,5 +145,3 @@ export const agentDefinitionFormSchema = z
 			}
 		}
 	});
-
-export type AgentDefinitionFormSchema = z.infer<typeof agentDefinitionFormSchema>;

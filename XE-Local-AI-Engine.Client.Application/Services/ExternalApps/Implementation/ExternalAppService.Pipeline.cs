@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
@@ -139,8 +140,8 @@ internal sealed partial class ExternalAppService
                 return;
             }
 
-            // Fire-and-forget by contract: Progress<T> hands the report to a synchronous Action<T>.
-            var progress = new Progress<ContainerPullProgress>(report => _ = PublishPullProgressAsync(instanceId, progressLabel, report));
+            // Fire-and-forget by contract: the report reaches a synchronous Action<T>, so the hub publishes complete in any order.
+            var progress = new SynchronousProgress<ContainerPullProgress>(report => _ = PublishPullProgressAsync(instanceId, progressLabel, report));
             await runtime.PullImageAsync(image, progress, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException and not ExternalAppPipelineException)

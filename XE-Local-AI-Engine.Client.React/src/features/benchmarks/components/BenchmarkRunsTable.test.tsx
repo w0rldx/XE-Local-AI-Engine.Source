@@ -9,7 +9,7 @@ import {
 	benchmarkFidelityFixture,
 	benchmarkJudgeFixture,
 	benchmarkRunSummaryFixture,
-} from "@/features/benchmarks/models/BenchmarkTestFixtures";
+} from "@/features/benchmarks/test/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The ranked table is where the node's ranking becomes readable. Two rules carry it: an unranked run is never hidden
@@ -219,15 +219,17 @@ describe("BenchmarkRunsTable", () => {
 	});
 
 	it.each([
-		["Re-judge run", "onRejudgeRun"],
-		["Delete terminal run", "onDeleteRun"],
-	] as const)("offers %s per row", async (label, handler) => {
+		["Re-judge run", "onRejudgeRun", false],
+		["Delete terminal run", "onDeleteRun", true],
+	] as const)("offers %s per row", async (label, handler, passesMenuButton) => {
 		const view = renderTable([rankedRun]);
+		const actions = screen.getByTestId("benchmark-run-actions-ranked");
 
-		fireEvent.click(screen.getByTestId("benchmark-run-actions-ranked"));
+		fireEvent.click(actions);
 		fireEvent.click(await screen.findByRole("menuitem", { name: label }));
 
-		expect(view[handler]).toHaveBeenCalledExactlyOnceWith(rankedRun);
+		// A delete hands over the row's actions button: the confirmation it opens returns the focus there.
+		expect(view[handler]).toHaveBeenCalledExactlyOnceWith(rankedRun, ...(passesMenuButton ? [actions] : []));
 	});
 
 	// The node refuses to delete an active run, and only a succeeded primary has output to judge.

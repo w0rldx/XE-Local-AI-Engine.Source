@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { useDownloadRateEstimates } from "@/core/model-downloads/hooks/useDownloadRateEstimates";
 import { formatDownloadEta, humanizeBytes } from "@/core/model-downloads/models/DownloadRateEstimate";
+import { ggufFailureText } from "@/core/model-downloads/models/GgufAcquisitionErrors";
 import type { GgufDownloadStatus } from "@/core/model-downloads/queries/useGgufDownload";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
@@ -20,7 +21,7 @@ interface DownloadProgressPanelProps {
 // In-flight GGUF download panel. Shows real byte-level progress when the backend reports Content-Length;
 // falls back to an indeterminate loader when totalBytes is absent. Completed/Cancelled entries are dropped
 // from the inFlight list by the store reconciliation in useActiveGgufDownloads. Failed entries show an
-// error row with the sanitized backend message. Rendered only when there is at least one in-flight entry.
+// error row with the translated failure text. Rendered only when there is at least one in-flight entry.
 export function DownloadProgressPanel({ inFlight, downloadStatuses, onCancel, cancellingModelName }: DownloadProgressPanelProps) {
 	const { t } = useTranslation();
 	// FE-derived speed + ETA per model from successive status pushes (no timestamps ride the wire).
@@ -44,6 +45,7 @@ export function DownloadProgressPanel({ inFlight, downloadStatuses, onCancel, ca
 					{inFlight.map((modelName) => {
 						const status = downloadStatuses.get(modelName);
 						const isFailed = status?.phase === "Failed";
+						const failure = isFailed ? ggufFailureText(t, status) : undefined;
 						const pct = status?.pct;
 						const hasDeterminate = pct !== undefined;
 						const estimate = rateEstimates.get(modelName);
@@ -114,11 +116,12 @@ export function DownloadProgressPanel({ inFlight, downloadStatuses, onCancel, ca
 									</Text>
 								) : null}
 
-								{isFailed && status?.sanitizedError ? (
+								{failure ? (
 									<InlineErrorAlert
-										message={status.sanitizedError}
+										message={failure}
 										variant="light"
 										title={t("pages.models.gguf.download.failedTitle", "Download failed")}
+										style={{ whiteSpace: "pre-line" }}
 									/>
 								) : null}
 							</Stack>

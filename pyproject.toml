@@ -4,7 +4,9 @@
 # shipped training runtime manifest (ADR 0005): the app copies exactly those two files into
 # staging and runs `uv sync --locked`, so anything added there lands in every user's training
 # venv and forces a re-lock behind the live GPU gate. The tooling below therefore lives at the
-# repo root with its own small uv.lock, and only ever reads tools/training/*.py.
+# repo root with its own uv.lock, and only ever reads tools/training/*.py. On linux x86_64 it adds
+# CPU torch (pinned by hand to the training lock's version) so the Model Lab lens test runs real
+# tensor ops; the rest of the training stack stays out.
 #
 # Run it through scripts/python-validation.sh (see AGENTS.md); the CI `python-quality` job runs
 # `--scope full`.
@@ -27,7 +29,19 @@ dev = [
     "pytest-cov>=7.1.0",
     "pyyaml>=6.0.3",
     "ruff>=0.15.13",
+    # CPU wheel for test_modellab_lens.py; the same version as tools/training/uv.lock, bumped by hand with it.
+    # numpy too: without it `import torch` warns, and filterwarnings = error fails collection.
+    "torch==2.13.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "numpy; sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 # Python files only: ruff >= 0.16 also formats Python fences inside *.md by default, which would
@@ -74,9 +88,10 @@ project-excludes = ["**/.venv", "**/node_modules", "**/__pycache__"]
 search-path = ["tools/training", "scripts/compliance", "catalog/external-apps/tools"]
 python-version = "3.14"
 # The training scripts import the fine-tuning stack (torch/unsloth/transformers/trl/datasets),
-# which only exists inside the 7 GB provisioned runtime venv, never in this dev venv. Those
-# imports resolve to Any; everything pure-python (trainlib, exportlib, protocol code, scripts/**)
-# is fully checked.
+# which only exists in full inside the 7 GB provisioned runtime venv. This dev venv has CPU torch
+# for one test only, so torch stays Any here too, as on a platform without it. Those imports
+# resolve to Any; everything pure-python (trainlib, exportlib, protocol code, scripts/**) is
+# fully checked.
 replace-imports-with-any = ["unsloth", "unsloth.*", "torch", "torch.*", "transformers", "transformers.*", "trl", "datasets"]
 
 [tool.pytest.ini_options]

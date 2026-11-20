@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Memory;
 
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -9,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -181,15 +183,43 @@ public sealed class MemorySemanticDeduplicatorTests
         AssertEx.Equal(afterFirst + 1, afterSecond, "Second run serves the cached existing vector and only re-embeds the candidate.");
     }
 
+    [Test]
+    public async Task FindSemanticDuplicates_WhenTheOperatorVetoesACacheMissWithAWaiter_BothRunsDegradeToNotApplied()
+    {
+        var vectors = new VectorMap()
+                      .Set("existing helper lesson", 1f, 0f, 0f)
+                      .Set("paraphrased helper lesson", 1f, 0f, 0f);
+        var logger = new RecordingLogger<MemorySemanticDeduplicator>();
+        var deduplicator = Build(vectors, out var provider, logger: logger);
+        var veto = new VetoGate();
+        provider.VetoEveryGenerate = veto;
+        MemoryDedupExisting[] existing = [Existing("existing helper lesson", MemoryScope.Procedural)];
+        MemoryDedupCandidate[] candidates = [Candidate("paraphrased helper lesson", MemoryScope.Procedural)];
+
+        // The owner misses the cache and is held inside the vetoed embed; the second run joins the owner's claim and its
+        // own candidate embed is vetoed too, as every call is while the eject mark stands.
+        var owner = deduplicator.FindSemanticDuplicatesAsync(existing, candidates, CancellationToken.None);
+        await veto.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var waiter = deduplicator.FindSemanticDuplicatesAsync(existing, candidates, CancellationToken.None);
+        veto.Release.SetResult();
+
+        AssertEx.False((await owner).Applied, "A vetoed embedder degrades to lexical-only.");
+        AssertEx.False((await waiter).Applied, "A run coalesced onto the vetoed claim degrades too.");
+        AssertEx.Equal(ModelResidencyIntent.Background, provider.LastIntent);
+        AssertEx.Empty(logger.Entries.Where(entry => entry.Level >= LogLevel.Warning), "Both runs take the veto's Debug path, never the outage Warning.");
+    }
+
     private static MemorySemanticDeduplicator Build(VectorMap vectors,
         out MapEmbeddingProvider provider,
         bool isConfident = true,
-        double threshold = 0.92d)
+        double threshold = 0.92d,
+        ILogger<MemorySemanticDeduplicator>? logger = null)
     {
         provider = new MapEmbeddingProvider(vectors);
         var resolver = SingleProviderResolverFactory.Create(provider);
         var options = Options.Create(new MemoryExtractionOptions
         {
+            SemanticDedupEnabled = true,
             SemanticDedupEmbeddingProviderName = MapEmbeddingProvider.ProviderKey,
             SemanticDedupSimilarityThreshold = threshold,
             SemanticDedupEmbeddingCacheMaxEntries = 512
@@ -197,7 +227,7 @@ public sealed class MemorySemanticDeduplicatorTests
         return new MemorySemanticDeduplicator(resolver,
             new FakeEmbeddingModelResolver(isConfident),
             options,
-            NullLogger<MemorySemanticDeduplicator>.Instance,
+            logger ?? NullLogger<MemorySemanticDeduplicator>.Instance,
             TimeProvider.System);
     }
 
@@ -258,11 +288,19 @@ public sealed class MemorySemanticDeduplicatorTests
 
         public bool ThrowOnGenerate { get; set; }
 
+        /// <summary>When set, the first generate call waits on its release, then it and every later call throw the operator's eject veto.</summary>
+        public VetoGate? VetoEveryGenerate { get; set; }
+
+        public ModelResidencyIntent? LastIntent { get; private set; }
+
+        private int _generateCalls;
+
         public string ProviderName => ProviderKey;
 
         public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
         {
             CreateGeneratorCallCount++;
+            LastIntent = selection.ResidencyIntent;
             return new MapEmbeddingGenerator(this, _vectors);
         }
 
@@ -326,6 +364,13 @@ public sealed class MemorySemanticDeduplicatorTests
                     throw new HttpRequestException("fake embedding transport failure");
                 }
 
+                if (_owner.VetoEveryGenerate is { } veto)
+                {
+                    return Interlocked.Increment(ref _owner._generateCalls) == 1
+                        ? VetoAfterAsync(veto)
+                        : Task.FromException<GeneratedEmbeddings<Embedding<float>>>(new OperatorEjectedException("The embedding model was ejected by the operator."));
+                }
+
                 var embeddings = new List<Embedding<float>>();
                 foreach (var value in values)
                 {
@@ -334,6 +379,13 @@ public sealed class MemorySemanticDeduplicatorTests
                 }
 
                 return Task.FromResult(new GeneratedEmbeddings<Embedding<float>>(embeddings));
+            }
+
+            private static async Task<GeneratedEmbeddings<Embedding<float>>> VetoAfterAsync(VetoGate veto)
+            {
+                veto.Entered.TrySetResult();
+                await veto.Release.Task;
+                throw new OperatorEjectedException("The embedding model was ejected by the operator.");
             }
 
             public object? GetService(Type serviceType, object? serviceKey = null)
@@ -345,6 +397,14 @@ public sealed class MemorySemanticDeduplicatorTests
             {
             }
         }
+    }
+
+    /// <summary>Lets a test hold one generate call inside the embedder, then release it as the operator's eject veto.</summary>
+    private sealed class VetoGate
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     // A fake resolver so IsConfident is controllable without touching the provider's ListModelsAsync.

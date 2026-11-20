@@ -1,6 +1,7 @@
 import { Spoiler, Stack, Text } from "@mantine/core";
 import { IconSparkles } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
+import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -8,8 +9,13 @@ import {
 	getAppUpdateStatusOptions,
 	getNodeInfoOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { MarkdownView } from "@/core/ui/components/MarkdownView/MarkdownView";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+
+// The markdown renderer (react-markdown, remark-gfm, Prism) is fetched only when there are notes to show: Home is the
+// landing route, and off desktop this card renders nothing.
+const MarkdownView = lazy(() =>
+	import("@/core/ui/components/MarkdownView/MarkdownView").then((module) => ({ default: module.MarkdownView })),
+);
 
 // The packaged release notes the last update check read from the feed. Both reads are the node's cached state: the
 // status key is the one the About dialog shares (no refresh flag, so no GitHub check), and the notes endpoint never
@@ -54,7 +60,9 @@ export function HomeWhatsNewCard() {
 				hideLabel={t("pages.home.whatsNew.showLess", "Show less")}
 			>
 				<Stack gap={0} data-testid="home-whats-new-notes">
-					<MarkdownView content={shown.notesMarkdown} />
+					<Suspense fallback={null}>
+						<MarkdownView content={shown.notesMarkdown} />
+					</Suspense>
 				</Stack>
 			</Spoiler>
 			{shown.isTruncated ? (

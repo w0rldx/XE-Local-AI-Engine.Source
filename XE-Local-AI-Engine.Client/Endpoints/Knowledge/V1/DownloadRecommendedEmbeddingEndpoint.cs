@@ -46,8 +46,8 @@ public sealed class DownloadRecommendedEmbeddingEndpoint : EndpointWithoutReques
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        // Already-usable friendly no-op. Which installed model counts as "this node can already embed" is
-        // RecommendedEmbeddingModel's own two-step rule (recommended repo first, else any embedding-named model).
+        // Already-usable friendly no-op: the installed model RecommendedEmbeddingModel.PickInstalled picks, the same one
+        // an unpinned EmbeddingModelResolver embeds with (canonical quant, then another quant, then any embedder).
         var existing = await RecommendedEmbeddingModel.ResolveExistingAsync(_modelStore, ct);
         if (existing is not null)
         {

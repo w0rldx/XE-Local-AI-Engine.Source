@@ -5,6 +5,8 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
+
 // Mock generated query/mutation factories to isolate the hook while retaining validation and mapping.
 const { listMock, toolCapableMock, offerMock, createMutationFn, updateMutationFn, deleteMutationFn } = vi.hoisted(() => ({
 	listMock: vi.fn(),
@@ -25,7 +27,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 }));
 
 import {
-	agentDefinitionsInvalidationKey,
 	agentDefinitionsQueryIds,
 	useAgentDefinitions,
 	useCreateAgentDefinition,
@@ -36,7 +37,7 @@ import {
 } from "@/core/agents/queries/useAgentDefinitions";
 
 // The generated query key the mutations invalidate (partial `_id` match), built via the production helper.
-const LIST_KEY = agentDefinitionsInvalidationKey(agentDefinitionsQueryIds.list);
+const LIST_KEY = operationInvalidationKey(agentDefinitionsQueryIds.list);
 
 // A generated-shaped agent-definition response (every field optional on the wire).
 const generatedDefinition = {
@@ -182,7 +183,7 @@ describe("default assistant tool offer", () => {
 		await waitFor(() => expect(offerFetch).toHaveBeenCalledTimes(2));
 
 		await queryClient.invalidateQueries({
-			queryKey: agentDefinitionsInvalidationKey(agentDefinitionsQueryIds.defaultAssistantToolOffer),
+			queryKey: operationInvalidationKey(agentDefinitionsQueryIds.defaultAssistantToolOffer),
 		});
 		expect(offerFetch).toHaveBeenCalledTimes(3);
 		second.unmount();

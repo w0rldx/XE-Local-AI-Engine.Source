@@ -22,6 +22,7 @@ import {
 	listUploadedImagesOptions,
 	startImageModelDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { imageBlobQueryKey } from "@/features/images/hooks/useImageObjectUrl";
 import {
 	toImageModelCatalogEntryView,
@@ -45,13 +46,8 @@ const imageQueryIds = {
 	uploads: "listUploadedImages",
 } as const;
 
-/** Builds the partial generated-query-key filter that matches every cached variant of one image endpoint. */
-function imageInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
-
 function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId: string): Promise<void> {
-	return queryClient.invalidateQueries({ queryKey: imageInvalidationKey(operationId) });
+	return queryClient.invalidateQueries({ queryKey: operationInvalidationKey(operationId) });
 }
 
 /**

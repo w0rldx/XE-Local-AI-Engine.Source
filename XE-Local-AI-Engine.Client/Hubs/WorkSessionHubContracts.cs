@@ -5,6 +5,18 @@ using XE_Local_AI_Engine.Client.Endpoints.WorkSessions.V1;
 public static class WorkSessionHubEvents
 {
     public const string Changed = "workSessionChanged";
+
+    /// <summary>Broadcast to every connection beside each <c>status</c> change, for the operations feed, which watches no session.</summary>
+    public const string StatusChanged = "workSessionStatusChanged";
+}
+
+/// <summary>
+///     A session's status moved. Only the id: the publish seam carries no status, and the feed re-reads the session list,
+///     which is the authority either way.
+/// </summary>
+public sealed class WorkSessionStatusChanged
+{
+    public required Guid SessionId { get; init; }
 }
 
 /// <summary>

@@ -90,8 +90,25 @@ internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
     public async Task<GraphWorkflowConditionalWriteResult> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default) =>
         await PublishWrittenAsync(await _inner.IgnoreNodeRunSteeringAsync(runId, nodeRunId, operationId, cancellationToken), GraphWorkflowChangeKind.Node, cancellationToken);
 
-    public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
-        PublishAsync(_inner.TransitionRunAsync(command, cancellationToken), GraphWorkflowChangeKind.Run, cancellationToken);
+    /// <summary>The one writer of a run's status, so it is also where the app-wide status broadcast goes out.</summary>
+    public async Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        var result = await PublishAsync(_inner.TransitionRunAsync(command, cancellationToken), GraphWorkflowChangeKind.Run, cancellationToken);
+        try
+        {
+            await _publisher.PublishRunStatusAsync(result.RunId, command.TargetStatus, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(exception,
+                "Graph workflow run {RunId} moved to {Status}, which could not be announced; the operations feed re-reads on its next reconnect.",
+                result.RunId,
+                command.TargetStatus);
+        }
+
+        return result;
+    }
 
     public Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default) =>
         _inner.ListNodeRunsAsync(runId, cancellationToken);

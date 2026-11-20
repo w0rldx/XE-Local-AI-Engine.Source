@@ -215,6 +215,7 @@ describe("PlaybookPanel", () => {
 		expect(screen.getByTestId("playbook-action-action-1")).toBeTruthy();
 		expect(screen.getByTestId("playbook-source-action-1").textContent).toBe("Manual");
 		expect(screen.getByText("Always cite your sources")).toBeTruthy();
+		expect(screen.getByRole("radiogroup", { name: "Filter by scope" })).toBeTruthy();
 	});
 
 	it("shows the empty state when there are no actions", () => {

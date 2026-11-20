@@ -12,6 +12,7 @@ import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStre
 import { Chat } from "@/features/chat/pages/Chat";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 import { forgetWebContentAutoAccept, useSetWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
+import { useChatWorkflowStore } from "@/features/chat/workflow/ChatWorkflowStore";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
@@ -221,5 +222,23 @@ describe("Chat web content review mode on the wire", () => {
 
 		await waitFor(() => expect(adapter.deleteConversation).toHaveBeenCalledWith(autoConversation.id));
 		await waitFor(() => expect(localStorage.getItem("xe-node-chat-web-auto:conversation-auto")).toBeNull());
+	});
+
+	it("removes the conversation's stored workflow opt-out and dismissed run once the conversation is deleted", async () => {
+		const workflow = useChatWorkflowStore.getState().actions;
+		workflow.selectDefinition(autoConversation.id, "");
+		workflow.dismissRun(autoConversation.id, "run-1");
+		workflow.dismissRun(reviewConversation.id, "run-2");
+		renderChat(reviewConversation.id);
+
+		fireEvent.click(await screen.findByTestId(`conversation-actions-${autoConversation.id}`));
+		fireEvent.click(await screen.findByTestId(`conversation-delete-${autoConversation.id}`), { shiftKey: true });
+
+		await waitFor(() => expect(adapter.deleteConversation).toHaveBeenCalledWith(autoConversation.id));
+		await waitFor(() => expect(localStorage.getItem("xe-node-chat-workflow-opted-out")).toBe("{}"));
+		expect(JSON.parse(localStorage.getItem("xe-node-chat-workflow-dismissed-runs") ?? "{}")).toEqual({
+			[reviewConversation.id]: "run-2",
+		});
+		workflow.forgetConversation(reviewConversation.id);
 	});
 });

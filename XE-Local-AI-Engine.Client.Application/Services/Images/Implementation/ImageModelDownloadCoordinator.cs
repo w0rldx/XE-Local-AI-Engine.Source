@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Images.Implementation;
 
 using System.Collections.Concurrent;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
@@ -133,7 +134,7 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
     // (an unobserved background fault would take the reason with it).
     private async Task RunDownloadAsync(string modelName, ImageModelRequest request, CancellationToken ct)
     {
-        var progress = new Progress<PullProgress>(update => ReportRunningProgress(modelName, update));
+        var progress = new SynchronousProgress<PullProgress>(update => ReportRunningProgress(modelName, update));
 
         try
         {
@@ -191,8 +192,8 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
         }
     }
 
-    // Records byte progress WITHOUT ever resurrecting a finished download. Progress<T> marshals its callback through the captured context, so a tick queued just
-    // before completion can be delivered after the terminal write; publishing it unguarded would flip a Completed/Failed download back to Running and hang the UI.
+    // Records byte progress WITHOUT ever resurrecting a finished download: a tick recorded after the terminal write would flip a Completed/Failed download back
+    // to Running and hang the UI.
     private void ReportRunningProgress(string modelName, PullProgress update)
     {
         ImageModelDownloadStatus status;
@@ -265,7 +266,7 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
         _ = PushAsync(stamped);
     }
 
-    // Fire-and-forget from a synchronous Progress<T> callback, like the GGUF lane: a failed push is only debug-logged,
+    // Fire-and-forget from a synchronous progress callback, like the GGUF lane: a failed push is only debug-logged,
     // because the list endpoint still serves the status. No request token exists here (MA0032/CA2016 opt-out).
     private async Task PushAsync(ImageModelDownloadStatus status)
     {

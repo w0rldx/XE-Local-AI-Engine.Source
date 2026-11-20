@@ -5,15 +5,17 @@ import {
 	Alert,
 	Badge,
 	Button,
+	Pagination,
 	PasswordInput,
 	Radio,
 	Table,
+	Tooltip,
 	useMantineColorScheme,
 	useMantineTheme,
 } from "@mantine/core";
-import { cleanup, render, renderHook, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import i18next from "i18next";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sourceThemeConfiguration } from "@/core/theme/config/ThemeConfiguration";
 import { ThemeProvider } from "@/core/theme/provider/ThemeProvider";
@@ -330,5 +332,66 @@ describe("ThemeProvider floating dropdown cap", () => {
 
 		expect(floating.style.maxHeight).toBe("180px");
 		expect(floating.style.overflowY).toBe("");
+	});
+});
+
+describe("ThemeProvider tooltip, pagination and motion defaults", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(async () => {
+		cleanup();
+		await i18next.changeLanguage("en");
+	});
+
+	// Mantine opens a Tooltip on hover only, so a keyboard user tabbing onto an icon-only control never learnt its name.
+	it("opens a Tooltip on keyboard focus and closes it on blur", async () => {
+		render(
+			<ThemeProvider>
+				<Tooltip label="Delete row">
+					<button type="button">x</button>
+				</Tooltip>
+			</ThemeProvider>,
+		);
+
+		const trigger = screen.getByRole("button", { name: "x" });
+		fireEvent.focus(trigger);
+		expect((await screen.findByRole("tooltip")).textContent).toBe("Delete row");
+
+		fireEvent.blur(trigger);
+		await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
+	});
+
+	it("opens every Tooltip on hover, focus and touch unless a call site says otherwise", () => {
+		const { result } = renderHook(() => useMantineTheme(), { wrapper: ThemeProvider });
+		const defaultProps = result.current.components["Tooltip"]?.defaultProps as { events?: object } | undefined;
+
+		expect(defaultProps?.events).toEqual({ hover: true, focus: true, touch: true });
+	});
+
+	it("skips transitions under the reduced-motion setting", () => {
+		const { result } = renderHook(() => useMantineTheme(), { wrapper: ThemeProvider });
+
+		expect(result.current.respectReducedMotion).toBe(true);
+	});
+
+	// The edge and step controls are icon-only; without the theme default each one announced as a nameless "button".
+	it.each([
+		["en", ["First page", "Previous page", "Next page", "Last page"]],
+		["de", ["Erste Seite", "Vorherige Seite", "Nächste Seite", "Letzte Seite"]],
+	])("names the Pagination controls in %s", async (language, names) => {
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage(language);
+
+		render(
+			<ThemeProvider>
+				<Pagination total={5} value={3} withEdges={true} onChange={vi.fn()} />
+			</ThemeProvider>,
+		);
+
+		for (const name of names) {
+			expect(screen.getByRole("button", { name })).toBeTruthy();
+		}
 	});
 });

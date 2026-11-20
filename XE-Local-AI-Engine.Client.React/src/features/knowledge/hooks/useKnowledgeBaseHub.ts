@@ -1,13 +1,14 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
-import { knowledgeInvalidationKey, knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import {
 	type KnowledgeDocument,
 	type KnowledgeDocumentStatus,
 	knowledgeStatusDescriptor,
 } from "@/features/knowledge/models/KnowledgeModels";
+import { knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
 
 // Server-pushed knowledge-base events. Each push carries the document id + its new indexing status. The handler
 // applies that status to the cached list row IMMEDIATELY (optimistic), then invalidates so the remaining fields
@@ -18,6 +19,11 @@ import {
 // name is the string method name the backend invokes on the client.
 const DOCUMENT_CHANGED = "knowledge.documentChanged";
 const CLOSED_HUB_POLL_MS = 10_000;
+// One document fires several pushes, and a repository import fires them for thousands of documents; every invalidation
+// refetches each list variant (decrypting every row's name). The optimistic write shows each status at once, so the
+// canonical refetch runs at most once per this window: the first push opens it, later pushes ride along, and a push
+// after it fired opens the next one, so a long import still refetches steadily and its last push is always covered.
+const PUSH_REFETCH_WINDOW_MS = 250;
 
 /** Payload of the {@link DOCUMENT_CHANGED} push: which document changed and its new status. */
 interface KnowledgeDocumentChangedEvent {
@@ -48,13 +54,25 @@ export function useKnowledgeBaseHub(): void {
 
 		const invalidateDocuments = (): void => {
 			queryClient
-				.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listDocuments) })
+				.invalidateQueries({ queryKey: operationInvalidationKey(knowledgeQueryIds.listDocuments) })
 				.catch(() => undefined);
-			queryClient.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.getDocument) }).catch(() => undefined);
+			queryClient.invalidateQueries({ queryKey: operationInvalidationKey(knowledgeQueryIds.getDocument) }).catch(() => undefined);
 			// An upload into a new collection, or a delete emptying one, changes the collection list too.
 			queryClient
-				.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listCollections) })
+				.invalidateQueries({ queryKey: operationInvalidationKey(knowledgeQueryIds.listCollections) })
 				.catch(() => undefined);
+		};
+
+		let pushRefetch: ReturnType<typeof setTimeout> | undefined;
+		const flushPushRefetch = (): void => {
+			if (pushRefetch !== undefined) {
+				clearTimeout(pushRefetch);
+				pushRefetch = undefined;
+				invalidateDocuments();
+			}
+		};
+		const schedulePushRefetch = (): void => {
+			pushRefetch ??= setTimeout(flushPushRefetch, PUSH_REFETCH_WINDOW_MS);
 		};
 
 		const applyDocumentChanged = (event: KnowledgeDocumentChangedEvent | undefined): void => {
@@ -62,7 +80,7 @@ export function useKnowledgeBaseHub(): void {
 			// cannot leave the row stuck on a stale intermediate status while the refetch is still in flight.
 			if (event && typeof event.documentId === "string" && typeof event.status === "string") {
 				queryClient.setQueriesData<KnowledgeDocumentListCache>(
-					{ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listDocuments) },
+					{ queryKey: operationInvalidationKey(knowledgeQueryIds.listDocuments) },
 					(old) =>
 						old
 							? {
@@ -75,7 +93,7 @@ export function useKnowledgeBaseHub(): void {
 				);
 			}
 
-			invalidateDocuments();
+			schedulePushRefetch();
 		};
 
 		connection.on(DOCUMENT_CHANGED, applyDocumentChanged);
@@ -91,7 +109,7 @@ export function useKnowledgeBaseHub(): void {
 		};
 		const hasInProgressRow = (): boolean =>
 			queryClient
-				.getQueriesData<KnowledgeDocumentListCache>({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listDocuments) })
+				.getQueriesData<KnowledgeDocumentListCache>({ queryKey: operationInvalidationKey(knowledgeQueryIds.listDocuments) })
 				.some(([, data]) => data?.items?.some((item) => knowledgeStatusDescriptor(item.status)?.inProgress === true) === true);
 		// release() drops these registrations.
 		hub.onReconnected(() => {
@@ -110,6 +128,8 @@ export function useKnowledgeBaseHub(): void {
 		return () => {
 			stopClosedPoll();
 			connection.off(DOCUMENT_CHANGED, applyDocumentChanged);
+			// A burst still waiting for its refetch leaves the cache invalidated rather than holding pre-push data as fresh.
+			flushPushRefetch();
 			// Release the shared lease: the manager stops the connection only after the LAST subscriber releases, and only
 			// once the start promise settles (so cleanup never aborts an in-flight negotiation under StrictMode / fast remounts).
 			hub.release();

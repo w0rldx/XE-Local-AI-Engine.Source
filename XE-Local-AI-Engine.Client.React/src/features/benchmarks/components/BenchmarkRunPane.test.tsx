@@ -10,7 +10,7 @@ vi.mock("@/features/benchmarks/components/BenchmarkSceneViewer", () => ({
 
 import { BenchmarkRunPane } from "@/features/benchmarks/components/BenchmarkRunPane";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkJudgeFixture, benchmarkRunDetailFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkJudgeFixture, benchmarkRunDetailFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 import { createProvidersWrapper, renderWithProviders } from "@/test/RenderWithProviders";
 
 afterEach(cleanup);
@@ -226,7 +226,7 @@ describe("BenchmarkRunPane", () => {
 		const row = screen.getByTestId("benchmark-artifact-art-1");
 		expect(row.textContent).toContain("Python tests stdout");
 		expect(row.textContent).toContain("tests");
-		expect(row.textContent).toContain("2 KB");
+		expect(row.textContent).toContain("2 KiB");
 		fireEvent.click(screen.getByTestId("benchmark-artifact-download-art-1"));
 
 		expect(onDownloadArtifact).toHaveBeenCalledExactlyOnceWith(artifact);

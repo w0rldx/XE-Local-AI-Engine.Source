@@ -30,7 +30,7 @@ public sealed class LocalContainerOptionsValidator : IValidateOptions<LocalConta
                                .AppendIf(limits.CpuCount is <= 0,
                                    "LocalContainer:ToolchainLimits:CpuCount must be greater than zero when set.")
                                .AppendIf(limits.MemoryMb is not null && limits.MemoryMb < SandboxToolchainLimits.MinimumMemoryMb,
-                                   $"LocalContainer:ToolchainLimits:MemoryMb must be at least {SandboxToolchainLimits.MinimumMemoryMb} MB when set; "
+                                   $"LocalContainer:ToolchainLimits:MemoryMb must be at least {SandboxToolchainLimits.MinimumMemoryMb} MiB when set; "
                                    + "a smaller ceiling OOM-kills a toolchain command rather than bounding it. Leave it unset to derive it from this host.")
                                .AppendIf(limits.PidsLimit is not null && limits.PidsLimit < SandboxToolchainLimits.MinimumPidsLimit,
                                    $"LocalContainer:ToolchainLimits:PidsLimit must be at least {SandboxToolchainLimits.MinimumPidsLimit} when set; "

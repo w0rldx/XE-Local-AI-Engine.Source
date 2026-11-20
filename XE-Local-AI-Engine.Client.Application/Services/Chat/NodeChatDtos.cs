@@ -259,6 +259,10 @@ public sealed record NodeChatPersistedMessageDto : ISelectedPathMessage
 
     public string? AgentName { get; init; }
 
+    // A chat import wrote this assistant message (metadata only). Read by the branch copy so the flag survives it; never serialized.
+    [JsonIgnore]
+    public bool Imported { get; init; }
+
     // The reasoning effort actually used to generate this assistant turn, surfaced from the metadata blob (no DB
     // column). Null for legacy turns persisted before this field existed and for user messages.
     public string? ReasoningEffort { get; init; }
@@ -279,8 +283,8 @@ public sealed record NodeChatPersistedMessageDto : ISelectedPathMessage
     // column). Null for legacy turns, user messages and providers that report no timings.
     public NodeChatThroughputDto? Throughput { get; init; }
 
-    // The category of a failed assistant turn, surfaced from the metadata blob (no DB column). Null for a legacy turn,
-    // a turn that did not fail, and a stored name this build does not know.
+    // The category of a failed assistant turn, or of a cancelled one whose reason is shown, from the metadata blob (no DB column).
+    // Null for a legacy turn, any other turn, and a stored name this build does not know.
     public FailureCategory? FailureCategory { get; init; }
 }
 

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { hubMock } = vi.hoisted(() => ({
 	hubMock: {
+		path: undefined as string | undefined,
 		handler: undefined as ((payload: unknown) => void) | undefined,
 		reconnected: undefined as (() => void) | undefined,
 		unregisterReconnected: vi.fn(),
@@ -23,14 +24,21 @@ const { hubMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
-	acquireHubConnection: () => ({
-		connection: { on: hubMock.on, off: hubMock.off },
-		onReconnected: hubMock.onReconnected,
-		release: hubMock.release,
-	}),
+	acquireHubConnection: (path: string) => {
+		hubMock.path = path;
+		return {
+			connection: { on: hubMock.on, off: hubMock.off },
+			onReconnected: hubMock.onReconnected,
+			release: hubMock.release,
+		};
+	},
 }));
 
-import { useSourceBuildHub } from "@/features/node-settings/hooks/useSourceBuildHub";
+import {
+	imageRuntimeSourceBuildStream,
+	llamaCppSourceBuildStream,
+	useSourceBuildHub,
+} from "@/features/node-settings/hooks/useSourceBuildHub";
 
 function descriptor(repository: string, buildId: string) {
 	return {
@@ -46,6 +54,7 @@ function descriptor(repository: string, buildId: string) {
 
 describe("useSourceBuildHub", () => {
 	beforeEach(() => {
+		hubMock.path = undefined;
 		hubMock.handler = undefined;
 		hubMock.reconnected = undefined;
 		vi.clearAllMocks();
@@ -57,7 +66,7 @@ describe("useSourceBuildHub", () => {
 		const wrapper = ({ children }: { children: ReactNode }) => (
 			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 		);
-		const { result } = renderHook(() => useSourceBuildHub(true), { wrapper });
+		const { result } = renderHook(() => useSourceBuildHub(llamaCppSourceBuildStream, true), { wrapper });
 
 		act(() =>
 			hubMock.handler?.({
@@ -91,7 +100,7 @@ describe("useSourceBuildHub", () => {
 		const wrapper = ({ children }: { children: ReactNode }) => (
 			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 		);
-		const { result } = renderHook(() => useSourceBuildHub(true), { wrapper });
+		const { result } = renderHook(() => useSourceBuildHub(llamaCppSourceBuildStream, true), { wrapper });
 		const currentBuild = descriptor("https://github.com/ggml-org/llama.cpp", "11111111-1111-4111-8111-111111111111");
 
 		act(() =>
@@ -129,7 +138,7 @@ describe("useSourceBuildHub", () => {
 		const wrapper = ({ children }: { children: ReactNode }) => (
 			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 		);
-		const { result, unmount } = renderHook(() => useSourceBuildHub(true), { wrapper });
+		const { result, unmount } = renderHook(() => useSourceBuildHub(llamaCppSourceBuildStream, true), { wrapper });
 
 		act(() =>
 			hubMock.handler?.({
@@ -158,7 +167,7 @@ describe("useSourceBuildHub", () => {
 		const wrapper = ({ children }: { children: ReactNode }) => (
 			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 		);
-		const { result } = renderHook(() => useSourceBuildHub(true), { wrapper });
+		const { result } = renderHook(() => useSourceBuildHub(llamaCppSourceBuildStream, true), { wrapper });
 
 		act(() =>
 			hubMock.handler?.({
@@ -175,5 +184,33 @@ describe("useSourceBuildHub", () => {
 		);
 
 		expect(result.current.logEntries).toEqual([]);
+	});
+
+	it("subscribes the image runtime stream to its own hub and invalidates its own queries on terminal", async () => {
+		const queryClient = new QueryClient();
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue(undefined);
+		const wrapper = ({ children }: { children: ReactNode }) => (
+			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+		);
+		const { result } = renderHook(() => useSourceBuildHub(imageRuntimeSourceBuildStream, true), { wrapper });
+
+		expect(hubMock.path).toBe("images/runtime/source-build/hub");
+		expect(hubMock.on).toHaveBeenCalledWith("stableDiffusionCppSourceBuild.statusChanged", expect.any(Function));
+
+		act(() =>
+			hubMock.handler?.({
+				phase: "Completed",
+				appendedLogStartSequence: 0,
+				appendedLogLines: ["done"],
+				terminal: true,
+				sanitizedError: null,
+				currentBuild: descriptor("https://github.com/leejet/stable-diffusion.cpp", "33333333-3333-4333-8333-333333333333"),
+			}),
+		);
+
+		expect(result.current.logEntries).toEqual([{ sequence: 0, message: "done" }]);
+		await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(2));
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: [{ _id: "getStableDiffusionCppSourceBuildStatus" }] });
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: [{ _id: "getImageRuntimeStatus" }] });
 	});
 });

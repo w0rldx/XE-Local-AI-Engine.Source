@@ -18,6 +18,7 @@ import {
 	startTranscriptionModelDownloadMutation,
 	updateTranscriptSegmentMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import {
 	toTranscriptionModelView,
 	toTranscriptionRuntimeView,
@@ -38,14 +39,9 @@ export const transcriptionQueryIds = {
 	models: "listTranscriptionModels",
 } as const;
 
-/** Builds the partial generated-query-key filter that matches every cached variant of one transcription endpoint. */
-function transcriptionInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
-
 /** Invalidates every cached variant of one transcription endpoint. The hub's pushes invalidate through this. */
 export function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId: string): Promise<void> {
-	return queryClient.invalidateQueries({ queryKey: transcriptionInvalidationKey(operationId) });
+	return queryClient.invalidateQueries({ queryKey: operationInvalidationKey(operationId) });
 }
 
 // Session history, newest-first from the store. Paged on the wire (limit 1..200, offset >= 0); this surface shows one

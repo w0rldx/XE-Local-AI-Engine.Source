@@ -1,12 +1,11 @@
-import { formatTimestamp } from "@/core/formatting/TimeFormatting";
-import { MS_PER_DAY, startOfUtcDay, type UsageDateRange } from "@/core/usage/UsageDateRange";
-
 import type {
 	XeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse as ProviderTotalsDto,
 	XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse as UsageBucketDto,
 	XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse as UsageSummaryDto,
 	XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse as UsageTotalsDto,
 } from "@/core/api/generated";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { MS_PER_DAY, startOfUtcDay, type UsageDateRange } from "@/core/usage/UsageDateRange";
 
 export type { ProviderTotalsDto, UsageBucketDto, UsageSummaryDto, UsageTotalsDto };
 
@@ -40,11 +39,6 @@ export interface UsageModelRow {
 	// model that only ran on free/local/unpriced providers.
 	readonly estimatedCostUsd: number;
 }
-
-// The canonical provider dimension emitted by the backend. `unknown` is the catch-all the backend assigns when a
-// run predates the provider dimension or its provider could not be resolved.
-const KNOWN_PROVIDERS = ["local", "ollama", "codex", "azure", "unknown"] as const;
-export type KnownProvider = (typeof KNOWN_PROVIDERS)[number];
 
 // True when the summary carries no recorded usage — drives the empty-state guidance card. Checks the grand total
 // run count (the authoritative "nothing happened" signal) rather than the items array, so a range with buckets but

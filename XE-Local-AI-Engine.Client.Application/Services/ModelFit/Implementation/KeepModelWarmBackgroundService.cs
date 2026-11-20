@@ -99,7 +99,7 @@ public sealed class KeepModelWarmBackgroundService : BackgroundService
                 ResetCadence();
                 if (!_insufficientCapacityWarningLogged)
                 {
-                    _logger.LogWarning("Keep model warm is enabled, but the active llama.cpp process cap is {MaxLoadedProcesses}; at least two slots are required. Restart after raising the cap.",
+                    _logger.LogWarning("Keep model warm is enabled, but the active llama.cpp process cap is {MaxLoadedProcesses}; at least two slots are required. Raise the cap to at least 2.",
                         _supervisorOptions.MaxLoadedProcesses);
                     _insufficientCapacityWarningLogged = true;
                 }
@@ -219,7 +219,7 @@ public sealed class KeepModelWarmBackgroundService : BackgroundService
         {
             if (safeCadenceCeiling < activeTtl)
             {
-                _logger.LogWarning("Keep model warm interval {ConfiguredInterval} is too close to the active llama.cpp idle TTL {IdleTtl}; using {EffectiveInterval} until the runtime restarts.",
+                _logger.LogWarning("Keep model warm interval {ConfiguredInterval} is too close to the active llama.cpp idle TTL {IdleTtl}; using {EffectiveInterval} instead.",
                     configuredInterval, activeTtl, safeCadenceCeiling);
             }
             else

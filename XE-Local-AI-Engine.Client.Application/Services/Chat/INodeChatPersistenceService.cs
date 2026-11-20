@@ -17,6 +17,9 @@ public interface INodeChatPersistenceService
 
     Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>The ids of every stored chat (kind <c>chat</c>, not purged), archived ones included, in list order; nothing is decrypted.</summary>
+    Task<IReadOnlyList<Guid>> ListChatConversationIdsAsync(CancellationToken cancellationToken = default);
+
     /// <summary>
     ///     Searches chat conversations (kind <c>chat</c>, not deleted) by title and message text, newest first, from the
     ///     in-memory index; content written by a call that has returned is always found.
@@ -66,6 +69,17 @@ public interface INodeChatPersistenceService
 
     /// <summary>Writes a Completed user or assistant message under a deterministic id at most once; a repeat answers the standing row.</summary>
     Task<NodeChatInsertMessageIfAbsentResult> InsertMessageIfAbsentAsync(NodeChatInsertMessageIfAbsentRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Writes one imported chat as a NEW conversation in ONE transaction: the conversation, its messages in order
+    ///     and its archive state all commit, or nothing of it does. Returns the new id.
+    /// </summary>
+    /// <remarks>
+    ///     Each message gets what <see cref="InsertMessageIfAbsentAsync" /> gives it (encryption, the search stale
+    ///     mark) except a run envelope: no run happened on this node, so an assistant message carries an imported flag
+    ///     in its metadata instead, and the restart reconcile never backfills an envelope for it.
+    /// </remarks>
+    Task<Guid> ImportConversationAsync(NodeChatImportConversationRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>Removes a message the caller inserted itself (a compensating write for a send that lost its second commit).</summary>
     Task DeleteMessageAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default);

@@ -88,7 +88,7 @@ public sealed class McpToolResultProjectionAIFunctionTests
         var bytes = new byte[34 * 1024];
         var result = Project($$$"""{"content":[{"type":"text","text":"chart:"},{"type":"image","data":"{{{Convert.ToBase64String(bytes)}}}","mimeType":"image/png"}],"_meta":{"k":1}}""");
 
-        AssertEx.Equal("chart:\n[image image/png, 34 KB]", Body(result));
+        AssertEx.Equal("chart:\n[image image/png, 34 KiB]", Body(result));
         var image = ToolResultMedia.Get(result).Single();
         AssertEx.Equal("image/png", image.MediaType);
         AssertEx.Equal(bytes.Length, image.Data.Length);
@@ -106,7 +106,7 @@ public sealed class McpToolResultProjectionAIFunctionTests
 
         var result = McpToolResultProjectionAIFunction.Project(image, ToolName) as string;
 
-        AssertEx.Equal("[image image/jpeg, 1 KB]", Body(result));
+        AssertEx.Equal("[image image/jpeg, 1 KiB]", Body(result));
         AssertEx.True(ReferenceEquals(image, ToolResultMedia.Get(result).Single()), "The DataContent itself must reach the chat for persistence.");
     }
 

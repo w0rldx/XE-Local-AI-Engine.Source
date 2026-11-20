@@ -196,9 +196,6 @@ import type {
 	CreateNodeChatConversationData,
 	CreateNodeChatConversationErrors,
 	CreateNodeChatConversationResponses,
-	CreateNodeChatMessageRevisionData,
-	CreateNodeChatMessageRevisionErrors,
-	CreateNodeChatMessageRevisionResponses,
 	CreatePlaybookActionData,
 	CreatePlaybookActionErrors,
 	CreatePlaybookActionResponses,
@@ -367,6 +364,9 @@ import type {
 	EjectImageRuntimeData,
 	EjectImageRuntimeErrors,
 	EjectImageRuntimeResponses,
+	EjectModelLabWarmWorkerData,
+	EjectModelLabWarmWorkerErrors,
+	EjectModelLabWarmWorkerResponses,
 	EjectRunningModelData,
 	EjectRunningModelErrors,
 	EjectRunningModelResponses,
@@ -628,8 +628,14 @@ import type {
 	GetModelLabArchitectureData,
 	GetModelLabArchitectureErrors,
 	GetModelLabArchitectureResponses,
+	GetModelLabExperimentAttentionData,
+	GetModelLabExperimentAttentionErrors,
+	GetModelLabExperimentAttentionResponses,
 	GetModelLabExperimentData,
 	GetModelLabExperimentErrors,
+	GetModelLabExperimentLensData,
+	GetModelLabExperimentLensErrors,
+	GetModelLabExperimentLensResponses,
 	GetModelLabExperimentResponses,
 	GetModelLabExperimentTraceData,
 	GetModelLabExperimentTraceErrors,
@@ -1499,7 +1505,6 @@ import {
 	zCreateMcpServerResponse,
 	zCreateNodeBackupResponse,
 	zCreateNodeChatConversationResponse,
-	zCreateNodeChatMessageRevisionResponse,
 	zCreatePlaybookActionResponse,
 	zCreateScheduledJobResponse,
 	zCreateSkillResponse,
@@ -1556,6 +1561,7 @@ import {
 	zDraftImagePromptResponse,
 	zDraftSkillResponse,
 	zEjectImageRuntimeResponse,
+	zEjectModelLabWarmWorkerResponse,
 	zEjectRunningModelResponse,
 	zEjectTranscriptionRuntimeResponse,
 	zEnableScheduledJobResponse,
@@ -1643,6 +1649,8 @@ import {
 	zGetModelCatalogInfoResponse,
 	zGetModelGgufInspectionResponse,
 	zGetModelLabArchitectureResponse,
+	zGetModelLabExperimentAttentionResponse,
+	zGetModelLabExperimentLensResponse,
 	zGetModelLabExperimentResponse,
 	zGetModelLabExperimentTraceResponse,
 	zGetModelLabPyTorchIndexResponse,
@@ -4396,28 +4404,6 @@ export const listNodeChatMessageRevisions = <ThrowOnError extends boolean = true
 	(options.client ?? client).get<ListNodeChatMessageRevisionsResponses, ListNodeChatMessageRevisionsErrors, ThrowOnError>({
 		responseType: "json",
 		responseValidator: async (data) => await zListNodeChatMessageRevisionsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/revisions",
-		...options,
-	});
-
-export const createNodeChatMessageRevision = <ThrowOnError extends boolean = true>(
-	options: Options<CreateNodeChatMessageRevisionData, ThrowOnError>,
-): RequestResult<CreateNodeChatMessageRevisionResponses, CreateNodeChatMessageRevisionErrors, ThrowOnError> =>
-	(options.client ?? client).post<CreateNodeChatMessageRevisionResponses, CreateNodeChatMessageRevisionErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zCreateNodeChatMessageRevisionResponse.parseAsync(data),
 		security: [
 			{
 				key: "JWTBearerAuth",
@@ -9535,6 +9521,28 @@ export const getModelLabExperiment = <ThrowOnError extends boolean = true>(
 		...options,
 	});
 
+export const getModelLabExperimentAttention = <ThrowOnError extends boolean = true>(
+	options: Options<GetModelLabExperimentAttentionData, ThrowOnError>,
+): RequestResult<GetModelLabExperimentAttentionResponses, GetModelLabExperimentAttentionErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetModelLabExperimentAttentionResponses, GetModelLabExperimentAttentionErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelLabExperimentAttentionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/experiments/{experimentId}/attention/{layer}",
+		...options,
+	});
+
 export const cancelModelLabExperiment = <ThrowOnError extends boolean = true>(
 	options: Options<CancelModelLabExperimentData, ThrowOnError>,
 ): RequestResult<CancelModelLabExperimentResponses, CancelModelLabExperimentErrors, ThrowOnError> =>
@@ -9552,6 +9560,28 @@ export const cancelModelLabExperiment = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/model-lab/experiments/{experimentId}/cancel",
+		...options,
+	});
+
+export const getModelLabExperimentLens = <ThrowOnError extends boolean = true>(
+	options: Options<GetModelLabExperimentLensData, ThrowOnError>,
+): RequestResult<GetModelLabExperimentLensResponses, GetModelLabExperimentLensErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetModelLabExperimentLensResponses, GetModelLabExperimentLensErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelLabExperimentLensResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/experiments/{experimentId}/lens",
 		...options,
 	});
 
@@ -9672,6 +9702,27 @@ export const getModelLabPyTorchSource = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/model-lab/pytorch-source",
+		...options,
+	});
+
+export const ejectModelLabWarmWorker = <ThrowOnError extends boolean = true>(
+	options?: Options<EjectModelLabWarmWorkerData, ThrowOnError>,
+): RequestResult<EjectModelLabWarmWorkerResponses, EjectModelLabWarmWorkerErrors, ThrowOnError> =>
+	(options?.client ?? client).post<EjectModelLabWarmWorkerResponses, EjectModelLabWarmWorkerErrors, ThrowOnError>({
+		responseValidator: async (data) => await zEjectModelLabWarmWorkerResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/warm/eject",
 		...options,
 	});
 

@@ -12,6 +12,7 @@ import {
 	resumeEvaluationMutation,
 	suggestComparisonOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { toComparisonReport, toComparisonSuggestion, toEvaluationRun } from "@/features/training/models/ComparisonModels";
 
 // Server-state for evaluations and comparison reports. Evaluation progress also arrives over the training run hub
@@ -23,12 +24,8 @@ const comparisonQueryIds = {
 	evaluations: "listEvaluations",
 } as const;
 
-function invalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
-
 function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId: string): Promise<void> {
-	return queryClient.invalidateQueries({ queryKey: invalidationKey(operationId) });
+	return queryClient.invalidateQueries({ queryKey: operationInvalidationKey(operationId) });
 }
 
 export function useComparisonReports() {

@@ -68,7 +68,7 @@ describe("isNodeChatReadOnlyConflict", () => {
 
 	it("rejects a SignalR HubException carrying any other message", () => {
 		const sizeCap = new Error(
-			"An unexpected error occurred invoking 'SendMessage' on the server. HubException: Your message is too large (513 KB, limit 512 KB).",
+			"An unexpected error occurred invoking 'SendMessage' on the server. HubException: Your message is too large (513 KiB, limit 512 KiB).",
 		);
 
 		expect(isNodeChatReadOnlyConflict(sizeCap)).toBe(false);

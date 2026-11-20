@@ -390,7 +390,7 @@ XE-Local-AI-Engine.Tests/Chat/NodeChatEnvelopeTransactionTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatHubTests.cs|run|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatInvocationPumpRunEnvelopeTests.cs|run|7
 XE-Local-AI-Engine.Tests/Chat/NodeChatPersistenceServiceTests.cs|run|5
-XE-Local-AI-Engine.Tests/Chat/NodeChatReadOnlyEndpointTests.cs|run|2
+XE-Local-AI-Engine.Tests/Chat/NodeChatReadOnlyEndpointTests.cs|run|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatReadOnlyEndpointTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatRegenerationServiceTests.cs|run|18
 XE-Local-AI-Engine.Tests/Chat/NodeChatRegenerationServiceTests.cs|summary|1
@@ -579,7 +579,7 @@ XE-Local-AI-Engine.Tests/Endpoints/GraphWorkflows/V1/GraphWorkflowValidateEndpoi
 XE-Local-AI-Engine.Tests/Endpoints/Images/ImageModelManagementEndpointTests.cs|run|2
 XE-Local-AI-Engine.Tests/Endpoints/Images/ImageModelManagementEndpointTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationExecutionEndpointTests.cs|summary|4
-XE-Local-AI-Engine.Tests/Endpoints/Knowledge/DownloadRecommendedEmbeddingEndpointTests.cs|run|3
+XE-Local-AI-Engine.Tests/Endpoints/Knowledge/DownloadRecommendedEmbeddingEndpointTests.cs|run|2
 XE-Local-AI-Engine.Tests/Endpoints/Knowledge/DownloadRecommendedEmbeddingEndpointTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Endpoints/Knowledge/DownloadRecommendedRerankerEndpointTests.cs|run|1
 XE-Local-AI-Engine.Tests/Endpoints/Knowledge/DownloadRecommendedRerankerEndpointTests.cs|summary|1
@@ -796,7 +796,7 @@ XE-Local-AI-Engine.Tests/Invocation/HeuristicTokenEstimatorTests.cs|run|3
 XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerApprovalTests.cs|run|9
 XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerContextBudgetTests.cs|run|5
 XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerEffortDispatchTests.cs|run|12
-XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerFailureTests.cs|run|4
+XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerFailureTests.cs|run|3
 XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerTestSupport.cs|run|12
 XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerTestSupport.cs|summary|5
 XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerTests.cs|run|21

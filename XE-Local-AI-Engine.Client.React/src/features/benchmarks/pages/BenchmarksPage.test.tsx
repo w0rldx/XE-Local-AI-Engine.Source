@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { BenchmarksPage } from "@/features/benchmarks/pages/BenchmarksPage";
 import { jsonRoute, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -85,7 +86,11 @@ describe("BenchmarksPage", () => {
 	it("guides the operator to create a project when the node has none", async () => {
 		baseRoutes([]);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		expect(await screen.findByText("Create a project to freeze one task and compare models.")).toBeTruthy();
 		expect(screen.getByText("Local model benchmarks")).toBeTruthy();
@@ -95,7 +100,11 @@ describe("BenchmarksPage", () => {
 	it("auto-selects the first project and shows its core task", async () => {
 		baseRoutes([projectRow]);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		expect(await screen.findByText("Summarise the attached text.")).toBeTruthy();
 		expect(screen.getByRole("heading", { name: "Summarisation" })).toBeTruthy();
@@ -109,7 +118,11 @@ describe("BenchmarksPage", () => {
 	it("exposes exactly one h1, the page's own title", async () => {
 		baseRoutes([projectRow]);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		expect(await screen.findByText("Summarise the attached text.")).toBeTruthy();
 		const headings = screen.getAllByRole("heading", { level: 1 });
@@ -128,7 +141,11 @@ describe("BenchmarksPage", () => {
 			jsonRoute("get", "agents", { items: [] }),
 		);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		expect(await screen.findByText("The benchmark store is offline.")).toBeTruthy();
 	});
@@ -136,7 +153,11 @@ describe("BenchmarksPage", () => {
 	it("opens the create-project editor from the page action", async () => {
 		baseRoutes([]);
 
-		renderWithProviders(<BenchmarksPage />);
+		renderWithProviders(
+			<ConfirmProvider>
+				<BenchmarksPage />
+			</ConfirmProvider>,
+		);
 
 		fireEvent.click(await screen.findByRole("button", { name: "New project" }));
 

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
-using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -103,7 +102,7 @@ public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
     public async Task AddApprovalDecisionAsync_RowIsInvisibleToOtherReadViews()
     {
         var databasePath = GetDatabasePath("approval-exclusion.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -134,7 +133,7 @@ public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
     private async Task<AgentExecutionLog> WriteAndReadSingleRowAsync(string fileName, ApprovalDecisionAuditInput input)
     {
         var databasePath = GetDatabasePath(fileName);
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -158,11 +157,6 @@ public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
         return Path.Combine(_rootPath, fileName);
     }
 
-    private static byte[] CreateKeyMaterial()
-    {
-        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
-    }
-
     private sealed class FixedTimeProvider : TimeProvider
     {
         private readonly DateTimeOffset _now;
@@ -175,36 +169,6 @@ public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
         public override DateTimeOffset GetUtcNow()
         {
             return _now;
-        }
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
         }
     }
 }

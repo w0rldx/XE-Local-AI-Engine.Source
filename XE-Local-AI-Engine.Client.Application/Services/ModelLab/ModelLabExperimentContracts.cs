@@ -6,6 +6,15 @@ using System.Text.Json.Serialization;
 public interface IModelLabActiveJob
 {
     Guid? ActiveBaseArtifactId { get; }
+
+    /// <summary>
+    ///     Evicts an idle warm worker that holds <paramref name="baseArtifactId" /> and waits for it to go. <c>Busy</c> while a job holds it;
+    ///     <c>NotConfirmed</c> while any worker that may hold the checkpoint (its own, or one of unknown checkpoint) was not seen to exit.
+    /// </summary>
+    Task<ModelLabEjectOutcome> EvictIdleWorkerAsync(Guid baseArtifactId, CancellationToken ct);
+
+    /// <summary>True while a worker not confirmed stopped may still run from the training runtime: a kept receipt, or a receipt scan that failed. Retries their reap first.</summary>
+    Task<bool> HasUnconfirmedWorkerAsync(CancellationToken ct);
 }
 
 /// <summary>Bounds on one Model Lab job, each a separate failure.</summary>
@@ -18,6 +27,24 @@ public sealed class ModelLabJobOptions
 
     /// <summary>How long the script gets to exit after a stop request or after closing its output, before its group is killed.</summary>
     public TimeSpan ExitGracePeriod { get; init; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>From a serving worker's spawn to its handshake: the imports, before any job.</summary>
+    public TimeSpan HandshakeTimeout { get; init; } = TimeSpan.FromSeconds(60);
+
+    /// <summary>How long one command line to a serving worker's stdin may take.</summary>
+    public TimeSpan CommandWriteTimeout { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>From a cancel to the job's terminal frame, and from a closed output to the exit; then the group is killed.</summary>
+    public TimeSpan CancelAcknowledgementTimeout { get; init; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>From a job's terminal frame to the worker's ready frame.</summary>
+    public TimeSpan ReadyTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>How long an evicted worker gets to exit on its own before its group is killed.</summary>
+    public TimeSpan EvictGrace { get; init; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>How long a killed worker may take to be seen gone; past it the exit counts as unverified.</summary>
+    public TimeSpan ExitVerifyTimeout { get; init; } = TimeSpan.FromSeconds(10);
 }
 
 /// <summary>What <c>modellab.py</c> reads from <c>job.json</c> for a trace. Holds the plaintext prompt, in the owner-only work directory.</summary>
@@ -26,6 +53,9 @@ public sealed record ModelLabTraceJobV1
     public int ContractVersion { get; init; } = ModelLabTraceSpec.ContractVersion;
 
     public string Kind { get; init; } = "trace";
+
+    /// <summary>The model a serving worker holds for this job; a worker holding another refuses it.</summary>
+    public required string ModelKey { get; init; }
 
     public required string CheckpointPath { get; init; }
 
@@ -43,6 +73,29 @@ public sealed record ModelLabTraceJobV1
     public required int TraceByteCap { get; init; }
 
     public int Seed { get; init; } = ModelLabTraceSpec.Seed;
+
+    /// <summary>Where the script writes the attention rows. This and the three below are set together, and left out of the file when the trace records no attention.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AttentionPath { get; init; }
+
+    /// <summary><see cref="ModelLabTraceSpec.AttentionLayersFor" />: full-attention blocks only, ascending.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<int>? AttentionLayers { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? AttentionTopKeys { get; init; }
+
+    /// <summary><see cref="ModelLabTraceSpec.AttentionByteCapFor" /> of the layers and the checkpoint's query heads.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? AttentionByteCap { get; init; }
+
+    /// <summary><see cref="ModelLabTraceSpec.LensTopTokens" />. Set with <see cref="LensByteCap" /> for a checkpoint of 2 to <see cref="ModelLabTraceSpec.MaxTraceLayers" /> blocks, and left out of the file otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? LensTopTokens { get; init; }
+
+    /// <summary><see cref="ModelLabTraceSpec.LensByteCapFor" /> of the block count: the lens lines' own cap, on top of <see cref="TraceByteCap" /> in the same file.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? LensByteCap { get; init; }
 }
 
 /// <summary>What <c>modellab.py</c> reads for a steering job. Holds the plaintext contrast prompts, in the owner-only work directory.</summary>
@@ -51,6 +104,9 @@ public sealed record ModelLabSteeringJobV1
     public int ContractVersion { get; init; } = ModelLabTraceSpec.ContractVersion;
 
     public string Kind { get; init; } = "steering";
+
+    /// <summary>The model a serving worker holds for this job; a worker holding another refuses it.</summary>
+    public required string ModelKey { get; init; }
 
     public required string CheckpointPath { get; init; }
 
@@ -85,6 +141,9 @@ public sealed record ModelLabExperimentRequest
 
     /// <summary>The blocks a trace records, in any order. Null for <see cref="ModelLabTraceSpec.LayersFor" />; a steering job has its own layer.</summary>
     public IReadOnlyList<int>? Layers { get; init; }
+
+    /// <summary>A trace also records each generated step's attention row at the blocks <see cref="ModelLabTraceSpec.AttentionLayersFor" /> picks.</summary>
+    public bool RecordAttention { get; init; }
 }
 
 /// <summary>A steering job's inputs. The arm's prompts are the request's <c>prompt</c> and then <see cref="AdditionalTestPrompts" />.</summary>
@@ -119,7 +178,11 @@ public enum ModelLabStartRefusal
     InvalidLayer,
     InvalidTraceLayers,
     PinLimitReached,
-    ModelNotLoaded
+    ModelNotLoaded,
+    AttentionUnavailable,
+
+    /// <summary>A warm worker's exit was never confirmed, so it may still hold GPU memory; every start retries its reap first.</summary>
+    OrphanWorker
 }
 
 public sealed record ModelLabStart
@@ -139,43 +202,55 @@ public enum ModelLabTraceReadStatus
 }
 
 /// <summary>One token at one layer, as measured. The short names are the file's, chosen to keep the capped trace small.</summary>
+/// <remarks>Every key is required, here and on the other line records: a key the script renames or drops makes the file unreadable, never a default value.</remarks>
 public sealed record ModelLabTraceRecord
 {
+    [JsonRequired]
     [JsonPropertyName("s")]
     public int Step { get; init; }
 
+    [JsonRequired]
     [JsonPropertyName("l")]
     public int Layer { get; init; }
 
+    [JsonRequired]
     [JsonPropertyName("k")]
     public string Kind { get; init; } = "?";
 
     /// <summary>Null, here and in the lists below, where the measured value was not a finite number.</summary>
+    [JsonRequired]
     [JsonPropertyName("n")]
     public double? Norm { get; init; }
 
     /// <summary>The 1st, 50th and 99th percentiles of the residual's values.</summary>
+    [JsonRequired]
     [JsonPropertyName("p")]
     public IReadOnlyList<double?> Percentiles { get; init; } = [];
 
+    [JsonRequired]
     [JsonPropertyName("ti")]
     public IReadOnlyList<int> TopIndices { get; init; } = [];
 
+    [JsonRequired]
     [JsonPropertyName("tv")]
     public IReadOnlyList<double?> TopValues { get; init; } = [];
 }
 
 public sealed record ModelLabTraceFooter
 {
+    [JsonRequired]
     [JsonPropertyName("truncated")]
     public bool Truncated { get; init; }
 
+    [JsonRequired]
     [JsonPropertyName("records")]
     public int Records { get; init; }
 
+    [JsonRequired]
     [JsonPropertyName("dropped")]
     public int Dropped { get; init; }
 
+    [JsonRequired]
     [JsonPropertyName("cap")]
     public long Cap { get; init; }
 }
@@ -185,6 +260,101 @@ public sealed record ModelLabTrace
     public required ModelLabTraceReadStatus Status { get; init; }
 
     public IReadOnlyList<ModelLabTraceRecord> Records { get; init; } = [];
+
+    public ModelLabTraceFooter? Footer { get; init; }
+}
+
+/// <summary>One predicted token's query row at one block, per query head: the kept keys, most weight first, and the mass of the keys left out.</summary>
+public sealed record ModelLabAttentionRecord
+{
+    /// <summary>The index of the token this row predicted.</summary>
+    [JsonRequired]
+    [JsonPropertyName("s")]
+    public int Step { get; init; }
+
+    [JsonRequired]
+    [JsonPropertyName("l")]
+    public int Layer { get; init; }
+
+    [JsonRequired]
+    [JsonPropertyName("q")]
+    public int QueryPosition { get; init; }
+
+    /// <summary>Key positions, per head.</summary>
+    [JsonRequired]
+    [JsonPropertyName("k")]
+    public IReadOnlyList<IReadOnlyList<int>> Keys { get; init; } = [];
+
+    /// <summary>Weights in units of <see cref="ModelLabAttentionSummary.WeightScale" />, rounded down, matching <see cref="Keys" />.</summary>
+    [JsonRequired]
+    [JsonPropertyName("w")]
+    public IReadOnlyList<IReadOnlyList<int>> Weights { get; init; } = [];
+
+    /// <summary>The weight outside the kept keys, per head, in the same units.</summary>
+    [JsonRequired]
+    [JsonPropertyName("r")]
+    public IReadOnlyList<int> Rest { get; init; } = [];
+}
+
+/// <summary>A trace's attention rows at one block, with the run's capture shape.</summary>
+public sealed record ModelLabAttention
+{
+    public required ModelLabTraceReadStatus Status { get; init; }
+
+    public ModelLabAttentionSummary? Summary { get; init; }
+
+    public IReadOnlyList<ModelLabAttentionRecord> Records { get; init; } = [];
+
+    public ModelLabTraceFooter? Footer { get; init; }
+}
+
+/// <summary>One generated step's logit lens: per block, the final norm and output layer applied to that block's last-position output. The short names are the file's.</summary>
+public sealed record ModelLabLensRecord
+{
+    /// <summary>The index of the generated token.</summary>
+    [JsonRequired]
+    [JsonPropertyName("s")]
+    public int Step { get; init; }
+
+    /// <summary>Per block, the top token ids of the readout, most probable first.</summary>
+    [JsonRequired]
+    [JsonPropertyName("i")]
+    public IReadOnlyList<IReadOnlyList<int>> Ids { get; init; } = [];
+
+    /// <summary>Per block, their natural-log probabilities, rounded down to four decimals; null where not finite.</summary>
+    [JsonRequired]
+    [JsonPropertyName("p")]
+    public IReadOnlyList<IReadOnlyList<double?>> Logprobs { get; init; } = [];
+
+    /// <summary>Per block, the generated token's logprob in the readout.</summary>
+    [JsonRequired]
+    [JsonPropertyName("c")]
+    public IReadOnlyList<double?> ChosenLogprobs { get; init; } = [];
+
+    /// <summary>Per block, the generated token's competition rank in the readout: tokens tied with it share the better rank. Null where its logprob is.</summary>
+    [JsonRequired]
+    [JsonPropertyName("r")]
+    public IReadOnlyList<int?> ChosenRanks { get; init; } = [];
+
+    /// <summary>Per block, the readout's entropy in nats, to three decimals; null where not finite.</summary>
+    [JsonRequired]
+    [JsonPropertyName("e")]
+    public IReadOnlyList<double?> Entropies { get; init; } = [];
+
+    /// <summary>The step's distinct top ids, as decimal strings, to their decoded text cut to 64 escaped bytes.</summary>
+    [JsonRequired]
+    [JsonPropertyName("t")]
+    public IReadOnlyDictionary<string, string?> Texts { get; init; } = new Dictionary<string, string?>(StringComparer.Ordinal);
+}
+
+/// <summary>A trace's logit lens lines, with the run's lens summary and the lens section's own footer.</summary>
+public sealed record ModelLabLens
+{
+    public required ModelLabTraceReadStatus Status { get; init; }
+
+    public ModelLabLensSummary? Summary { get; init; }
+
+    public IReadOnlyList<ModelLabLensRecord> Records { get; init; } = [];
 
     public ModelLabTraceFooter? Footer { get; init; }
 }
@@ -256,6 +426,80 @@ public sealed record ModelLabTraceResult
 
     /// <summary>Set on a steering job. The fields above then describe its derive pass, and the tokens stay empty.</summary>
     public ModelLabSteeringResult? Steering { get; init; }
+
+    /// <summary>The rendered prompt's tokens, in order. Null, like the three below, on a result saved before contract 4.</summary>
+    public IReadOnlyList<ModelLabPromptPiece>? PromptPieces { get; init; }
+
+    /// <summary>One character per block: F for full attention, L for linear, ? when the model does not say.</summary>
+    public string? LayerKinds { get; init; }
+
+    /// <summary>The attention kernel the run used, such as <c>sdpa</c>.</summary>
+    public string? AttnImplementation { get; init; }
+
+    /// <summary>Null unless the trace recorded attention.</summary>
+    public ModelLabAttentionSummary? Attention { get; init; }
+
+    /// <summary>Null on a result saved before contract 5, and for a checkpoint with fewer than 2 or more than <see cref="ModelLabTraceSpec.MaxTraceLayers" /> blocks.</summary>
+    public ModelLabLensSummary? Lens { get; init; }
+
+    /// <summary>True when the worker already held the model. Null on a result saved before contract 6.</summary>
+    public bool? Warm { get; init; }
+
+    /// <summary>Seconds the model took to load for this run: 0 when warm. Null on a result saved before contract 6.</summary>
+    public double? LoadSeconds { get; init; }
+}
+
+/// <summary>What a trace's logit lens recorded. The lines themselves follow the hook records in the trace blob.</summary>
+public sealed record ModelLabLensSummary
+{
+    /// <summary>Every block, ascending.</summary>
+    public IReadOnlyList<int> Layers { get; init; } = [];
+
+    public int TopTokens { get; init; }
+
+    public int Records { get; init; }
+
+    /// <summary>True when the lens cap dropped steps.</summary>
+    public bool Truncated { get; init; }
+
+    /// <summary>True when the output layer shares the input embedding's weights.</summary>
+    public bool TiedEmbeddings { get; init; }
+
+    /// <summary>The output layer's width: the V an entropy is bounded by, ln V.</summary>
+    public int VocabSize { get; init; }
+}
+
+/// <summary>One token of the rendered prompt. The text is what the tokenizer decodes the id to on its own, and can be cut to keep the result under its cap.</summary>
+public sealed record ModelLabPromptPiece
+{
+    public int Id { get; init; }
+
+    public string Text { get; init; } = string.Empty;
+}
+
+/// <summary>What a trace's attention capture recorded. The rows themselves are in the run's attention blob.</summary>
+public sealed record ModelLabAttentionSummary
+{
+    /// <summary>The captured blocks, ascending.</summary>
+    public IReadOnlyList<int> Layers { get; init; } = [];
+
+    /// <summary>Query heads per block; query head h reads key/value head h / (Heads / KvHeads).</summary>
+    public int Heads { get; init; }
+
+    public int KvHeads { get; init; }
+
+    public int HeadDim { get; init; }
+
+    /// <summary>Keys kept per row and head; a row over fewer keys keeps them all.</summary>
+    public int TopKeys { get; init; }
+
+    /// <summary>A stored weight of <c>n</c> means <c>n / WeightScale</c>.</summary>
+    public int WeightScale { get; init; }
+
+    public int Records { get; init; }
+
+    /// <summary>True when the byte cap dropped rows.</summary>
+    public bool Truncated { get; init; }
 }
 
 /// <summary>A derived vector and each arm that has finished. Arms compare only with each other: their launches are not a chat's.</summary>

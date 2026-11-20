@@ -39,7 +39,7 @@ interface AgentDefinitionFormProps {
 	submitError?: string;
 	onSubmit: (values: AgentDefinitionFormValues) => void;
 	// Reports whether the form has unsaved edits (current values differ from initialValues). The page wires this to the
-	// dialog close-guard and the route nav-guard. The form no longer renders its own Save/Cancel — those live in the
+	// dialog close-guard and the route nav-guard. The form renders no Save/Cancel of its own — those live in the
 	// dialog footer and drive submission via the imperative handle.
 	onDirtyChange?: (isDirty: boolean) => void;
 	// The seeded Default Assistant (backend provenance): its tools are the whole offer, shown locked, never saved as a list.

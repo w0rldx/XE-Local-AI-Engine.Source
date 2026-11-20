@@ -135,6 +135,7 @@ public static class LlamaServerServiceCollectionExtensions
 
         // Options default here so the supervisor is resolvable; the host overrides them from node config.
         services.TryAddSingleton(new LlamaServerSupervisorOptions());
+        // An empty map (spawn every model); a host may replace it to attach external endpoints. Nothing binds it from node config.
         services.TryAddSingleton(new LlamaServerExternalEndpointOptions());
         services.TryAddSingleton<ILlamaServerEndpointBinding, LlamaServerEndpointBinding>();
 
@@ -209,6 +210,9 @@ public static class LlamaServerServiceCollectionExtensions
         // Residency tick the supervisor raises on every change the running list shows; the Client host replaces this no-op with its hub-backed publisher.
         services.TryAddSingleton<IRuntimeResidencyChangeNotifier, NullRuntimeResidencyChangeNotifier>();
 
+        // No idle GPU holder in a provider-only host; the application registers its broker with a plain AddSingleton, which wins.
+        services.TryAddSingleton<IGpuIdleHolderPreemption>(NoOpGpuIdleHolderPreemption.Instance);
+
         // The supervisor owns all llama-server child processes for the node — strictly one singleton. Built via an
         // explicit factory because its ctor is internal (it takes the internal launcher/health-probe seams).
         services.TryAddSingleton(static sp => new LlamaServerProcessSupervisor(sp.GetRequiredService<ILlamaCppBinaryManager>(),
@@ -232,7 +236,8 @@ public static class LlamaServerServiceCollectionExtensions
             loadTelemetry: sp.GetRequiredService<ILlamaServerLoadTelemetry>(),
             spawnReceipts: SpawnReceipts(sp),
             pooledLaunchAdmission: sp.GetService<ILlamaServerPooledLaunchAdmission>(),
-            residencyNotifier: sp.GetRequiredService<IRuntimeResidencyChangeNotifier>()));
+            residencyNotifier: sp.GetRequiredService<IRuntimeResidencyChangeNotifier>(),
+            idlePreemption: sp.GetRequiredService<IGpuIdleHolderPreemption>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
         services.TryAddSingleton<ITransientLlamaServerEvaluationHarness>(static sp =>

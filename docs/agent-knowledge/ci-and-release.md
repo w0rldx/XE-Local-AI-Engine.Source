@@ -26,7 +26,8 @@ alarm. **Prevents:** a CPU-fallback run passing as GPU. **Authority:** `scripts/
 result. Never lower the shellcheck pin (0.11.0) or lint severity: `ubuntu-latest`'s 0.9.0 false positives fail
 `--severity=style`. Never re-add `docker pull` or `XE_REQUIRE_DOCKER_TESTS=1` to `build-and-test.yml`: the wire shape
 runs against `Testing.FakeDocker`, the daemon half in `scripts/run-docker-smoke-local.sh`. `python-quality` uses the root
-tooling manifest: never add dev tools to `tools/training/pyproject.toml`. **Prevents:** registry blips reddening PRs.
+tooling manifest: never add dev tools to `tools/training/pyproject.toml`. Its CPU torch comes from a second registry,
+`download.pytorch.org`; bump it by hand with the training lock. **Prevents:** registry blips reddening PRs.
 **Authority:** `build-and-test.yml`, `scripts/lint-release-scripts.sh`.
 [evidence](../agent-knowledge-evidence.md#packaging-and-repository-consolidation)
 

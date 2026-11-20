@@ -53,7 +53,7 @@ describe("fromGgufAcquisitions", () => {
 			label: "Downloading qwen3-8b",
 			state: "running",
 			progress: { kind: "known", pct: 25 },
-			detail: "1 KB of 4 KB",
+			detail: "1 KiB of 4 KiB",
 			href: { to: "/models" },
 		});
 	});
@@ -71,11 +71,34 @@ describe("fromGgufAcquisitions", () => {
 		expect(row).toMatchObject({ id: "gguf-import:op-1", kind: "gguf-import", label: "Importing qwen3-8b" });
 	});
 
-	it("carries the server's reason on a failure and offers no retry it does not have", () => {
-		const [row] = fromGgufAcquisitions([gguf({ phase: "Failed", sanitizedMessage: "Disk full." })], t);
+	it("explains a failure by its translated error code and offers no retry it does not have", () => {
+		const [row] = fromGgufAcquisitions(
+			[gguf({ phase: "Failed", errorCode: "InsufficientStorage", sanitizedMessage: "Need 5 GB, 1 GB free." })],
+			t,
+		);
 
-		expect(row).toMatchObject({ state: "failed", label: "qwen3-8b could not be downloaded", detail: "Disk full." });
+		expect(row).toMatchObject({
+			state: "failed",
+			label: "qwen3-8b could not be downloaded",
+			detail: "There is not enough free storage for this download.",
+		});
 		expect(row?.retry).toBeUndefined();
+	});
+
+	it("falls back to the generic sentence for an unknown code, and keeps the server text only after a DownloadFailed", () => {
+		const [unknown] = fromGgufAcquisitions([gguf({ phase: "Failed", errorCode: "Future", sanitizedMessage: "Raw." })], t);
+		const [generic] = fromGgufAcquisitions(
+			[gguf({ phase: "Failed", errorCode: "DownloadFailed", sanitizedMessage: "Download failed." })],
+			t,
+		);
+		const [imported] = fromGgufAcquisitions(
+			[gguf({ operationKind: "Import", phase: "Failed", errorCode: "SourceNotFound", sanitizedMessage: "Raw." })],
+			t,
+		);
+
+		expect(unknown?.detail).toBe("The model could not be downloaded.");
+		expect(generic?.detail).toBe("The model could not be downloaded.\nDownload failed.");
+		expect(imported?.detail).toBe("The selected GGUF file was not found.");
 	});
 
 	it("drops a cancelled operation and keeps a completed one as succeeded", () => {
@@ -110,11 +133,11 @@ describe("fromRuntimeAcquisition", () => {
 			state: "running",
 			label: "Setting up the local AI runtime",
 			progress: { kind: "known", pct: 25 },
-			detail: "Downloading the llama.cpp runtime… · 1 KB of 4 KB",
+			detail: "Downloading the llama.cpp runtime… · 1 KiB of 4 KiB",
 			href: { to: "/node-settings", search: { section: "runtimes" } },
 		});
 		expect(noTotal?.progress).toEqual({ kind: "indeterminate" });
-		expect(noTotal?.detail).toBe("Downloading the llama.cpp runtime… · 1 KB downloaded");
+		expect(noTotal?.detail).toBe("Downloading the llama.cpp runtime… · 1 KiB downloaded");
 	});
 
 	it("names the step only on the multi-archive path", () => {
@@ -172,5 +195,46 @@ describe("operationTransitions", () => {
 		const again = operationTransitions(seen, [op("rt", "failed")]);
 		expect(again.finished.map((row) => row.id)).toEqual(["rt"]);
 		expect([...operationTransitions(again.seen, []).seen]).toEqual([]);
+	});
+});
+
+describe("waiting operations", () => {
+	function op(id: string, state: Operation["state"]): Operation {
+		return { id, kind: "graph-run", label: id, progress: { kind: "indeterminate" }, state, href: { to: "/models" } };
+	}
+
+	it("reports a wait on first sight, once, and never as finished", () => {
+		const first = operationTransitions(new Map(), [op("w", "waiting")]);
+		expect(first.waiting.map((row) => row.id)).toEqual(["w"]);
+
+		const refetch = operationTransitions(first.seen, [op("w", "waiting")]);
+		expect(refetch.waiting).toEqual([]);
+
+		const decided = operationTransitions(refetch.seen, []);
+		expect(decided.waiting).toEqual([]);
+		expect(decided.finished).toEqual([]);
+	});
+
+	it("does not count a running row that starts waiting as finished, and reports the wait", () => {
+		const running = operationTransitions(new Map(), [op("w", "running")]);
+		const parked = operationTransitions(running.seen, [op("w", "waiting")]);
+
+		expect(parked.finished).toEqual([]);
+		expect(parked.waiting.map((row) => row.id)).toEqual(["w"]);
+	});
+
+	it("reports a new wait when the wait key changes under the same id", () => {
+		const wait = (waitKey: string): Operation => ({ ...op("s", "waiting"), waitKey });
+		const first = operationTransitions(new Map(), [wait("s:WaitingForInput")]);
+		const second = operationTransitions(first.seen, [wait("s:WaitingForApproval")]);
+		const repeat = operationTransitions(second.seen, [wait("s:WaitingForApproval")]);
+
+		expect(first.waiting).toHaveLength(1);
+		expect(second.waiting).toHaveLength(1);
+		expect(repeat.waiting).toEqual([]);
+	});
+
+	it("keeps a waiting row active", () => {
+		expect(isActiveOperation(op("w", "waiting"))).toBe(true);
 	});
 });

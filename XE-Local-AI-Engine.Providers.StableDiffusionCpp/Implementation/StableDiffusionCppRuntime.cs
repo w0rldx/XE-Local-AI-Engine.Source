@@ -65,11 +65,11 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
         // this job's own status says Generating, so only the load phase can be attributed this early.
         using var progressSubscription = _progressBroker.Subscribe(request.ModelName, tracker.ObserveFine);
 
-        var endpoint = await _supervisor.EnsureRunningAsync(request.ModelName, ct).ConfigureAwait(false);
-
         // Hold an active-job lease for the whole submit→poll→complete window so the idle reaper / LRU evictor never tree-kill this daemon mid-generation, even if the job outruns the idle TTL. Each
         // poll Touch()es the lease. See docs/wiki/14-image-generation.md ("Daemon leases and the teardown races").
-        _ = _supervisor.TryAcquireJobLease(request.ModelName, out var jobLease);
+        var leased = await EnsureLeasedAsync(request.ModelName, ct).ConfigureAwait(false);
+        var endpoint = leased.Endpoint;
+        var jobLease = leased.Lease;
         using var jobLeaseScope = jobLease;
 
         string? jobId = null;
@@ -85,10 +85,10 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
 
             while (true)
             {
-                jobLease?.Touch();
+                jobLease.Touch();
 
                 // Checked before each poll so a known-dead daemon fails the job now, not after the GET's retry window.
-                if (jobLease?.HasDaemonExited(out var exitCode) == true)
+                if (jobLease.HasDaemonExited(out var exitCode))
                 {
                     throw DaemonExited(exitCode, cause: null);
                 }
@@ -143,7 +143,7 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
                 await Task.Delay(PollInterval, ct).ConfigureAwait(false);
             }
         }
-        catch (HttpRequestException ex) when (jobLease?.HasDaemonExited(out var exitCode) == true)
+        catch (HttpRequestException ex) when (jobLease.HasDaemonExited(out var exitCode))
         {
             throw DaemonExited(exitCode, ex);
         }
@@ -161,6 +161,41 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
             tracker.ReportCoarse(ImageGenPhase.Cancelled, queuePosition: null);
             throw;
         }
+    }
+
+    /// <summary>
+    ///     Ensures the model's daemon and leases that same daemon, so a job is only ever submitted to a daemon it holds.
+    /// </summary>
+    /// <remarks>
+    ///     A daemon torn down or replaced between the ensure and the lease (an idle reap, a lowered cap) makes its endpoint stale: the
+    ///     model is ensured once more, and when that daemon is gone too the generation fails before anything was submitted.
+    /// </remarks>
+    private async Task<LeasedDaemon> EnsureLeasedAsync(string modelName, CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var endpoint = await _supervisor.EnsureRunningAsync(modelName, ct).ConfigureAwait(false);
+#pragma warning disable CA2000 // Ownership passes to the returned LeasedDaemon; the caller disposes the lease when the job ends.
+            if (_supervisor.TryAcquireJobLease(endpoint, out var lease))
+#pragma warning restore CA2000
+            {
+                return new LeasedDaemon
+                {
+                    Endpoint = endpoint,
+                    Lease = lease
+                };
+            }
+        }
+
+        throw new StableDiffusionRuntimeException("The image runtime unloaded the model while the generation was starting. Try again.");
+    }
+
+    /// <summary>An ensured daemon's endpoint and the job lease held on that same daemon.</summary>
+    private sealed class LeasedDaemon
+    {
+        public required ImageServerEndpoint Endpoint { get; init; }
+
+        public required IImageServerJobLease Lease { get; init; }
     }
 
     /// <summary>
@@ -222,13 +257,13 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
     ///     The lease is released first: eviction is only safe once no job holds the daemon, and generations are
     ///     serialized by <c>ImageJobCoordinator</c>'s single generation slot, which this call still holds.
     /// </remarks>
-    private async Task<bool> RecycleAfterFailedJobAsync(string modelName, SdJobState state, IImageServerJobLease? jobLease)
+    private async Task<bool> RecycleAfterFailedJobAsync(string modelName, SdJobState state, IImageServerJobLease jobLease)
     {
-        var stderrTail = Bound(jobLease?.StderrTail, MaxLoggedStderrLength);
+        var stderrTail = Bound(jobLease.StderrTail, MaxLoggedStderrLength);
         _logger.LogWarning("sd-server job for model {ModelName} failed ({ErrorCode}): {ErrorMessage}. Last stderr: {StderrTail}. Evicting the daemon; the next generation starts a fresh one.",
             modelName, Bound(state.ErrorCode) ?? "(none)", Bound(state.ErrorMessage) ?? "(none)", stderrTail ?? "(none)");
 
-        jobLease?.Dispose();
+        jobLease.Dispose();
         await _supervisor.EvictAsync(modelName, CancellationToken.None).ConfigureAwait(false);
         return stderrTail is not null && IsOutOfMemory(stderrTail);
     }

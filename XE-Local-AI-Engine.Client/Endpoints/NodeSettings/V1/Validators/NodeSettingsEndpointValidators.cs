@@ -406,6 +406,9 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
         NullOrBetween(RuleFor(static request => request.AgentHomeRunRetentionMaxTotalBytes),
             StoredNodeSettings.MinAgentHomeRunRetentionMaxTotalBytes, StoredNodeSettings.MaxAgentHomeRunRetentionMaxTotalBytes);
 
+        NullOrBetween(RuleFor(static request => request.ModelLabWarmIdleSeconds),
+            StoredNodeSettings.MinModelLabWarmIdleSeconds, StoredNodeSettings.MaxModelLabWarmIdleSeconds);
+
         // Every override entry must have a non-blank model name and finite, non-negative rates (HasValidRates is the one shared predicate with the store's Normalize). Junk is
         // rejected with an immediate 400; Normalize remains the defense-in-depth second pass that also drops any entry slipping through.
         RuleFor(static request => request.UsageRates!)

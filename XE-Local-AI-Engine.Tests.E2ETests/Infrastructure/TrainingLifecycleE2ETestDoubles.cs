@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -117,7 +118,7 @@ public static class TrainingLifecycleE2ETestDoubles
 
     public sealed class Runtime : ITrainingRuntimeService
     {
-        public Task<TrainingRuntimeInstallResult> InstallAsync(CancellationToken ct) =>
+        public Task<TrainingRuntimeInstallResult> InstallAsync(Func<CancellationToken, Task<bool>>? admitAsync, CancellationToken ct) =>
             Task.FromResult(new TrainingRuntimeInstallResult
             {
                 Outcome = TrainingRuntimeInstallOutcome.AlreadyRunning
@@ -137,8 +138,8 @@ public static class TrainingLifecycleE2ETestDoubles
                 CompletedAtUtc = null
             };
 
-        public Task<bool> RemoveAsync(CancellationToken ct) =>
-            Task.FromResult(false);
+        public Task<TrainingRuntimeRemoveOutcome> RemoveAsync(Func<CancellationToken, Task<bool>>? admitAsync, CancellationToken ct) =>
+            Task.FromResult(TrainingRuntimeRemoveOutcome.AlreadyRunning);
 
         public bool Cancel() =>
             false;
@@ -238,6 +239,14 @@ public static class TrainingLifecycleE2ETestDoubles
             public void RequestStop() { }
             public void KillGroup() { }
             public void Dispose() { }
+
+            public ConcurrentQueue<string> WrittenLines { get; } = new();
+
+            public Task WriteLineAsync(string line, CancellationToken cancellationToken)
+            {
+                WrittenLines.Enqueue(line);
+                return Task.CompletedTask;
+            }
         }
     }
 

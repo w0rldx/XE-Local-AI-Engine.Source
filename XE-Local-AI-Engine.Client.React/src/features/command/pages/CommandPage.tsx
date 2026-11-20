@@ -5,6 +5,7 @@ import { type KeyboardEvent, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
+import { isImeComposing } from "@/core/ui/models/ImeComposition";
 import { createAgentConversation, invokeIntent, streamAgentReply, toIntentRefusal } from "@/features/command/api/CommandApi";
 import { type CommandResult, CommandResultRow } from "@/features/command/components/CommandResultRow";
 import { type DictationLanguage, useCommandDictation } from "@/features/command/hooks/useCommandDictation";
@@ -129,7 +130,10 @@ export function CommandPage() {
 	}, [askAgent, text, update, utteredAt]);
 
 	const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-		if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+		if (isImeComposing(event)) {
+			return;
+		}
+		if (event.key === "Enter" && !event.shiftKey) {
 			event.preventDefault();
 			submit().catch(() => undefined);
 		} else if (event.key === "Escape") {

@@ -77,7 +77,10 @@ public sealed class DirectInferenceEvent
 
     public string? FinishReason { get; init; }
 
-    /// <summary>On <c>error</c>: a <see cref="DirectInferenceErrorCodes" /> value or a <c>FailureCategory</c> name.</summary>
+    /// <summary>
+    ///     On <c>error</c>: a <see cref="DirectInferenceErrorCodes" /> value or a <c>FailureCategory</c> name, <c>ModelEjected</c> when the model
+    ///     was unloaded under the request or while it arrived.
+    /// </summary>
     public string? ErrorCode { get; init; }
 
     public string? ErrorMessage { get; init; }

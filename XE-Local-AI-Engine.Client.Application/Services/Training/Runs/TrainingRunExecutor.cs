@@ -309,6 +309,7 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
                 break;
             case TrainingStdioEventKind.Artifact:
             case TrainingStdioEventKind.Heartbeat:
+            case TrainingStdioEventKind.Ready:
             default:
                 // A heartbeat's only job is to have arrived; the artifact is handled outside the state fold.
                 break;

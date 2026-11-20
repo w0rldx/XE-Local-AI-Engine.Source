@@ -1,8 +1,8 @@
-import { Anchor, Badge, Button, Group, Popover, Progress, Stack, Text, UnstyledButton } from "@mantine/core";
+import { Anchor, Badge, Group, Popover, Progress, Stack, Text, UnstyledButton } from "@mantine/core";
 import { IconPlayerEject, IconStack2 } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
@@ -15,14 +15,17 @@ import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import type { RunningModel } from "@/core/loaded-models/models/RunningModelsModels";
 import { useEjectImageRuntime, useEjectTranscriptionRuntime } from "@/core/loaded-models/queries/useEjectRuntimes";
 import { useEjectRunningModel, useRunningModels } from "@/core/loaded-models/queries/useRunningModels";
+import { FocusableDisabledButton } from "@/core/ui/components/FocusableDisabledButton/FocusableDisabledButton";
 import { toast } from "@/core/ui/notifications/Toast";
 import { RuntimeResidentRow } from "@/features/runtime-resources/components/RuntimeResidentRow";
 import {
 	HIGH_USAGE_PERCENT,
 	type MemoryUsage,
 	type ResidentRuntime,
+	type RuntimeResident,
 	usagePercent,
 } from "@/features/runtime-resources/models/RuntimeResourcesModels";
+import { useEjectModelLabWarmWorker } from "@/features/runtime-resources/queries/useEjectModelLabWarmWorker";
 import { useRuntimeResidents } from "@/features/runtime-resources/queries/useRuntimeResidents";
 import { useRuntimeResources } from "@/features/runtime-resources/queries/useRuntimeResources";
 
@@ -48,6 +51,10 @@ const residentStateColors: Record<ResidentState, string> = {
 	transient: "grape",
 	idle: "green",
 };
+
+// Keyed by model AND role: the same model can run as chat and as embedding at once.
+const llamaRowKey = (model: RunningModel) => `${model.modelName}-${model.role}`;
+const runtimeRowKey = (resident: RuntimeResident) => `${resident.runtime}-${resident.modelId ?? "starting"}`;
 
 function barColor(usage: MemoryUsage): string {
 	return usagePercent(usage) >= HIGH_USAGE_PERCENT ? "red" : "blue";
@@ -75,8 +82,8 @@ function UsageRow({ label, usage }: { label: string; usage: MemoryUsage }) {
 	);
 }
 
-// Always-visible gauge in the header: whole-machine RAM and VRAM plus the llama.cpp models, image and transcription
-// processes the engine holds, each with a graceful eject. Force eject stays on the Loaded Models page. Rendered only for a signed-in operator session on a
+// Always-visible gauge in the header: whole-machine RAM and VRAM plus the llama.cpp models, image, transcription and
+// Model Lab processes the engine holds, each with a graceful eject. Force eject stays on the Loaded Models page. Rendered only for a signed-in operator session on a
 // node with the model-fit surface, because both endpoints sit behind the Operator policy.
 export function RuntimeResourcesWidget() {
 	const { t } = useTranslation();
@@ -89,22 +96,72 @@ export function RuntimeResourcesWidget() {
 	// The two resident lists follow the residency hub's pushes and poll only while it is degraded.
 	const runningModelsQuery = useRunningModels(enabled);
 	const ejectMutation = useEjectRunningModel();
-	// Image and transcription rows each follow their own capability; with both off the residents query never fires.
-	const residentsQuery = useRuntimeResidents(enabled && (nodeCapabilities.images || nodeCapabilities.transcription));
+	// Image and transcription rows each follow their own capability; the Model Lab is ungated, so the query always fires.
+	const residentsQuery = useRuntimeResidents(enabled);
 	const ejectImageMutation = useEjectImageRuntime();
 	const ejectTranscriptionMutation = useEjectTranscriptionRuntime();
+	const ejectModelLabMutation = useEjectModelLabWarmWorker();
 	const queryClient = useQueryClient();
 	const [opened, setOpened] = useState(false);
+	const dropdownRef = useRef<HTMLDivElement>(null);
+	const residentsHeadingRef = useRef<HTMLHeadingElement>(null);
+
+	const residents = runningModelsQuery.data ?? [];
+	const shownRuntimes: Record<ResidentRuntime, boolean> = {
+		image: nodeCapabilities.images,
+		transcription: nodeCapabilities.transcription,
+		modelLab: true,
+	};
+	const runtimeResidents = (residentsQuery.data ?? []).filter((resident) => shownRuntimes[resident.runtime]);
+	const rowKeys = [...residents.map(llamaRowKey), ...runtimeResidents.map(runtimeRowKey)].join("|");
+	const ejectPending =
+		ejectMutation.isPending ||
+		ejectImageMutation.isPending ||
+		ejectTranscriptionMutation.isPending ||
+		ejectModelLabMutation.isPending;
+	// The control that had focus when an eject started, then whichever control in the dropdown took focus after it. The
+	// Eject buttons stay focusable while pending, so focus is lost only when the focused row goes away; a remembered
+	// control that is still mounted gets focus back, unless focus left it for the body (a click on blank space): that
+	// control is kept only to tell its removal, and the heading takes focus either way.
+	const focusBeforeEjectRef = useRef<HTMLElement | null>(null);
+	const leftForBodyRef = useRef<HTMLElement | null>(null);
+	const rememberFocus = () => {
+		const active = document.activeElement;
+		focusBeforeEjectRef.current = active instanceof HTMLElement && dropdownRef.current?.contains(active) ? active : null;
+	};
+
+	// Once no eject is pending, give lost focus back: to the same Eject when its row stayed (React keeps a kept row's
+	// element), else to the list heading. Never onto another Eject: a repeated Enter must not unload a second model.
+	// A pushed removal can detach the remembered control (the Eject, or one focus moved to) while the eject's refetches
+	// still keep it pending; the heading takes focus then rather than after them.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: rowKeys is a trigger (a row removed under focus), not a value the body reads.
+	useEffect(() => {
+		if (ejectPending && focusBeforeEjectRef.current?.isConnected !== false) {
+			return;
+		}
+		const active = document.activeElement;
+		if (dropdownRef.current !== null && (active === null || active === document.body)) {
+			const before = focusBeforeEjectRef.current;
+			(before?.isConnected && before !== leftForBodyRef.current ? before : residentsHeadingRef.current)?.focus();
+		}
+		if (!ejectPending) {
+			focusBeforeEjectRef.current = null;
+		}
+	}, [ejectPending, rowKeys]);
+
+	// Every close path goes through here, so a reopened dropdown never restores to a control of the closed one.
+	const setOpen = (next: boolean) => {
+		if (!next) {
+			focusBeforeEjectRef.current = null;
+		}
+		setOpened(next);
+	};
 
 	const resources = resourcesQuery.data;
 	if (!enabled || !resources) {
 		return null;
 	}
 
-	const residents = runningModelsQuery.data ?? [];
-	const runtimeResidents = (residentsQuery.data ?? []).filter((resident) =>
-		resident.runtime === "image" ? nodeCapabilities.images : nodeCapabilities.transcription,
-	);
 	const residentCount = residents.length + runtimeResidents.length;
 	const firstGpu = resources.gpus[0];
 	// Keyed by model AND role: the same model can run as chat and as embedding at once.
@@ -112,7 +169,8 @@ export function RuntimeResourcesWidget() {
 	const isEjecting = (model: RunningModel) => ejecting?.modelName === model.modelName && (ejecting.role ?? "") === model.role;
 
 	// Graceful only: a busy model is never interrupted from here. The outcomes mirror the Loaded Models page.
-	const handleEject = (model: RunningModel) =>
+	const handleEject = (model: RunningModel) => {
+		rememberFocus();
 		ejectMutation.mutate(
 			{ modelName: model.modelName, role: model.role || undefined, force: false },
 			{
@@ -141,32 +199,36 @@ export function RuntimeResourcesWidget() {
 					toast.error(apiErrorMessage(error, t("pages.loadedModels.llamaCpp.ejectError", "Could not eject the model."))),
 			},
 		);
+	};
 
-	const runtimeEjectMutations = { image: ejectImageMutation, transcription: ejectTranscriptionMutation };
+	const runtimeEjectMutations = {
+		image: ejectImageMutation,
+		transcription: ejectTranscriptionMutation,
+		modelLab: ejectModelLabMutation,
+	};
+	const runtimeEjectErrors: Record<ResidentRuntime, string> = {
+		image: t("pages.nodeSettings.imageRuntime.sourceBuild.ejectError", "Could not eject the image-runtime processes."),
+		transcription: t("pages.transcription.runtime.ejectFailed", "Could not eject the runtime."),
+		modelLab: t("runtimeResources.ejectModelLabFailed", "Could not unload the Model Lab model."),
+	};
 	// The mutations already refresh their own feature's status query; this refreshes the widget's residents and gauge. No force:
 	// a 409 (job running or queued, spawn in flight) carries the server's reason, shown as the toast.
-	const handleRuntimeEject = (runtime: ResidentRuntime) =>
+	const handleRuntimeEject = (runtime: ResidentRuntime) => {
+		rememberFocus();
 		runtimeEjectMutations[runtime].mutate(undefined, {
 			onSuccess: () =>
 				Promise.all([
 					queryClient.invalidateQueries({ queryKey: getRuntimeResidentsQueryKey() }),
 					queryClient.invalidateQueries({ queryKey: getRuntimeResourcesQueryKey() }),
 				]),
-			onError: (error) =>
-				toast.error(
-					apiErrorMessage(
-						error,
-						runtime === "image"
-							? t("pages.nodeSettings.imageRuntime.sourceBuild.ejectError", "Could not eject the image-runtime processes.")
-							: t("pages.transcription.runtime.ejectFailed", "Could not eject the runtime."),
-					),
-				),
+			onError: (error) => toast.error(apiErrorMessage(error, runtimeEjectErrors[runtime])),
 		});
+	};
 
 	return (
 		<Popover
 			opened={opened}
-			onChange={setOpened}
+			onChange={setOpen}
 			position="bottom-start"
 			shadow="md"
 			width={360}
@@ -179,7 +241,7 @@ export function RuntimeResourcesWidget() {
 					className="flex flex-row items-center gap-3 px-2 py-1"
 					aria-label={t("runtimeResources.trigger", "Memory usage and loaded models")}
 					aria-expanded={opened}
-					onClick={() => setOpened((previous) => !previous)}
+					onClick={() => setOpen(!opened)}
 					data-testid="runtime-resources-trigger"
 				>
 					<Group gap={6} wrap="nowrap">
@@ -208,7 +270,21 @@ export function RuntimeResourcesWidget() {
 					</Group>
 				</UnstyledButton>
 			</Popover.Target>
-			<Popover.Dropdown data-testid="runtime-resources-dropdown">
+			<Popover.Dropdown
+				ref={dropdownRef}
+				onFocus={(event) => {
+					focusBeforeEjectRef.current = event.target;
+					leftForBodyRef.current = null;
+				}}
+				// Marked at once, not a frame later: an eject settling in between would otherwise hand focus back to another
+				// Eject.
+				onBlur={(event) => {
+					if (event.relatedTarget === null) {
+						leftForBodyRef.current = event.target;
+					}
+				}}
+				data-testid="runtime-resources-dropdown"
+			>
 				<Stack gap="sm">
 					<UsageRow label={t("runtimeResources.ram", "RAM")} usage={resources.ram} />
 					{resources.gpus.length === 0 ? (
@@ -225,7 +301,7 @@ export function RuntimeResourcesWidget() {
 						))
 					)}
 
-					<Text size="sm" fw={500}>
+					<Text component="h3" ref={residentsHeadingRef} tabIndex={-1} size="sm" fw={500}>
 						{t("runtimeResources.residents", "Loaded models")}
 					</Text>
 					{residentCount === 0 ? (
@@ -237,7 +313,7 @@ export function RuntimeResourcesWidget() {
 							const state = residentState(model);
 							return (
 								<Group
-									key={`${model.modelName}-${model.role}`}
+									key={llamaRowKey(model)}
 									justify="space-between"
 									wrap="nowrap"
 									gap="xs"
@@ -261,33 +337,34 @@ export function RuntimeResourcesWidget() {
 											</Badge>
 										</Group>
 									</Stack>
-									<Button
+									<FocusableDisabledButton
 										size="compact-xs"
 										variant="light"
 										color="red"
 										leftSection={<IconPlayerEject size={12} />}
-										loading={isEjecting(model)}
-										disabled={model.isBusy || isEjecting(model)}
+										loaderSize={12}
+										blocked={model.isBusy}
+										pending={isEjecting(model)}
 										onClick={() => handleEject(model)}
 										aria-label={t("runtimeResources.ejectLabel", "Eject {{modelName}}", { modelName: model.modelName })}
 										data-testid={`runtime-resources-eject-${model.modelName}`}
 									>
 										{t("pages.loadedModels.llamaCpp.eject", "Eject")}
-									</Button>
+									</FocusableDisabledButton>
 								</Group>
 							);
 						})
 					)}
 					{runtimeResidents.map((resident) => (
 						<RuntimeResidentRow
-							key={`${resident.runtime}-${resident.modelId ?? "starting"}`}
+							key={runtimeRowKey(resident)}
 							resident={resident}
 							ejecting={runtimeEjectMutations[resident.runtime].isPending}
 							onEject={() => handleRuntimeEject(resident.runtime)}
 						/>
 					))}
 
-					<Anchor component={Link} to="/loaded-models" size="sm" onClick={() => setOpened(false)}>
+					<Anchor component={Link} to="/loaded-models" size="sm" onClick={() => setOpen(false)}>
 						{t("runtimeResources.openLoadedModels", "Manage loaded models")}
 					</Anchor>
 				</Stack>

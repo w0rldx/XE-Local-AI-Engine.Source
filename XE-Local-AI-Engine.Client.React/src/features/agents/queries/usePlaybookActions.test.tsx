@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 
 // Mock generated query/mutation factories to isolate the hook while retaining validation and mapping.
 const { listOptionsMock, mutationFns } = vi.hoisted(() => ({
@@ -36,7 +37,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 
 import { PromoteConflictError } from "@/features/agents/models/PlaybookActionMappers";
 import {
-	playbookInvalidationKey,
 	playbookQueryIds,
 	useAnalyzePlaybook,
 	useCreatePlaybookAction,
@@ -50,7 +50,7 @@ import {
 } from "@/features/agents/queries/usePlaybookActions";
 
 // The generated query key the mutations invalidate (partial `_id` match), built via the production helper.
-const ACTIONS_KEY = playbookInvalidationKey(playbookQueryIds.listActions);
+const ACTIONS_KEY = operationInvalidationKey(playbookQueryIds.listActions);
 
 // A generated-shaped playbook-action response (every field optional on the wire).
 const generatedAction = {

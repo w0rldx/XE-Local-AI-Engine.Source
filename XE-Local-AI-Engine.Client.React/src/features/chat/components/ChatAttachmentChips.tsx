@@ -2,7 +2,7 @@ import { ActionIcon, Badge, Group, Loader, Paper, Text, Tooltip } from "@mantine
 import { IconFileText, IconPhoto, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import { formatAttachmentSize } from "@/features/chat/models/ChatAttachmentModels";
+import { formatBytes } from "@/core/formatting/BytesFormatting";
 import type { ChatAttachment, ChatAttachmentStatus, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
 
 interface ChatAttachmentChipsProps {
@@ -79,7 +79,7 @@ export function ChatAttachmentChips({ attachments, pendingUploads, onRemove, dis
 							</Text>
 						</Tooltip>
 						<Text size="xs" c="dimmed">
-							{formatAttachmentSize(attachment.sizeBytes)}
+							{formatBytes(attachment.sizeBytes)}
 						</Text>
 						<Badge
 							size="xs"

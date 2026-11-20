@@ -1,6 +1,6 @@
 import { Alert, Badge, Button, Group, PasswordInput, SegmentedControl, Stack, Text, TextInput } from "@mantine/core";
 import { IconAlertTriangle, IconDeviceFloppy, IconRefresh, IconTrash } from "@tabler/icons-react";
-import type { Dispatch } from "react";
+import { type Dispatch, useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { COMPACT_CONTROLS_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
@@ -48,6 +48,7 @@ const segmentedControlStyles = { label: { whiteSpace: "normal" as const } };
 
 export function AzureCloudSettingsEditor(props: AzureCloudSettingsEditorProps) {
 	const { t } = useTranslation();
+	const labelId = useId();
 	const { formValues, visibleErrors, modelRowIds, headerRowIds, hostSuffixRowIds, dispatch, connection, signIn, status } = props;
 	const isManagedIdentity = formValues.authMode === "ManagedIdentity";
 	const isEntraId = formValues.authMode === "EntraId";
@@ -79,10 +80,11 @@ export function AzureCloudSettingsEditor(props: AzureCloudSettingsEditorProps) {
 			/>
 
 			<Stack gap={4}>
-				<Text size="sm" fw={500}>
+				<Text size="sm" fw={500} id={`${labelId}-auth`}>
 					{t("pages.cloudSettings.azure.authModeLabel", "Authentication")}
 				</Text>
 				<SegmentedControl
+					aria-labelledby={`${labelId}-auth`}
 					fullWidth={true}
 					styles={segmentedControlStyles}
 					orientation={segmentOrientation}
@@ -101,10 +103,11 @@ export function AzureCloudSettingsEditor(props: AzureCloudSettingsEditorProps) {
 			</Stack>
 
 			<Stack gap={4}>
-				<Text size="sm" fw={500}>
+				<Text size="sm" fw={500} id={`${labelId}-surface`}>
 					{t("pages.cloudSettings.azure.apiSurfaceLabel", "API surface")}
 				</Text>
 				<SegmentedControl
+					aria-labelledby={`${labelId}-surface`}
 					fullWidth={true}
 					styles={segmentedControlStyles}
 					orientation={segmentOrientation}

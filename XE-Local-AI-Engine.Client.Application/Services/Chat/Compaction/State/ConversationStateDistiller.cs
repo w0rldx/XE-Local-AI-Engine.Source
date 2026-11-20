@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -255,7 +256,7 @@ internal sealed class ConversationStateDistiller : IConversationStateDistiller
 
         if (consumed == 0)
         {
-            messages.Append(ConversationSummarizer.TruncateAtRuneBoundary(RenderMessage(input.Messages[0]), available));
+            messages.Append(TextTruncation.TruncateAtRuneBoundary(RenderMessage(input.Messages[0]), available));
             consumed = 1;
         }
 

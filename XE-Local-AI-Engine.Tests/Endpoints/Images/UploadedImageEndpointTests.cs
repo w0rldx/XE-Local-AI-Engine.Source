@@ -142,7 +142,7 @@ public sealed class UploadedImageEndpointTests
 
         AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
         await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, "the image upload");
-        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The file exceeds the maximum upload size of 1 MB.");
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The file exceeds the maximum upload size of 1 MiB.");
         AssertEx.Equal(expected: 0, (await ListAsync(factory, client)).GetProperty("items").GetArrayLength());
     }
 

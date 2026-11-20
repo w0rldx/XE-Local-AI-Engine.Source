@@ -77,8 +77,8 @@ scripts/run-backend-tests.sh   # THE backend gate: one Release build, then every
 - Never queue a gate on a worktree a writer is still editing; never overlap a build with a `--no-build` test run.
   Check `scripts/build-lock-status.sh` before queueing. Exit 69 = lock not acquired, nothing ran; 75 =
   CONTAMINATED, void, re-run (not a red).
-- The backend gate runs the Architecture namespace alone right after the Release build; red there stops the gate
-  (`FAIL-FAST`, exit 1) before the long lanes; `XE_GATE_FAIL_FAST=0` skips it. Every gate run appends one line to the
+- The backend gate runs the Architecture namespace beside the long lanes after the Release build; red there
+  stops the lanes (`FAIL-FAST`, exit 1); `XE_GATE_FAIL_FAST=0` skips it. Every gate run appends one line to the
   main checkout's `.tmp/gate-history.log`; a failing test listed in `scripts/known-flakes.txt` is annotated, never skipped.
   Before hand-off run the Architecture namespace alone (`--treenode-filter '/*/*.Architecture/*/*'`).
 - Scope with `--treenode-filter '/*/*/(ClassA|ClassB)/*'`, never `--filter`; `--list-tests` is authoritative, a

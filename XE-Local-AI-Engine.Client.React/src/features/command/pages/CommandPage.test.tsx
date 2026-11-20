@@ -7,7 +7,7 @@
 
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import i18next from "i18next";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { encodePcmFrame } from "@/core/audio/capture/CaptureSource";
@@ -308,6 +308,30 @@ describe("CommandPage", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "Open in chat" }));
 		expect(usePendingChatConversationStore.getState().pendingConversationId).toBe(conversationId);
+	});
+
+	it("keeps the draft on an Enter that confirms an IME composition and sends it on a plain Enter", async () => {
+		const requests: Record<string, unknown>[] = [];
+		server.use(
+			http.post(localApiPath("graph-workflows/intents/invoke"), async ({ request }) => {
+				requests.push((await request.json()) as Record<string, unknown>);
+				return HttpResponse.json(
+					{ title: "Conflict", status: 409, conflictType: "GraphWorkflowIntentExpired" },
+					{ status: 409, headers: { "Content-Type": "application/problem+json" } },
+				);
+			}),
+		);
+		await renderPage();
+
+		type("明かりをつけて");
+		fireEvent.keyDown(input(), { key: "Enter", isComposing: true });
+		fireEvent.keyDown(input(), { key: "Enter", keyCode: 229 });
+		expect(input().value).toBe("明かりをつけて");
+
+		pressEnter();
+		expect(input().value).toBe("");
+		expect(await screen.findByTestId("command-refusal")).toBeTruthy();
+		expect(requests.map((request) => request["utterance"])).toEqual(["明かりをつけて"]);
 	});
 
 	it("asks the user to say it again when the node refuses a stale utterance", async () => {

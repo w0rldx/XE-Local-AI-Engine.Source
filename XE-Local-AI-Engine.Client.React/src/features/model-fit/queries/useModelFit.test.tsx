@@ -3,6 +3,8 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
+
 // The refresh hook dispatches the domain `scheduledJobId` to the generated `refreshRecommendationsMutation()`'s
 // `mutationFn`. Mock the generated TanStack module so the test owns the
 // mutationFn and can assert the wire envelope the hook built without hitting the network.
@@ -21,11 +23,11 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	refreshModelCatalogMutation: vi.fn(() => ({ mutationFn: mutationMock.mutationFn })),
 }));
 
-import { modelFitInvalidationKey, modelFitQueryIds, useRefreshRecommendations } from "@/features/model-fit/queries/useModelFit";
+import { modelFitQueryIds, useRefreshRecommendations } from "@/features/model-fit/queries/useModelFit";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 // The generated query key the refresh mutation invalidates (partial `_id` match), built via the production helper.
-const LATEST_KEY = modelFitInvalidationKey(modelFitQueryIds.latest);
+const LATEST_KEY = operationInvalidationKey(modelFitQueryIds.latest);
 
 const invalidatedKeys: unknown[] = [];
 

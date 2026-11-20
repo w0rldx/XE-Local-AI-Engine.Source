@@ -170,12 +170,23 @@ public sealed class FakeDockerState
     }
 
     /// <summary>
+    ///     Answers an exec from its command line before any script, or returns null to fall through: for an outcome that depends on
+    ///     a value the client minted, such as the stop wrapper's identity path.
+    /// </summary>
+    public Func<string, FakeDockerExecOutcome?>? ExecResponder { get; set; }
+
+    /// <summary>
     ///     The outcome for one exec, most specific first: this container and this command, then either wildcard,
     ///     then both, then the default — exit zero and no output, matching what the in-memory fake answers for an
     ///     unscripted command.
     /// </summary>
     public FakeDockerExecOutcome ResolveExec(string containerId, string commandLine)
     {
+        if (ExecResponder?.Invoke(commandLine) is { } answered)
+        {
+            return answered;
+        }
+
         string[] keys =
         [
             ExecKey(containerId, commandLine),

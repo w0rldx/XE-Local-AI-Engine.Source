@@ -28,7 +28,9 @@ public interface ILlamaServerProcessSupervisor
     ///     Atomically acquires an exclusive runtime-mutation lease only when no process is running or starting. While
     ///     held, new <see cref="EnsureRunningAsync(string, ModelRole, CancellationToken)" /> calls wait. Returns null when a process already owns the runtime.
     /// </summary>
-    Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct)
+    /// <param name="ct">Cancels the wait for the gate.</param>
+    /// <param name="raisesDemand">False only for an idle GPU holder's own admission, so it never preempts itself.</param>
+    Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct, bool raisesDemand = true)
     {
         return Task.FromResult<ILlamaServerRuntimeMutationLease?>(null);
     }
@@ -38,6 +40,12 @@ public interface ILlamaServerProcessSupervisor
     ///     requests remain governed by <see cref="EnsureRunningAsync(string, ModelRole, CancellationToken)" /> and are not suppressed by this signal.
     /// </summary>
     bool IsKeepWarmSuppressed()
+    {
+        return false;
+    }
+
+    /// <summary>Whether a caller is waiting to enter the runtime-mutation gate, shared or exclusive; an idle GPU holder about to keep the gate yields to it.</summary>
+    bool HasRuntimeGateWaiters()
     {
         return false;
     }
@@ -109,17 +117,29 @@ public interface ILlamaServerProcessSupervisor
     ///     leases, then waits out the bounded drain window before tearing it down.
     /// </summary>
     /// <remarks>
-    ///     In-flight inference is tracked through <see cref="TryAcquireInferenceLease(string, ModelRole)" />, and an idle process is torn
-    ///     down immediately. When the window elapses with work still in flight the process is left RUNNING and the
-    ///     outcome reports that it could not complete safely — unless <paramref name="force" /> is set, in which case
-    ///     it is torn down anyway and the interrupted run is marked operator-ejected rather than a generic failure.
+    ///     In-flight inference is tracked through <see cref="TryAcquireInferenceLease(string, ModelRole)" />, and an idle process is torn down immediately.
+    ///     When the window elapses with work still in flight the process is left RUNNING and the outcome reports that it could not complete
+    ///     safely — unless <paramref name="force" /> is set: then it is torn down anyway and the interrupted run is marked operator-ejected.
     /// </remarks>
     /// <param name="modelName">Model whose process to eject.</param>
     /// <param name="role">Role of the process to eject (chat / embedding / reranker).</param>
     /// <param name="force">When set, tear the process down even if in-flight work has not drained.</param>
     /// <param name="ct">Cancellation for the (bounded) drain wait.</param>
+    /// <param name="operatorRequested">An operator's eject: it marks the key so a Background load cannot respawn it until a user-waited load does.</param>
     /// <returns>The eject outcome (idempotent no-op when nothing is running).</returns>
-    Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct);
+    Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct, bool operatorRequested = false);
+
+    /// <summary>
+    ///     Whether an operator eject currently blocks a <see cref="ModelResidencyIntent.Background" /> launch of the
+    ///     <c>(model, role)</c> key. A synchronous in-memory read; it never spawns.
+    /// </summary>
+    /// <remarks>
+    ///     True from the moment an operator eject attempt opens (its drain included) and after it ends Ejected, ForcedWhileBusy
+    ///     or NotRunning; a TimedOutStillBusy or cancelled attempt leaves no mark. It clears only when a spawn a non-Background
+    ///     caller qualified publishes at or after the latest eject attempt (an operator Start is such a caller); reusing a
+    ///     surviving process never clears it.
+    /// </remarks>
+    bool IsBackgroundLaunchBlocked(string modelName, ModelRole role);
 
     /// <summary>
     ///     Acquires a reference-counted inference lease against the running <c>(model, role)</c> process, so a graceful

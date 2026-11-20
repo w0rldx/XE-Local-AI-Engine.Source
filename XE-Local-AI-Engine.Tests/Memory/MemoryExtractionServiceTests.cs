@@ -7,6 +7,8 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -142,6 +144,38 @@ public sealed class MemoryExtractionServiceTests
 
         AssertEx.Equal(expected: 2, outcome.CreatedCandidates.Count, "With semantic dedup not applied, both lexical survivors persist.");
         AssertEx.Equal(expected: 0, outcome.DuplicateCount, "No candidate is dropped when semantic dedup does not run.");
+    }
+
+    [Test]
+    public async Task MemoryExtraction_WithDefaultOptions_SemanticDedupIsOff_LexicalStillDropsExactDuplicate()
+    {
+        var agentId = Guid.NewGuid();
+        var existing = EnabledAction(agentId, "Prefer the existing shared helper.", MemoryScope.Procedural);
+        var agent = new FakeExtractionAgent(_ =>
+        [
+            Candidate("  prefer   THE existing shared HELPER.  ", MemoryScope.Procedural),
+            Candidate("Reach for the existing common helper.", MemoryScope.Procedural)
+        ]);
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        var embeddingModelResolver = Substitute.For<IEmbeddingModelResolver>();
+        var deduplicator = new MemorySemanticDeduplicator(providerResolver,
+            embeddingModelResolver,
+            Options.Create(new MemoryExtractionOptions()),
+            NullLogger<MemorySemanticDeduplicator>.Instance,
+            TimeProvider.System);
+        var service = CreateService(out var store, agent, semanticDeduplicator: deduplicator);
+        store.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([existing]));
+        EchoAddedAction(store);
+
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId));
+
+        AssertEx.False(new MemoryExtractionOptions().SemanticDedupEnabled, "Semantic dedup is off by default.");
+        AssertEx.Equal(expected: 1, outcome.DuplicateCount, "Lexical dedup still drops the exact normalized duplicate.");
+        AssertEx.Equal(expected: 1, outcome.CreatedCandidates.Count, "The paraphrase survives: no semantic layer ran.");
+        AssertEx.Equal("Reach for the existing common helper.", outcome.CreatedCandidates[0].Behavior);
+        providerResolver.DidNotReceiveWithAnyArgs().ResolveProvider(default!);
+        await embeddingModelResolver.DidNotReceiveWithAnyArgs().ResolveAsync(default!, default);
     }
 
     [Test]

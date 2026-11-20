@@ -37,4 +37,7 @@ internal sealed record NodeChatMessageMetadata(
     // non-string token cannot fail the message read; ParseFailureCategory accepts only an exact member name.
     JsonElement? FailureCategory = null,
     // Time to first token and prompt/generation throughput of the turn (trailing optional, legacy blobs omit it). Numbers only.
-    NodeChatThroughputDto? Throughput = null);
+    NodeChatThroughputDto? Throughput = null,
+    // True on an assistant message a chat import wrote: the row's own record that no run happened on this node, so the
+    // restart reconcile backfills no envelope for it and a branch copy keeps the flag. Absent everywhere else.
+    bool? Imported = null);

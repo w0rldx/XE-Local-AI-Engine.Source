@@ -530,8 +530,13 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT document_id FROM knowledge_documents WHERE status = $pending;";
+        // A row waiting for an ejected embedder is not stranded: the worker's wake clears its reason once the embedder can load.
+        command.CommandText = """
+                              SELECT document_id FROM knowledge_documents
+                              WHERE status = $pending AND (failure_reason IS NULL OR failure_reason <> $waiting);
+                              """;
         AddParameter(command, "$pending", KnowledgeDocumentStatus.Pending.ToString());
+        AddParameter(command, "$waiting", KnowledgeIngestionService.WaitingForEmbeddingModelReason);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var pendingIds = new List<Guid>();
@@ -541,6 +546,46 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         }
 
         return pendingIds;
+    }
+
+    public async Task<IReadOnlyList<Guid>> ClearEmbeddingModelWaitAsync(CancellationToken cancellationToken)
+    {
+        var connection = _dbContext.Database.GetDbConnection();
+        await OpenIfNeededAsync(connection, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+                              UPDATE knowledge_documents
+                              SET failure_reason = NULL, updated_at_utc = $updated_at_utc
+                              WHERE status = $pending AND failure_reason = $waiting
+                              RETURNING document_id;
+                              """;
+        AddParameter(command, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+        AddParameter(command, "$pending", KnowledgeDocumentStatus.Pending.ToString());
+        AddParameter(command, "$waiting", KnowledgeIngestionService.WaitingForEmbeddingModelReason);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var clearedIds = new List<Guid>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            clearedIds.Add(Guid.Parse(reader.GetString(0)));
+        }
+
+        return clearedIds;
+    }
+
+    public async Task<bool> HasEmbeddingModelWaitAsync(CancellationToken cancellationToken)
+    {
+        var connection = _dbContext.Database.GetDbConnection();
+        await OpenIfNeededAsync(connection, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+                              SELECT EXISTS (SELECT 1 FROM knowledge_documents WHERE status = $pending AND failure_reason = $waiting);
+                              """;
+        AddParameter(command, "$pending", KnowledgeDocumentStatus.Pending.ToString());
+        AddParameter(command, "$waiting", KnowledgeIngestionService.WaitingForEmbeddingModelReason);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) != 0;
     }
 
     public async Task<IReadOnlyList<string>> ListIndexedEmbeddingModelsAsync(int limit, CancellationToken cancellationToken)

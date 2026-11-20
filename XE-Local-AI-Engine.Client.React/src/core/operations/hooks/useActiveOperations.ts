@@ -8,13 +8,17 @@ import { getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-que
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { useActiveGgufAcquisitions } from "@/core/model-downloads/queries/useGgufAcquisitions";
 import {
+	useBaseArtifactDownloadOperations,
 	useDatasetBuildOperations,
 	useImageJobOperations,
 	useImageModelDownloadOperations,
 	useKnowledgeIndexingOperation,
+	useModelLabExperimentOperations,
 	useSchedulerRunOperations,
 	useTrainingRunOperations,
 	useTranscriptionModelDownloadOperations,
+	useWaitingGraphRunOperations,
+	useWaitingWorkSessionOperations,
 } from "@/core/operations/hooks/useJobOperations";
 import {
 	type ActiveOperation,
@@ -43,11 +47,16 @@ export function useOperations({ watch = false }: { readonly watch?: boolean } = 
 	const ggufAcquisitions = useActiveGgufAcquisitions({ enabled });
 	const runtimeAcquisition = useRuntimeAcquisitionHub(enabled);
 	const { mutate: retryRuntime } = useRetryRuntimeAcquisition();
-	// The scheduler and transcription runtime switches 404 their hubs; only a definite "on" from the shared settings read
-	// leases one.
+	// The scheduler, transcription, graph-workflow and work-session switches 404 their hubs and lists; only a definite
+	// "on" from the shared settings read leases a hub or reads a list.
 	const { data: settings } = useQuery({
 		...getNodeSettingsOptions(),
-		enabled: enabled && (nodeCapabilities.scheduler || nodeCapabilities.transcription),
+		enabled:
+			enabled &&
+			(nodeCapabilities.scheduler ||
+				nodeCapabilities.transcription ||
+				nodeCapabilities.graphWorkflows ||
+				nodeCapabilities.workSessions),
 	});
 	const knowledge = useKnowledgeIndexingOperation({ enabled: enabled && nodeCapabilities.knowledgeBase, watch, t });
 	const trainingRuns = useTrainingRunOperations({ enabled: enabled && nodeCapabilities.training, watch, t });
@@ -64,6 +73,20 @@ export function useOperations({ watch = false }: { readonly watch?: boolean } = 
 		watch,
 		t,
 	});
+	const waitingGraphRuns = useWaitingGraphRunOperations({
+		enabled: enabled && nodeCapabilities.graphWorkflows && settings?.graphWorkflowsEnabled === true,
+		watch,
+		t,
+	});
+	const waitingWorkSessions = useWaitingWorkSessionOperations({
+		enabled: enabled && nodeCapabilities.workSessions && settings?.workSessionsEnabled === true,
+		watch,
+		t,
+	});
+	// Model Lab has no switch of its own; its Operator-only lists answer 403 to another role, which stops the source.
+	// Base checkpoints are a training endpoint family, offered with the training surface.
+	const modelLabExperiments = useModelLabExperimentOperations({ enabled, watch, t });
+	const baseArtifactDownloads = useBaseArtifactDownloadOperations({ enabled: enabled && nodeCapabilities.training, watch, t });
 
 	return useMemo(() => {
 		const retry = (failed: Parameters<typeof retryRuntime>[0]) =>
@@ -83,6 +106,10 @@ export function useOperations({ watch = false }: { readonly watch?: boolean } = 
 			...schedulerRuns,
 			...imageModelDownloads,
 			...transcriptionModelDownloads,
+			...waitingGraphRuns,
+			...waitingWorkSessions,
+			...modelLabExperiments,
+			...baseArtifactDownloads,
 		];
 	}, [
 		ggufAcquisitions,
@@ -96,6 +123,10 @@ export function useOperations({ watch = false }: { readonly watch?: boolean } = 
 		schedulerRuns,
 		imageModelDownloads,
 		transcriptionModelDownloads,
+		waitingGraphRuns,
+		waitingWorkSessions,
+		modelLabExperiments,
+		baseArtifactDownloads,
 	]);
 }
 

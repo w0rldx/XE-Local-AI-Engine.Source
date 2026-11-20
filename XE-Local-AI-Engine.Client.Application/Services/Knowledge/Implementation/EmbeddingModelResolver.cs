@@ -4,7 +4,6 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -81,12 +80,8 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
             };
         }
 
-        // (2) Nothing pinned yet: first installed embedding-named model in a deterministic order (for example a nomic-embed GGUF).
-        var embeddingModel = installed
-                             .Where(descriptor => !string.IsNullOrWhiteSpace(descriptor.ModelName)
-                                                  && ModelKindDetector.IsEmbeddingName(descriptor.ModelName))
-                             .OrderBy(descriptor => descriptor.ModelName, StringComparer.OrdinalIgnoreCase)
-                             .FirstOrDefault();
+        // (2) Nothing pinned yet: the same pick the recommended-download endpoint reports (recommended model first).
+        var embeddingModel = RecommendedEmbeddingModel.PickInstalled(installed);
         if (embeddingModel is not null)
         {
             return CreateConfidentResolution(embeddingModel.ModelName, embeddingModel);

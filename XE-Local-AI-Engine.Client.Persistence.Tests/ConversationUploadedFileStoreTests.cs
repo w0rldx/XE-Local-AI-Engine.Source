@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
-using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +12,6 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
-using XE_Local_AI_Engine.Providers.Abstractions;
 
 [Category(TestCategories.Integration)]
 public sealed class ConversationUploadedFileStoreTests : IAsyncDisposable
@@ -431,7 +429,7 @@ public sealed class ConversationUploadedFileStoreTests : IAsyncDisposable
     private static ConversationUploadedFileStore CreateStore(ServiceProvider provider, string uploadRoot, INodeSqliteKeyHolder keyHolder)
     {
         return new ConversationUploadedFileStore(provider.GetRequiredService<IServiceScopeFactory>(),
-            new FixedNodeDataDirectory(uploadRoot),
+            new FakeNodeDataDirectory(uploadRoot),
             keyHolder,
             TimeProvider.System);
     }
@@ -537,45 +535,5 @@ public sealed class ConversationUploadedFileStoreTests : IAsyncDisposable
         }
 
         return false;
-    }
-
-    private sealed class FixedNodeDataDirectory : INodeDataDirectory
-    {
-        public FixedNodeDataDirectory(string root)
-        {
-            Root = root;
-        }
-
-        public string Root { get; }
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
     }
 }

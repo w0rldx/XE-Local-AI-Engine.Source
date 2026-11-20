@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 using System.Globalization;
 using System.Runtime.InteropServices;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Provider-neutral post-generation vector policy shared by knowledge ingestion and query embedding.
@@ -118,8 +119,7 @@ public static class KnowledgeEmbeddingVectorPolicy
         ArgumentNullException.ThrowIfNull(resolution);
         return ShouldApplyMatryoshka(resolution, mode)
             ? CreateIdentity(resolution.Name, resolution.RevisionFingerprint, MatryoshkaAlgorithm, MatryoshkaWidth)
-            : string.Create(CultureInfo.InvariantCulture,
-                $"{resolution.Name}@{resolution.RevisionFingerprint}::{NativeAlgorithm}");
+            : CreateIdentityStem(resolution.Name, resolution.RevisionFingerprint, NativeAlgorithm);
     }
 
     /// <summary>Checks whether a persisted identity belongs to the currently resolved model and configured policy.</summary>
@@ -154,14 +154,25 @@ public static class KnowledgeEmbeddingVectorPolicy
 
     private static bool IsNomicV15(string resolvedModel)
     {
-        return resolvedModel.Contains("nomic-embed-text-v1.5", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(EmbeddingModelProfile.For(resolvedModel).Id, "nomic", StringComparison.Ordinal)
+               && EmbeddingModelProfile.ModelSegment(resolvedModel).Contains("v1.5", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string CreateIdentity(string resolvedModel, string revisionFingerprint, string algorithm, int width)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(resolvedModel);
         ArgumentException.ThrowIfNullOrWhiteSpace(revisionFingerprint);
-        return string.Create(CultureInfo.InvariantCulture, $"{resolvedModel}@{revisionFingerprint}::{algorithm}:{width}");
+        return string.Create(CultureInfo.InvariantCulture, $"{CreateIdentityStem(resolvedModel, revisionFingerprint, algorithm)}:{width}");
+    }
+
+    // The profile tag (prompt format + pooling) leads the algorithm, so a profile change stales only that model's vectors;
+    // nomic has no tag and keeps its pre-profile identity byte for byte.
+    private static string CreateIdentityStem(string resolvedModel, string revisionFingerprint, string algorithm)
+    {
+        var tag = EmbeddingModelProfile.For(resolvedModel).IdentityTag;
+        return tag is null
+            ? string.Create(CultureInfo.InvariantCulture, $"{resolvedModel}@{revisionFingerprint}::{algorithm}")
+            : string.Create(CultureInfo.InvariantCulture, $"{resolvedModel}@{revisionFingerprint}::{tag}+{algorithm}");
     }
 
     private static void ValidateFinite(ReadOnlySpan<float> vector)

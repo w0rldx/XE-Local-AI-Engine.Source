@@ -1,9 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { deleteIntegrationSessionMutation, listIntegrationSessionsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { toIntegrationSession } from "@/features/integrations/models/IntegrationMappers";
 import { type IntegrationSessionFilters, integrationPageSize } from "@/features/integrations/models/IntegrationModels";
-import { integrationInvalidationKey, integrationQueryIds } from "@/features/integrations/queries/useIntegrationTriggers";
+import { integrationQueryIds } from "@/features/integrations/queries/useIntegrationTriggers";
 
 // Server state for integration sessions. Both filters AND the paging are server-side for the same reason: the list is
 // one page of the server's ordering, so narrowing or slicing it in the browser would hide sessions that match the
@@ -40,9 +41,9 @@ export function useDeleteIntegrationSession() {
 	return useMutation({
 		...deleteIntegrationSessionMutation(),
 		onSuccess: async () => {
-			await queryClient.invalidateQueries({ queryKey: integrationInvalidationKey(integrationQueryIds.listSessions) });
+			await queryClient.invalidateQueries({ queryKey: operationInvalidationKey(integrationQueryIds.listSessions) });
 			// The executions the delete cascaded away are gone from that list too.
-			await queryClient.invalidateQueries({ queryKey: integrationInvalidationKey(integrationQueryIds.listExecutions) });
+			await queryClient.invalidateQueries({ queryKey: operationInvalidationKey(integrationQueryIds.listExecutions) });
 		},
 	});
 }

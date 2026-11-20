@@ -181,6 +181,9 @@ export interface NodeChatToolOutputLineDto {
 	text: string;
 }
 
+// The `runtimePhase` values that precede the first token while a local model cold-loads; "generating" is not one.
+export const modelLoadingPhases: ReadonlySet<string> = new Set(["preparing_runtime", "loading_model"]);
+
 export const nodeChatToolStreamEventTypes = {
 	toolCallRequested: "tool-call-requested",
 	toolCallCompleted: "tool-call-completed",

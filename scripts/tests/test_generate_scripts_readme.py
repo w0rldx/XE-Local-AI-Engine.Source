@@ -8,7 +8,9 @@ The subject's filename is not a valid module name, so it is loaded through impor
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -66,6 +68,47 @@ class GenerateScriptsReadmeTests(unittest.TestCase):
         _, headerless = MODULE.render(self.make_scripts({"bare.sh": "#!/usr/bin/env bash\nset -e\n"}))
 
         self.assertEqual(["bare.sh"], headerless)
+
+    def run_main(self, *argv: str, scripts_dir: Path) -> int:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            return MODULE.main(list(argv), scripts_dir=scripts_dir)
+
+    def test_check_passes_on_a_current_readme_and_leaves_its_bytes(self) -> None:
+        root = self.make_scripts(FILES)
+        self.assertEqual(0, self.run_main(scripts_dir=root))
+        before = (root / "README.md").read_bytes()
+
+        self.assertEqual(0, self.run_main("--check", scripts_dir=root))
+        self.assertEqual(before, (root / "README.md").read_bytes())
+
+    def test_check_fails_on_a_stale_readme_and_never_writes(self) -> None:
+        root = self.make_scripts(FILES)
+        stale = b"# scripts/\n\n- [`gone.sh`](gone.sh) - Removed.\n"
+        (root / "README.md").write_bytes(stale)
+
+        self.assertEqual(1, self.run_main("--check", scripts_dir=root))
+        self.assertEqual(stale, (root / "README.md").read_bytes())
+
+    def test_check_fails_when_the_readme_is_missing_and_creates_none(self) -> None:
+        root = self.make_scripts(FILES)
+
+        self.assertEqual(1, self.run_main("--check", scripts_dir=root))
+        self.assertFalse((root / "README.md").exists())
+
+    def test_without_check_the_readme_is_written(self) -> None:
+        root = self.make_scripts(FILES)
+        (root / "README.md").write_bytes(b"stale\n")
+
+        self.assertEqual(0, self.run_main(scripts_dir=root))
+        self.assertEqual(MODULE.render(root)[0].encode("utf-8"), (root / "README.md").read_bytes())
+
+    def test_an_unknown_argument_is_a_usage_error_that_writes_nothing(self) -> None:
+        root = self.make_scripts(FILES)
+
+        with self.assertRaises(SystemExit) as raised:
+            self.run_main("--chek", scripts_dir=root)
+        self.assertEqual(2, raised.exception.code)
+        self.assertFalse((root / "README.md").exists())
 
 
 if __name__ == "__main__":

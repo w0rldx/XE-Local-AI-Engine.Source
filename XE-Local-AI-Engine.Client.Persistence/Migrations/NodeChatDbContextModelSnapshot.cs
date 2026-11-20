@@ -5297,6 +5297,19 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("app_version");
 
+                    b.Property<Guid?>("AttentionBlobId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("attention_blob_id");
+
+                    b.Property<long?>("AttentionByteCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attention_byte_count");
+
+                    b.Property<string>("AttentionSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("attention_sha256");
+
                     b.Property<Guid>("BaseArtifactId")
                         .HasColumnType("TEXT")
                         .HasColumnName("base_artifact_id");

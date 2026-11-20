@@ -14,8 +14,12 @@ public sealed class PendingRestartRegistryTests
 {
     private static readonly StoredNodeSettings Boot = new()
     {
+        ChatCacheReuse = 128,
+        KvCacheType = "f16",
         LlamaMaxLoadedProcesses = 2,
-        KvCacheType = "f16"
+        LlamaIdleTimeToLiveSeconds = 900,
+        ImageMaxLoadedProcesses = 1,
+        ImageIdleTimeToLiveSeconds = 900
     };
 
     // The real stored-else-seed resolution, unseeded: an unset switch reads its options default.
@@ -59,10 +63,25 @@ public sealed class PendingRestartRegistryTests
     {
         var sut = new PendingRestartRegistry(Boot, Resolve);
 
-        AssertEx.Equal("llamaMaxLoadedProcesses", string.Join(',', sut.GetPendingFields(Boot with
+        AssertEx.Equal("chatCacheReuse", string.Join(',', sut.GetPendingFields(Boot with
         {
-            LlamaMaxLoadedProcesses = 3
+            ChatCacheReuse = 512
         })));
+    }
+
+    /// <summary>The node-settings save applies the process caps and idle TTLs to the running supervisors, so none of them waits for a restart.</summary>
+    [Test]
+    public void GetPendingFields_WhenOnlyTheProcessCapsAndTtlsChanged_IsEmpty()
+    {
+        var sut = new PendingRestartRegistry(Boot, Resolve);
+
+        AssertEx.Empty(sut.GetPendingFields(Boot with
+        {
+            LlamaMaxLoadedProcesses = 4,
+            LlamaIdleTimeToLiveSeconds = 60,
+            ImageMaxLoadedProcesses = 2,
+            ImageIdleTimeToLiveSeconds = 60
+        }));
     }
 
     [Test]
@@ -112,10 +131,10 @@ public sealed class PendingRestartRegistryTests
 
         var pending = sut.GetPendingFields(Boot with
         {
-            LlamaMaxLoadedProcesses = 4,
+            ChatCacheReuse = 512,
             KvCacheType = "q4_0"
         });
 
-        AssertEx.Equal("kvCacheType,llamaMaxLoadedProcesses", string.Join(',', pending));
+        AssertEx.Equal("chatCacheReuse,kvCacheType", string.Join(',', pending));
     }
 }

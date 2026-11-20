@@ -19,7 +19,7 @@ public sealed class SourceBuildRecoveryTests
     [RunOn(OS.Linux)]
     public async Task Recover_ActiveManifestVariantMismatch_DiscardsOrphanAndVersionsSignal()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
         var state = await SeedTreeAndStateAsync(active, GpuVariant.Cpu, store, manifestVariant: GpuVariant.Vulkan);
@@ -41,7 +41,7 @@ public sealed class SourceBuildRecoveryTests
     [RunOn(OS.Linux)]
     public async Task Recover_BackupOnlyMatchingManifest_RestoresActive()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var sourceRoot = Path.Combine(temp.Path, "llama.cpp", "source-build");
         var backup = Path.Combine(sourceRoot, ".backup");
@@ -62,7 +62,7 @@ public sealed class SourceBuildRecoveryTests
     [RunOn(OS.Linux)]
     public async Task Recover_CustomSelectionUsingOfficialRepository_PreservesExplicitSelection()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
         await SeedTreeAndStateAsync(active,
@@ -107,7 +107,7 @@ public sealed class SourceBuildRecoveryTests
 
         foreach (var (repository, revision, requested, resolved) in cases)
         {
-            using var temp = new TempDirectory();
+            using var temp = new TempDirectory("xe-recovery");
             using var store = new InstalledRuntimeStore(temp.Path);
             var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
             await SeedTreeAndStateAsync(active,
@@ -134,7 +134,7 @@ public sealed class SourceBuildRecoveryTests
     [RunOn(OS.Linux)]
     public async Task Recover_ActiveTreeValidationRunsFromBinaryDirectory()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
         await SeedTreeAndStateAsync(active, GpuVariant.Cpu, store, GpuVariant.Cpu, requireBinaryWorkingDirectory: true);
@@ -155,7 +155,7 @@ public sealed class SourceBuildRecoveryTests
     [RunOn(OS.Linux)]
     public async Task Recover_InProgressMarkerLeftByARestart_ReportsTheBuildAsFailedWithAReason()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var work = Path.Combine(temp.Path, "llama.cpp", "source-build", ".work");
         Directory.CreateDirectory(work);
@@ -176,7 +176,7 @@ public sealed class SourceBuildRecoveryTests
     [RunOn(OS.Linux)]
     public async Task Recover_WithoutInProgressMarker_StaysIdle()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         using var service = CreateService(temp.Path, store, new CudaManagedBuildSignal());
 
@@ -195,7 +195,7 @@ public sealed class SourceBuildRecoveryTests
     [RunOn(OS.Linux)]
     public async Task Recover_ActiveTreeIdentityMatchesButNoDevice_KeepsTreeAndRecordAndWarns()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
         await SeedTreeAndStateAsync(active, GpuVariant.Cuda, store, GpuVariant.Cuda, reportsDevice: false);
@@ -214,7 +214,7 @@ public sealed class SourceBuildRecoveryTests
     public async Task Recover_SweepsStaleRuntimeStagingDirectoriesAndKeepsFreshOnes()
     {
         // A kill mid-extract or mid-publish leaves {variant}.{guid}.tmp trees that only a finally block removed.
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var time = new AdvanceableTimeProvider();
         var tagDir = Path.Combine(temp.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag);
@@ -264,7 +264,7 @@ public sealed class SourceBuildRecoveryTests
             Skip.Test("root deletes through a 0500 directory, so the cleanup failure cannot be produced.");
         }
 
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var locked = Path.Combine(temp.Path, "llama.cpp", "source-build", ".work", "locked");
         Directory.CreateDirectory(locked);
@@ -315,7 +315,7 @@ public sealed class SourceBuildRecoveryTests
             Skip.Test("root deletes through a 0500 directory, so the reconcile failure cannot be produced.");
         }
 
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var sourceRoot = Path.Combine(temp.Path, "llama.cpp", "source-build");
         var backup = Path.Combine(sourceRoot, ".backup");
@@ -341,7 +341,7 @@ public sealed class SourceBuildRecoveryTests
     [RunOn(OS.Linux)]
     public async Task Recover_ActiveAndBackup_RestoresOnlyTreeMatchingFullDescriptor()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var sourceRoot = Path.Combine(temp.Path, "llama.cpp", "source-build");
         var backup = Path.Combine(sourceRoot, ".backup");
@@ -367,7 +367,7 @@ public sealed class SourceBuildRecoveryTests
     [RunOn(OS.Linux)]
     public async Task Recover_ActiveTreeWithUnboundRecordedPath_LeavesTreeAndRecordIntact()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
         var state = await SeedTreeAndStateAsync(active, GpuVariant.Cpu, store, manifestVariant: GpuVariant.Cpu);
@@ -397,7 +397,7 @@ public sealed class SourceBuildRecoveryTests
     [RunOn(OS.Linux)]
     public async Task Recover_ActiveTreeWithPrebuiltRecord_LeavesTreeAndRecordIntact()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var sourceRoot = Path.Combine(temp.Path, "llama.cpp", "source-build");
         var active = Path.Combine(sourceRoot, "active");
@@ -430,7 +430,7 @@ public sealed class SourceBuildRecoveryTests
     [RunOn(OS.Linux)]
     public async Task Recover_NoTreesWithRecordNamingAnotherPath_KeepsRecord()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var elsewhere = Path.Combine(temp.Path, "relocated", "source-build", "active", "build", "bin");
         var server = WriteServer(elsewhere, GpuVariant.Cuda);
@@ -451,7 +451,7 @@ public sealed class SourceBuildRecoveryTests
     [RunOn(OS.Linux)]
     public async Task Recover_BackupOnlyWithPrebuiltRecord_LeavesBackupInPlace()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         var backup = Path.Combine(temp.Path, "llama.cpp", "source-build", ".backup");
         await SeedTreeAndStateAsync(backup, GpuVariant.Cuda, store, manifestVariant: GpuVariant.Cuda);
@@ -485,7 +485,7 @@ public sealed class SourceBuildRecoveryTests
     [Test]
     public async Task Stop_WithExpiredShutdownBudget_DoesNotThrow()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         using var store = new InstalledRuntimeStore(temp.Path);
         using var buildService = CreateService(temp.Path, store, new CudaManagedBuildSignal());
         var logger = new RecordingLogger<CudaBuildStartupService>();
@@ -514,7 +514,7 @@ public sealed class SourceBuildRecoveryTests
             Skip.Test("In-app source builds run on Linux only, so the recovery path is unreachable.");
         }
 
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-recovery");
         var backup = Path.Combine(temp.Path, "llama.cpp", "source-build", ".backup");
         Directory.CreateDirectory(backup);
         await File.WriteAllTextAsync(Path.Combine(backup, "sentinel"), "keep");
@@ -643,7 +643,7 @@ public sealed class SourceBuildRecoveryTests
         public Task EvictAsync(string modelName, ModelRole role, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct) =>
+        public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct, bool operatorRequested = false) =>
             throw new NotSupportedException();
 
         public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role) =>
@@ -662,6 +662,9 @@ public sealed class SourceBuildRecoveryTests
 
         public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role) =>
             null;
+
+        public bool IsBackgroundLaunchBlocked(string modelName, ModelRole role) =>
+            false;
     }
 
     private sealed class ThrowingStore : IInstalledRuntimeStore
@@ -677,25 +680,5 @@ public sealed class SourceBuildRecoveryTests
 
         public Task DeleteAsync(CancellationToken ct) =>
             throw new NotSupportedException();
-    }
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public TempDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-recovery-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try { Directory.Delete(Path, true); }
-            catch (Exception)
-            {
-                /* Best effort. */
-            }
-        }
     }
 }

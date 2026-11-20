@@ -116,6 +116,17 @@ internal sealed class BaseArtifactService : IBaseArtifactService
             return BaseArtifactDeleteOutcome.Downloading;
         }
 
+        // An idle warm worker holds the weights open: it goes first. One running a job stays, and one not seen to exit may still read them.
+        switch (await _labJob.EvictIdleWorkerAsync(artifactId, ct))
+        {
+            case ModelLabEjectOutcome.Busy:
+                return BaseArtifactDeleteOutcome.InUseByExperiment;
+            case ModelLabEjectOutcome.NotConfirmed:
+                return BaseArtifactDeleteOutcome.WorkerNotConfirmed;
+            default:
+                break;
+        }
+
         if (_labJob.ActiveBaseArtifactId == artifactId)
         {
             return BaseArtifactDeleteOutcome.InUseByExperiment;
@@ -169,6 +180,6 @@ internal sealed class BaseArtifactService : IBaseArtifactService
 
     internal static string FormatGigabytes(long bytes)
     {
-        return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1024 * 1024 * 1024):0.#} GB");
+        return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1024 * 1024 * 1024):0.#} GiB");
     }
 }

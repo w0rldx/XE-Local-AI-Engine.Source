@@ -565,6 +565,12 @@ public sealed class ChatStreamEventMapperTests
 
         AssertEx.Equal("InsufficientCapacity", ChatStreamEventMapper.MessageEvent(ChatStreamEventTypes.AssistantFailed, correlation, message, Timestamp, sequence: 1).FailureCategory);
         AssertEx.Null(ChatStreamEventMapper.MessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, message, Timestamp, sequence: 1).FailureCategory);
+        // An ejected turn ends cancelled with its stored category, which the live terminal forwards like a failed one.
+        AssertEx.Equal("ModelEjected", ChatStreamEventMapper.MessageEvent(ChatStreamEventTypes.AssistantCancelled, correlation, message with
+        {
+            Status = NodeChatMessageStatusValues.Cancelled,
+            FailureCategory = FailureCategory.ModelEjected
+        }, Timestamp, sequence: 1).FailureCategory);
         AssertEx.Null(ChatStreamEventMapper.MessageEvent(ChatStreamEventTypes.AssistantFailed, correlation, message with
         {
             FailureCategory = null

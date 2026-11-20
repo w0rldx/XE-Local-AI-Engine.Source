@@ -176,20 +176,7 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
 
         // Every entry is a "{Variant}:{kvType}" pair.
         var state = new LlamaServerLaunchFallbackState([.. disabled]);
-        var tempPath = _statePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            await using (var stream = CreateOwnerOnly(tempPath))
-            {
-                await JsonSerializer.SerializeAsync(stream, state, SerializerOptions, ct).ConfigureAwait(false);
-            }
-
-            File.Move(tempPath, _statePath, overwrite: true);
-        }
-        finally
-        {
-            BestEffortFile.TryDeleteFile(tempPath);
-        }
+        await SecureFilePermissions.WriteJsonAtomicAsync(_statePath, state, SerializerOptions, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -206,7 +193,7 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         {
             try
             {
-                return CreateOwnerOnly(_lockPath, FileMode.OpenOrCreate);
+                return SecureFilePermissions.CreateOwnerOnly(_lockPath, FileMode.OpenOrCreate);
             }
             catch (IOException)
             {
@@ -233,22 +220,5 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
             _lockPath,
             LockAttempts);
         return null;
-    }
-
-    private static FileStream CreateOwnerOnly(string path, FileMode mode = FileMode.Create)
-    {
-        var options = new FileStreamOptions
-        {
-            Mode = mode,
-            Access = FileAccess.Write,
-            Share = FileShare.None
-        };
-
-        if (!OperatingSystem.IsWindows())
-        {
-            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        }
-
-        return new FileStream(path, options);
     }
 }

@@ -96,15 +96,15 @@ describe("NodeSettingsAdvancedFieldsCard guidance", () => {
 		expectInputSuffix("node-settings-agenthome-command-timeout", "minutes");
 	});
 
-	it("shows the AgentHome byte caps in MB with live-reload guidance", () => {
+	it("shows the AgentHome byte caps in MiB with live-reload guidance", () => {
 		renderCards();
 
 		expect(screen.getByLabelText("AgentHome max selected folder size")).toBeTruthy();
 		expect(screen.getByLabelText("AgentHome max patch size")).toBeTruthy();
-		expect(screen.getAllByText("A positive size in MB. Changes take effect without restarting the node.")).toHaveLength(2);
+		expect(screen.getAllByText("A positive size in MiB. Changes take effect without restarting the node.")).toHaveLength(2);
 		// 536870912 / 52428800 bytes on the wire.
-		expect((screen.getByTestId("node-settings-agenthome-max-folder-bytes") as HTMLInputElement).value).toBe("512 MB");
-		expect((screen.getByTestId("node-settings-agenthome-max-patch-bytes") as HTMLInputElement).value).toBe("50 MB");
+		expect((screen.getByTestId("node-settings-agenthome-max-folder-bytes") as HTMLInputElement).value).toBe("512 MiB");
+		expect((screen.getByTestId("node-settings-agenthome-max-patch-bytes") as HTMLInputElement).value).toBe("50 MiB");
 	});
 
 	it("adds the run time limit in minutes and the run retention in days", () => {
@@ -119,13 +119,13 @@ describe("NodeSettingsAdvancedFieldsCard guidance", () => {
 		).toBeTruthy();
 	});
 
-	it("adds the inner tool-call budget, the patch-apply timeout and the run caps, the byte cap in GB", () => {
+	it("adds the inner tool-call budget, the patch-apply timeout and the run caps, the byte cap in GiB", () => {
 		renderCards();
 
 		expect((screen.getByTestId("node-settings-agenthome-max-inner-tool-calls") as HTMLInputElement).value).toBe("24");
 		expect((screen.getByTestId("node-settings-agenthome-patch-apply-timeout") as HTMLInputElement).value).toBe("120 seconds");
 		expect((screen.getByTestId("node-settings-agenthome-run-retention-max-runs") as HTMLInputElement).value).toBe("200");
-		expect((screen.getByTestId("node-settings-agenthome-run-retention-max-bytes") as HTMLInputElement).value).toBe("2 GB");
+		expect((screen.getByTestId("node-settings-agenthome-run-retention-max-bytes") as HTMLInputElement).value).toBe("2 GiB");
 		// All four, and the retention window, are read per run, apply or sweep, so none carries the restart badge.
 		expect(screen.queryByTestId("node-settings-restart-badge-agentHomeRunRetentionDays")).toBeNull();
 		expect(screen.queryByTestId("node-settings-restart-badge-agentHomeMaxInnerToolCalls")).toBeNull();

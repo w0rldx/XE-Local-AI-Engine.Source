@@ -3,12 +3,19 @@ namespace XE_Local_AI_Engine.Tests.Telemetry;
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Events.Implementation;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 // Asserts the instruments publish on the shared "XE.Node" meter with their documented, bounded tags, captured through
 // a real MeterListener (OpenTelemetry's own surface): a wrong meter name or dropped tag silently loses the signal.
@@ -99,6 +106,40 @@ public sealed class NodeMetricsInstrumentPublicationTests
         AssertEx.Equal(expected: 2L, capture.CountLong("invocation_cancelled_total"));
         AssertEx.Contains(capture.LongTagValues("invocation_cancelled_total", "category"), (object?)"user");
         AssertEx.Contains(capture.LongTagValues("invocation_cancelled_total", "category"), (object?)"operator_eject");
+    }
+
+    // An unloaded model is an outcome like a cancel: the dispatcher ends it Cancelled with its own category and counts no failure,
+    // while a real failure reported the same way still counts.
+    [Test]
+    public async Task ReportInvocationFailed_ModelEjected_EndsCancelled_AndCountsNoFailure()
+    {
+        using var capture = new NodeMeterCapture();
+        var dispatcher = new WorkerEventDispatcher(Substitute.For<IInvocationRunner>(),
+            Substitute.For<IInvocationHistory>(),
+            NullLogger<WorkerEventDispatcher>.Instance,
+            TimeProvider.System);
+        var ejected = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+
+        await using (await dispatcher.ReportInvocationAssignedAsync(ejected))
+        {
+            await dispatcher.ReportInvocationFailedAsync(ejected.InvocationId, "The model was unloaded while this request was running.", FailureCategory.ModelEjected,
+                showCancelReason: true);
+        }
+
+        var state = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal(InvocationStatus.Cancelled, state.Status);
+        AssertEx.Equal(FailureCategory.ModelEjected, state.FailureCategory);
+        AssertEx.Equal("The model was unloaded while this request was running.", state.ChatError, "an eject's reason is shown, unlike a plain Stop's.");
+        AssertEx.False(capture.LongTagValues("invocation_failed_total", "source").Contains(nameof(FailureCategory.ModelEjected)), "an eject is not a failure.");
+
+        var failed = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        await using (await dispatcher.ReportInvocationAssignedAsync(failed))
+        {
+            await dispatcher.ReportInvocationFailedAsync(failed.InvocationId, "Provider unreachable.", FailureCategory.ModelLoadFailed);
+        }
+
+        AssertEx.Equal(InvocationStatus.Failed, AssertEx.NotNull(dispatcher.CurrentInvocation).Status);
+        AssertEx.Contains(capture.LongTagValues("invocation_failed_total", "source"), (object?)nameof(FailureCategory.ModelLoadFailed));
     }
 
     [Test]

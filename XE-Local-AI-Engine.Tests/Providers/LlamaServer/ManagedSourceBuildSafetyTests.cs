@@ -319,7 +319,7 @@ public sealed class ManagedSourceBuildSafetyTests
     private static LlamaCppBinaryManager CreateManager(string root, IInstalledRuntimeStore store, ICudaManagedBuildSignal? signal = null)
     {
 #pragma warning disable CA2000 // Test-scoped manager retains these no-network HTTP resources for the manager lifetime.
-        return new LlamaCppBinaryManager(new HttpClient(new ThrowingHandler()), root, LlamaCppReleasePins.PinnedTag,
+        return new LlamaCppBinaryManager(new HttpClient(new ThrowingHttpMessageHandler(new InvalidOperationException())), root, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, installedRuntimeStore: store, managedCudaSignal: signal ?? new CudaManagedBuildSignal());
 #pragma warning restore CA2000
     }
@@ -348,12 +348,6 @@ public sealed class ManagedSourceBuildSafetyTests
         }
 
         return bin;
-    }
-
-    private sealed class ThrowingHandler : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException();
     }
 
     private sealed class SecureTempDirectory : IDisposable

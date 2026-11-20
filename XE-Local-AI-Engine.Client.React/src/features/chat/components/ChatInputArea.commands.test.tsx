@@ -118,6 +118,17 @@ describe("ChatInputArea slash commands", () => {
 		expect(input.value).toBe("/pi");
 	});
 
+	it("keeps WebKit's composition-ending Enter (keyCode 229) from selecting a command, then selects on a plain Enter", () => {
+		const { input, onSend } = renderComposer();
+		fireEvent.change(input, { target: { value: "/pi", selectionStart: 3, selectionEnd: 3 } });
+		fireEvent.keyDown(input, { key: "Enter", code: "Enter", keyCode: 229 });
+		expect(input.value).toBe("/pi");
+		expect(onSend).not.toHaveBeenCalled();
+
+		fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+		expect(input.value).toBe("/ping");
+	});
+
 	it("does not show autocomplete while disabled or sending", () => {
 		const disabled = renderComposer({ disabled: true });
 		fireEvent.change(disabled.input, { target: { value: "/", selectionStart: 1, selectionEnd: 1 } });

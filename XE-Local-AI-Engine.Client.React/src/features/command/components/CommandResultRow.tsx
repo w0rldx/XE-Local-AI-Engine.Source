@@ -1,10 +1,10 @@
 import { Anchor, Group, Loader, Text } from "@mantine/core";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import type { XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse as GraphWorkflowRunResponse } from "@/core/api/generated";
-import { usePendingChatConversationStore } from "@/core/ui/stores/PendingChatConversationStore";
+import { useChatHandOff } from "@/core/ui/hooks/useChatHandOff";
 import type { IntentRefusal } from "@/features/command/api/CommandApi";
 import { isTerminalRunStatus, useCommandRunStatus } from "@/features/command/hooks/useCommandRunStatus";
 
@@ -100,8 +100,7 @@ function RunResultRow({ result, lineClamp, color }: RowStyle & { readonly result
 
 function ReplyResultRow({ result, lineClamp, color }: RowStyle & { readonly result: Extract<CommandResult, { kind: "reply" }> }) {
 	const { t } = useTranslation();
-	const navigate = useNavigate();
-	const setPendingConversationId = usePendingChatConversationStore((state) => state.actions.setPendingConversationId);
+	const { openConversation } = useChatHandOff();
 	const { conversationId } = result;
 
 	return (
@@ -111,16 +110,7 @@ function ReplyResultRow({ result, lineClamp, color }: RowStyle & { readonly resu
 				{result.failed ? t("pages.command.reply.failed") : result.text || t("pages.command.reply.waiting")}
 			</Text>
 			{conversationId === null ? null : (
-				<Anchor
-					component="button"
-					type="button"
-					size="sm"
-					onClick={() => {
-						// `/chat` reads its thread from its own preferences; this core hand-off store is how another page asks for one.
-						setPendingConversationId(conversationId);
-						navigate({ to: nodeRoutePaths.chat }).catch(() => undefined);
-					}}
-				>
+				<Anchor component="button" type="button" size="sm" onClick={() => openConversation(conversationId)}>
 					{t("pages.command.reply.openInChat")}
 				</Anchor>
 			)}

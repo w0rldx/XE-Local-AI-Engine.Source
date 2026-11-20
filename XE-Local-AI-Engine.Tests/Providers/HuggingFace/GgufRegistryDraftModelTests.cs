@@ -15,7 +15,7 @@ public sealed class GgufRegistryDraftModelTests
     [Test]
     public async Task Rescan_RegistersAnMtpDrafterAsADraft_NotAsAnOrdinaryModel()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
 
         // Both files as they land on disk: the real weights and the drafter downloaded from the same repo.
@@ -41,7 +41,7 @@ public sealed class GgufRegistryDraftModelTests
     [Test]
     public async Task Rescan_LeavesAnMtpNamedBaseModelAlone()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = Infra.Options(dir.Path);
 
         // From unsloth/Qwen3.6-27B-MTP-GGUF — a real chat model whose name advertises MTP layers.

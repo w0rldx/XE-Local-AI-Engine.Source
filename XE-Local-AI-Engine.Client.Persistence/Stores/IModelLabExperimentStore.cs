@@ -31,6 +31,13 @@ public sealed class ModelLabExperimentRecord
 
     public required long? TraceByteCount { get; init; }
 
+    /// <summary>A trace's attention blob; null on a trace that recorded none and on every steering row.</summary>
+    public required Guid? AttentionBlobId { get; init; }
+
+    public required string? AttentionSha256 { get; init; }
+
+    public required long? AttentionByteCount { get; init; }
+
     public required string? Notes { get; init; }
 
     public required bool IsPinned { get; init; }
@@ -77,6 +84,22 @@ public sealed record ModelLabExperimentCompletion
     public string? TraceSha256 { get; init; }
 
     public long? TraceByteCount { get; init; }
+
+    public Guid? AttentionBlobId { get; init; }
+
+    public string? AttentionSha256 { get; init; }
+
+    public long? AttentionByteCount { get; init; }
+
+    public static ModelLabExperimentCompletion Cancelled() =>
+        Finished(ModelLabExperimentStatus.Cancelled, "The experiment was cancelled.");
+
+    public static ModelLabExperimentCompletion Finished(ModelLabExperimentStatus status, string message) =>
+        new()
+        {
+            Status = status,
+            ErrorMessage = message
+        };
 }
 
 /// <summary>A blob written to the Model Lab store, as a row refers to it.</summary>

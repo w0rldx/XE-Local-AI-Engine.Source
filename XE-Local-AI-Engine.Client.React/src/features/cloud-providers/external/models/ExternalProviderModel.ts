@@ -1,3 +1,4 @@
+import { isRecord } from "@/core/models/JsonRecord";
 import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
 
 // The declared trust flag on a connection. Mirrors the backend `ExternalProviderLocality` enum name, which is what
@@ -37,7 +38,7 @@ export const noCloudGrants: ExternalProviderCloudGrants = {
 
 // Fail closed, like the backend: a missing object, or a member that is missing or not literally `true`, is no grant.
 export function parseCloudGrants(value: unknown): ExternalProviderCloudGrants {
-	const source = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+	const source = isRecord(value) ? value : {};
 	return {
 		localData: source["localData"] === true,
 		unattendedRuns: source["unattendedRuns"] === true,

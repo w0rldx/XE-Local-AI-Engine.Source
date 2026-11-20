@@ -1,5 +1,7 @@
-import { Alert } from "@mantine/core";
+import { Alert, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
+
+import { ButtonLink } from "@/core/ui/components/ButtonLink/ButtonLink";
 
 interface ModelPickerNoticeProps {
 	status: "pending" | "error" | "success";
@@ -18,7 +20,14 @@ export function ModelPickerNotice({ status, modelCount }: ModelPickerNoticeProps
 	}
 	return status === "success" && modelCount === 0 ? (
 		<Alert color="yellow" data-testid="model-lab-no-models">
-			{t("pages.modelLab.noModels", "No installed llama.cpp model is available. Install one under Models first.")}
+			<Stack gap="xs" align="flex-start">
+				<Text size="sm">
+					{t("pages.modelLab.noModels", "No installed llama.cpp model is available. Install one under Models first.")}
+				</Text>
+				<ButtonLink to="/models" size="compact-sm" variant="light" color="yellow" data-testid="model-lab-no-models-link">
+					{t("pages.modelLab.openModels", "Open Models")}
+				</ButtonLink>
+			</Stack>
 		</Alert>
 	) : null;
 }

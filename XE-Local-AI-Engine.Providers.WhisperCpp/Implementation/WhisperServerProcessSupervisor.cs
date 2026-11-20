@@ -31,6 +31,9 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     /// </summary>
     private static readonly TimeSpan RequestFailureExitGrace = TimeSpan.FromSeconds(1);
 
+    /// <summary>How long a GPU load waits for an idle GPU holder to release before it proceeds anyway.</summary>
+    private static readonly TimeSpan IdleHolderReleaseBound = TimeSpan.FromSeconds(30);
+
     private readonly IWhisperCppBinaryManager _binaryManager;
     private readonly IWhisperBackendSelector _backendSelector;
     private readonly SemaphoreSlim _ensureGate = new(initialCount: 1, maxCount: 1);
@@ -53,6 +56,9 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
     // Ticked after every change GetStatus shows: the starting flag, registration, detach, and the daemon's own exit.
     private readonly IRuntimeResidencyChangeNotifier _residencyNotifier;
+
+    // Whisper never takes the GPU work gate, so a GPU load asks an idle holder (a warm Model Lab worker) to leave instead.
+    private readonly IGpuIdleHolderPreemption _idlePreemption;
 
     private RunningServer? _current;
     private int _disposed;
@@ -79,7 +85,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         IWhisperRuntimeActivityGate? runtimeActivityGate = null,
         WhisperCudaFailureSignal? cudaFailureSignal = null,
         ProcessSpawnReceiptStore? spawnReceipts = null,
-        IRuntimeResidencyChangeNotifier? residencyNotifier = null)
+        IRuntimeResidencyChangeNotifier? residencyNotifier = null,
+        IGpuIdleHolderPreemption? idlePreemption = null)
     {
         ArgumentNullException.ThrowIfNull(backendSelector);
         _backendSelector = backendSelector;
@@ -100,18 +107,20 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         _cudaFailureSignal = cudaFailureSignal ?? new WhisperCudaFailureSignal();
         _spawnReceipts = spawnReceipts ?? new ProcessSpawnReceiptStore(nodeDataRoot: null, "whisper-server", _logger);
         _residencyNotifier = residencyNotifier ?? NullRuntimeResidencyChangeNotifier.Instance;
+        _idlePreemption = idlePreemption ?? NoOpGpuIdleHolderPreemption.Instance;
 
         // Absent a wired gate (a provider-only host, or a test), default to the no-op floor so GPU-load serialization
         // is simply off. The composition root injects the real singleton shared with the other supervisors.
         _loadAdmission = loadAdmission ?? new NoOpGpuModelLoadAdmission();
 
-        _reaperLoop = Task.Run(() => IdleReapLoop.RunAsync(_options.IdleTimeToLive,
+        _reaperLoop = Task.Run(() => IdleReapLoop.RunAsync(() => _options.IdleTimeToLive,
                 _timeProvider,
                 () =>
                 {
                     ReapIdleOnce();
                     return Task.CompletedTask;
                 },
+                _logger,
                 _shutdownCts.Token),
             _shutdownCts.Token);
     }
@@ -452,6 +461,14 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         return null;
     }
 
+    /// <summary>Asks an idle GPU holder to leave and waits for it, bounded, then takes the GPU-load admission ticket.</summary>
+    /// <remarks>A wait that ends unreleased proceeds as before: whisper never consulted the GPU work gate.</remarks>
+    private async Task<IDisposable> AdmitGpuLoadAsync(CancellationToken ct)
+    {
+        _ = await _idlePreemption.WaitForReleaseAsync(IdleHolderReleaseBound, ct).ConfigureAwait(false);
+        return await _loadAdmission.AcquireAsync(ct).ConfigureAwait(false);
+    }
+
     /// <summary>Resolves the model, backend and binary, launches, readiness-gates and registers the daemon.</summary>
     private async Task<RunningServer> SpawnOnceAsync(string modelId, CancellationToken ct)
     {
@@ -477,7 +494,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             // A CPU backend bypasses the gate entirely; it does not contend for VRAM.
             using var admissionTicket = binary.Backend == WhisperBackend.Cpu
                 ? null
-                : await _loadAdmission.AcquireAsync(spawnCt).ConfigureAwait(false);
+                : await AdmitGpuLoadAsync(spawnCt).ConfigureAwait(false);
 
             port = AllocatePort();
             var spec = WhisperServerArgumentBuilder.Build(modelId,
@@ -598,7 +615,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         {
             using var admissionTicket = running.Binary.Backend == WhisperBackend.Cpu
                 ? null
-                : await _loadAdmission.AcquireAsync(ct).ConfigureAwait(false);
+                : await AdmitGpuLoadAsync(ct).ConfigureAwait(false);
 
             using var loadCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             loadCts.CancelAfter(_options.ModelLoadTimeout);

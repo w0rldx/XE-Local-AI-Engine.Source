@@ -10,6 +10,7 @@ import { CommandPalette } from "@/core/layout/components/CommandPalette/CommandP
 import { DesktopNavigationBar } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar";
 import { HeaderBar, type IHeaderBarProperties } from "@/core/layout/components/HeaderBar/HeaderBar";
 import { isDesktopShell, SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_WIDTH_EXPANDED } from "@/core/layout/constants/LayoutBreakpoints";
+import { MAIN_CONTENT_ID } from "@/core/layout/constants/LayoutElementIds";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNavigationBarStore";
 
@@ -67,7 +68,7 @@ export function Layout({ headerStatus, headerIndicator, headerActions, drawerAct
 			{/* First focusable element on every page, off-screen until it takes focus: a keyboard or screen-reader
 			    user would otherwise tab through the whole sidebar and header on every navigation before reaching
 			    the page. Serves both layouts — the desktop rail and the mobile drawer share this one <main>. */}
-			<a href="#main-content" className="layout-skip-link">
+			<a href={`#${MAIN_CONTENT_ID}`} className="layout-skip-link">
 				{t("components.layout.skipToContent")}
 			</a>
 			<div className="flex flex-row h-dvh w-full overflow-hidden">
@@ -102,7 +103,7 @@ export function Layout({ headerStatus, headerIndicator, headerActions, drawerAct
 					    keeps this the element that scrolls, so page scrolling is unchanged. The scroll padding keeps a field that
 					    gets focus out from under a StickyBar pinned to either edge (top: a two-row phone tab bar). */}
 					<main
-						id="main-content"
+						id={MAIN_CONTENT_ID}
 						tabIndex={-1}
 						className="flex-1 min-h-0 overflow-y-auto scroll-pt-20 scroll-pb-16 md:px-8 px-2 pt-2"
 					>

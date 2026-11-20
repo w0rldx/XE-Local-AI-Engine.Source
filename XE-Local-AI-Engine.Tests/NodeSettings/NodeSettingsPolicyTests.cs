@@ -7,8 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The cross-field save policy runs on the MERGED settings: it rejects a draft-* mode without a draft model and
-///     keep-warm without a model, and falls back to the EFFECTIVE runtime value (<see cref="INodeRuntimeSettings" />)
-///     for an omitted process-slot or interval knob.
+///     keep-warm without a model, and reads an unset slot or TTL knob as that record's effective value.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class NodeSettingsPolicyTests
@@ -54,14 +53,18 @@ public sealed class NodeSettingsPolicyTests
     [Test]
     public async Task KeepWarmEnabled_UsesTheEffectiveProcessSlotCount_WhenTheRequestOmitsIt()
     {
-        // The request left LlamaMaxLoadedProcesses null, so the stored/effective value (1) decides — and one slot is
-        // not enough to keep a model warm and still admit another.
-        var errors = await ValidateAsync(new StoredNodeSettings
+        // The request omits the cap, so the merged record carries the stored 1 — and one slot is not enough to keep a model
+        // warm and still admit another.
+        var stored = new StoredNodeSettings
+        {
+            LlamaMaxLoadedProcesses = 1
+        };
+        var errors = await ValidateAsync(stored with
             {
                 KeepModelWarmEnabled = true,
                 KeepModelWarmModelName = "warm.gguf"
             },
-            maxLoadedProcesses: 1);
+            stored);
 
         AssertEx.ContainsSingle(errors,
             error => error.Field == NodeSettingsField.LlamaMaxLoadedProcesses
@@ -77,7 +80,10 @@ public sealed class NodeSettingsPolicyTests
                 KeepModelWarmModelName = "warm.gguf",
                 LlamaMaxLoadedProcesses = 2
             },
-            maxLoadedProcesses: 1);
+            new StoredNodeSettings
+            {
+                LlamaMaxLoadedProcesses = 1
+            });
 
         AssertEx.Empty(errors);
     }
@@ -86,12 +92,12 @@ public sealed class NodeSettingsPolicyTests
     public async Task KeepWarmInterval_NotShorterThanTheEffectiveIdleTimeToLive_IsRejected()
     {
         var errors = await ValidateAsync(new StoredNodeSettings
-            {
-                KeepModelWarmEnabled = true,
-                KeepModelWarmModelName = "warm.gguf",
-                KeepModelWarmIntervalSeconds = 600
-            },
-            idleTimeToLive: TimeSpan.FromSeconds(600));
+        {
+            KeepModelWarmEnabled = true,
+            KeepModelWarmModelName = "warm.gguf",
+            KeepModelWarmIntervalSeconds = 600,
+            LlamaIdleTimeToLiveSeconds = 600
+        });
 
         AssertEx.ContainsSingle(errors,
             error => error.Field == NodeSettingsField.KeepModelWarmIntervalSeconds
@@ -101,9 +107,7 @@ public sealed class NodeSettingsPolicyTests
     [Test]
     public async Task KeepWarmDisabled_SkipsTheRuntimeBackedRulesEntirely()
     {
-        var runtimeSettings = CreateRuntimeSettings(maxLoadedProcesses: 1,
-            keepWarmInterval: TimeSpan.FromHours(1),
-            idleTimeToLive: TimeSpan.FromSeconds(1));
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
 
         var errors = await NodeSettingsPolicy.ValidateMergedAsync(new StoredNodeSettings
             {
@@ -113,7 +117,89 @@ public sealed class NodeSettingsPolicyTests
             CancellationToken.None);
 
         AssertEx.Empty(errors);
-        await runtimeSettings.DidNotReceive().GetLlamaMaxLoadedProcessesAsync(Arg.Any<CancellationToken>());
+        // A call-shape pin: the keep-warm rules are the only readers of the effective values here, so none is resolved.
+        runtimeSettings.DidNotReceive().ResolveEffectiveValues(Arg.Any<StoredNodeSettings>());
+    }
+
+    /// <summary>An interval cleared by the save resolves to the default (300 s), which a 60 s TTL no longer outlasts.</summary>
+    [Test]
+    public async Task KeepWarmEnabled_AnIntervalClearedFromAStoredOne_IsJudgedAsTheDefault()
+    {
+        var errors = await ValidateAsync(new StoredNodeSettings
+            {
+                KeepModelWarmEnabled = true,
+                KeepModelWarmModelName = "warm.gguf",
+                LlamaIdleTimeToLiveSeconds = 60
+            },
+            new StoredNodeSettings
+            {
+                KeepModelWarmIntervalSeconds = 20
+            });
+
+        AssertEx.ContainsSingle(errors,
+            error => error.Field == NodeSettingsField.KeepModelWarmIntervalSeconds
+                     && error.Message == "The keep-model-warm interval must be shorter than the llama.cpp idle time-to-live.");
+    }
+
+    /// <summary>Clearing both resolves both to their defaults (300 s against 900 s), so the save is valid whatever was stored.</summary>
+    [Test]
+    public async Task KeepWarmEnabled_ClearingTheTtlAndTheInterval_IsJudgedAsBothDefaults()
+    {
+        var errors = await ValidateAsync(new StoredNodeSettings
+            {
+                KeepModelWarmEnabled = true,
+                KeepModelWarmModelName = "warm.gguf"
+            },
+            new StoredNodeSettings
+            {
+                KeepModelWarmIntervalSeconds = 1200,
+                LlamaIdleTimeToLiveSeconds = 3600
+            });
+
+        AssertEx.Empty(errors);
+    }
+
+    /// <summary>A cap cleared by the save resolves to the default the save applies, not to the stored value it replaces.</summary>
+    [Test]
+    public async Task KeepWarmEnabled_ACapClearedFromAStoredOne_IsJudgedAsTheDefault()
+    {
+        var runtimeSettings = SeededNodeRuntimeSettings.Create(stored: static () => new StoredNodeSettings
+        {
+            LlamaMaxLoadedProcesses = 1
+        });
+
+        var errors = await NodeSettingsPolicy.ValidateMergedAsync(new StoredNodeSettings
+            {
+                KeepModelWarmEnabled = true,
+                KeepModelWarmModelName = "warm.gguf"
+            },
+            runtimeSettings,
+            CancellationToken.None);
+
+        AssertEx.Empty(errors);
+    }
+
+    /// <summary>A TTL cleared by the save resolves to the default (900 s), not to the stored 3600 s.</summary>
+    [Test]
+    public async Task KeepWarmEnabled_ATtlClearedFromAStoredOne_IsJudgedAsTheDefault()
+    {
+        var runtimeSettings = SeededNodeRuntimeSettings.Create(stored: static () => new StoredNodeSettings
+        {
+            LlamaIdleTimeToLiveSeconds = 3600
+        });
+
+        var errors = await NodeSettingsPolicy.ValidateMergedAsync(new StoredNodeSettings
+            {
+                KeepModelWarmEnabled = true,
+                KeepModelWarmModelName = "warm.gguf",
+                KeepModelWarmIntervalSeconds = 1200
+            },
+            runtimeSettings,
+            CancellationToken.None);
+
+        AssertEx.ContainsSingle(errors,
+            error => error.Field == NodeSettingsField.KeepModelWarmIntervalSeconds
+                     && error.Message == "The keep-model-warm interval must be shorter than the llama.cpp idle time-to-live.");
     }
 
     /// <summary>
@@ -148,26 +234,10 @@ public sealed class NodeSettingsPolicyTests
         AssertEx.Empty(errors);
     }
 
-    private static async Task<IReadOnlyList<NodeSettingsValidationError>> ValidateAsync(StoredNodeSettings settings,
-        int maxLoadedProcesses = 4,
-        TimeSpan? keepWarmInterval = null,
-        TimeSpan? idleTimeToLive = null)
+    // The real resolution (stored > seed > default) over the stored record the merged one replaces.
+    private static async Task<IReadOnlyList<NodeSettingsValidationError>> ValidateAsync(StoredNodeSettings merged, StoredNodeSettings? stored = null)
     {
-        var runtimeSettings = CreateRuntimeSettings(maxLoadedProcesses,
-            keepWarmInterval ?? TimeSpan.FromSeconds(60),
-            idleTimeToLive ?? TimeSpan.FromSeconds(900));
-
-        return await NodeSettingsPolicy.ValidateMergedAsync(settings, runtimeSettings, CancellationToken.None);
-    }
-
-    private static INodeRuntimeSettings CreateRuntimeSettings(int maxLoadedProcesses,
-        TimeSpan keepWarmInterval,
-        TimeSpan idleTimeToLive)
-    {
-        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
-        runtimeSettings.GetLlamaMaxLoadedProcessesAsync(Arg.Any<CancellationToken>()).Returns(maxLoadedProcesses);
-        runtimeSettings.GetKeepModelWarmIntervalAsync(Arg.Any<CancellationToken>()).Returns(keepWarmInterval);
-        runtimeSettings.GetLlamaIdleTimeToLiveAsync(Arg.Any<CancellationToken>()).Returns(idleTimeToLive);
-        return runtimeSettings;
+        var runtimeSettings = SeededNodeRuntimeSettings.Create(stored: () => stored ?? new StoredNodeSettings());
+        return await NodeSettingsPolicy.ValidateMergedAsync(merged, runtimeSettings, CancellationToken.None);
     }
 }

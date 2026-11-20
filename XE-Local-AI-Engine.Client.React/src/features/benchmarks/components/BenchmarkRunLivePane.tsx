@@ -5,6 +5,7 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
 import { BenchmarkRunPane } from "@/features/benchmarks/components/BenchmarkRunPane";
+import { useConfirmDeleteBenchmarkRun } from "@/features/benchmarks/hooks/useBenchmarkRunActions";
 import { useBenchmarkRunHub } from "@/features/benchmarks/hooks/useBenchmarkRunHub";
 import type { BenchmarkReviewSubmission } from "@/features/benchmarks/models/BenchmarkModels";
 import {
@@ -13,7 +14,6 @@ import {
 	benchmarkScoreControl,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { toBenchmarkCriterionKind } from "@/features/benchmarks/models/BenchmarkVerifier";
-import { useBenchmarkProject, useBenchmarkRun } from "@/features/benchmarks/queries/useBenchmarks";
 import {
 	useBenchmarkRunArtifact,
 	useCancelBenchmarkRun,
@@ -23,10 +23,12 @@ import {
 	useScoreBenchmarkRun,
 	useSubmitBenchmarkRunReview,
 } from "@/features/benchmarks/queries/useBenchmarkRunMutations";
+import { useBenchmarkProject, useBenchmarkRun } from "@/features/benchmarks/queries/useBenchmarks";
 import { useBenchmarkTaskItems } from "@/features/benchmarks/queries/useBenchmarkTaskItems";
 
 export function BenchmarkRunLivePane({ runId }: { runId: string }) {
 	const { t } = useTranslation();
+	const confirmDeleteRun = useConfirmDeleteBenchmarkRun();
 	const runQuery = useBenchmarkRun(runId);
 	// Read through the query key the page already holds, so this costs no request: the judging MODE belongs to the
 	// project, not to the run, and the pane below cannot pick its reading without it.
@@ -162,12 +164,15 @@ export function BenchmarkRunLivePane({ runId }: { runId: string }) {
 					},
 				)
 			}
-			onDelete={() =>
+			onDelete={async () => {
+				if (!(await confirmDeleteRun())) {
+					return;
+				}
 				remove.mutate(run, {
 					onError: (error) =>
 						toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.delete", "Could not delete this terminal run."))),
-				})
-			}
+				});
+			}}
 		/>
 	);
 }

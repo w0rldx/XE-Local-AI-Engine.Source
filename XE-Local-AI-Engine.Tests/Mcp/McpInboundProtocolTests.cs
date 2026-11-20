@@ -257,6 +257,7 @@ public sealed class McpInboundProtocolTests
     [Arguments("llama_idle_time_to_live_seconds", "29", "llama.cpp idle time-to-live is outside")]
     [Arguments("keep_model_warm_interval_seconds", "-5", "Keep-model-warm interval is outside")]
     [Arguments("chat_cache_reuse", "8193", "Chat cache reuse is outside")]
+    [Arguments("model_lab_warm_idle_seconds", "3601", "Model Lab warm idle time must be between 0 and 3600 seconds")]
     [Arguments("speculative_draft_max_tokens", "17", "Speculative draft tokens is outside")]
     [Arguments("speculative_mode", "\"bogus\"", "Unknown speculative decoding mode.")]
     [Arguments("kv_cache_type", "\"bogus\"", "Unknown KV cache type.")]

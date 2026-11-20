@@ -1,11 +1,10 @@
 import { Badge, Button, Code, Group, Loader, Stack, Text } from "@mantine/core";
 import { IconFileText, IconHistory, IconMessage, IconTrash } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatBytes } from "@/core/formatting/BytesFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { AgentHomePatchApplyDialog } from "@/core/ui/components/AgentHomePatchApplyDialog/AgentHomePatchApplyDialog";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
@@ -16,7 +15,7 @@ import { ResponsiveTable, type ResponsiveTableColumn } from "@/core/ui/component
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useServerTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
-import { usePendingChatConversationStore } from "@/core/ui/stores/PendingChatConversationStore";
+import { useChatHandOff } from "@/core/ui/hooks/useChatHandOff";
 import { AgentRunDeleteDialog } from "@/features/agentRuns/components/AgentRunDeleteDialog";
 import { AgentRunViewerDialog } from "@/features/agentRuns/components/AgentRunViewerDialog";
 import {
@@ -24,7 +23,6 @@ import {
 	agentRunOutcomeColor,
 	agentRunPageSize,
 	agentRunPageSizeOptions,
-	formatAgentRunSize,
 } from "@/features/agentRuns/models/AgentRunModels";
 import { useAgentRuns } from "@/features/agentRuns/queries/useAgentRuns";
 
@@ -41,23 +39,12 @@ import { useAgentRuns } from "@/features/agentRuns/queries/useAgentRuns";
  */
 export function AgentRunsPage() {
 	const { t } = useTranslation();
-	const navigate = useNavigate();
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(agentRunPageSize);
 	const [reviewRunId, setReviewRunId] = useState<string | null>(null);
 	const [viewRunId, setViewRunId] = useState<string | null>(null);
 	const [deleteRunId, setDeleteRunId] = useState<string | null>(null);
-	// The conversation travels through the core hand-off store rather than a search param: `/chat` has no search
-	// schema and reads its thread from the chat preferences, which this store is what lets another feature reach
-	// without importing chat's own store.
-	const setPendingConversationId = usePendingChatConversationStore((state) => state.actions.setPendingConversationId);
-	const handleOpenConversation = useCallback(
-		(conversationId: string) => {
-			setPendingConversationId(conversationId);
-			navigate({ to: nodeRoutePaths.chat });
-		},
-		[navigate, setPendingConversationId],
-	);
+	const { openConversation } = useChatHandOff();
 
 	// A new page size renumbers the pages, so the old page number means nothing against it.
 	const handlePageSizeChange = useCallback((next: number) => {
@@ -111,7 +98,7 @@ export function AgentRunsPage() {
 						<AgentRunTable
 							runs={runs}
 							onReview={setReviewRunId}
-							onOpenConversation={handleOpenConversation}
+							onOpenConversation={openConversation}
 							onView={setViewRunId}
 							onDelete={setDeleteRunId}
 						/>
@@ -156,7 +143,7 @@ function AgentRunTable({
 			),
 		},
 		{ key: "changes", header: t("pages.agentRuns.columns.changes", "Changes"), cell: (run) => <ChangesCell run={run} /> },
-		{ key: "size", header: t("pages.agentRuns.columns.size", "Size"), cell: (run) => formatAgentRunSize(run.sizeBytes) },
+		{ key: "size", header: t("pages.agentRuns.columns.size", "Size"), cell: (run) => formatBytes(run.sizeBytes) },
 	];
 
 	return (

@@ -158,7 +158,7 @@ describe("MessageParts", () => {
 
 		renderWithProviders(<MessageParts parts={parts} isStreaming={true} streamingReasoningOverflowBytes={2048} />);
 
-		expect(screen.getByTestId("chat-live-reasoning-stream").textContent).toContain("+2 KB");
+		expect(screen.getByTestId("chat-live-reasoning-stream").textContent).toContain("+2 KiB");
 	});
 
 	// A long reasoning phase must read as progress: the live header carries a running word count that grows with it.

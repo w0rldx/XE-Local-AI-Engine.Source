@@ -176,6 +176,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 				{/* Adaptive-memory scope filter. "All" lists every scope; selecting a single scope filters the list at
 				    the source (server `?scope=`). Failure surfaces negative-guidance ("don't do X") memories distinctly. */}
 				<SegmentedControl
+					aria-label={t("pages.agents.playbook.scopeFilter.label", "Filter by scope")}
 					size="xs"
 					value={scopeFilter}
 					onChange={(value) => setScopeFilter(value as ScopeFilter)}

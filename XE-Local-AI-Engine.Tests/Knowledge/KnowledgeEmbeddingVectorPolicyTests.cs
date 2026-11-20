@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class KnowledgeEmbeddingVectorPolicyTests
 {
     private const string NomicV15 = "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M";
+    private const string Revision = "inventory-v1:pinned";
 
     [Test]
     public void Transform_ConfidentNomicV15_AppliesPopulationLayerNormThenTruncatesAndL2Normalizes()
@@ -162,6 +163,102 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
         AssertEx.Equal($"{NomicV15}@unresolved::native:v1", native);
         AssertEx.Equal($"{NomicV15}@unresolved::layernorm-population-eps1e-5-truncate-l2:v1:512", matryoshka);
         AssertEx.NotEqual(native, matryoshka);
+    }
+
+    [Test]
+    public void Transform_NomicV15_KeepsThePreProfileIdentityByteForByte()
+    {
+        // Literals captured before embedding profiles existed: a nomic identity change would stale every nomic corpus.
+        var resolution = new EmbeddingModelResolution
+        {
+            Name = NomicV15,
+            IsConfident = true,
+            RevisionFingerprint = Revision
+        };
+        var native = Enumerable.Range(0, 768).Select(static value => value / 100f).ToArray();
+
+        var matryoshka = KnowledgeEmbeddingVectorPolicy.Transform(resolution, native, KnowledgeEmbeddingVectorMode.Matryoshka512);
+        var nativeMode = KnowledgeEmbeddingVectorPolicy.Transform(resolution, native, KnowledgeEmbeddingVectorMode.Native);
+
+        AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M@inventory-v1:pinned::layernorm-population-eps1e-5-truncate-l2:v1:512",
+            matryoshka.Identity);
+        AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M@inventory-v1:pinned::native:v1:768", nativeMode.Identity);
+        AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M@inventory-v1:pinned::layernorm-population-eps1e-5-truncate-l2:v1:512",
+            KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, KnowledgeEmbeddingVectorMode.Matryoshka512));
+        AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M@inventory-v1:pinned::native:v1",
+            KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, KnowledgeEmbeddingVectorMode.Native));
+    }
+
+    [Test]
+    [Arguments("ggml-org/embeddinggemma-2-GGUF:Q8_0", "prompt-embeddinggemma+pool-mean:v1")]
+    [Arguments("CompendiumLabs/bge-m3-gguf:F16", "prompt-none+pool-cls:v1")]
+    [Arguments("Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0", "prompt-qwen3-embedding+pool-last:v1")]
+    [Arguments("my-embed:Q8_0", "prompt-none+pool-mean:v1")]
+    public void Transform_NonNomicProfile_CarriesItsIdentityTag(string modelName, string tag)
+    {
+        var resolution = new EmbeddingModelResolution
+        {
+            Name = modelName,
+            IsConfident = true,
+            RevisionFingerprint = Revision
+        };
+        var native = Enumerable.Range(0, 768).Select(static value => value / 100f).ToArray();
+
+        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(resolution, native, KnowledgeEmbeddingVectorMode.Matryoshka512);
+
+        AssertEx.Equal($"{modelName}@{Revision}::{tag}+native:v1:768", transformed.Identity);
+        AssertEx.Equal($"{modelName}@{Revision}::{tag}+native:v1",
+            KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, KnowledgeEmbeddingVectorMode.Matryoshka512));
+    }
+
+    [Test]
+    public void MatchesCurrentPolicy_UntaggedEmbeddingGemmaIdentity_IsStaleWhileNomicStillMatches()
+    {
+        const string Gemma = "ggml-org/embeddinggemma-2-GGUF:Q8_0";
+        var gemma = new EmbeddingModelResolution
+        {
+            Name = Gemma,
+            IsConfident = true,
+            RevisionFingerprint = Revision
+        };
+        var nomic = new EmbeddingModelResolution
+        {
+            Name = NomicV15,
+            IsConfident = true,
+            RevisionFingerprint = Revision
+        };
+
+        AssertEx.False(KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy($"{Gemma}@{Revision}::native:v1:768",
+                768,
+                gemma,
+                KnowledgeEmbeddingVectorMode.Matryoshka512),
+            "A corpus embedded with nomic's prefixes under EmbeddingGemma must be reindexed, never mixed with tagged vectors.");
+        AssertEx.True(KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy($"{NomicV15}@{Revision}::layernorm-population-eps1e-5-truncate-l2:v1:512",
+                512,
+                nomic,
+                KnowledgeEmbeddingVectorMode.Matryoshka512),
+            "A nomic corpus indexed before embedding profiles must stay current.");
+    }
+
+    [Test]
+    [Arguments(NomicV15, 512)]
+    [Arguments("nomic-embed-text-v1.5.f16", 512)]
+    [Arguments("nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0", 768)]
+    [Arguments("my-embed:Q8_0", 768)]
+    [Arguments("nomic-embed-text-v1.5/my-embed:Q8_0", 768)]
+    public void Transform_Matryoshka_AppliesOnlyWhenTheModelSegmentIsNomicV15(string modelName, int expectedWidth)
+    {
+        var native = Enumerable.Range(0, 768).Select(static value => value / 100f).ToArray();
+
+        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution
+            {
+                Name = modelName,
+                IsConfident = true
+            },
+            native,
+            KnowledgeEmbeddingVectorMode.Matryoshka512);
+
+        AssertEx.Equal(expectedWidth, transformed.Dimension);
     }
 
     [Test]

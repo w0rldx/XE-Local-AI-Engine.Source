@@ -55,10 +55,10 @@ export function browserFamily(userAgent: string): string | undefined {
 }
 
 function gib(bytes: number): string {
-	return `${Math.round(bytes / GIB)} GB`;
+	return `${Math.round(bytes / GIB)} GiB`;
 }
 
-/** `CPU: … / GPU: … (… GB) / RAM: … GB`, leaving out whatever the node could not read. */
+/** `CPU: … / GPU: … (… GiB) / RAM: … GiB`, leaving out whatever the node could not read. */
 export function describeHardware(nodeInfo: IssueNodeInfo): string {
 	const parts: string[] = [];
 	if (nodeInfo.cpuModel) {

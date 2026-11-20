@@ -347,7 +347,7 @@ namespace XE_Local_AI_Engine.Client
                     Log.Fatal("Port {Port} is already in use; --port does not fall back automatically.", port);
                     await Log.CloseAndFlushAsync();
                     instanceLease.Dispose();
-                    return LocalDataPreparation.Exit(6);
+                    return LocalDataPreparation.Exit(PortInUseExitCode);
                 }
 
 #pragma warning disable S5332 // Local mode intentionally binds plain HTTP exclusively on 127.0.0.1; it never leaves the machine.

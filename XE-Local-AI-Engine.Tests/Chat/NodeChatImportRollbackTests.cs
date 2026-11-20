@@ -110,7 +110,7 @@ public sealed class NodeChatImportRollbackTests
 }
 
 /// <summary>
-///     The container's chat persistence with two faults: an insert of <see cref="FailingContent" /> throws an error
+///     The container's chat persistence with two faults: importing a chat holding <see cref="FailingContent" /> throws an error
 ///     the API maps to a 400, and, when asked, the first delete throws.
 /// </summary>
 /// <remarks>Not sealed: <see cref="DispatchProxy" /> derives the proxy type at run time. Every other member forwards untouched.</remarks>
@@ -136,7 +136,7 @@ public class FailingImportPersistence : DispatchProxy
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
         ArgumentNullException.ThrowIfNull(targetMethod);
-        if (args is [NodeChatInsertMessageIfAbsentRequest { Content: FailingContent }, ..])
+        if (args is [NodeChatImportConversationRequest import, ..] && import.Messages.Any(static message => message.Content == FailingContent))
         {
             throw new NodeChatInvalidBranchSelectionException(Guid.Empty, Guid.Empty, FailureMarker);
         }

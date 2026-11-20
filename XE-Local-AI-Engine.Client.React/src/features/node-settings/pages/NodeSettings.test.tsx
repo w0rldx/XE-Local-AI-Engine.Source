@@ -13,7 +13,12 @@ const settingsResponse = {
 	minMessageRequestTimeoutSeconds: 5,
 	maxAllowedMessageRequestTimeoutSeconds: 3600,
 	// The node's restart gate, served on both the GET and the PUT; a slice is enough for these page tests.
-	restartRequiredFields: ["huggingFaceDefaultQuant", "llamaChatCacheRamMiB", "llamaMaxLoadedProcesses", "schedulerEnabled"],
+	restartRequiredFields: [
+		"huggingFaceDefaultQuant",
+		"llamaChatCacheRamMiB",
+		"llamaReadinessTimeoutCapSeconds",
+		"schedulerEnabled",
+	],
 };
 
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
@@ -687,21 +692,27 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		expect((screen.getByTestId("node-settings-save-button") as HTMLButtonElement).disabled).toBe(true);
 		expect(screen.getByTestId("node-settings-save-bar-status").getAttribute("role")).toBe("status");
 
-		// llamaMaxLoadedProcesses is restart-gated; enableTools is live.
+		// llamaReadinessTimeoutCapSeconds is restart-gated; llamaMaxLoadedProcesses and enableTools apply on save.
 		fireEvent.change(maxProcesses, { target: { value: "5" } });
+		fireEvent.change(screen.getByTestId("node-settings-llama-readiness-cap"), { target: { value: "300" } });
 		openSection("chat");
 		clickSwitch("node-settings-enable-tools");
 
-		expect(saveBarStatus()).toBe("2 unsaved changes · 1 need a restart");
+		expect(saveBarStatus()).toBe("3 unsaved changes · 1 need a restart");
 		expect((screen.getByTestId("node-settings-save-button") as HTMLButtonElement).disabled).toBe(false);
 		// Each section with an edit carries its own count in the nav.
-		expect(screen.getByTestId("node-settings-section-runtime").textContent).toContain("1");
+		expect(screen.getByTestId("node-settings-section-runtime").textContent).toContain("2");
 
-		// One Save sends both, wherever they were edited.
+		// One Save sends them all, wherever they were edited.
 		fireEvent.click(screen.getByTestId("node-settings-save-button"));
 		await waitFor(() =>
 			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
-				body: { llamaMaxLoadedProcesses: 5, enableTools: false, maxMessageRequestTimeoutSeconds: 600 },
+				body: {
+					llamaMaxLoadedProcesses: 5,
+					llamaReadinessTimeoutCapSeconds: 300,
+					enableTools: false,
+					maxMessageRequestTimeoutSeconds: 600,
+				},
 			}),
 		);
 		// A single save point: the old second Save button is gone.
@@ -725,6 +736,26 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		expect(generatedMock.saveFn).not.toHaveBeenCalled();
 	});
 
+	// One save outcome, one toast: the corrected save replaces the validation error instead of stacking beside it.
+	it("shows the validation error and the later saved notice under one toast id", async () => {
+		renderPage("runtime");
+		const maxProcesses = (await screen.findByTestId("node-settings-llama-max-processes")) as HTMLInputElement;
+		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
+
+		fireEvent.change(maxProcesses, { target: { value: "17" } });
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+		await waitFor(() =>
+			expect(toastMock.error).toHaveBeenCalledWith("Some settings are invalid. Fix the highlighted fields.", {
+				id: "node-settings-save",
+			}),
+		);
+
+		fireEvent.change(maxProcesses, { target: { value: "5" } });
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.any(String), { id: "node-settings-save" }));
+		expect(toastMock.error).toHaveBeenCalledTimes(1);
+	});
+
 	it("keeps an out-of-range timeout as typed and shows its range error", async () => {
 		renderPage("chat");
 		await screen.findByDisplayValue(/600/);
@@ -742,7 +773,9 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 	it("badges restart-gated fields in place of the old hint text", async () => {
 		renderPage("runtime");
 
-		expect(await screen.findByTestId("node-settings-restart-badge-llamaMaxLoadedProcesses")).toBeTruthy();
+		expect(await screen.findByTestId("node-settings-restart-badge-llamaReadinessTimeoutCapSeconds")).toBeTruthy();
+		// The process cap applies on save, so the node does not gate it.
+		expect(screen.queryByTestId("node-settings-restart-badge-llamaMaxLoadedProcesses")).toBeNull();
 		expect(screen.queryByTestId("node-settings-restart-badge-keepModelWarmEnabled")).toBeNull();
 	});
 
@@ -1114,6 +1147,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		await waitFor(() =>
 			expect(toastMock.success).toHaveBeenCalledWith(
 				"Node settings saved. Some changes wait for a node restart; the banner at the top lists them.",
+				{ id: "node-settings-save" },
 			),
 		);
 	});
@@ -1131,7 +1165,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		fireEvent.change(screen.getByTestId("node-settings-hf-default-quant"), { target: { value: "Q5_K_M" } });
 		fireEvent.click(screen.getByTestId("node-settings-save-button"));
 
-		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Node settings saved."));
+		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Node settings saved.", { id: "node-settings-save" }));
 	});
 
 	it("saves a feature switch from the General Features card and says a restart is needed", async () => {
@@ -1155,6 +1189,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		await waitFor(() =>
 			expect(toastMock.success).toHaveBeenCalledWith(
 				"Node settings saved. Some changes wait for a node restart; the banner at the top lists them.",
+				{ id: "node-settings-save" },
 			),
 		);
 	});
@@ -1224,7 +1259,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 				body: { enableTools: false, maxMessageRequestTimeoutSeconds: 600 },
 			}),
 		);
-		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Node settings saved."));
+		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Node settings saved.", { id: "node-settings-save" }));
 	});
 
 	it("saves the web-access switch and a cleared SearXNG URL", async () => {
@@ -1501,6 +1536,24 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 
 			expect(await screen.findByTestId("node-settings-section-content-knowledge")).toBeTruthy();
 			expect((screen.getByTestId("node-settings-search") as HTMLInputElement).value).toBe("");
+		});
+
+		it("keeps the focus in the search box on an Enter or Escape that belongs to an IME composition", async () => {
+			renderPage("general");
+			await screen.findByTestId("node-settings-section-content-general");
+			const input = screen.getByTestId("node-settings-search");
+			input.focus();
+
+			search("worker limits");
+			await waitFor(() => expect(searchStatus()).toBe("1 matching cards"));
+			fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+			fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+			fireEvent.keyDown(input, { key: "Escape", keyCode: 229 });
+			expect(document.activeElement).toBe(input);
+			expect((input as HTMLInputElement).value).toBe("worker limits");
+
+			fireEvent.keyDown(input, { key: "Enter" });
+			expect(document.activeElement).toBe(screen.getByTestId("node-settings-max-response-size"));
 		});
 	});
 });

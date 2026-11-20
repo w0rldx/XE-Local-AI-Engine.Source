@@ -344,7 +344,7 @@ describe("useActiveGgufDownloads", () => {
 		const status = result.current.get("unsloth/x:Q4_K_M");
 		expect(status?.phase).toBe("Failed");
 		expect(status?.pct).toBeUndefined();
-		expect(status?.sanitizedError).toBe("Download failed.");
+		expect(status?.sanitizedMessage).toBe("Download failed.");
 	});
 
 	it("hydrates acquisition-neutral imports by operation id and keeps them out of the download-only wrapper", async () => {

@@ -7,6 +7,7 @@ import {
 	getTrainingRunDefaultsOptions,
 	listTrainingRunsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { toTrainingRunDefaultsView, toTrainingRunView } from "@/features/training/models/TrainingModels";
 
 // Server-state for training runs. Live status, phase and step counters arrive over the run SignalR hub
@@ -18,12 +19,8 @@ const runQueryIds = {
 	defaults: "getTrainingRunDefaults",
 } as const;
 
-function runInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
-
 function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId: string): Promise<void> {
-	return queryClient.invalidateQueries({ queryKey: runInvalidationKey(operationId) });
+	return queryClient.invalidateQueries({ queryKey: operationInvalidationKey(operationId) });
 }
 
 /** The run list. Polls only while a run is in flight, as a floor under the hub. */

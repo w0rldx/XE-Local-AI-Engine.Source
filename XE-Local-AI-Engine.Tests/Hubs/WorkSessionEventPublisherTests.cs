@@ -52,7 +52,38 @@ public sealed class WorkSessionEventPublisherTests
 
         await publisher.PublishAsync(sessionId, sequence: 1, WorkSessionChangeKind.Status);
 
-        _ = clients.Received(1).Group($"work-session-{sessionId:N}");
-        AssertEx.Equal(1, clients.ReceivedCalls().Count());
+        var own = $"work-session-{sessionId:N}";
+        _ = clients.Received(1).Group(own);
+        _ = clients.DidNotReceive().Group(Arg.Is<string>(group => group != own));
+    }
+
+    /// <summary>The operations feed watches no session, so a status change, and only a status change, also goes to everyone.</summary>
+    [Test]
+    [Arguments(WorkSessionChangeKind.Status, true)]
+    [Arguments(WorkSessionChangeKind.Step, false)]
+    [Arguments(WorkSessionChangeKind.Task, false)]
+    [Arguments(WorkSessionChangeKind.Finding, false)]
+    [Arguments(WorkSessionChangeKind.Artifact, false)]
+    [Arguments(WorkSessionChangeKind.Checkpoint, false)]
+    public async Task PublishAsync_BroadcastsTheSessionIdOnAStatusChangeOnly(WorkSessionChangeKind kind, bool broadcast)
+    {
+        var sessionId = Guid.NewGuid();
+        var all = Substitute.For<IClientProxy>();
+        var clients = Substitute.For<IHubClients>();
+        clients.Group(Arg.Any<string>()).Returns(Substitute.For<IClientProxy>());
+        clients.All.Returns(all);
+        var hubContext = Substitute.For<IHubContext<WorkSessionHub>>();
+        hubContext.Clients.Returns(clients);
+        var publisher = new WorkSessionEventPublisher(hubContext);
+
+        await publisher.PublishAsync(sessionId, sequence: 7, kind);
+
+        await all.Received(broadcast ? 1 : 0)
+                 .SendCoreAsync("workSessionStatusChanged",
+                     Arg.Is<object?[]>(arguments => arguments.Length == 1
+                                                    && arguments[0] is WorkSessionStatusChanged
+                                                    && ((WorkSessionStatusChanged)arguments[0]!).SessionId == sessionId),
+                     Arg.Any<CancellationToken>());
+        AssertEx.Equal(broadcast ? 1 : 0, all.ReceivedCalls().Count());
     }
 }

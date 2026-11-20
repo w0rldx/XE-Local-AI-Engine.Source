@@ -5,7 +5,7 @@ import {
 	formatBenchmarkDuration,
 	medianBenchmarkRunDurationMs,
 } from "@/features/benchmarks/models/BenchmarkRunEstimate";
-import { benchmarkRunSummaryFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkRunSummaryFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 
 const run = benchmarkRunSummaryFixture;
 

@@ -3,6 +3,7 @@ import { useEffect, useEffectEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { isImeComposing } from "@/core/ui/models/ImeComposition";
 
 interface ChatKeyboardShortcutsProps {
 	/** Stops the running generation; undefined while nothing runs, so Esc does nothing. */
@@ -34,7 +35,7 @@ export function ChatKeyboardShortcuts({ onStop, onNewChat }: ChatKeyboardShortcu
 
 	const handleKeyDown = useEffectEvent((event: KeyboardEvent, ownedByExpandedTarget: boolean) => {
 		// An IME composition owns its keys, and a key some other handler already took (the slash-command list's Esc) is not ours.
-		if (event.defaultPrevented || event.isComposing || event.keyCode === 229) {
+		if (event.defaultPrevented || isImeComposing(event)) {
 			return;
 		}
 		const modifier = event.ctrlKey || event.metaKey;

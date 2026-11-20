@@ -5,12 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatDurationCompact } from "@/core/formatting/TimeFormatting";
+import { modelLoadingPhases } from "@/features/chat/models/NodeChatStreamTypes";
 
 /* eslint-disable react-doctor/no-many-boolean-props -- These flags are independent wire states (active, queued, delayed, content) rather than one mutually exclusive mode. */
-
-// The runtime phases that precede the first token while a local model cold-loads. Generating and absent
-// phases fall through to the normal typing/streaming affordance.
-const modelLoadingPhases = new Set(["preparing_runtime", "loading_model"]);
 
 // Errors are NOT rendered here: a failed turn shows its error as a highlighted block inside the assistant
 // bubble (see ChatMessage) so it renders exactly once and survives reload. This indicator only conveys the

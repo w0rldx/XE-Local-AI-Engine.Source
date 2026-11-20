@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -25,6 +26,7 @@ using XE_Local_AI_Engine.Providers.OpenAICompat;
 public sealed class LocalRuntimeWarmer
 {
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly IGpuIdleHolderPreemption _idlePreemption;
     private readonly IActiveCloudChatClientFactory _activeCloudFactory;
     private readonly ICloudModelResolver _cloudModelResolver;
     private readonly ILogger<LocalRuntimeWarmer> _logger;
@@ -41,11 +43,14 @@ public sealed class LocalRuntimeWarmer
         ILogger<LocalRuntimeWarmer> logger,
         TimeProvider timeProvider,
         IGpuWorkGate gpuWorkGate,
+        IGpuIdleHolderPreemption idlePreemption,
         LocalModelPerfLog? perfLog = null)
     {
         _perfLog = perfLog;
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
         _gpuWorkGate = gpuWorkGate;
+        ArgumentNullException.ThrowIfNull(idlePreemption);
+        _idlePreemption = idlePreemption;
         ArgumentNullException.ThrowIfNull(activeCloudFactory);
         ArgumentNullException.ThrowIfNull(cloudModelResolver);
         ArgumentNullException.ThrowIfNull(logger);
@@ -68,7 +73,7 @@ public sealed class LocalRuntimeWarmer
     ///     Cloud and external models route elsewhere, so they are a no-op. It surfaces the phase
     ///     into the invocation state and records readiness on <see cref="NodeMetrics" />. INVARIANT: this wait is
     ///     decoupled from the load's lifetime — a cancellation abandons the WAIT and rethrows while the load keeps
-    ///     going, leaving the model warm for the next send. A warm FAILURE is swallowed so the streaming send surfaces
+    ///     going, leaving the model warm for the next send. An operator-eject veto rethrows too. A warm FAILURE is swallowed so the streaming send surfaces
     ///     the classified error, but an admission-gated caller is handed it first, or a null-context refusal masks it.
     /// </remarks>
     internal async Task<LocalRuntimePreparationResult> PrepareLocalRuntimeAsync(string resolvedModel,
@@ -111,7 +116,7 @@ public sealed class LocalRuntimeWarmer
         // Phase: preparing runtime → loading model. Both fire BEFORE the stream-idle watchdog is armed.
         await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.PreparingRuntime);
         await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.LoadingModel, LoadingDetail(resolvedModel));
-        if (GpuWorkHolderNotice.ForModelLoad(_gpuWorkGate, invocationId) is { } gpuWorkNotice)
+        if (GpuWorkHolderNotice.ForModelLoad(_gpuWorkGate, _idlePreemption, invocationId) is { } gpuWorkNotice)
         {
             // The load waits for the exclusive job; without this the loading state carries no reason.
             await dispatcher.ReportTurnNoticeAsync(gpuWorkNotice);
@@ -125,10 +130,10 @@ public sealed class LocalRuntimeWarmer
         {
             await provider.WarmModelAsync(resolvedModel, cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (Exception exception) when (exception is OperationCanceledException or OperatorEjectedException)
         {
             // The caller cancelled its WAIT (the detached load continues in the supervisor and warms the model for the
-            // next send). Record the abandoned readiness and rethrow so the turn terminates as cancelled.
+            // next send), or an operator eject vetoed the load: a send would re-ensure and undo the eject. Rethrow so the turn ends cancelled.
             stream.AddModelReadiness(RecordReadiness(startedUtc, "cancelled"));
             readinessActivity?.SetTag("outcome", "cancelled");
             throw;

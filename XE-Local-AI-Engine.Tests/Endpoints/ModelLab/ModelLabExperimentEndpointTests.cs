@@ -32,6 +32,8 @@ public sealed class ModelLabExperimentEndpointTests
     [Arguments("GET", "/00000000-0000-0000-0000-000000000001")]
     [Arguments("DELETE", "/00000000-0000-0000-0000-000000000001")]
     [Arguments("GET", "/00000000-0000-0000-0000-000000000001/trace")]
+    [Arguments("GET", "/00000000-0000-0000-0000-000000000001/attention/3")]
+    [Arguments("GET", "/00000000-0000-0000-0000-000000000001/lens")]
     [Arguments("POST", "/00000000-0000-0000-0000-000000000001/cancel")]
     [Arguments("PUT", "/00000000-0000-0000-0000-000000000001/notes")]
     [Arguments("PUT", "/00000000-0000-0000-0000-000000000001/pin")]
@@ -53,6 +55,8 @@ public sealed class ModelLabExperimentEndpointTests
     [Arguments("GET", "/00000000-0000-0000-0000-000000000001")]
     [Arguments("DELETE", "/00000000-0000-0000-0000-000000000001")]
     [Arguments("GET", "/00000000-0000-0000-0000-000000000001/trace")]
+    [Arguments("GET", "/00000000-0000-0000-0000-000000000001/attention/3")]
+    [Arguments("GET", "/00000000-0000-0000-0000-000000000001/lens")]
     [Arguments("POST", "/00000000-0000-0000-0000-000000000001/cancel")]
     [Arguments("PUT", "/00000000-0000-0000-0000-000000000001/notes")]
     [Arguments("PUT", "/00000000-0000-0000-0000-000000000001/pin")]
@@ -214,7 +218,13 @@ public sealed class ModelLabExperimentEndpointTests
                 AssertEx.Equal(expected: 3, result.GetProperty("promptTokens").GetInt32());
                 AssertEx.Equal("hi", result.GetProperty("tokens")[0].GetProperty("text").GetString());
                 AssertEx.Equal(JsonValueKind.Null, result.GetProperty("tokens")[0].GetProperty("candidates").ValueKind, "A trace made before candidates still reads.");
-                foreach (var recordedLater in new[] { "layers", "seed", "maxNewTokens", "cuda" })
+                foreach (var recordedLater in new[]
+                         {
+                             "layers",
+                             "seed",
+                             "maxNewTokens",
+                             "cuda"
+                         })
                 {
                     AssertEx.Equal(JsonValueKind.Null, result.GetProperty(recordedLater).ValueKind, $"A trace made before {recordedLater} was recorded still reads.");
                 }
@@ -242,8 +252,7 @@ public sealed class ModelLabExperimentEndpointTests
     {
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
-        var id = await SaveSucceededAsync(
-            factory,
+        var id = await SaveSucceededAsync(factory,
             """
             {"promptTokens":3,"text":"hi","tokens":[{"id":9,"text":"hi","logprob":-0.1,
               "candidates":[{"id":9,"text":"hi","logprob":-0.1},{"id":4,"text":"yo","logprob":-2.5}],
@@ -288,16 +297,28 @@ public sealed class ModelLabExperimentEndpointTests
         using var client = factory.CreateClient();
         var id = await SaveSucceededAsync(factory, """{"promptTokens":3,"tokens":[],"text":"hi"}""");
 
-        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/notes", new { notes = "layer 12 looks odd" }));
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/notes", new
+        {
+            notes = "layer 12 looks odd"
+        }));
         AssertEx.Equal("layer 12 looks odd", (await GetJsonAsync(factory, client, $"{Experiments}/{id}")).GetProperty("notes").GetString());
         var listed = (await GetJsonAsync(factory, client, Experiments)).GetProperty("experiments")[0];
         AssertEx.Equal(JsonValueKind.Null, listed.GetProperty("notes").ValueKind, "A list leaves the note out.");
 
-        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/notes", new { notes = "   " }));
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/notes", new
+        {
+            notes = "   "
+        }));
         AssertEx.Equal(JsonValueKind.Null, (await GetJsonAsync(factory, client, $"{Experiments}/{id}")).GetProperty("notes").ValueKind, "Blank clears.");
 
-        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/notes", new { notes = "again" }));
-        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/notes", new { notes = (string?)null }));
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/notes", new
+        {
+            notes = "again"
+        }));
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/notes", new
+        {
+            notes = (string?)null
+        }));
         AssertEx.Equal(JsonValueKind.Null, (await GetJsonAsync(factory, client, $"{Experiments}/{id}")).GetProperty("notes").ValueKind, "Null clears.");
     }
 
@@ -309,9 +330,15 @@ public sealed class ModelLabExperimentEndpointTests
         var id = await SaveSucceededAsync(factory, """{"promptTokens":3,"tokens":[],"text":"hi"}""");
 
         AssertEx.Equal(HttpStatusCode.NoContent,
-            await PutAsync(factory, client, $"{Experiments}/{id}/notes", new { notes = new string('x', ModelLabExperimentService.MaxNotesCharacters) }));
+            await PutAsync(factory, client, $"{Experiments}/{id}/notes", new
+            {
+                notes = new string('x', ModelLabExperimentService.MaxNotesCharacters)
+            }));
         AssertEx.Equal(HttpStatusCode.BadRequest,
-            await PutAsync(factory, client, $"{Experiments}/{id}/notes", new { notes = new string('x', ModelLabExperimentService.MaxNotesCharacters + 1) }));
+            await PutAsync(factory, client, $"{Experiments}/{id}/notes", new
+            {
+                notes = new string('x', ModelLabExperimentService.MaxNotesCharacters + 1)
+            }));
     }
 
     [Test]
@@ -321,7 +348,9 @@ public sealed class ModelLabExperimentEndpointTests
         using var client = factory.CreateClient();
         var id = await SaveSucceededAsync(factory, """{"promptTokens":3,"tokens":[],"text":"hi"}""");
 
-        AssertEx.Equal(HttpStatusCode.BadRequest, await PutAsync(factory, client, $"{Experiments}/{id}/pin", new { }));
+        AssertEx.Equal(HttpStatusCode.BadRequest, await PutAsync(factory, client, $"{Experiments}/{id}/pin", new
+        {
+        }));
     }
 
     [Test]
@@ -337,10 +366,16 @@ public sealed class ModelLabExperimentEndpointTests
 
         foreach (var id in ids.Take(ModelLabExperimentService.MaxPinnedExperiments))
         {
-            AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/pin", new { pinned = true }));
+            AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{id}/pin", new
+            {
+                pinned = true
+            }));
         }
 
-        using (var request = Authorized(factory, HttpMethod.Put, $"{Experiments}/{ids[^1]}/pin", new { pinned = true }))
+        using (var request = Authorized(factory, HttpMethod.Put, $"{Experiments}/{ids[^1]}/pin", new
+               {
+                   pinned = true
+               }))
             using (var response = await client.SendAsync(request))
             {
                 AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -348,13 +383,22 @@ public sealed class ModelLabExperimentEndpointTests
                 AssertEx.Equal(nameof(ModelLabStartRefusal.PinLimitReached), body.RootElement.GetProperty("reason").GetString());
             }
 
-        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{ids[0]}/pin", new { pinned = true }), "Re-pinning a pinned run is not a new pin.");
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{ids[0]}/pin", new
+        {
+            pinned = true
+        }), "Re-pinning a pinned run is not a new pin.");
         var list = await GetJsonAsync(factory, client, Experiments);
         AssertEx.Equal(ModelLabExperimentService.MaxPinnedExperiments, list.GetProperty("maxPinnedExperiments").GetInt32());
         AssertEx.Equal(ModelLabExperimentService.MaxPinnedExperiments, list.GetProperty("experiments").EnumerateArray().Count(static row => row.GetProperty("isPinned").GetBoolean()));
 
-        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{ids[0]}/pin", new { pinned = false }));
-        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{ids[^1]}/pin", new { pinned = true }), "Unpinning one frees a place.");
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{ids[0]}/pin", new
+        {
+            pinned = false
+        }));
+        AssertEx.Equal(HttpStatusCode.NoContent, await PutAsync(factory, client, $"{Experiments}/{ids[^1]}/pin", new
+        {
+            pinned = true
+        }), "Unpinning one frees a place.");
     }
 
     [Test]
@@ -382,7 +426,15 @@ public sealed class ModelLabExperimentEndpointTests
             });
         }
 
-        object content = route == "pin" ? new { pinned = true } : new { notes = "a note" };
+        object content = route == "pin"
+            ? new
+            {
+                pinned = true
+            }
+            : new
+            {
+                notes = "a note"
+            };
         using (var request = Authorized(factory, HttpMethod.Put, $"{Experiments}/{running}/{route}", content))
             using (var response = await client.SendAsync(request))
             {
@@ -420,8 +472,8 @@ public sealed class ModelLabExperimentEndpointTests
             AssertEx.Equal("gpu-job-running", body.RootElement.GetProperty("reason").GetString());
         }
 
-        await runtime.DidNotReceiveWithAnyArgs().RemoveAsync(default);
-        await runtime.DidNotReceiveWithAnyArgs().InstallAsync(default);
+        await runtime.DidNotReceiveWithAnyArgs().RemoveAsync(default, default);
+        await runtime.DidNotReceiveWithAnyArgs().InstallAsync(default, default);
     }
 
     /// <summary>An evaluation runs on llama-server, so a lease does not make it a user of this runtime. A queue peek holds the gate with no lease and runs nothing.</summary>
@@ -444,7 +496,7 @@ public sealed class ModelLabExperimentEndpointTests
             using var response = await client.SendAsync(request);
         }
 
-        await runtime.Received(1).RemoveAsync(Arg.Any<CancellationToken>());
+        await runtime.Received(1).RemoveAsync(Arg.Any<Func<CancellationToken, Task<bool>>?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

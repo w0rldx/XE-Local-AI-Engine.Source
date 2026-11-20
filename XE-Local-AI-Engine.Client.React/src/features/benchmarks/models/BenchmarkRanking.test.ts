@@ -8,7 +8,7 @@ import {
 	sortBenchmarkRuns,
 	succeededRunCount,
 } from "@/features/benchmarks/models/BenchmarkRanking";
-import { benchmarkJudgeFixture, benchmarkRunSummaryFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkJudgeFixture, benchmarkRunSummaryFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 
 // The table's order is a product decision, not a server one: the node returns dense ranks with ties sharing a rank and
 // nulls for everything it excluded, and the UI has to turn that into one stable list where an excluded run is still

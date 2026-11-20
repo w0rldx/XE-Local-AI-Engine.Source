@@ -7,8 +7,10 @@
 #   JOBS = clamp(1, default, floor((MemAvailable − SIBLING_RESERVE − HEADROOM) / BATCH))
 #
 # Constants (GB), from measurements, not a model:
-#   BATCH 1.5            one namespace batch at PAR=1 peaked at 1369–1433 MB, JOBS 16–10
-#                        (scripts/run-tests-memory-safe.sh header, 2026-09-14 table)
+#   BATCH 1.0            2026-11-17, 16 vCPU / 32 GB, full gate shape: the summed host-tree RSS of all
+#                        live batches peaked at 0.8 GB per batch at JOBS 10 and 12 (3 runs each, siblings
+#                        included in the total); the old 1.5 came from a probe that later read only the
+#                        MTP controller, so it can no longer be re-checked from gate output
 #   SIBLING_RESERVE 5    the concurrent sibling lanes: Client.Persistence.Tests 3.2 GB at its pinned
 #                        width, plus AI.Agent.Tests
 #   HEADROOM 4           the OS, the IDE and whatever else the host runs
@@ -17,15 +19,15 @@
 # Test seam: XE_SIZING_MEMINFO names the meminfo file (default /proc/meminfo); a missing file reads
 # as unknown memory, which is also what macOS gets.
 
-XE_SIZING_BATCH_GB=1.5
+XE_SIZING_BATCH_GB=1.0
 XE_SIZING_SIBLING_RESERVE_GB=5
 XE_SIZING_HEADROOM_GB=4
 
-# The two measured JOBS defaults (see the runner header): 16 on a >= 32-CPU host, 10 below that.
+# The measured JOBS defaults (see the runner header): 16 on a >= 32-CPU host, 12 on 16-31, 10 below that.
 xe_sizing_default_jobs() {
   local nproc
   nproc="$(nproc 2>/dev/null || echo 4)"
-  echo $(( nproc >= 32 ? 16 : 10 ))
+  echo $(( nproc >= 32 ? 16 : nproc >= 16 ? 12 : 10 ))
 }
 
 # MemAvailable in GB with one decimal; prints nothing where the file or the field is missing.

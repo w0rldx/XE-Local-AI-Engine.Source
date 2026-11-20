@@ -128,8 +128,6 @@ export const transcriptionSnapshotSchema = z.object({
 	replayTruncated: z.boolean(),
 });
 
-export type TranscriptionSnapshot = z.infer<typeof transcriptionSnapshotSchema>;
-
 /**
  * The spelling the committed-row renderer wants. A live row carries the client's lowercase `CaptureChannel` while the
  * REST rows carry the backend's PascalCase names, and both go through the same row component and the same

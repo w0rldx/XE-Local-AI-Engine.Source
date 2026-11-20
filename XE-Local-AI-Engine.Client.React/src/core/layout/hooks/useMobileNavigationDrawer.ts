@@ -1,47 +1,22 @@
 import type { Dispatch, SetStateAction } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import type { UseMobileNavigationDrawerResult } from "@/core/layout/hooks/Types";
 
+/** One sub-panel's open state; the panel itself tells the parent drawer when it is on screen. */
 export function useMobileNavigationDrawer(
 	setParentDrawerOpen: Dispatch<SetStateAction<boolean>>,
 ): UseMobileNavigationDrawerResult {
 	const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-	const drawerReference = useRef<HTMLDivElement>(null);
-	const menuReference = useRef<HTMLDivElement>(null);
 
-	useEffect(() => {
-		const handleClickOutside = (event: MouseEvent) => {
-			const target = event.target as Node;
-			const isClickInsideDrawer = drawerReference.current?.contains(target);
-			const isClickInsideMenu = menuReference.current?.contains(target);
+	const openDrawer = useCallback(() => setIsDrawerOpen(true), []);
 
-			if (isDrawerOpen && !isClickInsideDrawer && !isClickInsideMenu) {
-				setIsDrawerOpen(false);
-			}
-		};
-
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => {
-			document.removeEventListener("mousedown", handleClickOutside);
-		};
-	}, [isDrawerOpen]);
-
-	const openDrawer = useCallback(() => {
-		setIsDrawerOpen(true);
-	}, []);
+	const closePanel = useCallback(() => setIsDrawerOpen(false), []);
 
 	const closeDrawer = useCallback(() => {
 		setIsDrawerOpen(false);
 		setParentDrawerOpen(false);
 	}, [setParentDrawerOpen]);
 
-	return {
-		isDrawerOpen,
-		setIsDrawerOpen,
-		drawerReference,
-		menuReference,
-		openDrawer,
-		closeDrawer,
-	};
+	return { isDrawerOpen, openDrawer, closePanel, closeDrawer };
 }

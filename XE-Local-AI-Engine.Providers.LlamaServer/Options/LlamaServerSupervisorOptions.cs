@@ -8,7 +8,8 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Options;
 public sealed class LlamaServerSupervisorOptions
 {
     /// <summary>Max number of concurrently-loaded CHAT-role processes; the embedding and reranker companions have their own slots.</summary>
-    public int MaxLoadedProcesses { get; init; } = 3;
+    /// <remarks>Read per decision; on a running node only the node-settings save writes it, and the next reap pass unloads any excess.</remarks>
+    public int MaxLoadedProcesses { get; set; } = 3;
 
     /// <summary>Slots for the companion roles (embedding, reranker, decision), held beside <see cref="MaxLoadedProcesses" />.</summary>
     /// <remarks>
@@ -19,7 +20,8 @@ public sealed class LlamaServerSupervisorOptions
     public int MaxLoadedCompanionProcesses { get; init; } = 3;
 
     /// <summary>Idle duration after which an unused process is evicted by the reaper.</summary>
-    public TimeSpan IdleTimeToLive { get; init; } = TimeSpan.FromMinutes(15);
+    /// <remarks>Read per reap pass; on a running node only the node-settings save writes it.</remarks>
+    public TimeSpan IdleTimeToLive { get; set; } = TimeSpan.FromMinutes(15);
 
     /// <summary>
     ///     Idle duration after which a process spawned by a <c>Transient</c> request (an AI Assist draft) and not touched

@@ -21,6 +21,8 @@ export interface IMobileNavigationMenuLink {
 export interface IMobileNavigationMenuProperties {
 	menuItemStyle: MenuItemStyles;
 	setDrawerOpen: Dispatch<SetStateAction<boolean>>;
+	/** Reports a sub-panel opening or closing to the parent drawer. */
+	onPanelOpenChange: (open: boolean) => void;
 	menuItem: IMobileNavigationMenuItem;
 	drawerTitle?: string;
 	links?: IMobileNavigationMenuLink[];

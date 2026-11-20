@@ -6503,68 +6503,6 @@
             "Bearer": []
           }
         ]
-      },
-      "post": {
-        "tags": [
-          "Chat"
-        ],
-        "operationId": "createNodeChatMessageRevision",
-        "parameters": [
-          {
-            "name": "conversationId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "guid"
-            }
-          },
-          {
-            "name": "messageId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "guid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
       }
     },
     "/api/local/v1/chat/conversations/{conversationId}/pin": {
@@ -18173,6 +18111,73 @@
         ]
       }
     },
+    "/api/local/v1/model-lab/experiments/{experimentId}/attention/{layer}": {
+      "get": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "getModelLabExperimentAttention",
+        "parameters": [
+          {
+            "name": "experimentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "layer",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabAttentionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-lab/experiments/{experimentId}/cancel": {
       "post": {
         "tags": [
@@ -18202,6 +18207,64 @@
           },
           "404": {
             "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-lab/experiments/{experimentId}/lens": {
+      "get": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "getModelLabExperimentLens",
+        "parameters": [
+          {
+            "name": "experimentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -18544,6 +18607,43 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabPyTorchBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-lab/warm/eject": {
+      "post": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "ejectModelLabWarmWorker",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabStartBlockedResponse"
                 }
               }
             }
@@ -43246,11 +43346,13 @@
         "description": "",
         "x-enumNames": [
           "Image",
-          "Transcription"
+          "Transcription",
+          "ModelLab"
         ],
         "enum": [
           "image",
-          "transcription"
+          "transcription",
+          "modelLab"
         ]
       },
       "XE_Local_AI_EngineClientEndpointsModelFitV1RuntimeResidentResponse": {
@@ -43282,6 +43384,10 @@
           },
           "canEject": {
             "type": "boolean"
+          },
+          "vramBytes": {
+            "type": "integer",
+            "nullable": true
           }
         }
       },
@@ -43518,6 +43624,104 @@
         "type": "object",
         "additionalProperties": false
       },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabAttentionHeadResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "keys",
+          "weights",
+          "rest"
+        ],
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "weights": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "rest": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabAttentionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "layer",
+          "heads",
+          "kvHeads",
+          "topKeys",
+          "rows",
+          "truncated",
+          "droppedRecords"
+        ],
+        "properties": {
+          "layer": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "heads": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kvHeads": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "topKeys": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabAttentionRowResponse"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "droppedRecords": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabAttentionRowResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "step",
+          "queryPosition",
+          "heads"
+        ],
+        "properties": {
+          "step": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "queryPosition": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "heads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabAttentionHeadResponse"
+            }
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -43609,6 +43813,7 @@
           "cardVramBytes",
           "license",
           "isGated",
+          "metadataPresent",
           "checkpointHiddenSize",
           "checkpointBlockCount",
           "ggufEmbeddingLength",
@@ -43645,6 +43850,9 @@
             "nullable": true
           },
           "isGated": {
+            "type": "boolean"
+          },
+          "metadataPresent": {
             "type": "boolean"
           },
           "checkpointHiddenSize": {
@@ -43698,6 +43906,10 @@
             "nullable": true
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabExperimentAttentionRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabExperimentListResponse": {
         "type": "object",
@@ -43822,6 +44034,144 @@
       "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabExperimentRouteRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensBlockResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "layer",
+          "ids",
+          "logprobs",
+          "chosenLogprob",
+          "chosenRank",
+          "entropy"
+        ],
+        "properties": {
+          "layer": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "logprobs": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double",
+              "nullable": true
+            }
+          },
+          "chosenLogprob": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "chosenRank": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "entropy": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "layers",
+          "topTokens",
+          "tiedEmbeddings",
+          "vocabSize",
+          "steps",
+          "texts",
+          "truncated",
+          "droppedSteps"
+        ],
+        "properties": {
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "topTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tiedEmbeddings": {
+            "type": "boolean"
+          },
+          "vocabSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensStepResponse"
+            }
+          },
+          "texts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensTextResponse"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "droppedSteps": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensStepResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "step",
+          "blocks"
+        ],
+        "properties": {
+          "step": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensBlockResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabLensTextResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "text"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabPromptTokenResponse": {
         "type": "object",
@@ -44079,6 +44429,9 @@
               "type": "integer",
               "format": "int32"
             }
+          },
+          "recordAttention": {
+            "type": "boolean"
           }
         }
       },
@@ -45271,6 +45624,19 @@
           "maxAllowedAgentHomeRunRetentionMaxTotalBytes": {
             "type": "integer"
           },
+          "modelLabWarmIdleSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minModelLabWarmIdleSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedModelLabWarmIdleSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
           "developmentEnabled": {
             "type": "boolean"
           },
@@ -45889,6 +46255,11 @@
           },
           "agentHomeRunRetentionMaxTotalBytes": {
             "type": "integer",
+            "nullable": true
+          },
+          "modelLabWarmIdleSeconds": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           },
           "developmentEnabled": {
@@ -51250,7 +51621,8 @@
           "ProviderAuthFailed",
           "ProviderRateLimited",
           "CallBudgetReached",
-          "InsufficientCapacity"
+          "InsufficientCapacity",
+          "ModelEjected"
         ],
         "enum": [
           "Cancelled",
@@ -51268,7 +51640,8 @@
           "ProviderAuthFailed",
           "ProviderRateLimited",
           "CallBudgetReached",
-          "InsufficientCapacity"
+          "InsufficientCapacity",
+          "ModelEjected"
         ]
       },
       "XE_Local_AI_EngineClientPersistenceAgentDefinitionKind": {
@@ -52496,6 +52869,46 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabAttentionSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "heads": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kvHeads": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "headDim": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "topKeys": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "weightScale": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "records": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientServicesModelLabModelLabCheckpointRefusal": {
         "type": "string",
         "description": "",
@@ -52529,6 +52942,50 @@
           "DownloadRejected",
           "UnsupportedModelType"
         ]
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabLensSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "topTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "records": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "tiedEmbeddings": {
+            "type": "boolean"
+          },
+          "vocabSize": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPromptPiece": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
       },
       "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchBlock": {
         "type": "object",
@@ -52984,7 +53441,9 @@
           "InvalidLayer",
           "InvalidTraceLayers",
           "PinLimitReached",
-          "ModelNotLoaded"
+          "ModelNotLoaded",
+          "AttentionUnavailable",
+          "OrphanWorker"
         ],
         "enum": [
           "UnsupportedPlatform",
@@ -53000,7 +53459,9 @@
           "InvalidLayer",
           "InvalidTraceLayers",
           "PinLimitReached",
-          "ModelNotLoaded"
+          "ModelNotLoaded",
+          "AttentionUnavailable",
+          "OrphanWorker"
         ]
       },
       "XE_Local_AI_EngineClientServicesModelLabModelLabSteeringArm": {
@@ -53243,6 +53704,46 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabSteeringResult"
               }
             ]
+          },
+          "promptPieces": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPromptPiece"
+            }
+          },
+          "layerKinds": {
+            "type": "string",
+            "nullable": true
+          },
+          "attnImplementation": {
+            "type": "string",
+            "nullable": true
+          },
+          "attention": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabAttentionSummary"
+              }
+            ]
+          },
+          "lens": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabLensSummary"
+              }
+            ]
+          },
+          "warm": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "loadSeconds": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
           }
         }
       },

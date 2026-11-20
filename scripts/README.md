@@ -9,7 +9,6 @@ Stopping a dev host safely: [README-dev-stop.md](README-dev-stop.md).
 - [`aspire-readiness-smoke.sh`](aspire-readiness-smoke.sh) — Bounded live readiness smoke for this worktree's isolated Aspire AppHost.
 - [`assembly-guard.sh`](assembly-guard.sh) — detect a test run whose assemblies were overwritten underneath it.
 - [`build-lock-status.sh`](build-lock-status.sh) — who holds the shared build lock, for how long, how far along, and who waits.
-- [`capture-agent-framework-dependencies.sh`](capture-agent-framework-dependencies.sh) — Capture exact Release/Debug direct + transitive NuGet graphs and package status reports at two git commits.
 - [`dev-aspire-common.sh`](dev-aspire-common.sh) — Shared, side-effect-free helpers for the worktree-scoped Aspire scripts.
 - [`dev-start.sh`](dev-start.sh) — Start this checkout/worktree's AppHost in isolated mode.
 - [`dev-status.sh`](dev-status.sh) — Show a filtered, token-free view of this worktree's Aspire instance.
@@ -30,8 +29,6 @@ Stopping a dev host safely: [README-dev-stop.md](README-dev-stop.md).
 - [`python-validation.sh`](python-validation.sh) — repo Python quality gate (ruff / pyrefly / pytest / bandit)
 - [`read-release-version.py`](read-release-version.py) — Read and validate the application version from the canonical release manifest.
 - [`regen-after-merge.sh`](regen-after-merge.sh) — regenerate and stage the generated and sorted frontend files after a merge.
-- [`run-agent-framework-hardware-compat.sh`](run-agent-framework-hardware-compat.sh) — Opt-in hardware lane: fixed GGUF + real llama-server through the production invocation path.
-- [`run-agent-framework-validation.sh`](run-agent-framework-validation.sh) — Fresh, serialized validation for the Agent Framework 1.15 / MEAI closure.
 - [`run-backend-tests.sh`](run-backend-tests.sh) — THE local backend gate: one build, then every enrolled test project.
 - [`run-docker-smoke-local.sh`](run-docker-smoke-local.sh) — OPT-IN real-daemon smoke for the container runtime and the sandbox.
 - [`run-e2e-local.sh`](run-e2e-local.sh) — OPT-IN local runner for the Playwright E2E suite.
@@ -50,7 +47,7 @@ Stopping a dev host safely: [README-dev-stop.md](README-dev-stop.md).
 
 - [`compliance/`](compliance/) — Holds `bundle_input_evidence.py`, `capture_bundle_inputs.targets`, `create_bundle_input_manifest.py`, `generate_backend_license_corpus.py`, `nuget-license-overrides.json`, `reconcile_payload_spdx.py` and more.
 - [`lab/`](lab/) — Holds `profiles/`.
-- [`lib/`](lib/) — Holds `build-lock-common.sh`, `discover-llama-server.sh`, `git-env.sh`, `smoke-ledger.sh`, `test-sizing.sh`.
+- [`lib/`](lib/) — Holds `build-lock-common.sh`, `discover-llama-server.sh`, `git-env.sh`, `proc-tree.sh`, `smoke-ledger.sh`, `test-sizing.sh`.
 - [`model-matrix/`](model-matrix/) — Holds `models.json`.
 - [`performance/`](performance/) — Holds `capture_inference_evidence.py`, `capture_windows_vram.ps1`, `inference_evidence/`, `run_scheduling_grid.py`, `tests/`.
 - [`release/`](release/) — Holds `dev-build-identity.py`, `verify-release-authority.py`, `verify-release-envelope.py`.

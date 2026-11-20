@@ -178,7 +178,7 @@
 			"importing_other": "{{count}} Chats werden importiert. Ein großer Import kann mehrere Minuten dauern.",
 			"menuAria": "Chats exportieren oder importieren",
 			"notJson": "Diese Datei ist kein JSON.",
-			"tooLarge": "Diese Datei ist größer als die 64 MB, die ein Import annimmt.",
+			"tooLarge": "Diese Datei ist größer als die 64 MiB, die ein Import annimmt.",
 			"toolCallsOmitted_one": "{{count}} Tool-Aufruf, nicht enthalten",
 			"toolCallsOmitted_other": "{{count}} Tool-Aufrufe, nicht enthalten",
 			"unsupportedVersion": "Dieser Chat-Export hat eine Formatversion, die diese App nicht lesen kann.",
@@ -239,7 +239,6 @@
 			"toolsWithheld": "Keine Tools angeboten"
 		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus.",
-		"reasoningMode": "Reasoning-Modus",
 		"search": {
 			"indexing": "Ältere Unterhaltungen werden noch indiziert; Ergebnisse können unvollständig sein.",
 			"titleMatch": "Treffer im Titel"
@@ -258,7 +257,6 @@
 			"stop": "Laufende Antwort stoppen",
 			"title": "Tastenkürzel"
 		},
-		"thinking": "denkt…",
 		"thoughts": "Gedanken",
 		"toolCall": {
 			"approvalPrompt": "Dieses Tool benötigt Ihre Freigabe zur Ausführung.",
@@ -362,37 +360,27 @@
 		"confirmation": "Bestätigung",
 		"copied": "Kopiert",
 		"copy": "Kopieren",
-		"create": "Erstellen",
 		"delete": "Löschen",
-		"density": "Dichte",
-		"densityComfortable": "Komfortabel",
-		"densityCompact": "Kompakt",
-		"densitySpacious": "Geräumig",
 		"discard": "Verwerfen",
 		"edit": "Bearbeiten",
-		"entries": "Einträge",
-		"error": "Fehler",
-		"fetchError": "Beim Laden der Tabellendaten ist ein Problem aufgetreten.",
 		"fieldInfo": {
 			"open": "Info zu {{field}}"
 		},
-		"filterReset": "Filter zurücksetzen",
-		"filters": "Filter",
 		"hide": "Ausblenden",
 		"keepEditing": "Weiter bearbeiten",
 		"loading": "Lädt…",
 		"loadingRateLimited": "Zu viele Anfragen an den Node. Neuer Versuch in {{seconds}} s.",
-		"noData": "Keine Einträge gefunden",
-		"ok": "Ok",
 		"pagination": {
+			"first": "Erste Seite",
+			"last": "Letzte Seite",
+			"next": "Nächste Seite",
+			"previous": "Vorherige Seite",
 			"rowsPerPage": "Zeilen pro Seite",
 			"showingRange": "{{from}}–{{to}} von {{total}}"
 		},
 		"refresh": "Aktualisieren",
-		"refreshing": "Wird aktualisiert…",
 		"retry": "Erneut versuchen",
 		"save": "Speichern",
-		"search": "Suchen",
 		"togglePasswordVisibility": "Passwort-Sichtbarkeit umschalten",
 		"unknown": "Unbekannt",
 		"view": "Anzeigen",
@@ -452,6 +440,7 @@
 		},
 		"markdownEditor": {
 			"edit": "Bearbeiten",
+			"modeLabel": "Editoransicht",
 			"preview": "Vorschau"
 		},
 		"markdownView": {
@@ -465,7 +454,6 @@
 			"ariaExpand": "Seitenleiste ausklappen",
 			"ariaLabel": "Hauptnavigation",
 			"tooltip": {
-				"collapse": "Einklappen",
 				"expand": "Ausklappen"
 			}
 		},
@@ -617,22 +605,9 @@
 	},
 	"errorMessages": {
 		"defaultErrorMessage": "Ein Fehler ist aufgetreten",
-		"emailAlreadyInUse": "Die E-Mail-Adresse wird bereits verwendet",
-		"invalidEmail": "Ungültige E-Mail-Adresse",
-		"invalidEmailOrPassword": "Ungültige E-Mail-Adresse oder ungültiges Passwort",
-		"invalidName": "Nur Buchstaben, Leerzeichen, Bindestriche und Apostrophe erlaubt",
-		"loginWithDisabledUser": "Der Benutzer ist deaktiviert. Wenn Sie glauben, dass es sich um einen Fehler handelt, wenden Sie sich bitte an den Administrator.",
-		"minLength": "Mindestens {{min}} Zeichen erforderlich",
 		"nodeUnreachable": "Der Node ist nicht erreichbar. Prüfen Sie, ob er läuft, und versuchen Sie es erneut.",
-		"onlyAlphanumeric": "Nur alphanumerische Zeichen erlaubt",
-		"passwordIncorrect": "Passwort ist falsch",
-		"passwordsDoNotMatch": "Passwörter stimmen nicht überein",
-		"requiredField": "Dieses Feld ist erforderlich",
-		"roleNameAlreadyExists": "Der Rollenname existiert bereits",
 		"tooManyRequests": "Zu viele Anfragen. Bitte versuchen Sie es später erneut.",
-		"unexpectedResponseShape": "Der Server hat eine Antwort in einem unerwarteten Format geliefert.",
-		"userNameNotMatchCriteria": "Der Benutzername darf nur Buchstaben, Zahlen, Punkte, Unterstriche und Bindestriche enthalten und darf nicht leer sein",
-		"usernameAlreadyInUse": "Der Benutzername wird bereits verwendet"
+		"unexpectedResponseShape": "Der Server hat eine Antwort in einem unerwarteten Format geliefert."
 	},
 	"navigation": {
 		"agentRuns": "Agent-Läufe",
@@ -663,7 +638,6 @@
 		"loadedModels": "Geladen",
 		"mcp": "MCP",
 		"modelLab": "Model Lab",
-		"modelRecommendations": "Modellempfehlungen",
 		"models": "Modelle",
 		"modelsInstalled": "Installiert",
 		"nodeSettings": "Node-Einstellungen",
@@ -680,7 +654,6 @@
 		"trainingGroup": "Training",
 		"transcription": "Transkription",
 		"usage": "Nutzung",
-		"user": "Benutzer",
 		"workSessions": "Arbeitssitzungen"
 	},
 	"notifications": {
@@ -830,6 +803,11 @@
 		}
 	},
 	"operations": {
+		"baseArtifactDownload": {
+			"failed": "Der Basis-Checkpoint {{repo}} konnte nicht heruntergeladen werden",
+			"running": "Basis-Checkpoint {{repo}} wird heruntergeladen",
+			"succeeded": "Der Basis-Checkpoint {{repo}} ist heruntergeladen"
+		},
 		"datasetBuild": {
 			"failed": "Datensatz {{name}} konnte nicht erstellt werden",
 			"running": "Datensatz {{name}} wird erstellt",
@@ -845,6 +823,9 @@
 			"running": "{{model}} wird importiert",
 			"succeeded": "{{model}} ist importiert"
 		},
+		"graphRun": {
+			"waiting": "Ein Workflow wartet auf Ihre Entscheidung"
+		},
 		"imageJob": {
 			"failed": "Das Bild konnte nicht erzeugt werden",
 			"running": "Ein Bild wird erzeugt",
@@ -859,7 +840,9 @@
 			"actionRequired": "Aktion erforderlich",
 			"runningPercent": "1 läuft · {{pct}} %",
 			"running_one": "{{count}} läuft",
-			"running_other": "{{count}} laufen"
+			"running_other": "{{count}} laufen",
+			"waiting_one": "{{count}} wartet auf Sie",
+			"waiting_other": "{{count}} warten auf Sie"
 		},
 		"knowledgeIndexing": {
 			"failed": "Einige Dokumente konnten nicht indiziert werden",
@@ -867,6 +850,11 @@
 			"progress": "{{done}} von {{count}} erledigt",
 			"running": "Dokumente für die Wissensdatenbank werden indiziert",
 			"succeeded": "Die Wissensdatenbank ist auf dem neuesten Stand"
+		},
+		"modelLabExperiment": {
+			"failed": "Das Model-Lab-Experiment mit {{model}} ist fehlgeschlagen",
+			"running": "Model-Lab-Experiment mit {{model}} läuft",
+			"succeeded": "Das Model-Lab-Experiment mit {{model}} ist abgeschlossen"
 		},
 		"notifications": {
 			"blocked": "Dieser Browser blockiert Benachrichtigungen dieser App. Erlauben Sie sie in den Website-Einstellungen des Browsers und schalten Sie dies dann ein.",
@@ -902,6 +890,10 @@
 			"failed": "Das Transkriptionsmodell {{model}} konnte nicht heruntergeladen werden",
 			"running": "Das Transkriptionsmodell {{model}} wird heruntergeladen",
 			"succeeded": "Das Transkriptionsmodell {{model}} ist heruntergeladen"
+		},
+		"workSession": {
+			"waitingForApproval": "Arbeitssitzung {{title}} wartet auf Ihre Freigabe",
+			"waitingForInput": "Arbeitssitzung {{title}} wartet auf Ihre Eingabe"
 		}
 	},
 	"pages": {
@@ -1402,7 +1394,8 @@
 					"UserPreference": "Benutzervorliebe"
 				},
 				"scopeFilter": {
-					"all": "Alle"
+					"all": "Alle",
+					"label": "Nach Bereich filtern"
 				},
 				"source": {
 					"Analysis": "Analyse",
@@ -1465,7 +1458,8 @@
 				"selectRun": "Den Lauf dieser Aufgabe in der Detailansicht zeigen",
 				"unknownItem": "Aufgabe {{index}}",
 				"unranked": "Nicht gewertet.",
-				"view": "Kombinationen"
+				"view": "Kombinationen",
+				"viewLabel": "Ergebnisse anzeigen als"
 			},
 			"charts": {
 				"cohortsHidden": "{{shown}} von {{total}} Wiederholungskohorten werden angezeigt.",
@@ -1490,15 +1484,16 @@
 				"live": "Live-Aktualisierungen verbunden",
 				"reconnecting": "Verbindung wird wiederhergestellt und abgeglichen…"
 			},
+			"deleteRunConfirm": {
+				"description": "Der Lauf, seine Antworten und seine Bewertungen werden gelöscht. Dies kann nicht rückgängig gemacht werden.",
+				"title": "Diesen Lauf löschen?"
+			},
 			"errors": {
 				"artifact": "Diese Nachweisdatei konnte nicht heruntergeladen werden.",
 				"artifactCorrupt": "Diese Nachweisdatei hat die Integritätsprüfung nicht bestanden und wurde nicht heruntergeladen.",
 				"cancel": "Diese Laufphase konnte nicht abgebrochen werden.",
-				"contextRefused": "Das Modell konnte den angeforderten Kontext nicht bereitstellen.",
 				"delete": "Dieser abgeschlossene Lauf konnte nicht gelöscht werden.",
-				"fingerprintChanged": "Das installierte Modell wurde nach dem Einfrieren dieses Laufs geändert.",
 				"judgeAttemptsActive": "Eine Bewertung dieses Projekts läuft noch. Warten Sie sie ab oder brechen Sie sie ab.",
-				"judgeFailed": "Die automatische Bewertung ist fehlgeschlagen; das Primärergebnis bleibt verfügbar.",
 				"kvUnsupportedHint": "Wählen Sie ausdrücklich f16, um dieses Modell mit dieser Laufzeit auszuführen.",
 				"measureFidelity": "Es konnte keine Treuemessung eingereiht werden.",
 				"notReviewable": "Dieser Lauf kann noch nicht bewertet werden. Beurteilen Sie ihn zuerst unter der aktuellen Richtlinie erneut.",
@@ -1506,7 +1501,6 @@
 				"projectsLoad": "Benchmark-Projekte konnten nicht geladen werden.",
 				"rejudgeProject": "Dieses Projekt konnte nicht neu bewertet werden.",
 				"rejudgeRun": "Dieser Lauf konnte nicht neu bewertet werden.",
-				"restartInterrupted": "Diese laufende Phase wurde durch einen Neustart des Nodes unterbrochen.",
 				"review": "Die Bewertung konnte nicht gespeichert werden.",
 				"reviewConflict": "Der Lauf hat sich geändert, bevor die Bewertung gespeichert wurde. Er wurde neu geladen.",
 				"reviewRequired": "Dieses Projekt verlangt eine Prüfung. Bewerten Sie den Lauf stattdessen über die Prüfung.",
@@ -1538,7 +1532,6 @@
 				"explanation": "Perplexität und KL-Divergenz messen, wie weit ein quantisierter Build von den Gewichten abweicht, aus denen er entstand. Beide dienen nur der Anzeige und fließen nie in eine Rangfolge ein.",
 				"kldLine": "KLD {{mean}} · p99 {{p99}} · {{agreement}}",
 				"kldStale": "kld-stale",
-				"kldStaleHint": "Gegen ein anderes Basismodell, einen anderen Korpus oder eine andere Chunk-Anzahl gemessen, als dieses Projekt jetzt erwartet. Messen Sie diesen Lauf erneut, um eine vergleichbare Zahl zu erhalten.",
 				"kldTooltip": "KL-Divergenz Mittelwert {{mean}}, p99 {{p99}}, Top-Token-Übereinstimmung {{agreement}}",
 				"measure": "Treue messen",
 				"measureExisting": "Auch die Läufe messen, die dieses Projekt bereits hat",
@@ -1787,14 +1780,9 @@
 					"delete": "Dieses Benchmark-Projekt konnte nicht gelöscht werden."
 				},
 				"fidelityChunks": "Zu bewertende Chunks",
-				"fidelityChunksHelp": "{{min}}–{{max}}; leer verwendet {{fallback}}.",
 				"fidelityEnabled": "Perplexität neben jedem Lauf messen",
-				"fidelityEnabledHelp": "Bewertet einen festen Korpus mit der eingefrorenen Platzierung des Laufs. Nur zur Anzeige: fließt nie in die Rangfolge ein.",
 				"fidelityKldBase": "Basismodell für KL-Divergenz",
-				"fidelityKldBaseHelp": "Die Referenz, gegen die die Quantisierungen gemessen werden — normalerweise der unquantisierte Build.",
 				"fidelityKldEnabled": "Zusätzlich KL-Divergenz messen",
-				"fidelityKldEnabledHelp": "Benötigt eine zwischengespeicherte Logit-Datei des Basismodells — mehrere zehn Gigabyte. Prüfen Sie vorher die Schätzung im Projekt.",
-				"fidelitySection": "Quantisierungstreue",
 				"frozen": "Eingefroren",
 				"frozenExplanation": "Dieses Projekt ist eingefroren, solange Läufe existieren. Löschen Sie die abgeschlossenen Läufe, um es wieder zu bearbeiten.",
 				"invocationTimeout": "Zeitlimit der Generierung (s)",
@@ -1949,6 +1937,7 @@
 				"notes": "Notizen",
 				"overall": "Gesamtwertung, 0 bis 100",
 				"reject": "Ablehnen",
+				"stateFilter": "Bewertungen anzeigen, die",
 				"states": {
 					"approved": "freigegeben",
 					"pending": "ausstehend",
@@ -2067,7 +2056,6 @@
 			"validation": {
 				"agent": "Wählen Sie einen Agenten.",
 				"context": "Der Kontext muss positiv sein.",
-				"fidelityChunks": "Chunks müssen zwischen {{min}} und {{max}} liegen.",
 				"fidelityKldBase": "KL-Divergenz erfordert ein Basismodell.",
 				"invocationTimeout": "Das Zeitlimit der Generierung muss zwischen 60 und 7200 Sekunden liegen.",
 				"judgeContext": "Der Kontext der Bewertung muss positiv sein.",
@@ -2170,37 +2158,12 @@
 		"chat": {
 			"actions": {
 				"branch": "Chat verzweigen",
-				"branchSuccess": "Verzweigter Chat wurde erstellt.",
 				"copy": "Nachricht kopieren",
 				"copyCode": "Code kopieren",
 				"copyCodeSuccess": "Kopiert",
 				"copySuccess": "Nachricht wurde in die Zwischenablage kopiert.",
-				"feedback": "Feedback geben",
 				"regenerate": "Antwort neu generieren",
 				"regenerateUnavailable": "Diese Nachricht kann nicht neu generiert werden."
-			},
-			"activeNode": {
-				"label": "Aktiver Node",
-				"release": "Aktiven Node freigeben",
-				"rememberDefault": "Als Standard merken",
-				"sessionHint": "Aktiv für diesen Browser-Tab/diese Sitzung. Freigeben, um zu wechseln."
-			},
-			"activityDetails": {
-				"arguments": "Argumente",
-				"result": "Ergebnis"
-			},
-			"activityTimeline": "Aktivitätsverlauf",
-			"activityTimelineTypes": {
-				"AgentHandoff": "Agent-Übergabe",
-				"ContentGeneration": "Inhaltserstellung",
-				"ContextRetrieval": "Kontextabruf",
-				"Error": "Fehler",
-				"ToolCall": "Tool-Aufruf",
-				"ToolResult": "Tool-Ergebnis",
-				"Unknown": "Typ {{type}}",
-				"WorkflowStepCompleted": "Workflow-Schritt abgeschlossen",
-				"WorkflowStepFailed": "Workflow-Schritt fehlgeschlagen",
-				"WorkflowStepStarted": "Workflow-Schritt gestartet"
 			},
 			"agentSelector": {
 				"hint": "Einen auf diesem Node definierten Agenten auswählen.",
@@ -2216,17 +2179,6 @@
 			"answerNow": "Jetzt antworten",
 			"answerNowHint": "Nachdenken beenden und mit dem bisherigen Stand antworten",
 			"answerNowUnavailable": "Das Modell kann gerade nicht vorzeitig zum Antworten gebracht werden.",
-			"clientSelector": {
-				"activeOnceChosen": "Aktiv für diesen Tab",
-				"activeSessionHint": "Durch die Auswahl wird der Node für diese Browser-Sitzung aktiv. Freigeben, um zu wechseln.",
-				"label": "Client-Node",
-				"placeholder": "Einen Online-Client auswählen"
-			},
-			"cloudToolsDisabled": "Cloud-Tools deaktiviert",
-			"cloudToolsEnabled": "Cloud-Tools aktiviert",
-			"cloudToolsLabel": "Cloud-Tools",
-			"cloudToolsPrivacyHint": "Cloud-Tools können Daten an den Anbieter senden",
-			"cloudToolsUnavailable": "Cloud-Tools sind für das ausgewählte Modell nicht verfügbar",
 			"commands": {
 				"menuLabel": "Slash-Befehle"
 			},
@@ -2260,17 +2212,16 @@
 						"unknown": "Unbekannt",
 						"unsupported": "Nicht unterstützt"
 					},
-					"tooLarge": "{{name}} überschreitet das Upload-Limit von {{limit}} MB.",
+					"tooLarge": "{{name}} überschreitet das Upload-Limit von {{limit}} MiB.",
 					"uploadBatchFailed": "Dateien konnten nicht hochgeladen werden.",
 					"uploadFailed": "{{name}} konnte nicht hochgeladen werden."
 				},
 				"dropToAttach": "Dateien zum Anhängen ablegen",
-				"image": "Bild anhängen",
 				"moreControls": "Weitere Eingabeoptionen",
 				"samplingOptions": "Erweiterte Sampling-Optionen",
 				"size": {
-					"overLimit": "Diese Nachricht ist {{used}} KB groß — über dem Limit von {{limit}} KB pro Nachricht. Kürzen Sie sie oder hängen Sie den Text als Datei an.",
-					"usage": "{{used}} KB / {{limit}} KB"
+					"overLimit": "Diese Nachricht ist {{used}} KiB groß — über dem Limit von {{limit}} KiB pro Nachricht. Kürzen Sie sie oder hängen Sie den Text als Datei an.",
+					"usage": "{{used}} KiB / {{limit}} KiB"
 				}
 			},
 			"connecting": "Verbindung zum lokalen Chat wird hergestellt…",
@@ -2363,11 +2314,9 @@
 				"delete": "Löschen",
 				"deleteConfirm": "Diesen Chat löschen? Das kann nicht rückgängig gemacht werden.",
 				"deleteShiftHint": "Umschalt+Klick überspringt Bestätigung",
-				"deleteSuccess": "Chat gelöscht.",
 				"empty": "Noch keine Chats.",
 				"expandAria": "Seitenleiste ausklappen",
 				"hide": "Seitenleiste einklappen",
-				"noClientAssigned": "Kein Client zugewiesen",
 				"noMatches": "Keine Chats entsprechen Ihrer Suche.",
 				"noMessages": "Keine Nachrichten",
 				"pin": "Anheften",
@@ -2382,7 +2331,6 @@
 				"show": "Seitenleiste ausklappen",
 				"showAll": "Alle anzeigen",
 				"showArchived": "Archivierte anzeigen",
-				"title": "Chats",
 				"truncatedNotice": "Die 100 neuesten werden angezeigt",
 				"unarchive": "Aus Archiv holen",
 				"unpin": "Nicht mehr anheften",
@@ -2390,21 +2338,11 @@
 			},
 			"conversations": "Chats",
 			"defaultAgentName": "Standard-Assistent",
-			"disconnect": {
-				"button": "Trennen",
-				"confirm": "Trennen",
-				"descriptionWithName": "\"{{name}}\" trennen? Laufende Aufgaben könnten dabei abgebrochen werden.",
-				"descriptionWithoutName": "Den ausgewählten Client-Node trennen? Laufende Aufgaben könnten dabei abgebrochen werden.",
-				"title": "Client-Node trennen"
-			},
 			"emptyState": "Erstellen oder wählen Sie einen Chat, um zu chatten.",
-			"encryptedConversation": {
-				"lockedDescription": "Geben Sie Ihr Passwort für verschlüsselte Synchronisierung ein, um verschlüsselte Chats zu entsperren.",
-				"lockedTitle": "Verschlüsselter Chat gesperrt"
-			},
 			"error": {
 				"categories": {
 					"InsufficientCapacity": "Derzeit ist nicht genug freier Speicher vorhanden, um dieses Modell zu laden.",
+					"ModelEjected": "Diese Antwort wurde beendet, weil das Modell gerade entladen wurde. Sie können es erneut versuchen.",
 					"ModelLoadFailed": "Das Modell konnte nicht geladen werden.",
 					"ModelNotInstalled": "Das angeforderte Chat-Modell ist nicht installiert. Installieren Sie es oder wählen Sie ein anderes Modell.",
 					"ModelUnavailable": "Das ausgewählte Modell ist nicht installiert oder nicht erreichbar.",
@@ -2412,6 +2350,7 @@
 				},
 				"categoryLabels": {
 					"InsufficientCapacity": "Kapazität nicht ausreichend",
+					"ModelEjected": "Modell entladen",
 					"ModelLoadFailed": "Laden des Modells fehlgeschlagen",
 					"ModelNotInstalled": "Modell nicht installiert",
 					"ModelUnavailable": "Modell nicht verfügbar",
@@ -2427,22 +2366,14 @@
 				"title": "Antwort fehlgeschlagen"
 			},
 			"feedback": {
-				"additionalFeedback": "Zusätzliches Feedback",
-				"additionalFeedbackPlaceholder": "Was war gut oder was sollte verbessert werden?",
 				"commentAria": "Feedback-Kommentar",
 				"commentPlaceholder": "Kommentar hinzufügen (optional)",
 				"commentTitleDown": "Was ist schiefgelaufen?",
 				"commentTitleUp": "Was war hilfreich?",
-				"description": "Helfen Sie mit, künftige Antworten zu verbessern, indem Sie diese Assistenten-Nachricht bewerten.",
 				"down": "Schlechte Antwort",
-				"negative": "Negativ",
-				"positive": "Positiv",
 				"submit": "Feedback senden",
-				"success": "Feedback wurde erfolgreich gesendet.",
-				"title": "Nachrichtenfeedback",
 				"up": "Gute Antwort"
 			},
-			"followUpTitle": "Vorgeschlagene Anschlussfragen",
 			"historyLoadFailedTitle": "Der lokale Chat-Verlauf konnte nicht geladen werden.",
 			"inputPlaceholder": "Nachricht eingeben",
 			"knowledgeBaseDisabled": "Wissensdatenbank deaktiviert",
@@ -2475,17 +2406,13 @@
 			"localToolsDisabled": "Lokale Tools deaktiviert",
 			"localToolsEnabled": "Lokale Tools aktiviert",
 			"localToolsLabel": "Lokale Tools",
-			"localToolsUnavailable": "Lokale Tools sind für das ausgewählte Modell nicht verfügbar",
-			"lockedState": "Dieser Chat ist gesperrt. Entsperren Sie ihn, um Nachrichten anzuzeigen.",
 			"menu": {
 				"label": "Nachrichtenoptionen",
 				"showTokensPerSecond": "Tokens/Sek. anzeigen"
 			},
 			"messageModelLabel": "Modell: {{model}}",
 			"modelAvailable": "Verfügbar",
-			"modelExpired": "Nicht geladen",
 			"modelLabel": "Modell",
-			"modelLoaded": "Aktuell geladen",
 			"modelPlaceholder": "Modell auswählen",
 			"modelSelector": {
 				"availableModels": "Verfügbare Modelle",
@@ -2501,10 +2428,8 @@
 				"noResults": "Keine Modelle gefunden",
 				"search": "Modelle suchen…"
 			},
-			"modelUnloadingIn": "Entladen in {{time}}",
 			"nativeReasoningLabel": "Natives Denken",
 			"newConversation": "Neuer Chat",
-			"newEncryptedConversation": "Neuer verschlüsselter Chat",
 			"noMessages": "Noch keine Nachrichten.",
 			"noModelGuidance": {
 				"body": "Installieren Sie ein GGUF-Modell, um lokal zu chatten.",
@@ -2513,10 +2438,8 @@
 				"setupTitle": "Ihr erstes Modell wird eingerichtet…",
 				"title": "Noch kein Chat-Modell installiert"
 			},
-			"noOnlineClientNodes": "Keine Online-Client-Nodes verfügbar. Koppeln und verbinden Sie zuerst einen Worker-Node, bevor Sie Chats erstellen.",
 			"nodeDefaultModel": "Node-Standard",
 			"nodeReply": "Node-Antwort",
-			"pendingApprovalLabel": "Ausstehende Freigabe",
 			"plainMode": {
 				"editPrompt": "Systemprompt bearbeiten",
 				"label": "Schlicht",
@@ -2548,33 +2471,20 @@
 				"on": "An",
 				"xhigh": "Höchste"
 			},
-			"reasoningEffortUnavailable": "Reasoning ist für das ausgewählte Modell nicht verfügbar",
 			"reasoningLabel": "Denken",
-			"reasoningMode": "Reasoning-Modus",
-			"release": {
-				"button": "Freigeben",
-				"confirm": "Freigeben",
-				"descriptionWithName": "\"{{name}}\" aus Ihrer aktiven Sitzung freigeben? Der Node bleibt online und kann anschließend wieder ausgewählt werden.",
-				"descriptionWithoutName": "Diesen Node aus Ihrer aktiven Sitzung freigeben? Der Node bleibt online.",
-				"title": "Node freigeben"
-			},
 			"remoteImage": {
 				"load": "Externes Bild laden"
 			},
 			"remoteViewOnly": "Dieser Chat wurde von einem gekoppelten Client gestartet und ist auf diesem Node nur lesbar.",
 			"remoteViewOnlyTitle": "Remote-Chat",
+			"responseFinished": "Antwort fertig",
 			"retryConnection": "Erneut versuchen",
 			"revisions": {
 				"next": "Nächste Revision",
-				"position": "Revision {{current}} von {{total}}",
 				"previous": "Vorherige Revision"
 			},
 			"roles": {
 				"assistant": "Assistent",
-				"system": "System",
-				"tool": "Tool",
-				"unknown": "Rolle {{role}}",
-				"user": "Benutzer",
 				"you": "Sie"
 			},
 			"samplingOptions": {
@@ -2638,46 +2548,13 @@
 			"stop": "Stopp",
 			"stopped": "Generierung gestoppt",
 			"stoppedWhileThinking": "Beim Nachdenken gestoppt",
-			"storageMode": {
-				"encrypted": "Verschlüsselt",
-				"encryptedTooltip": "Wird verschlüsselt gespeichert. Mit Ihrem Passwort für verschlüsselte Synchronisierung entsperren.",
-				"plain": "Normal",
-				"plainTooltip": "Wird als lesbarer Chat-Verlauf für Ihr Konto gespeichert."
-			},
-			"streamErrors": {
-				"epochKeyMissing": "Verschlüsselungsschlüssel werden noch synchronisiert — bitte versuchen Sie es erneut.",
-				"eventHandlerError": "Ein lokales Chat-Update ist fehlgeschlagen. Bitte versuchen Sie es erneut oder aktualisieren Sie den Chat."
-			},
 			"streamFailedTitle": "Der lokale Chat-Stream ist fehlgeschlagen.",
 			"streaming": "Antwort wird empfangen",
-			"sync": {
-				"confirm": {
-					"continue": "Weiter",
-					"enableEncryptedTitle": "Verschlüsselten Sync aktivieren?",
-					"enableStandardTitle": "Standard-Sync aktivieren?",
-					"enableSync": "Sync aktivieren",
-					"encryptedDescription": "Dadurch wird dieser TrustedLocal-Chat in verschlüsselten Sync umgewandelt. Sie müssen diese Änderung bestätigen, bevor verschlüsselte Uploads möglich sind.",
-					"keepLocalOnly": "Lokal behalten",
-					"standardDescription": "Dadurch kann dieser TrustedLocal-Chat mit der Plattform synchronisiert werden. Fahren Sie nur fort, wenn dieser Chat von diesem Gerät hochgeladen werden soll."
-				},
-				"enableEncrypted": "Verschlüsselten Sync aktivieren",
-				"enableStandard": "Sync aktivieren",
-				"encryptedEnabledSuccess": "Verschlüsselter Sync wurde für diesen Chat aktiviert.",
-				"standardEnabledSuccess": "Standard-Sync wurde für diesen Chat aktiviert."
-			},
 			"temporaryChat": {
 				"label": "Temporärer Chat",
 				"tooltip": "Dieser Chat bringt dem Agenten kein neues Gedächtnis bei; vorhandenes Gedächtnis wird weiterhin genutzt."
 			},
-			"thinking": "denkt…",
-			"thoughts": "Gedanken",
 			"tokensPerSecond": "{{value}} Tok/s",
-			"toolApproval": {
-				"approve": "Freigeben",
-				"description": "Ein Worker benötigt eine Freigabe, bevor er fortfahren kann.",
-				"reject": "Ablehnen",
-				"title": "Tool-Freigabe erforderlich"
-			},
 			"turnParked": "Eine Antwort in diesem Chat wartet auf Ihre Eingabe. Beantworten Sie die wartende Karte und senden Sie dann erneut.",
 			"turnThroughput": {
 				"cached": "{{value}} aus dem Cache",
@@ -2686,7 +2563,6 @@
 			},
 			"unknownError": "Unbekannter Fehler",
 			"waitingForResponse": "Warten auf Antwort",
-			"waitingForStreamedResponse": "Warten auf gestreamte Antwort",
 			"webAutoAccept": {
 				"confirm": "Automatische Übernahme aktivieren",
 				"label": "Webinhalte automatisch übernehmen",
@@ -2698,8 +2574,6 @@
 				"on": "Webinhalte gehen ungeprüft an das Modell"
 			},
 			"windowTitle": "Chat-Fenster",
-			"words_one": "Wort",
-			"words_other": "Wörter",
 			"workflow": {
 				"activity": {
 					"attachmentsSkipped": "Übersprungene Anhänge: {{names}}",
@@ -2745,8 +2619,7 @@
 					"empty": "Noch keine Chat-Workflows. Legen Sie einen auf der Seite Graph-Workflows an.",
 					"none": "Kein Workflow",
 					"noneHint": "Nachrichten gehen wie gewohnt an das Modell oder den Agenten",
-					"triggerCurrent": "Workflow: {{name}}",
-					"triggerLabel": "Workflow"
+					"triggerCurrent": "Workflow: {{name}}"
 				},
 				"showActivity": "Workflow-Aktivität anzeigen",
 				"status": {
@@ -2943,10 +2816,6 @@
 				"verificationUriLabel": "Verifizierungs-URL"
 			},
 			"loading": "Cloud-Einstellungen werden geladen…",
-			"placeholder": {
-				"description": "Anbieter-Konfiguration nutzt geheimnissichere lokale API-Antworten.",
-				"title": "Cloud-Einstellungen"
-			},
 			"provider": {
 				"activeEgressBanner": "Cloud (OpenAI) aktiv: Ihre Nachrichten verlassen Ihr Gerät. Melden Sie sich ab, um zum lokalen Betrieb zurückzukehren."
 			},
@@ -3244,7 +3113,7 @@
 				"decline": "Jetzt nicht",
 				"disclosureNote": "Dieser Hinweis ist eine Offenlegung, kein Schutz. Ihre Bestätigung wird nur in diesem Browser gespeichert und ändert nichts daran, was ein Entwicklungslauf tun darf.",
 				"intro": "Im Entwicklungsmodus darf ein Modell Dateien in einem verwalteten Worktree ändern, und die Build-, Test- und Lint-Befehle Ihres Repositorys werden auf diesem Rechner ausgeführt. Lesen Sie dies einmal, bevor Sie beginnen.",
-				"processLimits": "Für diese Befehle werden Grenzen für CPU, Arbeitsspeicher und Prozessanzahl angefordert, sofern dieser Node sie durchsetzen kann (die Übersicht zur Sandbox-Isolation zeigt, ob er es tut): standardmäßig alle logischen Kerne, 75 % des Arbeitsspeichers mit 4 GB als Untergrenze und 4096 Prozesse; ein Betreiber kann sie überschreiben. Wo der Host sie nicht durchsetzen kann, gilt keine Grenze, und ein außer Kontrolle geratener Befehl wird nur durch sein Zeitlimit und den Rechner selbst begrenzt.",
+				"processLimits": "Für diese Befehle werden Grenzen für CPU, Arbeitsspeicher und Prozessanzahl angefordert, sofern dieser Node sie durchsetzen kann (die Übersicht zur Sandbox-Isolation zeigt, ob er es tut): standardmäßig alle logischen Kerne, 75 % des Arbeitsspeichers mit 4 GiB als Untergrenze und 4096 Prozesse; ein Betreiber kann sie überschreiben. Wo der Host sie nicht durchsetzen kann, gilt keine Grenze, und ein außer Kontrolle geratener Befehl wird nur durch sein Zeitlimit und den Rechner selbst begrenzt.",
 				"processNetwork": "Für die Sandbox, in der der Agent arbeitet, ist ausgehender Netzwerkverkehr überall dort gesperrt, wo dieser Node das durchsetzen kann: unter Linux mit funktionierender Sandbox-Netzwerkprüfung oder mit einem Container-Provider. Wo das nicht möglich ist, etwa unter Windows, erreichen diese Befehle das Netzwerk uneingeschränkt. Nur das Auflösen der Abhängigkeiten durch die Engine selbst, ausgeführt gegen Ihren Basis-Commit noch bevor der Agent startet, erhält Netzwerkzugriff. Die Übersicht zur Sandbox-Isolation zeigt, welche Isolation dieser Node tatsächlich bereitgestellt hat.",
 				"processUser": "Auf diesem Node laufen diese Befehle unter dem angemeldeten Benutzerkonto, das die Engine ausführt. Wo dieser Host eine Dateisystemgrenze bietet (Linux mit bubblewrap), sehen die Befehle des Coders und der Validierung nur den verwalteten Arbeitsbaum, ihre Laufzeitverzeichnisse und die Toolchain; sonst haben sie dessen Zugriff auf Ihre Dateien. Die Abhängigkeitswiederherstellung der Engine für Ihren Basis-Commit läuft in jedem Fall außerhalb der Grenze, mit dem Zugriff Ihres Kontos und mit Netzwerk.",
 				"title": "Bevor Sie den Entwicklungsmodus nutzen",
@@ -3800,8 +3669,8 @@
 				},
 				"resources": {
 					"blocked": "Dieser Computer hat derzeit nicht genug freie Ressourcen für diese Anwendung.",
-					"disk": "Speicherplatz: {{required}} MB benötigt, {{available}} MB frei",
-					"memory": "Arbeitsspeicher: {{required}} MB benötigt, {{available}} MB frei",
+					"disk": "Speicherplatz: {{required}} MiB benötigt, {{available}} MiB frei",
+					"memory": "Arbeitsspeicher: {{required}} MiB benötigt, {{available}} MiB frei",
 					"ok": "Dieser Computer hat genug Arbeitsspeicher und Speicherplatz."
 				},
 				"started": "{{name}} wird installiert.",
@@ -4127,6 +3996,9 @@
 				"cloudModelHelp": "Cloud-Modelle laufen nur, wenn „Cloud-Modelle unbeaufsichtigt ausführen lassen“ unter Node-Einstellungen → Datenschutz & Updates eingeschaltet ist oder die externe Verbindung des Modells unbeaufsichtigte Läufe erlaubt.",
 				"cloudModelLabel": "{{label}} · {{provider}} (Cloud)",
 				"conditionPathHelp": "Ausgehende Kanten ohne eigenen Pfad vergleichen diesen.",
+				"connectBranch": "Von Zweig",
+				"connectSubmit": "Verbinden",
+				"connectTo": "Verbinden mit",
 				"criterionPlaceholder": "Optionale Beschreibung dieses Labels",
 				"criterionValue": "Beschreibung von Label {{index}}",
 				"decisionModelHelp": "Hier laufen nur installierte Modelle vom Typ Entscheidung. Importieren Sie eines in der Modellverwaltung.",
@@ -4156,7 +4028,8 @@
 				"devTaskTaskHelp": "Übernimmt den Patch der Entwicklungsaufgabe dieses Knotens. Jede Kante in diesen Knoten muss die Freigabe eines Pause-Knotens sein.",
 				"devTaskTaskPlaceholder": "Umsetzungsknoten wählen",
 				"devTaskTitle": "Titel der Aufgabe",
-				"devTaskTitlePlaceholder": "Die Beschriftung des Knotens",
+				"devTaskTitleHelp": "Leer lassen, um die Aufgabe nach der ersten Zeile der Anforderungen zu benennen.",
+				"devTaskTitlePlaceholder": "Die erste Zeile der Anforderungen",
 				"effort": {
 					"high": "Hoch",
 					"low": "Niedrig",
@@ -4400,6 +4273,10 @@
 				"valueHelp": "JSON – eine Zeichenkette steht in Anführungszeichen, z. B. „Approve“. Was kein JSON ist, wird als Text gespeichert."
 			},
 			"editor": {
+				"a11yEdge": "Drücken Sie Enter oder die Leertaste, um diese Verbindung auszuwählen und ihre Einstellungen zu öffnen. Entf entfernt sie.",
+				"a11yEdgeReadOnly": "Drücken Sie Enter oder die Leertaste, um diese Verbindung auszuwählen und ihre Einstellungen anzusehen.",
+				"a11yNode": "Drücken Sie Enter oder die Leertaste, um diesen Knoten auszuwählen und seine Einstellungen zu öffnen. Die Pfeiltasten verschieben ihn, Entf entfernt ihn, und „Verbinden mit“ in seinen Einstellungen fügt eine Verbindung hinzu.",
+				"a11yNodeReadOnly": "Drücken Sie Enter oder die Leertaste, um diesen Knoten auszuwählen und seine Einstellungen anzusehen.",
 				"autoArrange": "Automatisch anordnen",
 				"deleteHint": "Ziehen Sie einen Knoten auf die Arbeitsfläche oder klicken Sie ihn in der Palette an. Markieren Sie einen Knoten oder eine Verbindung und drücken Sie Entf, um die Auswahl zu entfernen.",
 				"notice": {
@@ -4849,6 +4726,7 @@
 				"editedFrom": "Bearbeitet aus",
 				"editingFrom": "Ausgangsbild",
 				"label": "Bearbeitung",
+				"modeLabel": "Bearbeitungsmodus",
 				"modes": {
 					"img2img": "Variation",
 					"reference": "Bearbeitung per Anweisung"
@@ -4996,7 +4874,6 @@
 					"searchPlaceholder": "z. B. flux schnell",
 					"searching": "Wird gesucht…",
 					"select": "Öffnen",
-					"title": "Hugging Face durchsuchen",
 					"untrustedPublisher": "Unbestätigter Anbieter",
 					"untrustedPublisherHint": "Dieser Anbieter ist kein bekannter Packager — prüfen Sie das Repository vor dem Download."
 				},
@@ -5021,8 +4898,7 @@
 					"parts_one": "{{count}} Datei",
 					"parts_other": "{{count}} Dateien",
 					"recommended": "Empfohlen",
-					"researchLicense": "Nicht-kommerzielle Forschungslizenz",
-					"title": "Empfohlene Bildmodelle"
+					"researchLicense": "Nicht-kommerzielle Forschungslizenz"
 				},
 				"delete": {
 					"action": "Modell löschen",
@@ -5085,7 +4961,6 @@
 					"started": "Download gestartet. Das Modell erscheint, sobald es bereit ist.",
 					"starting": "Wird gestartet…",
 					"submit": "Herunterladen",
-					"title": "Modell herunterladen",
 					"transferred": "{{completed}} übertragen"
 				},
 				"empty": "Noch keine Bildmodelle installiert.",
@@ -5126,6 +5001,10 @@
 			"subtitle": "Erzeugen Sie Bilder lokal mit stable-diffusion.cpp. Aufgaben laufen nacheinander und melden während der Verarbeitung ihren groben Status.",
 			"title": "Bildgenerierung",
 			"uploads": {
+				"deleteConfirm": {
+					"description": "Das Bild wird von diesem Node gelöscht. Dies kann nicht rückgängig gemacht werden.",
+					"title": "Dieses hochgeladene Bild löschen?"
+				},
 				"deleteError": "Das hochgeladene Bild konnte nicht gelöscht werden.",
 				"empty": "Laden Sie ein PNG oder JPEG hoch, um ein eigenes Bild zu bearbeiten.",
 				"error": "Das Bild konnte nicht hochgeladen werden.",
@@ -5522,10 +5401,6 @@
 					"copy": "Trace-ID kopieren",
 					"label": "Trace: {{traceId}}"
 				}
-			},
-			"placeholder": {
-				"description": "Aktuelle und historische Aufrufüberwachung wird hier portiert.",
-				"title": "Aufrufe"
 			}
 		},
 		"knowledgeBase": {
@@ -5573,6 +5448,7 @@
 				"content-missing": "Der Dokumentinhalt wurde nicht gefunden.",
 				"embedding-incomplete": "Das Embedding-Modell hat ein unvollständiges Ergebnis geliefert. Stellen Sie sicher, dass das konfigurierte Embedding-Modell geladen ist, und versuchen Sie es erneut.",
 				"embedding-model-changed": "Das Embedding-Modell hat sich während der Indizierung geändert. Wiederholen Sie das Dokument.",
+				"embedding-model-ejected": "Wartet auf das Embedding-Modell, das entladen wurde. Die Aufnahme wird fortgesetzt, sobald es wieder geladen ist.",
 				"embedding-rejected": "Das Embedding-Modell ist installiert, hat die Anfrage aber abgelehnt. Prüfen Sie die Node-Protokolle auf die Antwort des Servers und versuchen Sie es dann erneut.",
 				"embedding-unavailable": "Es ist kein Embedding-Modell installiert, daher können keine Dokumente indiziert werden. Verwenden Sie in den Node-Einstellungen „Empfohlenes Embedding-Modell herunterladen“ oder installieren Sie ein Embedding-GGUF unter Modelle → Hugging Face durchsuchen und versuchen Sie es dann erneut.",
 				"embedding-unreachable": "Das Embedding-Modell ist installiert, aber sein Prozess wurde beendet oder ist nicht erreichbar. Prüfen Sie die Node-Protokolle und wiederholen Sie dann das Dokument.",
@@ -5694,7 +5570,6 @@
 					"notRunning": "Dieses Modell lief nicht.",
 					"timedOutStillBusy": "'{{modelName}}' beendet noch eine Antwort und wurde daher weiter ausgeführt."
 				},
-				"ejected": "Modell ausgeworfen.",
 				"empty": "Derzeit laufen keine Modelle.",
 				"error": "Laufende Modelle konnten nicht geladen werden.",
 				"expertsOffloaded": "Experten im Arbeitsspeicher",
@@ -6071,11 +5946,11 @@
 				},
 				"installed": "Installiert",
 				"kvPerToken": {
-					"hint": "{{kb}} KB/Token ({{quant}} KV)",
+					"hint": "{{kb}} KiB/Token ({{quant}} KV)",
 					"tooltip": "KV-Cache-Kosten eines Tokens bei {{context}} Kontext, berechnet mit einem {{quant}}-KV-Cache (Standard beim Chat-Start) statt mit dem fp16-Cache, den die Speicherangaben oben verwenden."
 				},
 				"kvQuant": {
-					"hint": "≈ {{gb}} GB mit {{quant}} KV-Cache",
+					"hint": "≈ {{gb}} GiB mit {{quant}} KV-Cache",
 					"tooltip": "Nur eine Schätzung – die angezeigte Eignung nutzt den Standard-fp16-KV-Cache. Ein quantisierter KV-Cache erfordert Flash Attention und passende Startparameter; die Ersparnis ist eine Schätzung, keine garantierte Kompatibilität."
 				},
 				"lastRefreshed": "Zuletzt aktualisiert: {{time}}",
@@ -6083,7 +5958,7 @@
 				"modelsLink": "Modellverwaltung",
 				"moeOffload": {
 					"badge": "Experten auf CPU – langsamer, höhere Qualität",
-					"breakdown": "GPU {{gpuGb}} GB + RAM {{cpuGb}} GB"
+					"breakdown": "GPU {{gpuGb}} GiB + RAM {{cpuGb}} GiB"
 				},
 				"noCache": "Für diesen Anwendungsfall ist noch kein zwischengespeicherter Empfehlungs-Snapshot vorhanden. Führen Sie eine Empfehlungsprüfung über den Planer aus oder verwenden Sie „Jetzt aktualisieren“, falls ein Zeitplan existiert.",
 				"noJobGuidance": "Es existiert noch kein model-recommendation-check-Zeitplan. Erstellen Sie einen im Planer, um die Aktualisierung zu aktivieren.",
@@ -6212,6 +6087,20 @@
 					"draftHint": "Entwurfsmodell für spekulatives Decoding – kein Chat-Modell",
 					"dynamic": "Dynamisch",
 					"error": "Der Download konnte nicht gestartet werden.",
+					"errors": {
+						"DestinationConflict": "Das Downloadziel wird bereits verwendet.",
+						"DiskFull": "Auf dem Datenträger war während des Downloads kein Platz mehr. Die Teildatei wurde behalten, damit der Download fortgesetzt werden kann.",
+						"DownloadCompensationFailed": "Der Download ist fehlgeschlagen, und seine Bereinigung erfordert manuelle Nacharbeit. Wenden Sie sich an den Support, bevor Sie es erneut versuchen.",
+						"DownloadFailed": "Das Modell konnte nicht heruntergeladen werden.",
+						"Gated": "Dieses Modell ist zugangsbeschränkt und erfordert ein Hugging-Face-Zugriffstoken. Konfigurieren Sie ein Token und versuchen Sie es erneut.",
+						"HashMismatch": "Die heruntergeladene Modelldatei hat die Integritätsprüfung nicht bestanden und wurde verworfen. Bitte versuchen Sie es erneut.",
+						"InsufficientStorage": "Für diesen Download ist nicht genügend freier Speicher vorhanden.",
+						"Interrupted": "Dieser Download wurde nicht abgeschlossen. Starten Sie ihn erneut, um ab dem bereits heruntergeladenen Teil fortzufahren.",
+						"ModelConflict": "Ein Modell mit diesem Namen ist bereits einem anderen Anbieter zugeordnet.",
+						"Network": "Ein Netzwerkfehler hat den Download unterbrochen.",
+						"NotFound": "Die angeforderte Modelldatei, das Repository oder die Revision wurde nicht gefunden.",
+						"Unauthorized": "Das konfigurierte Hugging-Face-Token hat keinen Zugriff auf dieses zugangsbeschränkte Modell."
+					},
 					"eta": "~{{duration}} verbleibend",
 					"failedTitle": "Download fehlgeschlagen",
 					"fit": {
@@ -6398,10 +6287,6 @@
 				"setDefaultSuccess": "Lokales Standardmodell auf {{name}} gesetzt.",
 				"subtitle": "Installierte lokale Modelle auflisten, auswählen und löschen.",
 				"title": "Modellverwaltung"
-			},
-			"placeholder": {
-				"description": "Lokale Modellauflistung, Auswahl, Pull und Löschen werden hier ergänzt.",
-				"title": "Modelle"
 			},
 			"type": {
 				"capability": {
@@ -6715,7 +6600,7 @@
 					"downloadStarted": "Das empfohlene Embedding-Modell ({{model}}) wird heruntergeladen.",
 					"empty": "Keine installierten Embedding-Modelle",
 					"label": "Embedding-Modell",
-					"recommendedHelp": "Erforderlich für die Wissensdatenbank: Ohne Embedding-Modell können Dokumente nicht indexiert werden. Empfohlen: nomic-embed-text-v1.5 (~274 MB).",
+					"recommendedHelp": "Erforderlich für die Wissensdatenbank: Ohne Embedding-Modell können Dokumente nicht indexiert werden. Empfohlen: EmbeddingGemma 2 (~310 MB).",
 					"unpinned": "Noch nicht festgelegt (wird bei der ersten Indizierung gesetzt)"
 				},
 				"enableTools": {
@@ -6784,12 +6669,12 @@
 					"label": "Parallele Download-Verbindungen"
 				},
 				"imageIdleTimeToLiveSeconds": {
-					"info": "Wie lange in Sekunden ein Bildmodell ungenutzt bleiben darf, bevor sein sd-server-Prozess beendet wird, um VRAM freizugeben. Kürzer gibt den Speicher früher an Chat-Modelle zurück; länger erspart das Warten auf erneutes Laden zwischen Bildern. Standard: 900 (15 Minuten), erlaubt 30 bis 86400. Wirkt nach einem Neustart des Nodes.",
+					"info": "Wie lange in Sekunden ein Bildmodell ungenutzt bleiben darf, bevor sein sd-server-Prozess beendet wird, um VRAM freizugeben. Kürzer gibt den Speicher früher an Chat-Modelle zurück; länger erspart das Warten auf erneutes Laden zwischen Bildern. Standard: 900 (15 Minuten), erlaubt 30 bis 86400. Gilt sofort nach dem Speichern.",
 					"label": "Leerlaufzeit des Bildservers"
 				},
 				"imageMaxLoadedProcesses": {
 					"description": "Wie viele Bildmodelle gleichzeitig geladen bleiben; ein weiteres entlädt das am längsten ungenutzte. Ein Modell, das noch generiert, wird nie entladen; sind alle beschäftigt, schlägt ein neuer Auftrag fehl, bis eines fertig ist.",
-					"info": "Jedes geladene Bildmodell ist ein eigener sd-server-Prozess, der seine Gewichte im VRAM hält, meist neben einem Chat-Modell. Der Standard 1 hält diesen Speicherbedarf klein; erhöhen Sie ihn nur, wenn Sie oft zwischen Bildmodellen wechseln und VRAM übrig haben. Ein Modell, das noch generiert, wird nie entladen; sind alle beschäftigt, schlägt das Laden fehl. Wirkt nach einem Neustart des Nodes.",
+					"info": "Jedes geladene Bildmodell ist ein eigener sd-server-Prozess, der seine Gewichte im VRAM hält, meist neben einem Chat-Modell. Der Standard 1 hält diesen Speicherbedarf klein; erhöhen Sie ihn nur, wenn Sie oft zwischen Bildmodellen wechseln und VRAM übrig haben. Ein Modell, das noch generiert, wird nie entladen; sind alle beschäftigt, schlägt das Laden fehl. Gilt sofort nach dem Speichern; eine niedrigere Grenze entlädt untätige Modelle innerhalb von etwa einer halben Minute.",
 					"label": "Max. geladene Bildserver"
 				},
 				"imageTextEncoderOnGpu": {
@@ -6901,11 +6786,11 @@
 					"label": "Reservierter GPU-Speicher"
 				},
 				"llamaIdleTimeToLiveSeconds": {
-					"info": "Wie lange in Sekunden ein llama-server-Modell ungenutzt bleiben darf, bevor der Node es entlädt, um Speicher freizugeben. Ein Modell, das noch antwortet, wird nie entladen. Kürzer gibt VRAM früher frei; länger erspart Wartezeit beim erneuten Laden, wenn Sie zu einem Modell zurückkehren. Standard: 900 (15 Minuten), erlaubt 30 bis 86400. Wirkt nach einem Neustart des Nodes.",
+					"info": "Wie lange in Sekunden ein llama-server-Modell ungenutzt bleiben darf, bevor der Node es entlädt, um Speicher freizugeben. Ein Modell, das noch antwortet, wird nie entladen. Kürzer gibt VRAM früher frei; länger erspart Wartezeit beim erneuten Laden, wenn Sie zu einem Modell zurückkehren. Standard: 900 (15 Minuten), erlaubt 30 bis 86400. Gilt sofort nach dem Speichern.",
 					"label": "Leerlauf-Prozess-Lebensdauer"
 				},
 				"llamaMaxLoadedProcesses": {
-					"info": "Wie viele Chat-Modelle llama-server gleichzeitig geladen hält. Embedding- und Reranker-Modelle haben eigene Plätze und zählen nicht mit. Ist die Grenze erreicht, wird das am längsten unbenutzte, untätige Chat-Modell entladen; ist keines untätig, schlägt das Laden fehl. Standard: 3. „Modell warmhalten\" braucht mindestens 2. Wirkt nach einem Neustart des Nodes.",
+					"info": "Wie viele Chat-Modelle llama-server gleichzeitig geladen hält. Embedding- und Reranker-Modelle haben eigene Plätze und zählen nicht mit. Ist die Grenze erreicht, wird das am längsten unbenutzte, untätige Chat-Modell entladen; ist keines untätig, schlägt das Laden fehl. Standard: 3. „Modell warmhalten\" braucht mindestens 2. Gilt sofort nach dem Speichern; eine niedrigere Grenze entlädt untätige Modelle innerhalb von etwa einer halben Minute.",
 					"label": "Max. geladene Chat-Modelle"
 				},
 				"llamaRamReservePercent": {
@@ -6933,7 +6818,7 @@
 				"maxResponseSizeMb": {
 					"label": "Maximale Antwortgröße"
 				},
-				"megabytesPositive": "Eine positive Größe in MB. Änderungen werden ohne Neustart des Nodes wirksam.",
+				"megabytesPositive": "Eine positive Größe in MiB. Änderungen werden ohne Neustart des Nodes wirksam.",
 				"memoryExtractionModelName": {
 					"description": "Gewinnt aus abgeschlossenen Agentenläufen Erkenntnisse als Erinnerungskandidaten zur Prüfung.",
 					"label": "Modell für die Erinnerungsextraktion"
@@ -6944,6 +6829,11 @@
 					"description": "Puffer, den die Modellprüfung auf den geschätzten Speicherbedarf eines Modells aufschlägt. Gilt ab der nächsten Prüfung.",
 					"info": "Die Speicherschätzung schlägt diesen Anteil der Modellgewichte und des KV-Caches auf, um Speicher abzudecken, den die Formel nicht erfasst. Sie fließt in Modellempfehlungen, in das Kontextfenster beim Laden eines Modells und in die Kapazitätsprüfung für zusätzliche Agenten ein. Erhöhen Sie den Wert, wenn „passende\" Modelle trotzdem zu wenig Speicher haben; senken Sie ihn für größere Modelle oder Fenster. Standard: 12 %.",
 					"label": "Sicherheitsmarge der Modellprüfung"
+				},
+				"modelLabWarmIdleSeconds": {
+					"description": "Bei 0 bleibt kein Model-Lab-Modell vorgeladen.",
+					"info": "Wie lange in Sekunden das Model Lab seinen Worker samt Modell nach einem Lauf geladen hält, damit der nächste Trace oder Vergleich ohne erneutes Laden startet. Länger spart die Ladezeit zwischen Läufen; kürzer gibt den VRAM früher an Chat- und Bildmodelle zurück. Standard: 300 (5 Minuten), erlaubt 0 bis 3600; bei 0 wird der Worker nach jedem Lauf beendet. Gilt ab dem nächsten Lauf, ohne Neustart.",
+					"label": "Vorhaltezeit im Model Lab"
 				},
 				"nodeDbBackupRetainCount": {
 					"description": "Vor jedem Datenbank-Update wird eine Sicherung angelegt; ältere über diese Anzahl hinaus werden entfernt.",
@@ -7230,6 +7120,9 @@
 					},
 					"rebuild": "Neu bauen",
 					"remove": "Entfernen",
+					"removeConfirm": "Laufzeit entfernen",
+					"removeConfirmBody": "Die auf diesem Node gebaute stable-diffusion.cpp-Laufzeit und ihr Eintrag werden gelöscht. Dies kann nicht rückgängig gemacht werden.",
+					"removeConfirmTitle": "Verwaltete Laufzeit entfernen?",
 					"removeError": "Die verwaltete Bildlaufzeit konnte nicht entfernt werden.",
 					"repository": "GitHub-Repository",
 					"repositoryPlaceholder": "https://github.com/owner/stable-diffusion.cpp",
@@ -7310,6 +7203,9 @@
 					},
 					"rebuild": "Neu bauen",
 					"remove": "Entfernen",
+					"removeConfirm": "Laufzeit entfernen",
+					"removeConfirmBody": "Die auf diesem Node gebaute llama.cpp-Laufzeit und ihr Eintrag werden gelöscht. Dies kann nicht rückgängig gemacht werden.",
+					"removeConfirmTitle": "Verwaltete Laufzeit entfernen?",
 					"removeError": "Die aus Quellcode gebaute Laufzeit konnte nicht entfernt werden.",
 					"repository": "GitHub-Repository",
 					"repositoryPlaceholder": "https://github.com/owner/llama.cpp",
@@ -7550,10 +7446,6 @@
 				"timedOut": "Der Node ist nicht innerhalb einer Minute zurückgekehrt. Prüfen Sie, ob die App läuft, und laden Sie diese Seite dann neu.",
 				"title_one": "{{count}} Einstellung wartet auf einen Neustart des Nodes",
 				"title_other": "{{count}} Einstellungen warten auf einen Neustart des Nodes"
-			},
-			"placeholder": {
-				"description": "Lokale Node-Einstellungen werden über die Node-FastEndpoints-API angebunden.",
-				"title": "Node-Einstellungen"
 			},
 			"sandboxProfile": {
 				"description": "Legt fest, ob die Schutzgrenzen, die ein Sandbox-Prozess verlangt, nur eine Empfehlung oder Pflicht sind. Eine Änderung gilt ab der nächsten Sandbox.",
@@ -8576,6 +8468,8 @@
 	"runtimeResources": {
 		"ejectImageRuntime": "Bild-Laufzeit auswerfen",
 		"ejectLabel": "{{modelName}} auswerfen",
+		"ejectModelLabFailed": "Das Model-Lab-Modell konnte nicht entladen werden.",
+		"ejectModelLabRuntime": "Model-Lab-Worker auswerfen",
 		"ejectTranscriptionRuntime": "Transkriptions-Laufzeit auswerfen",
 		"gpu": "GPU {{index}} VRAM",
 		"noResidents": "Keine Modelle geladen.",
@@ -8585,6 +8479,7 @@
 		"runtime": {
 			"image": "Bilder",
 			"llamaCpp": "llama.cpp",
+			"modelLab": "Model Lab",
 			"transcription": "Transkription"
 		},
 		"startingModel": "Startet…",
@@ -8600,6 +8495,7 @@
 		"trigger": "Speicherauslastung und geladene Modelle",
 		"usage": "{{used}} von {{total}} belegt, {{available}} frei",
 		"vram": "VRAM",
+		"vramAllocated": "{{size}} GPU-Speicher zugewiesen",
 		"vramUnavailable": "VRAM-Auslastung nicht verfügbar"
 	},
 	"theme": {
@@ -8617,6 +8513,10 @@
 			"cleanupPending": "Bereinigung ausstehend",
 			"confirmDiscard": "Verwerfen bestätigen",
 			"delete": "Löschen",
+			"deleteConfirm": {
+				"description": "'{{name}}' wird von diesem Node gelöscht. Dies kann nicht rückgängig gemacht werden.",
+				"title": "Dieses Artefakt löschen?"
+			},
 			"discard": "Bereitgestellte Datei verwerfen",
 			"discardReason": "Grund für das Verwerfen",
 			"discardTitle": "Bereitgestelltes Artefakt verwerfen",
@@ -8666,14 +8566,11 @@
 			"create": {
 				"baseBenchmark": "Benchmark-Lauf (Basis)",
 				"baseEvaluation": "Basis-Auswertung",
-				"baseModel": "Basismodell",
-				"benchmarkNone": "Keiner",
 				"benchmarkPairing": "Optionale Benchmark-Zuordnung",
 				"benchmarkProject": "Benchmark-Projekt",
 				"cancel": "Abbrechen",
 				"evaluate": "Auswerten",
 				"evaluateFailed": "Die Auswertung konnte nicht gestartet werden.",
-				"evaluating": "Wird bewertet: {{scored}} von {{total}}",
 				"failed": "Der Vergleichsbericht konnte nicht erstellt werden.",
 				"missing": "Noch nicht ausgewertet",
 				"name": "Berichtsname",
@@ -8683,8 +8580,7 @@
 				"submit": "Bericht erstellen",
 				"title": "Neuer Vergleich",
 				"tunedBenchmark": "Benchmark-Lauf (feinabgestimmt)",
-				"tunedEvaluation": "Auswertung des feinabgestimmten Modells",
-				"tunedModel": "Feinabgestimmtes Modell"
+				"tunedEvaluation": "Auswertung des feinabgestimmten Modells"
 			},
 			"evaluation": {
 				"cancel": "Auswertung abbrechen",
@@ -8711,6 +8607,10 @@
 			"list": {
 				"create": "Neuer Vergleich",
 				"delete": "Löschen",
+				"deleteConfirm": {
+					"description": "'{{name}}' wird gelöscht. Dies kann nicht rückgängig gemacht werden.",
+					"title": "Diesen Vergleichsbericht löschen?"
+				},
 				"deleteFailed": "Der Vergleichsbericht konnte nicht gelöscht werden.",
 				"empty": "Noch keine Vergleichsberichte. Erstellen Sie einen aus einem abgeschlossenen Trainingslauf.",
 				"title": "Vergleichsberichte"
@@ -8736,12 +8636,20 @@
 			"cancel": "Abbrechen",
 			"counts": "{{total}} Beispiele · {{good}} gut · {{bad}} schlecht · {{rejected}} abgelehnt · {{duplicate}} doppelt",
 			"delete": "Löschen",
+			"deleteConfirm": {
+				"description": "'{{name}}' und seine Beispiele werden gelöscht. Dies kann nicht rückgängig gemacht werden.",
+				"title": "Diesen Datensatz löschen?"
+			},
 			"empty": "Noch keine Datensätze. Generieren Sie einen aus einer Definition.",
 			"revision": "Revision {{revision}}",
 			"title": "Datensätze"
 		},
 		"definitions": {
 			"delete": "Löschen",
+			"deleteConfirm": {
+				"description": "'{{name}}' wird gelöscht. Dies kann nicht rückgängig gemacht werden.",
+				"title": "Diese Datensatz-Definition löschen?"
+			},
 			"edit": "Bearbeiten",
 			"editor": {
 				"addKind": "Art hinzufügen",

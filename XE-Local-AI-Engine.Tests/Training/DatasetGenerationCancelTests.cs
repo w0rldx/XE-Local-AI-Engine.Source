@@ -33,6 +33,7 @@ public sealed class DatasetGenerationCancelTests
         var cancellations = new TrainingRunCancellationRegistry();
         var store = Substitute.For<ITrainingDatasetStore>();
         _ = store.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
+        _ = store.HasQueuedWorkAsync(Arg.Any<CancellationToken>()).Returns(true);
 
         var claims = 0;
         var polledAgain = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -258,7 +258,7 @@ describe("Home welcome card", () => {
 		expect(screen.queryByTestId("home-no-model")).toBeNull();
 	});
 
-	it("shows a failed first-run download with its reason and retries the same repo and quant", async () => {
+	it("shows a failed first-run download with its translated reason and retries the same repo and quant", async () => {
 		listModels.mockResolvedValue({ items: [], isAvailable: true });
 		activeDownloads.current = new Map([
 			[
@@ -266,7 +266,8 @@ describe("Home welcome card", () => {
 				{
 					modelName: "unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
 					phase: "Failed",
-					sanitizedError: "Download failed.",
+					errorCode: "InsufficientStorage",
+					sanitizedMessage: "Not enough free disk space: 5 GB required.",
 					includeProjector: true,
 				},
 			],
@@ -277,7 +278,9 @@ describe("Home welcome card", () => {
 		expect((await screen.findByTestId("home-setup-failed")).textContent).toContain(
 			"unsloth/Qwen3.5-9B-GGUF:Q4_K_M did not finish downloading.",
 		);
-		expect(screen.getByTestId("home-setup-failed-reason").textContent).toBe("Download failed.");
+		expect(screen.getByTestId("home-setup-failed-reason").textContent).toBe(
+			"There is not enough free storage for this download.",
+		);
 		expect(screen.queryByTestId("home-no-model")).toBeNull();
 		fireEvent.click(screen.getByRole("button", { name: "Retry download" }));
 		expect(startDownload.current.mutate).toHaveBeenCalledWith({
@@ -322,7 +325,8 @@ describe("Home welcome card", () => {
 				{
 					modelName: "unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
 					phase: "Failed",
-					sanitizedError: "This download did not finish. Start it again to resume from the part already downloaded.",
+					errorCode: "Interrupted",
+					sanitizedMessage: "This download did not finish. Start it again to resume from the part already downloaded.",
 					includeProjector: null,
 				},
 			],
@@ -531,7 +535,8 @@ describe("Home What's New card", () => {
 		renderHome();
 
 		expect((await screen.findByTestId("home-whats-new")).textContent).toContain("What's new in 1.2.0");
-		expect(screen.getByRole("heading", { name: "Changes in 1.2.0" })).toBeTruthy();
+		// The markdown renderer is a lazy chunk, so the rendered notes land a tick after the card.
+		expect(await screen.findByRole("heading", { name: "Changes in 1.2.0" })).toBeTruthy();
 		expect(screen.queryByTestId("home-whats-new-update")).toBeNull();
 		expect(screen.queryByTestId("home-whats-new-truncated")).toBeNull();
 		expect(updateStatus).toHaveBeenCalledWith({ query: { refresh: null } });

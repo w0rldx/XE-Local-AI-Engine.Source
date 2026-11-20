@@ -16,11 +16,13 @@ using XE_Local_AI_Engine.Client.Services.Common.Implementation;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
+using XE_Local_AI_Engine.Tests.Capacity;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -68,8 +70,40 @@ public sealed class ImageJobCoordinatorTests
         var jobId = await harness.Coordinator.EnqueueAsync(NewInput("while training"), CancellationToken.None);
 
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
-        await AssertFailedWithAsync(harness, jobId, ImageJobFailureReason.TrainingRunning, "A training run is using the GPU. Try again once it finishes.");
+        await AssertFailedWithAsync(harness, jobId, ImageJobFailureReason.TrainingRunning, ImageJobCoordinator.GpuBusyMessage);
         AssertEx.Equal(expected: 0, harness.Runtime.CallCount, "The runtime must not be called while a run holds the GPU.");
+    }
+
+    /// <summary>An idle Model Lab worker is not busy work: the refusal evicts it, the job waits it out once and generates.</summary>
+    [Test]
+    public async Task RunJob_WhileAnIdleModelLabWorkerHoldsTheNode_EvictsIt_AndGenerates()
+    {
+        await using var holders = new IdleHolderHarness();
+        var holder = await holders.AdmitIdleAsync();
+        using var harness = Harness.Create(blockRuntime: false, gpuWorkGate: holders.Gate, idlePreemption: holders.Broker);
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("after the idle worker"), CancellationToken.None);
+
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
+        AssertEx.Equal(expected: 1, holder.EvictionCount, "The refusal evicted the idle worker once.");
+        AssertEx.Equal(expected: 1, harness.Runtime.CallCount);
+    }
+
+    /// <summary>A RUNNING experiment is never preempted: the job refuses at once with the holder-neutral message, and the demand waits for the job's end.</summary>
+    [Test]
+    public async Task RunJob_WhileAModelLabExperimentRuns_RefusesAtOnce_AndLatchesTheDemand()
+    {
+        await using var holders = new IdleHolderHarness();
+        var holder = await holders.AdmitAsync();
+        using var harness = Harness.Create(blockRuntime: false, gpuWorkGate: holders.Gate, idlePreemption: holders.Broker);
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("during the experiment"), CancellationToken.None);
+
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
+        await AssertFailedWithAsync(harness, jobId, ImageJobFailureReason.TrainingRunning, ImageJobCoordinator.GpuBusyMessage);
+        AssertEx.Equal(FakeGpuIdleHolder.HolderState.Active, holder.State, "An active experiment is never preempted.");
+        AssertEx.True(holder.PreemptionPending, "The refused job's demand is served when the experiment ends.");
+        AssertEx.Equal(expected: 0, harness.Runtime.CallCount);
     }
 
     [Test]
@@ -80,7 +114,7 @@ public sealed class ImageJobCoordinatorTests
         supervisor.ListRunningProcesses().Returns([Resident("chat-27b", ModelRole.Chat), Resident("embedder", ModelRole.Embedding)]);
         using var harness = Harness.Create(blockRuntime: false, llamaSupervisor: supervisor);
         var callsBeforeEject = new ConcurrentBag<int>();
-        supervisor.EjectAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        supervisor.EjectAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<bool>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
                   .Returns(_ =>
                   {
                       callsBeforeEject.Add(harness.Runtime.CallCount);
@@ -90,8 +124,9 @@ public sealed class ImageJobCoordinatorTests
         var jobId = await harness.Coordinator.EnqueueAsync(NewInput("free the vram"), CancellationToken.None);
 
         await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
-        await supervisor.Received(1).EjectAsync("chat-27b", ModelRole.Chat, false, Arg.Any<CancellationToken>());
-        await supervisor.Received(1).EjectAsync("embedder", ModelRole.Embedding, false, Arg.Any<CancellationToken>());
+        // Not an operator eject: freeing VRAM for an image must not stop background work from reloading the model.
+        await supervisor.Received(1).EjectAsync("chat-27b", ModelRole.Chat, false, Arg.Any<CancellationToken>(), operatorRequested: false);
+        await supervisor.Received(1).EjectAsync("embedder", ModelRole.Embedding, false, Arg.Any<CancellationToken>(), operatorRequested: false);
         AssertEx.Equal(expected: 2, callsBeforeEject.Count);
         AssertEx.True(callsBeforeEject.All(static calls => calls == 0), "Both residents must be ejected before the runtime is called.");
     }
@@ -466,6 +501,7 @@ public sealed class ImageJobCoordinatorTests
             NullLogger<ImageJobCoordinator>.Instance,
             new FakeImageRuntimeActivityGate(),
             new GpuWorkGate(),
+            NoOpGpuIdleHolderPreemption.Instance,
             NoLlamaServerResidents(),
             InstalledModels(),
             new NullJobCreatedPublisher());
@@ -691,7 +727,8 @@ public sealed class ImageJobCoordinatorTests
             IGpuWorkGate? gpuWorkGate = null,
             ImageGenPhase[]? reportedPhases = null,
             Exception? runtimeFailure = null,
-            ILlamaServerProcessSupervisor? llamaSupervisor = null)
+            ILlamaServerProcessSupervisor? llamaSupervisor = null,
+            IGpuIdleHolderPreemption? idlePreemption = null)
         {
             var runtime = new FakeImageRuntime(blockRuntime, producedSize, reportedPhases, runtimeFailure);
             var store = new FakeImageJobStore();
@@ -713,6 +750,7 @@ public sealed class ImageJobCoordinatorTests
                 NullLogger<ImageJobCoordinator>.Instance,
                 activityGate,
                 gpuWorkGate ?? new GpuWorkGate(),
+                idlePreemption ?? NoOpGpuIdleHolderPreemption.Instance,
                 llamaSupervisor ?? NoLlamaServerResidents(),
                 InstalledModels(),
                 jobCreated);

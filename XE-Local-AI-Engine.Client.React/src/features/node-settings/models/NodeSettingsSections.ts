@@ -127,6 +127,7 @@ const nodeSettingsFieldSections: Readonly<
 	llamaRamReservePercent: "runtime",
 	speculativeDraftGpuLayers: "runtime",
 	imageIdleTimeToLiveSeconds: "runtime",
+	modelLabWarmIdleSeconds: "runtime",
 	modelFitSafetyMarginPercent: "runtime",
 	containerRuntimeSelection: "runtimes",
 	huggingFaceDownloadConnections: "models",

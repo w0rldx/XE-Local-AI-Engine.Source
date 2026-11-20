@@ -18,12 +18,13 @@ vi.mock("@xyflow/react", async (importOriginal) => ({
 	Handle: () => null,
 	ReactFlowProvider: ({ children }: { readonly children: React.ReactNode }) => children,
 	useReactFlow: () => ({ screenToFlowPosition: () => ({ x: 0, y: 0 }), fitView: () => Promise.resolve(true) }),
+	// A click reports React Flow's select change, which is what the editor selects from.
 	ReactFlow: ({
 		nodes,
-		onNodeClick,
+		onNodesChange,
 	}: {
 		readonly nodes?: readonly { readonly id: string; readonly data: Record<string, unknown> }[];
-		readonly onNodeClick?: (event: unknown, node: { readonly id: string }) => void;
+		readonly onNodesChange?: (changes: readonly { type: "select"; id: string; selected: boolean }[]) => void;
 	}) => (
 		<div data-testid="react-flow">
 			{(nodes ?? []).map((node) => (
@@ -32,7 +33,7 @@ vi.mock("@xyflow/react", async (importOriginal) => ({
 					type="button"
 					data-testid={`flow-node-${node.id}`}
 					data-diff={String(node.data["diff"] ?? "")}
-					onClick={(event) => onNodeClick?.(event, node)}
+					onClick={() => onNodesChange?.([{ type: "select", id: node.id, selected: true }])}
 				>
 					{node.id}
 				</button>
@@ -191,6 +192,28 @@ describe("GraphWorkflowEditorMode Assistant tab", () => {
 		expect(await screen.findByTestId("gw-review-undo")).toBeTruthy();
 		expect(screen.getByTestId("flow-node-note").getAttribute("data-diff")).toBe("");
 		expect(screen.queryByTestId("flow-node-lookup")).toBeNull();
+	});
+
+	it("sends on a plain Enter, never on an Enter that confirms an IME composition", async () => {
+		let sent: RunGraphWorkflowDesignerTurnRequest | undefined;
+		server.use(
+			...editorRoutes(),
+			http.post(localApiPath(turnPath), async ({ request }) => {
+				sent = (await request.json()) as RunGraphWorkflowDesignerTurnRequest;
+				return HttpResponse.json(designerTurnResponse());
+			}),
+		);
+		await renderEditor();
+		await openAssistantAndType("メモを追加して");
+		const input = screen.getByTestId<HTMLTextAreaElement>("gw-assistant-input");
+
+		fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+		fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+		expect(input.value).toBe("メモを追加して");
+
+		fireEvent.keyDown(input, { key: "Enter" });
+		expect(await screen.findByText(designerTurnResponse().reply)).toBeTruthy();
+		expect(sent?.messages).toEqual([{ role: "user", text: "メモを追加して" }]);
 	});
 
 	it("names a graph-level settings change in the review and shows the proposal's settings read-only", async () => {

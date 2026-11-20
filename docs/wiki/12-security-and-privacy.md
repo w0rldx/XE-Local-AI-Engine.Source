@@ -155,7 +155,9 @@ Four stores hold credential material outside the chat columns — `CloudCredenti
   created with `FileStreamOptions.UnixCreateMode` 0600, applies `SecureFilePermissions.Apply` (the Windows ACL) to it,
   then renames it over the target, so a torn or cancelled write leaves the previous credential intact instead of a blob
   that no longer decrypts (which the store would quarantine as *missing*). `CloudCredentialStore`, `CodexTokenStore`,
-  `EntraTokenCacheStore`, `EntraAuthCodeAccountStore` and `HfTokenStore` write through it; `ExternalProviderStore`
+  `EntraTokenCacheStore`, `EntraAuthCodeAccountStore` and `HfTokenStore` write through it, and `NodeSettingsStore`,
+  `InstalledRuntimeStore`, `LlamaServerLaunchFallbackStore`, `ManagedRuntimeStore` and `InstalledTrainingRuntimeStore` replace their
+  JSON state through `SecureFilePermissions.WriteJsonAtomicAsync`, built on it; `ExternalProviderStore`
   still creates in place with `UnixCreateMode` and narrows afterwards. This is the same discipline `node.key` follows (§2.1).
 - **A decryption failure quarantines the blob rather than propagating.** A row or file that no longer decrypts — a
   rotated operator secret, a corrupted write — would otherwise fail every later save's read-modify-write. The store
@@ -355,7 +357,7 @@ Key properties worth preserving:
 - **Single AEAD owner.** `AesGcmNodeAeadCipher` is the sole place `AesGcm` is constructed and the tag size lives — the column protector, the blob protectors and the vault codec all route through it. Don't construct `AesGcm` elsewhere.
 - **Associated data binds context.** `NodePayloadProtector.BuildAssociatedData` mixes the conversation id, record id, column name, and a schema version into the AAD, so a ciphertext can't be replayed into a different row/column. Don't drop a component from the AAD.
 - **Interceptor restores plaintext post-save** so the in-memory entity stays usable after `SaveChanges` (the DB row is ciphertext, the tracked object is plaintext again).
-- **Content/metadata are read-both.** Message `content` and `metadata_json` are the only encrypted columns that ever held plaintext on disk, so their reader accepts both forms. The startup migration that rewrote such rows into the envelope was removed before rc.3, so a data directory written before content encryption keeps those rows plaintext on disk. Don't remove the header check or the read-both fallback — those rows depend on it.
+- **Content/metadata are read-both.** Message `content` and `metadata_json` are the only encrypted columns that ever held plaintext on disk, so their reader accepts both forms. The startup migration that rewrote such rows into the envelope ran in every build up to rc.2 and was removed before rc.3, so an rc.2 data directory is already encrypted; only a directory written before content encryption and never opened by such a build still holds plaintext rows. The fallback has a cost: a blob without the header is returned unauthenticated, so a plaintext row written straight into the SQLite file reads as message content, where every other encrypted column would refuse it. Don't remove the header check or the read-both fallback while such directories are supported — those rows depend on it.
 
 ### Retention (data minimization)
 
@@ -583,7 +585,7 @@ Guards a contributor must not weaken:
 
 - **Path confinement.** `SandboxJailPathGuard.ResolveJailPath` rejects any path that escapes the jail root before any file op happens; its containment test is the shared `PathContainment.IsRootOrUnderCanonical`.
 - **Symlink-escape guard.** `EnsureNoSymlinkComponentsUnderJail` walks from the resolved leaf upward to the jail root and throws `UnauthorizedAccessException` on the *first* symlink component — defeating a "plant-a-symlink-after-resolve" swap (`SandboxJailPathGuard.cs`).
-- **O_NOFOLLOW file I/O.** Host file reads/writes use a libc `open()` `DllImport` with `O_NOFOLLOW` (plus `O_CLOEXEC`), because a managed `(FileOptions)` cast for `O_NOFOLLOW` throws. The kernel fails with `ELOOP` if the leaf is a symlink, closing the check-then-open (TOCTOU) race a managed `lstat`+open would leave. See `OpenNoFollow`, `ReadJailFileBytesNoFollowAsync`, `WriteJailFileNoFollowAsync` in `ProcessSandboxRuntimeProvider.cs`. A historical finding: plain `git apply` did *not* reject a `--binary` literal patch, so byte-level guards are not optional.
+- **O_NOFOLLOW file I/O.** Host file reads/writes use a libc `open()` `DllImport` with `O_NOFOLLOW` (plus `O_CLOEXEC`), because a managed `(FileOptions)` cast for `O_NOFOLLOW` throws. The kernel fails with `ELOOP` if the leaf is a symlink, closing the check-then-open (TOCTOU) race a managed `lstat`+open would leave. See `OpenNoFollow`, `ReadJailFileBytesNoFollowAsync`, `WriteJailFileNoFollowAsync` in `SandboxJailPathGuard.cs`. `O_NOFOLLOW` guards only the leaf, so the read leg (read-file and copy-out) then proves the OPENED handle is under the jail with `OpenedHandleContainment.EnsureWithinRoot` (Linux `/proc/self/fd`, Windows `GetFinalPathNameByHandle`), against a jail root resolved the same way: a directory swapped for a link after the walk is refused, and a jail under a linked temp directory still reads. Search, list and the copy-into write stay leaf-only. A historical finding: plain `git apply` did *not* reject a `--binary` literal patch, so byte-level guards are not optional.
 - **Byte caps + growth check.** `ReadHostFileUnderGuard` enforces a per-file byte cap and blocks (returns `null`) if the file *grew* after sizing — a swap-after-walk signal — rather than silently truncating.
 - **Tree-kill teardown.** Killing a sandbox `TreeKill`s the process tree (`process.Kill(true)`) and best-effort deletes the jail dir, so a sandbox kill terminates every running command.
 

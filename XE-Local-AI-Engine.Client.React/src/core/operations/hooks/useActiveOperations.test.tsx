@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,11 +17,24 @@ const acquire = vi.hoisted(() =>
 );
 
 vi.mock("@/core/api/signalr/SharedHubConnection", () => ({ acquireHubConnection: acquire }));
+const caps = vi.hoisted(() => ({ training: true }));
+vi.mock("@/capabilities/NodeCapabilities", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@/capabilities/NodeCapabilities")>();
+	return {
+		...actual,
+		nodeCapabilities: {
+			...actual.nodeCapabilities,
+			get training() {
+				return caps.training;
+			},
+		},
+	};
+});
 // The GGUF and runtime sources have their own tests and hubs; here only the job sources' gating is under test.
 vi.mock("@/core/model-downloads/queries/useGgufAcquisitions", () => ({ useActiveGgufAcquisitions: () => new Map() }));
 vi.mock("@/core/runtime-acquisition/hooks/useRuntimeAcquisitionHub", () => ({ useRuntimeAcquisitionHub: () => undefined }));
 
-import { getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { getNodeSettingsOptions, listBaseArtifactsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { useOperations } from "@/core/operations/hooks/useActiveOperations";
 
@@ -37,6 +50,7 @@ function leasedPaths(): unknown[] {
 
 beforeEach(() => {
 	acquire.mockClear();
+	caps.training = true;
 	// Empty cached lists and settings: the hooks read them and nothing goes to the network.
 	queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY, queryFn: () => ({ items: [] }) } },
@@ -65,7 +79,8 @@ describe("useOperations hub gating", () => {
 		expect(acquire).not.toHaveBeenCalled();
 
 		renderHook(() => useOperations({ watch: true }), { wrapper });
-		// images/hub twice: image jobs and image model downloads share its one connection.
+		// images/hub twice: image jobs and image model downloads share its one connection; training/runs/hub three times:
+		// training runs, Model Lab experiments and base checkpoint downloads.
 		expect(leasedPaths().toSorted()).toEqual([
 			"images/hub",
 			"images/hub",
@@ -73,7 +88,27 @@ describe("useOperations hub gating", () => {
 			"scheduler/hub",
 			"training/datasets/hub",
 			"training/runs/hub",
+			"training/runs/hub",
+			"training/runs/hub",
 		]);
+	});
+
+	it("leases the graph-workflow and work-session hubs only while their node switches are on", () => {
+		queryClient.setQueryData(getNodeSettingsOptions().queryKey, {
+			graphWorkflowsEnabled: false,
+			workSessionsEnabled: false,
+		} as never);
+		renderHook(() => useOperations({ watch: true }), { wrapper });
+		expect(leasedPaths()).not.toContain("graph-workflows/hub");
+		expect(leasedPaths()).not.toContain("work-sessions/hub");
+
+		queryClient.setQueryData(getNodeSettingsOptions().queryKey, {
+			graphWorkflowsEnabled: true,
+			workSessionsEnabled: true,
+		} as never);
+		renderHook(() => useOperations({ watch: true }), { wrapper });
+		expect(leasedPaths()).toContain("graph-workflows/hub");
+		expect(leasedPaths()).toContain("work-sessions/hub");
 	});
 
 	it("leases the transcription hub for model downloads only while the node's transcription switch is on", () => {
@@ -94,5 +129,26 @@ describe("useOperations hub gating", () => {
 		renderHook(() => useOperations({ watch: true }), { wrapper });
 		expect(leasedPaths()).not.toContain("scheduler/hub");
 		expect(leasedPaths()).toContain("knowledge-base/hub");
+	});
+});
+
+describe("useOperations broadcast-backed source gating", () => {
+	// Whether the base checkpoint list was ever asked for (the refused request settles as an error).
+	function checkpointsRead(): boolean {
+		const state = queryClient.getQueryState(listBaseArtifactsOptions().queryKey);
+		return state !== undefined && (state.fetchStatus === "fetching" || state.errorUpdateCount > 0 || state.dataUpdateCount > 0);
+	}
+
+	it("reads base checkpoints only while the training surface is offered", async () => {
+		caps.training = false;
+		const off = renderHook(() => useOperations({ watch: true }), { wrapper });
+		await act(async () => undefined);
+		expect(checkpointsRead()).toBe(false);
+		off.unmount();
+
+		caps.training = true;
+		renderHook(() => useOperations({ watch: true }), { wrapper });
+		await act(async () => undefined);
+		expect(checkpointsRead()).toBe(true);
 	});
 });

@@ -10,6 +10,7 @@ import { chatErrorMessage, chatWriteErrorMessage } from "@/features/chat/models/
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import { type ChatSamplingOptions, toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import { forgetWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
+import { useChatWorkflowStore } from "@/features/chat/workflow/ChatWorkflowStore";
 
 interface ChatConversationActionsInput {
 	cacheConversation: (conversation: ChatConversationModel) => void;
@@ -145,6 +146,7 @@ export function useChatConversationActions({
 			}
 			forgetConversationTitle(conversationId);
 			forgetWebContentAutoAccept(conversationId);
+			useChatWorkflowStore.getState().actions.forgetConversation(conversationId);
 			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() });
 		},
 	});

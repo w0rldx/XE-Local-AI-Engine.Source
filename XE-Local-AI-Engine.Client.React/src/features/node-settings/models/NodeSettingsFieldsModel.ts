@@ -68,7 +68,7 @@ export interface NodeSettingsFieldsForm {
 	// Node-level voice gate and the default voice for new users on this node.
 	voiceFeatureEnabled: boolean;
 	defaultVoiceProfile: string;
-	// Developer-only. The AgentHome timeouts are edited in MINUTES and the byte caps in MB (see nodeSettingsDisplayScale).
+	// Developer-only. The AgentHome timeouts are edited in MINUTES and the byte caps in MiB (see nodeSettingsDisplayScale).
 	orchestrationIdleTimeoutSeconds: number | string;
 	agentHomePrepareTimeoutSeconds: number | string;
 	agentHomeCommandTimeoutSeconds: number | string;
@@ -77,7 +77,7 @@ export interface NodeSettingsFieldsForm {
 	maxPendingToolCallAgeMinutes: number | string;
 	detachedGraceSeconds: number | string;
 	// The curated runtime tunables (see tunableFields). Plain bounded integers; the chat HTTP timeout, the image idle TTL
-	// and the AgentHome run limit are edited in MINUTES, the Hugging Face disk margin in GB.
+	// and the AgentHome run limit are edited in MINUTES, the Hugging Face disk margin in GiB.
 	llamaReadinessTimeoutCapSeconds: number | string;
 	llamaChatHttpTimeoutSeconds: number | string;
 	llamaEmbeddingHttpTimeoutSeconds: number | string;
@@ -85,6 +85,8 @@ export interface NodeSettingsFieldsForm {
 	llamaGpuReservePercent: number | string;
 	llamaRamReservePercent: number | string;
 	imageIdleTimeToLiveSeconds: number | string;
+	// 0 turns keeping a Model Lab model warm off; read live at each idle transition.
+	modelLabWarmIdleSeconds: number | string;
 	modelFitSafetyMarginPercent: number | string;
 	maxProviderCallsPerInvocation: number | string;
 	customToolMaxTimeoutSeconds: number | string;
@@ -157,7 +159,7 @@ export interface NodeSettingsFieldsForm {
 	agentExecutionLogRetentionEnabled: boolean;
 	agentExecutionLogRetentionDays: number | string;
 	nodeDbBackupRetainCount: number | string;
-	// Shown and edited in GB (see nodeSettingsDisplayScale).
+	// Shown and edited in GiB (see nodeSettingsDisplayScale).
 	benchmarkKldCacheMaxBytes: number | string;
 	schedulerHistoryRetentionDays: number | string;
 	// Runtime and workspace knobs. The image pair and the seven workspace limits apply after a restart; the AgentHome four
@@ -178,7 +180,7 @@ export interface NodeSettingsFieldsForm {
 	agentHomeMaxInnerToolCalls: number | string;
 	agentHomePatchApplyTimeoutSeconds: number | string;
 	agentHomeRunRetentionMaxRuns: number | string;
-	// Shown and edited in GB (see nodeSettingsDisplayScale).
+	// Shown and edited in GiB (see nodeSettingsDisplayScale).
 	agentHomeRunRetentionMaxTotalBytes: number | string;
 	// The nine feature switches (section "general", Features card). The response carries their effective value.
 	developmentEnabled: boolean;
@@ -240,6 +242,7 @@ export const tunableFields = [
 	"llamaGpuReservePercent",
 	"llamaRamReservePercent",
 	"imageIdleTimeToLiveSeconds",
+	"modelLabWarmIdleSeconds",
 	"modelFitSafetyMarginPercent",
 	"maxProviderCallsPerInvocation",
 	"customToolMaxTimeoutSeconds",
@@ -294,7 +297,7 @@ const SECONDS_PER_MINUTE = 60;
 const BYTES_PER_MB = 1024 * 1024;
 const BYTES_PER_GB = 1024 * BYTES_PER_MB;
 
-// Fields whose wire unit is too fine to read comfortably: the form holds `wire / scale` (minutes instead of seconds, MB
+// Fields whose wire unit is too fine to read comfortably: the form holds `wire / scale` (minutes instead of seconds, MiB
 // instead of bytes) and buildNodeSettingsRequest multiplies back, rounding to a whole wire unit. The wire never changes.
 export const nodeSettingsDisplayScale = {
 	llamaIdleTimeToLiveSeconds: SECONDS_PER_MINUTE,
@@ -366,6 +369,7 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	llamaGpuReservePercent: 5,
 	llamaRamReservePercent: 15,
 	imageIdleTimeToLiveSeconds: 15,
+	modelLabWarmIdleSeconds: 300,
 	modelFitSafetyMarginPercent: 12,
 	maxProviderCallsPerInvocation: 200,
 	customToolMaxTimeoutSeconds: 300,

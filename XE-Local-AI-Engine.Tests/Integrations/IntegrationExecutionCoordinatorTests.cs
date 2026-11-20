@@ -450,6 +450,28 @@ public sealed class IntegrationExecutionCoordinatorTests
         AssertEx.Equal(FailureCategory.ProviderUnreachable, request.FailureCategory);
     }
 
+    // An eject ends the run Cancelled, but its chat row keeps the reason and category the conversation shows; a plain Stop keeps neither.
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task Run_WhenTheRunnerReportsCancelled_ProjectsTheChatRowLikeTheChatPump(bool showCancelReason)
+    {
+        using var harness = new Harness();
+        harness.TerminalStatus = InvocationStatus.Cancelled;
+        harness.TerminalFailureCategory = showCancelReason ? FailureCategory.ModelEjected : FailureCategory.Cancelled;
+        harness.TerminalError = "the reason";
+        harness.TerminalShowCancelReason = showCancelReason;
+        var executionId = harness.SeedAccepted();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        AssertEx.Equal(IntegrationExecutionStatus.Cancelled, harness.Row(executionId).Status);
+        var request = harness.TerminalizeRequest ?? throw new AssertionException("The assistant turn was never terminalized.");
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, request.Status);
+        AssertEx.Equal(showCancelReason ? (FailureCategory?)FailureCategory.ModelEjected : null, request.FailureCategory);
+        AssertEx.True(string.Equals(showCancelReason ? "the reason" : null, request.Error, StringComparison.Ordinal), $"got {request.Error ?? "null"}.");
+    }
+
     [Test]
     public async Task Run_CreatesTheAssistantPlaceholderBeforeTheRunAndTerminalizesWithAnEnvelope()
     {

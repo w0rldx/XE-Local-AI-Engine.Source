@@ -70,6 +70,14 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({ acquireHubConnection:
 
 // A training-run detail read that nothing seeded stays pending until the test answers it, by run id.
 const pendingDetails = vi.hoisted(() => new Map<string, (run: unknown) => void>());
+// The broadcast-backed sources' reads, answered per test.
+const pushed = vi.hoisted(() => ({
+	graphRuns: vi.fn<() => Promise<unknown>>(),
+	workSessions: vi.fn<() => Promise<unknown>>(),
+	experiments: vi.fn<() => Promise<unknown>>(),
+	experiment: vi.fn<() => Promise<unknown>>(),
+	artifacts: vi.fn<() => Promise<unknown>>(),
+}));
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>();
 	return {
@@ -78,29 +86,48 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 			...actual.getTrainingRunOptions(options),
 			queryFn: () => new Promise((resolve) => pendingDetails.set(options.path.runId, resolve)),
 		}),
+		listGraphWorkflowRunsOptions: (options: Parameters<typeof actual.listGraphWorkflowRunsOptions>[0]) => ({
+			...actual.listGraphWorkflowRunsOptions(options),
+			queryFn: pushed.graphRuns,
+		}),
+		listWorkSessionsOptions: () => ({ ...actual.listWorkSessionsOptions(), queryFn: pushed.workSessions }),
+		listModelLabExperimentsOptions: () => ({ ...actual.listModelLabExperimentsOptions(), queryFn: pushed.experiments }),
+		getModelLabExperimentOptions: (options: Parameters<typeof actual.getModelLabExperimentOptions>[0]) => ({
+			...actual.getModelLabExperimentOptions(options),
+			queryFn: pushed.experiment,
+		}),
+		listBaseArtifactsOptions: () => ({ ...actual.listBaseArtifactsOptions(), queryFn: pushed.artifacts }),
 	};
 });
 
 import {
 	getTrainingRunOptions,
+	listBaseArtifactsOptions,
+	listGraphWorkflowRunsOptions,
 	listImageJobsOptions,
 	listTrainingDatasetsOptions,
+	listModelLabExperimentsOptions,
 	listTrainingRunsOptions,
+	listWorkSessionsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import {
 	type JobSourceOptions,
+	useBaseArtifactDownloadOperations,
 	useDatasetBuildOperations,
 	useImageJobOperations,
 	useKnowledgeIndexingOperation,
+	useModelLabExperimentOperations,
 	useSchedulerRunOperations,
 	useTrainingRunOperations,
+	useWaitingGraphRunOperations,
+	useWaitingWorkSessionOperations,
 } from "@/core/operations/hooks/useJobOperations";
 import { type Operation, operationTransitions } from "@/core/operations/models/OperationModels";
 
 // The feed reads active work only.
 const trainingKey = listTrainingRunsOptions({ query: { page: 1, pageSize: 200, activeOnly: true } }).queryKey;
 const imageKey = listImageJobsOptions({ query: { limit: 200, offset: 0, activeOnly: true } }).queryKey;
-const datasetKey = [{ ...listTrainingDatasetsOptions().queryKey[0], scope: "operations" }];
+const datasetKey = listTrainingDatasetsOptions().queryKey;
 
 let queryClient: QueryClient;
 
@@ -371,19 +398,16 @@ describe("list sources", () => {
 		expect(hub("training/runs/hub").handlers.size).toBe(0);
 	});
 
-	it("keeps dataset builds apart from the datasets page's mapped list under the generated key", async () => {
-		const pageKey = listTrainingDatasetsOptions().queryKey;
-		const pageList = [{ id: "ds-1", status: "Generating" }];
-		queryClient.setQueryData(pageKey, pageList as never);
-		queryClient.setQueryData(datasetKey, { items: [{ id: "ds-1", name: "Support", workStatus: "Running" }] } as never);
+	it("reads dataset builds from the raw response under the generated key the datasets page shares", async () => {
+		const raw = { items: [{ id: "ds-1", name: "Support", status: "Generating", workStatus: "Running" }] };
+		queryClient.setQueryData(datasetKey, raw as never);
 
 		const { result } = renderHook(() => useDatasetBuildOperations(on), { wrapper });
 
 		expect(result.current).toEqual([expect.objectContaining({ id: "dataset-build:ds-1", state: "running" })]);
-		expect(queryClient.getQueryData(pageKey)).toBe(pageList);
-		// A generate on the datasets page invalidates the generated key, which must reach this source's entry too.
-		await act(() => queryClient.invalidateQueries({ queryKey: pageKey, refetchType: "none" }));
-		expect(queryClient.getQueryState(datasetKey)?.isInvalidated).toBe(true);
+		// The source caches nothing of its own: the page's entry stays the raw response it maps through `select`.
+		expect(queryClient.getQueryData(datasetKey)).toBe(raw);
+		expect(queryClient.getQueryCache().findAll({ queryKey: [{ _id: "listTrainingDatasets" }] })).toHaveLength(1);
 	});
 
 	it("re-reads dataset builds on a replay reset and image jobs only on a terminal phase", async () => {
@@ -603,5 +627,288 @@ describe("push sources", () => {
 		const second = renderHook(() => useSchedulerRunOperations(on), { wrapper });
 
 		expect(second.result.current).toEqual([]);
+	});
+});
+
+describe("broadcast-backed sources", () => {
+	const MINUTE_MS = 60_000;
+	const HUB_DOWN_MS = 15_000;
+	const GRAPH = "graph-workflows/hub";
+	const SESSIONS = "work-sessions/hub";
+	const RUNS = "training/runs/hub";
+	const graphKey = listGraphWorkflowRunsOptions({ query: { status: "WaitingForApproval", limit: 200 } }).queryKey;
+	const waitingRun = { id: "run-9", definitionId: "def-1", status: "WaitingForApproval" };
+
+	beforeEach(() => {
+		for (const read of Object.values(pushed)) {
+			read.mockReset();
+		}
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	async function settle(): Promise<void> {
+		await act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+	}
+
+	async function advance(ms: number): Promise<void> {
+		act(() => vi.advanceTimersByTime(ms));
+		await settle();
+	}
+
+	// Ticks until the assertion holds: a read's answer reaches the hook a few ticks after it was asked.
+	async function eventually(assertion: () => void, ticks = 20): Promise<void> {
+		try {
+			assertion();
+		} catch (error) {
+			if (ticks === 0) {
+				throw error;
+			}
+			await settle();
+			await eventually(assertion, ticks - 1);
+		}
+	}
+
+	// What the list query's refetchInterval option resolves to right now, for its one observer.
+	function intervalOf(queryKey: readonly unknown[]): unknown {
+		const query = queryClient.getQueryCache().find({ queryKey });
+		const interval = query?.observers[0]?.options.refetchInterval;
+		return typeof interval === "function" && query ? interval(query) : interval;
+	}
+
+	function dropHub(path: string): void {
+		act(() => {
+			hub(path).connection.state = "Reconnecting";
+			for (const callback of hub(path).dropped) {
+				callback();
+			}
+		});
+	}
+
+	function connectAgain(path: string): void {
+		hub(path).connection.state = "Connected";
+		reconnect(path);
+	}
+
+	const states = (operations: readonly Operation[]) => operations.map(({ id, state }) => ({ id, state }));
+
+	it("discovers the first parked graph run from an empty feed on the status broadcast, with no interval beside the hub", async () => {
+		pushed.graphRuns.mockResolvedValueOnce({ runs: [] }).mockResolvedValue({ runs: [waitingRun] });
+		const { result } = renderHook(() => useWaitingGraphRunOperations(on), { wrapper });
+		await eventually(() => expect(pushed.graphRuns).toHaveBeenCalledOnce());
+		await settle();
+
+		await advance(3 * MINUTE_MS);
+		expect(pushed.graphRuns).toHaveBeenCalledOnce();
+		expect(intervalOf(graphKey)).toBe(false);
+
+		emit(GRAPH, "graphWorkflowRunStatusChanged", { runId: "run-9", status: "WaitingForApproval" });
+
+		await eventually(() => expect(states(result.current)).toEqual([{ id: "graph-run:run-9", state: "waiting" }]));
+		expect(pushed.graphRuns).toHaveBeenCalledTimes(2);
+	});
+
+	it("re-reads the parked runs only for a move into a wait or out of one it holds", async () => {
+		pushed.graphRuns.mockResolvedValueOnce({ runs: [waitingRun] }).mockResolvedValue({ runs: [] });
+		const { result } = renderHook(() => useWaitingGraphRunOperations(on), { wrapper });
+		await eventually(() => expect(result.current).toHaveLength(1));
+
+		// Another run starting or finishing cannot change this list.
+		emit(GRAPH, "graphWorkflowRunStatusChanged", { runId: "run-1", status: "Running" });
+		await settle();
+		expect(pushed.graphRuns).toHaveBeenCalledOnce();
+
+		emit(GRAPH, "graphWorkflowRunStatusChanged", { runId: "run-9", status: "Running" });
+		await eventually(() => expect(result.current).toEqual([]));
+		expect(pushed.graphRuns).toHaveBeenCalledTimes(2);
+	});
+
+	it("leases no hub for a reading caller, and reads nothing while the feature is off", async () => {
+		pushed.graphRuns.mockResolvedValue({ runs: [waitingRun] });
+		const reader = renderHook(() => useWaitingGraphRunOperations({ ...on, watch: false }), { wrapper });
+		const off = renderHook(() => useWaitingWorkSessionOperations({ ...on, enabled: false }), { wrapper });
+		await eventually(() => expect(reader.result.current).toHaveLength(1));
+
+		await advance(3 * MINUTE_MS);
+
+		expect(hubs.acquire).not.toHaveBeenCalled();
+		expect(pushed.graphRuns).toHaveBeenCalledOnce();
+		expect(pushed.workSessions).not.toHaveBeenCalled();
+		expect(off.result.current).toEqual([]);
+	});
+
+	it("filters waiting work sessions out of the list, and drops the row on the session's status broadcast", async () => {
+		pushed.workSessions
+			.mockResolvedValueOnce({
+				items: [
+					{ id: "s-1", title: "Docs", status: "WaitingForInput" },
+					{ id: "s-2", title: "Refactor", status: "Running" },
+				],
+			})
+			.mockResolvedValue({ items: [{ id: "s-1", title: "Docs", status: "Running" }] });
+		const { result } = renderHook(() => useWaitingWorkSessionOperations(on), { wrapper });
+		await eventually(() => expect(result.current.map((row) => row.id)).toEqual(["work-session:s-1"]));
+		await advance(3 * MINUTE_MS);
+		expect(pushed.workSessions).toHaveBeenCalledOnce();
+		expect(intervalOf(listWorkSessionsOptions().queryKey)).toBe(false);
+
+		emit(SESSIONS, "workSessionStatusChanged", { sessionId: "s-1" });
+
+		await eventually(() => expect(result.current).toEqual([]));
+	});
+
+	it("follows a Model Lab experiment started elsewhere from its creation broadcast to its failure, under one id", async () => {
+		const experiment = { id: "e-1", installedModelName: "qwen3-0.6b", repoId: "Qwen/Qwen3-0.6B", errorMessage: null };
+		let list: unknown = { activeExperimentId: null, experiments: [] };
+		pushed.experiments.mockImplementation(async () => list);
+		const { result } = renderHook(() => useModelLabExperimentOperations(on), { wrapper });
+		await eventually(() => expect(pushed.experiments).toHaveBeenCalledOnce());
+		await settle();
+
+		// A training run's creation on the shared hub is not this list's business.
+		emit(RUNS, "job.created", { id: "run-1", kind: "TrainingRun" });
+		await settle();
+		expect(pushed.experiments).toHaveBeenCalledOnce();
+
+		list = { activeExperimentId: "e-1", experiments: [{ ...experiment, status: "Running" }] };
+		emit(RUNS, "job.created", { id: "e-1", kind: "ModelLabExperiment" });
+		await eventually(() => expect(states(result.current)).toEqual([{ id: "model-lab-experiment:e-1", state: "running" }]));
+		const running = result.current;
+		await eventually(() => expect(hub(RUNS).connection.invoke).toHaveBeenCalledWith("Subscribe", "e-1", Number.MAX_SAFE_INTEGER));
+		await advance(3 * MINUTE_MS);
+		expect(intervalOf(listModelLabExperimentsOptions().queryKey)).toBe(false);
+
+		list = {
+			activeExperimentId: null,
+			experiments: [{ ...experiment, status: "Failed", errorMessage: "The trace ran out of memory." }],
+		};
+		emit(RUNS, "trainingRun.event", { runId: "e-1", kind: "State" });
+		await eventually(() => expect(result.current.map((row) => row.state)).toEqual(["failed"]));
+
+		expect(pushed.experiment).not.toHaveBeenCalled();
+		expect(operationTransitions(operationTransitions(new Map(), running).seen, result.current).finished).toEqual([
+			expect.objectContaining({ id: "model-lab-experiment:e-1", state: "failed", detail: "The trace ran out of memory." }),
+		]);
+	});
+
+	it("re-reads base checkpoints on their start and end broadcasts, once a minute only for a running download's bytes", async () => {
+		let items: unknown[] = [];
+		pushed.artifacts.mockImplementation(async () => ({ items }));
+		const { result } = renderHook(() => useBaseArtifactDownloadOperations(on), { wrapper });
+		await eventually(() => expect(pushed.artifacts).toHaveBeenCalledOnce());
+		await settle();
+		expect(intervalOf(listBaseArtifactsOptions().queryKey)).toBe(false);
+
+		items = [{ id: "a-1", repoId: "Qwen/Qwen3-0.6B", status: "Downloading" }];
+		emit(RUNS, "job.created", { id: "a-1", kind: "BaseArtifactDownload" });
+		await eventually(() => expect(result.current.map((row) => row.state)).toEqual(["running"]));
+		expect(intervalOf(listBaseArtifactsOptions().queryKey)).toBe(MINUTE_MS);
+		await advance(MINUTE_MS);
+		expect(pushed.artifacts).toHaveBeenCalledTimes(3);
+
+		items = [{ id: "a-1", repoId: "Qwen/Qwen3-0.6B", status: "Ready" }];
+		emit(RUNS, "job.ended", { id: "a-1", kind: "BaseArtifactDownload" });
+		await eventually(() => expect(result.current.map((row) => row.state)).toEqual(["succeeded"]));
+		await advance(3 * MINUTE_MS);
+
+		expect(pushed.artifacts).toHaveBeenCalledTimes(4);
+		expect(intervalOf(listBaseArtifactsOptions().queryKey)).toBe(false);
+	});
+
+	const sources = [
+		["graph runs", GRAPH, pushed.graphRuns, useWaitingGraphRunOperations, { runs: [] }],
+		["work sessions", SESSIONS, pushed.workSessions, useWaitingWorkSessionOperations, { items: [] }],
+		[
+			"Model Lab experiments",
+			RUNS,
+			pushed.experiments,
+			useModelLabExperimentOperations,
+			{ activeExperimentId: null, experiments: [] },
+		],
+		["base checkpoint downloads", RUNS, pushed.artifacts, useBaseArtifactDownloadOperations, { items: [] }],
+	] as const;
+
+	it.each(sources)(
+		"still discovers %s once a minute while their hub is down, and stops on reconnect",
+		async (_name, path, read, useSource, empty) => {
+			read.mockResolvedValue(empty);
+			renderHook(() => useSource(on), { wrapper });
+			await eventually(() => expect(read).toHaveBeenCalledOnce());
+			await settle();
+
+			dropHub(path);
+			await advance(MINUTE_MS - 1);
+			expect(read).toHaveBeenCalledOnce();
+			await advance(1);
+			expect(read).toHaveBeenCalledTimes(2);
+
+			// The reconnect re-reads once for the gap, then the interval stops.
+			connectAgain(path);
+			await settle();
+			await advance(3 * MINUTE_MS);
+			expect(read).toHaveBeenCalledTimes(3);
+		},
+	);
+
+	it("follows a running experiment by id, not by the whole list, while the hub is down", async () => {
+		const experiment = { id: "e-1", installedModelName: "qwen3-0.6b", repoId: "Qwen/Qwen3-0.6B", errorMessage: null };
+		const running = { activeExperimentId: "e-1", experiments: [{ ...experiment, status: "Running" }] };
+		pushed.experiments
+			.mockResolvedValueOnce(running)
+			.mockResolvedValueOnce(running)
+			.mockResolvedValue({ activeExperimentId: null, experiments: [{ ...experiment, status: "Succeeded" }] });
+		pushed.experiment
+			.mockResolvedValueOnce({ ...experiment, status: "Running" })
+			.mockResolvedValue({ ...experiment, status: "Succeeded" });
+		const { result } = renderHook(() => useModelLabExperimentOperations(on), { wrapper });
+		await eventually(() => expect(result.current.map((row) => row.state)).toEqual(["running"]));
+		// The live-only join's re-read.
+		await eventually(() => expect(pushed.experiments).toHaveBeenCalledTimes(2));
+		pushed.experiments.mockClear();
+
+		dropHub(RUNS);
+		await eventually(() => expect(pushed.experiment).toHaveBeenCalledOnce());
+		// The answer lands a tick after the read; only a Running answer arms the interval.
+		await settle();
+		await advance(HUB_DOWN_MS);
+
+		await eventually(() => expect(pushed.experiment).toHaveBeenCalledTimes(2));
+		await eventually(() => expect(pushed.experiments).toHaveBeenCalledOnce());
+		await advance(2 * HUB_DOWN_MS);
+		expect(pushed.experiment).toHaveBeenCalledTimes(2);
+		expect(pushed.experiments).toHaveBeenCalledOnce();
+		expect(result.current.map((row) => row.state)).toEqual(["succeeded"]);
+	});
+
+	it("re-reads a downloading checkpoint at the hub-down pace while the hub is down", async () => {
+		pushed.artifacts.mockResolvedValue({ items: [{ id: "a-1", repoId: "Qwen/Qwen3-0.6B", status: "Downloading" }] });
+		renderHook(() => useBaseArtifactDownloadOperations(on), { wrapper });
+		await eventually(() => expect(pushed.artifacts).toHaveBeenCalledOnce());
+		await settle();
+
+		dropHub(RUNS);
+		await advance(HUB_DOWN_MS);
+
+		expect(pushed.artifacts).toHaveBeenCalledTimes(2);
+		expect(intervalOf(listBaseArtifactsOptions().queryKey)).toBe(HUB_DOWN_MS);
+	});
+
+	it.each(
+		sources.flatMap(([name, , read, useSource]) => [403, 404].map((statusCode) => [name, statusCode, read, useSource] as const)),
+	)("stops the %s source quietly on a %i, and releases its hub", async (_name, statusCode, read, useSource) => {
+		read.mockRejectedValue({ statusCode });
+		const { result } = renderHook(() => useSource(on), { wrapper });
+		await eventually(() => expect(queryClient.getQueryCache().getAll()[0]?.state.status).toBe("error"));
+
+		await advance(3 * MINUTE_MS);
+
+		expect(read).toHaveBeenCalledOnce();
+		expect(result.current).toEqual([]);
+		for (const call of hubs.acquire.mock.results) {
+			expect((call.value as { release: ReturnType<typeof vi.fn> }).release).toHaveBeenCalled();
+		}
 	});
 });

@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Services.Chat;
 
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -16,6 +18,9 @@ public sealed class ModelKindDetectorTests
     [Arguments("all-minilm:Q4_K_M")]
     [Arguments("all-minilm")]
     [Arguments("my-EMBEDDING-model")]
+    [Arguments("CompendiumLabs/bge-m3-gguf:Q8_0")]
+    [Arguments("compendiumlabs/BGE-M3-GGUF:F16")]
+    [Arguments("rerank-org/bge-m3")]
     public void IsEmbeddingName_WhenEmbeddingName_ReturnsTrue(string modelName)
     {
         var result = ModelKindDetector.IsEmbeddingName(modelName);
@@ -41,6 +46,8 @@ public sealed class ModelKindDetectorTests
     [Arguments("BAAI/bge-reranker-base")]
     [Arguments("jina-reranker-v2-base-multilingual")]
     [Arguments("mxbai-rerank-xsmall-v1:Q8_0")]
+    [Arguments("gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M")]
+    [Arguments("bge-reranker-v2-m3")]
     public void IsRerankerName_WhenRerankerName_ReturnsTrue(string modelName)
     {
         var result = ModelKindDetector.IsRerankerName(modelName);
@@ -65,6 +72,7 @@ public sealed class ModelKindDetectorTests
     [Arguments("llama-3.1-8b-instruct:Q6_K")]
     [Arguments("nomic-embed-text")]
     [Arguments("bge-large")]
+    [Arguments("rerank-org/bge-m3")]
     [Arguments("")]
     [Arguments("   ")]
     public void IsRerankerName_WhenNotRerankerName_ReturnsFalse(string modelName)
@@ -72,5 +80,16 @@ public sealed class ModelKindDetectorTests
         var result = ModelKindDetector.IsRerankerName(modelName);
 
         AssertEx.False(result, "a chat / embedding / unknown model name must never be guessed as reranker");
+    }
+
+    [Test]
+    [Arguments("bge-org/some-chat-model:Q4_K_M")]
+    [Arguments("embedding-org/chat-model")]
+    public void Classify_WhenOnlyTheOwnerLooksLikeAnEmbedder_IsChat(string modelName)
+    {
+        // The owner names a publisher, not the model kind: only the segment after the last '/' is matched.
+        var kind = LocalGgufModelKindClassifier.Classify(modelName);
+
+        AssertEx.Equal(ModelKind.Chat, kind, "an embedding-looking owner must not make a chat model an embedder");
     }
 }

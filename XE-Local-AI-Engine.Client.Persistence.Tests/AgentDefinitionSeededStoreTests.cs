@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
-using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -31,7 +30,7 @@ public sealed class AgentDefinitionSeededStoreTests : IDisposable
     public async Task AddSeededAsync_SetsSeededProvenanceAndSlug()
     {
         var databasePath = GetDatabasePath("seeded.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid definitionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -64,7 +63,7 @@ public sealed class AgentDefinitionSeededStoreTests : IDisposable
     {
         // Forge-proof: the normal create path never sets Seeded, so a manual row can never appear in the seeded slug set.
         var databasePath = GetDatabasePath("manual.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid definitionId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -95,7 +94,7 @@ public sealed class AgentDefinitionSeededStoreTests : IDisposable
     public async Task AddSeededAsync_EncryptsInstructionsAtRest()
     {
         var databasePath = GetDatabasePath("seeded-ciphertext.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var instructions = "SEEDED-PROMPT-" + Guid.NewGuid().ToString("N");
 
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -120,7 +119,7 @@ public sealed class AgentDefinitionSeededStoreTests : IDisposable
         // The DB-level filtered unique index is the defense-in-depth guard beneath the service-level skip: a second
         // insert of the same non-null slug must be rejected.
         var databasePath = GetDatabasePath("dup-slug.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -160,11 +159,6 @@ public sealed class AgentDefinitionSeededStoreTests : IDisposable
         return Path.Combine(_rootPath, fileName);
     }
 
-    private static byte[] CreateKeyMaterial()
-    {
-        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
-    }
-
     private static bool ContainsSubsequence(byte[] source, byte[] needle)
     {
         if (needle.Length == 0)
@@ -193,35 +187,5 @@ public sealed class AgentDefinitionSeededStoreTests : IDisposable
         }
 
         return false;
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
     }
 }

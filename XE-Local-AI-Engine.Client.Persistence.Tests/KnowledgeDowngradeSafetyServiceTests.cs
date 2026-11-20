@@ -177,7 +177,7 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         services.AddSingleton<IConfiguration>(configuration);
         services.AddLogging();
         services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
-        services.AddSingleton<INodeDataDirectory>(new FixedNodeDataDirectory(_rootPath));
+        services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(_rootPath));
         services.AddSingleton(timeProvider ?? TimeProvider.System);
         services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite(connectionString));
         services.AddSingleton<IKnowledgeDowngradeSafetyService, KnowledgeDowngradeSafetyService>();
@@ -226,16 +226,6 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM knowledge_documents;";
         return Convert.ToInt64(await command.ExecuteScalarAsync());
-    }
-
-    private sealed class FixedNodeDataDirectory : INodeDataDirectory
-    {
-        public FixedNodeDataDirectory(string root)
-        {
-            Root = root;
-        }
-
-        public string Root { get; }
     }
 
     private sealed class FixedTimeProvider : TimeProvider

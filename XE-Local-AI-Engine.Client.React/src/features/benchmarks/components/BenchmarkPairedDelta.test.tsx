@@ -12,8 +12,7 @@ vi.mock("@/core/api/generated", async (importOriginal) => ({
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { BenchmarkPairedDelta } from "@/features/benchmarks/components/BenchmarkPairedDelta";
-import { benchmarkCellFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
-
+import { benchmarkCellFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const cells = [

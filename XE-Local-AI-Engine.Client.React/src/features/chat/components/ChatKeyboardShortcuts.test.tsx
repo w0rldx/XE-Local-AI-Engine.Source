@@ -68,6 +68,7 @@ describe("ChatKeyboardShortcuts", () => {
 		);
 
 		fireEvent.keyDown(document.body, { key: "Escape", isComposing: true });
+		fireEvent.keyDown(document.body, { key: "Escape", keyCode: 229 });
 		const taken = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
 		taken.preventDefault();
 		document.body.dispatchEvent(taken);

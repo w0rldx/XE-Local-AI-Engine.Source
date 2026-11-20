@@ -27,7 +27,8 @@ public enum NodeSettingsField
     AgentHomeEnabled,
     HuggingFaceDefaultQuant,
     RerankerModelName,
-    KnowledgeEmbeddingModelName
+    KnowledgeEmbeddingModelName,
+    ModelLabWarmIdleSeconds
 }
 
 /// <summary>A single cross-field violation: the offending field plus the operator-facing message.</summary>
@@ -97,21 +98,17 @@ public static class NodeSettingsPolicy
 
         // The FAST model of an `auto` turn is a SECOND chat process alongside the turn's own model, so a node capped
         // at one loaded process could never admit it — the setting would look configured and silently never apply.
-        if (!string.IsNullOrWhiteSpace(settings.AutoEffortFastModelName))
+        if (!string.IsNullOrWhiteSpace(settings.AutoEffortFastModelName)
+            && runtimeSettings.ResolveEffectiveValues(settings).LlamaMaxLoadedProcesses < 2)
         {
-            var maxLoadedProcessesForSwap = settings.LlamaMaxLoadedProcesses
-                                            ?? await runtimeSettings.GetLlamaMaxLoadedProcessesAsync(cancellationToken);
-            if (maxLoadedProcessesForSwap < 2)
-            {
-                return
-                [
-                    new NodeSettingsValidationError
-                    {
-                        Field = NodeSettingsField.LlamaMaxLoadedProcesses,
-                        Message = "A fast model for automatic reasoning effort requires at least two loaded-process slots, because it runs alongside the conversation's own model."
-                    }
-                ];
-            }
+            return
+            [
+                new NodeSettingsValidationError
+                {
+                    Field = NodeSettingsField.LlamaMaxLoadedProcesses,
+                    Message = "A fast model for automatic reasoning effort requires at least two loaded-process slots, because it runs alongside the conversation's own model."
+                }
+            ];
         }
 
         // A default above the ceiling would be clamped silently at every call; refuse it where the operator can see why. Only
@@ -176,9 +173,9 @@ public static class NodeSettingsPolicy
             return [];
         }
 
-        var effectiveMaxLoadedProcesses = settings.LlamaMaxLoadedProcesses
-                                          ?? await runtimeSettings.GetLlamaMaxLoadedProcessesAsync(cancellationToken);
-        if (effectiveMaxLoadedProcesses < 2)
+        // The cap, TTL and interval resolve from THIS record, as the save will apply them: a cleared value is the default, never the stored value it replaces.
+        var effective = runtimeSettings.ResolveEffectiveValues(settings);
+        if (effective.LlamaMaxLoadedProcesses < 2)
         {
             return
             [
@@ -190,13 +187,7 @@ public static class NodeSettingsPolicy
             ];
         }
 
-        var effectiveKeepWarmInterval = settings.KeepModelWarmIntervalSeconds is { } intervalSeconds
-            ? TimeSpan.FromSeconds(intervalSeconds)
-            : await runtimeSettings.GetKeepModelWarmIntervalAsync(cancellationToken);
-        var effectiveIdleTimeToLive = settings.LlamaIdleTimeToLiveSeconds is { } idleTimeToLiveSeconds
-            ? TimeSpan.FromSeconds(idleTimeToLiveSeconds)
-            : await runtimeSettings.GetLlamaIdleTimeToLiveAsync(cancellationToken);
-        if (effectiveKeepWarmInterval >= effectiveIdleTimeToLive)
+        if (effective.KeepModelWarmInterval >= effective.LlamaIdleTimeToLive)
         {
             return
             [

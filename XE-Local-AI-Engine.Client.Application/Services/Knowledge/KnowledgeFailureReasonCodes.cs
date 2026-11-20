@@ -22,6 +22,7 @@ public static class KnowledgeFailureReasonCodes
         [KnowledgeIngestionService.UnexpectedReason] = "unexpected",
         [KnowledgeIngestionService.EmbeddingModelChangedReason] = "embedding-model-changed",
         [KnowledgeIngestionService.TimedOutReason] = "timed-out",
+        [KnowledgeIngestionService.WaitingForEmbeddingModelReason] = "embedding-model-ejected",
         [KnowledgeChunkEmbedder.EmbeddingUnavailableReason] = "embedding-unavailable",
         [KnowledgeChunkEmbedder.EmbeddingIncompleteReason] = "embedding-incomplete",
         [KnowledgeChunkEmbedder.EmbeddingRejectedReason] = "embedding-rejected",

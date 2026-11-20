@@ -249,7 +249,16 @@ public sealed class ModelLabPromptTokensServiceTests
 
         private static List<object> Tokenize(string content, bool addSpecial, bool parseSpecial)
         {
-            List<object> tokens = addSpecial ? [new { id = Control["<s>"], piece = "<s>" }] : [];
+            List<object> tokens = addSpecial
+                ?
+                [
+                    new
+                    {
+                        id = Control["<s>"],
+                        piece = "<s>"
+                    }
+                ]
+                : [];
             var position = 0;
             while (position < content.Length)
             {

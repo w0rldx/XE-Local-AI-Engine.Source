@@ -83,7 +83,8 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                     Options.Create(_options),
                     _timeProvider,
                     maxOutputTokens,
-                    _options.MaxToolCalls);
+                    _options.MaxToolCalls,
+                    _logger);
             var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), profile, liveProgress);
 
             // Every attempt is a fresh conversation against one preserved workspace, so an earlier attempt's leftovers

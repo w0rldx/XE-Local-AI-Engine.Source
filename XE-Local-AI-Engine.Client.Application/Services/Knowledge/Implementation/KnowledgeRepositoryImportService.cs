@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -12,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Bounded repository importer: the request carries only an opaque registered-folder id, and host paths are resolved
@@ -299,7 +299,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
         try
         {
             using var handle = OpenNoFollow(fullPath);
-            EnsureOpenedFileWithinRoot(handle, resolvedRoot);
+            OpenedHandleContainment.EnsureWithinRoot(handle, resolvedRoot);
             var length = RandomAccess.GetLength(handle);
             if (length < 0 || length > maximumBytes || length > int.MaxValue)
             {
@@ -361,64 +361,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
         return new SafeFileHandle(fileDescriptor, ownsHandle: true);
     }
 
-    [SuppressMessage("Sonar Code Smell", "S3869:SafeHandle instances should not use DangerousGetHandle",
-        Justification =
-            "Linux exposes an opened file's canonical target through /proc/self/fd/{fd}; the owning SafeFileHandle remains live for this synchronous lookup and is never released or transferred here.")]
-    private static void EnsureOpenedFileWithinRoot(SafeFileHandle handle, string resolvedRoot)
-    {
-        string? openedPath;
-        if (OperatingSystem.IsLinux())
-        {
-            var descriptorPath = string.Create(CultureInfo.InvariantCulture,
-                $"/proc/self/fd/{handle.DangerousGetHandle().ToInt64()}");
-            openedPath = new FileInfo(descriptorPath).ResolveLinkTarget(returnFinalTarget: true)?.FullName;
-        }
-        else if (OperatingSystem.IsWindows())
-        {
-            var buffer = new char[32_768];
-            var length = GetFinalPathNameByHandle(handle, buffer, (uint)buffer.Length, flags: 0);
-            if (length == 0 || length >= (uint)buffer.Length)
-            {
-                throw new UnauthorizedAccessException("A repository file's opened path could not be verified.");
-            }
-
-            openedPath = NormalizeWindowsHandlePath(new string(buffer, 0, (int)length));
-        }
-        else
-        {
-            // Linux and Windows are the supported/default hosts. Other platforms retain the pre-open component walk,
-            // but have no native final-handle canonicalization in this implementation.
-            return;
-        }
-
-        if (openedPath is null
-            || !HostPathSafety.IsPathWithinRoot(resolvedRoot,
-                Path.TrimEndingDirectorySeparator(Path.GetFullPath(openedPath))))
-        {
-            throw new UnauthorizedAccessException("A repository file resolved outside the registered repository root.");
-        }
-    }
-
-    private static string NormalizeWindowsHandlePath(string path)
-    {
-        const string devicePrefix = @"\\?\";
-        const string uncPrefix = @"\\?\UNC\";
-        if (path.StartsWith(uncPrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            return string.Concat(@"\\", path[uncPrefix.Length..]);
-        }
-
-        return path.StartsWith(devicePrefix, StringComparison.Ordinal) ? path[devicePrefix.Length..] : path;
-    }
-
     [DllImport("libc", EntryPoint = "open", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
     private static extern int open(byte[] pathname, int flags);
-
-    [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    private static extern uint GetFinalPathNameByHandle(SafeFileHandle file,
-        [Out] char[] filePath,
-        uint filePathSize,
-        uint flags);
 }

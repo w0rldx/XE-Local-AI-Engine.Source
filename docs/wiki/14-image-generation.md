@@ -152,9 +152,9 @@ The process-wide activity gate (`IImageRuntimeActivityGate` → `ImageRuntimeAct
 - **Reuse-or-spawn** one daemon per model behind a per-model single-flight gate.
 - **Readiness-gate** on start by polling `/sdcpp/v1/capabilities`; the daemon binds its socket only after synchronous model load, so a readiness timeout (`ReadinessTimeout`, default 2 min) is a load failure.
 - **Loopback port allocation** with collision-retry from the range **18200–18299** — distinct from the llama.cpp range (18100–18199) so the two runtimes never contend for a port.
-- **Idle-TTL eviction** via a background reaper (`IdleTimeToLive`, default 15 min) to free VRAM; a reuse-path liveness probe (throttled, timeout-bounded) tears down and respawns a wedged daemon after `MaxReuseLivenessFailures` (default 3) consecutive failures.
+- **Idle-TTL eviction** via a background reaper (`IdleTimeToLive`, default 15 min; a pass every quarter of the TTL, clamped to 1–30 s and re-read before every delay) to free VRAM; a reuse-path liveness probe (throttled, timeout-bounded) tears down and respawns a wedged daemon after `MaxReuseLivenessFailures` (default 3) consecutive failures.
 - **Per-OS tree-kill teardown** on eviction, abort, and shutdown (Linux process group / Windows Job Object), so no `sd-server` survives a supervisor stop.
-- `MaxLoadedProcesses` defaults to **1** (node setting `ImageMaxLoadedProcesses`, applied on restart, like `TextEncoderOnGpu`) — sd-server is VRAM-heavy and typically co-resident with a chat model, so a spawn for a new model evicts an idle LRU daemon first. A daemon under a job lease is never the victim; when every loaded daemon is leased the spawn is refused (`LoadedModelCapReached`) and the image job fails with that fixed cap message instead of the generic one.
+- `MaxLoadedProcesses` defaults to **1** (node setting `ImageMaxLoadedProcesses`; a save applies it and the idle TTL to the running supervisor, while `TextEncoderOnGpu` waits for a restart) — sd-server is VRAM-heavy and typically co-resident with a chat model, so a spawn for a new model evicts idle LRU daemons until it fits under the cap, reading the cap under the admission gate. A daemon under a job lease is never the victim; when no unleased daemon is left the spawn is refused (`LoadedModelCapReached`) and the image job fails with that fixed cap message instead of the generic one, and daemons already detached are still torn down. After a lowered cap, each reap pass ends by unloading LRU unleased daemons while more ports are allocated than the cap allows.
 
 Like the text runtime, a `StaleProcessReaper` instance runs at startup to reap `sd-server` orphans left by a previous run of **this** app — matched strictly against the app's own binaries root (`{LocalApplicationData}/XE-Local-AI-Engine/stable-diffusion.cpp`) so an unrelated install is never touched. See [Local Runtime & Providers](03-local-runtime-and-providers.md) for the shared supervisor pattern and [Hosting & Deployment](11-hosting-and-deployment.md) for process reaping.
 
@@ -351,14 +351,16 @@ read "no active jobs" but before it tree-kills the daemon.
 
 The rules that fall out of it:
 
-- **Acquisition also re-checks identity.** After latching the word, the supervisor confirms the daemon is still the
-  registered, live one. A forced teardown (restart, evict, dispose) that removed it between the lookup and the latch would
-  leave the lease guarding a dead handle, so the lease is released and acquisition returns null — the caller proceeds
-  *leaseless*.
+- **The lease is bound to the ensured daemon.** `TryAcquireJobLease` takes the endpoint `EnsureRunningAsync` returned and
+  grants a lease only while that same endpoint instance is the registered, live daemon. After latching the word it checks
+  again, so a forced teardown (restart, evict, dispose) between the lookup and the latch releases the lease and fails
+  acquisition. `StableDiffusionCppRuntime.EnsureLeasedAsync` then ensures once more; when the second lease also fails,
+  it throws `StableDiffusionRuntimeException` ("The image runtime unloaded the model while the generation was starting. Try
+  again.") before anything was submitted; `ImageJobCoordinator` maps it to the generic "Image generation failed.", and
+  the node log keeps the specific message. A job is never submitted to a stale endpoint or run without a lease.
 - **The lease spans the whole generation.** `StableDiffusionCppRuntime` holds it across submit → poll → complete, so the
   reaper and the LRU evictor never tree-kill a daemon mid-generation even when the job outruns the idle TTL. Each poll
-  `Touch()`es the lease, so the idle window is measured from the last observed progress rather than from submission. A
-  leaseless job still runs; the poll loop surfaces any failure through the normal error path.
+  `Touch()`es the lease, so the idle window is measured from the last observed progress rather than from submission.
 - **Idle reaping is refused, never forced.** `TryBeginEvict` latches only while no lease is held, and once latched no new
   lease can attach. A generation starting concurrently with a reap therefore either wins the lease first — `TryBeginEvict`
   fails and the daemon is reaped on a later pass — or is refused. A daemon under an active lease is never tree-killed.

@@ -17,6 +17,12 @@ using Microsoft.Extensions.Options;
 /// </remarks>
 public sealed class KnowledgeIngestionWorker : BackgroundService
 {
+    /// <summary>The first wait before a row deferred by an operator-ejected embedder is checked again.</summary>
+    internal static readonly TimeSpan FirstWakeWindow = TimeSpan.FromSeconds(60);
+
+    /// <summary>The cap the doubling wake window stops at.</summary>
+    internal static readonly TimeSpan MaxWakeWindow = TimeSpan.FromMinutes(5);
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly KnowledgeIngestionDispatcher _dispatcher;
     private readonly SemaphoreSlim _concurrency;
@@ -35,16 +41,35 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
     // would never process; they stay Pending and recover on the next start.
     private volatile bool _stopping;
 
+    private readonly IKnowledgeChunkEmbedder _embedder;
+    private readonly IKnowledgeIndexingNotifier _notifier;
+    private readonly TimeProvider _timeProvider;
+
+    // The wake for rows waiting on an ejected embedder. A waiting row implies an armed wake: _wakeArmed is true from
+    // ArmWake until the wake's window elapses, and _wakeSignal (0 or 1) carries that arm to the single wake loop.
+    private readonly Lock _wakeGate = new();
+    private readonly SemaphoreSlim _wakeSignal = new(initialCount: 0, maxCount: 1);
+    private bool _wakeArmed;
+
     public KnowledgeIngestionWorker(IServiceScopeFactory scopeFactory,
         KnowledgeIngestionDispatcher dispatcher,
+        IKnowledgeChunkEmbedder embedder,
+        IKnowledgeIndexingNotifier notifier,
         IOptions<KnowledgeBaseOptions> options,
+        TimeProvider timeProvider,
         ILogger<KnowledgeIngestionWorker> logger)
     {
         ArgumentNullException.ThrowIfNull(scopeFactory);
         _scopeFactory = scopeFactory;
         ArgumentNullException.ThrowIfNull(dispatcher);
         _dispatcher = dispatcher;
+        ArgumentNullException.ThrowIfNull(embedder);
+        _embedder = embedder;
+        ArgumentNullException.ThrowIfNull(notifier);
+        _notifier = notifier;
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
 
@@ -59,6 +84,10 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
         // the in-memory channel) before draining new uploads. A failure here must never take the worker down.
         await RecoverInterruptedDocumentsAsync(stoppingToken);
 
+        // Armed unconditionally: a recovery that failed can leave a waiting row behind, and a wake with nothing to do is a no-op.
+        var wakeLoop = RunWakeLoopAsync(stoppingToken);
+        ArmWake();
+
         try
         {
             await foreach (var documentId in _dispatcher.Reader.ReadAllAsync(stoppingToken))
@@ -72,6 +101,103 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
         {
             // Host shutdown requested: stop reading the queue. StopAsync awaits the in-flight documents before disposal.
         }
+
+        await wakeLoop;
+    }
+
+    /// <summary>Arms the single wake for waiting rows unless one is already armed or shutdown has begun.</summary>
+    private void ArmWake()
+    {
+        lock (_wakeGate)
+        {
+            if (_stopping || _wakeArmed)
+            {
+                return;
+            }
+
+            _wakeArmed = true;
+            _ = _wakeSignal.Release();
+        }
+    }
+
+    /// <summary>
+    ///     Waits for each armed window, then asks whether the embedder is still ejected: blocked re-arms with the next,
+    ///     doubled window and touches no document; unblocked clears every waiting reason and sweeps them back in.
+    /// </summary>
+    /// <remarks>
+    ///     The window starts at <see cref="FirstWakeWindow" /> and doubles to <see cref="MaxWakeWindow" />; an unblocked
+    ///     wake resets it. The armed flag clears before the query, so a deferral that lands during a wake arms its
+    ///     successor. Runs on the stopping token, never on the drain deadline, and is not in-flight document work. A wake
+    ///     that finds no waiting row never probes the embedder and stays unarmed until the next deferral.
+    /// </remarks>
+    private async Task RunWakeLoopAsync(CancellationToken stoppingToken)
+    {
+        var window = FirstWakeWindow;
+        try
+        {
+            while (true)
+            {
+                await _wakeSignal.WaitAsync(stoppingToken);
+                await Task.Delay(window, _timeProvider, stoppingToken);
+                lock (_wakeGate)
+                {
+                    _wakeArmed = false;
+                }
+
+                window = await WakeAsync(window, stoppingToken);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Shutdown: waiting rows stay Pending, and startup recovery re-admits them on the next start.
+        }
+    }
+
+    private async Task<TimeSpan> WakeAsync(TimeSpan window, CancellationToken stoppingToken)
+    {
+        var next = window * 2 < MaxWakeWindow ? window * 2 : MaxWakeWindow;
+        try
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var catalog = scope.ServiceProvider.GetRequiredService<IKnowledgeDocumentCatalogService>();
+
+            // Nothing waits: skip the probe and only sweep (rows a failed sweep left plain Pending), so nothing re-arms
+            // unless that sweep fails. The armed flag is already clear, so the next deferral re-arms.
+            if (await catalog.HasEmbeddingModelWaitAsync(stoppingToken))
+            {
+                if (await _embedder.IsEmbeddingModelBlockedAsync(stoppingToken))
+                {
+                    ArmWake();
+                    return next;
+                }
+
+                foreach (var documentId in await catalog.ClearEmbeddingModelWaitAsync(stoppingToken))
+                {
+                    await _notifier.NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Pending, stoppingToken);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            // A failed check must never strand a waiting row: log the type only and look again at the next window.
+            _logger.LogWarning("Knowledge ingestion could not check the ejected embedding model ({ErrorClass}); waiting documents are checked again later.",
+                exception.GetType().Name);
+            ArmWake();
+            return next;
+        }
+
+        // The cleared rows are plain Pending now, so a sweep that failed would strand them with nothing armed.
+        if (!await SweepStrandedPendingAsync(stoppingToken))
+        {
+            ArmWake();
+            return next;
+        }
+
+        return FirstWakeWindow;
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
@@ -138,7 +264,10 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
             // shutdown never loses a completed write, and fires only past the drain window so a hung document cannot block.
             await using var scope = _scopeFactory.CreateAsyncScope();
             var ingestionService = scope.ServiceProvider.GetRequiredService<IKnowledgeIngestionService>();
-            await ingestionService.RunAsync(documentId, _drainDeadline.Token);
+            if (await ingestionService.RunAsync(documentId, _drainDeadline.Token) == KnowledgeIngestionRunOutcome.Deferred)
+            {
+                ArmWake();
+            }
         }
         catch (OperationCanceledException) when (_drainDeadline.IsCancellationRequested)
         {
@@ -158,7 +287,7 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
             // slot, then sweep any stranded Pending documents now that a queue slot may have freed.
             _dispatcher.MarkCompleted(documentId);
             ReleaseConcurrency();
-            await SweepStrandedPendingAsync();
+            _ = await SweepStrandedPendingAsync(stoppingToken: null);
         }
     }
 
@@ -170,39 +299,47 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
     ///     Those are documents a full queue rejected at upload or during startup recovery. Gating on an empty queue makes
     ///     this run only as capacity frees and prevents a busy loop: a sweep that finds no stranded work enqueues nothing,
     ///     so no further completion fires it again. A document already queued or in flight is skipped, never given a
-    ///     follow-up run, and enqueueing stops the moment the queue fills, leaving the rest to a later sweep.
+    ///     follow-up run, and enqueueing stops the moment the queue fills, leaving the rest to a later sweep. Returns false
+    ///     only when the sweep itself failed, so a caller with nothing else to re-fire it can look again later.
     /// </remarks>
-    private async Task SweepStrandedPendingAsync()
+    /// <param name="stoppingToken">The wake's stopping token; null for a document completion, which runs on the drain deadline.</param>
+    private async Task<bool> SweepStrandedPendingAsync(CancellationToken? stoppingToken)
     {
-        if (_stopping || _drainDeadline.IsCancellationRequested || _dispatcher.PendingCount > 0)
+        if (_stopping || _drainDeadline.IsCancellationRequested || stoppingToken?.IsCancellationRequested == true || _dispatcher.PendingCount > 0)
         {
-            return;
+            return true;
         }
 
+        var cancellationToken = CancellationToken.None;
         try
         {
+            // Read inside the try: a completion abandoned past the drain window can land after Dispose.
+            cancellationToken = stoppingToken ?? _drainDeadline.Token;
             await using var scope = _scopeFactory.CreateAsyncScope();
             var catalog = scope.ServiceProvider.GetRequiredService<IKnowledgeDocumentCatalogService>();
-            var pending = await catalog.ListPendingDocumentIdsAsync(_drainDeadline.Token);
+            var pending = await catalog.ListPendingDocumentIdsAsync(cancellationToken);
             foreach (var documentId in pending)
             {
-                var admission = await _dispatcher.EnqueueStrandedAsync(documentId, _drainDeadline.Token);
+                var admission = await _dispatcher.EnqueueStrandedAsync(documentId, cancellationToken);
                 if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
                 {
                     break;
                 }
             }
         }
-        catch (OperationCanceledException) when (_drainDeadline.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Shutting down — stranded documents stay Pending and recover on the next start.
         }
         catch (Exception exception)
         {
             // A sweep failure (for example a transient database open) must never fault the background task; the stranded
-            // documents are re-swept on a later completion or recovered on the next start. Log the exception type only.
+            // documents are re-swept on a later completion or wake, or recovered on the next start. Log the type only.
             _logger.LogWarning("Knowledge ingestion drain-sweep failed ({ErrorClass}); stranded documents remain for a later sweep.", exception.GetType().Name);
+            return false;
         }
+
+        return true;
     }
 
     private async Task DrainInFlightAsync(CancellationToken cancellationToken)
@@ -261,6 +398,8 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
 
     public override void Dispose()
     {
+        // _wakeSignal is never disposed: the wake loop may still wait on it until base.Dispose cancels the stopping token,
+        // and a SemaphoreSlim whose AvailableWaitHandle is never read holds no unmanaged resource.
         _drainDeadline.Dispose();
         _concurrency.Dispose();
         base.Dispose();

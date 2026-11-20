@@ -28,7 +28,11 @@ public sealed class ModelLabPromptTokensEndpointTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, Route)
         {
-            Content = JsonContent.Create(new { modelName = Model, prompt = "hi" })
+            Content = JsonContent.Create(new
+            {
+                modelName = Model,
+                prompt = "hi"
+            })
         };
         request.Headers.Add("Origin", "http://localhost");
 
@@ -45,7 +49,11 @@ public sealed class ModelLabPromptTokensEndpointTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, Route)
         {
-            Content = JsonContent.Create(new { modelName = Model, prompt = "hi" })
+            Content = JsonContent.Create(new
+            {
+                modelName = Model,
+                prompt = "hi"
+            })
         };
         factory.AddNonOperatorBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
@@ -67,7 +75,11 @@ public sealed class ModelLabPromptTokensEndpointTests
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, new { modelName, prompt });
+        using var request = Authorized(factory, new
+        {
+            modelName,
+            prompt
+        });
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -105,7 +117,11 @@ public sealed class ModelLabPromptTokensEndpointTests
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, new { modelName = Model, prompt = "hi" });
+        using var request = Authorized(factory, new
+        {
+            modelName = Model,
+            prompt = "hi"
+        });
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -123,8 +139,18 @@ public sealed class ModelLabPromptTokensEndpointTests
                    RenderedPrompt = "<|im_start|>user\nhi",
                    Tokens =
                    [
-                       new ModelLabPromptToken { Id = 151644, Piece = "<|im_start|>", Special = true },
-                       new ModelLabPromptToken { Id = 872, Piece = "user", Special = false }
+                       new ModelLabPromptToken
+                       {
+                           Id = 151644,
+                           Piece = "<|im_start|>",
+                           Special = true
+                       },
+                       new ModelLabPromptToken
+                       {
+                           Id = 872,
+                           Piece = "user",
+                           Special = false
+                       }
                    ],
                    TokenCount = 5,
                    Truncated = true
@@ -132,7 +158,13 @@ public sealed class ModelLabPromptTokensEndpointTests
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, new { modelName = Model, systemPrompt = "be brief", prompt = "hi", disableThinking = true });
+        using var request = Authorized(factory, new
+        {
+            modelName = Model,
+            systemPrompt = "be brief",
+            prompt = "hi",
+            disableThinking = true
+        });
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -145,11 +177,10 @@ public sealed class ModelLabPromptTokensEndpointTests
         AssertEx.Equal("<|im_start|>", body.Tokens[0].Piece);
         AssertEx.True(body.Tokens[0].Special);
         AssertEx.False(body.Tokens[1].Special);
-        await service.Received(1).GetPromptTokensAsync(
-            Arg.Is<ModelLabPromptTokensQuery>(static query => query.ModelName == Model
-                                                              && query.SystemPrompt == "be brief"
-                                                              && query.Prompt == "hi"
-                                                              && query.DisableThinking),
+        await service.Received(1).GetPromptTokensAsync(Arg.Is<ModelLabPromptTokensQuery>(static query => query.ModelName == Model
+                                                                                                         && query.SystemPrompt == "be brief"
+                                                                                                         && query.Prompt == "hi"
+                                                                                                         && query.DisableThinking),
             Arg.Any<CancellationToken>());
     }
 

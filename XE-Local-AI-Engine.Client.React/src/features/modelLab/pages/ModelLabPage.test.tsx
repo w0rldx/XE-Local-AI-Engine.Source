@@ -81,10 +81,11 @@ function stubRoutes(respond: () => Response): void {
 	);
 }
 
-// The page suspends on its strings' import, and React retries that inside an awaited act scope only.
+// The page suspends on its strings' import, and React retries that inside an awaited act scope only. The router is for
+// the empty picker's Models link.
 async function renderPage(): Promise<void> {
 	await act(async () => {
-		renderWithProviders(<ModelLabPage />);
+		renderWithProviders(<ModelLabPage />, { withRouter: true });
 	});
 }
 

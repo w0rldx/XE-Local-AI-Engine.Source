@@ -46,6 +46,7 @@ public sealed record NodeSettingsAgenticPatch
     public string? KvCacheType { get; init; }
     public string? RerankerModelName { get; init; }
     public string? AutoEffortFastModelName { get; init; }
+    public int? ModelLabWarmIdleSeconds { get; init; }
 }
 
 public sealed class NodeSettingsAgenticView
@@ -85,6 +86,8 @@ public sealed class NodeSettingsAgenticView
     public required string? RerankerModelName { get; init; }
 
     public required string? AutoEffortFastModelName { get; init; }
+
+    public required int? ModelLabWarmIdleSeconds { get; init; }
 }
 
 public sealed class NodeSettingsAdministrationResult
@@ -227,6 +230,13 @@ public static class NodeSettingsAgenticPatchValidation
             && !IsBetween(draftLayers, StoredNodeSettings.MinSpeculativeDraftGpuLayers, StoredNodeSettings.MaxSpeculativeDraftGpuLayers))
         {
             return Reject(NodeSettingsField.SpeculativeDraftGpuLayers, "Speculative draft GPU layers is outside the supported range.");
+        }
+
+        if (patch.ModelLabWarmIdleSeconds is { } warmIdleSeconds
+            && !IsBetween(warmIdleSeconds, StoredNodeSettings.MinModelLabWarmIdleSeconds, StoredNodeSettings.MaxModelLabWarmIdleSeconds))
+        {
+            return Reject(NodeSettingsField.ModelLabWarmIdleSeconds,
+                $"Model Lab warm idle time must be between {StoredNodeSettings.MinModelLabWarmIdleSeconds} and {StoredNodeSettings.MaxModelLabWarmIdleSeconds} seconds; 0 turns warming off.");
         }
 
         return [];

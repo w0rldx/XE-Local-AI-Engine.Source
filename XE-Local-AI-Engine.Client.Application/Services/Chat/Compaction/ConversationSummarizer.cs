@@ -8,6 +8,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
@@ -216,7 +217,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
             Temperature = 0f,
 
             // A deliberately LOOSE token cap whose job is to stop a reasoning model spending a whole window on one
-            // fold. It can bind first on a byte-fallback script, so TruncateAtRuneBoundary is the only length guarantee.
+            // fold. It can bind first on a byte-fallback script, so TextTruncation.TruncateAtRuneBoundary is the only length guarantee.
             MaxOutputTokens = Math.Max(1, _options.MaxSummaryChars)
         };
 
@@ -245,7 +246,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
             return null;
         }
 
-        var clamped = TruncateAtRuneBoundary(text, Math.Max(1, _options.MaxSummaryChars));
+        var clamped = TextTruncation.TruncateAtRuneBoundary(text, Math.Max(1, _options.MaxSummaryChars));
 
         // One line per fold: how close the synopsis came to the rendered ceiling, and - because only the summarizer
         // emits it - how many folds a compaction ran. Debug, so it costs nothing outside a diagnostic round.
@@ -322,7 +323,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
         while (low <= high)
         {
             var midpoint = low + ((high - low) / 2);
-            var candidateLength = MoveBeforeSplitSurrogate(content, midpoint);
+            var candidateLength = TextTruncation.MoveBeforeSplitSurrogate(content, midpoint);
             if (candidateLength == 0)
             {
                 low = midpoint + 1;
@@ -379,26 +380,6 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
         {
             return false;
         }
-    }
-
-    internal static string TruncateAtRuneBoundary(string value, int maximumChars)
-    {
-        if (value.Length <= maximumChars)
-        {
-            return value;
-        }
-
-        return value[..MoveBeforeSplitSurrogate(value, maximumChars)];
-    }
-
-    private static int MoveBeforeSplitSurrogate(string value, int index)
-    {
-        return index > 0
-               && index < value.Length
-               && char.IsHighSurrogate(value[index - 1])
-               && char.IsLowSurrogate(value[index])
-            ? index - 1
-            : index;
     }
 
     private bool RequestFitsBudget(string? priorSummary, string? alreadyCaptured, IReadOnlyList<ConversationSummarizerMessage> batch, int budget)

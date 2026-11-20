@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
 import type {
@@ -39,6 +40,33 @@ interface BenchmarkRunActionsInput {
 // The launch configuration an operator picks for a prospective run (model, KV-cache type, repeat mode) together with
 // every mutation that acts on runs: start one, start a matrix, re-run a cell, re-judge, measure fidelity, delete.
 // The configuration and the launches are one concern — a launch reads the picks directly — so they share a hook.
+/**
+ * Asks before a terminal run is deleted; resolves true when the operator confirms. `returnFocusTo` is for a dialog opened
+ * from a menu item: the dialog's own focus return goes to whatever held the focus when it opened, which is the menu's
+ * item (gone with the menu) or the menu's button, depending on whether the menu handed the focus back first. Once the
+ * dialog has closed, a focus left on the body goes to `returnFocusTo`.
+ */
+export function useConfirmDeleteBenchmarkRun(): (returnFocusTo?: HTMLElement | null) => Promise<boolean> {
+	const { t } = useTranslation();
+	const { confirm } = useConfirm();
+	return (returnFocusTo) =>
+		confirm({
+			onClosed: () => {
+				const active = document.activeElement;
+				if (returnFocusTo?.isConnected && (active === null || active === document.body)) {
+					returnFocusTo.focus();
+				}
+			},
+			title: t("pages.benchmarks.deleteRunConfirm.title", "Delete this run?"),
+			description: t(
+				"pages.benchmarks.deleteRunConfirm.description",
+				"The run, its answers and its scores are deleted. This cannot be undone.",
+			),
+			confirmationText: t("common.delete", "Delete"),
+			cancellationText: t("common.cancel", "Cancel"),
+		});
+}
+
 export function useBenchmarkRunActions({ detail, selectedProjectId, runs, selectRun }: BenchmarkRunActionsInput) {
 	const { t } = useTranslation();
 	const [selectedModel, setSelectedModel] = useState<string | null>(null);
@@ -150,7 +178,11 @@ export function useBenchmarkRunActions({ detail, selectedProjectId, runs, select
 		);
 	};
 
-	const removeRun = (run: BenchmarkRunSummary): void => {
+	const confirmDeleteRun = useConfirmDeleteBenchmarkRun();
+	const removeRun = async (run: BenchmarkRunSummary, menuButton: HTMLElement | null): Promise<void> => {
+		if (!(await confirmDeleteRun(menuButton))) {
+			return;
+		}
 		deleteRun.mutate(run, {
 			onError: (error) =>
 				toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.delete", "Could not delete this terminal run."))),

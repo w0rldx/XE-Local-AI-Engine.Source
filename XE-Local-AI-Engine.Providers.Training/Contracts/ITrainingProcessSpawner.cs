@@ -47,6 +47,9 @@ public sealed class TrainingSpawnRequest
     ///     scripts import, placed on the child's <c>PYTHONPATH</c>. Null spawns the plain training environment.
     /// </summary>
     public string? GgufPyDirectory { get; init; }
+
+    /// <summary>Opens a pipe to the child's stdin for <see cref="ITrainingProcessHandle.WriteLineAsync" />; train and export spawns leave it off.</summary>
+    public bool RedirectStandardInput { get; init; }
 }
 
 /// <summary>
@@ -61,7 +64,28 @@ public interface ITrainingProcessHandle : IDisposable
     /// <summary>Merged stdout + stderr, line by line, completing when the child closes both streams.</summary>
     IAsyncEnumerable<string> ReadOutputAsync(CancellationToken cancellationToken);
 
+    /// <summary>The exit code once the child exited and its output closed; a descendant holding the pipe keeps this waiting.</summary>
     Task<int> WaitForExitAsync(CancellationToken cancellationToken);
+
+    /// <summary>The exit code once the child exited and no process is left in the group it leads, without waiting for its output to close.</summary>
+    /// <remarks>
+    ///     A child that does not provably lead its own group is waited on as <see cref="WaitForExitAsync" /> does, output included,
+    ///     and then for the group its pid names to empty, since a receipt read before <c>setsid</c> ran records another group. A descendant
+    ///     that left the group is not waited on.
+    ///     <see langword="null" /> once <paramref name="cancellationToken" /> is cancelled. This default keeps the output wait of
+    ///     <see cref="WaitForExitAsync" />, so a handle that does not override it only ever waits longer.
+    /// </remarks>
+    async Task<int?> WaitForGroupExitAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     ///     SIGTERM to the process GROUP. Cooperative by contract: <c>train.py</c> latches
@@ -72,6 +96,10 @@ public interface ITrainingProcessHandle : IDisposable
 
     /// <summary>SIGTERM then SIGKILL to the process group. The watchdog's and the reaper's escalation.</summary>
     void KillGroup();
+
+    /// <summary>Writes <paramref name="line" /> and a newline to the child's stdin as UTF-8 and flushes; concurrent writers are serialized.</summary>
+    /// <exception cref="InvalidOperationException">The spawn did not set <see cref="TrainingSpawnRequest.RedirectStandardInput" />.</exception>
+    Task WriteLineAsync(string line, CancellationToken cancellationToken);
 }
 
 public interface ITrainingProcessSpawner
@@ -87,8 +115,10 @@ public sealed record TrainingProcessFacts
 
     public required long StartTicks { get; init; }
 
+    /// <summary>Null when <c>/proc/[pid]/exe</c> could not be read.</summary>
     public required string? ExecutablePath { get; init; }
 
+    /// <summary>Null when the environment could not be read; empty when it was read and carries no token.</summary>
     public required string? RunToken { get; init; }
 }
 
@@ -98,15 +128,27 @@ public interface ITrainingProcessInspector
     /// <summary>The current facts for <paramref name="processId" />, or null when it is gone or unreadable.</summary>
     TrainingProcessFacts? Inspect(int processId);
 
+    /// <summary>Whether <paramref name="processId" /> is gone, alive, or unreadable; tells apart the two cases a null <see cref="Inspect" /> merges.</summary>
+    TrainingProcessPresence ProbePresence(int processId);
+
     /// <summary>The host's own process group, which no trainer signal may ever target.</summary>
     int HostProcessGroupId { get; }
 
-    /// <summary>
-    ///     SIGTERM then SIGKILL to <paramref name="processGroupId" />, each sent only while its leader still has
-    ///     <paramref name="expectedStartTicks" />. Only ever called after a full receipt match.
-    /// </summary>
-    Task KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default);
+    /// <summary>Whether any process is left in <paramref name="processGroupId" />, by a signal-0 probe that sends nothing. Never throws.</summary>
+    /// <remarks>
+    ///     A leader that is gone proves nothing while its group still has members. False off Linux; true for a group no probe can prove
+    ///     empty (init's, the caller's, the host's) and for any refusal other than "no such group".
+    /// </remarks>
+    bool ProcessGroupHasMembers(int processGroupId);
 
-    /// <summary>SIGTERM then SIGKILL to <paramref name="processId" /> while it still has <paramref name="expectedStartTicks" />.</summary>
-    Task KillProcessAsync(int processId, long expectedStartTicks, CancellationToken cancellationToken = default);
+    /// <summary>
+    ///     SIGTERM then SIGKILL to <paramref name="processGroupId" />, each sent only while its leader still has <paramref name="expectedStartTicks" />
+    ///     and <paramref name="expectedRunToken" />. Only ever called after a full receipt match.
+    /// </summary>
+    /// <returns>The leader's presence after the kill; a vanished leader reads gone only once its group is empty, and an operational failure reads deferred.</returns>
+    Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default);
+
+    /// <summary>SIGTERM then SIGKILL to <paramref name="processId" /> alone while it still has <paramref name="expectedStartTicks" /> and <paramref name="expectedRunToken" />.</summary>
+    /// <returns>Its presence afterwards; a pid that vanished reads gone only once the group it may have started is empty.</returns>
+    Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default);
 }

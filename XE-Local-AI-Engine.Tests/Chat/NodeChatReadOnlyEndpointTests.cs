@@ -138,24 +138,24 @@ public sealed class NodeChatReadOnlyEndpointTests
     }
 
     [Test]
-    public async Task CreateMessageRevision_WhenOriginRemote_Returns409ReadOnly()
+    public async Task MessageRevisions_PostIsNotRouted_GetStillReachesTheListHandler()
     {
         var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory);
+        var revisionsUri = $"/api/local/v1/chat/conversations/{conversationId}/messages/{Guid.NewGuid()}/revisions";
 
-        // POST revisions creates a sibling variant placeholder — a mutation, so it is guarded. Empty JSON body
-        // satisfies the POST content-type binding (ids bind from the route); without it the pipeline returns 415
-        // before the guard runs.
-        using var request = CreateJsonRequest(factory,
-            HttpMethod.Post,
-            $"/api/local/v1/chat/conversations/{conversationId}/messages/{Guid.NewGuid()}/revisions",
-            new
-            {
-            });
-        using var response = await client.SendAsync(request);
+        // A variant is minted only by the hub's RegenerateMessage, which also starts its run; the path serves GET alone.
+        using var postRequest = CreateJsonRequest(factory, HttpMethod.Post, revisionsUri, new
+        {
+        });
+        using var postResponse = await client.SendAsync(postRequest);
+        AssertEx.Equal(HttpStatusCode.MethodNotAllowed, postResponse.StatusCode);
 
-        await AssertReadOnlyConflictAsync(response);
+        // An unknown message reaches the GET handler, which answers 404 for it.
+        using var getRequest = CreateRequest(factory, HttpMethod.Get, revisionsUri);
+        using var getResponse = await client.SendAsync(getRequest);
+        AssertEx.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
     }
 
     [Test]

@@ -10,6 +10,8 @@ using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Tests.Capacity;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -28,6 +30,42 @@ public sealed class DatasetGenerationQueueTests
         var exception = await AssertEx.ThrowsAsync<TrainingConflictException>(() => service.StartAsync(Guid.NewGuid(), 1, "dataset"));
 
         AssertEx.Equal("TrainingBusy", exception.Code);
+        _ = store.DidNotReceive().CreateDatasetAndEnqueueAsync(Arg.Any<TrainingDatasetEnqueueCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>An idle Model Lab worker is not busy work: the start asks it to leave, waits it out once, and enqueues.</summary>
+    [Test]
+    public async Task Start_WhileAnIdleModelLabWorkerHoldsTheNode_EvictsIt_AndEnqueues()
+    {
+        await using var holders = new IdleHolderHarness();
+        var holder = await holders.AdmitIdleAsync();
+        var store = Substitute.For<ITrainingDatasetStore>();
+        _ = store.CreateDatasetAndEnqueueAsync(Arg.Any<TrainingDatasetEnqueueCommand>(), Arg.Any<CancellationToken>()).Returns(Dataset());
+        using var signal = new DatasetGenerationQueueSignal();
+        var service = Service(store, holders.Gate, signal, idlePreemption: holders.Broker);
+
+        _ = await service.StartAsync(Guid.NewGuid(), 1, "dataset");
+
+        AssertEx.Equal(expected: 1, holder.EvictionCount);
+        AssertEx.Null(holders.Gate.ExclusiveKind, "The worker gave the gate back before the enqueue.");
+        _ = await store.Received(1).CreateDatasetAndEnqueueAsync(Arg.Any<TrainingDatasetEnqueueCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>A RUNNING experiment still refuses with TrainingBusy at once, and the refused start's demand waits for the job's end.</summary>
+    [Test]
+    public async Task Start_WhileAModelLabExperimentRuns_IsRefusedAtOnce_AndLatchesTheDemand()
+    {
+        await using var holders = new IdleHolderHarness();
+        var holder = await holders.AdmitAsync();
+        var store = Substitute.For<ITrainingDatasetStore>();
+        using var signal = new DatasetGenerationQueueSignal();
+        var service = Service(store, holders.Gate, signal, idlePreemption: holders.Broker);
+
+        var exception = await AssertEx.ThrowsAsync<TrainingConflictException>(() => service.StartAsync(Guid.NewGuid(), 1, "dataset"));
+
+        AssertEx.Equal("TrainingBusy", exception.Code);
+        AssertEx.Equal(FakeGpuIdleHolder.HolderState.Active, holder.State);
+        AssertEx.True(holder.PreemptionPending);
         _ = store.DidNotReceive().CreateDatasetAndEnqueueAsync(Arg.Any<TrainingDatasetEnqueueCommand>(), Arg.Any<CancellationToken>());
     }
 
@@ -180,9 +218,11 @@ public sealed class DatasetGenerationQueueTests
         IDatasetGenerationQueueSignal signal,
         TrainingRunCancellationRegistry? cancellations = null,
         IJobCreatedPublisher? jobCreated = null,
-        IDatasetGenerationEventBuffer? events = null) =>
+        IDatasetGenerationEventBuffer? events = null,
+        IGpuIdleHolderPreemption? idlePreemption = null) =>
         new(store,
             gate,
+            idlePreemption ?? NoOpGpuIdleHolderPreemption.Instance,
             cancellations ?? new TrainingRunCancellationRegistry(),
             signal,
             jobCreated ?? Substitute.For<IJobCreatedPublisher>(),

@@ -58,7 +58,10 @@ public enum BaseArtifactDeleteOutcome
     Downloading = 1,
 
     /// <summary>A live Model Lab job has it loaded or about to load, and deleting it would fail that job.</summary>
-    InUseByExperiment = 2
+    InUseByExperiment = 2,
+
+    /// <summary>A Model Lab worker that may hold it was stopped but not seen to exit, so it may still have the files open and the memory in use.</summary>
+    WorkerNotConfirmed = 3
 }
 
 /// <summary>

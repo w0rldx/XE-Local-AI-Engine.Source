@@ -34,7 +34,6 @@ import {
 // gated is the backend's call (NodeSettingsRestartGate); these tests cover only how the form uses the list.
 const restartRequiredFields: ReadonlySet<string> = new Set([
 	"chatCacheReuse",
-	"llamaMaxLoadedProcesses",
 	"llamaChatCacheRamMiB",
 	"toolPipelineMaxIterationsPerRequest",
 	"knowledgeScheduledReindexIntervalMinutes",
@@ -800,7 +799,7 @@ describe("external access", () => {
 describe("display units", () => {
 	const bounds = toNodeSettingsFieldBounds(undefined);
 
-	it("round-trips seconds shown as minutes and bytes shown as MB back to the unchanged wire values", () => {
+	it("round-trips seconds shown as minutes and bytes shown as MiB back to the unchanged wire values", () => {
 		const response = {
 			llamaIdleTimeToLiveSeconds: 45,
 			agentHomePrepareTimeoutSeconds: 100,
@@ -917,13 +916,25 @@ describe("unified node fields and the pending-change summary", () => {
 	});
 
 	it("counts sendable changes, invalid edits and the restart-gated subset", () => {
-		const form = { ...baseline, uiMode: "simple", chatCacheReuse: 512, llamaMaxLoadedProcesses: "abc" };
+		// llamaMaxLoadedProcesses applies on save, so it counts as a change but never as restart-gated.
+		const form = {
+			...baseline,
+			uiMode: "simple",
+			chatCacheReuse: 512,
+			toolPipelineMaxIterationsPerRequest: "abc",
+			llamaMaxLoadedProcesses: 5,
+		};
 		const result = buildNodeSettingsRequest(form, baseline, bounds, false);
 
 		const summary = summarizePendingChanges(result, form, baseline, restartRequiredFields);
 
-		expect([...summary.changed].sort()).toEqual(["chatCacheReuse", "llamaMaxLoadedProcesses", "uiMode"]);
-		expect([...summary.restartRequired].sort()).toEqual(["chatCacheReuse", "llamaMaxLoadedProcesses"]);
+		expect([...summary.changed].sort()).toEqual([
+			"chatCacheReuse",
+			"llamaMaxLoadedProcesses",
+			"toolPipelineMaxIterationsPerRequest",
+			"uiMode",
+		]);
+		expect([...summary.restartRequired].sort()).toEqual(["chatCacheReuse", "toolPipelineMaxIterationsPerRequest"]);
 	});
 
 	it("reports nothing for an untouched draft", () => {
@@ -1333,7 +1344,7 @@ describe("knowledge, privacy and usage knobs", () => {
 			agentExecutionLogRetentionEnabled: true,
 			agentExecutionLogRetentionDays: 30,
 			nodeDbBackupRetainCount: 3,
-			// 64 GiB, shown in GB.
+			// 64 GiB, shown in GiB.
 			benchmarkKldCacheMaxBytes: 64,
 			schedulerHistoryRetentionDays: 30,
 		});
@@ -1548,7 +1559,7 @@ describe("runtime and workspace knobs", () => {
 			agentHomeMaxInnerToolCalls: 24,
 			agentHomePatchApplyTimeoutSeconds: 120,
 			agentHomeRunRetentionMaxRuns: 200,
-			// 2 GiB, shown in GB.
+			// 2 GiB, shown in GiB.
 			agentHomeRunRetentionMaxTotalBytes: 2,
 		});
 	});
@@ -1630,6 +1641,35 @@ describe("runtime and workspace knobs", () => {
 		for (const field of [...restartGated, ...live].filter((field) => field !== "agentHomeRunRetentionMaxTotalBytes")) {
 			expect(nodeSettingsScaleOf(field)).toBe(1);
 		}
+	});
+});
+
+describe("Model Lab warm time", () => {
+	const bounds = toNodeSettingsFieldBounds(undefined);
+	const baseline = toNodeSettingsFieldsForm(undefined);
+
+	it("defaults to 300 seconds in the runtime section and reads the stored value and bounds back", () => {
+		expect(baseline.modelLabWarmIdleSeconds).toBe(300);
+		expect(nodeSettingsSectionOf("modelLabWarmIdleSeconds")).toBe("runtime");
+		expect(bounds.tunables.modelLabWarmIdleSeconds).toEqual({ min: 0, max: 3600 });
+		const response = { modelLabWarmIdleSeconds: 0, minModelLabWarmIdleSeconds: 0, maxAllowedModelLabWarmIdleSeconds: 1800 };
+		expect(toNodeSettingsFieldsForm(response).modelLabWarmIdleSeconds).toBe(0);
+		expect(toNodeSettingsFieldBounds(response).tunables.modelLabWarmIdleSeconds).toEqual({ min: 0, max: 1800 });
+	});
+
+	it("sends 0 as a real value, in seconds, without a restart", () => {
+		const { body, errors } = buildNodeSettingsRequest({ ...baseline, modelLabWarmIdleSeconds: 0 }, baseline, bounds, false);
+
+		expect(errors).toEqual({});
+		expect(body).toEqual({ modelLabWarmIdleSeconds: 0 });
+		expect(touchesRestartGatedField(body, restartRequiredFields)).toBe(false);
+	});
+
+	it.each([-1, 3601, 1.5])("rejects %s with a range error and never sends it", (value) => {
+		const { body, errors } = buildNodeSettingsRequest({ ...baseline, modelLabWarmIdleSeconds: value }, baseline, bounds, false);
+
+		expect(errors).toMatchObject({ modelLabWarmIdleSeconds: "range" });
+		expect(body).toEqual({});
 	});
 });
 

@@ -1,6 +1,7 @@
 import type { TFunction } from "i18next";
 
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
+import { ggufFailureText } from "@/core/model-downloads/models/GgufAcquisitionErrors";
 import type { GgufAcquisitionStatus } from "@/core/model-downloads/models/GgufAcquisitionModels";
 import type { RuntimeAcquisitionStatus } from "@/core/runtime-acquisition/queries/useRuntimeAcquisitionStatus";
 
@@ -18,10 +19,17 @@ export type OperationKind =
 	| "image-job"
 	| "scheduler-run"
 	| "image-model-download"
-	| "transcription-model-download";
+	| "transcription-model-download"
+	| "graph-run"
+	| "work-session"
+	| "model-lab-experiment"
+	| "base-artifact-download";
 
-/** `succeeded` rows exist only so the toast coordinator can see the transition; the Activity views drop them. */
-export type OperationState = "running" | "succeeded" | "failed";
+/**
+ * `succeeded` rows exist only so the toast coordinator can see the transition; the Activity views drop them. `waiting`
+ * rows wait for the user's decision or input.
+ */
+export type OperationState = "running" | "waiting" | "succeeded" | "failed";
 
 /** Known only when the source reported a percentage or byte counts with a total; never estimated. */
 export type OperationProgress = { readonly kind: "known"; readonly pct: number } | { readonly kind: "indeterminate" };
@@ -38,7 +46,10 @@ export type OperationLink =
 				| "/scheduler"
 				| "/transcription";
 	  }
-	| { readonly to: "/node-settings"; readonly search: { readonly section: "runtimes" } };
+	| { readonly to: "/node-settings"; readonly search: { readonly section: "runtimes" } }
+	| { readonly to: "/graph-workflows"; readonly search: { readonly definitionId: string; readonly runId: string } }
+	| { readonly to: "/work-sessions/$sessionId"; readonly params: { readonly sessionId: string } }
+	| { readonly to: "/model-lab"; readonly search: { readonly tab: "trace" } };
 
 export interface Operation {
 	/** Stable across the operation's lifetime, prefixed by kind. */
@@ -51,10 +62,17 @@ export interface Operation {
 	readonly href: OperationLink;
 	/** Present only where the source already has a retry action. */
 	readonly retry?: () => void;
+	/** A waiting row's wait: a different value under the same id is a new wait that alerts again. Defaults to the id. */
+	readonly waitKey?: string;
+}
+
+/** The key a snapshot tracks a row under: its wait for a waiting row, else its id. */
+export function transitionKey(operation: Operation): string {
+	return operation.state === "waiting" ? (operation.waitKey ?? operation.id) : operation.id;
 }
 
 export interface ActiveOperation extends Operation {
-	readonly state: "running" | "failed";
+	readonly state: "running" | "waiting" | "failed";
 }
 
 export const INDETERMINATE: OperationProgress = { kind: "indeterminate" };
@@ -111,7 +129,7 @@ export function fromGgufAcquisitions(statuses: Iterable<GgufAcquisitionStatus>, 
 		const state: OperationState = status.phase === "Completed" ? "succeeded" : status.phase === "Failed" ? "failed" : "running";
 		const detail =
 			state === "failed"
-				? (status.sanitizedMessage ?? undefined)
+				? ggufFailureText(t, status)
 				: state === "running"
 					? byteLine(status.completedBytes, status.totalBytes, t)
 					: undefined;
@@ -208,32 +226,45 @@ const FAILURE_STAYS_ACTIVE: ReadonlySet<OperationKind> = new Set<OperationKind>(
 ]);
 
 export function isActiveOperation(operation: Operation): operation is ActiveOperation {
-	return operation.state === "running" || (operation.state === "failed" && FAILURE_STAYS_ACTIVE.has(operation.kind));
+	return (
+		operation.state === "running" ||
+		operation.state === "waiting" ||
+		(operation.state === "failed" && FAILURE_STAYS_ACTIVE.has(operation.kind))
+	);
 }
 
 export interface OperationTransitions {
 	/** Operations seen running before and terminal now: each appears here exactly once per run. */
 	readonly finished: readonly Operation[];
+	/** Operations waiting now that were not waiting in the previous snapshot, first sight included. */
+	readonly waiting: readonly Operation[];
 	/** The state map to pass to the next call. */
 	readonly seen: ReadonlyMap<string, OperationState>;
 }
 
 /**
  * Terminal transitions between two snapshots. Only an observed running-to-terminal step counts, so a terminal state
- * on first sight (page load hydration, a remount, a reconnect replay of an already-terminal row) never counts. Ids
- * missing from the snapshot are forgotten, which bounds the map to what the sources still report.
+ * on first sight (page load hydration, a remount, a reconnect replay of an already-terminal row) never counts. A wait
+ * counts on first sight too: it asks for the user whenever it started, and a waiting row whose `waitKey` changed is
+ * a new wait. Keys missing from the snapshot are forgotten, which bounds the map to what the sources still report.
  */
 export function operationTransitions(
 	previous: ReadonlyMap<string, OperationState>,
 	operations: readonly Operation[],
 ): OperationTransitions {
 	const finished: Operation[] = [];
+	const waiting: Operation[] = [];
 	const seen = new Map<string, OperationState>();
 	for (const operation of operations) {
-		if (previous.get(operation.id) === "running" && operation.state !== "running") {
+		const key = transitionKey(operation);
+		const before = previous.get(key);
+		if (before === "running" && operation.state !== "running" && operation.state !== "waiting") {
 			finished.push(operation);
 		}
-		seen.set(operation.id, operation.state);
+		if (operation.state === "waiting" && before !== "waiting") {
+			waiting.push(operation);
+		}
+		seen.set(key, operation.state);
 	}
-	return { finished, seen };
+	return { finished, waiting, seen };
 }

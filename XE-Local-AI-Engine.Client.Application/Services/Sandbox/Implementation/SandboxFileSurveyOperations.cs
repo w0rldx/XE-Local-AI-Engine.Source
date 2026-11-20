@@ -76,15 +76,15 @@ internal static class SandboxFileSurveyOperations
     {
         var resolved = SandboxJailPathGuard.ResolveJailPath(jailRoot, sandboxPath);
 
-        // SECURITY: reject any symlink component (a sandboxed command can plant one), then read through a no-follow
-        // open so a leaf swapped to a symlink after the component check cannot redirect the read outside the jail.
+        // SECURITY: reject any symlink component (a sandboxed command can plant one), then read through a no-follow open whose handle is
+        // proven under the jail, so neither a leaf nor a directory swapped to a symlink after the component check redirects the read.
         SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(jailRoot, resolved, sandboxPath);
         if (!File.Exists(resolved))
         {
             throw new FileNotFoundException($"Sandbox path '{sandboxPath}' was not found.", sandboxPath);
         }
 
-        var bytes = await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(resolved, maxBytes, cancellationToken);
+        var bytes = await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(jailRoot, resolved, maxBytes, cancellationToken);
         return Encoding.UTF8.GetString(bytes);
     }
 
@@ -141,8 +141,8 @@ internal static class SandboxFileSurveyOperations
     {
         var source = SandboxJailPathGuard.ResolveJailPath(jailRoot, request.SourcePath);
 
-        // SECURITY: reject any symlink component on the jail-side source, then read through a no-follow open so an
-        // escaping symlink cannot copy a host file outside the jail out to the caller's destination.
+        // SECURITY: reject any symlink component on the jail-side source, then read through a no-follow open whose handle is proven
+        // under the jail, so an escaping symlink cannot copy a host file outside the jail out to the caller's destination.
         SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(jailRoot, source, request.SourcePath);
         if (!File.Exists(source))
         {
@@ -151,7 +151,7 @@ internal static class SandboxFileSurveyOperations
 
         // Read the raw bytes from inside the jail and write them to the host destination so a binary artifact survives
         // the round trip unchanged (parity with the container provider's copy-out).
-        var content = await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(source, int.MaxValue, cancellationToken);
+        var content = await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(jailRoot, source, int.MaxValue, cancellationToken);
         await File.WriteAllBytesAsync(request.DestinationPath, content, cancellationToken);
     }
 

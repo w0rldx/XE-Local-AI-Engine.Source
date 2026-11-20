@@ -34,6 +34,9 @@ public sealed partial class BenchmarkStore
                          .ToListAsync(cancellationToken))
         .ToDictionary(static entry => entry.Kind, static entry => entry.Count);
 
+    public Task<bool> HasQueuedWorkAsync(CancellationToken cancellationToken = default) =>
+        _dbContext.BenchmarkWorkItems.AsNoTracking().AnyAsync(entity => entity.Status == BenchmarkWorkStatus.Queued, cancellationToken);
+
     public async Task<BenchmarkClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default)
     {
         while (true)

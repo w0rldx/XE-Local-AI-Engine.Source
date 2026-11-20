@@ -276,8 +276,6 @@ export function privateHostIssue(entry: string, allowedHosts: readonly string[])
 	return listed ? undefined : "privateHostNotAllowed";
 }
 
-export type CustomToolFormSchema = z.infer<ReturnType<typeof buildCustomToolFormSchema>>;
-
 /** Strips the `custom__` prefix so the editor works with the bare slug. */
 export function toSlug(name: string): string {
 	return name.startsWith(CUSTOM_TOOL_NAME_PREFIX) ? name.slice(CUSTOM_TOOL_NAME_PREFIX.length) : name;

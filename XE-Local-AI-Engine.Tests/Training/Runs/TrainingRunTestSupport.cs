@@ -1,32 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Training.Runs;
 
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
-
-/// <summary>A key holder with fixed material, so the frozen-copy round trip exercises the real AES-GCM path.</summary>
-internal sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-{
-    private byte[]? _key;
-
-    public FixedNodeSqliteKeyHolder(byte[] key)
-    {
-        _key = key;
-    }
-
-    public ReadOnlyMemory<byte> Key
-    {
-        get
-        {
-            ObjectDisposedException.ThrowIf(_key is null, this);
-            return _key;
-        }
-    }
-
-    public void Dispose() =>
-        _key = null;
-}
 
 /// <summary>
 ///     A scripted trainer. Lines are handed to the reader in order; the process "exits" with the scripted status once
@@ -67,6 +44,8 @@ internal sealed class FakeTrainingProcessHandle : ITrainingProcessHandle
     public bool Killed { get; private set; }
 
     public bool Disposed { get; private set; }
+
+    public ConcurrentQueue<string> WrittenLines { get; } = new();
 
     /// <summary>When set, the scripted lines are withheld so the run looks silent to the watchdog.</summary>
     public static FakeTrainingProcessHandle Silent(TrainingLaunchReceipt receipt) =>
@@ -112,6 +91,12 @@ internal sealed class FakeTrainingProcessHandle : ITrainingProcessHandle
     {
         Disposed = true;
         Complete();
+    }
+
+    public Task WriteLineAsync(string line, CancellationToken cancellationToken)
+    {
+        WrittenLines.Enqueue(line);
+        return Task.CompletedTask;
     }
 
     private void Complete()
@@ -192,22 +177,46 @@ internal sealed class FakeTrainingProcessInspector : ITrainingProcessInspector
 
     public int HostProcessGroupId { get; init; } = 777;
 
+    /// <summary>What a probe reports when <see cref="Inspect" /> found nothing; gone, as a missing <c>/proc</c> entry is.</summary>
+    public TrainingProcessPresence AbsentPresence { get; init; } = TrainingProcessPresence.Gone;
+
+    /// <summary>What a kill reports after its re-inspection.</summary>
+    public TrainingProcessPresence PresenceAfterKill { get; init; } = TrainingProcessPresence.Gone;
+
     public TrainingProcessFacts? Inspect(int processId) =>
         _facts;
 
+    public TrainingProcessPresence ProbePresence(int processId) =>
+        _facts is null ? AbsentPresence : TrainingProcessPresence.Alive;
+
+    /// <summary>What every group probe answers; empty by default, as a group whose leader is gone usually is.</summary>
+    public bool GroupHasMembers { get; set; }
+
+    public List<int> ProbedGroups { get; } = [];
+
+    public bool ProcessGroupHasMembers(int processGroupId)
+    {
+        ProbedGroups.Add(processGroupId);
+        return GroupHasMembers;
+    }
+
     public List<long> SignalledStartTicks { get; } = [];
 
-    public Task KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default)
+    public List<string> SignalledRunTokens { get; } = [];
+
+    public Task<TrainingProcessPresence> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default)
     {
         SignalledGroups.Add(processGroupId);
         SignalledStartTicks.Add(expectedStartTicks);
-        return Task.CompletedTask;
+        SignalledRunTokens.Add(expectedRunToken);
+        return Task.FromResult(PresenceAfterKill);
     }
 
-    public Task KillProcessAsync(int processId, long expectedStartTicks, CancellationToken cancellationToken = default)
+    public Task<TrainingProcessPresence> KillProcessAsync(int processId, long expectedStartTicks, string expectedRunToken, CancellationToken cancellationToken = default)
     {
         SignalledProcesses.Add(processId);
         SignalledStartTicks.Add(expectedStartTicks);
-        return Task.CompletedTask;
+        SignalledRunTokens.Add(expectedRunToken);
+        return Task.FromResult(PresenceAfterKill);
     }
 }

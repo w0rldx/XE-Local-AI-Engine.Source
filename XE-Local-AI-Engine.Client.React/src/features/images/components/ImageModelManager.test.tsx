@@ -326,7 +326,7 @@ describe("ImageModelManager", () => {
 
 			await waitFor(() => {
 				const detail = screen.getByTestId("image-model-download-detail-unsized-model").textContent ?? "";
-				expect(detail).toContain("2 MB transferred");
+				expect(detail).toContain("2 MiB transferred");
 				expect(detail).not.toContain("%");
 			});
 		});

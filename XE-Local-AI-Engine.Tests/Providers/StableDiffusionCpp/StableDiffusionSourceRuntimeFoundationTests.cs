@@ -32,7 +32,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     {
         using var temp = new TempDirectory();
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
-        using var handler = new CountingHandler();
+        using var handler = new CountingHttpMessageHandler(() => new HttpResponseMessage(HttpStatusCode.OK));
         using var http = new HttpClient(handler);
         var manager = new StableDiffusionCppBinaryManager(http,
             temp.Path,
@@ -57,7 +57,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             Validity = ManagedRuntimeValidity.Invalid,
             InvalidReason = "corrupt"
         }, CancellationToken.None);
-        using var handler = new CountingHandler();
+        using var handler = new CountingHttpMessageHandler(() => new HttpResponseMessage(HttpStatusCode.OK));
         using var http = new HttpClient(handler);
         var manager = new StableDiffusionCppBinaryManager(http,
             temp.Path,
@@ -87,7 +87,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         }
 
         await store.WriteAsync(state, CancellationToken.None);
-        using var handler = new CountingHandler();
+        using var handler = new CountingHttpMessageHandler(() => new HttpResponseMessage(HttpStatusCode.OK));
         using var http = new HttpClient(handler);
         var signal = new ManagedSourceBuildSignal<SdGpuBackend>();
         signal.SetActive(SdGpuBackend.Cuda);
@@ -1069,17 +1069,6 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         public Task DeleteAsync(CancellationToken ct)
         {
             return _inner.DeleteAsync(ct);
-        }
-    }
-
-    private sealed class CountingHandler : HttpMessageHandler
-    {
-        public int CallCount { get; private set; }
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            CallCount++;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
         }
     }
 

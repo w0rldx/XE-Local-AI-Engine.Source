@@ -145,9 +145,9 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
             Parent = parent
         };
 
-        // A cancelled turn persists NO error text: a user cancel or an operator eject is an outcome, not a failure, so
-        // it leaves no red banner. Only the user-facing Error is cleared; the envelope's FailureCategory is untouched.
-        var terminalError = terminalStatus == NodeChatMessageStatusValues.Cancelled ? null : state.Error;
+        // A plain cancel persists NO error text: it is an outcome, not a failure. A cancel the user did not ask for keeps its reason, which the chat
+        // shows in place of the stopped label, never as a red banner. The envelope's FailureCategory is untouched.
+        var terminalError = state.ChatError;
 
         var persisted = await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
             {
@@ -173,8 +173,8 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
                 Sources = TurnKnowledgeSourceCollector.Merge(sources, TurnKnowledgeSourceCollector.Snapshot()),
                 ContextWindow = state.ContextSnapshot is { } snapshot ? MapContextWindow(snapshot, state) : null,
                 Throughput = NodeChatThroughputDto.From(state.Throughput),
-                // Only a failed turn keeps its category on the row; a cancel is an outcome, not a failure, as with Error above.
-                FailureCategory = terminalStatus == NodeChatMessageStatusValues.Failed ? state.FailureCategory : null
+                // A failed turn, or a cancel with a shown reason, keeps its category on the row; a plain cancel stores none, as with Error above.
+                FailureCategory = ChatTerminalProjection.ChatFailureCategory(state)
             },
             CancellationToken.None);
 

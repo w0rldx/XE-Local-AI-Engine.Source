@@ -10,6 +10,8 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -192,6 +194,103 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     }
 
     [Test]
+    public async Task EmbedAsync_EmbedsWithBackgroundIntent()
+    {
+        var provider = new CapturingProvider(Descriptor(ConfiguredName));
+
+        _ = await CreateEmbedder(provider).EmbedAsync(["chunk one"], CancellationToken.None);
+
+        AssertEx.Equal(ModelResidencyIntent.Background, provider.LastSelectedIntent);
+    }
+
+    [Test]
+    public async Task EmbedAsync_WhenTheOperatorVetoesAfterAnEarlierBatchSpentTheRetry_PassesTheVetoThrough()
+    {
+        // Call 1 fails and spends the retry, call 2 embeds chunk one, call 3 is the operator's veto for chunk two.
+        var provider = new CapturingProvider(Descriptor(ConfiguredName))
+        {
+            TransientFailures = 1,
+            VetoOnCall = 3
+        };
+        var embedder = CreateEmbedder(provider, maxBatchSize: 1);
+
+        _ = await AssertEx.ThrowsAsync<OperatorEjectedException>(() => embedder.EmbedAsync(["chunk one", "chunk two"], CancellationToken.None));
+
+        AssertEx.Equal(3, provider.GenerateCalls);
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task IsEmbeddingModelBlockedAsync_AsksTheSupervisorForTheResolvedEmbedder(bool blocked)
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.IsBackgroundLaunchBlocked(ConfiguredName, ModelRole.Embedding).Returns(blocked);
+        var embedder = CreateEmbedder(new CapturingProvider(Descriptor(ConfiguredName)), supervisor: supervisor);
+
+        AssertEx.Equal(blocked, await embedder.IsEmbeddingModelBlockedAsync(CancellationToken.None));
+    }
+
+    [Test]
+    public async Task IsEmbeddingModelBlockedAsync_WhenTheResolutionIsNotConfident_IsTrueWithoutAskingTheSupervisor()
+    {
+        // Nothing installed matches, so the resolution is the bare configured name, which need not be the marked model.
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        var embedder = CreateEmbedder(new CapturingProvider(Descriptor("qwen2.5:Q4_K_M")), supervisor: supervisor);
+
+        AssertEx.True(await embedder.IsEmbeddingModelBlockedAsync(CancellationToken.None), "An unknown embedder must keep waiting rows waiting.");
+        _ = supervisor.DidNotReceiveWithAnyArgs().IsBackgroundLaunchBlocked(default!, default);
+    }
+
+    [Test]
+    public async Task IsEmbeddingModelBlockedAsync_WhenThePinnedModelWasRemoved_IsFalseSoTheRunFailsWithTheMissingModelReason()
+    {
+        // The inventory answered and the pinned model is not in it: nothing to wait for, even if an eject mark remains.
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.IsBackgroundLaunchBlocked(Arg.Any<string>(), Arg.Any<ModelRole>()).Returns(true);
+        var embedder = CreateEmbedder(new CapturingProvider(Descriptor(ConfiguredName)), supervisor: supervisor, pinnedModel: "removed-embed.gguf");
+
+        AssertEx.False(await embedder.IsEmbeddingModelBlockedAsync(CancellationToken.None), "A removed pinned model must not keep rows waiting.");
+    }
+
+    [Test]
+    public async Task EmbedAsync_WhenThePinnedModelWasRemoved_FailsAsUnavailableWithoutCreatingAGenerator()
+    {
+        var provider = new CapturingProvider(Descriptor(ConfiguredName));
+        var embedder = CreateEmbedder(provider, pinnedModel: "removed-embed.gguf");
+
+        var failure = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() => embedder.EmbedAsync(["chunk one"], CancellationToken.None));
+
+        AssertEx.Equal(KnowledgeChunkEmbedder.EmbeddingUnavailableReason, failure.Reason);
+        AssertEx.Null(provider.LastSelectedModelName, "A removed pinned model must never reach the supervisor, where a stale eject mark would veto it.");
+    }
+
+    [Test]
+    public async Task IsEmbeddingModelBlockedAsync_WhenTheInventoryReadFails_IsTrue()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        var embedder = CreateEmbedder(new CapturingProvider(Descriptor(ConfiguredName))
+            {
+                ThrowOnListModels = true
+            },
+            supervisor: supervisor,
+            pinnedModel: ConfiguredName);
+
+        AssertEx.True(await embedder.IsEmbeddingModelBlockedAsync(CancellationToken.None), "A transient inventory failure keeps waiting rows waiting.");
+    }
+
+    [Test]
+    public async Task IsEmbeddingModelBlockedAsync_OnAnotherProvider_IsFalseWithoutAskingTheSupervisor()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.IsBackgroundLaunchBlocked(Arg.Any<string>(), Arg.Any<ModelRole>()).Returns(true);
+        var embedder = CreateEmbedder(new CapturingProvider(Descriptor(ConfiguredName)), supervisor: supervisor, providerName: "another-runtime");
+
+        AssertEx.False(await embedder.IsEmbeddingModelBlockedAsync(CancellationToken.None));
+        _ = supervisor.DidNotReceiveWithAnyArgs().IsBackgroundLaunchBlocked(default!, default);
+    }
+
+    [Test]
     public async Task ResolveEmbeddingContextWindowAsync_WhenResolvedModelAdvertisesAWindow_ReturnsIt()
     {
         var provider = new CapturingProvider(Descriptor(ConfiguredName, maxContextTokens: 2048));
@@ -226,11 +325,16 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         AssertEx.Null(window);
     }
 
-    private static KnowledgeChunkEmbedder CreateEmbedder(ILocalModelProvider provider, int maxBatchSize = 64)
+    private static KnowledgeChunkEmbedder CreateEmbedder(ILocalModelProvider provider,
+        int maxBatchSize = 64,
+        ILlamaServerProcessSupervisor? supervisor = null,
+        string providerName = "llamacpp",
+        string? pinnedModel = null)
     {
         var options = Options.Create(new KnowledgeBaseOptions
         {
             EmbeddingModelName = ConfiguredName,
+            EmbeddingProviderName = providerName,
             MaxEmbeddingBatchSize = maxBatchSize
         });
 
@@ -238,9 +342,13 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         providerResolver.ResolveProvider(Arg.Any<string>()).Returns(provider);
 
         return new KnowledgeChunkEmbedder(providerResolver,
-            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
+            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings
+            {
+                KnowledgeEmbeddingModelName = pinnedModel
+            })),
             new KnowledgeEmbeddingPrefixer(),
-            options);
+            options,
+            supervisor ?? Substitute.For<ILlamaServerProcessSupervisor>());
     }
 
     private static LocalModelDescriptor Descriptor(string modelName, int? maxContextTokens = null)
@@ -270,7 +378,15 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
 
         public string? LastSelectedModelName { get; private set; }
 
+        public ModelResidencyIntent? LastSelectedIntent { get; private set; }
+
+        /// <summary>The <c>GenerateAsync</c> call number that throws the operator's eject veto instead.</summary>
+        public int? VetoOnCall { get; init; }
+
         public bool ThrowOnGenerate { get; init; }
+
+        /// <summary>When set, the inventory read fails as an unreachable provider.</summary>
+        public bool ThrowOnListModels { get; init; }
 
         /// <summary>How many leading <c>GenerateAsync</c> calls fail as an unreachable process before generation succeeds.</summary>
         public int TransientFailures { get; init; }
@@ -295,12 +411,15 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
         {
             LastSelectedModelName = selection.ModelName;
+            LastSelectedIntent = selection.ResidencyIntent;
             return new FixedEmbeddingGenerator(this, VectorDimensions, GenerateFailureStatus);
         }
 
         public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct)
         {
-            return Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(_models);
+            return ThrowOnListModels
+                ? Task.FromException<IReadOnlyList<LocalModelDescriptor>>(new HttpRequestException("fake inventory transport failure"))
+                : Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(_models);
         }
 
         public IChatClient CreateChatClient(LocalModelSelection selection) =>
@@ -341,6 +460,11 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
                 CancellationToken cancellationToken = default)
             {
                 _owner.GenerateCalls++;
+                if (_owner.GenerateCalls == _owner.VetoOnCall)
+                {
+                    throw new OperatorEjectedException("The embedding model was ejected by the operator.");
+                }
+
                 if (_failureStatus is { } status)
                 {
                     throw new HttpRequestException("The llama-server embedding endpoint returned HTTP 500: input (678 tokens) is too large to process.",

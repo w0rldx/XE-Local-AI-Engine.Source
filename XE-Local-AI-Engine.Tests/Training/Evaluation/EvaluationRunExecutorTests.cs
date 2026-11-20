@@ -17,7 +17,6 @@ using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
-using XE_Local_AI_Engine.Tests.Training.Runs;
 
 /// <summary>
 ///     Pins that an evaluation scores against the definition body the DATASET pinned, not the live row: tool offers

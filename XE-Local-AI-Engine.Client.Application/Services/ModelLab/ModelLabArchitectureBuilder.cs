@@ -28,7 +28,11 @@ public static class ModelLabArchitectureBuilder
 
     // Adding a family: one IModelLabArchitectureDescriptor and one entry here.
     private static readonly FrozenDictionary<string, IModelLabArchitectureDescriptor> Descriptors =
-        new IModelLabArchitectureDescriptor[] { new ModelLabQwen35Architecture(), new ModelLabLlamaArchitecture() }
+        new IModelLabArchitectureDescriptor[]
+            {
+                new ModelLabQwen35Architecture(),
+                new ModelLabLlamaArchitecture()
+            }
             .ToFrozenDictionary(static descriptor => descriptor.Architecture, StringComparer.Ordinal);
 
     // Group order inside a block: the mixer first, then the FFN, the norms, the MTP head and the rest.

@@ -135,7 +135,7 @@ public sealed class TrainingOptionDefaultsCalculator : ITrainingOptionDefaultsCa
         if (estimate.GpuBytes > budget)
         {
             throw new TrainingRunRejectedException(
-                $"The selected options need about {estimate.GpuBytes / (1024 * 1024)} MB of VRAM and only {budget / (1024 * 1024)} MB is available. Lower the sequence length or the batch size.");
+                $"The selected options need about {estimate.GpuBytes / (1024 * 1024)} MiB of VRAM and only {budget / (1024 * 1024)} MiB is available. Lower the sequence length or the batch size.");
         }
 
         return new TrainingRunDefaults

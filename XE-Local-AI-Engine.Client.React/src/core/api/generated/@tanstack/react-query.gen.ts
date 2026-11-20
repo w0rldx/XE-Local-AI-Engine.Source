@@ -73,7 +73,6 @@ import {
 	createMcpServer,
 	createNodeBackup,
 	createNodeChatConversation,
-	createNodeChatMessageRevision,
 	createPlaybookAction,
 	createScheduledJob,
 	createSkill,
@@ -130,6 +129,7 @@ import {
 	draftImagePrompt,
 	draftSkill,
 	ejectImageRuntime,
+	ejectModelLabWarmWorker,
 	ejectRunningModel,
 	ejectTranscriptionRuntime,
 	enableScheduledJob,
@@ -218,6 +218,8 @@ import {
 	getModelGgufInspection,
 	getModelLabArchitecture,
 	getModelLabExperiment,
+	getModelLabExperimentAttention,
+	getModelLabExperimentLens,
 	getModelLabExperimentTrace,
 	getModelLabPyTorchIndex,
 	getModelLabPyTorchSource,
@@ -652,9 +654,6 @@ import type {
 	CreateNodeChatConversationData,
 	CreateNodeChatConversationError,
 	CreateNodeChatConversationResponse,
-	CreateNodeChatMessageRevisionData,
-	CreateNodeChatMessageRevisionError,
-	CreateNodeChatMessageRevisionResponse,
 	CreatePlaybookActionData,
 	CreatePlaybookActionResponse,
 	CreateScheduledJobData,
@@ -807,6 +806,9 @@ import type {
 	EjectImageRuntimeData,
 	EjectImageRuntimeError,
 	EjectImageRuntimeResponse,
+	EjectModelLabWarmWorkerData,
+	EjectModelLabWarmWorkerError,
+	EjectModelLabWarmWorkerResponse,
 	EjectRunningModelData,
 	EjectRunningModelResponse,
 	EjectTranscriptionRuntimeData,
@@ -1005,7 +1007,13 @@ import type {
 	GetModelLabArchitectureData,
 	GetModelLabArchitectureError,
 	GetModelLabArchitectureResponse,
+	GetModelLabExperimentAttentionData,
+	GetModelLabExperimentAttentionError,
+	GetModelLabExperimentAttentionResponse,
 	GetModelLabExperimentData,
+	GetModelLabExperimentLensData,
+	GetModelLabExperimentLensError,
+	GetModelLabExperimentLensResponse,
 	GetModelLabExperimentResponse,
 	GetModelLabExperimentTraceData,
 	GetModelLabExperimentTraceError,
@@ -4301,30 +4309,6 @@ export const listNodeChatMessageRevisionsOptions = (options: Options<ListNodeCha
 		},
 		queryKey: listNodeChatMessageRevisionsQueryKey(options),
 	});
-
-export const createNodeChatMessageRevisionMutation = (
-	options?: Partial<Options<CreateNodeChatMessageRevisionData>>,
-): UseMutationOptions<
-	CreateNodeChatMessageRevisionResponse,
-	AxiosError<CreateNodeChatMessageRevisionError>,
-	Options<CreateNodeChatMessageRevisionData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		CreateNodeChatMessageRevisionResponse,
-		AxiosError<CreateNodeChatMessageRevisionError>,
-		Options<CreateNodeChatMessageRevisionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createNodeChatMessageRevision({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
 
 export const pinNodeChatConversationMutation = (
 	options?: Partial<Options<PinNodeChatConversationData>>,
@@ -9287,6 +9271,28 @@ export const getModelLabExperimentOptions = (options: Options<GetModelLabExperim
 		queryKey: getModelLabExperimentQueryKey(options),
 	});
 
+export const getModelLabExperimentAttentionQueryKey = (options: Options<GetModelLabExperimentAttentionData>) =>
+	createQueryKey("getModelLabExperimentAttention", options, false, ["Model-Lab"]);
+
+export const getModelLabExperimentAttentionOptions = (options: Options<GetModelLabExperimentAttentionData>) =>
+	queryOptions<
+		GetModelLabExperimentAttentionResponse,
+		AxiosError<GetModelLabExperimentAttentionError>,
+		GetModelLabExperimentAttentionResponse,
+		ReturnType<typeof getModelLabExperimentAttentionQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelLabExperimentAttention({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelLabExperimentAttentionQueryKey(options),
+	});
+
 export const cancelModelLabExperimentMutation = (
 	options?: Partial<Options<CancelModelLabExperimentData>>,
 ): UseMutationOptions<unknown, AxiosError<DefaultError>, Options<CancelModelLabExperimentData>> => {
@@ -9302,6 +9308,28 @@ export const cancelModelLabExperimentMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getModelLabExperimentLensQueryKey = (options: Options<GetModelLabExperimentLensData>) =>
+	createQueryKey("getModelLabExperimentLens", options, false, ["Model-Lab"]);
+
+export const getModelLabExperimentLensOptions = (options: Options<GetModelLabExperimentLensData>) =>
+	queryOptions<
+		GetModelLabExperimentLensResponse,
+		AxiosError<GetModelLabExperimentLensError>,
+		GetModelLabExperimentLensResponse,
+		ReturnType<typeof getModelLabExperimentLensQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelLabExperimentLens({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelLabExperimentLensQueryKey(options),
+	});
 
 export const setModelLabExperimentNotesMutation = (
 	options?: Partial<Options<SetModelLabExperimentNotesData>>,
@@ -9418,6 +9446,30 @@ export const getModelLabPyTorchSourceOptions = (options?: Options<GetModelLabPyT
 		},
 		queryKey: getModelLabPyTorchSourceQueryKey(options),
 	});
+
+export const ejectModelLabWarmWorkerMutation = (
+	options?: Partial<Options<EjectModelLabWarmWorkerData>>,
+): UseMutationOptions<
+	EjectModelLabWarmWorkerResponse,
+	AxiosError<EjectModelLabWarmWorkerError>,
+	Options<EjectModelLabWarmWorkerData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		EjectModelLabWarmWorkerResponse,
+		AxiosError<EjectModelLabWarmWorkerError>,
+		Options<EjectModelLabWarmWorkerData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await ejectModelLabWarmWorker({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const listLocalModelsQueryKey = (options?: Options<ListLocalModelsData>) =>
 	createQueryKey("listLocalModels", options, false, ["Models"]);

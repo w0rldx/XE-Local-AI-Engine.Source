@@ -3,8 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { ThoughtsSection } from "@/core/chat/components/ThoughtsSection";
 import type { ChatStreamingState } from "@/features/chat/models/ChatModels";
-
-const modelLoadingPhases: ReadonlySet<string> = new Set(["preparing_runtime", "loading_model"]);
+import { modelLoadingPhases } from "@/features/chat/models/NodeChatStreamTypes";
 
 interface WorkflowNodeLiveDetailProps {
 	readonly nodeKey: string;

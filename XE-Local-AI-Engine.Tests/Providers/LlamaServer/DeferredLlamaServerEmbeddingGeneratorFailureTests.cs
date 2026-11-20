@@ -5,6 +5,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -33,6 +35,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Integration)]
 public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
 {
+    private const string EmbedModel = "nomic-embed-text-v1.5";
+
     // The verbatim body a llama-server returns when a pooled embedding input exceeds the physical batch size. This is
     // the failure that breaks knowledge-base ingestion, captured from a nomic-embed-text-v1.5 server.
     private const string OversizedInputBody =
@@ -327,6 +331,108 @@ public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
         _ = await AssertEx.ThrowsAsync<IOException>(() => generator.GenerateAsync(["search_document: chunk"]));
     }
 
+    [Test]
+    [Arguments(ModelResidencyIntent.Background, true)]
+    [Arguments(ModelResidencyIntent.Interactive, false)]
+    public async Task GenerateAsync_WhenEnsureIsVetoed_OnlyABackgroundGeneratorSeesTheTypedVeto(ModelResidencyIntent intent, bool typed)
+    {
+        var supervisor = MarkedSupervisor(new Uri("http://127.0.0.1:9/v1"), blocked: true);
+        supervisor.EnsureRunningAsync(EmbedModel, ModelRole.Embedding, Arg.Any<CancellationToken>())
+                  .ThrowsAsync(new OperatorEjectedException("The model was ejected by the operator."));
+        supervisor.EnsureRunningAsync(EmbedModel, ModelRole.Embedding, Arg.Any<ModelResidencyIntent>(), Arg.Any<CancellationToken>())
+                  .ThrowsAsync(new OperatorEjectedException("The model was ejected by the operator."));
+        using var generator = new DeferredLlamaServerEmbeddingGenerator(supervisor, EmbedModel, TimeSpan.FromSeconds(5), intent);
+
+        var failure = await AssertEx.ThrowsAsync<Exception>(() => generator.GenerateAsync(["chunk"]));
+
+        // Interactive callers keep the lexical-fallback shape: the veto stays wrapped in IOException.
+        AssertEx.Equal(typed ? typeof(OperatorEjectedException) : typeof(IOException), failure.GetType());
+        AssertEx.Equal(1, supervisor.ReceivedCalls().Count(call => call.GetMethodInfo().Name == nameof(ILlamaServerProcessSupervisor.EnsureRunningAsync)));
+        AssertEx.Empty(supervisor.ReceivedCalls().Where(call => call.GetMethodInfo().Name == nameof(ILlamaServerProcessSupervisor.TryAcquireInferenceLease)));
+    }
+
+    [Test]
+    [Arguments(ModelResidencyIntent.Background, true, true)]
+    [Arguments(ModelResidencyIntent.Background, false, false)]
+    [Arguments(ModelResidencyIntent.Interactive, true, false)]
+    public async Task GenerateAsync_WhenTheLeaseIsRefusedForAnEvictingProcessBehindACachedAdapter_TypesItOnlyUnderTheMark(ModelResidencyIntent intent,
+        bool blocked,
+        bool typed)
+    {
+        // Unmarked is an image-job drain: it keeps today's IOException, like an Interactive caller under the mark.
+        using var server = StubServer.Returning(HttpStatusCode.OK, EmbeddingResponseWith("[0.25,-0.5,0.75]"));
+        using var lease = new RecordingInferenceLease();
+        var supervisor = MarkedSupervisor(server.BaseAddress, blocked);
+        supervisor.TryAcquireInferenceLease(EmbedModel, ModelRole.Embedding)
+                  .Returns(LlamaServerLeaseAcquisition.Granted(lease), LlamaServerLeaseAcquisition.Evicting);
+        using var generator = new DeferredLlamaServerEmbeddingGenerator(supervisor, EmbedModel, TimeSpan.FromSeconds(30), intent);
+        _ = await generator.GenerateAsync(["chunk"]);
+
+        var failure = await AssertEx.ThrowsAsync<Exception>(() => generator.GenerateAsync(["chunk"]));
+
+        AssertEx.Equal(typed ? typeof(OperatorEjectedException) : typeof(IOException), failure.GetType());
+        AssertEx.Equal(1, supervisor.ReceivedCalls().Count(call => call.GetMethodInfo().Name == nameof(ILlamaServerProcessSupervisor.EnsureRunningAsync)),
+            "The refusal must not re-ensure (or relaunch) the cached adapter.");
+        AssertEx.Equal(1, server.RequestCount, "The refused request must never reach the server.");
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task GenerateAsync_WhenABackgroundBatchFindsTheServerGone_TypesItOnlyUnderTheMark(bool blocked)
+    {
+        var gone = StubServer.Returning(HttpStatusCode.OK, EmbeddingResponseWith("[0.25,-0.5,0.75]"));
+        using var lease = new RecordingInferenceLease();
+        var supervisor = MarkedSupervisor(gone.BaseAddress, blocked, lease);
+        using var generator = new DeferredLlamaServerEmbeddingGenerator(supervisor, EmbedModel, TimeSpan.FromSeconds(30), ModelResidencyIntent.Background);
+        _ = await generator.GenerateAsync(["chunk"]);
+        gone.Dispose();
+
+        var failure = await AssertEx.ThrowsAsync<Exception>(() => generator.GenerateAsync(["chunk"]));
+
+        // Unmarked keeps today's transport failure so the chunk embedder's own one-retry budget still applies.
+        AssertEx.Equal(blocked ? typeof(OperatorEjectedException) : typeof(HttpRequestException), failure.GetType());
+        if (blocked)
+        {
+            AssertEx.True(failure.InnerException is HttpRequestException, "The original failure must be the veto's cause.");
+        }
+
+        await supervisor.Received(1).WaitForProcessExitAsync(EmbedModel, ModelRole.Embedding, Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+        AssertEx.Equal(1, supervisor.ReceivedCalls().Count(call => call.GetMethodInfo().Name == nameof(ILlamaServerProcessSupervisor.EnsureRunningAsync)));
+    }
+
+    [Test]
+    public async Task GenerateAsync_WhenTheServerAnswersNon2xxUnderTheMark_StaysARejectionWithoutAskingTheMark()
+    {
+        using var server = StubServer.Returning(HttpStatusCode.InternalServerError, OversizedInputBody);
+        var supervisor = MarkedSupervisor(server.BaseAddress, blocked: true);
+        using var generator = new DeferredLlamaServerEmbeddingGenerator(supervisor, EmbedModel, TimeSpan.FromSeconds(30), ModelResidencyIntent.Background);
+
+        var failure = await AssertEx.ThrowsAsync<HttpRequestException>(() => generator.GenerateAsync(["chunk"]));
+
+        AssertEx.Equal(HttpStatusCode.InternalServerError, failure.StatusCode);
+        _ = supervisor.DidNotReceiveWithAnyArgs().IsBackgroundLaunchBlocked(default!, default);
+    }
+
+    // A supervisor whose ensure hands out the endpoint, whose lease is granted, and whose operator eject mark is set or clear.
+    private static ILlamaServerProcessSupervisor MarkedSupervisor(Uri endpoint, bool blocked, ILlamaServerInferenceLease? lease = null)
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        var resolved = new LlamaServerEndpoint
+        {
+            ModelName = EmbedModel,
+            Role = ModelRole.Embedding,
+            BaseAddress = endpoint
+        };
+        supervisor.EnsureRunningAsync(EmbedModel, ModelRole.Embedding, Arg.Any<CancellationToken>()).Returns(resolved);
+        supervisor.EnsureRunningAsync(EmbedModel, ModelRole.Embedding, Arg.Any<ModelResidencyIntent>(), Arg.Any<CancellationToken>()).Returns(resolved);
+        supervisor.TryAcquireInferenceLease(EmbedModel, ModelRole.Embedding)
+                  .Returns(lease is null ? LlamaServerLeaseAcquisition.NotRunning : LlamaServerLeaseAcquisition.Granted(lease));
+        supervisor.WaitForProcessExitAsync(EmbedModel, ModelRole.Embedding, Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>()).Returns(true);
+        supervisor.IsBackgroundLaunchBlocked(EmbedModel, ModelRole.Embedding).Returns(blocked);
+        return supervisor;
+    }
+
     private static FakeProcessSupervisor SupervisorFor(StubServer server)
     {
         return new FakeProcessSupervisor
@@ -351,6 +457,11 @@ public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
         }
 
         public Uri BaseAddress { get; }
+
+        private int _requestCount;
+
+        /// <summary>How many requests reached this server: the batch-send witness.</summary>
+        public int RequestCount => Volatile.Read(ref _requestCount);
 
         public static StubServer Returning(HttpStatusCode status, string body)
         {
@@ -401,6 +512,7 @@ public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
                             return;
                         }
 
+                        _ = Interlocked.Increment(ref _requestCount);
                         var payload = Encoding.UTF8.GetBytes(body);
                         context.Response.StatusCode = (int)status;
                         context.Response.ContentType = "application/json";

@@ -3,6 +3,7 @@
 // the field markup; all form state lives in the parent's reducer and is passed in as callbacks.
 
 import { PasswordInput, SegmentedControl, Stack, Text, TextInput } from "@mantine/core";
+import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -40,6 +41,7 @@ export function EntraConnectionFields({
 	onSignInMethodChange,
 }: EntraConnectionFieldsProps) {
 	const { t } = useTranslation();
+	const labelId = useId();
 
 	// A typed value or a previously stored one both put a secret "in play" — mirrors
 	// CloudSettingsEndpointDtoMapper.ParseEntraSignInMethod's `hasSecret` check. With a secret present, the operator
@@ -110,11 +112,12 @@ export function EntraConnectionFields({
 				error={errors.entraTokenScope}
 			/>
 			<Stack gap={4}>
-				<Text size="sm" fw={500}>
+				<Text size="sm" fw={500} id={`${labelId}-sign-in`}>
 					{t("pages.cloudSettings.entra.signInMethodLabel", "Sign-in method")}
 				</Text>
 				{hasSecret ? (
 					<SegmentedControl
+						aria-labelledby={`${labelId}-sign-in`}
 						data-testid="cloud-settings-entra-sign-in-method-secret"
 						value={isAuthorizationCode ? "AuthorizationCode" : "ClientSecret"}
 						onChange={(value) => onSignInMethodChange(parseEntraSignInMethod(value))}
@@ -134,6 +137,7 @@ export function EntraConnectionFields({
 					/>
 				) : (
 					<SegmentedControl
+						aria-labelledby={`${labelId}-sign-in`}
 						data-testid="cloud-settings-entra-sign-in-method"
 						value={values.entraSignInMethod}
 						onChange={(value) => onSignInMethodChange(parseEntraSignInMethod(value))}

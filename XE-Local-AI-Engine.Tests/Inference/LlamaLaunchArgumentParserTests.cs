@@ -72,6 +72,13 @@ public sealed class LlamaLaunchArgumentParserTests
     [Arguments("--control-vector-scaled /tmp/v.gguf:2", "--control-vector-scaled")]
     [Arguments("--top-k 40 --control-vector-scaled=/tmp/v.gguf:2", "--control-vector-scaled")]
     [Arguments("--control-vector-layer-range 1 5", "--control-vector-layer-range")]
+    // Serving mode: the profile owns pooling, and --rerank flips pooling to rank.
+    [Arguments("--embedding", "--embedding")]
+    [Arguments("--embeddings", "--embeddings")]
+    [Arguments("--pooling cls", "--pooling")]
+    [Arguments("--top-k 40 --pooling=last", "--pooling")]
+    [Arguments("--rerank", "--rerank")]
+    [Arguments("--reranking", "--reranking")]
     public void FindReservedFlag_DetectsManagedFlags(string raw, string expected)
     {
         AssertEx.Equal(expected, LlamaLaunchArgumentParser.FindReservedFlag(raw));
@@ -110,6 +117,12 @@ public sealed class LlamaLaunchArgumentParserTests
     public void ParseSanitized_ALayerRangeWithOneValue_LeavesTheNextFlagAlone()
     {
         AssertEx.Equal("--top-k 40", string.Join(' ', LlamaLaunchArgumentParser.ParseSanitized("--control-vector-layer-range 1 --top-k 40")));
+    }
+
+    [Test]
+    public void ParseSanitized_StripsPooling_WithItsValue()
+    {
+        AssertEx.Equal("--top-k 40", string.Join(' ', LlamaLaunchArgumentParser.ParseSanitized("--pooling cls --top-k 40")));
     }
 
     [Test]

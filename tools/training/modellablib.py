@@ -3,6 +3,7 @@
 Run the checks with ``python3 tools/training/test_modellablib.py``.
 """
 
+import contextlib
 import hashlib
 import json
 import math
@@ -12,11 +13,17 @@ import struct
 from typing import Any, TypeGuard
 
 # Separate from trainlib.CONTRACT_VERSION: this script and train.py change independently.
-CONTRACT_VERSION = 3
+CONTRACT_VERSION = 6
 
 TRACE_KIND = "trace"
 STEERING_KIND = "steering"
 SOURCE_KIND = "source"
+
+# Both directions of the --serve protocol: one JSON object per line, the line at most this long.
+MAX_FRAME_BYTES = 64 * 1024
+_COMMAND_FIELDS = {"run": ("jobId", "config"), "cancel": ("jobId",), "evict": ()}
+# What a trace or steering job writes; a cancelled job leaves none of it.
+_OUTPUT_FIELDS = ("tracePath", "attentionPath", "resultPath", "vectorPath", "randomVectorPath")
 
 _SOURCE_JOB_FIELDS = frozenset(("kind", "contractVersion", "configDirectory", "resultPath", "maxResultBytes"))
 MAX_CONFIG_BYTES = 1024 * 1024
@@ -28,6 +35,20 @@ TORCH_FILE_PREFIX = "torch:"
 FOOTER_RESERVE_BYTES = 160
 
 MAX_NEW_TOKENS_LIMIT = 4096
+
+# A trace records attention only with all four, a null one counting as absent.
+_ATTENTION_FIELDS = ("attentionPath", "attentionLayers", "attentionTopKeys", "attentionByteCap")
+MAX_ATTENTION_LAYERS = 8
+MAX_ATTENTION_TOP_KEYS = 64
+# Attention weights are stored as integers in 1/ATTENTION_WEIGHT_SCALE, rounded down.
+ATTENTION_WEIGHT_SCALE = 10_000
+
+# A trace reads every block through the output head with both, a null one counting as absent.
+_LENS_FIELDS = ("lensTopTokens", "lensByteCap")
+MAX_LENS_TOP_TOKENS = 20
+# Text-config fields that change the logits after the output layer, with their neutral values: the batched lens rows
+# would miss such a transform, so a model that sets one gets no lens.
+_NEUTRAL_LOGIT_TRANSFORMS = {"final_logit_softcapping": (None,), "logits_scaling": (None, 1), "logit_scale": (None, 1)}
 
 # A token or candidate text in result.json: its JSON-escaped UTF-8 form at most this long, cut ones ending in CUT_MARK.
 # Only a result over TRACE_RESULT_BUDGET_BYTES is cut.
@@ -51,6 +72,52 @@ class JobError(ValueError):
     """A job file the script cannot use; modellab.py reports it as the "contract" error category."""
 
 
+class ProtocolError(ValueError):
+    """A host command the --serve worker cannot follow: the "protocol" error category, then exit 1."""
+
+
+def frame_bytes(event, token, fields):
+    """One worker frame as written: a JSON line carrying the run token, at most MAX_FRAME_BYTES. An over-long
+    ``message`` is cut to fit; any other frame that large is a bug and raises."""
+    frame = {"event": event, "token": token, **fields}
+    line = (json.dumps(frame) + "\n").encode()
+    if len(line) > MAX_FRAME_BYTES and isinstance(frame.get("message"), str):
+        # ASCII-escaped, so every character dropped takes at least one byte with it.
+        frame["message"] = frame["message"][: max(0, len(frame["message"]) - (len(line) - MAX_FRAME_BYTES))]
+        line = (json.dumps(frame) + "\n").encode()
+    if len(line) > MAX_FRAME_BYTES:
+        raise ValueError(f"A {event} frame is {len(line)} bytes, over the protocol's {MAX_FRAME_BYTES}.")
+    return line
+
+
+def parse_command(line):
+    """One host command line (bytes, as read with a limit of MAX_FRAME_BYTES + 1) as a dict with a known op."""
+    if len(line) > MAX_FRAME_BYTES:
+        raise ProtocolError(f"A command line is longer than {MAX_FRAME_BYTES} bytes.")
+    try:
+        command = json.loads(line)
+    except ValueError:
+        raise ProtocolError("A command line is not JSON.") from None
+    if not isinstance(command, dict):
+        raise ProtocolError("A command line is not a JSON object.")
+    op = command.get("op")
+    required = _COMMAND_FIELDS.get(op) if isinstance(op, str) else None
+    if required is None:
+        raise ProtocolError("A command's op is not run, cancel or evict.")
+    for name in required:
+        if not isinstance(command.get(name), str) or not command[name]:
+            raise ProtocolError(f"A {op} command has no usable '{name}'.")
+    return command
+
+
+def remove_outputs(job):
+    """Deletes what a job may have written so far; a file it never wrote is no error."""
+    for name in _OUTPUT_FIELDS:
+        if isinstance(path := job.get(name), str) and path:
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(path)
+
+
 def validate_job(job):
     """Checks every field the host fixes, before the model is loaded."""
     if not isinstance(job, dict):
@@ -58,10 +125,12 @@ def validate_job(job):
     if job.get("contractVersion") != CONTRACT_VERSION:
         raise JobError("The job's contract version is not supported by this script.")
     kind = job.get("kind")
-    if kind == STEERING_KIND:
-        return _validated_steering_job(job)
     if kind == SOURCE_KIND:
         return _validated_source_job(job)
+    # The worker holds one model under this key: a later job naming another is refused, not served the wrong one.
+    _require_strings(job, ("modelKey",))
+    if kind == STEERING_KIND:
+        return _validated_steering_job(job)
     if kind != TRACE_KIND:
         raise JobError("The job has no usable 'kind'.")
     _require_strings(job, ("checkpointPath", "prompt", "tracePath", "resultPath"))
@@ -81,7 +150,68 @@ def validate_job(job):
         raise JobError("The job has no usable 'traceByteCap'.")
     if not _is_int(job.get("seed")):
         raise JobError("The job has no usable 'seed'.")
+    _validate_attention_fields(job)
+    _validate_lens_fields(job)
     return job
+
+
+def _given(job, fields, kind, together):
+    """Whether the job gives a group of optional fields, refused when it gives only some."""
+    given = [name for name in fields if job.get(name) is not None]
+    if given and len(given) != len(fields):
+        raise JobError(f"The job's {kind} fields come {together}, and it gives only {given}.")
+    return bool(given)
+
+
+def _validate_attention_fields(job):
+    if not _given(job, _ATTENTION_FIELDS, "attention", "all four or none"):
+        return
+    _require_strings(job, ("attentionPath",))
+    layers = job["attentionLayers"]
+    usable = (
+        isinstance(layers, list)
+        and 1 <= len(layers) <= MAX_ATTENTION_LAYERS
+        and all(_is_int(layer) and layer >= 0 for layer in layers)
+        and layers == sorted(set(layers))
+    )
+    if not usable:
+        raise JobError("The job has no usable 'attentionLayers'.")
+    keys = job["attentionTopKeys"]
+    if not _is_int(keys) or not 1 <= keys <= MAX_ATTENTION_TOP_KEYS:
+        raise JobError("The job has no usable 'attentionTopKeys'.")
+    cap = job["attentionByteCap"]
+    if not _is_int(cap) or cap <= FOOTER_RESERVE_BYTES:
+        raise JobError("The job has no usable 'attentionByteCap'.")
+
+
+def _validate_lens_fields(job):
+    if not _given(job, _LENS_FIELDS, "lens", "both or neither"):
+        return
+    top = job["lensTopTokens"]
+    if not _is_int(top) or not 1 <= top <= MAX_LENS_TOP_TOKENS:
+        raise JobError("The job has no usable 'lensTopTokens'.")
+    cap = job["lensByteCap"]
+    if not _is_int(cap) or cap <= FOOTER_RESERVE_BYTES:
+        raise JobError("The job has no usable 'lensByteCap'.")
+
+
+def captures_attention(job):
+    return job.get("attentionPath") is not None
+
+
+def records_lens(job):
+    return job.get("lensTopTokens") is not None
+
+
+def lens_readable(block_count, final_norm, output_layer, text_config):
+    """Whether the batched readout is the model's own for blocks 0..B-2: at least two blocks, a final norm and an
+    output layer, and no logit transform after that layer. A model that fails this traces as without the lens."""
+    return (
+        block_count >= 2
+        and final_norm is not None
+        and output_layer is not None
+        and all(getattr(text_config, name, None) in neutral for name, neutral in _NEUTRAL_LOGIT_TRANSFORMS.items())
+    )
 
 
 def _validated_steering_job(job):
@@ -181,6 +311,10 @@ def _gguf_string(text):
     return struct.pack("<Q", len(encoded)) + encoded
 
 
+# How much of a failure's own text the row's reason keeps, after its type name.
+FAILURE_MESSAGE_CHARACTERS = 400
+
+
 def describe_failure(error):
     """The row's reason. Triton's text for a missing compiler offers remedies a user cannot reach, so it is replaced."""
     if "Failed to find C compiler" in str(error):
@@ -189,7 +323,7 @@ def describe_failure(error):
             "Install one or make it visible to the node, then start the trace again."
         )
     # Shortened, and the type kept: str(error) can be empty.
-    return f"{type(error).__name__}: {str(error)[:400]}"
+    return f"{type(error).__name__}: {str(error)[:FAILURE_MESSAGE_CHARACTERS]}"
 
 
 def _rounded(value):
@@ -211,14 +345,28 @@ def _json_bytes(text):
     return len(json.dumps(text, ensure_ascii=False).encode()) - 2
 
 
+def _written_bytes(text):
+    # As CappedTraceWriter writes it: ASCII-escaped, so a CJK character takes 6 bytes and an astral one 12.
+    return len(json.dumps(text)) - 2
+
+
+def _cut(text, size):
+    if size(text) <= CANDIDATE_TEXT_BYTES:
+        return text
+    while size(text + CUT_MARK) > CANDIDATE_TEXT_BYTES:
+        text = text[:-1]
+    return text + CUT_MARK
+
+
 def cut_text(text):
     """A token text whose JSON form takes at most CANDIDATE_TEXT_BYTES, a cut one ending in an ellipsis; the id stays
     exact. Bytes, not characters: 64 control characters escape to 384 bytes, and 41 texts a step must fit the cap."""
-    if _json_bytes(text) <= CANDIDATE_TEXT_BYTES:
-        return text
-    while _json_bytes(text + CUT_MARK) > CANDIDATE_TEXT_BYTES:
-        text = text[:-1]
-    return text + CUT_MARK
+    return _cut(text, _json_bytes)
+
+
+def cut_written_text(text):
+    """cut_text for a trace line: the same bound, measured in the ASCII-escaped form the trace writer writes."""
+    return _cut(text, _written_bytes)
 
 
 def step_candidates(ids, texts, logprobs):
@@ -243,40 +391,47 @@ def scored_token(token_id, text, raw, processed):
     }
 
 
-def check_aligned(chosen, generated):
-    """Raises unless the steps the candidate processor saw chose exactly the generated tokens, one step per token."""
+def check_aligned(chosen, generated, steps="candidate"):
+    """Raises unless the steps a processor saw chose exactly the generated tokens, one step per token."""
     if list(chosen) != list(generated):
         raise RuntimeError(
-            f"The candidate steps ({len(chosen)}) did not choose the generated tokens ({len(generated)}): "
+            f"The {steps} steps ({len(chosen)}) did not choose the generated tokens ({len(generated)}): "
             "a later processor or the decoding loop changed the choice."
         )
 
 
 def _trace_result_bytes(result):
-    return json.dumps(result, ensure_ascii=False).encode()
+    # Strict JSON, like every other writer here: the host's parser refuses NaN and infinity.
+    return json.dumps(result, ensure_ascii=False, allow_nan=False).encode()
 
 
-def _cut_candidate_texts(tokens):
-    for token in tokens:
+def _cut_candidate_texts(result):
+    for token in result["tokens"]:
         for candidate in token["candidates"] + token["processedCandidates"]:
             candidate["text"] = cut_text(candidate["text"])
 
 
-def _cut_token_texts(tokens):
-    for token in tokens:
+def _cut_prompt_texts(result):
+    for piece in result.get("promptPieces", ()):
+        piece["text"] = cut_text(piece["text"])
+
+
+def _cut_token_texts(result):
+    for token in result["tokens"]:
         token["text"] = cut_text(token["text"])
 
 
 def fitted_trace_result(result, budget=TRACE_RESULT_BUDGET_BYTES):
-    """A trace's result.json bytes, texts whole unless over the budget: then candidate texts are cut, then token texts.
+    """A trace's result.json bytes, texts whole unless over the budget: then candidate texts are cut, then the prompt
+    pieces' texts, then token texts.
 
     Cuts ``result`` in place. Over the budget even then, it raises: the host would refuse the file.
     """
     blob = _trace_result_bytes(result)
-    for cut in (_cut_candidate_texts, _cut_token_texts):
+    for cut in (_cut_candidate_texts, _cut_prompt_texts, _cut_token_texts):
         if len(blob) <= budget:
             return blob
-        cut(result["tokens"])
+        cut(result)
         blob = _trace_result_bytes(result)
     if len(blob) > budget:
         raise ValueError(f"The trace result is {len(blob)} bytes with its texts cut, over its budget of {budget}.")
@@ -296,10 +451,56 @@ def trace_record(step, layer, kind, norm, percentiles, top_indices, top_values):
     }
 
 
+def competition_rank(logprobs, chosen):
+    """The chosen token's rank per row, ties sharing the better rank: 1 plus the count strictly above it. On tensors
+    in modellab.py: ``logprobs`` [B, V], ``chosen`` [B, 1]. A NaN chosen value compares above nothing and ranks 1,
+    so lens_record writes the rank only beside a finite chosen logprob."""
+    return (logprobs > chosen).sum(-1) + 1
+
+
+def lens_record(step, ids, logprobs, chosen, ranks, entropies, texts):
+    """One step's logit lens, per block (index = block): the top ids and logprobs, the chosen token's logprob and
+    rank, and the readout's entropy in nats; a rank is null exactly where its chosen logprob is. ``texts`` maps every
+    id to its decoded text; the line keeps the step's distinct top ids' texts, each cut as written."""
+    return {
+        "lens": {
+            "s": step,
+            "i": [list(row) for row in ids],
+            "p": [[_floored_logprob(value) for value in row] for row in logprobs],
+            "c": [_floored_logprob(value) for value in chosen],
+            "r": [rank if math.isfinite(value) else None for rank, value in zip(ranks, chosen, strict=True)],
+            # + 0.0: a one-hot readout sums to -0.0, written 0.0.
+            "e": [_rounded(value + 0.0) for value in entropies],
+            "t": {str(token): cut_written_text(texts[token]) for token in sorted({t for row in ids for t in row})},
+        }
+    }
+
+
+def _scaled_down(weight):
+    if not math.isfinite(weight):
+        raise JobError("An attention weight was not a finite number, so the trace's attention rows cannot be stored.")
+    return math.floor(weight * ATTENTION_WEIGHT_SCALE)
+
+
+def attention_record(step, layer, query_position, keys, weights):
+    """The attention of the query that predicts token ``step``, at one layer: per head the kept key positions best
+    first, their weights, and the rest of the row's mass. All rounded down, so a head's row never sums past the scale.
+    """
+    return {
+        "s": step,
+        "l": layer,
+        "q": query_position,
+        "k": [list(head) for head in keys],
+        "w": [[_scaled_down(weight) for weight in head] for head in weights],
+        # Clamped: a float32 softmax row can sum a hair past 1.
+        "r": [max(0, _scaled_down(1 - sum(head))) for head in weights],
+    }
+
+
 class CappedTraceWriter:
     """JSON lines with a hard byte cap. Once a record does not fit, every later one is counted, not written."""
 
-    def __init__(self, path, cap):
+    def __init__(self, path, cap, footer_key=None, handle=None):
         if cap <= FOOTER_RESERVE_BYTES:
             raise ValueError("The trace byte cap is too small for its footer.")
         self.path = path
@@ -307,8 +508,15 @@ class CappedTraceWriter:
         self.bytes = 0
         self.records = 0
         self.dropped = 0
+        self._footer_key = footer_key
+        self._owns_handle = handle is None
         # The directory is owner-only; the file holds statistics of the prompt's activations.
-        self._handle = open(path, "wb")  # noqa: SIM115 - it stays open across the hooks, until close().
+        self._handle = open(path, "wb") if handle is None else handle  # noqa: SIM115 - open until close().
+
+    def section(self, cap, footer_key):
+        """Lines on the same file under their own cap and counts, ending in a ``{footer_key: {...}}`` line; this
+        writer's records and footer stay as they would be without it. Close the section before this writer."""
+        return CappedTraceWriter(self.path, cap, footer_key, self._handle)
 
     @property
     def truncated(self):
@@ -328,19 +536,20 @@ class CappedTraceWriter:
         return True
 
     def close(self):
-        footer = {
-            "footer": True,
+        counts = {
             "truncated": self.truncated,
             "records": self.records,
             "dropped": self.dropped,
             "payloadBytes": self.bytes,
             "cap": self.cap,
         }
+        footer = {"footer": True, **counts} if self._footer_key is None else {self._footer_key: counts}
         line = (json.dumps(footer, separators=(",", ":")) + "\n").encode()
         if len(line) > FOOTER_RESERVE_BYTES:
             raise ValueError("The trace footer is larger than its reserve.")
         self._handle.write(line)
-        self._handle.close()
+        if self._owns_handle:
+            self._handle.close()
         return self.bytes + len(line)
 
 

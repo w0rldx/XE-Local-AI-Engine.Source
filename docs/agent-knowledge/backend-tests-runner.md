@@ -119,7 +119,7 @@ lock, or the parallelism limits.
 
 ### A loopback port you bound on `:0` and released is a candidate, not a reservation
 
-**Rule:** hold-versus-retry is in `docs/wiki/17-writing-tests.md` ("Independence"). `LoopbackPort.BindWithRetryAsync` retries only on the engine CLI's exit code 6 (`DesktopPortStore.IsPortAvailable` branch of `Program`) and Kestrel's `IOException` → `AddressInUseException` → `SocketException` chain: return `null` on those, let every other failure throw, never retry on time. Never "fix" a race with an ephemeral port when the test proves a requested port is honoured. **Prevents:** a batch taking the released candidate first. **Authority:** `XE-Local-AI-Engine.Tests/Testing/LoopbackPort.cs`. [evidence](../agent-knowledge-evidence.md#a-loopback-port-you-bound-on-0-and-released-is-a-candidate-not-a-reservation)
+**Rule:** hold-versus-retry is in `docs/wiki/17-writing-tests.md` ("Independence"). `LoopbackPort.BindWithRetryAsync` retries only on the engine CLI's exit code 6 (the `DesktopPortStore.IsPortAvailable` branch of `Program`, or a port lost before Kestrel's bind: `PortInUseFailure`) and Kestrel's `IOException` → `AddressInUseException` → `SocketException` chain: return `null` on those, let every other failure throw, never retry on time. Never "fix" a race with an ephemeral port when the test proves a requested port is honoured. **Prevents:** a batch taking the released candidate first. **Authority:** `XE-Local-AI-Engine.Tests/Testing/LoopbackPort.cs`. [evidence](../agent-knowledge-evidence.md#a-loopback-port-you-bound-on-0-and-released-is-a-candidate-not-a-reservation)
 
 ### Never classify a cancellation from a `CancellationToken.Register` callback
 

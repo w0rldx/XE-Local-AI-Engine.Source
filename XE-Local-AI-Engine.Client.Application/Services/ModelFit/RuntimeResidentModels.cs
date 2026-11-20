@@ -6,7 +6,10 @@ using XE_Local_AI_Engine.Providers.WhisperCpp;
 public enum RuntimeResidentKind
 {
     Image = 0,
-    Transcription = 1
+    Transcription = 1,
+
+    /// <summary>The warm Model Lab Python worker; its model id is the checkpoint's repository id.</summary>
+    ModelLab = 2
 }
 
 /// <summary>What a resident daemon is doing right now.</summary>
@@ -18,12 +21,12 @@ public enum RuntimeResidentState
     Exited = 3
 }
 
-/// <summary>One image or whisper daemon held in memory, read from in-memory state only.</summary>
+/// <summary>One image or whisper daemon or the warm Model Lab worker held in memory, read from in-memory state only.</summary>
 public sealed class RuntimeResident
 {
     public required RuntimeResidentKind Runtime { get; init; }
 
-    /// <summary>The image model name or the whisper catalog id; <see langword="null" /> while starting or switching.</summary>
+    /// <summary>The image model name, the whisper catalog id or the Model Lab checkpoint's repository id; <see langword="null" /> while starting or switching.</summary>
     public required string? ModelId { get; init; }
 
     public required RuntimeResidentState State { get; init; }
@@ -33,4 +36,7 @@ public sealed class RuntimeResident
 
     /// <summary>Whether that runtime's eject would be admitted now: the same gate fields its eviction reservation refuses on.</summary>
     public required bool CanEject { get; init; }
+
+    /// <summary>The Model Lab worker's allocated GPU memory at its last ready; <see langword="null" /> for image and whisper rows and before that ready.</summary>
+    public long? VramBytes { get; init; }
 }

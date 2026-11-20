@@ -3,6 +3,7 @@ import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useImageObjectUrl } from "@/features/images/hooks/useImageObjectUrl";
 import type { ImageEditSource, UploadedImageView } from "@/features/images/models/ImageModels";
@@ -21,6 +22,7 @@ interface UploadedImageCardProps {
  */
 export function UploadedImageCard({ image, onEdit }: UploadedImageCardProps) {
 	const { t } = useTranslation();
+	const { confirm } = useConfirm();
 	const { url, isLoading, isError } = useImageObjectUrl(image.imageId);
 	const deleteUpload = useDeleteUploadedImage();
 	const label = t("pages.images.uploads.uploaded", "Uploaded");
@@ -60,14 +62,26 @@ export function UploadedImageCard({ image, onEdit }: UploadedImageCardProps) {
 							color="red"
 							leftSection={<IconTrash size={14} />}
 							loading={deleteUpload.isPending}
-							onClick={() =>
+							onClick={async () => {
+								const confirmed = await confirm({
+									title: t("pages.images.uploads.deleteConfirm.title", "Delete this uploaded image?"),
+									description: t(
+										"pages.images.uploads.deleteConfirm.description",
+										"The image is deleted from this node. This cannot be undone.",
+									),
+									confirmationText: t("common.delete", "Delete"),
+									cancellationText: t("common.cancel", "Cancel"),
+								});
+								if (!confirmed) {
+									return;
+								}
 								deleteUpload.mutate(image.imageId, {
 									onError: (error) =>
 										toast.error(
 											apiErrorMessage(error, t("pages.images.uploads.deleteError", "Could not delete the uploaded image.")),
 										),
-								})
-							}
+								});
+							}}
 							data-testid="uploaded-image-delete"
 						>
 							{t("common.delete", "Delete")}

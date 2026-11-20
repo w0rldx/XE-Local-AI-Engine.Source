@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import { isImeComposing } from "@/core/ui/models/ImeComposition";
 import {
 	GraphWorkflowAgentConfigForm,
 	type GraphWorkflowAgentOption,
@@ -34,6 +35,7 @@ import {
 	GraphWorkflowStartConfigForm,
 } from "@/features/graphWorkflows/components/config/GraphWorkflowSimpleConfigForms";
 import { GraphWorkflowToolConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowToolConfigForm";
+import { GraphWorkflowNodeConnectControl } from "@/features/graphWorkflows/components/GraphWorkflowNodeConnectControl";
 import {
 	type GraphWorkflowCanvasNodeData,
 	type GraphWorkflowGraphSettings,
@@ -70,8 +72,10 @@ export interface GraphWorkflowNodeConfigPanelProps {
 	readonly decisionModelOptionsReady?: boolean;
 	/** The graph's `kind` and `chat` block: they decide which chat switches apply and what End publishes by default. */
 	readonly graphSettings?: GraphWorkflowGraphSettings;
-	/** Every node of the graph, for a DevTask `apply` node's implement-node picker. */
+	/** Every node of the graph, for a DevTask `apply` node's implement-node picker and the Connect to targets. */
 	readonly graphNodes?: readonly GraphWorkflowCanvasNodeData[];
+	/** Adds an edge from this node through the editor's `onConnect`. Absent, the panel offers no Connect to control. */
+	readonly onConnect?: (target: string, sourceHandle: string | undefined) => void;
 	readonly readOnly?: boolean;
 	/** Opens the Assistant tab about this node. Absent where there is no assistant, such as the run view. */
 	readonly onAskAssistant?: () => void;
@@ -93,6 +97,7 @@ export function GraphWorkflowNodeConfigPanel({
 	decisionModelOptionsReady = true,
 	graphSettings = standardGraphSettings,
 	graphNodes = [],
+	onConnect,
 	readOnly = false,
 	onAskAssistant,
 }: GraphWorkflowNodeConfigPanelProps) {
@@ -332,7 +337,7 @@ export function GraphWorkflowNodeConfigPanel({
 				}}
 				onBlur={commitKey}
 				onKeyDown={(event) => {
-					if (event.key === "Enter") {
+					if (event.key === "Enter" && !isImeComposing(event)) {
 						commitKey();
 					}
 				}}
@@ -403,6 +408,15 @@ export function GraphWorkflowNodeConfigPanel({
 					data-testid="gw-node-config-timeout"
 				/>
 			</Group>
+			{onConnect === undefined ? null : (
+				<GraphWorkflowNodeConnectControl
+					key={node.key}
+					node={node}
+					graphNodes={graphNodes}
+					onConnect={onConnect}
+					readOnly={readOnly}
+				/>
+			)}
 
 			{body}
 			<GraphWorkflowChatSwitches node={node} graphSettings={graphSettings} onChange={onChange} readOnly={readOnly} />

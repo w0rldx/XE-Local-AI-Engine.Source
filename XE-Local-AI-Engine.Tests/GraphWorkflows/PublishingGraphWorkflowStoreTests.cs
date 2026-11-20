@@ -52,8 +52,27 @@ public sealed class PublishingGraphWorkflowStoreTests
 
             await publisher.Received(1).PublishAsync(RunId, Sequence, probe.Kind, Arg.Any<CancellationToken>());
             AssertEx.Equal(expected: 1,
-                publisher.ReceivedCalls().Count(),
+                CallsTo(publisher, nameof(IGraphWorkflowEventPublisher.PublishAsync)),
                 $"{probe.Method} → {probe.Kind} must announce its commit exactly once, with the watermark that commit allocated.");
+        }
+    }
+
+    /// <summary>
+    ///     A run's status has one writer, so a run transition is the only mutation that also tells every connection the
+    ///     run's new status: that broadcast is how the operations feed sees a run start or stop waiting for a decision.
+    /// </summary>
+    [Test]
+    public async Task OnlyARunTransition_BroadcastsTheRunsNewStatus()
+    {
+        foreach (var probe in Probes())
+        {
+            var (store, publisher, _) = Create();
+
+            await probe.Invoke(store);
+
+            var expected = probe.Method == nameof(IGraphWorkflowStore.TransitionRunAsync) ? 1 : 0;
+            await publisher.Received(expected).PublishRunStatusAsync(RunId, GraphWorkflowRunStatus.Running, Arg.Any<CancellationToken>());
+            AssertEx.Equal(expected, CallsTo(publisher, nameof(IGraphWorkflowEventPublisher.PublishRunStatusAsync)), probe.Method);
         }
     }
 
@@ -150,6 +169,8 @@ public sealed class PublishingGraphWorkflowStoreTests
         var (store, publisher, inner) = Create();
         publisher.PublishAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<GraphWorkflowChangeKind>(), Arg.Any<CancellationToken>())
                  .ThrowsAsyncForAnyArgs(new InvalidOperationException("the hub is gone"));
+        publisher.PublishRunStatusAsync(Arg.Any<Guid>(), Arg.Any<GraphWorkflowRunStatus>(), Arg.Any<CancellationToken>())
+                 .ThrowsAsyncForAnyArgs(new InvalidOperationException("the hub is gone"));
 
         var result = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
         {
@@ -161,6 +182,9 @@ public sealed class PublishingGraphWorkflowStoreTests
         AssertEx.Equal(Sequence, result.Sequence, "the commit's own watermark still reaches the caller.");
         await inner.Received(1).TransitionRunAsync(Arg.Any<TransitionGraphWorkflowRunCommand>(), Arg.Any<CancellationToken>());
     }
+
+    private static int CallsTo(IGraphWorkflowEventPublisher publisher, string method) =>
+        publisher.ReceivedCalls().Count(call => string.Equals(call.GetMethodInfo().Name, method, StringComparison.Ordinal));
 
     /// <summary>Every mutation the store can commit, and the kind the client reacts to.</summary>
     private static IReadOnlyList<Probe> Probes() =>

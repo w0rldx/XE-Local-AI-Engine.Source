@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     Blobs are laid out in the platform's native byte order and carry the RESOLVED embedding model name that produced
 ///     them plus the vector dimension they were produced at. Applies the document embedding prefix and batches the work;
 ///     a transport/model failure, or a within-run dimension inconsistency, throws a content-free
-///     <see cref="KnowledgeIngestionException" />.
+///     <see cref="KnowledgeIngestionException" />; an operator eject's background veto passes through unchanged.
 /// </remarks>
 public interface IKnowledgeChunkEmbedder
 {
@@ -37,6 +37,20 @@ public interface IKnowledgeChunkEmbedder
     Task<KnowledgeEmbeddingDescriptor?> ResolveExpectedVectorAsync(CancellationToken cancellationToken)
     {
         return Task.FromResult<KnowledgeEmbeddingDescriptor?>(null);
+    }
+
+    /// <summary>
+    ///     Whether an operator eject still marks the currently resolved embedding model, so a background ingestion run
+    ///     would be refused; false for an embedding provider without eject marks.
+    /// </summary>
+    /// <remarks>
+    ///     Also true when the embedding model cannot be resolved confidently: the fallback name may not be the marked
+    ///     model, so an unknown answer keeps waiting rows waiting instead of re-admitting them. False when the inventory
+    ///     proved the pinned model removed, so the re-admitted run fails with the missing-model reason.
+    /// </remarks>
+    Task<bool> IsEmbeddingModelBlockedAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult(false);
     }
 }
 

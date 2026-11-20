@@ -1,11 +1,16 @@
 import type { TFunction } from "i18next";
 
 import type {
+	XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactResponse as BaseArtifactResponse,
+	XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse as GraphWorkflowRunResponse,
 	XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse as ImageJobResponse,
+	XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse as ModelLabExperimentResponse,
 	XeLocalAiEngineClientEndpointsTrainingV1TrainingDatasetResponse as TrainingDatasetResponse,
 	XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse as TrainingRunResponse,
+	XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionSummaryResponse as WorkSessionResponse,
 } from "@/core/api/generated";
 import { imageJobFailureMessage } from "@/core/models/ImageJobFailure";
+import { isRecord } from "@/core/models/JsonRecord";
 import {
 	byteLine,
 	INDETERMINATE,
@@ -14,8 +19,9 @@ import {
 	type OperationState,
 } from "@/core/operations/models/OperationModels";
 
-// The job sources of the operations feed. Training runs, dataset builds and image jobs are rows of the history lists
-// their pages already read; knowledge-base indexing, scheduler runs and image/Whisper model downloads are push-fed maps
+// The job sources of the operations feed. Training runs, dataset builds, image jobs, Model Lab experiments and base
+// checkpoint downloads are rows of the lists their pages already read; graph runs and work sessions add a row only while
+// they wait for the user; knowledge-base indexing, scheduler runs and image/Whisper model downloads are push-fed maps
 // (their hubs broadcast and there is no cheap list to hydrate from). Like the GGUF rows, a cancelled job is the user's
 // own decision: no row.
 
@@ -212,9 +218,15 @@ const SCHEDULER_RUN_STATE: Readonly<Record<string, OperationState | "cancelled">
 // Terminal entries kept for the coordinator to see; older ones are dropped so a long session stays bounded.
 const MAX_SETTLED_SCHEDULER_RUNS = 20;
 
+/** A string member of an untrusted hub payload; `undefined` when the payload is no object or the member no string. */
+export function stringField(payload: unknown, key: string): string | undefined {
+	const value = isRecord(payload) ? payload[key] : undefined;
+	return typeof value === "string" ? value : undefined;
+}
+
 function readString(payload: unknown, key: "runId" | "templateId" | "errorMessage"): string | undefined {
-	const value = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>)[key] : undefined;
-	return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+	const value = stringField(payload, key);
+	return value !== undefined && value.trim().length > 0 ? value : undefined;
 }
 
 /**
@@ -287,7 +299,7 @@ export function applyModelDownloadEvent(
 	payload: unknown,
 	nameKey: "modelName" | "modelId",
 ): ModelDownloads | undefined {
-	const record = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>) : {};
+	const record = isRecord(payload) ? payload : {};
 	const name = record[nameKey];
 	const rawPhase = record["phase"];
 	const phase = typeof rawPhase === "string" ? rawPhase.toLowerCase() : undefined;
@@ -391,4 +403,124 @@ export function fromSchedulerRuns(runs: SchedulerRuns | undefined, t: TFunction)
 		detail: entry.error,
 		href: { to: "/scheduler" },
 	}));
+}
+
+// The graph run status a Pause node parks a run in until someone decides.
+export const graphRunWaitingStatus = "WaitingForApproval";
+
+/**
+ * Graph runs parked for a decision, one waiting row each, linked to the run. The source lists only parked runs.
+ * Accepted ceiling: the run summary carries nothing that changes per Pause node, so a run decided at one Pause and
+ * parked at the next between two reads looks like one wait and alerts once.
+ */
+export function fromWaitingGraphRuns(runs: readonly GraphWorkflowRunResponse[], t: TFunction): Operation[] {
+	return runs
+		.filter((run) => run.status === graphRunWaitingStatus)
+		.map((run) => ({
+			id: `graph-run:${run.id}`,
+			kind: "graph-run",
+			label: t("operations.graphRun.waiting", "A workflow waits for your decision"),
+			progress: INDETERMINATE,
+			state: "waiting",
+			href: { to: "/graph-workflows", search: { definitionId: run.definitionId, runId: run.id } },
+		}));
+}
+
+/** Work sessions waiting for input or approval, one waiting row each; every other session is the page's business. */
+export function fromWaitingWorkSessions(sessions: readonly WorkSessionResponse[], t: TFunction): Operation[] {
+	return sessions.flatMap((session) => {
+		const title = session.title;
+		const label =
+			session.status === "WaitingForInput"
+				? t("operations.workSession.waitingForInput", "Work session {{title}} waits for your input", { title })
+				: session.status === "WaitingForApproval"
+					? t("operations.workSession.waitingForApproval", "Work session {{title}} waits for your approval", { title })
+					: undefined;
+		return label === undefined
+			? []
+			: [
+					{
+						id: `work-session:${session.id}`,
+						kind: "work-session",
+						label,
+						progress: INDETERMINATE,
+						state: "waiting",
+						// A session that moves from waiting for input to waiting for approval between two reads waits anew.
+						waitKey: `work-session:${session.id}:${session.status}`,
+						href: { to: "/work-sessions/$sessionId", params: { sessionId: session.id } },
+					} satisfies Operation,
+				];
+	});
+}
+
+/** Model Lab experiments (trace and steering runs) from the experiments list, so one ending elsewhere still alerts. */
+export function fromModelLabExperiments(experiments: readonly ModelLabExperimentResponse[], t: TFunction): Operation[] {
+	return experiments.flatMap((experiment) => {
+		const state = jobState(experiment.status);
+		const model = experiment.installedModelName || experiment.repoId;
+		return state === undefined
+			? []
+			: [
+					{
+						id: `model-lab-experiment:${experiment.id}`,
+						kind: "model-lab-experiment",
+						label: pick(
+							state,
+							t("operations.modelLabExperiment.running", "Running a Model Lab experiment on {{model}}", { model }),
+							t("operations.modelLabExperiment.succeeded", "The Model Lab experiment on {{model}} finished", { model }),
+							t("operations.modelLabExperiment.failed", "The Model Lab experiment on {{model}} failed", { model }),
+						),
+						progress: INDETERMINATE,
+						state,
+						detail: state === "failed" ? (experiment.errorMessage ?? undefined) : undefined,
+						href: { to: "/model-lab", search: { tab: "trace" } },
+					} satisfies Operation,
+				];
+	});
+}
+
+const BASE_ARTIFACT_STATE: Readonly<Record<string, OperationState>> = {
+	Downloading: "running",
+	Ready: "succeeded",
+	Failed: "failed",
+};
+
+/**
+ * Base checkpoint downloads. The store is shared by Model Lab and training and records no starter, so every download
+ * shows, labelled as a base checkpoint rather than as Model Lab's.
+ */
+export function fromBaseArtifactDownloads(artifacts: readonly BaseArtifactResponse[], t: TFunction): Operation[] {
+	return artifacts.flatMap((artifact) => {
+		const state = BASE_ARTIFACT_STATE[artifact.status];
+		if (state === undefined) {
+			return [];
+		}
+		const repo = artifact.repoId;
+		const completed = artifact.progress?.completedBytes;
+		const total = artifact.progress?.totalBytes;
+		return [
+			{
+				id: `base-artifact-download:${artifact.id}`,
+				kind: "base-artifact-download",
+				label: pick(
+					state,
+					t("operations.baseArtifactDownload.running", "Downloading the base checkpoint {{repo}}", { repo }),
+					t("operations.baseArtifactDownload.succeeded", "The base checkpoint {{repo}} is downloaded", { repo }),
+					t("operations.baseArtifactDownload.failed", "The base checkpoint {{repo}} could not be downloaded", { repo }),
+				),
+				progress:
+					state === "running" && completed != null && total != null && total > 0
+						? knownProgress((completed / total) * 100)
+						: INDETERMINATE,
+				state,
+				detail:
+					state === "failed"
+						? (artifact.errorMessage ?? undefined)
+						: state === "running"
+							? byteLine(completed, total, t)
+							: undefined,
+				href: { to: "/model-lab", search: { tab: "trace" } },
+			} satisfies Operation,
+		];
+	});
 }

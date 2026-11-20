@@ -28,7 +28,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_ReassemblesEveryRangeExactly_AndVerifiesHash()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 4);
         var correctSha = Infra.Sha256Upper(Payload);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((request, _) => RangeResponse(Payload, request, correctSha));
@@ -76,7 +76,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_WhenOriginIgnoresRange_FallsBackToSingleStream()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 4);
         // An origin that answers every request — the probe included — with the whole file and a plain 200.
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(Payload));
@@ -106,7 +106,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_Resume_RefetchesOnlyTheIncompleteRange()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         // Two connections over 8192 bytes: chunk 0 is [0, 4096), chunk 1 is [4096, 8192).
         var options = ParallelOptions(dir.Path, connections: 2, retries: 0);
         var destination = dir.FilePath(Infra.FileName);
@@ -168,7 +168,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_WhenResumeSidecarIsTorn_RefetchesEveryRange()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 2, retries: 0);
         var destination = dir.FilePath(Infra.FileName);
         var partPath = destination + ".part";
@@ -225,7 +225,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_WhenFullLengthPartHasNoSidecar_RefetchesEveryRange()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 2);
         var destination = dir.FilePath(Infra.FileName);
         // A pre-sized parallel .part whose cursors were swept away: its length is the whole file, but its content is
@@ -254,7 +254,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_AdoptsExistingSingleStreamPart_WithoutRefetchingIt()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 2);
         var destination = dir.FilePath(Infra.FileName);
         // A .part left by the single-stream path: contiguous from byte 0, with a one-cursor record naming the commit
@@ -288,7 +288,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_WhenSingleStreamPrefixNamesAnotherCommit_RefetchesEveryRange()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 2);
         var destination = dir.FilePath(Infra.FileName);
         // A contiguous prefix whose record names a commit the ref has since moved off. Adopting it would splice the old
@@ -323,7 +323,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_WhenSingleStreamPrefixHasNoRecord_RefetchesEveryRange()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 2);
         var destination = dir.FilePath(Infra.FileName);
         // A contiguous prefix with nothing beside it — a .part from before the writing commit was recorded. Which
@@ -352,7 +352,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task SingleStreamDownload_Resume_PinsTheRecordedCommit_AndKeepsThePrefix()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         // One connection: the single-stream path verbatim, with no range probe in front of it.
         var options = ParallelOptions(dir.Path, connections: 1);
         var destination = dir.FilePath(Infra.FileName);
@@ -393,7 +393,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task SingleStreamDownload_WhenTheRecordedCommitMoved_DiscardsThePartialAndRefetchesFromZero()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 1);
         var destination = dir.FilePath(Infra.FileName);
         const int alreadyFetched = 3000;
@@ -432,7 +432,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task SingleStreamDownload_WhenThePartialHasNoRecord_RefetchesFromZero()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 1);
         var destination = dir.FilePath(Infra.FileName);
         // A legacy .part: contiguous, but with no record of what wrote it.
@@ -461,7 +461,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_ConnectionCount_IsClampedToSixteen()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var payload = BuildPayload(16384);
         var options = ParallelOptions(dir.Path, connections: 99);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((request, _) => RangeResponse(payload, request));
@@ -488,7 +488,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_ConnectionCountBelowOne_UsesSingleStreamWithoutProbing()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 0);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(Payload));
         using var http = new HttpClient(handler);
@@ -515,7 +515,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_FileBelowThreshold_UsesSingleStreamWithoutProbing()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 4);
         // One byte under the worth-it threshold: splitting would cost more than it returns.
         options.ParallelDownloadMinimumBytes = Payload.Length + 1;
@@ -541,7 +541,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_PinsEveryChunkToTheProbedCommit_NotTheMutableRef()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 2);
         var destination = dir.FilePath(Infra.FileName);
         // Chunks run concurrently, so the recorder has to be thread-safe; the probe is still enqueued first.
@@ -578,7 +578,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_WhenChunkContentRangeDoesNotMatchTheRequest_IsRejectedWithoutCommitting()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 2, retries: 0);
         var destination = dir.FilePath(Infra.FileName);
 
@@ -613,7 +613,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_WhenAChunkReportsADifferentCommit_IsRejectedWithoutCommitting()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 2, retries: 0);
         var destination = dir.FilePath(Infra.FileName);
 
@@ -643,7 +643,7 @@ public sealed class HfParallelDownloadTests
     [Test]
     public async Task ParallelDownload_WhenTheRefMovedBetweenAttempts_RefetchesEveryRange()
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var options = ParallelOptions(dir.Path, connections: 2, retries: 0);
         var destination = dir.FilePath(Infra.FileName);
         const int chunkSize = 4096;

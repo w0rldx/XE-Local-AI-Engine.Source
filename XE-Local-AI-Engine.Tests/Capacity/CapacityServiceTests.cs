@@ -233,7 +233,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            MaxLoadedProcesses = 2,
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 2
+            },
             RunningLlama =
             [
                 new LlamaServerProcessHealth
@@ -264,6 +267,50 @@ public sealed class CapacityServiceTests
         AssertRejectionLogged(harness, "maximum number of concurrent models", "'running/a:Q4_K_M' (Chat)");
     }
 
+    /// <summary>The node-settings save writes the cap into the running supervisor options; the next decision of the same service reads it.</summary>
+    [Test]
+    public async Task ProcessCap_FollowsALiveChangeOfTheSupervisorCap()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb),
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 2
+            },
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "running/a:Q4_K_M",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                },
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "running/b:Q4_K_M",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
+            ]
+        };
+        var service = harness.Build();
+        var atTheCap = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, atTheCap.Verdict);
+
+        harness.SupervisorOptions.MaxLoadedProcesses = 3;
+        var raised = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+        AssertEx.Equal(CapacityVerdict.Allow, raised.Verdict);
+        raised.Reservation?.Dispose();
+
+        harness.SupervisorOptions.MaxLoadedProcesses = 2;
+        var lowered = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, lowered.Verdict);
+    }
+
     [Test]
     public async Task Capacity_ResidentCompanions_DoNotCountTowardTheChatProcessCap()
     {
@@ -272,7 +319,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            MaxLoadedProcesses = 2,
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 2
+            },
             RunningLlama =
             [
                 Responsive("running/chat:Q4_K_M", ModelRole.Chat),
@@ -304,7 +354,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            MaxLoadedProcesses = 1
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 1
+            }
         };
         var service = harness.Build();
         var first = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
@@ -378,7 +431,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            MaxLoadedProcesses = 2,
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 2
+            },
             RunningLlama =
             [
                 new LlamaServerProcessHealth
@@ -732,7 +788,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            MaxLoadedProcesses = 1,
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 1
+            },
             RunningLlama =
             [
                 new LlamaServerProcessHealth
@@ -935,7 +994,10 @@ public sealed class CapacityServiceTests
         {
             Profile = CpuProfile(availableRam: 10 * Gb),
             Footprint = CpuFootprint(8 * Gb),
-            MaxLoadedProcesses = 5,
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 5
+            },
             RunningLlama =
             [
                 new LlamaServerProcessHealth
@@ -1120,7 +1182,10 @@ public sealed class CapacityServiceTests
                     Detail = "ok"
                 }
             ],
-            MaxLoadedProcesses = 5
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 5
+            }
         };
         var service = harness.Build();
 
@@ -1204,7 +1269,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(10 * Gb),
             Footprint = GpuFootprint(6 * Gb),
-            MaxLoadedProcesses = 5
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 5
+            }
         };
         var service = harness.Build();
 
@@ -1321,7 +1389,10 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            MaxLoadedProcesses = 1,
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 1
+            },
             RunningLlama =
             [
                 new LlamaServerProcessHealth
@@ -1524,7 +1595,6 @@ public sealed class CapacityServiceTests
     {
         public bool CloudSelected { get; init; }
         public string ProviderName { get; init; } = Llamacpp;
-        public int MaxLoadedProcesses { get; init; } = 3;
         public HardwareProfile Profile { get; init; } = null!;
         public ModelFootprint Footprint { get; init; } = ModelFootprint.Unknown;
         public IReadOnlyList<LlamaServerProcessHealth> RunningLlama { get; init; } = [];
@@ -1547,7 +1617,6 @@ public sealed class CapacityServiceTests
             var resolver = Substitute.For<ILocalModelProviderResolver>();
             resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                     .Returns(Task.FromResult(ProviderName));
-            resolver.MaxLoadedProcesses.Returns(MaxLoadedProcesses);
 
             // The effective profile the audit hands the capacity gate; for these tests it is the raw Profile unchanged
             // (no CPU fallback). A dedicated fallback test overrides GetEffectiveProfileAsync to return a CPU-degraded one.

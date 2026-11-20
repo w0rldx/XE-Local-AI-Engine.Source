@@ -1,13 +1,14 @@
 import { Badge, Card, Divider, Group, Loader, Stack, Text } from "@mantine/core";
+import { IconHourglass } from "@tabler/icons-react";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatBytes } from "@/core/formatting/BytesFormatting";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { LabelValueRow } from "@/core/ui/components/LabelValueRow/LabelValueRow";
 import { KnowledgeStatusBadge } from "@/features/knowledge/components/KnowledgeStatusBadge";
 import {
-	formatKnowledgeBytes,
 	formatKnowledgeTimestamp,
 	type KnowledgeDocumentDetail,
 	knowledgeFailureReasonKey,
@@ -91,7 +92,7 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 								</Group>
 							</LabelValueRow>
 							<LabelValueRow justify="space-between" gap="md" label={t("pages.knowledgeBase.table.size", "Size")}>
-								{formatKnowledgeBytes(detail.sizeBytes)}
+								{formatBytes(detail.sizeBytes)}
 							</LabelValueRow>
 							<LabelValueRow justify="space-between" gap="md" label={t("pages.knowledgeBase.table.created", "Created")}>
 								{formatKnowledgeTimestamp(detail.createdAtUtc)}
@@ -109,6 +110,15 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 										: detail.failureReason
 								}
 							/>
+						) : null}
+						{/* A document parked while its embedding model is unloaded stays Pending and says why it waits. */}
+						{detail.status === "Pending" && detail.failureReasonCode === "embedding-model-ejected" ? (
+							<Group gap={6} wrap="nowrap" c="dimmed">
+								<IconHourglass size={14} />
+								<Text size="sm" c="dimmed" data-testid="knowledge-detail-waiting">
+									{t(knowledgeFailureReasonKey(detail.failureReasonCode), { defaultValue: detail.failureReason })}
+								</Text>
+							</Group>
 						) : null}
 
 						<Divider label={t("pages.knowledgeBase.detail.chunks", "Chunks")} labelPosition="left" />

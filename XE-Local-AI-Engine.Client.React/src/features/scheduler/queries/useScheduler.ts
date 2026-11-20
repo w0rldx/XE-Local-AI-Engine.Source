@@ -16,6 +16,7 @@ import {
 	triggerScheduledJobMutation,
 	updateScheduledJobMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { keepPreviousPageOf } from "@/core/ui/components/TablePagination/useTablePagination";
 import { toScheduledJob, toScheduledJobRun, toScheduledJobTemplate } from "@/features/scheduler/models/SchedulerMappers";
 import type { ScheduledJobRun, ScheduledJobRunFilters } from "@/features/scheduler/models/SchedulerModels";
@@ -33,11 +34,6 @@ export const schedulerQueryIds = {
 	getRun: "getScheduledJobRun",
 	listUpcoming: "listUpcomingScheduledJobs",
 } as const;
-
-/** Builds the partial generated-query-key filter that matches every cached variant of one scheduler endpoint. */
-export function schedulerInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
 
 export function useScheduledJobTemplates() {
 	return useQuery({
@@ -126,15 +122,15 @@ export function useDeleteScheduledRunAnswer() {
 // A job edit can move its next fire, so Home's upcoming list refreshes with the job list.
 async function invalidateJobs(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
 	await Promise.all([
-		queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listJobs) }),
-		queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listUpcoming) }),
+		queryClient.invalidateQueries({ queryKey: operationInvalidationKey(schedulerQueryIds.listJobs) }),
+		queryClient.invalidateQueries({ queryKey: operationInvalidationKey(schedulerQueryIds.listUpcoming) }),
 	]);
 }
 
 async function invalidateRuns(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
 	await Promise.all([
-		queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listRuns) }),
-		queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.getRun) }),
+		queryClient.invalidateQueries({ queryKey: operationInvalidationKey(schedulerQueryIds.listRuns) }),
+		queryClient.invalidateQueries({ queryKey: operationInvalidationKey(schedulerQueryIds.getRun) }),
 	]);
 }
 

@@ -57,14 +57,3 @@ export interface PendingAttachmentUpload {
 	readonly sizeBytes: number;
 	readonly percent: number;
 }
-
-// Formats a byte count for the attachment chip: bytes / KB / MB with one decimal above the KB threshold.
-export function formatAttachmentSize(bytes: number): string {
-	if (bytes < 1024) {
-		return `${bytes} B`;
-	}
-	if (bytes < 1024 * 1024) {
-		return `${(bytes / 1024).toFixed(1)} KB`;
-	}
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}

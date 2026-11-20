@@ -26,6 +26,9 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
     // At most one slot-module line per process is promoted to Information in this window.
     internal const long PromotedLineIntervalMilliseconds = 5000;
 
+    // llama.cpp applies LLAMA_ARG_* first and argv wins, so the exposure is a role that emits no serving-mode flag (chat, decision) inheriting one.
+    internal static readonly IReadOnlyList<string> ManagedEnvironmentVariables = ["LLAMA_ARG_EMBEDDINGS", "LLAMA_ARG_POOLING", "LLAMA_ARG_RERANKING"];
+
     private readonly ILogger<LlamaServerProcessLauncher> _logger;
     private readonly ChildProcessOutputTailRegistry _outputTails;
 
@@ -63,7 +66,7 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
         return LaunchPlain(BuildStartInfo(spec), label, capture);
     }
 
-    private static ProcessStartInfo BuildStartInfo(LlamaServerLaunchSpec spec)
+    internal static ProcessStartInfo BuildStartInfo(LlamaServerLaunchSpec spec)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -78,6 +81,11 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
         foreach (var arg in spec.Arguments)
         {
             startInfo.ArgumentList.Add(arg);
+        }
+
+        foreach (var variable in ManagedEnvironmentVariables)
+        {
+            _ = startInfo.Environment.Remove(variable);
         }
 
         return startInfo;

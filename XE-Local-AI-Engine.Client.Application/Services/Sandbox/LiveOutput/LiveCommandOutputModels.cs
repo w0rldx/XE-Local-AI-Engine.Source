@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.LiveOutput;
 /// <summary>The bounds one <see cref="LiveCommandOutput" /> enforces; sizes are UTF-16 characters, each line counted with one separator.</summary>
 public sealed class LiveCommandOutputLimits
 {
+    /// <summary>The default <see cref="MaxTailChars" />; also the budget of a resumed call's output tail.</summary>
+    public const int DefaultMaxTailChars = 16 * 1024;
+
     /// <summary>Lines are coalesced for this long before a batch is delivered, and batches are at least this far apart.</summary>
     public TimeSpan FlushInterval { get; init; } = TimeSpan.FromMilliseconds(100);
 
@@ -13,7 +16,7 @@ public sealed class LiveCommandOutputLimits
     public int MaxLiveChars { get; init; } = 1024 * 1024;
 
     /// <summary>The most kept in the tail of the last lines, delivered or skipped.</summary>
-    public int MaxTailChars { get; init; } = 16 * 1024;
+    public int MaxTailChars { get; init; } = DefaultMaxTailChars;
 
     /// <summary>The longest line shown; a longer one is cut and marked.</summary>
     public int MaxLineChars { get; init; } = 2000;

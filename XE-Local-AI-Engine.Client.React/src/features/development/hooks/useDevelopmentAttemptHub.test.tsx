@@ -5,11 +5,12 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import type {
 	DevelopmentAttemptLiveUpdate,
 	DevelopmentAttemptSubscriptionSnapshot,
 } from "@/features/development/models/DevelopmentModels";
-import { developmentInvalidationKey, developmentQueryIds } from "@/features/development/queries/useDevelopment";
+import { developmentQueryIds } from "@/features/development/queries/useDevelopment";
 
 const hubMock = vi.hoisted(() => {
 	const handlers = new Map<string, (update: DevelopmentAttemptLiveUpdate) => void>();
@@ -163,7 +164,7 @@ describe("useDevelopmentAttemptHub", () => {
 
 		expect(invalidate).toHaveBeenCalledTimes(1);
 		expect(invalidate).toHaveBeenCalledWith({
-			queryKey: developmentInvalidationKey(developmentQueryIds.getProject),
+			queryKey: operationInvalidationKey(developmentQueryIds.getProject),
 		});
 	});
 

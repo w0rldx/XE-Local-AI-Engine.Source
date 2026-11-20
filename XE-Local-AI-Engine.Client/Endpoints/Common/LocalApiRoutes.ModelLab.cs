@@ -19,6 +19,12 @@ public static partial class LocalApiRoutes
 
         public const string ExperimentTrace = "model-lab/experiments/{experimentId:guid}/trace";
 
+        // One captured block's attention rows of a trace that recorded them: one block per call, because the whole blob is several megabytes.
+        public const string ExperimentAttention = "model-lab/experiments/{experimentId:guid}/attention/{layer:int}";
+
+        // A trace's logit lens, apart from the trace: two of the trace's three readers never show it, and it is most of the blob.
+        public const string ExperimentLens = "model-lab/experiments/{experimentId:guid}/lens";
+
         public const string ExperimentNotes = "model-lab/experiments/{experimentId:guid}/notes";
 
         // A pinned experiment is exempt from retention's trim.
@@ -35,5 +41,8 @@ public static partial class LocalApiRoutes
 
         // A Next token run's rendered prompt as the running llama-server tokenizes it. Never loads a model.
         public const string PromptTokens = "model-lab/prompt-tokens";
+
+        // The residents widget's eject for the warm worker: frees an Idle worker's checkpoint, never a running job's.
+        public const string WarmEject = "model-lab/warm/eject";
     }
 }

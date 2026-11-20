@@ -69,6 +69,8 @@ interface ChatWorkflowState {
 		carryOverPendingPick(conversationId: string): void;
 		dismissRun(conversationId: string, runId: string): void;
 		setShowActivity(show: boolean): void;
+		/** Drops a deleted conversation's pick and dismissed run, so their stored entries do not outlive it. */
+		forgetConversation(conversationId: string): void;
 	};
 }
 
@@ -94,5 +96,12 @@ export const useChatWorkflowStore = create<ChatWorkflowState>((set) => ({
 			writeStorage(SHOW_ACTIVITY_STORAGE_KEY, String(showActivity));
 			set({ showActivity });
 		},
+		forgetConversation: (conversationId) =>
+			set((state) => {
+				const { [conversationId]: _pick, ...selected } = state.selectedDefinitionByConversation;
+				const { [conversationId]: _dismissed, ...dismissedRunByConversation } = state.dismissedRunByConversation;
+				writeStorage(DISMISSED_RUNS_STORAGE_KEY, JSON.stringify(dismissedRunByConversation));
+				return { ...withSelection(selected), dismissedRunByConversation };
+			}),
 	},
 }));

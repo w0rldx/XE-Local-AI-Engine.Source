@@ -10,6 +10,7 @@ import {
 	listAgentDefinitionsOptions,
 	updateAgentDefinitionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 
 // Server state for the agent-management surface. Reads use the generated hey-api `*Options()` (which wire the shared
 // axios instance + TanStack Query AbortSignal automatically) and a TanStack `select` that maps the optional-field
@@ -22,11 +23,6 @@ export const agentDefinitionsQueryIds = {
 	list: "listAgentDefinitions",
 	defaultAssistantToolOffer: "getDefaultAssistantToolOffer",
 } as const;
-
-/** Builds the partial generated-query-key filter that matches every cached variant of one agent-definition endpoint. */
-export function agentDefinitionsInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
 
 export function useAgentDefinitions() {
 	return useQuery({
@@ -60,7 +56,7 @@ export function useDefaultAssistantToolOffer(modelProfile: string | null, enable
 
 function invalidateList(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
 	return queryClient.invalidateQueries({
-		queryKey: agentDefinitionsInvalidationKey(agentDefinitionsQueryIds.list),
+		queryKey: operationInvalidationKey(agentDefinitionsQueryIds.list),
 	});
 }
 

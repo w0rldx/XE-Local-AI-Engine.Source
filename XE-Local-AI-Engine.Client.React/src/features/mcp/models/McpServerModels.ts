@@ -142,6 +142,4 @@ export const mcpServerFormSchema = z
 		}
 	});
 
-export type McpServerFormSchema = z.infer<typeof mcpServerFormSchema>;
-
 export { isLoopbackUrl };

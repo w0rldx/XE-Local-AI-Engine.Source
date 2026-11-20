@@ -73,6 +73,7 @@ public sealed class NodeAdminMcpToolsTests
         "llama_idle_time_to_live_seconds",
         "llama_max_loaded_processes",
         "max_message_request_timeout_seconds",
+        "model_lab_warm_idle_seconds",
         "reranker_model_name",
         "speculative_draft_gpu_layers",
         "speculative_draft_max_tokens",
@@ -1268,7 +1269,8 @@ public sealed class NodeAdminMcpToolsTests
             SpeculativeDraftGpuLayers = null,
             KvCacheType = null,
             RerankerModelName = null,
-            AutoEffortFastModelName = null
+            AutoEffortFastModelName = null,
+            ModelLabWarmIdleSeconds = null
         };
 
     private static IEnumerable<(MethodInfo Method, McpServerToolAttribute? Attribute)> ToolMethods() =>

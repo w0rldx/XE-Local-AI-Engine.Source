@@ -3,6 +3,8 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
+
 // The inference-profile mutation hooks dispatch their domain variables to the generated mutationFn's `{ body }`
 // envelope and invalidate the profiles list on success. Mock the generated
 // TanStack module so the test owns each mutationFn and can assert the wire envelope + the invalidation, offline.
@@ -32,10 +34,9 @@ import {
 	useFreezeInferenceProfile,
 	useInvalidateInferenceProfile,
 } from "@/features/model-fit/queries/useInferenceProfiles";
-import { modelFitInvalidationKey } from "@/features/model-fit/queries/useModelFit";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
-const LIST_KEY = modelFitInvalidationKey(inferenceProfileQueryIds.list);
+const LIST_KEY = operationInvalidationKey(inferenceProfileQueryIds.list);
 
 const invalidatedKeys: unknown[] = [];
 

@@ -1,17 +1,23 @@
-import { Badge, Button, Card, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Badge, Card, Group, Loader, Stack, Text, Title } from "@mantine/core";
 import { IconPlayerEject, IconServer2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type { RunningModel } from "@/core/loaded-models/models/RunningModelsModels";
+import { FocusableDisabledButton } from "@/core/ui/components/FocusableDisabledButton/FocusableDisabledButton";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
+import { useEjectFocusRestore } from "@/features/loaded-models/hooks/useEjectFocusRestore";
 
 interface RunningModelsPanelProps {
 	runningModels: readonly RunningModel[];
 	isLoading: boolean;
 	error: unknown;
-	onEject: (model: RunningModel) => void;
+	/**
+	 * Opens a confirmation first and may await the request. `restoreFocus` gives lost focus back (the Eject, else the
+	 * heading); pass it as each dialog's `onClosed`, the only point the panel restores focus.
+	 */
+	onEject: (model: RunningModel, restoreFocus: () => void) => Promise<void> | void;
 	ejectingModelName: string | null;
 }
 
@@ -24,13 +30,15 @@ interface RunningModelsPanelProps {
 // there now).
 export function RunningModelsPanel({ runningModels, isLoading, error, onEject, ejectingModelName }: RunningModelsPanelProps) {
 	const { t, i18n } = useTranslation();
+	const rowKeys = runningModels.map((model) => `${model.modelName}-${model.role}`).join("|");
+	const { headingRef, cardFocusHandlers, restoreFocusTo } = useEjectFocusRestore(rowKeys);
 
 	return (
-		<Card withBorder={true} radius="md" p="lg" data-testid="loaded-models-llamacpp-card">
+		<Card withBorder={true} radius="md" p="lg" data-testid="loaded-models-llamacpp-card" {...cardFocusHandlers}>
 			<Stack gap="md">
 				<Group gap="xs" align="center">
 					<IconServer2 size={20} />
-					<Title order={2} size="h4">
+					<Title ref={headingRef} tabIndex={-1} order={2} size="h4">
 						{t("pages.loadedModels.llamaCpp.title", "llama.cpp runtime")}
 					</Title>
 				</Group>
@@ -126,18 +134,19 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 						]}
 						actionsHeader={t("pages.loadedModels.llamaCpp.columns.action", "Action")}
 						actions={(model) => (
-							<Button
+							<FocusableDisabledButton
 								size="xs"
 								variant="light"
 								color="red"
 								leftSection={<IconPlayerEject size={14} />}
-								loading={ejectingModelName === model.modelName}
-								disabled={ejectingModelName === model.modelName}
-								onClick={() => onEject(model)}
+								pending={ejectingModelName === model.modelName}
+								onClick={async (event) => {
+									await onEject(model, restoreFocusTo(event.currentTarget));
+								}}
 								data-testid={`loaded-models-llamacpp-eject-${model.modelName}`}
 							>
 								{t("pages.loadedModels.llamaCpp.eject", "Eject")}
-							</Button>
+							</FocusableDisabledButton>
 						)}
 					/>
 				) : null}

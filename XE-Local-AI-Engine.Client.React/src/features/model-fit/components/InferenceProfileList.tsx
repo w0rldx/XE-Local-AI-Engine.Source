@@ -3,6 +3,7 @@ import { IconBolt, IconInfoCircle, IconSnowflake, IconTrash } from "@tabler/icon
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import { ProfileMetricsCard } from "@/features/model-fit/components/ProfileMetricsCard";
@@ -176,11 +177,11 @@ function ProfileModelCell({ profile }: { readonly profile: InferenceProfileView 
 								globalFree:
 									profile.frozenGlobalFreeVramBytes === null
 										? t("pages.modelFit.inferenceProfiles.metrics.unknown", "Unknown")
-										: `${(profile.frozenGlobalFreeVramBytes / 1024 ** 3).toFixed(1)} GB`,
+										: formatBytesAsGb(profile.frozenGlobalFreeVramBytes),
 								processBudget:
 									profile.frozenProcessBudgetVramBytes === null
 										? t("pages.modelFit.inferenceProfiles.metrics.unknown", "Unknown")
-										: `${(profile.frozenProcessBudgetVramBytes / 1024 ** 3).toFixed(1)} GB`,
+										: formatBytesAsGb(profile.frozenProcessBudgetVramBytes),
 							},
 						)}
 					</Text>

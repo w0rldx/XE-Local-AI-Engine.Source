@@ -10,7 +10,7 @@ import {
 	sortBenchmarkCells,
 	toBenchmarkCell,
 } from "@/features/benchmarks/models/BenchmarkCells";
-import { benchmarkCellFixture, benchmarkTaskItemFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkCellFixture, benchmarkTaskItemFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 
 describe("toBenchmarkCell", () => {
 	it("orders a cell's answers by their item index, whatever order the node listed them in", () => {

@@ -72,6 +72,20 @@ export function BasisBadge({ basis }: BasisBadgeProps) {
 			</Badge>
 		);
 	}
+	if (basis === "derived") {
+		return (
+			<Badge variant="light" color="cyan" data-testid="model-lab-explain-basis">
+				{t("pages.modelLab.explain.ui.basisDerived", "Derived analysis")}
+			</Badge>
+		);
+	}
+	if (basis === "unavailable") {
+		return (
+			<Badge variant="outline" color="gray" data-testid="model-lab-explain-basis">
+				{t("pages.modelLab.explain.ui.basisUnavailable", "Not available here")}
+			</Badge>
+		);
+	}
 	// The same orange badge, wording and key as the operation graph's: one source of truth for "inferred".
 	return (
 		<Badge variant="light" color="orange" maw="100%" styles={inferredBadgeStyles} data-testid="model-lab-explain-basis">

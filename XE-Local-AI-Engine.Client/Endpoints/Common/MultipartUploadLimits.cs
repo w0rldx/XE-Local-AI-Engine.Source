@@ -18,7 +18,7 @@ internal static class MultipartUploadLimits
         options.MaxUploadFileSizeMb * 1024L * 1024L;
 
     internal static string TooLargeMessage(long maxUploadBytes) =>
-        $"The file exceeds the maximum upload size of {maxUploadBytes / (1024L * 1024L)} MB.";
+        $"The file exceeds the maximum upload size of {maxUploadBytes / (1024L * 1024L)} MiB.";
 
     /// <summary>The 413 an upload route answers for a file past its cap, built by the one writer the host's own refusal uses.</summary>
     internal static IResult TooLarge(long maxUploadBytes) =>

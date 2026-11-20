@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Runtime;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Training;
+using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>
 ///     Removes the installed training runtime. Also the cancel verb for an install in flight: cancelling first and then
@@ -15,6 +16,8 @@ using XE_Local_AI_Engine.Providers.Training;
 /// </summary>
 public sealed class RemoveTrainingRuntimeEndpoint : EndpointWithoutRequest<TrainingRuntimeStatusResponse>
 {
+    private const string GpuJobRunningMessage = "A GPU job is running. Wait for it to finish, or cancel it, before removing the runtime.";
+
     private readonly TrainingRuntimeOrchestrationService _runtime;
 
     public RemoveTrainingRuntimeEndpoint(TrainingRuntimeOrchestrationService runtime)
@@ -41,20 +44,27 @@ public sealed class RemoveTrainingRuntimeEndpoint : EndpointWithoutRequest<Train
             return;
         }
 
-        if (_runtime.IsGpuJobRunning)
+        if (await _runtime.RefusesForRunningGpuJobAsync(ct))
         {
-            await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked(TrainingRuntimeBlockedEndpointSupport.GpuJobRunningReason,
-                "A GPU job is running. Wait for it to finish, or cancel it, before removing the runtime."));
+            await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked(TrainingRuntimeBlockedEndpointSupport.GpuJobRunningReason, GpuJobRunningMessage));
             return;
         }
 
         try
         {
-            if (!await _runtime.RemoveAsync(ct))
+            switch (await _runtime.RemoveAsync(ct))
             {
-                await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked(TrainingRuntimeBlockedEndpointSupport.AlreadyInstallingReason,
-                    "A training runtime install is in progress. Cancel it before removing the runtime."));
-                return;
+                case TrainingRuntimeRemoveOutcome.AlreadyRunning:
+                    await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked(TrainingRuntimeBlockedEndpointSupport.AlreadyInstallingReason,
+                        "A training runtime install is in progress. Cancel it before removing the runtime."));
+                    return;
+                case TrainingRuntimeRemoveOutcome.GpuJobRunning:
+                    await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked(TrainingRuntimeBlockedEndpointSupport.GpuJobRunningReason, GpuJobRunningMessage));
+                    return;
+                case TrainingRuntimeRemoveOutcome.Removed:
+                    break;
+                default:
+                    throw new InvalidOperationException("Unknown training runtime remove outcome.");
             }
         }
         catch (Exception exception) when (exception is TrainingRuntimeException or ManagedPythonException)

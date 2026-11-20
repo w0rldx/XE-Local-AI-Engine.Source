@@ -218,7 +218,6 @@ XE-Local-AI-Engine.Client.Application/Services/Knowledge/Implementation/Knowledg
 XE-Local-AI-Engine.Client.Application/Services/Mcp/Implementation/McpServerConnectionManager.cs|ConnectResult
 XE-Local-AI-Engine.Client.Application/Services/ModelFit/GgufFileSelector.cs|SelectedGgufFile
 XE-Local-AI-Engine.Client.Application/Services/ModelFit/LlamaCppRuntimeRemovalOutcome.cs|LlamaCppRuntimeRemovalOutcome
-XE-Local-AI-Engine.Client.Application/Services/Sandbox/Container/Implementation/DockerDotNetRuntimeClient.cs|ExecOutput
 XE-Local-AI-Engine.Client.Application/Services/Sandbox/Fake/FakeSandboxRuntimeProvider.cs|VirtualFile
 XE-Local-AI-Engine.Client.Application/Services/Sandbox/Implementation/Launch/HostSandboxContainmentProbe.cs|NetworkIsolationProbe
 XE-Local-AI-Engine.Client.Application/Services/Sandbox/Implementation/Launch/HostSandboxContainmentProbe.cs|ResourceLimitProbe

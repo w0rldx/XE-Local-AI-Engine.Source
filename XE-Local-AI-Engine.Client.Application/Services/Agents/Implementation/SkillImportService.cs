@@ -499,7 +499,7 @@ internal sealed partial class SkillImportService : ISkillImportService
             await buffer.WriteAsync(chunk.AsMemory(start: 0, read), cancellationToken);
         }
 
-        throw new SkillImportException($"The archive exceeds the maximum import size of {_options.MaxArchiveBytes / (1024 * 1024)} MB.");
+        throw new SkillImportException($"The archive exceeds the maximum import size of {_options.MaxArchiveBytes / (1024 * 1024)} MiB.");
     }
 
     private static string CacheKey(Guid token)

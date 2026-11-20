@@ -2,8 +2,19 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
 import { useOperations } from "@/core/operations/hooks/useActiveOperations";
-import { isOnOperationPage, markedTitle, showSystemNotification } from "@/core/operations/models/JobAlerts";
-import { type OperationState, operationTransitions } from "@/core/operations/models/OperationModels";
+import {
+	alertedWaits,
+	isOnOperationPage,
+	markedTitle,
+	recordAlertedWaits,
+	showSystemNotification,
+} from "@/core/operations/models/JobAlerts";
+import {
+	type Operation,
+	type OperationState,
+	operationTransitions,
+	transitionKey,
+} from "@/core/operations/models/OperationModels";
 import { useJobNotificationStore } from "@/core/operations/stores/JobNotificationStore";
 import { llamaCppRuntimeInvalidationKey } from "@/core/runtime-acquisition/queries/useRuntimeAcquisitionStatus";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -14,6 +25,12 @@ import { toast } from "@/core/ui/notifications/Toast";
 // before the page opened, a reconnect re-hydration, a remount, a StrictMode re-run) stays silent. The toast id carries
 // operation and state too, so a repeat call could only update the same toast. A failed download or runtime install also
 // keeps its Activity row and the header indicator's error state; the toast is never its only trace.
+//
+// A waiting operation (a graph run or work session that needs a decision) alerts once per wait when first seen waiting,
+// even on first sight, since it waits for the user whenever it started. A wait is its row's `transitionKey` (the id,
+// plus the wait's status where the source reports one), so a work session moving from input to approval between two reads
+// alerts again. The alerted waits are remembered in this browser (`recordAlertedWaits`) so a reload does not alert the
+// same wait again; a wait seen ending is forgotten, so the next one alerts. A wait whose own page is open and visible is not claimed, so a later page load still alerts it.
 //
 // The alerts are for a user who is elsewhere: no toast while the operation's own page is open and visible, since it
 // shows the outcome itself. While the tab is hidden each finish also counts into the tab title, cleared when the tab is
@@ -34,7 +51,8 @@ export function OperationToastCoordinator() {
 		document.addEventListener("visibilitychange", clearMarker);
 		return () => {
 			document.removeEventListener("visibilitychange", clearMarker);
-			// Signing out unmounts the shell; a count about the signed-in session must not outlive it.
+			// Signing out unmounts the shell; a count about the signed-in session must not outlive it. The alerted waits stay:
+			// an unmount is also a dev remount or a reload, and only the logout itself forgets them (useNodeLogout).
 			unseen.current = 0;
 			document.title = markedTitle(document.title, 0);
 		};
@@ -42,16 +60,32 @@ export function OperationToastCoordinator() {
 
 	useEffect(() => {
 		const previous = seen.current;
-		const { finished, seen: next } = operationTransitions(previous, operations);
+		const { finished, waiting, seen: next } = operationTransitions(previous, operations);
 		seen.current = next;
 		const hidden = document.visibilityState === "hidden";
-		for (const operation of finished) {
-			if (!hidden && isOnOperationPage(operation, globalThis.location.pathname)) {
+		const waitingNow = new Set(operations.filter((operation) => operation.state === "waiting").map(transitionKey));
+		const released = [...previous].flatMap(([key, state]) => (state === "waiting" && !waitingNow.has(key) ? [key] : []));
+		let claimed: Operation[] = [];
+		if (waiting.length > 0 || released.length > 0) {
+			const alerted = alertedWaits();
+			claimed = waiting.filter(
+				(operation) =>
+					!alerted.includes(transitionKey(operation)) && (hidden || !isOnOperationPage(operation, globalThis.location)),
+			);
+			if (claimed.length > 0 || released.some((id) => alerted.includes(id))) {
+				recordAlertedWaits(alerted, claimed.map(transitionKey), released, waitingNow);
+			}
+		}
+		const alerts: Operation[] = [...finished, ...claimed];
+		for (const operation of alerts) {
+			if (!hidden && isOnOperationPage(operation, globalThis.location)) {
 				continue;
 			}
 			const id = `operation:${operation.id}:${operation.state}`;
 			if (operation.state === "succeeded") {
 				toast.success(operation.label, { id });
+			} else if (operation.state === "waiting") {
+				toast.warning(operation.label, { id });
 			} else if (operation.detail === undefined) {
 				toast.error(operation.label, { id });
 			} else {

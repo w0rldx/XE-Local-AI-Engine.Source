@@ -14,5 +14,9 @@ public interface IKnowledgeIngestionService
     ///     Advances one document through extraction, chunking, embedding, and indexing. Never throws for an expected
     ///     failure: any step failure sets the document to <c>Failed</c> with a content-free reason.
     /// </summary>
-    Task RunAsync(Guid documentId, CancellationToken cancellationToken);
+    /// <remarks>
+    ///     An operator-ejected embedding model is not a failure: the run hands the row back to Pending with the waiting
+    ///     reason and returns <see cref="KnowledgeIngestionRunOutcome.Deferred" />.
+    /// </remarks>
+    Task<KnowledgeIngestionRunOutcome> RunAsync(Guid documentId, CancellationToken cancellationToken);
 }

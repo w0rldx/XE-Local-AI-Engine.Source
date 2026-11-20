@@ -59,7 +59,7 @@ export function NodeSettingsKnowledgeModelsCard({
 					<Text size="xs" c="dimmed">
 						{t(
 							"pages.nodeSettings.fields.embeddingModel.recommendedHelp",
-							"Required for the knowledge base: without an embedding model, documents cannot be indexed. Recommended: nomic-embed-text-v1.5 (~274 MB).",
+							"Required for the knowledge base: without an embedding model, documents cannot be indexed. Recommended: EmbeddingGemma 2 (~310 MB).",
 						)}
 					</Text>
 					<Button

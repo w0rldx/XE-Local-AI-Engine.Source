@@ -21,12 +21,18 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 /// </remarks>
 public sealed class ModelLabCheckpointPreflightService
 {
-    /// <summary>What tracing needs beyond the weights: the process, the activations and the capped trace buffers.</summary>
+    /// <summary>What tracing needs beyond the weights: the process, the activations and the capped trace buffers. Recorded attention fits inside it: its kept rows are a few megabytes, and its float32 key copy at 8,192 tokens measured about 17 MiB.</summary>
     internal const long WorkingMemoryBytes = 2L * 1024 * 1024 * 1024;
 
     private const string ConfigFileName = "config.json";
 
     private const long MaxConfigBytes = 1024 * 1024;
+
+    /// <summary><c>Qwen3_5TextConfig</c>'s default <c>full_attention_interval</c>.</summary>
+    private const int DefaultFullAttentionInterval = 4;
+
+    /// <summary>A bound on a list built from a downloaded number, far past any model this card can trace.</summary>
+    private const int MaxDerivedBlocks = 1024;
 
     /// <summary>What <c>modellab.py</c> has traced. Its hooks need <c>model.model</c>'s blocks, which not every layout has; extend this after tracing one.</summary>
     private static readonly HashSet<string> TracedModelTypes = new(StringComparer.Ordinal)
@@ -124,6 +130,7 @@ public sealed class ModelLabCheckpointPreflightService
             CardVramBytes = cardBytes,
             License = license,
             IsGated = isGated,
+            MetadataPresent = metadataPresent,
             // The same words the row records: a live hub answer always has metadata, a saved artifact may not.
             LicenseConfirmationText = LicenseGateService.BuildModelLabText(repoId, license, isGated, metadataPresent)
         };
@@ -170,6 +177,7 @@ public sealed class ModelLabCheckpointPreflightService
 
         var config = await readConfig(ct);
         var steerableBlocks = gguf.SteerableBlockCount;
+        var layerTypes = LayerTypesOrNull(config);
         result = result with
         {
             CheckpointHiddenSize = config?.HiddenSize,
@@ -177,8 +185,9 @@ public sealed class ModelLabCheckpointPreflightService
             GgufEmbeddingLength = gguf.EmbeddingLength,
             GgufBlockCount = gguf.BlockCount,
             GgufSteerableBlockCount = steerableBlocks,
-            CheckpointLayerTypes = config?.LayerTypes,
-            DefaultSteeringLayer = steerableBlocks >= 2 ? ModelLabTraceSpec.DefaultSteeringLayer((int)steerableBlocks.Value, config?.LayerTypes) : null
+            CheckpointLayerTypes = layerTypes,
+            CheckpointAttentionHeads = config?.NumAttentionHeads,
+            DefaultSteeringLayer = steerableBlocks >= 2 ? ModelLabTraceSpec.DefaultSteeringLayer((int)steerableBlocks.Value, layerTypes) : null
         };
 
         if (gguf.Failure != GgufTensorReadFailure.None || gguf.EmbeddingLength is null || gguf.BlockCount is null)
@@ -214,6 +223,23 @@ public sealed class ModelLabCheckpointPreflightService
         return Refuse(result, ModelLabCheckpointRefusal.BlockCountMismatch,
             string.Create(CultureInfo.InvariantCulture,
                 $"{repoId} has {blockCount} blocks and '{installedModelName}' has {gguf.BlockCount}, so a layer from one does not name the same layer in the other.{hint}"));
+    }
+
+    /// <summary>The config's own kinds, or for a traced type that leaves them out, transformers' rule: block i is full attention when (i + 1) is a multiple of the interval, 4 by default.</summary>
+    private static IReadOnlyList<string>? LayerTypesOrNull(BaseCheckpointConfigV1? config)
+    {
+        if (config?.LayerTypes is { } stated)
+        {
+            return stated;
+        }
+
+        if (config is not { ModelType: { } modelType, NumHiddenLayers: int blocks and > 0 and <= MaxDerivedBlocks } || !TracedModelTypes.Contains(modelType) || config.FullAttentionInterval is <= 0)
+        {
+            return null;
+        }
+
+        var interval = config.FullAttentionInterval ?? DefaultFullAttentionInterval;
+        return [.. Enumerable.Range(0, blocks).Select(layer => (layer + 1) % interval == 0 ? "full_attention" : "linear_attention")];
     }
 
     private async Task<BaseCheckpointConfigV1?> ReadConfigOrNullAsync(BaseCheckpointManifest manifest, CancellationToken ct)

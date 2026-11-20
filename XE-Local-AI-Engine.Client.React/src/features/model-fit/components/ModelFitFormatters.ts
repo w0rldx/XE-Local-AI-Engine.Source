@@ -1,6 +1,7 @@
 // Presentation helpers shared by the model-fit pages. Kept in a non-component module so the page components can
 // import them without tripping the "components-only export" lint rule.
 
+import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 
 // Badge color for a recommendation fit level. The advisor emits a run-mode fit level of "GPU" (the model fits the
@@ -50,12 +51,9 @@ export function formatModelFitMetric(value: number | null, unit = "", fractionDi
 	return unit ? `${formatted} ${unit}` : formatted;
 }
 
-// Formats a memory figure in megabytes to a compact GB string, or a dash when absent.
+// Formats a memory figure in MiB (the advisor's unit) to a compact GiB string, or a dash when absent.
 export function formatMemoryMb(megabytes: number | null): string {
-	if (megabytes === null) {
-		return "—";
-	}
-	return `${(megabytes / 1024).toFixed(1)} GB`;
+	return formatBytesAsGb(megabytes === null ? null : megabytes * 1024 ** 2);
 }
 
 // Formats a context-window token count with thousands separators, or a dash when absent.

@@ -110,6 +110,7 @@ public sealed class StubNodeRuntimeSettings
     private int _agentHomeRunRetentionDays = StoredNodeSettings.DefaultAgentHomeRunRetentionDays;
     private int _agentHomeRunRetentionMaxRuns = StoredNodeSettings.DefaultAgentHomeRunRetentionMaxRuns;
     private long _agentHomeRunRetentionMaxTotalBytes = StoredNodeSettings.DefaultAgentHomeRunRetentionMaxTotalBytes;
+    private int _modelLabWarmIdleSeconds = StoredNodeSettings.DefaultModelLabWarmIdleSeconds;
 
     // The feature switches default ON here, unlike their code defaults: a consumer test exercises the feature unless it says otherwise.
     private bool _developmentEnabled = true;
@@ -698,6 +699,12 @@ public sealed class StubNodeRuntimeSettings
         return this;
     }
 
+    public StubNodeRuntimeSettings WithModelLabWarmIdleSeconds(int value)
+    {
+        _modelLabWarmIdleSeconds = value;
+        return this;
+    }
+
     public StubNodeRuntimeSettings WithDevelopmentEnabled(bool value)
     {
         _developmentEnabled = value;
@@ -766,9 +773,6 @@ public sealed class StubNodeRuntimeSettings
         settings.GetToolCapableModelsAsync(Arg.Any<CancellationToken>()).Returns(_toolCapableModels);
         settings.GetHuggingFaceDefaultQuantAsync(Arg.Any<CancellationToken>()).Returns(_huggingFaceDefaultQuant);
         settings.GetHuggingFaceDiskMarginBytesAsync(Arg.Any<CancellationToken>()).Returns(_huggingFaceDiskMarginBytes);
-        settings.GetLlamaMaxLoadedProcessesAsync(Arg.Any<CancellationToken>()).Returns(_llamaMaxLoadedProcesses);
-        settings.GetLlamaIdleTimeToLiveAsync(Arg.Any<CancellationToken>())
-                .Returns(_llamaIdleTimeToLive);
         settings.GetKeepModelWarmEnabledAsync(Arg.Any<CancellationToken>()).Returns(_keepModelWarmEnabled);
         settings.GetKeepModelWarmModelNameAsync(Arg.Any<CancellationToken>()).Returns(_keepModelWarmModelName);
         settings.GetKeepModelWarmIntervalAsync(Arg.Any<CancellationToken>()).Returns(_keepModelWarmInterval);
@@ -895,6 +899,7 @@ public sealed class StubNodeRuntimeSettings
         settings.GetAgentHomeRunRetentionDaysAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeRunRetentionDays);
         settings.GetAgentHomeRunRetentionMaxRunsAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeRunRetentionMaxRuns);
         settings.GetAgentHomeRunRetentionMaxTotalBytesAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeRunRetentionMaxTotalBytes);
+        settings.GetModelLabWarmIdleSecondsAsync(Arg.Any<CancellationToken>()).Returns(_ => _modelLabWarmIdleSeconds);
         settings.GetDevelopmentEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _developmentEnabled);
         settings.GetDevelopmentEnabled().Returns(_ => _developmentEnabled);
         settings.GetWorkSessionsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _workSessionsEnabled);
@@ -934,6 +939,11 @@ public sealed class StubNodeRuntimeSettings
                         ChatRetentionEnabled = stored.ChatRetentionEnabled ?? _chatRetentionEnabled,
                         AgentExecutionLogRetentionEnabled = stored.AgentExecutionLogRetentionEnabled ?? _agentExecutionLogRetentionEnabled,
                         ImageTextEncoderOnGpu = stored.ImageTextEncoderOnGpu ?? _imageTextEncoderOnGpu,
+                        LlamaMaxLoadedProcesses = stored.LlamaMaxLoadedProcesses ?? _llamaMaxLoadedProcesses,
+                        LlamaIdleTimeToLive = stored.LlamaIdleTimeToLiveSeconds is { } llamaTtl ? TimeSpan.FromSeconds(llamaTtl) : _llamaIdleTimeToLive,
+                        ImageMaxLoadedProcesses = stored.ImageMaxLoadedProcesses ?? _imageMaxLoadedProcesses,
+                        ImageIdleTimeToLive = TimeSpan.FromSeconds(stored.ImageIdleTimeToLiveSeconds ?? StoredNodeSettings.DefaultImageIdleTimeToLiveSeconds),
+                        KeepModelWarmInterval = stored.KeepModelWarmIntervalSeconds is { } interval ? TimeSpan.FromSeconds(interval) : _keepModelWarmInterval,
                         ChatRetentionDays = stored.ChatRetentionDays ?? _chatRetentionDays,
                         AgentExecutionLogRetentionDays = stored.AgentExecutionLogRetentionDays ?? _agentExecutionLogRetentionDays,
                         SchedulerHistoryRetentionDays = stored.SchedulerHistoryRetentionDays ?? _schedulerHistoryRetentionDays,

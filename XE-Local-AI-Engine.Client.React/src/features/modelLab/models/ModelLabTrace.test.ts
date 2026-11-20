@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { activeJobPollMs, toTraceTable } from "@/features/modelLab/models/ModelLabTrace";
+import { activeJobPollMs, stepperBlocks, toTraceTable } from "@/features/modelLab/models/ModelLabTrace";
 
 describe("activeJobPollMs", () => {
 	it("keeps only a floor while the hub is live, and polls otherwise", () => {
@@ -48,5 +48,32 @@ describe("toTraceTable", () => {
 		);
 
 		expect(rows[1]).toEqual({ step: 1, token: undefined, norms: [3, null] });
+	});
+});
+
+describe("stepperBlocks", () => {
+	const table = toTraceTable(
+		[
+			{ step: 0, layer: 1, kind: "L", norm: 2 },
+			{ step: 0, layer: 3, kind: "F", norm: 5 },
+			{ step: 1, layer: 1, kind: "L", norm: 4 },
+		],
+		[{ text: "a" }, { text: "b" }],
+	);
+
+	it("shows the traced blocks of a step when the result does not name every block", () => {
+		expect(stepperBlocks(table, 1)).toEqual([
+			{ index: 1, kind: "L", norm: 4 },
+			{ index: 3, kind: "F", norm: null },
+		]);
+	});
+
+	it("shows every block when the result names their kinds, leaving untraced ones without a norm", () => {
+		expect(stepperBlocks(table, 0, ["L", "L", "L", "F"])).toEqual([
+			{ index: 0, kind: "L", norm: undefined },
+			{ index: 1, kind: "L", norm: 2 },
+			{ index: 2, kind: "L", norm: undefined },
+			{ index: 3, kind: "F", norm: 5 },
+		]);
 	});
 });

@@ -139,7 +139,11 @@ public interface IWorkerEventDispatcher
         string? finishReason = null,
         InvocationThroughput? throughput = null);
 
-    Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory);
+    /// <summary>
+    ///     Ends the invocation as failed, or cancelled for the Cancelled and ModelEjected categories (neither counts as a failure);
+    ///     <c>showCancelReason</c> marks a cancel the user did not ask for, whose message and category the chat shows.
+    /// </summary>
+    Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory, bool showCancelReason = false);
 
     /// <summary>
     ///     Records the turn's tool-schema token estimate on the invocation state so the terminalize write can persist it

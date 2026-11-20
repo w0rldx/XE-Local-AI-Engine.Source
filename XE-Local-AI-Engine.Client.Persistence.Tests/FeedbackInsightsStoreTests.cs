@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
 using System.Data;
 using System.Data.Common;
-using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -27,7 +26,7 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
     public async Task GetAgentFeedbackAggregateAsync_GroupsCountsToolsAndExemplars_ExcludingPurgedUnboundAndOtherAgents()
     {
         var databasePath = GetDatabasePath("aggregate.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -110,7 +109,7 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
         // (messages.agent_definition_id), NOT the conversation binding. The chat UI creates conversations with
         // no agent binding, so per-message attribution is the only signal that surfaces feedback.
         var databasePath = GetDatabasePath("per-message.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -148,7 +147,7 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
     public async Task GetAgentFeedbackAggregateAsync_WhenAgentMissing_ReturnsNull()
     {
         var databasePath = GetDatabasePath("missing.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -163,7 +162,7 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
     public async Task GetAgentFeedbackAggregateAsync_CapsExemplarsNewestFirst()
     {
         var databasePath = GetDatabasePath("cap.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -295,40 +294,5 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
-    }
-
-    private static byte[] CreateKeyMaterial()
-    {
-        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
     }
 }

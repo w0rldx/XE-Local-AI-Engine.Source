@@ -31,7 +31,7 @@ public sealed class HuggingFaceRepoIdTests
     [Test]
     public async Task HubAndHeaderReads_SendNoRequestForAHostileId()
     {
-        using var handler = new CountingHandler();
+        using var handler = new CountingHttpMessageHandler(() => new HttpResponseMessage(HttpStatusCode.NotFound));
         using var http = new HttpClient(handler, disposeHandler: false);
         var options = new HuggingFaceOptions();
         var hub = new HfHubClient(http, options, NullLogger<HfHubClient>.Instance, TimeProvider.System);
@@ -44,13 +44,13 @@ public sealed class HuggingFaceRepoIdTests
             AssertEx.Null((await header.ReadHeaderAsync(id, "model.gguf", "main", CancellationToken.None)).Architecture, id);
         }
 
-        AssertEx.Equal(expected: 0, handler.RequestCount);
+        AssertEx.Equal(expected: 0, handler.CallCount);
     }
 
     [Test]
     public async Task Download_RefusesAHostileIdBeforeAnyRequest()
     {
-        using var handler = new CountingHandler();
+        using var handler = new CountingHttpMessageHandler(() => new HttpResponseMessage(HttpStatusCode.NotFound));
         using var http = new HttpClient(handler, disposeHandler: false);
         var client = new HfDownloadClient(http, http, GgufStoreTestInfrastructure.NoTokenStore(), Substitute.For<IFreeSpaceProbe>(),
             new HuggingFaceOptions(), NullLogger<HfDownloadClient>.Instance);
@@ -59,18 +59,7 @@ public sealed class HuggingFaceRepoIdTests
         _ = await AssertEx.ThrowsAsync<ArgumentException>(() => client.DownloadAsync("owner/name?x=1", "model.gguf", "main", "model",
             destination, destination + ".part", expectedSizeBytes: 1, expectedSha256: null, progress: null, CancellationToken.None));
 
-        AssertEx.Equal(expected: 0, handler.RequestCount);
+        AssertEx.Equal(expected: 0, handler.CallCount);
         AssertEx.False(Directory.Exists(Path.GetDirectoryName(destination)), "A refused id must not create the destination directory.");
-    }
-
-    private sealed class CountingHandler : HttpMessageHandler
-    {
-        public int RequestCount { get; private set; }
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            RequestCount++;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
-        }
     }
 }

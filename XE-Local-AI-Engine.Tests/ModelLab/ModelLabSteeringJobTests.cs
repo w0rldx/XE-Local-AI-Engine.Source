@@ -210,6 +210,43 @@ public sealed class ModelLabSteeringJobTests
         AssertEx.Null(host.Gate.ExclusiveKind);
     }
 
+    /// <summary>A derive whose worker breaks between its done and its ready has not finished: no arm may run on what it left.</summary>
+    [Test]
+    public async Task ADeriveWhoseWorkerBreaksAfterItsDone_FailsAndStartsNoArm()
+    {
+        using var process = new ScriptedProcess();
+        var harness = new ScriptedHarness();
+        await using var host = await StartHostAsync(process, harness);
+        var start = await host.Service.StartExperimentAsync(Request(host), CancellationToken.None);
+        process.Finish([Handshake, """{"event":"done","cancelled":false}""", """{"event":"done","cancelled":false}"""], exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+
+        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
+        AssertEx.Contains(record.ErrorMessage!, "broke its protocol", StringComparison.Ordinal);
+        AssertEx.Equal(expected: 0, harness.BodiesRun);
+        AssertEx.Null(host.Gate.ExclusiveKind);
+    }
+
+    /// <summary>A derive whose worker exits between its done and its ready has not finished cleanly, though its files are written: no arm runs.</summary>
+    [Test]
+    public async Task ADeriveWhoseWorkerExitsAfterItsDone_FailsAndStartsNoArm()
+    {
+        using var process = new ScriptedProcess();
+        var harness = new ScriptedHarness();
+        await using var host = await StartHostAsync(process, harness);
+        var start = await host.Service.StartExperimentAsync(Request(host), CancellationToken.None);
+        // A nonzero status ends the scripted process straight after its done, with no ready.
+        process.Finish([Handshake, """{"event":"done","cancelled":false}"""], exitCode: 1);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+
+        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
+        AssertEx.Contains(record.ErrorMessage!, "exited after its job before reporting ready", StringComparison.Ordinal);
+        AssertEx.Equal(expected: 0, harness.BodiesRun);
+        AssertEx.Null(host.Gate.ExclusiveKind);
+    }
+
     /// <summary>The blob store now takes a full-depth trace; a vector keeps its own, smaller bound.</summary>
     [Test]
     public async Task AVectorPastItsOwnBound_IsNotKept_ThoughTheStoreTakesLargerTraces()
@@ -743,6 +780,35 @@ public sealed class ModelLabSteeringJobTests
     {
         AssertEx.Equal(expected: 14, ModelLabTraceSpec.DefaultSteeringLayer(24, layerTypes: null));
         AssertEx.Equal(expected: 1, ModelLabTraceSpec.DefaultSteeringLayer(2, ["full_attention", "linear_attention"]));
+    }
+
+    /// <summary>The worker leaves after the derive, but the gate and lease pass straight to the arms: a chat's ensure queued meanwhile gets in only after them.</summary>
+    [Test]
+    public async Task AnEnsureQueuedDuringTheDerive_GetsTheRuntimeOnlyAfterTheArms()
+    {
+        using var process = new ScriptedProcess();
+        var harness = new ScriptedHarness();
+        await using var host = await StartHostAsync(process, harness);
+        Task<ILlamaServerRuntimeMutationLease?>? ensure = null;
+        var seenByArms = new List<bool>();
+        harness.BeforeBody = _ =>
+        {
+            seenByArms.Add(ensure!.IsCompleted);
+            return Task.CompletedTask;
+        };
+        var start = await host.Service.StartExperimentAsync(Request(host), CancellationToken.None);
+        await process.Spawned.WaitAsync(TestBudgets.Contended);
+
+        ensure = host.Supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+        await using var lease = await ensure.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status);
+        AssertEx.Equal("False|False|False", string.Join('|', seenByArms), "No arm saw the queued ensure through.");
+        AssertEx.NotNull(lease);
+        AssertEx.True(process.EvictRequested, "The derive's worker was evicted before the arms.");
+        AssertEx.Empty(Directory.Exists(Path.Combine(host.DataRoot, "model-lab", "receipts")) ? Directory.GetFiles(Path.Combine(host.DataRoot, "model-lab", "receipts")) : []);
     }
 
     private static ModelLabExperimentRequest Request(LabHost host, int? layer = null) =>

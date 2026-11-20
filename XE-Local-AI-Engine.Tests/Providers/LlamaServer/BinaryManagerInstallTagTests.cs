@@ -28,7 +28,7 @@ public sealed class BinaryManagerInstallTagTests
     [Test]
     public async Task InstallTag_WhenSourceRuntimeRecorded_FailsBeforeDownloadAndPreservesRecord()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         using var handler = new ScriptedHandler(() => throw new InvalidOperationException("A source record must block prebuilt installation."));
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
@@ -58,7 +58,7 @@ public sealed class BinaryManagerInstallTagTests
     [UnsupportedOSPlatform("windows")]
     public async Task InstallTag_AndSourceAdoption_SerializeRecordMutationWithSourceWinningLast()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var archive = BuildExecutableTarGz();
         using var handler = new GatedHandler(archive);
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -103,7 +103,7 @@ public sealed class BinaryManagerInstallTagTests
     [ExcludeOn(OS.Windows)]
     public async Task InstallTag_WhenSourceRecordAppearsDuringDownload_RefusesTheWrite()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var archive = BuildExecutableTarGz();
         using var handler = new GatedHandler(archive);
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -138,7 +138,7 @@ public sealed class BinaryManagerInstallTagTests
     [ExcludeOn(OS.Windows)]
     public async Task InstallTag_AndEnsureOfTheSameDirectory_DownloadOnceAndTheEnsureServesTheInstall()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var archive = BuildExecutableTarGz();
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
         using var handler = new GatedHandler(archive);
@@ -168,7 +168,7 @@ public sealed class BinaryManagerInstallTagTests
     {
         // The smoke test spawns the extracted llama-server (here a POSIX shell stub). On Windows the stub is not
         // executable, so the spawn semantics differ — exercise the install+state contract on POSIX hosts only.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var archive = BuildExecutableTarGz();
         var digest = Sha256Hex(archive);
 
@@ -200,7 +200,7 @@ public sealed class BinaryManagerInstallTagTests
     public async Task InstallTag_PinsANamedVariant_AndOtherwiseKeepsTheRecordsPin(bool pinVariant, bool previouslyPinned, bool expectedPinned)
     {
         // POSIX-only: the smoke test spawns the extracted stub.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var archive = BuildExecutableTarGz();
         using var handler = new ScriptedHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -230,7 +230,7 @@ public sealed class BinaryManagerInstallTagTests
     {
         // A prebuilt install replaces the binary the device audit memoized against; without the bump a mid-download
         // zero-device audit keeps the CPU-fallback banner up until restart. POSIX-only: the smoke test spawns the stub.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var archive = BuildExecutableTarGz();
         using var handler = new ScriptedHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -256,7 +256,7 @@ public sealed class BinaryManagerInstallTagTests
     {
         // The negative control for the bump above: this branch runs on EVERY model spawn, so bumping here would
         // invalidate the device-audit memo continuously and re-run the expensive --list-devices probe per spawn.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
         var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
@@ -281,7 +281,7 @@ public sealed class BinaryManagerInstallTagTests
     [Test]
     public async Task InstallTag_WhenDigestMismatch_RetriesThenKeepsOldBinary_NoStateWritten()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         // A pre-existing pinned binary that must survive the failed upgrade.
         var pinnedServer = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", "build", "bin", "llama-server");
         Directory.CreateDirectory(Path.GetDirectoryName(pinnedServer)!);
@@ -310,7 +310,7 @@ public sealed class BinaryManagerInstallTagTests
     [Test]
     public async Task InstallTag_RejectsBadTag_NoDownload()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         using var handler = new ScriptedHandler(() => throw new InvalidOperationException("A malformed tag must never download."));
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
@@ -325,7 +325,7 @@ public sealed class BinaryManagerInstallTagTests
     [Test]
     public async Task InstallTag_RejectsAssetNameWithTraversal_NoDownload()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         using var handler = new ScriptedHandler(() => throw new InvalidOperationException("A traversal asset name must never download."));
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
@@ -341,7 +341,7 @@ public sealed class BinaryManagerInstallTagTests
     [Test]
     public async Task InstallTag_WhenExpectedSizeExceedsCeiling_RejectedBeforeDownload()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         using var handler = new ScriptedHandler(() => throw new InvalidOperationException("An oversized asset must never download."));
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
@@ -359,7 +359,7 @@ public sealed class BinaryManagerInstallTagTests
     [Test]
     public async Task InstallTag_WhenStreamExceedsBound_AbortsAndCleansTemp_NoState()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         // A unique asset name so this test's GUID-tagged temp archives can be isolated from any concurrent test's.
         var uniqueAsset = $"llama-{Guid.NewGuid():N}-oversize.tar.gz";
         // Server streams far more than the slack allows for a tiny declared size → the bounded copy must abort.
@@ -386,7 +386,7 @@ public sealed class BinaryManagerInstallTagTests
     [Test]
     public async Task InstallTag_WhenOnDiskSizeMismatchesExpected_FailsAndKeepsOld()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var archive = BuildExecutableTarGz();
         var digest = Sha256Hex(archive);
 
@@ -412,7 +412,7 @@ public sealed class BinaryManagerInstallTagTests
     {
         // POSIX only: the smoke test spawns the extracted server. Here the extracted "server" exits non-zero, failing
         // the self-check; the just-extracted variant dir must be removed so a later resolve can't serve it unverified.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var archive = BuildFailingServerTarGz();
         var digest = Sha256Hex(archive);
 
@@ -436,7 +436,7 @@ public sealed class BinaryManagerInstallTagTests
     [Test]
     public async Task InstallTag_RejectsMissingDigest_NoDownload()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         using var handler = new ScriptedHandler(() => throw new InvalidOperationException("A missing digest must never download."));
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
@@ -453,7 +453,7 @@ public sealed class BinaryManagerInstallTagTests
     {
         // No state file, the catalog reports offline, and the pinned archive is already extracted on disk → tier-3
         // (pins) bootstrap must succeed with zero downloads (the brand-new offline first-run contract).
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
         var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
@@ -478,7 +478,7 @@ public sealed class BinaryManagerInstallTagTests
     public async Task EnsureBinary_WhenInstalledStatePresent_PrefersInstalledTagOffline()
     {
         // Tier 2: with the live catalog offline, the recorded installed tag is used (not the pinned floor).
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var installedServer = Path.Combine(cache.Path, "llama.cpp", Tag, "cpu", "build", "bin", "llama-server");
         Directory.CreateDirectory(Path.GetDirectoryName(installedServer)!);
         await File.WriteAllTextAsync(installedServer, "installed-binary");
@@ -503,7 +503,7 @@ public sealed class BinaryManagerInstallTagTests
     {
         // Issue #1: a pin-bootstrapped binary with NO installed-runtime record must be recorded on ensure so the
         // runtime-status surface shows "Installed: <tag> (<variant>)" on first load (no explicit update ever ran).
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
         var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
@@ -531,7 +531,7 @@ public sealed class BinaryManagerInstallTagTests
     {
         // The hot path must not rewrite an identical record on every ensure: a record for the same (tag, variant) the
         // ensure resolves is left untouched (the InstalledAtUtc stamp must not advance).
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
         var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
@@ -560,7 +560,7 @@ public sealed class BinaryManagerInstallTagTests
         // The pinned-floor branch must never overwrite a newer explicit-install record for the same variant. Here the
         // live catalog resolves the pinned floor (e.g. a node whose recommended setting points back at the pin) while a
         // newer tag is already recorded — the recorded tag must survive (only the live/tier-2 resolve may advance it).
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var newerTag = $"b{LlamaCppRuntimeTag.ParseTagNumberOrNull(LlamaCppReleasePins.PinnedTag)!.Value + 1}";
         AssertEx.True(LlamaCppRuntimeTag.IsUpdateAvailable(LlamaCppReleasePins.PinnedTag, newerTag), "The recorded tag must be newer than the pinned floor for this test to be meaningful.");
 
@@ -645,7 +645,7 @@ public sealed class BinaryManagerInstallTagTests
     private static async Task<EnsuredRecord> EnsureOverRecordOnlineAsync(bool operatorSelected)
     {
         AssertEx.True(LlamaCppRuntimeTag.IsUpdateAvailable(OlderThanPinTag, LlamaCppReleasePins.PinnedTag), "The recorded tag must be older than the pin for this test.");
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
         foreach (var tag in new[]
                  {
@@ -679,7 +679,7 @@ public sealed class BinaryManagerInstallTagTests
     /// <summary>Records <paramref name="installedTag" />, puts its binary and the pin's on disk, and ensures CPU with an online catalog.</summary>
     private static async Task<LlamaBinary> EnsureWithInstalledTagOnDiskOnlineAsync(string installedTag)
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
         foreach (var tag in new[]
                  {
@@ -712,7 +712,7 @@ public sealed class BinaryManagerInstallTagTests
         // higher tag) must NOT write the pin's asset/sha (which belong to a different variant + the pinned floor) over
         // the authoritative record. The pin is resolved by OS/arch/variant, so its asset/digest never match an arbitrary
         // non-pinned tag — recording them would corrupt Tag↔Asset↔Sha256 consistency.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-installtag");
         const string higherTag = "b9700";
         AssertEx.False(string.Equals(higherTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal), "The recorded tag must be a non-pinned (explicitly-installed) tag for this test.");
 
@@ -896,32 +896,6 @@ public sealed class BinaryManagerInstallTagTests
             {
                 Content = new ByteArrayContent(_content)
             };
-        }
-    }
-
-    private sealed class TempDir : IDisposable
-    {
-        public TempDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-installtag-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
         }
     }
 }

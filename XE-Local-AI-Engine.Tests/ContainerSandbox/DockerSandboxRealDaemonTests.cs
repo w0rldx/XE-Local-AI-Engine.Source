@@ -52,8 +52,8 @@ public sealed class DockerSandboxRealDaemonTests
     private static readonly TimeSpan ImagePullTimeout = TimeSpan.FromMinutes(5);
 
     /// <summary>
-    ///     One probe and one image pull for the whole class. The 22 tests below run in parallel and every one of them
-    ///     needs the same answer; probing (let alone pulling) per test would multiply the round trips by 22 for a
+    ///     One probe and one image pull for the whole class. The tests below run in parallel and every one of them
+    ///     needs the same answer; probing (let alone pulling) per test would multiply the round trips by the test count for a
     ///     result that cannot differ. A skip decided here is rethrown to each awaiting test unchanged.
     /// </summary>
     private static readonly Lazy<Task<ContainerSandboxOptions>> DaemonGate = new(ResolveUsableDaemonAsync);
@@ -293,6 +293,272 @@ public sealed class DockerSandboxRealDaemonTests
     }
 
     [Test]
+    public async Task RealDaemon_Stop_EndsTheCommandAndItsChild_KeepsWhatItPrinted_AndLeavesASiblingRunning()
+    {
+        // A docker exec outlives its attach connection, so a stop that only dropped the stream left the command and its
+        // children running in the reused container while the next command ran.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        var sibling = StartMarkedCommand(fixture, "sleep 700 & echo ready; sleep 701", timeout: null);
+        var stopped = StartMarkedCommand(fixture, "sleep 600 & echo ready; sleep 601", timeout: null);
+        await sibling.Ready.WaitAsync(TimeSpan.FromSeconds(60));
+        await stopped.Ready.WaitAsync(TimeSpan.FromSeconds(60));
+
+        await fixture.Provider.CancelCommandAsync(fixture.Handle, stopped.ExecutionId);
+        var result = await stopped.Result.WaitAsync(TimeSpan.FromSeconds(60));
+
+        AssertEx.False(result.Completed, "a stopped command must not read as finished");
+        AssertEx.Equal("ready\n", result.StandardOutput, "the output printed before the stop is the evidence of how far it got");
+        AssertEx.True(result.StandardError.EndsWith(SandboxCommandResult.CancelledMessage, StringComparison.Ordinal), result.StandardError);
+        var processes = await ListProcessArgumentsAsync(fixture);
+        AssertEx.False(processes.Contains("sleep 600"), "still running after the stop: sleep 600");
+        AssertEx.False(processes.Contains("sleep 601"), "still running after the stop: sleep 601");
+        AssertEx.Contains(processes, "sleep 700");
+        AssertEx.Contains(processes, "sleep 701");
+
+        await fixture.Provider.CancelCommandAsync(fixture.Handle, sibling.ExecutionId);
+        AssertEx.False((await sibling.Result.WaitAsync(TimeSpan.FromSeconds(60))).Completed);
+        AssertEx.False((await ListProcessArgumentsAsync(fixture)).Contains("sleep 700"), "the sibling outlived its own stop");
+    }
+
+    [Test]
+    public async Task RealDaemon_Timeout_EndsTheCommandAndItsChild_AndKeepsWhatItPrinted()
+    {
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        var timedOut = StartMarkedCommand(fixture, "sleep 610 & echo ready; sleep 611", TimeSpan.FromSeconds(3));
+
+        var result = await timedOut.Result.WaitAsync(TimeSpan.FromSeconds(60));
+
+        AssertEx.True(timedOut.Ready.IsCompleted, "the command never printed its marker, so the timeout proves nothing");
+        AssertEx.False(result.Completed);
+        AssertEx.Equal("ready\n", result.StandardOutput);
+        var processes = await ListProcessArgumentsAsync(fixture);
+        AssertEx.False(processes.Contains("sleep 610"), "still running after the stop: sleep 610");
+        AssertEx.False(processes.Contains("sleep 611"), "still running after the stop: sleep 611");
+    }
+
+    [Test]
+    public async Task RealDaemon_AnArgumentHoldingShellSyntax_ReachesTheCommandVerbatim()
+    {
+        // The stop wrapper is a shell, so this is the proof that it hands the argv over as data: nothing here is parsed.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        const string Argument = "it's \"quoted\" $(touch pwned) `touch pwned2`; touch pwned3\nsecond line $HOME";
+
+        var result = await fixture.Provider.ExecuteAsync(fixture.Handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = Guid.NewGuid().ToString("N"),
+                Executable = "printf",
+                Arguments = ["%s", Argument],
+                Timeout = TimeSpan.FromSeconds(30)
+            });
+
+        AssertEx.Equal(expected: 0, result.ExitCode);
+        AssertEx.Equal(Argument, result.StandardOutput);
+        AssertEx.Empty(Directory.GetFileSystemEntries(fixture.WorkspaceRoot, "pwned*"));
+    }
+
+    [Test]
+    public async Task RealDaemon_AMissingExecutable_ReadsAsTheDaemonReportsIt()
+    {
+        // The daemon's own words for an absent executable, unchanged by the stop wrapper.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+
+        var result = await fixture.Provider.ExecuteAsync(fixture.Handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = Guid.NewGuid().ToString("N"),
+                Executable = "xe-no-such-tool",
+                Arguments = ["--version"],
+                Timeout = TimeSpan.FromSeconds(30)
+            });
+
+        AssertEx.True(result.Completed);
+        AssertEx.Equal(expected: 127, result.ExitCode);
+        AssertEx.Contains(result.StandardOutput, "executable file not found");
+        AssertEx.Empty(result.StandardError);
+    }
+
+    [Test]
+    public async Task RealDaemon_AShellBuiltinOrAWrapperFunctionName_RunsAsTheDaemonRunsIt()
+    {
+        // The stop wrapper is a shell: a name it would resolve to a builtin or its own function must still reach the daemon,
+        // which runs a binary of that name or reports none.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+
+        var echo = await RunAsync(fixture, "echo", "hi");
+        var exit = await RunAsync(fixture, "exit", "3");
+        var function = await RunAsync(fixture, "__xe_scan");
+
+        AssertEx.Equal(expected: 0, echo.ExitCode);
+        AssertEx.Equal("hi\n", echo.StandardOutput);
+        AssertEx.Equal(expected: 127, exit.ExitCode, "`exit` is a shell builtin with no binary: the daemon finds no such executable");
+        AssertEx.Contains(exit.StandardOutput, "executable file not found");
+        AssertEx.Equal(expected: 127, function.ExitCode, "the wrapper's own function must not be runnable by name");
+        AssertEx.Contains(function.StandardOutput, "executable file not found");
+    }
+
+    [Test]
+    public async Task RealDaemon_AnExecutableAShellBuiltinShadows_RunsSupervised_AndATimeoutKillsIt()
+    {
+        // `test` is a builtin in every POSIX sh. A file of that name on PATH must still run under stop supervision rather than
+        // take the unwrapped route, where a timeout only drops the stream and leaves it running.
+        if (OperatingSystem.IsWindows())
+        {
+            throw new SkipTestException("SKIPPED — a Windows host cannot set the executable bit a Linux container reads on a bind-mounted file.");
+        }
+
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        var binDirectory = Path.Combine(fixture.WorkspaceRoot, "bin");
+        Directory.CreateDirectory(binDirectory);
+        var script = Path.Combine(binDirectory, "test");
+        await File.WriteAllTextAsync(script, "#!/bin/sh\necho ready\nsleep 620\n");
+        File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead
+                                     | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+
+        var result = await fixture.Provider.ExecuteAsync(fixture.Handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = Guid.NewGuid().ToString("N"),
+                Executable = "test",
+                Arguments = [],
+                Environment = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["PATH"] = options.WorkspaceMountTarget + "/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                },
+                Timeout = TimeSpan.FromSeconds(3)
+            });
+
+        AssertEx.False(result.Completed);
+        AssertEx.Equal("ready\n", result.StandardOutput, "the file on PATH ran, not the builtin");
+        AssertEx.False((await ListProcessArgumentsAsync(fixture)).Contains("sleep 620"), "still running after the timeout: sleep 620");
+    }
+
+    [Test]
+    public async Task RealDaemon_AProcessWhoseNameHoldsANewline_IsStoppedToo()
+    {
+        // A newline in the name pushes the session id onto the stat record's next line, where a one-line scan never looked.
+        // Busybox echo writes the name in the single write /proc/<pid>/comm needs.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        var stopped = StartMarkedCommand(fixture, "echo -n 'xe\nsurvivor' > /proc/$$/comm; echo ready; while :; do :; done", timeout: null);
+        await stopped.Ready.WaitAsync(TimeSpan.FromSeconds(60));
+        AssertEx.Contains(await ProbeAsync(fixture, "for f in /proc/[0-9]*/stat; do head -c 40 \"$f\"; echo; done"), "(xe\nsurvivor)",
+            message: "the process name did not take the newline, so this test would prove nothing");
+
+        await fixture.Provider.CancelCommandAsync(fixture.Handle, stopped.ExecutionId);
+        var result = await stopped.Result.WaitAsync(TimeSpan.FromSeconds(60));
+
+        AssertEx.False(result.Completed);
+        AssertEx.False(result.StandardError.Contains(DockerSandboxRuntimeProvider.UnconfirmedStopMessage, StringComparison.Ordinal), result.StandardError);
+        AssertEx.False((await ListProcessArgumentsAsync(fixture)).Any(static line => line.Contains("survivor", StringComparison.Ordinal)),
+            "the process with a newline in its name outlived the stop");
+    }
+
+    [Test]
+    public async Task RealDaemon_ACommandThatForgesItsStopIdentity_IsNotConfirmedStopped_AndItsSandboxIsKilled()
+    {
+        // The identity file is the command's to write. A record naming a live pid with another start time once read as "already
+        // gone", so the stop confirmed while the command ran on.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        var forged = StartMarkedCommand(fixture,
+            "for f in /tmp/.xe-exec-*; do read p t < \"$f\"; [ \"$p\" = \"$PPID\" ] && echo '1 1' > \"$f\" && echo ready; done; sleep 630",
+            timeout: null);
+        await forged.Ready.WaitAsync(TimeSpan.FromSeconds(60));
+
+        await fixture.Provider.CancelCommandAsync(fixture.Handle, forged.ExecutionId);
+        var result = await forged.Result.WaitAsync(TimeSpan.FromSeconds(60));
+
+        AssertEx.False(result.Completed);
+        AssertEx.Contains(result.StandardError, DockerSandboxRuntimeProvider.UnconfirmedStopMessage);
+        await AssertEx.ThrowsAsync<DockerRuntimeException>(() => fixture.Client.InspectContainerAsync(fixture.ContainerId));
+    }
+
+    [Test]
+    public async Task RealDaemon_AProcessAFinishedCommandLeftRunning_DoesNotMakeALaterStopATeardown()
+    {
+        // A finished command's background process is recorded as a known survivor; only a process nobody accounts for, new since, tears
+        // the sandbox down.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        AssertEx.Equal(expected: 0, (await RunAsync(fixture, "/bin/sh", "-c", "sleep 660 > /dev/null 2>&1 < /dev/null &")).ExitCode);
+        var stopped = StartMarkedCommand(fixture, "sleep 661 & echo ready; sleep 662", timeout: null);
+        await stopped.Ready.WaitAsync(TimeSpan.FromSeconds(60));
+
+        await fixture.Provider.CancelCommandAsync(fixture.Handle, stopped.ExecutionId);
+        var result = await stopped.Result.WaitAsync(TimeSpan.FromSeconds(60));
+
+        AssertEx.False(result.Completed);
+        AssertEx.Equal(SandboxCommandResult.CancelledMessage, result.StandardError, "a confirmed stop: no teardown line");
+        var processes = await ListProcessArgumentsAsync(fixture);
+        AssertEx.Contains(processes, "sleep 660");
+        AssertEx.False(processes.Contains("sleep 661"), "still running after the stop: sleep 661");
+        AssertEx.False(processes.Contains("sleep 662"), "still running after the stop: sleep 662");
+    }
+
+    [Test]
+    public async Task RealDaemon_ADescendantInItsOwnSession_MakesTheStopUnconfirmed_AndTheTeardownEndsItAndTheSibling()
+    {
+        // A daemonizing descendant leaves the command's session, which a session scan never sees. The teardown that ends it also
+        // ends every other command in the container, and the sibling's result says its sandbox was killed.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+        var sibling = StartMarkedCommand(fixture, "echo ready; sleep 650", timeout: null);
+        var stopped = StartMarkedCommand(fixture,
+            "(setsid sleep 640 &); until ps -o args | grep -q '^sleep 640'; do :; done; echo ready; sleep 641",
+            timeout: null);
+        await sibling.Ready.WaitAsync(TimeSpan.FromSeconds(60));
+        await stopped.Ready.WaitAsync(TimeSpan.FromSeconds(60));
+        AssertEx.Contains(await ProbeAsync(fixture, "ps -o sid,args | grep '[s]leep 640'; ps -o sid,args | grep '[s]leep 641'"), "sleep 640",
+            message: "the detached worker never started, so this test would prove nothing");
+
+        await fixture.Provider.CancelCommandAsync(fixture.Handle, stopped.ExecutionId);
+        var result = await stopped.Result.WaitAsync(TimeSpan.FromSeconds(60));
+
+        AssertEx.False(result.Completed);
+        AssertEx.Equal("ready\n", result.StandardOutput);
+        AssertEx.Contains(result.StandardError, DockerSandboxRuntimeProvider.UnconfirmedStopMessage);
+        AssertEx.True(result.StandardError.EndsWith(SandboxCommandResult.CancelledMessage, StringComparison.Ordinal), result.StandardError);
+        await AssertEx.ThrowsAsync<DockerRuntimeException>(() => fixture.Client.InspectContainerAsync(fixture.ContainerId));
+        var siblingResult = await sibling.Result.WaitAsync(TimeSpan.FromSeconds(60));
+        AssertEx.False(siblingResult.Completed, "the sibling was ended by the teardown, not finished");
+        AssertEx.Contains(siblingResult.StandardError, DockerSandboxRuntimeProvider.SandboxKilledMessage);
+    }
+
+    [Test]
+    [Arguments("xe-no-such-tool")]
+    [Arguments("./xe-no-such-tool")]
+    [Arguments("/xe/no/such/tool")]
+    [Arguments("/etc/hostname")]
+    [Arguments("/tmp")]
+    public async Task RealDaemon_ACommandTheWrapperCannotStart_ReadsExactlyAsAnUnwrappedExec(string executable)
+    {
+        // The wrapper answers these itself, so the daemon's words are rebuilt client-side; an unwrapped exec is the reference.
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateAsync(options);
+
+        var wrapped = await RunAsync(fixture, executable, "--version");
+        var direct = await fixture.Client.ExecuteAsync(fixture.ContainerId,
+            new DockerExecutionRequest
+            {
+                Executable = executable,
+                Arguments = ["--version"],
+                WorkingDirectory = options.WorkspaceMountTarget,
+                MaxCapturedBytes = 4096
+            });
+
+        AssertEx.Equal(direct.ExitCode, (long)wrapped.ExitCode);
+        AssertEx.Equal(direct.StandardOutput, wrapped.StandardOutput);
+        AssertEx.Equal(direct.StandardError, wrapped.StandardError);
+    }
+
+    [Test]
     public async Task RealDaemon_CopyInto_LandsInTheWorkspaceAndTheContainerCanReadIt()
     {
         // write_file is built on copy-into, which threw unconditionally. Docker refuses archive extraction into a
@@ -439,7 +705,7 @@ public sealed class DockerSandboxRealDaemonTests
         // real daemon rather than the fake because the property under test is the daemon-side label filter, which the
         // fake can only imitate.
         var options = await RequireDaemonAsync();
-        using var workspace = new TemporaryDirectory();
+        using var workspace = new TempDirectory("xe-docker-tests");
         var workspaceRoot = Path.Combine(workspace.Path, "workspace");
         Directory.CreateDirectory(workspaceRoot);
 
@@ -504,8 +770,8 @@ public sealed class DockerSandboxRealDaemonTests
     public async Task RealDaemon_StartupSweep_LeavesAnotherInstallationsContainerAlone()
     {
         var options = await RequireDaemonAsync();
-        using var theirWorkspace = new TemporaryDirectory();
-        using var ourWorkspace = new TemporaryDirectory();
+        using var theirWorkspace = new TempDirectory("xe-docker-tests");
+        using var ourWorkspace = new TempDirectory("xe-docker-tests");
         var workspaceRoot = Path.Combine(theirWorkspace.Path, "workspace");
         Directory.CreateDirectory(workspaceRoot);
 
@@ -572,7 +838,7 @@ public sealed class DockerSandboxRealDaemonTests
             UserId = 1000,
             GroupId = 1000
         };
-        using var workspace = new TemporaryDirectory();
+        using var workspace = new TempDirectory("xe-docker-tests");
         var workspaceRoot = Path.Combine(workspace.Path, "workspace");
         Directory.CreateDirectory(workspaceRoot);
 
@@ -920,10 +1186,83 @@ public sealed class DockerSandboxRealDaemonTests
         return (result.StandardOutput + result.StandardError).Trim();
     }
 
+    /// <summary>Starts <paramref name="shellCommand" />, which prints <c>ready</c> once it and its child run; the stop tests wait for it.</summary>
+    private static MarkedCommand StartMarkedCommand(ContainerFixture fixture, string shellCommand, TimeSpan? timeout)
+    {
+        var executionId = Guid.NewGuid().ToString("N");
+        var observer = new ReadyLineObserver();
+        var result = fixture.Provider.ExecuteAsync(fixture.Handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = executionId,
+                Executable = "/bin/sh",
+                Arguments = ["-c", shellCommand],
+                OutputObserver = observer,
+                Timeout = timeout ?? TimeSpan.FromMinutes(5)
+            });
+        return new MarkedCommand
+        {
+            ExecutionId = executionId,
+            Ready = observer.Ready,
+            Result = result
+        };
+    }
+
+    private static Task<SandboxCommandResult> RunAsync(ContainerFixture fixture, string executable, params string[] arguments)
+    {
+        return fixture.Provider.ExecuteAsync(fixture.Handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = Guid.NewGuid().ToString("N"),
+                Executable = executable,
+                Arguments = arguments,
+                Timeout = TimeSpan.FromSeconds(30)
+            });
+    }
+
+    /// <summary>The argv of every process in the container, one entry per process, read with the image's <c>ps</c>.</summary>
+    private static async Task<IReadOnlyList<string>> ListProcessArgumentsAsync(ContainerFixture fixture)
+    {
+        var result = await fixture.Provider.ExecuteAsync(fixture.Handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = Guid.NewGuid().ToString("N"),
+                Executable = "ps",
+                Arguments = ["-o", "args"],
+                Timeout = TimeSpan.FromSeconds(30)
+            });
+        AssertEx.Equal(expected: 0, result.ExitCode, result.StandardOutput + result.StandardError);
+        return result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    private sealed class MarkedCommand
+    {
+        public required string ExecutionId { get; init; }
+
+        public required Task Ready { get; init; }
+
+        public required Task<SandboxCommandResult> Result { get; init; }
+    }
+
+    private sealed class ReadyLineObserver : ISandboxOutputObserver
+    {
+        private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Ready => _ready.Task;
+
+        public void OnLine(SandboxOutputSource source, string line)
+        {
+            if (source == SandboxOutputSource.StandardOutput && string.Equals(line, "ready", StringComparison.Ordinal))
+            {
+                _ready.TrySetResult();
+            }
+        }
+    }
+
     /// <summary>A provider plus one verified container plus its host workspace, torn down together.</summary>
     private sealed class ContainerFixture : IAsyncDisposable
     {
-        private readonly TemporaryDirectory _workspace;
+        private readonly TempDirectory _workspace;
 
         private ContainerFixture(DockerSandboxRuntimeProvider provider,
             SandboxHandle handle,
@@ -931,7 +1270,7 @@ public sealed class DockerSandboxRealDaemonTests
             string containerId,
             DockerContainerSpecification specification,
             bool daemonIsRootless,
-            TemporaryDirectory workspace)
+            TempDirectory workspace)
         {
             Provider = provider;
             Handle = handle;
@@ -972,7 +1311,7 @@ public sealed class DockerSandboxRealDaemonTests
             SandboxNetworkPolicy networkPolicy = SandboxNetworkPolicy.None,
             bool withRuntimeMounts = false)
         {
-            var workspace = new TemporaryDirectory();
+            var workspace = new TempDirectory("xe-docker-tests");
             var workspaceRoot = Path.Combine(workspace.Path, "workspace");
             Directory.CreateDirectory(workspaceRoot);
 

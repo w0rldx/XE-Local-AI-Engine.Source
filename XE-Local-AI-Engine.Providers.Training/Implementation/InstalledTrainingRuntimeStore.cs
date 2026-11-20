@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>
@@ -9,8 +10,8 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 /// </summary>
 /// <remarks>
 ///     Mirrors <c>InstalledRuntimeStore</c>'s role for llama.cpp: it records what was adopted, it does not perform the
-///     adoption. Writes go to a temp sibling and are then moved into place, so a crash mid-write leaves the previous
-///     record intact rather than a truncated file that would make an installed runtime look absent. A record that
+///     adoption. Writes go through <see cref="SecureFilePermissions.WriteJsonAtomicAsync{T}" />, so a crash mid-write leaves the
+///     previous record intact rather than a truncated file that would make an installed runtime look absent. A record that
 ///     cannot be parsed is treated as absent for the same reason: the only safe reading of an unreadable state file is
 ///     "nothing is installed", which makes the next install rebuild rather than trust it.
 /// </remarks>
@@ -53,23 +54,7 @@ internal sealed class InstalledTrainingRuntimeStore
         ArgumentNullException.ThrowIfNull(state);
 
         Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
-        var tempPath = $"{_statePath}.{Guid.NewGuid():N}.tmp";
-        try
-        {
-            await using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                await JsonSerializer.SerializeAsync(stream, state, SerializerOptions, ct).ConfigureAwait(false);
-            }
-
-            File.Move(tempPath, _statePath, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(tempPath))
-            {
-                File.Delete(tempPath);
-            }
-        }
+        await SecureFilePermissions.WriteJsonAtomicAsync(_statePath, state, SerializerOptions, ct).ConfigureAwait(false);
     }
 
     public void Delete()

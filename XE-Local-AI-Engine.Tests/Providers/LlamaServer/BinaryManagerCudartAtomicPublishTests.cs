@@ -33,7 +33,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     public async Task InstallTag_WindowsCuda_PublishesTheBuildOnlyTogetherWithItsCudartDlls()
     {
         // POSIX only: the post-install smoke test spawns the extracted llama-server.exe, a shell stub with an exec bit.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: true);
         var manager = fixture.Manager();
 
@@ -50,7 +50,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     [Test]
     public async Task InstallTag_WindowsCuda_CudartFailure_NeverPublishesAHalfCudaDir()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: false);
         var manager = fixture.Manager();
 
@@ -72,7 +72,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     public async Task EnsureBinary_FirstRunWindowsCuda_PublishesTheBuildOnlyTogetherWithItsCudartDlls()
     {
         // The pinned first-run path (no catalog, no record): no smoke test spawns here, so this runs on every OS.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: true, LlamaCppReleasePins.PinnedTag);
 
         var binary = await fixture.PinnedManager().EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None);
@@ -87,7 +87,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     [Test]
     public async Task EnsureBinary_FirstRunWindowsCuda_CudartFailure_NeverPublishesAHalfCudaDir()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: false, LlamaCppReleasePins.PinnedTag);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => fixture.PinnedManager().EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
@@ -104,7 +104,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     public async Task TryGetInstalled_WindowsCudaDirWithTheMarkerButWithoutACublasFamily_ReadsAsNotInstalled(string missingDll)
     {
         // The legacy state: an older build's one-by-one top-up was interrupted after cudart64_* landed. That dir enumerates no GPU, so it is not installed.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: true, LlamaCppReleasePins.PinnedTag);
         var serverDir = await fixture.WritePublishedServerAsync([.. CompleteCompanionSet.Where(dll => dll != missingDll)]);
         var manager = fixture.PinnedManager();
@@ -119,7 +119,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     public async Task TryGetInstalled_WindowsVulkanDirWithNoCudaDlls_ReadsAsInstalled()
     {
         // The companion set is a Windows-CUDA requirement only; a Vulkan build next to no CUDA DLL at all is complete.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Windows, Architecture.X64, GpuVariant.Vulkan));
         var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "vulkan", pin.ServerRelativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
@@ -137,7 +137,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     {
         // The operator's Windows state: cudart kept, both cublas families deleted. A cudart of the verified length may be loaded by a running server, so it
         // is never rewritten; this one differs in content from the archive's to prove it.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: true, LlamaCppReleasePins.PinnedTag);
         var serverDir = await fixture.WritePublishedServerAsync(["ggml-cuda.dll"]);
         await File.WriteAllTextAsync(Path.Combine(serverDir, "cudart64_12.dll"), "real-cudart-12345");
@@ -163,7 +163,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     public async Task EnsureBinary_WhenLandingADllFailsMidway_KeepsEveryFileThatWasThere_FailsNamingTheFile_AndTheNextEnsureCompletesTheSet()
     {
         // A directory where cublasLt64_12.dll must land makes its rename fail on any OS: the in-use or access-denied target of a Windows box.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: true, LlamaCppReleasePins.PinnedTag);
         var serverDir = await fixture.WritePublishedServerAsync(["cudart64_12.dll", "ggml-cuda.dll"]);
         var obstacle = Directory.CreateDirectory(Path.Combine(serverDir, "cublasLt64_12.dll")).FullName;
@@ -194,7 +194,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     public async Task EnsureBinary_LegacyDirWithATruncatedCudart_ReplacesItWholeAndThenReadsAsInstalled()
     {
         // An older build copied non-atomically, so an existing DLL may be cut short: a length other than the verified one is replaced by rename.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: true, LlamaCppReleasePins.PinnedTag);
         var serverDir = await fixture.WritePublishedServerAsync(["cudart64_12.dll"]);
         await File.WriteAllTextAsync(Path.Combine(serverDir, "cudart64_12.dll"), "old-cudart");
@@ -213,7 +213,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     public async Task EnsureBinary_LegacyPinnedDir_WhenTheCompanionDownloadFails_IsLeftByteForByteAndServed_AndTheNextEnsureRepairsIt()
     {
         // Offline: before this check the marker-only dir was served as it was (on the CPU). A failed repair must keep exactly that, and say so.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: false, LlamaCppReleasePins.PinnedTag);
         var serverDir = await fixture.WritePublishedServerAsync(["cudart64_12.dll", "ggml-cuda.dll"]);
         var before = Snapshot(fixture.VariantDir);
@@ -248,7 +248,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     public async Task EnsureBinary_AfterAFailedRepair_ASetCompletedElsewhere_ClearsThatFailure_ButNoOtherAcquisitionsFailure()
     {
         // Another node sharing the cache, or the operator, completes the set: this node's cache hit acquires nothing, yet the red banner must not stay forever.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: false, LlamaCppReleasePins.PinnedTag);
         var serverDir = await fixture.WritePublishedServerAsync(["cudart64_12.dll"]);
         var registry = new RuntimeAcquisitionStatusRegistry(new NullRuntimeAcquisitionEventPublisher(), NullLogger<RuntimeAcquisitionStatusRegistry>.Instance, TimeProvider.System);
@@ -284,7 +284,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     public async Task EnsureBinary_ACacheHitsClear_NeverOverwritesAStatusAnotherAcquisitionReportedSinceItLooked()
     {
         // Ensures lock per variant dir while every variant and tag shares one registry, so another acquisition can report between a check and its write.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: false, LlamaCppReleasePins.PinnedTag);
         var serverDir = await fixture.WritePublishedServerAsync(["cudart64_12.dll"]);
         var registry = new InterleavingRegistry(new RuntimeAcquisitionStatusRegistry(new NullRuntimeAcquisitionEventPublisher(),
@@ -315,7 +315,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     public async Task EnsureBinary_LegacyDirOfANonPinnedTag_DownloadsNothing_IsLeftByteForByteAndServed_AndWarns()
     {
         // The pin's companion name and digest belong to the pinned release; for any other tag they would fetch the wrong asset, so no repair is attempted.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: true, Tag);
         var serverDir = await fixture.WritePublishedServerAsync(["cudart64_12.dll"]);
         var before = Snapshot(fixture.VariantDir);
@@ -334,7 +334,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     public async Task InstallTag_WindowsCuda_CompanionArchiveWithoutAFamily_FailsAndPublishesNothing()
     {
         // The operator-install staging path keeps its strict behavior: an incomplete companion discards the staged tree and fails the install.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: true, companionDlls: ["cudart64_12.dll", "cublas64_12.dll"]);
 
         var failure = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => fixture.Manager().InstallTagAsync(Tag,
@@ -352,7 +352,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     [Test]
     public async Task IncompleteCompanionSetMessage_WhenTheListingFails_StillNamesTheMissingFamily()
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
 
         var message = LlamaCppBinaryManager.IncompleteCompanionSetMessage("cublas64_*.dll", Path.Combine(cache.Path, "gone"));
 
@@ -365,7 +365,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     [Arguments("cublasLt64_12.dll", "cublasLt64_*.dll")]
     public async Task EnsureBinary_FirstRunWindowsCuda_CompanionArchiveWithoutAFamily_FailsNamingItAndPublishesNothing(string omittedDll, string family)
     {
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         using var fixture = new Fixture(cache.Path, cudartServed: true, LlamaCppReleasePins.PinnedTag, [.. CompleteCompanionSet.Where(dll => dll != omittedDll)]);
         var registry = new RuntimeAcquisitionStatusRegistry(new NullRuntimeAcquisitionEventPublisher(), NullLogger<RuntimeAcquisitionStatusRegistry>.Instance, TimeProvider.System);
 
@@ -385,7 +385,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     {
         // The cached-dir top-up flattens into a PUBLISHED dir, where the cudart64_* marker reads as "installed" and "paired". A recursive enumeration yields
         // a dir's own files before its subdirs', so an enumeration-order copy lands the root-level marker before the nested DLL fails, on any filesystem.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-cudart-publish");
         var source = Directory.CreateDirectory(Path.Combine(cache.Path, "extracted", "bin")).FullName;
         await File.WriteAllTextAsync(Path.Combine(cache.Path, "extracted", "cudart64_12.dll"), "fake-cuda-runtime");
         await File.WriteAllTextAsync(Path.Combine(source, "nvrtc64_120_0.dll"), "fake-nvrtc");
@@ -656,32 +656,6 @@ public sealed class BinaryManagerCudartAtomicPublishTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             return Task.FromResult(_responder(request.RequestUri!));
-        }
-    }
-
-    private sealed class TempDir : IDisposable
-    {
-        public TempDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-cudart-publish-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
         }
     }
 }

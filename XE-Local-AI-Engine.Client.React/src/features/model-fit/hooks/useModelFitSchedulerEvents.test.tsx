@@ -5,6 +5,8 @@ import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
+
 // Captured event handlers keyed by the SignalR client-method name the hook subscribes to.
 const handlers = new Map<string, (...args: unknown[]) => void>();
 
@@ -57,12 +59,12 @@ vi.mock("@/features/scheduler/queries/useScheduler", () => ({
 	fetchScheduledJobRuns: vi.fn().mockResolvedValue([]),
 }));
 
-import type { ScheduledJobRun } from "@/features/scheduler/models/SchedulerModels";
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
-import { toast } from "@/core/ui/notifications/Toast";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { toast } from "@/core/ui/notifications/Toast";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
-import { modelFitInvalidationKey, modelFitQueryIds } from "@/features/model-fit/queries/useModelFit";
+import { modelFitQueryIds } from "@/features/model-fit/queries/useModelFit";
+import type { ScheduledJobRun } from "@/features/scheduler/models/SchedulerModels";
 import { fetchScheduledJobRuns } from "@/features/scheduler/queries/useScheduler";
 
 const TERMINAL_RUN_EVENTS = ["scheduler.runCompleted", "scheduler.runFailed", "scheduler.runCancelled"];
@@ -79,7 +81,7 @@ const MODEL_FIT_TEMPLATE_ID = "model-recommendation-check";
 // `[{ _id: "getLatestRecommendations", ... }]`. Invalidation is by the `_id` partial object (TanStack
 // partial-object matching), so it matches every cached (useCase, providerName) variant. Built via the same
 // production helper the hook uses.
-const LATEST_KEY = modelFitInvalidationKey(modelFitQueryIds.latest);
+const LATEST_KEY = operationInvalidationKey(modelFitQueryIds.latest);
 
 const invalidatedKeys: unknown[] = [];
 

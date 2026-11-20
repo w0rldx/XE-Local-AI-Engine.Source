@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The embedding-model resolver maps the configured embedding name to a model actually installed on the resolved
 ///     provider so knowledge-base embedding works out of the box:
 ///     - exact configured name installed → keep it, CONFIDENT;
-///     - no exact match but an embedding-named GGUF installed → use that GGUF, CONFIDENT;
+///     - no exact match and nothing pinned → <see cref="RecommendedEmbeddingModel.PickInstalled" />, CONFIDENT;
 ///     - nothing matching installed → keep the configured name, NOT confident (the caller's graceful failure path fires);
 ///     - a transport failure while listing models degrades to the configured name, NOT confident, never throwing.
 ///     The confidence bit lets a consumer (the catalog's staleness check) distinguish a real resolution from a bare
@@ -61,6 +61,44 @@ public sealed class EmbeddingModelResolverTests
 
         // Deterministic ordinal-ignore-case order: "bge-small:Q4" sorts before "mxbai-embed-large:Q8_0".
         AssertEx.Equal("bge-small:Q4", resolution.Name);
+        AssertEx.True(resolution.IsConfident);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenUnpinnedWithTheRecommendedModelAndAnEarlierSortedEmbedder_PicksTheRecommended()
+    {
+        var provider = ProviderWithModels(Descriptor("CompendiumLabs/bge-m3-gguf:F16"),
+            Descriptor(RecommendedEmbeddingModel.CanonicalModelName));
+        var resolver = CreateResolver();
+
+        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);
+
+        AssertEx.Equal("ggml-org/embeddinggemma-2-GGUF:Q8_0", resolution.Name);
+        AssertEx.True(resolution.IsConfident);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenUnpinnedWithNomicAndBgeM3_PicksBgeM3ByName()
+    {
+        var provider = ProviderWithModels(Descriptor("nomic-ai/nomic-embed-text-v1.5-GGUF:F16"),
+            Descriptor("CompendiumLabs/bge-m3-gguf:F16"));
+        var resolver = CreateResolver();
+
+        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);
+
+        AssertEx.Equal("CompendiumLabs/bge-m3-gguf:F16", resolution.Name);
+        AssertEx.True(resolution.IsConfident);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenConfiguredNameInstalled_BeatsTheRecommendedModel()
+    {
+        var provider = ProviderWithModels(Descriptor(RecommendedEmbeddingModel.CanonicalModelName), Descriptor("nomic-embed-text"));
+        var resolver = CreateResolver();
+
+        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);
+
+        AssertEx.Equal(ConfiguredName, resolution.Name);
         AssertEx.True(resolution.IsConfident);
     }
 
@@ -116,7 +154,7 @@ public sealed class EmbeddingModelResolverTests
     public async Task ResolveAsync_WhenPinnedModelInstalled_PinWinsOverConfiguredNameAndEarlierSortedEmbedder()
     {
         // The configured name is installed AND an embedder sorts before the pin; the pin still wins.
-        var provider = ProviderWithModels(Descriptor("ggml-org/embeddinggemma-2-GGUF:BF16"),
+        var provider = ProviderWithModels(Descriptor(RecommendedEmbeddingModel.CanonicalModelName),
             Descriptor("nomic-embed-text"),
             Descriptor("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0"));
         var resolver = CreateResolver(pin: "nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0");
@@ -132,7 +170,7 @@ public sealed class EmbeddingModelResolverTests
     public async Task ResolveAsync_WhenPinnedModelMissing_IsNotConfidentAndNeverFallsBackToAnotherEmbedder()
     {
         // The silent switch this pin exists to stop: another embedder installed, the pinned one gone.
-        var provider = ProviderWithModels(Descriptor("ggml-org/embeddinggemma-2-GGUF:BF16"), Descriptor("nomic-embed-text"));
+        var provider = ProviderWithModels(Descriptor(RecommendedEmbeddingModel.CanonicalModelName), Descriptor("nomic-embed-text"));
         var resolver = CreateResolver(pin: "nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0");
 
         var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);

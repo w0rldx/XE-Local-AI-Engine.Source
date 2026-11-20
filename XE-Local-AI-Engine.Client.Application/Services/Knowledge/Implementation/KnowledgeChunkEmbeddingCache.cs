@@ -65,7 +65,7 @@ public sealed class KnowledgeChunkEmbeddingCache : IKnowledgeChunkEmbeddingCache
 
         if (resolved is null)
         {
-            throw new InvalidOperationException("The chunk embedding cache could not resolve every requested vector.");
+            throw new KnowledgeChunkEmbeddingUnresolvedException("The chunk embedding cache could not resolve every requested vector.");
         }
 
         return resolved.Select(static vector => vector.ToArray()).ToArray();

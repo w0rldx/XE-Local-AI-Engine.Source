@@ -64,8 +64,6 @@ const nodeRestartGate: ReadonlySet<string> = new Set([
 	"huggingFaceDefaultQuant",
 	"huggingFaceDiskMarginBytes",
 	"huggingFaceDownloadConnections",
-	"llamaMaxLoadedProcesses",
-	"llamaIdleTimeToLiveSeconds",
 	"chatCacheReuse",
 	"speculativeMode",
 	"speculativeDraftModelName",
@@ -88,8 +86,6 @@ const nodeRestartGate: ReadonlySet<string> = new Set([
 	"maxPendingToolCallAgeMinutes",
 	"transcriptionIdleTimeoutMinutes",
 	"transcriptionInferenceTimeoutMinutes",
-	"imageIdleTimeToLiveSeconds",
-	"imageMaxLoadedProcesses",
 	"imageTextEncoderOnGpu",
 	"knowledgeScheduledReindexEnabled",
 	"knowledgeScheduledReindexIntervalMinutes",
@@ -351,7 +347,7 @@ describe("NodeSettingsFieldsCard — recommended embedding model download", () =
 
 		expect(screen.getByTestId("node-settings-embedding-download-recommended")).toBeTruthy();
 		// The helper names the recommended model + explains why it's required (human copy resolves — no bare i18n key).
-		expect(screen.getByText(/nomic-embed-text-v1\.5/)).toBeTruthy();
+		expect(screen.getByText(/EmbeddingGemma 2/)).toBeTruthy();
 	});
 
 	it("invokes the download handler once when the button is clicked", () => {
@@ -664,11 +660,11 @@ describe("NodeSettingsFieldsCard — curated tunables", () => {
 		expect((screen.getByTestId("node-settings-chat-cache-ram-size") as HTMLInputElement).value).toBe("2048 MiB");
 	});
 
-	it("shows the disk margin in GB and the chat request timeout in minutes", () => {
+	it("shows the disk margin in GiB and the chat request timeout in minutes", () => {
 		renderCard({ section: "models" });
-		expect((screen.getByTestId("node-settings-hf-disk-margin") as HTMLInputElement).value).toBe("1 GB");
+		expect((screen.getByTestId("node-settings-hf-disk-margin") as HTMLInputElement).value).toBe("1 GiB");
 		expect(
-			screen.getByText("Allowed range: 1 B–1024 GB. A download is refused if it would leave less free space than this."),
+			screen.getByText("Allowed range: 1 B–1024 GiB. A download is refused if it would leave less free space than this."),
 		).toBeTruthy();
 		cleanup();
 
@@ -993,10 +989,10 @@ describe("NodeSettingsFieldsCard — knowledge, privacy and usage knobs", () => 
 		expect((screen.getByTestId("node-settings-agent-log-retention-enabled") as HTMLInputElement).checked).toBe(true);
 	});
 
-	it("shows the benchmark cache in GB and edits it through onChange", () => {
+	it("shows the benchmark cache in GiB and edits it through onChange", () => {
 		const { onChange } = renderCard({ section: "usage" });
 		const input = screen.getByTestId("node-settings-benchmark-kld-cache") as HTMLInputElement;
-		expect(input.value).toBe("64 GB");
+		expect(input.value).toBe("64 GiB");
 
 		fireEvent.change(input, { target: { value: "32" } });
 

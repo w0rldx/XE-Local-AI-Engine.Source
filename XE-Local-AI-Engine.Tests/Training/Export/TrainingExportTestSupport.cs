@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Training.Export;
 
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
@@ -81,6 +82,14 @@ internal sealed class ScriptedExportSpawner : ITrainingProcessSpawner
 
         public void Dispose()
         {
+        }
+
+        public ConcurrentQueue<string> WrittenLines { get; } = new();
+
+        public Task WriteLineAsync(string line, CancellationToken cancellationToken)
+        {
+            WrittenLines.Enqueue(line);
+            return Task.CompletedTask;
         }
 
         private async IAsyncEnumerable<string> Emit([EnumeratorCancellation] CancellationToken cancellationToken)

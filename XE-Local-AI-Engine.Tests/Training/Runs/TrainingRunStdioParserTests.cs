@@ -49,6 +49,58 @@ public sealed class TrainingRunStdioParserTests
     }
 
     [Test]
+    public void Parse_ReadsTheServeWorkersReadyFrame()
+    {
+        var ready = AssertEx.NotNull(TrainingRunStdioParser.ParseOrNull("""{"event":"ready","token":"t-1","vramBytes":1024,"reservedBytes":4096}"""),
+            "The ready frame must parse.");
+
+        AssertEx.Equal(TrainingStdioEventKind.Ready, ready.Kind);
+        AssertEx.Equal(expected: 1024L, ready.VramBytes!.Value);
+        AssertEx.Equal(expected: 4096L, ready.ReservedBytes!.Value);
+        AssertEx.Equal("t-1", ready.Token);
+        AssertEx.Null(ready.JobId, "ready is process-scoped and carries no jobId.");
+    }
+
+    [Test]
+    [Arguments("""{"event":"handshake","contractVersion":6,"token":"t-1","jobId":"j-1"}""")]
+    [Arguments("""{"event":"phase","phase":"tracing","token":"t-1","jobId":"j-1"}""")]
+    [Arguments("""{"event":"progress","step":1,"token":"t-1","jobId":"j-1"}""")]
+    [Arguments("""{"event":"heartbeat","phase":"tracing","token":"t-1","jobId":"j-1"}""")]
+    [Arguments("""{"event":"artifact","path":"/x","token":"t-1","jobId":"j-1"}""")]
+    [Arguments("""{"event":"done","cancelled":false,"token":"t-1","jobId":"j-1"}""")]
+    [Arguments("""{"event":"error","category":"protocol","token":"t-1","jobId":"j-1"}""")]
+    [Arguments("""{"event":"ready","vramBytes":0,"token":"t-1","jobId":"j-1"}""")]
+    public void Parse_SurfacesTheRawTokenAndJobIdOnEveryKind(string line)
+    {
+        var parsed = AssertEx.NotNull(TrainingRunStdioParser.ParseOrNull(line), "Every protocol kind must parse.");
+
+        AssertEx.Equal("t-1", parsed.Token);
+        AssertEx.Equal("j-1", parsed.JobId);
+    }
+
+    /// <summary>The handshake's <c>serve</c> is kept as sent: true, false, or null when absent or not a bool, so a check can tell them apart.</summary>
+    [Test]
+    [Arguments(",\"serve\":true", "True")]
+    [Arguments(",\"serve\":false", "False")]
+    [Arguments(",\"serve\":\"true\"", "null")]
+    [Arguments("", "null")]
+    public void Parse_KeepsTheHandshakesServeFieldAsSent(string serveField, string expected)
+    {
+        var parsed = AssertEx.NotNull(TrainingRunStdioParser.ParseOrNull("{\"event\":\"handshake\",\"contractVersion\":6" + serveField + "}"));
+
+        AssertEx.Equal(expected, parsed.Serve?.ToString() ?? "null");
+    }
+
+    [Test]
+    public void Parse_WhenTheTrainerSendsNoTokenOrJobId_LeavesThemNull()
+    {
+        var done = AssertEx.NotNull(TrainingRunStdioParser.ParseOrNull("""{"event":"done","cancelled":false}"""), "The done line must parse.");
+
+        AssertEx.Null(done.Token);
+        AssertEx.Null(done.JobId);
+    }
+
+    [Test]
     public void Parse_IgnoresBannerAndMalformedLines()
     {
         // Every one of these is something this stack really prints, or a line the parser must not accept as protocol.

@@ -162,8 +162,8 @@ describe("InferenceProfilePanel", () => {
 
 		renderPanel();
 
-		// 6_656_000_000 bytes → 6.2 GB outcome.
-		expect(screen.getByTestId("inference-profile-outcome-fro1").textContent).toContain("6.2 GB");
+		// 6_656_000_000 bytes → 6.2 GiB outcome.
+		expect(screen.getByTestId("inference-profile-outcome-fro1").textContent).toContain("6.2 GiB");
 	});
 
 	it("calls the benchmark mutation when a row's Benchmark button is clicked", () => {

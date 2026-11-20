@@ -285,9 +285,9 @@ function ResourceStep({ preview }: { preview: ExternalAppInstallPreview }) {
 	);
 }
 
-/** Bytes → whole MB, the unit the copy promises. */
+/** Bytes → whole MiB, the unit the copy promises. */
 function megabytes(bytes: number | null | undefined): number {
-	return Math.round((bytes ?? 0) / 1_000_000);
+	return Math.round((bytes ?? 0) / 1024 ** 2);
 }
 
 /**

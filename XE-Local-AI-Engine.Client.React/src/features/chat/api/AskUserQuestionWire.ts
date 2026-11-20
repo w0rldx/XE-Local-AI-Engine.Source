@@ -1,4 +1,5 @@
 import type { PendingUserQuestion, UserQuestion, UserQuestionOption } from "@/core/models/ChatMessageParts";
+import { isRecord } from "@/core/models/JsonRecord";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 /**
@@ -74,8 +75,8 @@ export function parsePendingUserQuestion(event: NodeChatStreamEventDto): Pending
 	// arguments verbatim and one that unwraps them both land here.
 	const rawQuestions = Array.isArray(parsed)
 		? parsed
-		: typeof parsed === "object" && parsed !== null && Array.isArray((parsed as { questions?: unknown }).questions)
-			? (parsed as { questions: unknown[] }).questions
+		: isRecord(parsed) && Array.isArray(parsed["questions"])
+			? (parsed["questions"] as unknown[])
 			: undefined;
 	if (!rawQuestions) {
 		return undefined;

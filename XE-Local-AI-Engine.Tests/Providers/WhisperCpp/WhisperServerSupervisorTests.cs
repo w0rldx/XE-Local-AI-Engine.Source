@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Tests.Providers.WhisperCpp;
 using System.Globalization;
 using System.Net;
 using Microsoft.Extensions.Logging;
+using NSubstitute;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
@@ -277,6 +279,40 @@ public sealed class WhisperServerSupervisorTests
         AssertEx.Equal(expected: 2, admission.AcquireCount, "The in-place model switch must take the gate too.");
         AssertEx.Equal(expected: 2, admission.ReleaseCount);
         AssertEx.False(admission.IsHeld);
+    }
+
+    /// <summary>
+    ///     Whisper never takes the GPU work gate, so a GPU spawn and a GPU model switch each ask an idle GPU holder to leave
+    ///     before the load. A wait that ends unreleased proceeds as before: the substitute answers false.
+    /// </summary>
+    [Test]
+    public async Task EnsureRunning_CudaBackend_RaisesIdleHolderDemandBeforeEachLoad_AndProceedsWhenNotReleased()
+    {
+        var idlePreemption = Substitute.For<IGpuIdleHolderPreemption>();
+        await using var harness = new WhisperSupervisorHarness(binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda),
+            backendSelector: new FakeWhisperBackendSelector(WhisperBackend.Cuda),
+            idlePreemption: idlePreemption);
+
+        await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        _ = await idlePreemption.Received(1).WaitForReleaseAsync(Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+
+        var switched = await harness.Supervisor.EnsureRunningAsync("small", CancellationToken.None);
+
+        AssertEx.Equal("small", switched.ModelId);
+        _ = await idlePreemption.Received(2).WaitForReleaseAsync(Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task EnsureRunning_CpuBackend_RaisesNoIdleHolderDemand()
+    {
+        var idlePreemption = Substitute.For<IGpuIdleHolderPreemption>();
+        await using var harness = new WhisperSupervisorHarness(idlePreemption: idlePreemption);
+
+        await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        await harness.Supervisor.EnsureRunningAsync("small", CancellationToken.None);
+
+        _ = await idlePreemption.DidNotReceiveWithAnyArgs().WaitForReleaseAsync(default, default);
+        idlePreemption.DidNotReceive().RequestPreemption();
     }
 
     [Test]

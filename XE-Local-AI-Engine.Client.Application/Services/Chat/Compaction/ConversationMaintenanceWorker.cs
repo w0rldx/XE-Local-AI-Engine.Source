@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     Drains the <see cref="ConversationMaintenanceDispatcher" /> queue one job at a time, each in its own DI scope on
@@ -120,7 +121,18 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
             };
             await using var scope = _scopeFactory.CreateAsyncScope();
             await _invocationYield.RunWhenIdleAsync(job.Kind == ConversationMaintenanceKind.Compact ? "compaction" : "distillation",
-                token => work(scope.ServiceProvider, job, token),
+                async token =>
+                {
+                    // Inside the yielded work, so a refusal that lands after a turn took the slot completes the job instead of rerunning it.
+                    try
+                    {
+                        await work(scope.ServiceProvider, job, token);
+                    }
+                    catch (Exception exception) when (exception is OperatorEjectedException or LlamaServerModelEjectedException)
+                    {
+                        _logger.LogDebug("Background {Kind} for conversation {ConversationId} skipped: the operator ejected its model.", job.Kind, job.ConversationId);
+                    }
+                },
                 cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

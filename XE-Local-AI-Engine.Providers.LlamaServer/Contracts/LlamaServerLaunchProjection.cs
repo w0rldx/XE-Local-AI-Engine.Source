@@ -83,7 +83,7 @@ public sealed record LlamaServerLaunchProjection
     /// <summary>Whether the chat template/tool grammar is enabled (<c>--jinja</c>); chat role only.</summary>
     public required bool Jinja { get; init; }
 
-    /// <summary>The pooled-role <c>--pooling</c> value (<c>mean</c>/<c>rank</c>), or <see langword="null" /> for chat.</summary>
+    /// <summary>The <c>--pooling</c> value: the embedding profile's pooling for embedding, <c>rank</c> for the reranker, null otherwise.</summary>
     public required string? Pooling { get; init; }
 
     /// <summary>
@@ -125,14 +125,20 @@ public sealed record LlamaServerLaunchProjection
     /// <param name="role">The serving role, which decides the pooling/jinja/batch flags.</param>
     /// <param name="chatCacheReuse">The chat <c>--cache-reuse</c> window; 0 emits no flag.</param>
     /// <param name="chatCacheRamMiB">The chat host prompt-cache budget in MiB.</param>
+    /// <param name="embeddingPooling">The <see cref="EmbeddingModelProfile.Pooling" /> of the model; required for the embedding role, ignored otherwise.</param>
     public static LlamaServerLaunchProjection From(GpuVariant variant,
         ResolvedLaunchArguments resolved,
         LlamaServerLaunchPlan? plan,
         ModelRole role = ModelRole.Chat,
         int chatCacheReuse = 0,
-        int chatCacheRamMiB = 0)
+        int chatCacheRamMiB = 0,
+        string? embeddingPooling = null)
     {
         ArgumentNullException.ThrowIfNull(resolved);
+        if (role == ModelRole.Embedding && string.IsNullOrWhiteSpace(embeddingPooling))
+        {
+            throw new ArgumentException("An embedding launch needs the model's profile pooling.", nameof(embeddingPooling));
+        }
 
         var isGpu = variant != GpuVariant.Cpu;
         var isGpuExplore = isGpu && resolved.ExploreMode;
@@ -196,7 +202,7 @@ public sealed record LlamaServerLaunchProjection
             Jinja = isChat,
             Pooling = role switch
             {
-                ModelRole.Embedding => "mean",
+                ModelRole.Embedding => embeddingPooling,
                 ModelRole.Reranker => "rank",
                 _ => null
             }

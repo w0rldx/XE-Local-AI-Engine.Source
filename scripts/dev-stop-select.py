@@ -8,6 +8,9 @@ import os
 import sys
 
 ProcessRecord = tuple[int, int, int, str, str]
+# A snapshot record is one tab-separated line, and comm and argv may hold any byte but NUL: a tab, newline or
+# carriage return there would split a record or forge another one, so every C0 control and DEL is escaped.
+CONTROL_ESCAPES = {code: f"\\x{code:02x}" for code in (*range(0x20), 0x7F)}
 
 
 def parse_snapshot(lines: list[str]) -> dict[int, ProcessRecord]:
@@ -26,7 +29,8 @@ def parse_snapshot(lines: list[str]) -> dict[int, ProcessRecord]:
 
 def read_proc_record(proc_root: str, pid: int) -> ProcessRecord | None:
     try:
-        with open(os.path.join(proc_root, str(pid), "stat"), encoding="utf-8") as stat_file:
+        # comm is raw bytes: a strict decode would drop the process, and with it the path to its children.
+        with open(os.path.join(proc_root, str(pid), "stat"), encoding="utf-8", errors="backslashreplace") as stat_file:
             stat = stat_file.read()
         end = stat.rfind(")")
         if end < 0:
@@ -51,7 +55,7 @@ def snapshot(proc_root: str) -> int:
         if record is None:
             continue
         ppid, sid, starttime, comm, command = record
-        print(pid, ppid, sid, starttime, comm, command, sep="\t")
+        print(pid, ppid, sid, starttime, comm.translate(CONTROL_ESCAPES), command.translate(CONTROL_ESCAPES), sep="\t")
     return 0
 
 

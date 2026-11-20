@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { MarkdownView } from "@/core/ui/components/MarkdownView/MarkdownView";
+import { isImeComposing } from "@/core/ui/models/ImeComposition";
 import { withCloudModelLabels } from "@/features/graphWorkflows/components/config/GraphWorkflowSelectOptions";
 import type { GraphWorkflowDesignerState } from "@/features/graphWorkflows/hooks/useGraphWorkflowDesigner";
 import type { GraphWorkflowEditorMode } from "@/features/graphWorkflows/hooks/useGraphWorkflowEditor";
@@ -204,7 +205,7 @@ export function GraphWorkflowAssistantPanel({ designer, editorMode, selectedNode
 				onChange={(event) => designer.setDraft(event.currentTarget.value)}
 				onKeyDown={(event) => {
 					// Enter sends, Shift+Enter breaks the line: the chat composer's convention.
-					if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+					if (event.key === "Enter" && !event.shiftKey && !isImeComposing(event)) {
 						event.preventDefault();
 						if (canSend) {
 							designer.send();

@@ -398,6 +398,73 @@
 						}
 					}
 				},
+				"stepper": {
+					"attentionMap": {
+						"detail": "Spalten sind die Key-Positionen, die in irgendeinem Schritt ein gespeichertes Gewicht für diesen Block und Head haben, in Positionsreihenfolge; über 256 Spalten bleiben die mit der größten Gewichtssumme, und ein Hinweis zählt den Rest. Die Farbskala reicht von 0 bis zum größten Gewicht im Bild, das die Legende nennt; Farben sind daher nicht zwischen Heads oder Blöcken vergleichbar. Zellen ohne gemessenes Gewicht haben eigene Zustände: zukünftige Position (der Key kommt nach der Query, kausale Attention kann ihn nicht lesen), nicht unter den Top K (nicht gespeichert; sein Gewicht steckt im Rest der Zeile), auf 0 abgerundet (gespeichert, aber unter 1/10.000) und Zeile fehlt (der Lauf hat die Zeile dieses Schritts an seiner Größengrenze verworfen). Eine helle Spalte über viele Zeilen ist oft ein Attention Sink auf einem Template- oder ersten Token, kein Zeichen von Relevanz. Die Key-Liste enthält dieselben Werte für die aktuelle Zeile.",
+						"math": "$$M_{s,c} = a^{(j)}_{P+s-1,\\,c}$$\n\n- $s$: generiertes Token (Zeile); $c$: Key-Position (Spalte); $j$: der gewählte Head.\n- Zukünftige Position: $c > P+s-1$; die kausale Maske macht $a = 0$.\n- Nicht unter den Top K: $c \\notin \\mathcal{K}$ dieser Zeile; das Gewicht ist unbekannt und im Rest enthalten.\n- Auf 0 abgerundet: $c \\in \\mathcal{K}$ mit $a < 10^{-4}$.\n- Farbe: $M_{s,c} / \\max M$ über die Zellen im Bild.",
+						"overview": "Die Karte stapelt die Zeilen aller Schritte: eine Zeile pro generiertem Token, eine Spalte pro Key-Position. Eine dunklere Zelle bedeutet mehr Gewicht; die Zeile des aktuellen Schritts ist markiert."
+					},
+					"attentionRow": {
+						"detail": "Die Query gehört zur Position, die der Schritt liest, die Zeile des generierten Tokens $s$ umfasst also die Key-Positionen 0 bis $P+s-1$. Ein Gewicht zeigt, wo der Head liest, nicht was er schreibt: Die Values werden mit diesen Gewichten gemischt, danach entscheiden ein Gate pro Dimension und die Ausgabeprojektion, wie viel im Residualstrom ankommt; ein großes Gewicht auf einem kleinen oder weggegateten Value ändert also wenig. Attention ist daher weder eine Erklärung noch ein Maß für Wichtigkeit. Template-Tokens und das erste Token nehmen oft einen großen Anteil auf (Attention Sinks); ein hohes Gewicht dort sagt nichts über relevanten Inhalt. Die Gewichte werden in fp32 aus den Query- und Key-Tensoren neu berechnet, die der Kernel verwendet hat; nur die größten Keys bleiben erhalten, auf 1/10.000 abgerundet.",
+						"math": "$$a^{(j)}_{t,s} = \\frac{\\exp\\big(\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s / \\sqrt{d_h}\\big)}{\\sum_{u \\le t} \\exp\\big(\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_u / \\sqrt{d_h}\\big)}, \\qquad s \\le t$$\n\n$$o^{(j)}_t = \\mathrm{sigmoid}\\big(g^{(j)}_t\\big) \\odot \\sum_{s \\le t} a^{(j)}_{t,s}\\, v^{(m)}_s, \\qquad y_t = W_O\\big[o^{(1)}_t; \\dots; o^{(H)}_t\\big]$$\n\n- $t$: Query-Position; $s$: Key-Position; $j$: Query-Head; $m$: der Key/Value-Head seiner Gruppe.\n- $\\tilde q = \\mathrm{RoPE}(\\mathrm{RMSNorm}(q))$, $\\tilde k$ ebenso: RMSNorm pro Head (`q_norm`, `k_norm`), dann RoPE nur auf dem ersten Teil jedes Heads; den Anteil legt die Checkpoint-Konfiguration fest.\n- $d_h$: Head-Dimension; dieses Modell skaliert mit genau $1/\\sqrt{d_h}$.\n- $g^{(j)}_t$: Gate-Hälfte der Query-Projektion; $W_O$: `o_proj`.\n\nDie gezeigte Zeile ist $a^{(j)}_{t,\\cdot}$; Values, Gate und $W_O$ wirken danach und werden nicht aufgezeichnet.",
+						"overview": "Für den gewählten Schritt, Block und Head zeigt diese Zeile, wie die Query des Heads ihr Gewicht auf alle früheren Positionen und die eigene verteilt hat. Jedes Gewicht liegt zwischen 0 und 1, und die Zeile ergibt zusammen 1."
+					},
+					"heads": {
+						"detail": "Die Checkpoint-Konfiguration legt die Anzahl der Heads fest. Bei Grouped-Query Attention teilen sich mehrere Query-Heads einen Key/Value-Head: Sie vergleichen mit denselben Keys, aber mit eigener Query, ihre Zeilen unterscheiden sich also trotzdem. Die Standardkonfiguration von Qwen3.5 hat zum Beispiel 16 Query-Heads, die sich 4 Key/Value-Heads teilen (Gruppen zu 4), und jeden 4. Block als Full-Attention-Block; der Lauf nennt die Werte dieses Checkpoints. Ein aufgezeichneter Block speichert alle seine Query-Heads. Head-Nummern sind Positionen im Modell, keine Rangfolge; diese Ansicht bewertet keinen Head als wichtig.",
+						"math": "$$G = H / H_{kv}, \\qquad j = m\\,G + g, \\quad 0 \\le g < G$$\n\n- $H$: Query-Heads; $H_{kv}$: Key/Value-Heads; $G$: Query-Heads pro Gruppe.\n- Query-Head $j$ liest Key/Value-Head $m = \\lfloor j / G \\rfloor$.\n- Heads einer Gruppe teilen $\\tilde k^{(m)}$ und $v^{(m)}$ und unterscheiden sich in $\\tilde q^{(j)}$ und in ihrem Gate.\n\nDie Ausgaben aller $H$ Heads werden vor $W_O$ verkettet; was ein Head beiträgt, hängt also auch von $W_O$ ab.",
+						"overview": "Attention läuft als mehrere Heads nebeneinander, jeder mit eigener Query und eigenen Gewichten. Sie sehen jeweils einen Head; verschiedene Heads können auf ganz verschiedene Positionen schauen."
+					},
+					"lens": {
+						"detail": "Für jeden generierten Schritt behält der Lauf die Ausgabe jedes Blocks an der Position, die der Schritt liest, schickt die Blöcke vor dem letzten in einem gebündelten Aufruf durch die finale RMSNorm und die Ausgabeprojektion (`lm_head`), nimmt die Zeile des letzten Blocks direkt aus den Ausgabe-Logits des Modells und wendet dann einmal Softmax über das ganze Vokabular an. Die Module sind die des Modells, die Skalierung $(1 + w)$ der Norm, ihre float32-Rechnung und eine etwaige Gewichtsteilung mit den Token-Embeddings sind also genau die der echten Auslesung. Die Lens nutzt die rohen Logits; die Generierungseinstellungen des Checkpoints gelten für sie nicht. Jeder Block behält seine Top-N-Tokens (der Lauf nennt N), Log-Wahrscheinlichkeit und Rang des gewählten Tokens und die Streuung der Auslesung; Log-Wahrscheinlichkeiten werden auf 1/10.000 abgerundet. Am letzten Block ist die Lens die Ausgabe des Modells selbst; an jedem früheren Block ist sie die finale Auslesung, früh angewendet, was das Modell nie tut. Die Vokabulargröße V stammt aus dem Checkpoint (bei Qwen3.5 zum Beispiel etwa 248k Tokens).",
+						"math": "$$p^{(b)}_t = \\mathrm{softmax}\\big(W_U\\, \\mathrm{RMSNorm}_f(h^{(b)}_t)\\big), \\qquad \\mathrm{RMSNorm}_f(x) = \\frac{x}{\\sqrt{\\tfrac{1}{d}\\sum_i x_i^2 + \\epsilon}} \\odot (1 + w)$$\n\n- $h^{(b)}_t$: Ausgabe von Block $b$ an Position $t = P+s-1$, der Position, die Schritt $s$ liest; $b = 0, \\dots, B-1$.\n- $W_U \\in \\mathbb{R}^{V \\times d}$: die Ausgabeprojektion (`lm_head`), ohne Bias; ob sie gleich der Token-Embedding-Matrix ist, hängt von der Checkpoint-Konfiguration ab.\n- $w$, $\\epsilon$: Gewicht und Epsilon der finalen Norm, die in float32 rechnet und ihr Ergebnis zurück nach bf16 wandelt; die Logits bleiben bf16, Softmax rechnet in float32.\n- $B$, $d$ (Hidden-Größe) und $V$ stammen aus dem Checkpoint.\n- Die gezeigte Norm ist die von Qwen3.5, der Familie, die Traces unterstützen; andere Familien skalieren mit $w$ statt $(1 + w)$, und die Lens nutzt immer das Norm-Modul des Checkpoints selbst.\n\nBei $b = B-1$ ist das die Ausgabe des Modells: $W_U\\,\\mathrm{RMSNorm}_f(h^{(B-1)}_t) = \\ell^{(s)}$. Für $b < B-1$ ist es eine Auslesung, die das Modell nie berechnet.",
+						"overview": "Die Logit Lens liest die Ausgabe jedes Blocks in diesem Schritt durch die eigene finale Norm und Ausgabeprojektion des Modells, als hörte das Modell nach diesem Block auf. Sie zeigt, welche Tokens diese frühe Auslesung bevorzugt. Sie ist eine abgeleitete Analyse, neben dem Lauf berechnet, nicht das, was das Modell berechnet hat: Nur die Ausgabe des letzten Blocks erreichte die Ausgabeschicht."
+					},
+					"lensCaveats": {
+						"detail": "Vier Grenzen gelten. Im echten Modell erreicht nur die Ausgabe des letzten Blocks die Ausgabeschicht; die übrigen Auslesungen werden neben dem Lauf berechnet und beeinflussen kein Token. Die Zustände früher Blöcke liegen noch nicht in der Basis, die die Ausgabeprojektion liest; geringe Übereinstimmung mit dem gewählten Token und hohe Streuung sind dort also zu erwarten und sagen wenig. Teilt der Checkpoint die Ausgabeprojektion mit den Token-Embeddings (der Lauf nennt, ob), geben die ersten Blöcke oft das Token an der aktuellen Position wieder, weil ihr Zustand noch nahe an dessen Embedding liegt. Und dies ist die einfache Auslesung, keine Tuned Lens: Kein Block bekommt eine gelernte Übersetzung in die Ausgabebasis, ein Block kann also Information tragen, die die Lens nicht zeigt. Eine hohe Lens-Wahrscheinlichkeit beweist daher nicht, dass ein Block etwas „entschieden“ hat oder „weiß“, und eine niedrige nicht das Gegenteil.",
+						"math": "$$h^{(b)}_t = e_{x_t} + \\sum_{j=0}^{b} \\Delta^{(j)}_t, \\qquad \\ell^{(b)}_v = e_v^{\\top}\\, \\mathrm{RMSNorm}_f\\big(h^{(b)}_t\\big) \\;\\; (W_U = E)$$\n\n- $e_{x_t}$: Embedding des Tokens, das an Position $t$ gelesen wird; $\\Delta^{(j)}_t$: was Block $j$ zum Residualstrom addiert.\n- Bei geteilten Gewichten ist Zeile $v$ von $W_U$ das Embedding $e_v$ von Token $v$; solange $h^{(b)}_t$ noch nahe an $e_{x_t}$ liegt, ist der Logit von $v = x_t$ tendenziell groß.\n- Keine Auslesung für $b < B-1$ geht in die Generierung ein; jedes Token stammt allein aus $\\ell^{(s)}$.",
+						"overview": "Eine Lens-Auslesung ist die finale Auslesung des Modells, früh angewendet, nicht das, was das Modell an diesem Block „denkt“. Sie ist eine abgeleitete Analyse: aus gemessenen Zuständen berechnet, aber nichts, was das Modell berechnet oder für seine Entscheidung genutzt hat."
+					},
+					"lensChosen": {
+						"detail": "Das gewählte Token ist das, das der Trace generiert hat: der beste Kandidat nach den Generierungseinstellungen des Checkpoints. Die Lens liest rohe Logits, ihr Rang kann also selbst am letzten Block größer als 1 sein, wenn diese Einstellungen die Reihenfolge geändert haben. Rang 1 heißt, kein Token hat eine höhere Lens-Wahrscheinlichkeit. Tokens mit genau demselben Wert teilen sich den besseren Rang; das gewählte Token kann also Rang 1 haben, während ein anderes zuerst steht, und die Ansicht sagt dann „gleichauf auf Platz 1“. Liegt das Token außerhalb der Top N eines Blocks, zeigt die Ansicht trotzdem Rang und Wahrscheinlichkeit, die der Lauf getrennt speichert. Die gezeigte Wahrscheinlichkeit stammt aus der abgerundeten Log-Wahrscheinlichkeit und übersteigt die berechnete daher nie. Eine Wahrscheinlichkeit, die über die Blöcke steigt, zeigt, wo die finale Auslesung dieses Token zu wählen begänne; sie zeigt nicht, dass ein Block etwas entschieden hat.",
+						"math": "$$\\pi^{(b)} = p^{(b)}_{t,x}, \\qquad r^{(b)} = 1 + \\big|\\{\\, v : p^{(b)}_{t,v} > p^{(b)}_{t,x} \\,\\}\\big|$$\n\n- $x = x_{P+s}$: das in Schritt $s$ generierte Token; $p^{(b)}_t$: die Lens-Verteilung von Block $b$.\n- $r^{(b)}$: Wettkampfrang; gleiche Werte teilen sich den besseren Rang, $r^{(b)} = 1$ schließt einen Gleichstand also nicht aus.\n- Gespeichert: $\\lambda^{(b)} = \\ln \\pi^{(b)}$, auf ein Vielfaches von $10^{-4}$ abgerundet; gezeigt: $e^{\\lambda^{(b)}} \\le \\pi^{(b)}$.",
+						"overview": "Diese Spalte zeigt für jeden Block die Wahrscheinlichkeit und den Rang, die seine Lens-Auslesung dem Token gibt, das das Modell in diesem Schritt tatsächlich gewählt hat. Von oben nach unten gelesen zeigt sie, ab welcher Tiefe die finale Auslesung es wählen würde; dort hat das Modell nicht entschieden."
+					},
+					"lensEntropy": {
+						"detail": "Die Streuung ist die Entropie der Lens-Verteilung des Blocks über das ganze Vokabular, in float32 berechnet und auf drei Nachkommastellen gespeichert. Ihre Einheit ist das Nat, weil sie den natürlichen Logarithmus nutzt, wie jede Log-Wahrscheinlichkeit hier. $e^H$ macht daraus eine Anzahl: Eine Auslesung mit Streuung $H$ ist etwa so verteilt wie $e^H$ gleich wahrscheinliche Tokens; etwa 0,69 nats entsprechen also einem Münzwurf zwischen zwei, 2,30 nats einer Wahl unter zehn. Das Maximum ist $\\ln V$, nur erreicht, wenn alle V Tokens gleich wahrscheinlich sind. Hohe Streuung an frühen Blöcken ist für eine Lens zu erwarten: Ihre Zustände liegen noch nicht in der Basis, die die Ausgabeprojektion liest, die dort früh angewendete finale Auslesung ergibt also oft eine flache Verteilung. Die Streuung beschreibt diese Auslesung, nicht die Unsicherheit des Modells an diesem Block. Geringe Streuung heißt auch nicht richtig: Eine Auslesung kann scharf auf einem Token liegen, das das Modell nicht wählt. Am letzten Block ist sie die Streuung der rohen Ausgabe, vor den Generierungseinstellungen. „–“ markiert einen Wert, der keine endliche Zahl war.",
+						"math": "$$H^{(b)} = -\\sum_{v=1}^{V} p^{(b)}_{t,v} \\ln p^{(b)}_{t,v}, \\qquad 0 \\le H^{(b)} \\le \\ln V, \\qquad k^{(b)} = e^{H^{(b)}}$$\n\n- $p^{(b)}_{t,v}$: Lens-Wahrscheinlichkeit von Token $v$ an Block $b$; ein Term mit $p = 0$ zählt als 0.\n- $H = 0$: ein Token hat Wahrscheinlichkeit 1; $H = \\ln V$: alle $V$ Tokens sind gleich wahrscheinlich.\n- $k^{(b)}$: die Anzahl gleich wahrscheinlicher Tokens mit derselben Entropie, denn $k$ davon ergeben genau $\\ln k$.\n- Einheit nats; in Bit wäre es $H / \\ln 2$.\n\nBeispiel: Mit den rund 248k Tokens von Qwen3.5 ist $\\ln V \\approx 12{,}42$; die Ansicht berechnet die Grenze aus dem $V$ dieses Checkpoints.",
+						"overview": "Die Streuung sagt, wie gleichmäßig die Lens-Auslesung eines Blocks ihre Wahrscheinlichkeit verteilt. 0 nats heißt, ein Token bekommt alles; je höher der Wert, desto mehr Tokens teilen sie sich."
+					},
+					"lensLastBlock": {
+						"detail": "Beide Zahlen stammen aus Logits vor den Generierungseinstellungen des Checkpoints, und die Lens nimmt die Zeile des letzten Blocks direkt aus der Ausgabe des Modells, statt sie neu zu berechnen, weil eine gebündelte Neuberechnung leicht anders rundet. Nur die gespeicherte Rundung kann die beiden trennen, sie stimmen daher innerhalb der Toleranz überein, die die Ansicht nennt. Eine größere Differenz heißt, die gespeicherte Lens gehört nicht zur Ausgabe dieses Schritts, ein Aufzeichnungsfehler, und die Ansicht warnt; die Generierungseinstellungen können das nicht erklären, da keine der beiden Zahlen sie enthält. Die Übereinstimmung prüft die Auslesung selbst; sie sagt nichts darüber, wie gut die Auslesungen früherer Blöcke das Modell beschreiben.",
+						"math": "$$\\Delta = \\big|\\lambda^{(B-1)} - \\lambda^{\\mathrm{out}}\\big|, \\qquad \\lambda^{\\mathrm{out}} = \\ln \\mathrm{softmax}\\big(\\ell^{(s)}\\big)_x$$\n\n- $\\lambda^{(B-1)}$: Log-Wahrscheinlichkeit des gewählten Tokens aus der Lens des letzten Blocks; $\\lambda^{\\mathrm{out}}$: dieselbe aus den rohen Ausgabe-Logits $\\ell^{(s)}$ des Schritts.\n- $\\ell^{(s)} = W_U\\,\\mathrm{RMSNorm}_f(h^{(B-1)}_t)$; für den letzten Block nimmt die Lens $\\ell^{(s)}$ selbst, $\\Delta$ ist daher nur die gespeicherte Rundung.\n- Die Ansicht warnt, wenn $\\Delta$ die genannte Toleranz übersteigt.",
+						"overview": "Am letzten Block ist die Lens die echte Ausgabe des Modells: ihre Zeile stammt aus den rohen Ausgabe-Logits des Schritts und wird nicht neu berechnet. Die Ansicht zeigt für das gewählte Token beide Zahlen: seine Wahrscheinlichkeit aus der Lens des letzten Blocks und aus der rohen Modellausgabe."
+					},
+					"lensNotRecorded": {
+						"detail": "Die Lens lässt sich aus einem fertigen Trace nicht rekonstruieren: Sie braucht den vollständigen Ausgabevektor jedes Blocks in jedem Schritt, und ein Trace ohne sie behält nur Residualnorm-Statistiken der aufgezeichneten Blöcke und die Ausgabekandidaten. Läufe, die vor der Lens-Aufzeichnung gespeichert wurden, haben sie nie, und ein Checkpoint mit mehr Blöcken als die Grenze läuft wie bisher, ohne Lens. Hat ein Lauf seine Größengrenze für die Lens erreicht, behalten die ersten Schritte ihre Auslesungen, spätere sagen „nicht behalten“; die generierten Tokens sind davon nicht betroffen.",
+						"math": "$$p^{(b)}_t = \\mathrm{softmax}\\big(W_U\\, \\mathrm{RMSNorm}_f(h^{(b)}_t)\\big), \\qquad h^{(b)}_t \\in \\mathbb{R}^{d}$$\n\n- Braucht alle $d$ Komponenten von $h^{(b)}_t$ für jeden Block $b$ und Schritt; $d$ ist die Hidden-Größe des Checkpoints.\n- Eine Norm $\\lVert h^{(b)}_t \\rVert$ oder einige Top-Dimensionen bestimmen $\\mathrm{RMSNorm}_f(h^{(b)}_t)$ nicht; die Auslesung lässt sich daraus nicht ableiten.",
+						"overview": "Dieser Lauf hat keine Logit Lens. Traces zeichnen sie erst ab der Node-Version auf, die sie eingeführt hat, und nur für Checkpoints innerhalb der Blockgrenze der Lens."
+					},
+					"linearNoMatrix": {
+						"detail": "Statt eines wachsenden KV-Caches trägt jeder Value-Head eine Zustandsmatrix fester Größe von Token zu Token. Jedes Token lässt den Zustand zuerst verblassen und schreibt dann hinein, und die Ausgabe liest den Zustand mit der Query. Frühere Tokens sind in diese Matrix eingemischt und lassen sich nicht wieder trennen; ein Gewicht pro Position existiert daher weder gemessen noch sonst. Ein Full-Attention-Block zeigt eine Zeile, wo der Lauf eine aufgezeichnet hat.",
+						"math": "$$S_t = \\gamma_t S_{t-1} + \\beta_t\\, \\hat k_t \\big(v_t - \\gamma_t S_{t-1}^{\\top} \\hat k_t\\big)^{\\top}, \\qquad o_t = S_t^{\\top} \\hat q_t / \\sqrt{d_k}$$\n\n- $S_t \\in \\mathbb{R}^{d_k \\times d_v}$: Zustand eines Value-Heads, an jeder Position gleich groß.\n- $\\gamma_t \\in (0,1)$: Zerfall; $\\beta_t \\in (0,1)$: Schreibstärke.\n- $\\hat q_t$, $\\hat k_t$: L2-normierte Query und Key; $v_t$: Value.\n\n$o_t$ hängt von früheren Tokens nur über $S_{t-1}$ ab, daher gibt es kein $a_{t,s}$ zum Aufzeichnen. Die Operation `delta` erklärt die Aktualisierung Schritt für Schritt.",
+						"overview": "Dieser Block nutzt Linear Attention (Gated Delta Rule). Er vergleicht die Query nie mit jeder früheren Position, daher gibt es keine Zeile mit Gewichten."
+					},
+					"notRecorded": {
+						"detail": "Die Gewichte lassen sich aus einem fertigen Trace nicht rekonstruieren: Sie brauchen Query und Keys jeder Position, und ein Trace behält beides nicht, nur Residualnormen und Kandidaten. Läufe, die vor der Attention-Aufzeichnung gespeichert wurden, haben sie nie. Für einen neuen Lauf schalten Sie im Trace-Formular „Attention aufzeichnen“ ein; das kostet Speicher und etwas Generierungszeit, lassen Sie es also aus, wenn Normen und Kandidaten genügen. Linear-Attention-Blöcke haben in keinem Lauf Gewichte zum Aufzeichnen.",
+						"math": "$$a_{t,s} = \\mathrm{softmax}_s\\big(\\tilde q_t \\cdot \\tilde k_s / \\sqrt{d_h}\\big)$$\n\n- Braucht $\\tilde q_t$ und jedes $\\tilde k_s$, $s \\le t$, des Blocks; ein Trace ohne Aufzeichnung speichert beides nicht.\n- Eine Residualnorm $\\lVert h_t \\rVert$ bestimmt weder $\\tilde q_t$ noch $\\tilde k_s$; die Gewichte lassen sich daraus nicht ableiten.",
+						"overview": "Dieser Lauf hat für diesen Block keine Attention-Gewichte. Sie werden nur aufgezeichnet, wenn ein Trace mit eingeschaltetem „Attention aufzeichnen“ startet, und dann nur für die Full-Attention-Blöcke, die der Node standardmäßig aufzeichnet."
+					},
+					"step": {
+						"detail": "Der Prompt-Durchlauf (Prefill) schickt jedes Prompt-Token durch alle Blöcke; die Ausgabe an seiner letzten Position liefert die Kandidaten für das erste generierte Token. Jeder weitere Schritt liest ein Token: Full-Attention-Blöcke holen Keys und Values aller früheren Positionen aus dem KV-Cache, der pro Schritt um einen Eintrag wächst, und Linear-Attention-Blöcke aktualisieren ihren Zustand fester Größe. Der Trace dekodiert greedy, das gewählte Token ist also der beste Kandidat nach den Generierungseinstellungen des Checkpoints. Alles Gezeigte stammt aus diesem einen gespeicherten Lauf des Hugging-Face-Checkpoints in bf16, nicht aus dem GGUF, das „Nächstes Token“ ausführt.",
+						"math": "$$\\ell^{(s)} = f\\big(x_0, \\dots, x_{P+s-1}\\big)_{P+s-1}, \\qquad x_{P+s} = \\arg\\max_i \\tilde\\ell^{(s)}_i$$\n\n- $P$: Anzahl der Prompt-Tokens; Positionen zählen ab 0.\n- $s$: Index des generierten Tokens, ab 0. Sein Schritt liest Position $P+s-1$: das letzte Prompt-Token für $s = 0$, sonst das generierte Token $s-1$.\n- $\\ell^{(s)}$: Logits an dieser Position; $\\tilde\\ell^{(s)}$: dieselben nach den Prozessoren des Checkpoints.\n\nMit dem Cache berechnet ein Schritt in jedem Block nur seine eigene Position und liest in jedem Full-Attention-Block die $P+s$ Keys im Cache; der Prefill berechnet alle Prompt-Positionen in einem Durchlauf, mit bis auf Rundung gleichem Ergebnis.",
+						"overview": "Ein Schritt der Wiedergabe ist ein Vorwärtsdurchlauf des Modells, der ein generiertes Token erzeugt. Der erste Schritt liest den ganzen Prompt auf einmal; jeder weitere gibt nur das zuvor gewählte Token ein."
+					},
+					"topKeys": {
+						"detail": "Der Lauf legt K fest und nennt es; eine Zeile kürzer als K behält jeden Key. Jedes behaltene Gewicht wird auf ein Vielfaches von 1/10.000 abgerundet, ein Gewicht unter 0,01 % erscheint also als 0, und die gezeigten Werte übersteigen nie die wahren. Der Rest ist das gemeinsame Gewicht aller nicht behaltenen Keys, eine Zahl pro Zeile und Head; auf welche Positionen er fällt, wird nicht gespeichert. Ein kleiner Rest heißt, die behaltenen Keys decken fast die ganze Zeile ab; ein großer Rest heißt, der Head verteilt sein Gewicht dünn. Wegen der Rundung können behaltene Gewichte und Rest zusammen etwas unter 100 % liegen. Die Liste zeigt die behaltenen Keys in Positionsreihenfolge, mit je einem Nachbarn auf jeder Seite als Kontext.",
+						"math": "$$\\mathcal{K}_t = \\text{Positionen der } \\min(K,\\, t+1) \\text{ größten } a_{t,s}, \\quad s \\le t$$\n\n$$\\hat a_{t,s} = \\frac{\\lfloor 10^4\\, a_{t,s} \\rfloor}{10^4} \\;\\; (s \\in \\mathcal{K}_t), \\qquad r_t = 1 - \\sum_{s \\in \\mathcal{K}_t} a_{t,s}$$\n\n- $t$: Query-Position; die Zeile hat $t+1$ Keys.\n- $\\hat a$: gespeichertes Gewicht; $r_t$: der Rest.\n\n$\\sum_{s \\in \\mathcal{K}_t} \\hat a_{t,s} + r_t \\le 1$. Der Kernel gibt keine Gewichte zurück; sie werden neben ihm in fp32 aus derselben Query und denselben Keys nach RoPE berechnet, für jeden Head des Blocks.",
+						"overview": "Eine Zeile über einen langen Prompt hat Tausende Gewichte. Der Lauf behält pro Zeile und Head nur die K größten, dazu eine Zahl für alle übrigen: den Rest."
+					}
+				},
 				"trace": {
 					"maxP99": {
 						"detail": "Für jeden Schritt berechnet der Tracer das 1., 50. und 99. Perzentil über die Dimensionen der Blockausgabe an der neuesten Position, mit Vorzeichen. Die Zusammenfassung behält das größte 99. Perzentil über alle Schritte. Ein einziger Schritt kann es bestimmen, und über große negative Werte sagt es nichts.",
@@ -417,9 +484,11 @@
 				},
 				"ui": {
 					"basisBackground": "Allgemeiner Hintergrund",
+					"basisDerived": "Abgeleitete Analyse",
 					"basisLlamaCpp": "Von llama.cpp gemessen",
 					"basisMeasurement": "Was diese Messung bedeutet",
 					"basisSimulated": "Auf dieser Seite simuliert",
+					"basisUnavailable": "Hier nicht verfügbar",
 					"heading": "Erklärung",
 					"level": {
 						"detail": "Details",
@@ -560,6 +629,7 @@
 				}
 			},
 			"noModels": "Es ist kein installiertes llama.cpp-Modell verfügbar. Bitte installieren Sie zuerst eines unter Modelle.",
+			"openModels": "Modelle öffnen",
 			"pytorch": {
 				"blockRoot": "(Block)",
 				"build": "PyTorch-Index erstellen",
@@ -615,6 +685,7 @@
 				"sourceCheckpoint": "Heruntergeladener Checkpoint",
 				"sourceFailed": "Die Quelldatei konnte nicht geladen werden.",
 				"sourceHuggingFace": "config.json von Hugging Face",
+				"sourceLabel": "Architektur lesen aus",
 				"title": "PyTorch"
 			},
 			"savedCompare": {
@@ -680,6 +751,7 @@
 				"caveatStrength": "Gleiche relative Stärke in Checkpoint und GGUF ist eine Annahme.",
 				"facts": "Schicht {{layer}} ({{kind}}), Skala {{scale}}, Vektorlänge {{norm}}, Vektor {{hash}}. Abgeleitet in {{seconds}} s, Spitze {{vram}} auf {{device}}.",
 				"intro": "Leitet aus den beiden Sätzen einen Vektor ab und führt das GGUF dreimal mit denselben Prompts und demselben Seed aus: ohne Vektor, mit diesem und mit einem Zufallsvektor gleicher Länge. Ein Prompt pro Zeile.",
+				"jobKindLabel": "Art des Laufs",
 				"jobSteering": "Steering",
 				"jobTrace": "Trace",
 				"kindFull": "volle Attention",
@@ -715,6 +787,11 @@
 				"basisRaw": "Rohe Logits",
 				"basisRawNote": "Von PyTorch aus den rohen Logits des Modells über das gesamte Vokabular berechnet",
 				"cancel": "Experiment abbrechen",
+				"cancelConfirm": {
+					"description": "Das laufende Experiment wird beendet, bevor es fertig ist.",
+					"keep": "Weiterlaufen lassen",
+					"title": "Dieses Experiment abbrechen?"
+				},
 				"chatWait": "Chats, die ein lokales Modell brauchen, warten, bis dies fertig ist oder du es abbrichst.",
 				"check": "Prüfen",
 				"checkFailed": "Die Prüfung konnte nicht laufen.",
@@ -724,6 +801,10 @@
 				"compareKind": "Vergleichen Sie Traces nur mit Traces und Steering-Läufe nur mit Steering-Läufen.",
 				"compareUnfinished": "Nur abgeschlossene Läufe lassen sich vergleichen.",
 				"delete": "Löschen",
+				"deleteConfirm": {
+					"description": "Der gespeicherte Lauf und seine Aufzeichnungen werden von diesem Node gelöscht, ob angeheftet oder nicht. Dies kann nicht rückgängig gemacht werden.",
+					"title": "Dieses Experiment löschen?"
+				},
 				"deleteFailed": "Das Experiment konnte nicht gelöscht werden.",
 				"download": "Checkpoint holen",
 				"downloadFailed": "Der Download konnte nicht starten.",
@@ -738,6 +819,15 @@
 				"layersClear": "Leeren",
 				"layersCost": "Jeder getracete Block kostet Generierungszeit: Bei getesteten Modellen kamen für drei Blöcke etwa 9 % hinzu, für alle Blöcke etwa 60 %.",
 				"layersDefault": "Keine gewählt: Die Blöcke {{layers}} werden getraced.",
+				"license": {
+					"confirm": "Ich bestätige, dass ich diese Gewichte herunterladen und Experimente damit durchführen darf.",
+					"declared": "Der Basis-Checkpoint „{{repoId}}“ deklariert die Lizenz „{{license}}“.",
+					"englishOriginal": "Englisches Original",
+					"englishOriginalNote": "Dieser englische Text wird als Ihre Bestätigung gespeichert.",
+					"gated": "Das Repository ist zugangsbeschränkt, und seine Bedingungen wurden auf Hugging Face akzeptiert.",
+					"noMetadata": "Für den Basis-Checkpoint „{{repoId}}“ wurden keine Lizenz-Metadaten gefunden.",
+					"undeclared": "Der Basis-Checkpoint „{{repoId}}“ deklariert keine Lizenz."
+				},
 				"listFailed": "Die Experimente konnten nicht geladen werden.",
 				"loadFailed": "Das Experiment konnte nicht geladen werden.",
 				"measured": "Gemessen",
@@ -769,6 +859,11 @@
 				"pinned": "Angeheftet",
 				"progress": "Token {{step}} von höchstens {{total}}, {{vram}} auf der GPU.",
 				"prompt": "Prompt",
+				"recordAttention": {
+					"help": "Speichert zusätzlich für jedes generierte Token, wo jeder Head der Full-Attention-Blöcke gelesen hat: die größten Keys seiner Zeile und das Gewicht des Rests. Die Ausgabe des Modells bleibt unverändert.\n\nDas kostet einige MiB Speicher pro Lauf und macht den Trace etwas langsamer. Schalten Sie es ein, um die Attention eines Laufs schrittweise anzusehen; lassen Sie es aus, wenn Sie nur Normen und Kandidaten brauchen oder Läufe klein halten möchten.",
+					"label": "Attention aufzeichnen",
+					"unavailable": "Dieser Checkpoint hat keinen Full-Attention-Block, daher gibt es keine Attention aufzuzeichnen."
+				},
 				"repo": "Checkpoint-Repository",
 				"retention": "Die neuesten {{count}} nicht angehefteten Experimente werden behalten. Angeheftete bleiben, bis Sie sie löschen: {{pinned}} von {{max}} angeheftet.",
 				"revision": "Revision (optional)",
@@ -776,7 +871,7 @@
 				"saved": "Checkpoint auf diesem Node",
 				"savedFailed": "Die Checkpoints auf diesem Node konnten nicht gelesen werden.",
 				"savedHint": "Bereits heruntergeladen, wird daher ohne Verbindung zu Hugging Face geprüft und getraced.",
-				"scope": "Der Trace lädt den Checkpoint in voller Präzision auf die GPU und braucht daher dessen Gewichte plus etwa 2 GB Kartenspeicher. Ein größeres Modell wird abgelehnt, bevor etwas heruntergeladen wird, egal wie es für den Chat quantisiert ist.",
+				"scope": "Der Trace lädt den Checkpoint in voller Präzision auf die GPU und braucht daher dessen Gewichte plus etwa 2 GiB Kartenspeicher. Ein größeres Modell wird abgelehnt, bevor etwas heruntergeladen wird, egal wie es für den Chat quantisiert ist.",
 				"select": "{{repo}} vom {{date}} zum Vergleichen auswählen",
 				"showInArchitecture": "Block {{index}} unter Architektur zeigen",
 				"spec": "Bis zu 128 Tokens, greedy. Der Trace ist je nach Anzahl der Blöcke in der Größe begrenzt und wird mit Prompt und Ausgabe verschlüsselt auf diesem Node gespeichert.",
@@ -789,12 +884,108 @@
 					"Succeeded": "Fertig"
 				},
 				"stepButton": "Schritt {{step}}: {{text}}",
+				"stepper": {
+					"attention": "Attention in Block {{index}}",
+					"attentionFailed": "Die Attention-Zeilen konnten nicht gelesen werden.",
+					"attentionNotFound": "Dieser Lauf hat für Block {{index}} keine Attention-Zeilen behalten.",
+					"attentionNote": "In fp32 aus den Query-/Key-Tensoren des Kernels neu berechnet, Top K behalten, abgerundet. Dieser Lauf hat pro Zeile und Head die {{topKeys}} größten Keys behalten; seine {{heads}} Query-Heads teilen sich {{kvHeads}} Key/Value-Heads.",
+					"attentionTruncated_one": "Die Attention-Datei hat ihre Obergrenze erreicht: {{count}} Zeile dieses Blocks wurde nicht behalten, die Karte markiert sie als fehlend.",
+					"attentionTruncated_other": "Die Attention-Datei hat ihre Obergrenze erreicht: {{count}} Zeilen dieses Blocks wurden nicht behalten, die Karte markiert sie als fehlend.",
+					"attentionTruncated_zero": "Die Attention-Datei hat ihre Obergrenze erreicht, aber jede Zeile dieses Blocks wurde behalten.",
+					"block": "Block {{index}}, {{kind}}: {{norm}}",
+					"blocks": "Blöcke in diesem Schritt",
+					"explain": {
+						"attentionMap": "Die Karte lesen",
+						"attentionRow": "Was diese Zeile zeigt",
+						"heads": "Heads und Key/Value-Heads",
+						"topKeys": "Top K und der Rest"
+					},
+					"head": "Head",
+					"headOption": "Head {{head}} (Key/Value-Head {{kvHead}})",
+					"kind": {
+						"full": "volle Attention",
+						"linear": "lineare Attention",
+						"unknown": "Art nicht angegeben"
+					},
+					"legend": {
+						"floored": "Gespeichert, unter 0,01 %",
+						"future": "Spätere Position (nie gelesen)",
+						"missing": "Zeile nicht behalten",
+						"notTopK": "Nicht unter den Top K (Teil des Rests)",
+						"weight": "Gewicht, 0 bis {{max}}"
+					},
+					"lens": {
+						"block": "Block",
+						"caption": "Lens-Auslesung jedes Blocks in Schritt {{step}}; das gewählte Token ist {{text}}",
+						"chosen": "Gewähltes Token",
+						"chosenLine": "Gewähltes Token {{text}}: {{rank}}, {{percent}}",
+						"chosenMissing": "Gewähltes Token {{text}}: nicht verfügbar (keine endliche Zahl).",
+						"detailTitle": "Lens-Auslesung von Block {{index}}",
+						"explain": {
+							"caveats": "Was die Lens nicht sagen kann",
+							"chosen": "Das gewählte Token über die Blöcke",
+							"entropy": "Streuung in nats",
+							"lastBlock": "Der letzte Block und die rohe Ausgabe",
+							"lens": "Was die Logit Lens zeigt"
+						},
+						"failed": "Die Logit Lens konnte nicht gelesen werden.",
+						"lastBlock": "Gewähltes Token: {{lens}} aus der Lens des letzten Blocks (Block {{index}}), {{raw}} in der rohen Modellausgabe.",
+						"mismatch": "Die Log-Wahrscheinlichkeiten unterscheiden sich um {{delta}} nats, mehr als die Toleranz: Die Lens hat die rohe Ausgabe dieses Schritts nicht reproduziert.",
+						"noTop": "Die Auslesung dieses Blocks ist keine endliche Zahl, daher hat sie keine Top-Tokens zum Anzeigen.",
+						"notAvailable": "nicht verfügbar",
+						"notFound": "Dieser Lauf hat keine Logit Lens behalten.",
+						"note": "Die finale Norm und die Ausgabeschicht des Modells, angewendet auf die Ausgabe jedes Blocks in diesem Schritt. Eine abgeleitete Auslesung, nicht das, was das Modell berechnet hat: Die Ausgabeschicht hat nur die Ausgabe des letzten Blocks gelesen.",
+						"rank": "Rang {{rank}}",
+						"spread": "Streuung (nats)",
+						"spreadLine": "Streuung der Auslesung dieses Blocks: {{entropy}} nats, etwa so verteilt wie e^H ≈ {{tokens}} gleich wahrscheinliche Tokens (höchstens ln V = {{max}} nats für dieses Vokabular).",
+						"spreadMissing": "Streuung der Auslesung dieses Blocks: nicht verfügbar (keine endliche Zahl).",
+						"stepMissing": "Die Lens-Auslesung dieses Schritts wurde nicht behalten.",
+						"tied": "gleichauf auf Platz 1",
+						"tiedEmbeddings": "Dieser Checkpoint teilt seine Ausgabeschicht mit den Token-Embeddings, daher geben die ersten Blöcke oft das Token an der aktuellen Position wieder.",
+						"title": "Was jeder Block vorhersagen würde (Logit Lens)",
+						"tolerance": "Die Ansicht warnt, wenn sich die Log-Wahrscheinlichkeiten um mehr als {{tolerance}} nats unterscheiden, eine Stufe der gespeicherten Rundung.",
+						"top": "Top-Token der Lens",
+						"truncated": "Die Lens hat ihre Größengrenze erreicht: Die ersten Schritte haben ihre Auslesungen behalten, spätere wurden nicht behalten. Die generierten Tokens sind davon nicht betroffen.",
+						"unavailable": "Dieser Lauf hat keine Logit Lens: Er wurde vor der Lens-Aufzeichnung gespeichert, oder sein Checkpoint hat mehr Blöcke als die Lens-Grenze von 64."
+					},
+					"linearNoMatrix": "Ein Block mit linearer Attention führt einen laufenden Zustand statt Gewichten über frühere Positionen, daher gibt es keine Attention-Matrix zum Anzeigen.",
+					"mapCapped": "Die Karte zeigt {{shown}} von {{total}} Key-Positionen; die {{dropped}} mit der kleinsten Gewichtssumme fehlen.",
+					"mapCaption": "Karte: eine Zeile pro generiertem Token, eine Spalte pro gespeicherter Key-Position; die Zeile des aktuellen Schritts ist umrandet.",
+					"next": "Nächster Schritt",
+					"noBlocks": "Dieser Lauf hat keine Blöcke aufgezeichnet.",
+					"noRecord": "kein Eintrag in diesem Schritt",
+					"noTokens": "Dieser Lauf hat keine Token erzeugt, die sich schrittweise ansehen lassen.",
+					"norm": "Residual-Norm {{norm}}",
+					"notCaptured": "Dieser Lauf hat Attention nur für die Blöcke {{layers}} aufgezeichnet; dieser Block war nicht dabei.",
+					"notRecorded": "Dieser Lauf hat keine Attention aufgezeichnet.",
+					"notTraced": "in diesem Lauf nicht aufgezeichnet",
+					"position": "Schritt {{step}} von {{total}}: {{text}}",
+					"previous": "Vorheriger Schritt",
+					"provenance": "Hugging-Face-Checkpoint, bf16, transformers {{transformers}}; nicht das GGUF. Jeder Wert unten stammt aus diesem einen gespeicherten Lauf.",
+					"provenanceKernel": "Hugging-Face-Checkpoint, bf16, transformers {{transformers}}, Attention-Kernel {{kernel}}; nicht das GGUF. Jeder Wert unten stammt aus diesem einen gespeicherten Lauf.",
+					"recorded": "{{block}}, Attention aufgezeichnet",
+					"recordedLegend": "Das Auge markiert die Blöcke, deren Attention dieser Lauf aufgezeichnet hat.",
+					"rowCaption": "Gespeicherte Keys von Head {{head}} in Schritt {{step}}, nach Position geordnet, jeweils mit ihren Nachbarn",
+					"rowMissing": "Die Zeile dieses Schritts wurde nicht behalten.",
+					"rowPosition": "Position",
+					"rowRest": "Rest der Zeile: {{rest}}",
+					"rowToken": "Token im Kontext",
+					"rowWeight": "Gewicht",
+					"shade": "F: volle Attention, L: lineare Attention. Die Schattierung ist die Residual-Norm des Blocks in diesem Schritt, relativ zur größten in diesem Lauf.",
+					"slider": "Schritt",
+					"tokens": "Generierte Tokens"
+				},
 				"tab": "Trace und Steering",
 				"token": "Token",
 				"traceFailed": "Der Trace konnte nicht geladen werden.",
 				"truncated": "Der Trace hat seine Grenze von {{cap}} erreicht: {{dropped}} Einträge wurden nicht behalten. Die Generierung war nicht betroffen.",
 				"tryNextToken": "Unter „Nächstes Token“ ausprobieren",
-				"unsupported": "Der Trace läuft vorerst nur unter Linux, weil er die Python-Trainings-Runtime braucht, die es nur unter Linux gibt. Die anderen Werkzeuge im Model Lab funktionieren hier."
+				"unsupported": "Der Trace läuft vorerst nur unter Linux, weil er die Python-Trainings-Runtime braucht, die es nur unter Linux gibt. Die anderen Werkzeuge im Model Lab funktionieren hier.",
+				"view": {
+					"label": "Lauf anzeigen als",
+					"stepper": "Schrittweise",
+					"table": "Tabelle"
+				}
 			}
 		}
 	}

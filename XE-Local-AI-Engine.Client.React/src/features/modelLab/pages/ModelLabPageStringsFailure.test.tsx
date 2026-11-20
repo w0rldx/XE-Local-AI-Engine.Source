@@ -37,7 +37,7 @@ describe("ModelLabPage when its strings will not load", () => {
 		server.use(http.get(localApiPath("models"), () => HttpResponse.json({ items: [] })));
 
 		await act(async () => {
-			renderWithProviders(<ModelLabPage />);
+			renderWithProviders(<ModelLabPage />, { withRouter: true });
 		});
 
 		await waitFor(() => expect(screen.getByRole("tab", { name: "Trace and steer" })).toBeTruthy(), { timeout: 5000 });

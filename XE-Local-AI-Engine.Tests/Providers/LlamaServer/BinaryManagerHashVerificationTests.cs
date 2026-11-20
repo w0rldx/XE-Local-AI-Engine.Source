@@ -16,7 +16,7 @@ public sealed class BinaryManagerHashVerificationTests
     [Test]
     public async Task EnsureBinary_CorruptDownload_RetriesOnce_ThenSurfacesSanitizedFailure()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-test");
         // The handler always returns bytes that cannot match the pinned SHA256 → forced corruption on every attempt.
         using var handler = new CountingHttpMessageHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -38,7 +38,7 @@ public sealed class BinaryManagerHashVerificationTests
     [Test]
     public async Task EnsureBinary_CachedBinaryPresent_ReusedOffline_NoDownload()
     {
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-test");
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
         var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
@@ -61,7 +61,7 @@ public sealed class BinaryManagerHashVerificationTests
     {
         // Regression: the pinned b9692 Linux archive puts llama-server under a top-level llama-{tag}/, not build/bin/,
         // so the manager searches the extracted tree, else "did not contain the expected server executable".
-        using var cache = new TempCacheDir();
+        using var cache = new TempDirectory("xe-llama-test");
         var variantDir = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu");
         var actualServerPath = Path.Combine(variantDir, $"llama-{LlamaCppReleasePins.PinnedTag}", "llama-server");
         Directory.CreateDirectory(Path.GetDirectoryName(actualServerPath)!);
@@ -77,31 +77,5 @@ public sealed class BinaryManagerHashVerificationTests
         AssertEx.Equal(expected: 0, handler.CallCount);
         AssertEx.Equal(actualServerPath, binary.ServerExecutablePath);
         AssertEx.True(binary.IsPinnedFallback);
-    }
-
-    private sealed class TempCacheDir : IDisposable
-    {
-        public TempCacheDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-llama-test-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
-        }
     }
 }

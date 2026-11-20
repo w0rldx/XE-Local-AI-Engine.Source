@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 public interface IDatasetGenerationService
 {
@@ -32,6 +33,7 @@ public sealed class DatasetGenerationService : IDatasetGenerationService
 {
     private readonly TrainingRunCancellationRegistry _cancellations;
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly IGpuIdleHolderPreemption _idlePreemption;
     private readonly IJobCreatedPublisher _jobCreated;
     private readonly IDatasetGenerationEventBuffer _events;
     private readonly IDatasetGenerationQueueSignal _signal;
@@ -39,11 +41,14 @@ public sealed class DatasetGenerationService : IDatasetGenerationService
 
     public DatasetGenerationService(ITrainingDatasetStore store,
         IGpuWorkGate gpuWorkGate,
+        IGpuIdleHolderPreemption idlePreemption,
         TrainingRunCancellationRegistry cancellations,
         IDatasetGenerationQueueSignal signal,
         IJobCreatedPublisher jobCreated,
         IDatasetGenerationEventBuffer events)
     {
+        ArgumentNullException.ThrowIfNull(idlePreemption);
+        _idlePreemption = idlePreemption;
         ArgumentNullException.ThrowIfNull(events);
         _events = events;
         ArgumentNullException.ThrowIfNull(jobCreated);
@@ -63,7 +68,8 @@ public sealed class DatasetGenerationService : IDatasetGenerationService
         string name,
         CancellationToken cancellationToken = default)
     {
-        if (_gpuWorkGate.ExclusiveKind is not null)
+        // An idle Model Lab worker is not busy work: it is asked to leave and waited out once, and only busy work refuses.
+        if (_gpuWorkGate.ExclusiveKind is not null && !await IsFreedByIdleReleaseAsync(cancellationToken))
         {
             throw new TrainingConflictException("TrainingBusy");
         }
@@ -105,4 +111,7 @@ public sealed class DatasetGenerationService : IDatasetGenerationService
         });
         _events.EvictPlaintext(datasetId);
     }
+
+    private async Task<bool> IsFreedByIdleReleaseAsync(CancellationToken cancellationToken) =>
+        await _idlePreemption.WaitForReleaseAsync(GpuWorkAdmission.IdleHolderReleaseBound, cancellationToken) && _gpuWorkGate.ExclusiveKind is null;
 }

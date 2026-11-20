@@ -11,6 +11,7 @@ import type { DirectInferenceEvent, DirectInferenceRequest } from "@/core/direct
 import { SamePromptComparison } from "@/features/modelLab/components/SamePromptComparison";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
+import { holdAnimationFrames } from "@/test/HoldAnimationFrames";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
@@ -229,6 +230,69 @@ describe("SamePromptComparison", () => {
 		expect(hub.state.requests).toHaveLength(2);
 	});
 
+	it("shows each side's last streamed events when the runs complete, without waiting for a frame", async () => {
+		stubModels();
+		hub.state.events = {
+			"model-a": [{ type: "delta", textDelta: "from " }, { type: "delta", textDelta: "a" }, { type: "done" }],
+			"model-b": [{ type: "delta", textDelta: "from " }, { type: "delta", textDelta: "b" }, { type: "done" }],
+		} satisfies Record<string, DirectInferenceEvent[]>;
+		renderWithProviders(<SamePromptComparison />);
+		holdAnimationFrames();
+
+		await fillAndRun();
+
+		await waitFor(() => expect(column(1).getByTestId("direct-inference-output").textContent).toBe("from b"));
+		expect(column(0).getByTestId("direct-inference-output").textContent).toBe("from a");
+		expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+	});
+
+	it("shows the events no frame committed yet when Stop ends the run", async () => {
+		stubModels();
+		hub.state.hangs.add("model-a");
+		hub.state.events = {
+			"model-a": [
+				{ type: "delta", textDelta: "par" },
+				{ type: "delta", textDelta: "tial" },
+			],
+		};
+		renderWithProviders(<SamePromptComparison />);
+		const frames = holdAnimationFrames();
+
+		await fillAndRun();
+		await waitFor(() => expect(hub.connection.stream).toHaveBeenCalledTimes(1));
+		expect(column(0).queryByTestId("direct-inference-output")).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+		await waitFor(() => expect(column(0).getByTestId("direct-inference-output").textContent).toBe("partial"));
+		frames.runFrame();
+		expect(column(1).getByText("Not run: stopped before this model started.")).toBeTruthy();
+	});
+
+	it("a new run shows nothing a stopped run left in an unpainted frame", async () => {
+		stubModels();
+		hub.state.hangs.add("model-b");
+		hub.state.events = {
+			"model-a": [{ type: "delta", textDelta: "from a" }, { type: "done" }],
+			"model-b": [{ type: "delta", textDelta: "partial b" }],
+		};
+		renderWithProviders(<SamePromptComparison />);
+		holdAnimationFrames();
+
+		await fillAndRun();
+		await waitFor(() => expect(hub.connection.stream).toHaveBeenCalledTimes(2));
+		hub.state.hangs.add("model-a");
+		hub.state.events = {};
+
+		fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+		fireEvent.click(screen.getByRole("button", { name: "Run both" }));
+
+		await waitFor(() => expect(hub.connection.stream).toHaveBeenCalledTimes(3));
+		await waitFor(() => expect(hub.dispose).toHaveBeenCalledTimes(1));
+		expect(column(1).queryByTestId("direct-inference-output")).toBeNull();
+		expect(column(1).getByText("Waiting for the first run to finish.")).toBeTruthy();
+	});
+
 	it("Stop while the hub connects starts neither run, even after the connection settles", async () => {
 		stubModels();
 		hub.pendingStart();
@@ -268,7 +332,7 @@ describe("SamePromptComparison", () => {
 
 	it("says when no eligible model is installed", async () => {
 		server.use(http.get(localApiPath("models"), () => HttpResponse.json({ items: [] })));
-		renderWithProviders(<SamePromptComparison />);
+		renderWithProviders(<SamePromptComparison />, { withRouter: true });
 
 		expect((await screen.findByTestId("model-lab-no-models")).textContent).toContain("No installed llama.cpp model");
 	});

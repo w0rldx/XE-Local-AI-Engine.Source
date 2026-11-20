@@ -149,7 +149,7 @@ internal sealed class LiveEndpointSupervisor : ILlamaServerProcessSupervisor, IA
     public Task EvictAsync(string modelName, ModelRole role, CancellationToken ct) =>
         throw new NotSupportedException();
 
-    public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct) =>
+    public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct, bool operatorRequested = false) =>
         throw new NotSupportedException();
 
     public Task<T> RunExclusiveProfilingAsync<T>(string modelName,
@@ -169,6 +169,9 @@ internal sealed class LiveEndpointSupervisor : ILlamaServerProcessSupervisor, IA
 
     public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role) =>
         throw new NotSupportedException();
+
+    public bool IsBackgroundLaunchBlocked(string modelName, ModelRole role) =>
+        false;
 
     private sealed class LeaseCounter
     {

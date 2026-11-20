@@ -4,13 +4,19 @@ set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+# Kills only PIDs this file started or its fake hosts recorded, should a case fail before they are gone.
+cleanup() {
+  if [[ -f "$TMP/spawned" ]]; then xargs -r kill -9 <"$TMP/spawned" 2>/dev/null || true; fi
+  if [[ -n "${UNRELATED:-}" ]]; then kill -9 "$UNRELATED" 2>/dev/null || true; fi
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
 FAKE="$TMP/repo"
 PROJ="$FAKE/XE-Local-AI-Engine.Tests"
 BIN="$PROJ/bin/Release/net10.0"
 mkdir -p "$FAKE/scripts/lib" "$PROJ/Cases" "$BIN"
 cp "$ROOT/scripts/run-tests-memory-safe.sh" "$FAKE/scripts/"
-cp "$ROOT/scripts/lib/test-sizing.sh" "$FAKE/scripts/lib/"
+cp "$ROOT/scripts/lib/test-sizing.sh" "$ROOT/scripts/lib/proc-tree.sh" "$FAKE/scripts/lib/"
 printf 'MemAvailable:    6291456 kB\n' >"$TMP/meminfo-6g"
 
 cat >"$FAKE/scripts/with-build-lock.sh" <<'EOF'
@@ -69,6 +75,33 @@ if [[ -n "$trxname" ]]; then
   mkdir -p "$results" && : >"$results/$trxname"
   printf 'trx=%s/%s coverage=%s\n' "$results" "$trxname" "$coverage" >>"$FAKE_LOG"
 fi
+# FAKE_BLOCK_NS: the batch whose filter names it holds still until, in this order, FAKE_AWAIT_HOLD (the runner's
+# output) shows a held launch, FAKE_FREE_MEMINFO rewrites MemAvailable to 64 GB, and FAKE_LOG shows a batch started
+# whose filter begins with FAKE_AWAIT_START. Each step is optional; one that never comes fails the batch.
+await_in() {
+  local i
+  # real-timer: the subject is the real runner's scheduling, observed through its own output files.
+  for ((i = 0; i < 600; i++)); do grep -Fq -- "$1" "$2" 2>/dev/null && return 0; sleep 0.1; done
+  echo "fake host: '$1' never appeared in $2" >&2; exit 1
+}
+if [[ -n "${FAKE_BLOCK_NS:-}" && "$filter" == *"$FAKE_BLOCK_NS"* ]]; then
+  [[ -z "${FAKE_AWAIT_HOLD:-}" ]] || await_in 'holding the next batch' "$FAKE_AWAIT_HOLD"
+  [[ -z "${FAKE_FREE_MEMINFO:-}" ]] || printf 'MemAvailable:   67108864 kB\n' >"$XE_SIZING_MEMINFO"
+  [[ -z "${FAKE_AWAIT_START:-}" ]] || await_in "filter=$FAKE_AWAIT_START" "$FAKE_LOG"
+  echo "released $filter" >>"$FAKE_LOG"
+fi
+# FAKE_SPAWN: MTP's controller -> host -> engine chain. A child that starts a grandchild, both PIDs recorded in
+# FAKE_SPAWN (child first); with XE_SIZING_PS set, that table describes the tree (a 2000 MB host). Then MemAvailable
+# drops under any floor and this controller waits to be killed.
+if [[ -n "${FAKE_SPAWN:-}" ]]; then
+  bash -c 'echo "$$" >>"$1"; sleep 300 & echo "$!" >>"$1"; wait' _ "$FAKE_SPAWN" &
+  for ((i = 0; i < 600; i++)); do [[ "$(wc -l <"$FAKE_SPAWN")" -ge 2 ]] && break; sleep 0.1; done
+  mapfile -t kids <"$FAKE_SPAWN"
+  [[ -z "${XE_SIZING_PS:-}" ]] || printf '%s 1 1024\n%s %s 2048000\n%s %s 1024\n' \
+    "$$" "${kids[0]}" "$$" "${kids[1]}" "${kids[0]}" >"$XE_SIZING_PS"
+  printf 'MemAvailable:     102400 kB\n' >"$XE_SIZING_MEMINFO"
+  wait
+fi
 # FAKE_SUMMARY picks the MTP summary: passed (default), failed, skipped (all skipped), none.
 case "${FAKE_SUMMARY:-passed}" in
   passed)  printf 'Test run summary: Passed!\n  total: 1\n  failed: 0\n  succeeded: 1\n  skipped: 0\n' ;;
@@ -82,6 +115,20 @@ exit "${FAKE_EXIT_AFTER_SUMMARY:-0}"
 EOF
 chmod +x "$FAKE/scripts/with-build-lock.sh" "$FAKE/scripts/assembly-guard.sh" \
   "$BIN/XE-Local-AI-Engine.Tests"
+
+# --- scripts/lib/proc-tree.sh: one ps table in, the tree's summed RSS and its descendant PIDs out ---
+# shellcheck source=scripts/lib/proc-tree.sh
+source "$ROOT/scripts/lib/proc-tree.sh"
+# A controller (10) whose test host (11) started an engine (12) and a helper (13); 20 is unrelated.
+printf '%s\n' '  1     0    100' ' 10     1 105000' ' 11    10 700000' ' 12    11  50000' ' 13    11   2000' \
+  ' 20     1 999999' >"$TMP/ps-table"
+check_tree() {
+  local got; got="$(XE_SIZING_PS="$TMP/ps-table" xe_proc_tree "$2")"
+  [[ "$got" == "$1" ]] || { echo "xe_proc_tree $2: wanted '$1', got '$got'" >&2; exit 1; }
+}
+check_tree '857000 11 12 13' 10   # grandchildren in, the unrelated 20 out
+check_tree '2000' 13              # a leaf: its own RSS, no descendants
+check_tree '0' 99                 # a PID missing from the table
 
 write_namespaces() {
   rm -f "$PROJ/Cases"/*.cs
@@ -273,6 +320,78 @@ done
 for ns in ShardA ShardB ShardC ShardD; do
   [[ "$(grep -c "XE_Local_AI_Engine.Tests.$ns)" "$TMP/shard-all.log")" -eq 1 ]] \
     || { echo "$ns was not run exactly once across the shards" >&2; cat "$TMP/shard-all.log" >&2; exit 1; }
+done
+
+# --- backpressure: with a batch running, the next waits for one batch + AVAIL_FLOOR of MemAvailable ---
+# Runs the script with its output in <name>.out, where a fake host can watch for the held-launch line.
+run_to_file() {
+  local name="$1"; shift
+  : >"$TMP/$name.log"
+  set +e
+  FAKE_LOG="$TMP/$name.log" NO_BUILD=1 JOBS=2 "$@" "$FAKE/scripts/run-tests-memory-safe.sh" >"$TMP/$name.out" 2>&1
+  status=$?
+  set -e
+  output="$(cat "$TMP/$name.out")"
+  if [[ "$status" -ne 0 ]] || ! grep -Fq 'ALL NAMESPACE BATCHES GREEN' <<<"$output"; then
+    echo "$name: exited $status" >&2; printf '%s\n' "$output" >&2; exit 1
+  fi
+}
+line_of() { grep -nF -- "$1" "$2" | head -1 | cut -d: -f1; }
+refute() { if grep -Fq "$@"; then echo "unexpected: grep -F $*" >&2; exit 1; fi; }
+write_namespaces XE_Local_AI_Engine.Tests.HoldA XE_Local_AI_Engine.Tests.HoldB
+printf 'MemAvailable:    1048576 kB\n' >"$TMP/meminfo-1g"
+printf 'MemAvailable:   67108864 kB\n' >"$TMP/meminfo-64g"
+next_filter='/*/XE_Local_AI_Engine.Tests.HoldB/'
+
+# 1 GB free: HoldB is held while HoldA runs, and starts once HoldA has finished.
+run_to_file hold-finish env XE_SIZING_MEMINFO="$TMP/meminfo-1g" FAKE_BLOCK_NS=Tests.HoldA \
+  FAKE_AWAIT_HOLD="$TMP/hold-finish.out"
+[[ "$(grep -c 'holding the next batch' <<<"$output")" -eq 1 ]]
+grep -Fq '.. holding the next batch: MemAvailable 1024MB < 1824MB (one batch 1.0 GB + AVAIL_FLOOR 800MB)' <<<"$output"
+(( $(line_of 'released /*/XE_Local_AI_Engine.Tests.HoldA/' "$TMP/hold-finish.log") \
+   < $(line_of "filter=$next_filter" "$TMP/hold-finish.log") )) \
+  || { echo "hold-finish: HoldB started before HoldA finished" >&2; cat "$TMP/hold-finish.log" >&2; exit 1; }
+
+# Memory freed while HoldA still runs: HoldB starts at once (HoldA itself waits for that start).
+cp "$TMP/meminfo-1g" "$TMP/meminfo-freed"
+run_to_file hold-memory env XE_SIZING_MEMINFO="$TMP/meminfo-freed" FAKE_BLOCK_NS=Tests.HoldA \
+  FAKE_AWAIT_HOLD="$TMP/hold-memory.out" FAKE_FREE_MEMINFO=1 FAKE_AWAIT_START="$next_filter"
+grep -Fq 'holding the next batch' <<<"$output"
+
+# Room for a batch, or unknown memory: never held. HoldA stays running until HoldB has started.
+for room in "$TMP/meminfo-64g" "$TMP/absent-meminfo"; do
+  run_to_file hold-none env XE_SIZING_MEMINFO="$room" FAKE_BLOCK_NS=Tests.HoldA FAKE_AWAIT_START="$next_filter"
+  refute 'holding the next batch' <<<"$output"
+done
+
+# --- SAFETY-KILL: the controller and every descendant die, an unrelated process does not ---
+# A zombie still answers kill -0, and its reaper is whatever this file runs under, so state Z counts as gone.
+alive() { local st; st="$(ps -o stat= -p "$1" 2>/dev/null)"; [[ -n "$st" && "$st" != Z* ]]; }
+write_namespaces XE_Local_AI_Engine.Tests.Ordinary
+sleep 300 >/dev/null 2>&1 & UNRELATED=$!
+for table in live seamed; do
+  : >"$TMP/spawned"
+  printf 'MemAvailable:   67108864 kB\n' >"$TMP/meminfo-kill"
+  seam=()
+  [[ "$table" == live ]] || seam=(XE_SIZING_PS="$TMP/ps-kill")
+  run_red "kill-$table" env XE_SIZING_MEMINFO="$TMP/meminfo-kill" FAKE_SPAWN="$TMP/spawned" ${seam[@]+"${seam[@]}"}
+  [[ "$status" -eq 1 ]] || { echo "kill-$table exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+  grep -Fq '!! SAFETY-KILL XE_Local_AI_Engine.Tests.Ordinary: avail 100MB < 800MB' <<<"$output"
+  grep -Fq 'FAILED namespaces: XE_Local_AI_Engine.Tests.Ordinary(oom)' <<<"$output"
+  # The seamed table gives the host 2000 MB: peakRSS is the tree's sum, not the controller's 1 MB.
+  [[ "$table" == live ]] || grep -Fq 'peakRSS(any batch)=2002MB' <<<"$output"
+  mapfile -t descendants <"$TMP/spawned"
+  [[ "${#descendants[@]}" -eq 2 ]] || { echo "kill-$table: fake host recorded ${descendants[*]}" >&2; exit 1; }
+  deadline=$((SECONDS + 60))
+  while :; do
+    survivors=()
+    for pid in "${descendants[@]}"; do alive "$pid" && survivors+=("$pid"); done
+    [[ "${#survivors[@]}" -eq 0 ]] && break
+    (( SECONDS <= deadline )) || { echo "kill-$table: descendants survived SAFETY-KILL: ${survivors[*]}" >&2; exit 1; }
+    # real-timer: a KILL is delivered asynchronously; the assertion waits for real processes to die.
+    sleep 0.2
+  done
+  alive "$UNRELATED" || { echo "kill-$table: SAFETY-KILL took an unrelated process" >&2; exit 1; }
 done
 
 echo "run-tests-memory-safe.test.sh: PASS"

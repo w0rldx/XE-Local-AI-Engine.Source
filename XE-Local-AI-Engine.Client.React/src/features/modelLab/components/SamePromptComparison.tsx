@@ -1,12 +1,14 @@
 import { Alert, Button, Group, Paper, Select, SimpleGrid, Stack, Text, Textarea, Title } from "@mantine/core";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { DirectInferenceResult } from "@/core/directInference/DirectInferenceModels";
 import { DirectInferenceErrorAlert, DirectInferenceOutput } from "@/core/directInference/DirectInferenceOutput";
 import { DirectInferenceSamplingFields } from "@/core/directInference/DirectInferenceSamplingFields";
+import { useAbortableRun } from "@/core/directInference/useAbortableRun";
 import { useDirectInferenceModels } from "@/core/directInference/useDirectInferenceModels";
 import { type ChatSamplingOptions, toWireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
+import { useStreamCommitScheduler } from "@/core/streaming/useStreamCommitScheduler";
 import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNotice";
 import { comparisonSeed, runInOrder } from "@/features/modelLab/models/SamePromptRun";
 
@@ -15,6 +17,13 @@ interface Comparison {
 	seed: number;
 	// Null until that model's run starts.
 	results: [DirectInferenceResult | null, DirectInferenceResult | null];
+}
+
+// The latest streamed result per model since the last commit; undefined where that model streamed nothing.
+type PendingResults = [DirectInferenceResult | undefined, DirectInferenceResult | undefined];
+
+function mergePendingResults(previous: PendingResults, next: PendingResults): PendingResults {
+	return [next[0] ?? previous[0], next[1] ?? previous[1]];
 }
 
 // One prompt, two installed llama.cpp models, one after the other over the chat hub. Held in this component only: nothing is saved.
@@ -28,10 +37,14 @@ export function SamePromptComparison() {
 	const [prompt, setPrompt] = useState("");
 	const [sampling, setSampling] = useState<ChatSamplingOptions>({});
 	const [comparison, setComparison] = useState<Comparison | undefined>();
-	const [running, setRunning] = useState(false);
-	const abortRef = useRef<AbortController | undefined>(undefined);
-	// Leaving mid-run cancels it, or it keeps holding the node's invocation slot.
-	useEffect(() => () => abortRef.current?.abort(), []);
+	const { running, start, stop } = useAbortableRun();
+	const resultCommits = useStreamCommitScheduler<PendingResults>(
+		(pending) =>
+			setComparison(
+				(current) => current && { ...current, results: [pending[0] ?? current.results[0], pending[1] ?? current.results[1]] },
+			),
+		mergePendingResults,
+	);
 
 	const run = async (): Promise<void> => {
 		if (modelA === null || modelB === null || prompt.trim().length === 0) {
@@ -43,36 +56,21 @@ export function SamePromptComparison() {
 			systemPrompt: systemPrompt.trim().length > 0 ? systemPrompt : undefined,
 			samplingOptions: toWireSamplingOptions({ ...sampling, seed }),
 		};
-		const controller = new AbortController();
-		abortRef.current = controller;
+		// A stopped run's frame that never painted must not merge into this one.
+		resultCommits.cancel();
 		setComparison({ models: [modelA, modelB], seed, results: [null, null] });
-		setRunning(true);
-		await runInOrder(
-			[
-				{ ...shared, modelId: modelA },
-				{ ...shared, modelId: modelB },
-			],
-			(index, result) =>
-				setComparison(
-					(current) =>
-						current && {
-							...current,
-							results: index === 0 ? [result, current.results[1]] : [current.results[0], result],
-						},
-				),
-			controller.signal,
-		);
-		// A stopped attempt already went idle, and by now the panel may belong to a newer run.
-		if (!controller.signal.aborted) {
-			setRunning(false);
-			abortRef.current = undefined;
-		}
-	};
-
-	// Idle at once: while the hub is still connecting, the attempt only settles when the connection does.
-	const stop = (): void => {
-		abortRef.current?.abort();
-		setRunning(false);
+		await start(async (signal) => {
+			await runInOrder(
+				[
+					{ ...shared, modelId: modelA },
+					{ ...shared, modelId: modelB },
+				],
+				(index, result) => resultCommits.schedule(index === 0 ? [result, undefined] : [undefined, result]),
+				signal,
+			);
+			// A finished or stopped run shows its last events at once, not on the next frame.
+			resultCommits.flush();
+		});
 	};
 
 	return (

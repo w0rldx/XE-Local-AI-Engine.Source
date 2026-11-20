@@ -331,7 +331,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         {
             invocationOutcome = exception switch
             {
-                LlamaServerModelEjectedException => "cancelled",
+                LlamaServerModelEjectedException or OperatorEjectedException => "cancelled",
                 ProviderCallBudgetExceededException => "stopped",
                 _ => "failed"
             };
@@ -339,6 +339,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
             {
                 // A designed bound: the budget already logged its own warning with the round count, so no stack trace here.
                 _logger.LogInformation("Invocation {InvocationId} stopped at its provider-call budget.", package.InvocationId);
+            }
+            else if (exception is OperatorEjectedException or LlamaServerModelEjectedException)
+            {
+                // The model was ejected while this turn loaded or ran: an outcome, classified ModelEjected, so no stack trace.
+                _logger.LogInformation("Invocation {InvocationId} cancelled: {Reason}", package.InvocationId, exception.Message);
             }
             else if (exception is ApprovalExpiredException)
             {
@@ -351,15 +356,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }
 
             var (failureCategory, message) = InvocationFailureClassifier.MapFailure(exception);
-            // An operator force-eject surfaces as a Cancelled-category LlamaServerModelEjectedException here (not the OCE
-            // path). Count it as a cancellation cause rather than a failure, mirroring the OCE branch above.
-            if (exception is LlamaServerModelEjectedException)
+            // An eject surfaces here, not on the OCE path. Counted as a cancellation cause, mirroring the OCE branch above: an operator mark
+            // refusing the load, or the model unloaded under the turn (a force eject or an image job making room), which need not be the operator's.
+            var ejectCause = exception switch
             {
-                NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", "operator_eject"));
+                OperatorEjectedException => "operator_eject",
+                LlamaServerModelEjectedException => "model_eject",
+                _ => null
+            };
+            if (ejectCause is not null)
+            {
+                NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", ejectCause));
             }
 
             await ReportTerminalTelemetryAsync(turn, package.InvocationId);
-            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, message, failureCategory);
+            // The user did not ask for an eject, so the chat shows its reason instead of the plain stopped label.
+            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, message, failureCategory, showCancelReason: ejectCause is not null);
         }
         finally
         {

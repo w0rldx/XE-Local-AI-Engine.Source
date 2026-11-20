@@ -11,6 +11,7 @@ import {
 	updatePlaybookActionMutation,
 	updateSuggestedPlaybookActionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import { toPlaybookAction, toPlaybookActionRequestBody, toPromoteError } from "@/features/agents/models/PlaybookActionMappers";
 import type {
 	MemoryScope,
@@ -35,14 +36,9 @@ export const playbookQueryIds = {
 	listActions: "listAgentPlaybookActions",
 } as const;
 
-/** Builds the partial generated-query-key filter that matches every cached variant of the playbook-action list. */
-export function playbookInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
-
 function invalidateActions(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
 	return queryClient.invalidateQueries({
-		queryKey: playbookInvalidationKey(playbookQueryIds.listActions),
+		queryKey: operationInvalidationKey(playbookQueryIds.listActions),
 	});
 }
 

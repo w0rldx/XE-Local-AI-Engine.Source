@@ -343,7 +343,7 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         services.AddSingleton<IConfiguration>(configuration);
         services.AddLogging();
         services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
-        services.AddSingleton<INodeDataDirectory>(new FixedNodeDataDirectory(_rootPath));
+        services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(_rootPath));
         services.AddSingleton(timeProvider ?? TimeProvider.System);
         services.AddDbContext<NodeChatDbContext>(options =>
         {
@@ -409,16 +409,6 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'probe';";
         var result = await command.ExecuteScalarAsync();
         return Convert.ToInt32(result, CultureInfo.InvariantCulture) > 0;
-    }
-
-    private sealed class FixedNodeDataDirectory : INodeDataDirectory
-    {
-        public FixedNodeDataDirectory(string root)
-        {
-            Root = root;
-        }
-
-        public string Root { get; }
     }
 
     private sealed class FixedTimeProvider : TimeProvider

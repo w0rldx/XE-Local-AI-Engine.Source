@@ -3,12 +3,18 @@ import { skipToken, useQueries, useQuery, useQueryClient } from "@tanstack/react
 import type { TFunction } from "i18next";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { getErrorStatus } from "@/core/api/errors/RetryClassification";
 import {
 	getImageJobOptions,
+	getModelLabExperimentOptions,
 	getTrainingRunOptions,
+	listBaseArtifactsOptions,
+	listGraphWorkflowRunsOptions,
 	listImageJobsOptions,
+	listModelLabExperimentsOptions,
 	listTrainingDatasetsOptions,
 	listTrainingRunsOptions,
+	listWorkSessionsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import { joinHubGroup } from "@/core/api/signalr/SharedHubGroups";
@@ -16,18 +22,24 @@ import {
 	applyKnowledgeDocumentStatus,
 	applyModelDownloadEvent,
 	applySchedulerRunEvent,
+	fromBaseArtifactDownloads,
 	fromDatasetBuilds,
 	fromImageJobs,
 	fromKnowledgeIndexing,
 	fromModelDownloads,
+	fromModelLabExperiments,
 	fromSchedulerRuns,
 	fromTrainingRuns,
+	fromWaitingGraphRuns,
+	fromWaitingWorkSessions,
+	graphRunWaitingStatus,
 	type KnowledgeIndexingBatch,
 	type ModelDownloadEntry,
 	type ModelDownloads,
 	removeKnowledgeDocument,
 	type SchedulerRunEntry,
 	type SchedulerRuns,
+	stringField,
 } from "@/core/operations/models/JobOperationModels";
 import type { Operation } from "@/core/operations/models/OperationModels";
 
@@ -44,17 +56,18 @@ import type { Operation } from "@/core/operations/models/OperationModels";
 // - Push sources (knowledge-base indexing, scheduler runs, image and Whisper model downloads): the hub broadcasts and
 //   there is no cheap list to hydrate from, so it is leased while the feature is on and its events fold into a no-fetch
 //   cache entry. A download already running at page load appears with its next progress push (at most a second).
-
-function field(payload: unknown, key: string): string | undefined {
-	const value = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>)[key] : undefined;
-	return typeof value === "string" ? value : undefined;
-}
+// - Broadcast-only list sources (graph runs and work sessions waiting for the user, base checkpoint downloads): the
+//   same list snapshot, re-read on their hub's app-wide broadcast; nothing is joined. Model Lab experiments are a list
+//   source on the training-run hub like training runs.
 
 interface ListSourceHub {
 	readonly path: string;
-	readonly subscribeArgs: (id: string) => readonly unknown[];
+	/** How a running id's group is joined; absent for a broadcast-only source, which passes no running ids. */
+	readonly subscribeArgs?: (id: string) => readonly unknown[];
 	/** Per client method: the job id when this payload may move the job's list row, else undefined. */
 	readonly events: Readonly<Record<string, (payload: unknown) => string | undefined>>;
+	/** Per broadcast client method: whether this payload may change the list. */
+	readonly broadcasts: Readonly<Record<string, (payload: unknown) => boolean>>;
 	/**
 	 * Subscribe replays nothing, so an end between the list GET and the join reaches no handler: the list is re-read
 	 * once after each pass of successful Subscribes. The images hub replays a job's buffered events instead.
@@ -66,14 +79,49 @@ interface ListSourceHub {
 // evicted, and the hub answers a replay reset for it, which re-reads the list like a state event.
 const LIVE_ONLY = Number.MAX_SAFE_INTEGER;
 
+// Broadcast on a job kind's own hub when a job of that kind is created anywhere, and for a base checkpoint download,
+// which has no group, also when it ends. The payload names the kind, since three kinds share the training-run hub.
+const JOB_CREATED = "job.created";
+const JOB_ENDED = "job.ended";
+
+const ofKind =
+	(kind: string) =>
+	(payload: unknown): boolean =>
+		stringField(payload, "kind") === kind;
+
 const trainingRunHub: ListSourceHub = {
 	path: "training/runs/hub",
 	subscribeArgs: (id) => [id, LIVE_ONLY],
 	liveOnly: true,
 	events: {
-		"trainingRun.event": (payload) => (field(payload, "kind") === "State" ? field(payload, "runId") : undefined),
-		"trainingRun.replayReset": (payload) => field(payload, "runId"),
+		"trainingRun.event": (payload) => (stringField(payload, "kind") === "State" ? stringField(payload, "runId") : undefined),
+		"trainingRun.replayReset": (payload) => stringField(payload, "runId"),
 	},
+	broadcasts: { [JOB_CREATED]: ofKind("TrainingRun") },
+};
+
+// Model Lab experiments stream on the training-run hub under their own id, and end with the same State event.
+const modelLabExperimentHub: ListSourceHub = {
+	...trainingRunHub,
+	broadcasts: { [JOB_CREATED]: ofKind("ModelLabExperiment") },
+};
+
+const baseArtifactDownloadHub: ListSourceHub = {
+	path: "training/runs/hub",
+	events: {},
+	broadcasts: { [JOB_CREATED]: ofKind("BaseArtifactDownload"), [JOB_ENDED]: ofKind("BaseArtifactDownload") },
+};
+
+const graphRunStatusHub: ListSourceHub = {
+	path: "graph-workflows/hub",
+	events: {},
+	broadcasts: { graphWorkflowRunStatusChanged: () => true },
+};
+
+const workSessionStatusHub: ListSourceHub = {
+	path: "work-sessions/hub",
+	events: {},
+	broadcasts: { workSessionStatusChanged: () => true },
 };
 
 const datasetBuildHub: ListSourceHub = {
@@ -81,9 +129,11 @@ const datasetBuildHub: ListSourceHub = {
 	subscribeArgs: (id) => [id, LIVE_ONLY],
 	liveOnly: true,
 	events: {
-		"datasetGeneration.event": (payload) => (field(payload, "kind") === "State" ? field(payload, "datasetId") : undefined),
-		"datasetGeneration.replayReset": (payload) => field(payload, "datasetId"),
+		"datasetGeneration.event": (payload) =>
+			stringField(payload, "kind") === "State" ? stringField(payload, "datasetId") : undefined,
+		"datasetGeneration.replayReset": (payload) => stringField(payload, "datasetId"),
 	},
+	broadcasts: { [JOB_CREATED]: ofKind("DatasetBuild") },
 };
 
 const TERMINAL_IMAGE_PHASES: ReadonlySet<string | undefined> = new Set(["Succeeded", "Failed", "Cancelled"]);
@@ -93,12 +143,10 @@ const imageJobHub: ListSourceHub = {
 	subscribeArgs: (id) => [id],
 	events: {
 		"imageJob.statusChanged": (payload) =>
-			TERMINAL_IMAGE_PHASES.has(field(payload, "phase")) ? field(payload, "jobId") : undefined,
+			TERMINAL_IMAGE_PHASES.has(stringField(payload, "phase")) ? stringField(payload, "jobId") : undefined,
 	},
+	broadcasts: { [JOB_CREATED]: ofKind("ImageJob") },
 };
-
-// Broadcast on each list source's hub when a job of its kind is created anywhere.
-const JOB_CREATED = "job.created";
 
 // hub degraded: while a list source's hub is not connected or refused a Subscribe, no push announces a running job's
 // end, so its list is re-read at this pace until the hub is back (whose reconnect re-reads it once) or nothing runs.
@@ -112,15 +160,16 @@ function hubDownPoll(hubDown: boolean, operations: readonly Operation[]): number
  * Leases `hub` while `watching` and holds each running id's group through `joinHubGroup`, which
  * re-subscribes after a reconnect and leaves a group only when its last holder on the shared connection does, so a page
  * watching the same id and this feed never drop each other's membership. `onChange` runs for an event of a held id, for
- * `job.created`, and after a reconnect, whose gap may hide a finish or a creation. `onHubDown` reports whether the lease
- * is not connected (a failed start, reconnecting, closed until the manager's restart) or a held id's Subscribe failed.
+ * a matching broadcast (with its payload), and after a reconnect, whose gap may hide a finish or a creation. `onHubDown`
+ * reports whether the lease is not connected (a failed start, reconnecting, closed until the manager's restart) or a held
+ * id's Subscribe failed.
  */
 function useListSourceHub(
 	hub: ListSourceHub,
 	watching: boolean,
 	runningIds: readonly string[],
 	onHubDown: (down: boolean) => void,
-	onChange: () => void,
+	onChange: (broadcast?: unknown) => void,
 ): void {
 	const key = runningIds.toSorted().join(",");
 	const wanted = useRef<ReadonlySet<string>>(new Set());
@@ -163,7 +212,7 @@ function useListSourceHub(
 		// The Subscribes sent in one tick (one join pass, or one reconnect's re-joins), so a live-only hub re-reads once.
 		let pass: Promise<boolean>[] = [];
 		const subscribe = (id: string): void => {
-			if (connection.state !== HubConnectionState.Connected) {
+			if (hub.subscribeArgs === undefined || connection.state !== HubConnectionState.Connected) {
 				return;
 			}
 			const joining = connection.invoke("Subscribe", ...hub.subscribeArgs(id)).then(
@@ -210,8 +259,16 @@ function useListSourceHub(
 			};
 			return [name, handler] as const;
 		});
-		const created = (): void => onChangeRef.current();
-		handlers.push([JOB_CREATED, created]);
+		for (const [name, matches] of Object.entries(hub.broadcasts)) {
+			handlers.push([
+				name,
+				(payload: unknown): void => {
+					if (matches(payload)) {
+						onChangeRef.current(payload);
+					}
+				},
+			]);
+		}
 		for (const [name, handler] of handlers) {
 			connection.on(name, handler);
 		}
@@ -331,19 +388,11 @@ export function useTrainingRunOperations({ enabled, watch, t }: JobSourceOptions
 	return operations;
 }
 
-// The datasets page caches its own mapped list under the generated key, so the raw response lives under a child key:
-// a separate cache entry that the page's invalidation of the generated key still reaches by partial match.
-const datasetBuildOptions = () => {
-	const options = listTrainingDatasetsOptions();
-	// The extra field also reaches the request options through the generated queryFn, which ignores it as it does `_id`.
-	const queryKey = [{ ...options.queryKey[0], scope: "operations" }] as unknown as typeof options.queryKey;
-	return { ...options, queryKey };
-};
-
+// The same raw cache entry the datasets page reads through its own `select`, so both share one request and one poller.
 export function useDatasetBuildOperations({ enabled, watch, t }: JobSourceOptions): readonly Operation[] {
 	const queryClient = useQueryClient();
 	const [hubDown, setHubDown] = useState(false);
-	const options = datasetBuildOptions();
+	const options = listTrainingDatasetsOptions();
 	const { data } = useQuery({
 		...options,
 		enabled,
@@ -435,12 +484,12 @@ const KNOWLEDGE_INDEXING_KEY = ["operations", "knowledgeIndexing"] as const;
 
 const knowledgeReducers: Readonly<Record<string, PushReducer<string>>> = {
 	"knowledge.documentChanged": (batch: KnowledgeIndexingBatch | undefined, payload) => {
-		const documentId = field(payload, "documentId");
-		const status = field(payload, "status");
+		const documentId = stringField(payload, "documentId");
+		const status = stringField(payload, "status");
 		return documentId === undefined || status === undefined ? batch : applyKnowledgeDocumentStatus(batch, documentId, status);
 	},
 	"knowledge.documentRemoved": (batch: KnowledgeIndexingBatch | undefined, payload) => {
-		const documentId = field(payload, "documentId");
+		const documentId = stringField(payload, "documentId");
 		return documentId === undefined ? batch : removeKnowledgeDocument(batch, documentId);
 	},
 };
@@ -505,4 +554,151 @@ export function useSchedulerRunOperations(options: JobSourceOptions): readonly O
 	const runs = usePushSource(options, "scheduler/hub", SCHEDULER_RUNS_KEY, schedulerReducers);
 	const { t } = options;
 	return useMemo(() => fromSchedulerRuns(runs, t), [runs, t]);
+}
+
+// A 403 or 404 (the caller's role, or the feature switched off on the node) stops a pushed list quietly: no lease, no
+// poll, no focus or mount refetch, no rows.
+function isUnavailable(error: unknown): boolean {
+	const status = getErrorStatus(error);
+	return status === 403 || status === 404;
+}
+
+// Discovery pace of a pushed list whose hub is down.
+const DISCOVERY_POLL_MS = 60_000;
+
+interface ListQuery<T> {
+	readonly state: { readonly data?: T; readonly error: unknown };
+}
+
+const available = (query: ListQuery<unknown>): boolean => !isUnavailable(query.state.error);
+
+/**
+ * A pushed list's read options: hydrated once, re-read on its hub's push, and no interval beside a live hub.
+ * hub degraded: while `degraded` (the watching caller's hub is down) no push announces a change, so the list is
+ * re-read every minute, or at the hub-down pace while one of its rows runs, also in a hidden tab, whose title count and
+ * OS notification are for; the reconnect re-reads it once and the interval stops.
+ */
+function pushedListSettings<T = unknown>(degraded: boolean, running: (data: T) => boolean = () => false) {
+	return {
+		refetchInterval: (query: ListQuery<T>): number | false => {
+			if (!degraded || !available(query)) {
+				return false;
+			}
+			return query.state.data !== undefined && running(query.state.data) ? HUB_DOWN_POLL_MS : DISCOVERY_POLL_MS;
+		},
+		refetchIntervalInBackground: degraded,
+		refetchOnWindowFocus: available,
+		refetchOnMount: available,
+	};
+}
+
+/**
+ * Graph runs parked for a decision (a Pause node), read by status so an empty feed still discovers the first one, and
+ * re-read on `graphWorkflowRunStatusChanged`: a run moving into a wait, or out of one this list holds.
+ */
+export function useWaitingGraphRunOperations({ enabled, watch, t }: JobSourceOptions): readonly Operation[] {
+	const queryClient = useQueryClient();
+	const [hubDown, setHubDown] = useState(false);
+	const options = listGraphWorkflowRunsOptions({ query: { status: graphRunWaitingStatus, limit: ACTIVE_ROWS } });
+	const { data, error } = useQuery({ ...options, enabled, ...pushedListSettings<unknown>(watch && hubDown) });
+	const unavailable = isUnavailable(error);
+	const runs = enabled && !unavailable ? data?.runs : undefined;
+	useListSourceHub(graphRunStatusHub, enabled && watch && !unavailable, [], setHubDown, (broadcast) => {
+		const runId = stringField(broadcast, "runId");
+		if (
+			broadcast === undefined ||
+			stringField(broadcast, "status") === graphRunWaitingStatus ||
+			runs?.some((run) => run.id === runId) === true
+		) {
+			queryClient.invalidateQueries({ queryKey: options.queryKey }).catch(() => undefined);
+		}
+	});
+	return useMemo(() => fromWaitingGraphRuns(runs ?? [], t), [runs, t]);
+}
+
+/**
+ * Work sessions waiting for input or approval, filtered out of the list the Work Sessions page reads, and re-read on
+ * `workSessionStatusChanged`.
+ */
+export function useWaitingWorkSessionOperations({ enabled, watch, t }: JobSourceOptions): readonly Operation[] {
+	const queryClient = useQueryClient();
+	const [hubDown, setHubDown] = useState(false);
+	const options = listWorkSessionsOptions();
+	const { data, error } = useQuery({ ...options, enabled, ...pushedListSettings<unknown>(watch && hubDown) });
+	const unavailable = isUnavailable(error);
+	const sessions = enabled && !unavailable ? data?.items : undefined;
+	useListSourceHub(workSessionStatusHub, enabled && watch && !unavailable, [], setHubDown, () => {
+		queryClient.invalidateQueries({ queryKey: options.queryKey }).catch(() => undefined);
+	});
+	return useMemo(() => fromWaitingWorkSessions(sessions ?? [], t), [sessions, t]);
+}
+
+/**
+ * Model Lab experiments, from the list the Model Lab page reads, so a run that ends while the user is elsewhere alerts.
+ * A list source on the training-run hub: `job.created` announces a start, the running id's State event its end.
+ */
+export function useModelLabExperimentOperations({ enabled, watch, t }: JobSourceOptions): readonly Operation[] {
+	const queryClient = useQueryClient();
+	const [hubDown, setHubDown] = useState(false);
+	const options = listModelLabExperimentsOptions();
+	const { data, error } = useQuery({ ...options, enabled, ...pushedListSettings<unknown>(watch && hubDown) });
+	const unavailable = isUnavailable(error);
+	const list = enabled && !unavailable ? data : undefined;
+	const reread = (): void => {
+		queryClient.invalidateQueries({ queryKey: options.queryKey }).catch(() => undefined);
+	};
+	// hub degraded: the running experiment is read by id, one row instead of every retained prompt and result, until it
+	// leaves Running; then the list is re-read once for the terminal row.
+	const activeId = list?.activeExperimentId ?? null;
+	const activeOptions = getModelLabExperimentOptions({ path: { experimentId: activeId ?? "" } });
+	useQuery({
+		...activeOptions,
+		queryFn: async (context) => {
+			// `queryOptions()` always emits a queryFn; the generated one reads its request off the key.
+			const experiment = await activeOptions.queryFn!(context);
+			if (experiment.status !== "Running") {
+				reread();
+			}
+			return experiment;
+		},
+		enabled: watch && hubDown && activeId !== null,
+		refetchInterval: (query) => (query.state.data?.status === "Running" ? HUB_DOWN_POLL_MS : false),
+		refetchIntervalInBackground: true,
+	});
+	const operations = useMemo(() => fromModelLabExperiments(list?.experiments ?? [], t), [list, t]);
+	useListSourceHub(modelLabExperimentHub, enabled && watch && !unavailable, runningIds(operations), setHubDown, reread);
+	return operations;
+}
+
+// sampled value: a download's byte count lives in the node's memory and no hub pushes it, so beside a live hub the
+// watching caller re-reads the list once a minute while one downloads, for the row's progress.
+const DOWNLOAD_PROGRESS_POLL_MS = 60_000;
+
+/**
+ * Base checkpoint downloads (Model Lab and training share the store), from the list both pages read, re-read on the
+ * training-run hub's `job.created` and `job.ended` for a download.
+ */
+export function useBaseArtifactDownloadOperations({ enabled, watch, t }: JobSourceOptions): readonly Operation[] {
+	const queryClient = useQueryClient();
+	const [hubDown, setHubDown] = useState(false);
+	const options = listBaseArtifactsOptions();
+	const downloading = (list: { readonly items: readonly { readonly status: string }[] }): boolean =>
+		list.items.some((artifact) => artifact.status === "Downloading");
+	const settings = pushedListSettings(watch && hubDown, downloading);
+	const { data, error } = useQuery({
+		...options,
+		enabled,
+		...settings,
+		refetchInterval: (query) =>
+			settings.refetchInterval(query) ||
+			(watch && available(query) && query.state.data !== undefined && downloading(query.state.data)
+				? DOWNLOAD_PROGRESS_POLL_MS
+				: false),
+	});
+	const unavailable = isUnavailable(error);
+	const artifacts = enabled && !unavailable ? data?.items : undefined;
+	useListSourceHub(baseArtifactDownloadHub, enabled && watch && !unavailable, [], setHubDown, () => {
+		queryClient.invalidateQueries({ queryKey: options.queryKey }).catch(() => undefined);
+	});
+	return useMemo(() => fromBaseArtifactDownloads(artifacts ?? [], t), [artifacts, t]);
 }

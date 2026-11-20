@@ -3,7 +3,16 @@ import type { i18n as I18n } from "i18next";
 export type ExplanationLevel = "overview" | "detail" | "math";
 
 // What a shown explanation rests on. The badge states it, so text about inferred structure never reads as read from the file.
-export type ExplanationBasis = "background" | "measurement" | "llamaCpp" | "simulated" | { inferredFrom: string };
+// Unavailable: what the shown run or block cannot provide, so a missing view never reads as an empty measurement.
+// Derived: computed from measured states, but not something the model computed, such as the logit lens.
+export type ExplanationBasis =
+	| "background"
+	| "measurement"
+	| "llamaCpp"
+	| "simulated"
+	| "unavailable"
+	| "derived"
+	| { inferredFrom: string };
 
 const explanationRoot = "pages.modelLab.explain";
 
@@ -31,6 +40,9 @@ export const nextTokenTopics = [
 	// Background: its math is about the simulation, not a measured value.
 	{ id: "entries", basis: "background" },
 ] as const satisfies readonly { id: string; basis: ExplanationBasis }[];
+
+// The logit lens topics under pages.modelLab.explain.stepper, in the order the stepper's lens panel lists them.
+export const lensTopics = ["lens", "lensChosen", "lensEntropy", "lensLastBlock", "lensCaveats", "lensNotRecorded"] as const;
 
 // A template node's explanation keys: per block kind, where one id means different operations in different templates, then
 // per GGUF architecture, then shared. A kind text outranks every architecture, so it must hold for each family with that kind.

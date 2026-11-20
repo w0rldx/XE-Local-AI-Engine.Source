@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -157,6 +158,21 @@ public sealed class PooledRoleLaunchAdmission : ILlamaServerPooledLaunchAdmissio
             allocation?.ProcessContextTokens, allocation?.ChatSlots, allocation?.Placement, string.Join(", ", evicted));
 
         return ToReservation(decision);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     Flag and name come from one strict snapshot: an unreadable settings file throws rather than read as keep-warm off, so the
+    ///     reaper skips its cap pass instead of unloading the keep-warm model.
+    /// </remarks>
+    public async Task<IReadOnlyCollection<string>> GetProtectedChatModelsAsync(CancellationToken ct)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var stored = await scope.ServiceProvider.GetRequiredService<INodeSettingsStore>().LoadStrictAsync(ct)
+                     ?? throw new InvalidOperationException("The node settings file is unreadable, so the keep-warm model is unknown.");
+        return NodeRuntimeSettings.ResolveKeepModelWarmEnabled(stored) && NodeRuntimeSettings.ResolveKeepModelWarmModelName(stored) is { } keepWarm
+            ? [keepWarm]
+            : [];
     }
 
     private static IDisposable? ToReservation(CapacityDecision decision) =>

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -11,6 +12,46 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class LlamaServerProcessLauncherTests
 {
     private const string SlotLine = "slot update_slots: id  0 | task 7 | prompt processing progress, n_past = 2048, n_tokens = 2048, progress = 0.5";
+
+    [Test]
+    [NotInParallel(["LLAMA_ARG_EMBEDDINGS", "LLAMA_ARG_POOLING", "LLAMA_ARG_RERANKING"])]
+    public void BuildStartInfo_DropsTheServingModeVariablesTheNodeEnvironmentCarries()
+    {
+        // llama.cpp reads LLAMA_ARG_* before argv, so an inherited one would be a second override path past the managed flags.
+        var previous = LlamaServerProcessLauncher.ManagedEnvironmentVariables.ToDictionary(static name => name, Environment.GetEnvironmentVariable, StringComparer.Ordinal);
+        try
+        {
+            foreach (var name in previous.Keys)
+            {
+                Environment.SetEnvironmentVariable(name, "1");
+            }
+
+            var startInfo = LlamaServerProcessLauncher.BuildStartInfo(new LlamaServerLaunchSpec
+            {
+                ModelName = "model",
+                Role = ModelRole.Embedding,
+                ExecutablePath = "/fake/bin/llama-server",
+                Arguments = ["--embeddings", "--pooling", "mean"],
+                Port = 8080,
+                WorkingDirectory = "/fake/bin"
+            });
+
+            AssertEx.Equal(expected: 3, previous.Count);
+            foreach (var name in previous.Keys)
+            {
+                AssertEx.False(startInfo.Environment.ContainsKey(name), $"{name} must not reach the llama-server child.");
+            }
+
+            AssertEx.True(startInfo.Environment.ContainsKey("PATH"), "the rest of the node environment is still inherited.");
+        }
+        finally
+        {
+            foreach (var (name, value) in previous)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
+        }
+    }
 
     [Test]
     public void TryPromoteServingLine_PromotesOneSlotLinePerInterval()

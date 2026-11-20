@@ -31,15 +31,27 @@ public interface IStaleProcessScanner
     ProcessStat? ReadStat(int pid);
 
     /// <summary>
-    ///     The executable realpath of <paramref name="pid" /> read from <c>/proc/[pid]/exe</c>, whatever the process is named, or
-    ///     <see langword="null" /> when the process is gone, the link is unreadable, or the platform has no <c>/proc</c>. Never throws.
+    ///     SIGKILLs <paramref name="pid" /> (its whole group when it leads one) ONLY while it still runs <paramref name="expectedExecutablePath" />
+    ///     and carries <paramref name="expectedStartTicks" />, both read after a pidfd pinned it, and is not this host's own child. Never throws.
     /// </summary>
-    string? ReadExecutablePath(int pid);
+    StaleProcessKillResult KillIfSameProcess(int pid, string expectedExecutablePath, long expectedStartTicks);
+}
 
-    /// <summary>
-    ///     SIGKILLs <paramref name="pid" /> (its whole group when it leads one) ONLY while it still carries
-    ///     <paramref name="expectedStartTicks" />, re-read immediately before the signal so a recycled pid is never signaled.
-    ///     Returns whether the signal was sent. Never throws.
-    /// </summary>
-    bool KillIfSameProcess(int pid, long expectedStartTicks);
+/// <summary>What <see cref="IStaleProcessScanner.KillIfSameProcess" /> did; only the first two let the reaper drop the receipt.</summary>
+public enum StaleProcessKillResult
+{
+    /// <summary>The recorded process was signalled.</summary>
+    Killed,
+
+    /// <summary>The pid is gone or names another process: nothing was signalled, and the receipt can never match again.</summary>
+    Mismatch,
+
+    /// <summary>The pid lives but its <c>/proc</c> identity could not be read (EMFILE, EACCES): nothing was signalled.</summary>
+    Unreadable,
+
+    /// <summary>A pidfd call or the numeric group kill failed operationally (EPERM, EMFILE): nothing was signalled.</summary>
+    Deferred,
+
+    /// <summary>The pid is this host's own child: its receipt is live, so nothing was signalled and the receipt stays.</summary>
+    OwnChild
 }

@@ -12,6 +12,7 @@ import {
 import { type KeyboardEvent, memo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { isImeComposing } from "@/core/ui/models/ImeComposition";
 import { ConversationListCollapsedRail } from "@/features/chat/components/ConversationList/ConversationListCollapsedRail";
 import { ConversationListItem } from "@/features/chat/components/ConversationList/ConversationListItem";
 import type {
@@ -149,6 +150,9 @@ export const ConversationList = memo(function ConversationList({
 	};
 
 	const handleRenameKeyDown = (event: KeyboardEvent<HTMLInputElement>, conversationId: string): void => {
+		if (isImeComposing(event)) {
+			return;
+		}
 		if (event.key === "Enter") {
 			event.preventDefault();
 			commitRename(conversationId);

@@ -35,7 +35,7 @@ public sealed class CudaManagedRuntimeTests
         var signal = new CudaManagedBuildSignal();
         signal.MarkAvailable();
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
@@ -53,7 +53,7 @@ public sealed class CudaManagedRuntimeTests
     {
         using var dir = new TempDir();
         using var store = new InstalledRuntimeStore(dir.Path);
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.Arm64, TimeProvider.System, catalog: null, store, overrideOptions: null, new CudaManagedBuildSignal());
@@ -86,7 +86,7 @@ public sealed class CudaManagedRuntimeTests
         await store.WriteAsync(recorded, CancellationToken.None);
         var signal = new CudaManagedBuildSignal();
         signal.MarkAvailable();
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
@@ -126,7 +126,7 @@ public sealed class CudaManagedRuntimeTests
         var signal = new CudaManagedBuildSignal();
         signal.MarkAvailable();
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
@@ -150,7 +150,7 @@ public sealed class CudaManagedRuntimeTests
         var signal = new CudaManagedBuildSignal();
         signal.MarkAvailable();
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
@@ -179,7 +179,7 @@ public sealed class CudaManagedRuntimeTests
         var sourceCuda = Path.Combine(dir.Path, "llama.cpp", "source-cuda");
         MakeWorldWritable(sourceCuda);
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
@@ -206,7 +206,7 @@ public sealed class CudaManagedRuntimeTests
         await store.WriteAsync(SourceBuildState(binDir, sha), CancellationToken.None);
         var signal = new CudaManagedBuildSignal();
         signal.MarkAvailable();
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
@@ -254,7 +254,7 @@ public sealed class CudaManagedRuntimeTests
         // The signal a startup seed has not reached yet — exactly what makes the selector pick Vulkan.
         var signal = new CudaManagedBuildSignal();
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
@@ -317,7 +317,7 @@ public sealed class CudaManagedRuntimeTests
         var signal = new CudaManagedBuildSignal();
         signal.MarkAvailable();
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
@@ -346,7 +346,7 @@ public sealed class CudaManagedRuntimeTests
         signal.SetActive(GpuVariant.Cpu);
         var before = signal.Version;
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
@@ -433,7 +433,7 @@ public sealed class CudaManagedRuntimeTests
         var sentinel = Path.Combine(sourceCuda, "keep.txt");
         await File.WriteAllTextAsync(sentinel, "keep", CancellationToken.None);
 
-        using var handler = new ThrowingHandler();
+        using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, new CudaManagedBuildSignal());
@@ -528,13 +528,8 @@ public sealed class CudaManagedRuntimeTests
         }
     }
 
-    private sealed class ThrowingHandler : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            throw new InvalidOperationException("No network call expected: a managed CUDA serve must never download.");
-        }
-    }
+    private static ThrowingHttpMessageHandler NoNetworkHandler() =>
+        new(new InvalidOperationException("No network call expected: a managed CUDA serve must never download."));
 
     private sealed class TempDir : IDisposable
     {

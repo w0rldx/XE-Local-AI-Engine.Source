@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Tests.Capacity;
 using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -177,6 +178,160 @@ public sealed class DirectInferenceServiceTests
         AssertEx.Equal("This message was queued behind a running training run.", error.ErrorMessage);
         AssertEx.Null(harness.SentMessages, "the provider is never called");
         AssertEx.Null(harness.Dispatcher.CurrentInvocation, "the slot was never taken");
+    }
+
+    /// <summary>A request that meets a Model Lab worker already leaving waits for it, then runs, instead of refusing.</summary>
+    [Test]
+    public async Task StreamAsync_MeetingAnEvictionInProgress_JoinsIt_AndRunsOnceTheGpuIsBack()
+    {
+        var harness = new Harness(Updates(Text("ok"), Finish()));
+        var evictionMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var holder = AdmitHolder(harness, evictionMayFinish.Task, idle: true);
+        holder.RequestPreemption();
+        AssertEx.Equal(FakeGpuIdleHolder.HolderState.Evicting, holder.State);
+
+        var streaming = harness.Service.StreamAsync(Request(), CancellationToken.None).ToListAsync().AsTask();
+        await AssertEx.EventuallyAsync(() => holder.PreemptionRequestCount >= 2, TestBudgets.Contended, "The request's wait reached the leaving holder.");
+        AssertEx.Equal(expected: 0, harness.ProviderCalls, "Nothing runs while the GPU is still held.");
+        evictionMayFinish.SetResult();
+        var events = await streaming.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.Equal(DirectInferenceEventTypes.Done, events[^1].Type);
+        AssertEx.Equal(expected: 1, harness.ProviderCalls);
+        AssertEx.Equal(expected: 1, holder.EvictionCount, "The request joined the eviction under way and started none of its own.");
+    }
+
+    /// <summary>A running Model Lab job is never waited on: the request refuses at once, and its demand turns the job's end into an eviction.</summary>
+    [Test]
+    public async Task StreamAsync_WhileAModelLabJobIsActive_RefusesAtOnce_AndLatchesTheDemand()
+    {
+        var harness = new Harness(Updates(Text("never")));
+        var holder = AdmitHolder(harness, Task.CompletedTask, idle: false);
+
+        var events = await harness.Service.StreamAsync(Request(), CancellationToken.None).ToListAsync().AsTask().WaitAsync(TestBudgets.Contended);
+
+        AssertEx.Equal(DirectInferenceErrorCodes.GpuWorkExclusive, events.Single().ErrorCode);
+        AssertEx.Equal("This message was queued behind a running Model Lab experiment.", events.Single().ErrorMessage);
+        AssertEx.Equal(FakeGpuIdleHolder.HolderState.Active, holder.State, "The running job is not interrupted.");
+        AssertEx.True(holder.PreemptionPending);
+        AssertEx.Equal(expected: 0, harness.ProviderCalls);
+    }
+
+    /// <summary>The gate is read again after the wait: a new holder that took it in between refuses the request and is the one asked to leave.</summary>
+    [Test]
+    public async Task StreamAsync_WhenAnotherHolderTakesTheGateBeforeTheRecheck_Refuses_AndLatchesTheDemandOnIt()
+    {
+        var harness = new Harness(Updates(Text("never")));
+        var evictionMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        FakeGpuIdleHolder? next = null;
+        // The first holder's release admits the next one before the release is reported, so the waiter can only re-check after it.
+        var first = AdmitHolder(harness, evictionMayFinish.Task, idle: true, afterRelease: () => next = AdmitHolder(harness, Task.CompletedTask, idle: false));
+        first.RequestPreemption();
+
+        var streaming = harness.Service.StreamAsync(Request(), CancellationToken.None).ToListAsync().AsTask();
+        await AssertEx.EventuallyAsync(() => first.PreemptionRequestCount >= 2, TestBudgets.Contended, "The request's wait reached the leaving holder.");
+        evictionMayFinish.SetResult();
+        var events = await streaming.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.Equal(DirectInferenceErrorCodes.GpuWorkExclusive, events.Single().ErrorCode);
+        AssertEx.Equal(expected: 0, harness.ProviderCalls);
+        var second = AssertEx.NotNull(next);
+        AssertEx.True(second.PreemptionPending, "The refusal's demand reached the holder that owns the gate now.");
+        second.ExitActive();
+        await second.Released.WaitAsync(TestBudgets.Contended);
+        AssertEx.Null(harness.Gate.ExclusiveKind, "So that holder evicts at its job's end instead of idling.");
+    }
+
+    /// <summary>A steering hand-off ends the worker's session while its arms keep the gate: the wait succeeds, the re-check still refuses.</summary>
+    [Test]
+    public async Task StreamAsync_WhenTheLeavingHolderHandsTheGateToSteeringArms_Refuses()
+    {
+        var harness = new Harness(Updates(Text("never")));
+        var evictionMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var holder = AdmitHolder(harness, evictionMayFinish.Task, idle: true, keepsGate: true);
+        holder.RequestPreemption();
+
+        var streaming = harness.Service.StreamAsync(Request(), CancellationToken.None).ToListAsync().AsTask();
+        await AssertEx.EventuallyAsync(() => holder.PreemptionRequestCount >= 2, TestBudgets.Contended, "The request's wait reached the leaving holder.");
+        evictionMayFinish.SetResult();
+        var events = await streaming.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.Equal(FakeGpuIdleHolder.HolderState.Released, holder.State);
+        AssertEx.Equal(GpuWorkKind.ModelLabExperiment, harness.Gate.ExclusiveKind, "The arms still hold the gate.");
+        AssertEx.Equal(DirectInferenceErrorCodes.GpuWorkExclusive, events.Single().ErrorCode);
+        AssertEx.Equal(expected: 0, harness.ProviderCalls);
+    }
+
+    /// <summary>An eviction that never gives the GPU back is waited on for the bound only, then refused as before.</summary>
+    [Test]
+    public async Task StreamAsync_WhenTheEvictionOutlastsTheBound_Refuses()
+    {
+        var harness = new Harness(Updates(Text("never")));
+        var evictionMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var holder = AdmitHolder(harness, evictionMayFinish.Task, idle: true);
+        holder.RequestPreemption();
+        try
+        {
+            var streaming = harness.Service.StreamAsync(Request(), CancellationToken.None).ToListAsync().AsTask();
+            await AssertEx.EventuallyAsync(() => harness.HolderClock.ArmedTimerCount > 0, TestBudgets.Contended, "The request's wait armed its bound.");
+            harness.HolderClock.Advance(GpuWorkAdmission.IdleHolderReleaseBound + TimeSpan.FromSeconds(1));
+            var events = await streaming.WaitAsync(TestBudgets.Contended);
+
+            AssertEx.Equal(DirectInferenceErrorCodes.GpuWorkExclusive, events.Single().ErrorCode);
+            AssertEx.Equal(FakeGpuIdleHolder.HolderState.Evicting, holder.State);
+            AssertEx.Equal(expected: 0, harness.ProviderCalls);
+        }
+        finally
+        {
+            evictionMayFinish.SetResult();
+            await holder.Released.WaitAsync(TestBudgets.Contended);
+        }
+    }
+
+    /// <summary>Two requests join one eviction; cancelling one ends only its own wait, and it leaves no provider call and no slot entry behind.</summary>
+    [Test]
+    public async Task StreamAsync_TwoRequestsJoiningOneEviction_OneCancelled_TheOtherRuns()
+    {
+        var harness = new Harness(Updates(Text("ok"), Finish()));
+        var evictionMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var holder = AdmitHolder(harness, evictionMayFinish.Task, idle: true);
+        holder.RequestPreemption();
+        using var cancelled = new CancellationTokenSource();
+
+        var leaving = harness.Service.StreamAsync(Request(), cancelled.Token).ToListAsync(cancelled.Token).AsTask();
+        var staying = harness.Service.StreamAsync(Request(), CancellationToken.None).ToListAsync().AsTask();
+        await AssertEx.EventuallyAsync(() => holder.PreemptionRequestCount >= 3, TestBudgets.Contended, "Both requests' waits reached the leaving holder.");
+        await cancelled.CancelAsync();
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => leaving.WaitAsync(TestBudgets.Contended));
+        AssertEx.Equal(FakeGpuIdleHolder.HolderState.Evicting, holder.State, "The cancel ended only that wait, never the eviction.");
+        evictionMayFinish.SetResult();
+        var events = await staying.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.Equal(DirectInferenceEventTypes.Done, events[^1].Type);
+        AssertEx.Equal(expected: 1, harness.ProviderCalls, "Only the request that stayed reached the provider.");
+        AssertEx.Equal(expected: 1, harness.Recorded.Select(static state => state.InvocationId).Distinct().Count(), "The cancelled one never took the slot.");
+    }
+
+    // A model unloaded under the request reaches an API client as ModelEjected with the neutral text, which names no actor (an image
+    // job unloads a model the same way an operator does), and the live entry ends Cancelled rather than failed.
+    [Test]
+    public async Task StreamAsync_AnEjectedModel_EndsWithTheModelEjectedCodeAndTheNeutralText()
+    {
+        var harness = new Harness(Failing(new LlamaServerModelEjectedException(DeferredLlamaServerChatClient.ModelEjectedMessage)));
+
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi"
+        }, CancellationToken.None).ToListAsync();
+
+        var error = events.Single();
+        AssertEx.Equal(DirectInferenceEventTypes.Error, error.Type);
+        AssertEx.Equal(nameof(FailureCategory.ModelEjected), error.ErrorCode);
+        AssertEx.Equal(DeferredLlamaServerChatClient.ModelEjectedMessage, error.ErrorMessage);
+        AssertEx.False(DeferredLlamaServerChatClient.ModelEjectedMessage.Contains("operator", StringComparison.OrdinalIgnoreCase));
+        AssertEx.False(DeferredLlamaServerChatClient.ModelEjectingMessage.Contains("operator", StringComparison.OrdinalIgnoreCase));
+        AssertEx.Equal(InvocationStatus.Cancelled, AssertEx.NotNull(harness.Dispatcher.CurrentInvocation).Status);
     }
 
     [Test]
@@ -660,6 +815,46 @@ public sealed class DirectInferenceServiceTests
         AssertEx.True(source.Contains(declaration, StringComparison.Ordinal), $"DirectInferenceModels.ts must declare '{declaration}'");
     }
 
+    private static DirectInferenceRequest Request() =>
+        new()
+        {
+            ModelId = ModelId,
+            Prompt = "Hi"
+        };
+
+    /// <summary>
+    ///     A holder admitted as the Model Lab session admits (registered, then the gate), ending Idle or Active. Its eviction waits for
+    ///     <paramref name="evictionMayFinish" />, gives the gate back unless <paramref name="keepsGate" /> hands it on, deregisters,
+    ///     then runs <paramref name="afterRelease" /> before the release is reported.
+    /// </summary>
+    private static FakeGpuIdleHolder AdmitHolder(Harness harness, Task evictionMayFinish, bool idle, bool keepsGate = false, Action? afterRelease = null)
+    {
+        IDisposable? hold = null;
+        FakeGpuIdleHolder? holder = null;
+        holder = new FakeGpuIdleHolder(async () =>
+        {
+            await evictionMayFinish;
+            if (!keepsGate)
+            {
+                hold!.Dispose();
+            }
+
+            harness.Broker.Deregister(holder!);
+            afterRelease?.Invoke();
+        }, harness.HolderClock);
+        harness.Broker.Register(holder);
+#pragma warning disable CA2000 // Given back by the holder's eviction; a gate handed on dies with the test's gate.
+        AssertEx.Succeeded(harness.Gate.TryBeginExclusive(GpuWorkKind.ModelLabExperiment, out hold), "The holder's own gate admission is not refused.");
+#pragma warning restore CA2000
+        holder.EnterActive();
+        if (idle)
+        {
+            holder.ExitActive();
+        }
+
+        return holder;
+    }
+
     private static async Task<List<DirectInferenceEvent>> RunPastTheDeadlineAsync(Harness harness)
     {
         List<DirectInferenceEvent> received = [];
@@ -737,13 +932,17 @@ public sealed class DirectInferenceServiceTests
 
     private sealed class Harness
     {
+        private int _providerCalls;
+
         public Harness(Func<CancellationToken, IAsyncEnumerable<ChatResponseUpdate>>? stream)
         {
             Stream = stream ?? (_ => AsyncEnumerable.Empty<ChatResponseUpdate>());
+            Gate = new GpuWorkGate(Broker);
             var chatClient = Substitute.For<IChatClient>();
             chatClient.GetStreamingResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
                       .Returns(call =>
                       {
+                          Interlocked.Increment(ref _providerCalls);
                           SentMessages = call.Arg<IEnumerable<ChatMessage>>().ToList();
                           SentOptions = call.Arg<ChatOptions?>();
                           return Stream(call.Arg<CancellationToken>());
@@ -758,8 +957,16 @@ public sealed class DirectInferenceServiceTests
             models.ExistsAsync(ModelId, Arg.Any<CancellationToken>()).Returns(true);
             Providers.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(LlamaServerProviderConstants.ProviderName);
             var trust = new FakeModelTrustResolver().Register("lan", "qwen3").Register("hosted", "qwen3", ExternalProviderLocality.Cloud);
-            Service = new DirectInferenceService(chatClient, Dispatcher, Gate, Settings, models, trust, Providers, Time, NullLogger<DirectInferenceService>.Instance);
+            Service = new DirectInferenceService(chatClient, Dispatcher, Gate, Broker, Settings, models, trust, Providers, Time, NullLogger<DirectInferenceService>.Instance);
         }
+
+        /// <summary>The real broker the gate and the service share; empty, it behaves as a node that never warms a holder.</summary>
+        public GpuIdleHolderBroker Broker { get; } = new();
+
+        /// <summary>Bounds a holder's release wait, so a test can pass the bound without waiting it out.</summary>
+        public ManualTimeProvider HolderClock { get; } = new();
+
+        public int ProviderCalls => Volatile.Read(ref _providerCalls);
 
         public Func<CancellationToken, IAsyncEnumerable<ChatResponseUpdate>> Stream { get; set; }
 
@@ -769,7 +976,7 @@ public sealed class DirectInferenceServiceTests
 
         public FakeNodeSettingsStore Settings { get; } = new(new StoredNodeSettings());
 
-        public GpuWorkGate Gate { get; } = new();
+        public GpuWorkGate Gate { get; }
 
         public IInvocationHistory History { get; } = Substitute.For<IInvocationHistory>();
 

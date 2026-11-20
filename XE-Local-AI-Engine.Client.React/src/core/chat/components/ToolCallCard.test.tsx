@@ -136,7 +136,7 @@ describe("ToolCallCard", () => {
 			<ToolCallCard
 				part={toolPart({
 					state: "received",
-					result: "[image image/png, 1 KB]",
+					result: "[image image/png, 1 KiB]",
 					images: [{ mediaType: "image/png", src: "data:image/png;base64,AQID" }],
 				})}
 			/>,

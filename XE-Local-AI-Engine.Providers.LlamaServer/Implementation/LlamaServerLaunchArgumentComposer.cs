@@ -34,7 +34,7 @@ internal static class LlamaServerLaunchArgumentComposer
     {
         // Context, placement, KV-cache/flash-attention and CPU threads, all emitted from ONE projection of this spawn's launch shape so the vector that reaches the
         // process and the shape a receipt records can never drift apart. Precedence lives in the launch policy that produced the plan; the matrix is in wiki 03.
-        var projection = LlamaServerLaunchProjection.From(variant, resolved, plan, key.Role, chatCacheReuse, chatCacheRamMiB);
+        var projection = LlamaServerLaunchProjection.From(variant, resolved, plan, key.Role, chatCacheReuse, chatCacheRamMiB, EmbeddingModelProfile.For(key.ModelName).Pooling);
 
         var args = new List<string>
         {
@@ -103,10 +103,10 @@ internal static class LlamaServerLaunchArgumentComposer
         }
         else if (key.Role == ModelRole.Embedding)
         {
-            // /v1/embeddings is exposed only with --embeddings + a non-`none` pooling type.
-            args.Add("--embeddings");
-            args.Add("--pooling");
-            args.Add("mean");
+            // /v1/embeddings is exposed only with --embeddings + a non-`none` pooling type; the pooling is the model's profile, never the GGUF header.
+            args.Add(LlamaServerManagedFlags.Embeddings);
+            args.Add(LlamaServerManagedFlags.Pooling);
+            args.Add(projection.Pooling!);
             AppendPooledForwardPassBatchArgs(args, projection);
 
             // One-shot forward passes have no prompt state worth caching, so disable the host prompt cache instead of inheriting the upstream default.
@@ -117,8 +117,8 @@ internal static class LlamaServerLaunchArgumentComposer
         {
             // Reranker role, exposed only with --rerank (alias --reranking) plus rank pooling, verified against b9692 and re-confirmed at b10201
             // help output. MUTUALLY EXCLUSIVE with the embedding branch above, and carrying none of the chat-only flags. See wiki 03, "Per-role launch flags".
-            args.Add("--rerank");
-            args.Add("--pooling");
+            args.Add(LlamaServerManagedFlags.Rerank);
+            args.Add(LlamaServerManagedFlags.Pooling);
             args.Add("rank");
             AppendPooledForwardPassBatchArgs(args, projection);
 

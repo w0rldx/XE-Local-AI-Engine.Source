@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { useRunStreamSubscription } from "@/core/api/signalr/useRunStreamSubscription";
+import { trainingRunStream, useRunStreamSubscription } from "@/core/api/signalr/useRunStreamSubscription";
 
 export interface ModelLabLiveProgress {
 	phase: string | null;
@@ -28,7 +28,7 @@ export function useModelLabExperimentHub(experimentId: string | null, onResync: 
 		setSnapshot({ experimentId, progress: emptyProgress });
 	}, [experimentId]);
 
-	useRunStreamSubscription(experimentId, {
+	useRunStreamSubscription(trainingRunStream, experimentId, {
 		onResync,
 		onLiveChange: setIsLive,
 		onEvent: (event, gap) => {

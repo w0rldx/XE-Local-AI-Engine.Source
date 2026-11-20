@@ -229,7 +229,7 @@ public sealed class GgufHeaderReaderBoundsTests
 
     private static async Task<GgufHeaderMetadata> ReadFileAsync(byte[] bytes)
     {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var dir = new TempDirectory("xe-hf-test");
         var path = dir.FilePath("model.gguf");
         await File.WriteAllBytesAsync(path, bytes);
         var reader = GgufStoreTestInfrastructure.HeaderReader(new HuggingFaceOptions());

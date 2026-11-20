@@ -17,7 +17,17 @@ import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import type { ChatExportFormat } from "@/features/chat/models/ChatExportFile";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 
-function formatRelative(iso?: string): string {
+// Narrow style keeps the label as short as the list row needs ("5m ago", "vor 5 m"); `auto` turns zero seconds into
+// "now"/"jetzt". A malformed stored language tag throws a RangeError, so it falls back to the environment's default.
+function relativeTimeFormat(language: string | undefined): Intl.RelativeTimeFormat {
+	try {
+		return new Intl.RelativeTimeFormat(language, { numeric: "auto", style: "narrow" });
+	} catch {
+		return new Intl.RelativeTimeFormat(undefined, { numeric: "auto", style: "narrow" });
+	}
+}
+
+function formatRelative(iso: string | undefined, language: string | undefined): string {
 	if (!iso) {
 		return "";
 	}
@@ -30,10 +40,10 @@ function formatRelative(iso?: string): string {
 	const now = new Date();
 	const diffMin = Math.round((now.getTime() - date.getTime()) / 60000);
 	if (diffMin < 1) {
-		return "now";
+		return relativeTimeFormat(language).format(0, "second");
 	}
 	if (diffMin < 60) {
-		return `${diffMin}m`;
+		return relativeTimeFormat(language).format(-diffMin, "minute");
 	}
 
 	return formatTimestamp(date.getTime(), { month: "short", day: "numeric" });
@@ -77,7 +87,7 @@ export function ConversationListItem({
 	onDelete,
 	onExport,
 }: ConversationListItemProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const isRemote = conversation.origin === "remote";
 	const canManage = !isRemote && (Boolean(onRename) || Boolean(onTogglePin) || Boolean(onToggleArchive) || Boolean(onDelete));
 	const showMenu = canManage || Boolean(onExport);
@@ -139,7 +149,7 @@ export function ConversationListItem({
 					{isRenaming ? null : (
 						<Group gap={4} wrap="nowrap">
 							<Text size="xs" c="dimmed">
-								{formatRelative(conversation.lastActivity ?? conversation.updatedAt)}
+								{formatRelative(conversation.lastActivity ?? conversation.updatedAt, i18n.language)}
 							</Text>
 							{showMenu ? (
 								<Menu position="bottom-end" withinPortal={true} disabled={isMutating}>

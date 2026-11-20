@@ -12,7 +12,7 @@ public sealed class ConvertScriptProvisionerTests
     [Test]
     public void TryResolve_BeforeProvisioning_ReturnsNull()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-convert-script");
         using var provisioner = new ConvertScriptProvisioner(new FakeFetcher(), NullLogger<ConvertScriptProvisioner>.Instance, temp.Path);
 
         AssertEx.False(provisioner.TryResolve(out _));
@@ -21,7 +21,7 @@ public sealed class ConvertScriptProvisionerTests
     [Test]
     public async Task EnsureAsync_CopiesTheThreePinnedPaths_AndAdoptsUnderTheCommit()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-convert-script");
         var fetcher = new FakeFetcher();
         using var provisioner = new ConvertScriptProvisioner(fetcher, NullLogger<ConvertScriptProvisioner>.Instance, temp.Path);
 
@@ -48,7 +48,7 @@ public sealed class ConvertScriptProvisionerTests
     [Test]
     public async Task EnsureAsync_WhenAlreadyProvisioned_DoesNotRefetch()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-convert-script");
         var fetcher = new FakeFetcher();
         using var provisioner = new ConvertScriptProvisioner(fetcher, NullLogger<ConvertScriptProvisioner>.Instance, temp.Path);
 
@@ -62,7 +62,7 @@ public sealed class ConvertScriptProvisionerTests
     [Test]
     public async Task EnsureAsync_WhenFetchedCommitDiffers_RejectsAndAdoptsNothing()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-convert-script");
         var fetcher = new FakeFetcher
         {
             ReportedCommit = new string('b', 40)
@@ -77,7 +77,7 @@ public sealed class ConvertScriptProvisionerTests
     [Test]
     public async Task EnsureAsync_WhenAScriptIsMissing_RejectsAndAdoptsNothing()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-convert-script");
         var fetcher = new FakeFetcher
         {
             OmitLoraScript = true
@@ -116,32 +116,6 @@ public sealed class ConvertScriptProvisionerTests
             await File.WriteAllTextAsync(Path.Combine(conversion, "__init__.py"), "\n", ct);
             await File.WriteAllTextAsync(Path.Combine(conversion, "base.py"), "# per-arch converters\n", ct);
             return ReportedCommit ?? commitSha;
-        }
-    }
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public TempDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-            _ = Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // Best effort: a leaked temp directory is reclaimed by the OS.
-            }
         }
     }
 }

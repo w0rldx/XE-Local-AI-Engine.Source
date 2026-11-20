@@ -264,10 +264,10 @@ public sealed class ImageServerSupervisorTests
         };
         await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time);
 
-        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        var endpoint = await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
         var firstHandle = launcher.Handles.Single();
 #pragma warning disable CA2000 // Released mid-test below: the release is what frees the daemon for eviction.
-        AssertEx.Succeeded(supervisor.TryAcquireJobLease("sd15", out var lease));
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease(endpoint, out var lease));
 #pragma warning restore CA2000
 
         // Past the TTL, but the daemon is leased (mid-generation): a new distinct model finds no evictable victim → reject.
@@ -287,9 +287,9 @@ public sealed class ImageServerSupervisorTests
     }
 
     [Test]
-    public async Task TryAcquireJobLease_AfterDaemonEvicted_ReturnsFalseLeaseless()
+    public async Task TryAcquireJobLease_AfterDaemonEvicted_RefusesTheStaleEndpoint()
     {
-        // Once a daemon has been evicted (torn down), a lease attempt must refuse leaselessly rather than
+        // Once a daemon has been evicted (torn down), a lease attempt on its endpoint must be refused rather than
         // hand back a lease over a dead/removed daemon. Lease acquisition and eviction share an atomic latch, so a lease
         // can never be granted over a daemon that eviction has claimed or removed.
         var launcher = new FakeImageProcessLauncher();
@@ -302,7 +302,7 @@ public sealed class ImageServerSupervisorTests
         };
         await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time);
 
-        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        var endpoint = await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
         var firstHandle = launcher.Handles.Single();
 
         // Idle past the TTL, then admit a distinct model at cap 1 → the idle LRU daemon is atomically latched and evicted.
@@ -310,7 +310,226 @@ public sealed class ImageServerSupervisorTests
         await supervisor.EnsureRunningAsync("flux", CancellationToken.None);
         AssertEx.True(firstHandle.WasTreeKilled, "the idle past-TTL daemon should have been evicted to admit the new model.");
 
-        AssertEx.False(supervisor.TryAcquireJobLease("sd15", out _));
+        AssertEx.False(supervisor.TryAcquireJobLease(endpoint, out _));
+    }
+
+    [Test]
+    public async Task LoweredImageCap_TheNextReapUnloadsTheLruUnleasedDaemon()
+    {
+        var launcher = new FakeImageProcessLauncher();
+        var time = new AdvanceableClock();
+        var options = new StableDiffusionRuntimeOptions
+        {
+            IdleTimeToLive = TimeSpan.FromMinutes(15),
+            MaxLoadedProcesses = 3
+        };
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time);
+        var leased = await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease(leased, out var lease));
+        using var leaseScope = lease;
+        time.Advance(TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("flux", CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("sdxl", CancellationToken.None);
+
+        // A node-settings save lowers the cap; every daemon is inside its idle window.
+        options.MaxLoadedProcesses = 2;
+        await supervisor.ReapIdleOnceAsync();
+
+        var handles = launcher.Handles.OrderBy(static handle => handle.ProcessId).ToList();
+        AssertEx.False(handles[0].WasTreeKilled, "a daemon mid-generation is never unloaded, though it is the least recently used");
+        AssertEx.True(handles[1].WasTreeKilled, "the least recently used unleased daemon is unloaded");
+        AssertEx.False(handles[2].WasTreeKilled, "the cap is met after one unload");
+        AssertEx.Equal(expected: 2, supervisor.GetResidents().Count);
+    }
+
+    [Test]
+    public async Task LoweredImageCap_AnAdmissionEvictsEveryEligibleVictim()
+    {
+        var launcher = new FakeImageProcessLauncher();
+        var time = new AdvanceableClock();
+        var options = new StableDiffusionRuntimeOptions
+        {
+            IdleTimeToLive = TimeSpan.FromMinutes(15),
+            MaxLoadedProcesses = 3
+        };
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time);
+        foreach (var model in new[]
+                 {
+                     "sd15",
+                     "flux",
+                     "sdxl"
+                 })
+        {
+            await supervisor.EnsureRunningAsync(model, CancellationToken.None);
+            time.Advance(TimeSpan.FromMinutes(1));
+        }
+
+        // Two over the new cap: one eviction alone would still leave no room.
+        options.MaxLoadedProcesses = 1;
+        await supervisor.EnsureRunningAsync("qwen-image", CancellationToken.None);
+
+        var handles = launcher.Handles.OrderBy(static handle => handle.ProcessId).ToList();
+        AssertEx.True(handles.Take(3).All(static handle => handle.WasTreeKilled), "every unleased daemon is evicted to fit the new cap");
+        AssertEx.Equal(expected: 4, launcher.LaunchCount);
+        AssertEx.Equal("qwen-image", supervisor.GetResidents().Single().ModelName);
+    }
+
+    [Test]
+    public async Task TryAcquireJobLease_OnAnEndpointOfAReplacedDaemon_IsRefused_AndTheNewOneIsLeased()
+    {
+        var launcher = new FakeImageProcessLauncher();
+        await using var supervisor = ImageSupervisorFactory.Create(launcher);
+        var first = await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+
+        // Same model, likely the same freed port: only the daemon's identity tells the two endpoints apart.
+        var replacement = await supervisor.RestartAsync("sd15", CancellationToken.None);
+
+        AssertEx.False(supervisor.TryAcquireJobLease(first, out _), "an endpoint the replaced daemon handed out must get no lease");
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease(replacement, out var lease));
+        using var leaseScope = lease;
+    }
+
+    [Test]
+    public async Task EnsureRunning_ADaemonLatchedForTeardownButNotYetRemoved_IsRespawned()
+    {
+        var launcher = new FakeImageProcessLauncher();
+        var time = new AdvanceableClock();
+        var ttl = TimeSpan.FromMinutes(15);
+        ImageServerProcessSupervisor? target = null;
+        Task<ImageServerEndpoint>? ensured = null;
+
+        // The idle reap logs its decision after it latched the daemon and before it removes it: an ensure lands right there.
+        var logger = new OnInformationLogger<ImageServerProcessSupervisor>("Evicting idle sd-server",
+            () => ensured = target!.EnsureRunningAsync("sd15", CancellationToken.None));
+        await using var supervisor = ImageSupervisorFactory.Create(launcher,
+            options: new StableDiffusionRuntimeOptions
+            {
+                IdleTimeToLive = ttl,
+                MaxLoadedProcesses = 2
+            },
+            timeProvider: time,
+            logger: logger);
+        target = supervisor;
+        var doomed = await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+
+        await supervisor.ReapIdleOnceAsync();
+        var fresh = await AssertEx.NotNull(ensured, "the ensure ran inside the reap window");
+
+        AssertEx.False(ReferenceEquals(doomed, fresh), "a daemon latched for teardown must not hand out its endpoint again");
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.True(launcher.Handles.OrderBy(static handle => handle.ProcessId).First().WasTreeKilled);
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease(fresh, out var lease));
+        using var leaseScope = lease;
+    }
+
+    [Test]
+    public async Task LoweredImageCap_DuringAnAdmission_AppliesToTheNextReap_NotToThatAdmission()
+    {
+        var launcher = new FakeImageProcessLauncher();
+        var time = new AdvanceableClock();
+        var notifier = new CallbackResidencyChangeNotifier();
+        var options = new StableDiffusionRuntimeOptions
+        {
+            IdleTimeToLive = TimeSpan.FromMinutes(15),
+            MaxLoadedProcesses = 3
+        };
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time, residencyNotifier: notifier);
+        foreach (var model in new[]
+                 {
+                     "sd15",
+                     "flux",
+                     "sdxl"
+                 })
+        {
+            await supervisor.EnsureRunningAsync(model, CancellationToken.None);
+            time.Advance(TimeSpan.FromMinutes(1));
+        }
+
+        // A save lowers the cap while the admission is evicting its first victim, under the gate.
+        notifier.OnChange = () =>
+        {
+            notifier.OnChange = null;
+            options.MaxLoadedProcesses = 1;
+        };
+        await supervisor.EnsureRunningAsync("qwen-image", CancellationToken.None);
+
+        var handles = launcher.Handles.OrderBy(static handle => handle.ProcessId).ToList();
+        AssertEx.Equal(expected: 1, handles.Count(static handle => handle.WasTreeKilled), "the admission finishes on the cap it read: one victim");
+        AssertEx.Equal(expected: 3, supervisor.GetResidents().Count);
+
+        await supervisor.ReapIdleOnceAsync();
+        AssertEx.Equal("qwen-image", supervisor.GetResidents().Single().ModelName, "the next reap applies the new cap");
+    }
+
+    [Test]
+    public async Task LoweredImageCap_PartialEvictionThenRefusal_TearsDownTheDetached()
+    {
+        var launcher = new FakeImageProcessLauncher();
+        var time = new AdvanceableClock();
+        var options = new StableDiffusionRuntimeOptions
+        {
+            IdleTimeToLive = TimeSpan.FromMinutes(15),
+            MaxLoadedProcesses = 2
+        };
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time);
+        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(1));
+        var leased = await supervisor.EnsureRunningAsync("flux", CancellationToken.None);
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease(leased, out var lease));
+        using var leaseScope = lease;
+
+        // One unleased victim frees one slot, and the cap needs two: the admission evicts it, then is refused.
+        options.MaxLoadedProcesses = 1;
+        var ex = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => supervisor.EnsureRunningAsync("sdxl", CancellationToken.None));
+
+        AssertEx.True(ex.LoadedModelCapReached);
+        var handles = launcher.Handles.OrderBy(static handle => handle.ProcessId).ToList();
+        AssertEx.True(handles[0].WasTreeKilled && handles[0].WasDisposed, "the victim detached before the refusal is still torn down");
+        AssertEx.False(handles[1].WasTreeKilled, "a leased daemon is never a victim");
+        AssertEx.Equal(expected: 2, launcher.LaunchCount, "the refused model never launched");
+    }
+
+    [Test]
+    public async Task LoweredImageCap_AnAdmissionCancelledAfterTheFirstDetach_TearsItDown_AndStops()
+    {
+        var launcher = new FakeImageProcessLauncher();
+        var time = new AdvanceableClock();
+        var notifier = new CallbackResidencyChangeNotifier();
+        using var cts = new CancellationTokenSource();
+        var options = new StableDiffusionRuntimeOptions
+        {
+            IdleTimeToLive = TimeSpan.FromMinutes(15),
+            MaxLoadedProcesses = 3
+        };
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time, residencyNotifier: notifier);
+        foreach (var model in new[]
+                 {
+                     "sd15",
+                     "flux",
+                     "sdxl"
+                 })
+        {
+            await supervisor.EnsureRunningAsync(model, CancellationToken.None);
+            time.Advance(TimeSpan.FromMinutes(1));
+        }
+
+        options.MaxLoadedProcesses = 1;
+
+        // The first detach under the admission gate ticks residency; the caller is cancelled right there.
+        notifier.OnChange = () =>
+        {
+            notifier.OnChange = null;
+            cts.Cancel();
+        };
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => supervisor.EnsureRunningAsync("qwen-image", cts.Token));
+        notifier.OnChange = null;
+
+        var handles = launcher.Handles.OrderBy(static handle => handle.ProcessId).ToList();
+        AssertEx.True(handles[0].WasTreeKilled && handles[0].WasDisposed, "the victim detached before the cancellation is torn down");
+        AssertEx.False(handles[1].WasTreeKilled || handles[2].WasTreeKilled, "a cancelled admission evicts nothing more");
+        AssertEx.Equal(expected: 3, launcher.LaunchCount, "the cancelled admission never launched");
     }
 
     [Test]
@@ -328,9 +547,9 @@ public sealed class ImageServerSupervisorTests
         };
         await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time);
 
-        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        var endpoint = await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
         var firstHandle = launcher.Handles.Single();
-        AssertEx.Succeeded(supervisor.TryAcquireJobLease("sd15", out var lease));
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease(endpoint, out var lease));
         using var leaseScope = lease;
 
         // Advance most of the TTL, then Touch — the daemon is now recently-used again.
@@ -352,8 +571,8 @@ public sealed class ImageServerSupervisorTests
         var launcher = new FakeImageProcessLauncher();
         var logger = new RecordingLogger<ImageServerProcessSupervisor>();
         await using var supervisor = ImageSupervisorFactory.Create(launcher, logger: logger);
-        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
-        AssertEx.Succeeded(supervisor.TryAcquireJobLease("sd15", out var lease));
+        var endpoint = await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease(endpoint, out var lease));
         using var leaseScope = lease;
 
         launcher.Handles.Single().SimulateExit(exitCode: 137);
@@ -373,8 +592,8 @@ public sealed class ImageServerSupervisorTests
         var launcher = new FakeImageProcessLauncher();
         var logger = new RecordingLogger<ImageServerProcessSupervisor>();
         await using var supervisor = ImageSupervisorFactory.Create(launcher, logger: logger);
-        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
-        AssertEx.Succeeded(supervisor.TryAcquireJobLease("sd15", out var lease));
+        var endpoint = await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease(endpoint, out var lease));
         using var leaseScope = lease;
 
         await supervisor.RestartAsync("sd15", CancellationToken.None);

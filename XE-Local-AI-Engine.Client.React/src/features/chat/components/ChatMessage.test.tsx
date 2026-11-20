@@ -638,14 +638,28 @@ describe("ChatMessage actions", () => {
 		expect(screen.getByText("Partial answer…")).toBeTruthy();
 	});
 
-	it("keeps a cancelled turn neutral even when the backend persisted an error string alongside it", () => {
-		// Classification is driven by the terminal `status`, never by the (localized) error text — so a canceled
-		// run that carries a backend error string still renders the neutral stop, not the red failure alert.
+	it("shows a cancelled turn's reason in place of the stopped label, still without the red alert", () => {
+		// Classification is driven by the terminal `status`, never by the error text. The backend keeps a reason only on a
+		// cancel the user did not ask for (an operator eject), and the neutral line shows it instead of "Generation stopped".
+		const reason = "The model was ejected by the operator; it reloads when it is next used directly.";
+		renderWithProviders(<ChatMessage message={assistantMessage({ content: "", status: "cancelled", error: reason })} />);
+
+		const stopped = screen.getByTestId("chat-message-stopped-assistant-1");
+		expect(stopped.textContent).toBe(reason);
+		expect(screen.queryByTestId("chat-message-error-assistant-1")).toBeNull();
+	});
+
+	it("localizes an ejected model's cancelled turn from its category over the raw English reason", () => {
 		renderWithProviders(
-			<ChatMessage message={assistantMessage({ content: "", status: "cancelled", error: "The operation was canceled." })} />,
+			<ChatMessage
+				message={assistantMessage({ content: "", status: "cancelled", error: "The model was unloaded." })}
+				failureCategory="ModelEjected"
+			/>,
 		);
 
-		expect(screen.getByTestId("chat-message-stopped-assistant-1")).toBeTruthy();
+		expect(screen.getByTestId("chat-message-stopped-assistant-1").textContent).toBe(
+			"This reply stopped because the model was being unloaded. You can try again.",
+		);
 		expect(screen.queryByTestId("chat-message-error-assistant-1")).toBeNull();
 	});
 

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -341,7 +342,7 @@ public sealed class ConversationStateDistillationServiceTests
             providerResolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
             return new LocalRuntimeWarmer(providerResolver, Substitute.For<IActiveCloudChatClientFactory>(), new FakeModelTrustResolver(), Substitute.For<ICloudModelResolver>(),
                 NullLogger<LocalRuntimeWarmer>.Instance,
-                TimeProvider.System, new GpuWorkGate());
+                TimeProvider.System, new GpuWorkGate(), NoOpGpuIdleHolderPreemption.Instance);
         }
     }
 }

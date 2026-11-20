@@ -306,7 +306,6 @@ public sealed class SupervisorPooledAdmissionTests
     {
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(LlamaServerProviderConstants.ProviderName));
-        resolver.MaxLoadedProcesses.Returns(3);
         var audit = Substitute.For<IRuntimeDeviceAudit>();
         audit.GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult(new RuntimeDeviceAuditState
@@ -390,6 +389,9 @@ public sealed class SupervisorPooledAdmissionTests
             Reservations.Enqueue(reservation);
             return Task.FromResult<IDisposable?>(reservation);
         }
+
+        public Task<IReadOnlyCollection<string>> GetProtectedChatModelsAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyCollection<string>>([]);
 
         public Task<IDisposable?> AdmitChatAsync(string modelName,
             bool mayUnloadIdleModels,

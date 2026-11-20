@@ -11,7 +11,8 @@ that claims to list it. It is deliberately a *mention* check, not a structural o
 spell these names verbatim, so a substring match is enough to catch the failure that actually
 happens (a brand-new name nobody wrote down) without dictating how a page is laid out. The same holds for
 `scripts/README.md`: every top-level `scripts/*.sh|*.py` needs a row there, and, because that index is generated
-(`scripts/generate-scripts-readme.py`), a row naming a script that no longer exists fails too.
+(`scripts/generate-scripts-readme.py`), a row naming a script that no longer exists fails too, as does any other
+difference from the bytes that generator would write (a changed header line, a subfolder file list).
 
 Every inventory must be non-empty. An inventory that silently resolves to zero items — a moved
 directory, a renamed source file, a regex that stopped matching — would make its check vacuously
@@ -54,6 +55,7 @@ from __future__ import annotations
 
 import argparse
 import codecs
+import importlib.util
 import os
 import re
 import subprocess
@@ -91,6 +93,8 @@ SCRIPTS_README = SCRIPTS_DIR / "README.md"
 SCRIPT_SUFFIXES = (".sh", ".py")
 # A row of the index scripts/generate-scripts-readme.py writes: "- [`name`](name) — header line".
 SCRIPTS_README_ROW_RE = re.compile(r"^- \[`(?P<name>[^`/]+)`\]", re.MULTILINE)
+# The generator beside this file renders the expected index for whichever root is checked.
+SCRIPTS_README_GENERATOR = Path(__file__).resolve().parent / "generate-scripts-readme.py"
 
 AGENT_KNOWLEDGE_INDEX = Path("docs/agent-knowledge.md")
 AGENT_KNOWLEDGE_DIR = Path("docs/agent-knowledge")
@@ -416,8 +420,18 @@ def check_solution_projects(root: Path) -> CheckResult:
     return build_result(check, PROJECT_LAYOUT_PAGE, read_text(root, PROJECT_LAYOUT_PAGE), inventory)
 
 
+def render_scripts_readme(scripts_dir: Path) -> str:
+    spec = importlib.util.spec_from_file_location("generate_scripts_readme", SCRIPTS_README_GENERATOR)
+    if spec is None or spec.loader is None:
+        raise InventoryError(f"cannot load {SCRIPTS_README_GENERATOR}")
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    return generator.render(scripts_dir)[0]
+
+
 def check_scripts_readme(root: Path) -> CheckResult:
-    """Every top-level scripts/*.sh|*.py has a row in scripts/README.md, and every script row names one that exists."""
+    """Every top-level scripts/*.sh|*.py has a row in scripts/README.md, every script row names one that exists,
+    and the file is byte-identical to what scripts/generate-scripts-readme.py renders."""
     check = "scripts-readme"
     scripts_dir = root / SCRIPTS_DIR
     if not scripts_dir.is_dir():
@@ -433,6 +447,9 @@ def check_scripts_readme(root: Path) -> CheckResult:
         Missing(check, name, SCRIPTS_README, problem=f"row {name} names no script; {regenerate}", label="STALE")
         for name in sorted(rows.difference(inventory))
     )
+    if not missing and (root / SCRIPTS_README).read_bytes() != render_scripts_readme(scripts_dir).encode("utf-8"):
+        problem = f"differs from the generated index; {regenerate}"
+        missing.append(Missing(check, SCRIPTS_README.name, SCRIPTS_README, problem=problem, label="STALE"))
     return CheckResult(check=check, doc=SCRIPTS_README, inventory=inventory, missing=tuple(missing))
 
 

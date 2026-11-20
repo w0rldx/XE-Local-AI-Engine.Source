@@ -207,6 +207,9 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
         await transaction.CommitAsync(cancellationToken);
     }
 
+    public Task<bool> HasQueuedWorkAsync(CancellationToken cancellationToken = default) =>
+        _dbContext.DatasetGenerationWorkItems.AsNoTracking().AnyAsync(item => item.Status == DatasetGenerationWorkStatus.Queued, cancellationToken);
+
     public async Task<DatasetGenerationClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default)
     {
         while (true)

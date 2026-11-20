@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MobileNavigationMenu } from "@/core/layout/components/MobileNavigationMenu/MobileNavigationMenu";
@@ -9,17 +9,15 @@ import { SidebarMenuItem } from "@/core/layout/components/Sidebar/SidebarMenuIte
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // Labels here are props: the parent (MobileNavigationBar) is what calls `t()`, so this file passes plain strings.
-// The one string the tree translates itself is the sub-panel's close button, so that bundle entry is what proves
-// the panel opened.
-const CLOSE_LABEL = "Close";
-
 function renderMenu(overrides: Partial<IMobileNavigationMenuProperties> = {}) {
 	const setDrawerOpen = vi.fn();
+	const onPanelOpenChange = vi.fn();
 
 	const result = renderWithProviders(
 		<MobileNavigationMenu
 			menuItemStyle={{}}
 			setDrawerOpen={setDrawerOpen}
+			onPanelOpenChange={onPanelOpenChange}
 			menuItem={{ icon: null, label: "Chat" }}
 			width={390}
 			{...overrides}
@@ -27,7 +25,7 @@ function renderMenu(overrides: Partial<IMobileNavigationMenuProperties> = {}) {
 		{ route: "/" },
 	);
 
-	return { ...result, setDrawerOpen };
+	return { ...result, setDrawerOpen, onPanelOpenChange };
 }
 
 describe("MobileNavigationMenu", () => {
@@ -64,11 +62,7 @@ describe("MobileNavigationMenu", () => {
 
 		fireEvent.click(root);
 
-		// The panel's own close button is the translated string, so finding it proves the sub-panel really mounted.
-		const panel = (await screen.findByRole("button", { name: CLOSE_LABEL })).closest("div[class*='panel']");
-		expect(panel).not.toBeNull();
-
-		const inPanel = within(panel as HTMLElement);
+		const inPanel = within(await screen.findByRole("dialog", { name: "Settings" }));
 		expect(inPanel.getByRole("link", { name: "Node Settings" }).getAttribute("href")).toBe("/node-settings");
 		expect(inPanel.getByRole("link", { name: "Diagnostics" }).getAttribute("href")).toBe("/diagnostics");
 	});
@@ -147,6 +141,80 @@ describe("MobileNavigationMenu", () => {
 
 		expect(setDrawerOpen).toHaveBeenCalledTimes(1);
 		expect(setDrawerOpen).toHaveBeenCalledWith(false);
+	});
+});
+
+describe("MobileNavigationMenu sub-panel", () => {
+	afterEach(() => {
+		cleanup();
+	});
+
+	const groupMenu: Partial<IMobileNavigationMenuProperties> = {
+		menuItem: { icon: null, label: "Settings" },
+		drawerTitle: "Settings",
+		links: [
+			{ label: "Node Settings", to: "/node-settings" },
+			{ label: "Diagnostics", to: "/diagnostics" },
+		],
+	};
+
+	// The panel was a bare positioned div: Escape did nothing, focus stayed on the page behind it and a screen reader
+	// was never told a dialog had opened.
+	it("opens as a named dialog, moves focus in and keeps Tab inside it", async () => {
+		const { onPanelOpenChange } = renderMenu(groupMenu);
+
+		fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+
+		const panel = await screen.findByRole("dialog", { name: "Settings" });
+		expect(onPanelOpenChange).toHaveBeenLastCalledWith(true);
+		await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true));
+
+		const last = within(panel).getByRole("link", { name: "Diagnostics" });
+		last.focus();
+		fireEvent.keyDown(last, { key: "Tab" });
+
+		expect(panel.contains(document.activeElement)).toBe(true);
+		expect(document.activeElement).not.toBe(last);
+	});
+
+	it("closes on Escape, reports it, and puts focus back on the item that opened it", async () => {
+		const { onPanelOpenChange, setDrawerOpen } = renderMenu(groupMenu);
+		const opener = await screen.findByRole("button", { name: "Settings" });
+		opener.focus();
+		fireEvent.click(opener);
+		const panel = await screen.findByRole("dialog", { name: "Settings" });
+		await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true));
+
+		fireEvent.keyDown(document.activeElement as Element, { key: "Escape" });
+
+		await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(opener));
+		expect(onPanelOpenChange).toHaveBeenLastCalledWith(false);
+		// Escape leaves the parent drawer to its own handling.
+		expect(setDrawerOpen).not.toHaveBeenCalled();
+	});
+});
+
+describe("MobileNavigationMenu sub-panel unmount", () => {
+	afterEach(() => {
+		cleanup();
+	});
+
+	// A group can leave the drawer while its panel is open (a capability or UI-mode change filters it out). The parent
+	// stops closing on Escape while it believes a panel is open, so it must still hear that this one is gone.
+	it("reports the panel closed when its menu unmounts while the panel is open", async () => {
+		const { onPanelOpenChange, unmount } = renderMenu({
+			menuItem: { icon: null, label: "Settings" },
+			drawerTitle: "Settings",
+			links: [{ label: "Node Settings", to: "/node-settings" }],
+		});
+		fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+		await screen.findByRole("dialog", { name: "Settings" });
+		expect(onPanelOpenChange).toHaveBeenLastCalledWith(true);
+
+		unmount();
+
+		expect(onPanelOpenChange).toHaveBeenLastCalledWith(false);
 	});
 });
 

@@ -97,14 +97,14 @@ describe("ProfileMetricsCard", () => {
 
 		renderCard(<ProfileMetricsCard metrics={metrics} testIdSuffix="p1" />);
 
-		// TTFT 120 ms, generation 42.0 tok/s, cache-hit 75 %, VRAM at load 6.0 GB.
+		// TTFT 120 ms, generation 42.0 tok/s, cache-hit 75 %, VRAM at load 6.0 GiB.
 		expect(screen.getByTestId("inference-profile-metric-ttft-p1").textContent).toContain("120 ms");
 		expect(screen.getByTestId("inference-profile-metric-genTps-p1").textContent).toContain("42.0 tok/s");
 		expect(screen.getByTestId("inference-profile-metric-promptTps-p1").textContent).toContain("310.0 tok/s");
 		expect(screen.getByTestId("inference-profile-metric-cacheHit-p1").textContent).toContain("75 %");
 		expect(screen.getByTestId("inference-profile-metric-toolLoop-p1").textContent).toContain("850 ms");
-		expect(screen.getByTestId("inference-profile-metric-vramLoad-p1").textContent).toContain("6.0 GB");
-		expect(screen.getByTestId("inference-profile-metric-vramAfter-p1").textContent).toContain("6.5 GB");
+		expect(screen.getByTestId("inference-profile-metric-vramLoad-p1").textContent).toContain("6.0 GiB");
+		expect(screen.getByTestId("inference-profile-metric-vramAfter-p1").textContent).toContain("6.5 GiB");
 	});
 
 	it("omits a metric whose value is null rather than showing a dash", () => {
@@ -147,11 +147,11 @@ describe("ProfileMetricsCard", () => {
 		expect(screen.getByTestId("inference-profile-metric-p95Latency-embedding").textContent).toContain("29 ms");
 		expect(screen.getByTestId("inference-profile-metric-outputDimension-embedding").textContent).toContain("768");
 		expect(screen.getByTestId("inference-profile-metric-valuesFinite-embedding").textContent).toContain("Yes");
-		expect(screen.getByTestId("inference-profile-metric-globalFreeVramLoad-embedding").textContent).toContain("6.0 GB");
-		expect(screen.getByTestId("inference-profile-metric-processBudgetVramLoad-embedding").textContent).toContain("7.0 GB");
-		expect(screen.getByTestId("inference-profile-metric-minimumGlobalFreeVram-embedding").textContent).toContain("5.0 GB");
-		expect(screen.getByTestId("inference-profile-metric-minimumProcessBudgetVram-embedding").textContent).toContain("6.0 GB");
-		expect(screen.getByTestId("inference-profile-metric-peakProcessRam-embedding").textContent).toContain("3.0 GB");
+		expect(screen.getByTestId("inference-profile-metric-globalFreeVramLoad-embedding").textContent).toContain("6.0 GiB");
+		expect(screen.getByTestId("inference-profile-metric-processBudgetVramLoad-embedding").textContent).toContain("7.0 GiB");
+		expect(screen.getByTestId("inference-profile-metric-minimumGlobalFreeVram-embedding").textContent).toContain("5.0 GiB");
+		expect(screen.getByTestId("inference-profile-metric-minimumProcessBudgetVram-embedding").textContent).toContain("6.0 GiB");
+		expect(screen.getByTestId("inference-profile-metric-peakProcessRam-embedding").textContent).toContain("3.0 GiB");
 		expect(screen.queryByTestId("inference-profile-metric-vramLoad-embedding")).toBeNull();
 	});
 

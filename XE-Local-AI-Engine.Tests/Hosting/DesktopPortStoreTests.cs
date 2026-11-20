@@ -67,7 +67,7 @@ public sealed class DesktopPortStoreTests
     [Test]
     public async Task ResolveBindUrl_WhenPortFileMissing_FallsBackToDynamicBind()
     {
-        using var directory = new TempDirectory();
+        using var directory = new TempDirectory("xe-port-store");
 
         var resolved = await DesktopPortStore.ResolveBindUrlAsync(directory.Path);
 
@@ -88,7 +88,7 @@ public sealed class DesktopPortStoreTests
                      "  "
                  })
         {
-            using var directory = new TempDirectory();
+            using var directory = new TempDirectory("xe-port-store");
             WritePortFile(directory.Path, invalid);
 
             var resolved = await DesktopPortStore.ResolveBindUrlAsync(directory.Path);
@@ -100,7 +100,7 @@ public sealed class DesktopPortStoreTests
     [Test]
     public async Task ResolveBindUrl_WhenPersistedPortIsFree_RebindsThatPort()
     {
-        using var directory = new TempDirectory();
+        using var directory = new TempDirectory("xe-port-store");
         var freePort = FindFreeLoopbackPort();
         WritePortFile(directory.Path, freePort.ToString(CultureInfo.InvariantCulture));
 
@@ -112,7 +112,7 @@ public sealed class DesktopPortStoreTests
     [Test]
     public async Task ResolveBindUrl_WhenPersistedPortIsTaken_FallsBackToDynamicBind()
     {
-        using var directory = new TempDirectory();
+        using var directory = new TempDirectory("xe-port-store");
         var port = FindFreeLoopbackPort();
 
         // Hold the port for the duration of the resolve so the availability probe sees it as taken.
@@ -129,7 +129,7 @@ public sealed class DesktopPortStoreTests
     [Test]
     public async Task PersistThenResolve_RoundTripsToTheSameLoopbackUrl()
     {
-        using var directory = new TempDirectory();
+        using var directory = new TempDirectory("xe-port-store");
         var freePort = FindFreeLoopbackPort();
 
         DesktopPortStore.Persist(directory.Path, freePort, NullLogger.Instance);
@@ -156,7 +156,7 @@ public sealed class DesktopPortStoreTests
     [Test]
     public async Task ReadyFile_PersistsRoundTripsAndDeletes()
     {
-        using var directory = new TempDirectory();
+        using var directory = new TempDirectory("xe-port-store");
         var info = new ReadyInfo("1.2.3", "http://127.0.0.1:41234",
             "http://127.0.0.1:41234/api/local/v1/mcp/server", directory.Path, 123, DateTimeOffset.UnixEpoch);
 
@@ -171,7 +171,7 @@ public sealed class DesktopPortStoreTests
     [Test]
     public async Task ReadyEvidence_DistinguishesAbsentFromInvalidAndRejectsUnsafeUris()
     {
-        using var directory = new TempDirectory();
+        using var directory = new TempDirectory("xe-port-store");
         AssertEx.Equal(ReadyEvidenceState.Absent, (await DesktopPortStore.ReadReadyEvidenceAsync(directory.Path)).State);
 
         foreach (var invalidJson in new[]
@@ -221,31 +221,5 @@ public sealed class DesktopPortStoreTests
         using var listener = new TcpListener(IPAddress.Loopback, port: 0);
         listener.Start();
         return ((IPEndPoint)listener.LocalEndpoint).Port;
-    }
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public TempDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"xe-port-store-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // Best-effort cleanup of the temp directory.
-            }
-        }
     }
 }

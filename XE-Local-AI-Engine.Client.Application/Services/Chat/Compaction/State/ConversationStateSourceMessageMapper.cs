@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 
+using XE_Local_AI_Engine.Client.Common;
+
 /// <summary>Projects a persisted chat message onto the distiller's input, keeping tool calls as short excerpts.</summary>
 internal static class ConversationStateSourceMessageMapper
 {
@@ -33,5 +35,5 @@ internal static class ConversationStateSourceMessageMapper
     }
 
     internal static string? Excerpt(string? value) =>
-        value is null ? null : ConversationSummarizer.TruncateAtRuneBoundary(value, ToolExcerptChars);
+        value is null ? null : TextTruncation.TruncateAtRuneBoundary(value, ToolExcerptChars);
 }

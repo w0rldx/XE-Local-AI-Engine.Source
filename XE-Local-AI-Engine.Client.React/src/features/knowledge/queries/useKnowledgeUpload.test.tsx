@@ -40,7 +40,7 @@ describe("useKnowledgeUpload", () => {
 	});
 
 	it("shows the endpoint's own size-limit message from the validation errors map", async () => {
-		const message = "The file exceeds the maximum upload size of 50 MB.";
+		const message = "The file exceeds the maximum upload size of 50 MiB.";
 		server.use(
 			http.post(localApiPath("knowledge-base/documents"), () =>
 				HttpResponse.json(

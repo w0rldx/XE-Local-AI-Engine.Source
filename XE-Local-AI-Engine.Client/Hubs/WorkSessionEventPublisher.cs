@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
-///     Pushes a committed work-session change to that session's group. Supersedes the no-op the application module
+///     Pushes a committed work-session change to that session's group, and a status change also to every connection. Supersedes the no-op the application module
 ///     registers, so a host without this hub stays resolvable.
 /// </summary>
 internal sealed class WorkSessionEventPublisher : IWorkSessionEventPublisher
@@ -16,14 +16,23 @@ internal sealed class WorkSessionEventPublisher : IWorkSessionEventPublisher
         _hubContext = hubContext;
     }
 
-    public Task PublishAsync(Guid sessionId, long sequence, WorkSessionChangeKind kind, CancellationToken cancellationToken = default) =>
-        _hubContext.Clients.Group(WorkSessionHubGroups.Session(sessionId))
-                   .SendAsync(WorkSessionHubEvents.Changed, new WorkSessionChanged
-                   {
-                       SessionId = sessionId,
-                       Seq = sequence,
-                       Kind = ToWireKind(kind)
-                   }, cancellationToken);
+    public async Task PublishAsync(Guid sessionId, long sequence, WorkSessionChangeKind kind, CancellationToken cancellationToken = default)
+    {
+        await _hubContext.Clients.Group(WorkSessionHubGroups.Session(sessionId))
+                         .SendAsync(WorkSessionHubEvents.Changed, new WorkSessionChanged
+                         {
+                             SessionId = sessionId,
+                             Seq = sequence,
+                             Kind = ToWireKind(kind)
+                         }, cancellationToken);
+        if (kind == WorkSessionChangeKind.Status)
+        {
+            await _hubContext.Clients.All.SendAsync(WorkSessionHubEvents.StatusChanged, new WorkSessionStatusChanged
+            {
+                SessionId = sessionId
+            }, cancellationToken);
+        }
+    }
 
     /// <summary>
     ///     The wire spelling of a change kind, written out rather than derived from the enum name.

@@ -24,7 +24,7 @@ public sealed class ImageModelDeletionTests
     [Test]
     public async Task DeleteModel_WhenAWeightFileIsLocked_KeepsTheRegistryEntryAndReportsAConflict()
     {
-        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var models = new TempDirectory("xe-hf-test");
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) => new HttpResponseMessage());
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -85,7 +85,7 @@ public sealed class ImageModelDeletionTests
     [Test]
     public async Task DeleteModel_WhenTheWeightsAreRemovable_RemovesBothTheFileAndTheRegistryEntry()
     {
-        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var models = new TempDirectory("xe-hf-test");
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) => new HttpResponseMessage());
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -103,7 +103,7 @@ public sealed class ImageModelDeletionTests
     [Test]
     public async Task DeleteModel_WhenTheModelIsNotInstalled_Succeeds()
     {
-        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var models = new TempDirectory("xe-hf-test");
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
 
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) => new HttpResponseMessage());

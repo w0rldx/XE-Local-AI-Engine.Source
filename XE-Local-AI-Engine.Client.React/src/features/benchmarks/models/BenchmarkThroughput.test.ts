@@ -11,7 +11,7 @@ import {
 	hasThroughputBreakdown,
 	throughputEvidenceEntries,
 } from "@/features/benchmarks/models/BenchmarkThroughput";
-import { benchmarkRunSummaryFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkRunSummaryFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 
 describe("BenchmarkThroughput", () => {
 	// An unmeasured number is a dash, never a zero: a run whose runtime reported no timings must not read as a run that

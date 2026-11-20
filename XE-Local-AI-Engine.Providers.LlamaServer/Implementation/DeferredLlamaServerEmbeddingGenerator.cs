@@ -4,6 +4,7 @@ using System.ClientModel;
 using System.Globalization;
 using System.Net;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -12,11 +13,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     <see cref="GenerateAsync" /> call, then delegates to the MEAI OpenAI embedding adapter over its endpoint.
 /// </summary>
 /// <remarks>
-///     <strong>Lexical-fallback contract:</strong> every failure this generator can produce lands in the single
-///     <see cref="HttpRequestException" /> / <see cref="IOException" /> set callers already handle, which keeps
-///     <c>EmbeddingPlaybookRetrievalRanker</c>'s degrade-to-lexical path intact (wiki 03). The generator is
-///     <see cref="IDisposable" /> and <strong>caller-owned</strong>
-///     (<see cref="Abstractions.ILocalModelProvider.CreateEmbeddingGenerator" />): disposing it disposes the inner adapter, while the supervisor still owns the process.
+///     <strong>Lexical-fallback contract:</strong> every failure lands in the <see cref="HttpRequestException" /> /
+///     <see cref="IOException" /> set the lexical fallbacks already handle (wiki 03), except that a
+///     <see cref="ModelResidencyIntent.Background" /> generator throws <see cref="OperatorEjectedException" /> while an
+///     operator eject marks the embedder. It is <see cref="IDisposable" /> and <strong>caller-owned</strong>: disposing
+///     it disposes the inner adapter, while the supervisor owns the process.
 /// </remarks>
 internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
 {
@@ -29,6 +30,8 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
     /// </summary>
     private const int MaxProfilingReEnsures = 3;
 
+    private const string BackgroundVetoMessage = "The embedding model was ejected by the operator; background embedding waits until it is loaded again.";
+
     /// <summary>How long a server-gone failure waits for the supervisor to observe the process exit before rethrowing.</summary>
     private static readonly TimeSpan ServerGoneExitWait = TimeSpan.FromSeconds(2);
 
@@ -36,16 +39,21 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
     private readonly string _modelName;
     private readonly TimeSpan _networkTimeout;
     private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly ModelResidencyIntent _intent;
 
     private IEmbeddingGenerator<string, Embedding<float>>? _inner;
 
-    public DeferredLlamaServerEmbeddingGenerator(ILlamaServerProcessSupervisor supervisor, string modelName, TimeSpan networkTimeout)
+    public DeferredLlamaServerEmbeddingGenerator(ILlamaServerProcessSupervisor supervisor,
+        string modelName,
+        TimeSpan networkTimeout,
+        ModelResidencyIntent intent = ModelResidencyIntent.Interactive)
     {
         ArgumentNullException.ThrowIfNull(supervisor);
         _supervisor = supervisor;
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         _modelName = modelName;
         _networkTimeout = networkTimeout;
+        _intent = intent;
     }
 
     public async Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
@@ -62,6 +70,16 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
         }
         catch (Exception exception) when (exception is ClientResultException or HttpRequestException or IOException)
         {
+            // The MEAI OpenAI adapter reports a non-2xx as System.ClientModel's ClientResultException, which is in NOBODY's catch set upstream, so translate it at
+            // the provider boundary and keep one transport-failure catch set. Already-conforming shapes rethrow unchanged. What it cost before: wiki 03.
+            var failure = exception is ClientResultException clientResult
+                ? new HttpRequestException(DescribeFailure(clientResult), clientResult, clientResult.Status switch
+                {
+                    > 0 and var status => (HttpStatusCode)status,
+                    _ => null
+                })
+                : exception;
+
             // Self-heal seam, mirroring DeferredLlamaServerChatClient.InvalidateInner: the cached adapter is bound to ONE endpoint for this generator's whole
             // lifetime, and the cancellation guard is the chat client's, in the same operand order. Why both, and why the drop is latent-only today: wiki 03.
             if (!cancellationToken.IsCancellationRequested && LlamaServerConnectionFailure.IsServerGone(exception))
@@ -70,20 +88,18 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
 
                 // A killed process's sockets close before the supervisor sees it exit; without this wait the caller's retry re-ensures onto the dead endpoint.
                 await _supervisor.WaitForProcessExitAsync(_modelName, ModelRole.Embedding, ServerGoneExitWait, cancellationToken).ConfigureAwait(false);
+                if (IsBackgroundVetoed())
+                {
+                    throw new OperatorEjectedException(BackgroundVetoMessage, failure);
+                }
             }
 
-            // The MEAI OpenAI adapter reports a non-2xx as System.ClientModel's ClientResultException, which is in NOBODY's catch set upstream, so translate it at
-            // the provider boundary and keep one transport-failure catch set. Already-conforming shapes rethrow unchanged. What it cost before: wiki 03.
-            if (exception is not ClientResultException clientResult)
+            if (ReferenceEquals(failure, exception))
             {
                 throw;
             }
 
-            throw new HttpRequestException(DescribeFailure(clientResult), clientResult, clientResult.Status switch
-            {
-                > 0 and var status => (HttpStatusCode)status,
-                _ => null
-            });
+            throw failure;
         }
     }
 
@@ -92,9 +108,10 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
     /// </summary>
     /// <remarks>
     ///     A profiling or benchmark spawn owning this key is refused and RETRIED rather than embedded around; a draining
-    ///     operator eject is refused outright. Both give up as <see cref="IOException" />, the transport-failure set
-    ///     every caller already handles, once the bounded retry is spent, so retrieval degrades to its lexical fallback
-    ///     instead of failing unclassified. Why a retry rather than proceeding: wiki 03.
+    ///     eject is refused outright. Both give up as <see cref="IOException" />, the transport-failure set every caller
+    ///     already handles, once the bounded retry is spent, so retrieval degrades to its lexical fallback instead of
+    ///     failing unclassified; a background refusal under an operator's eject mark is the typed veto instead. Why a
+    ///     retry rather than proceeding: wiki 03.
     /// </remarks>
     private async Task<LeasedInner> EnsureLeasedInnerAsync(CancellationToken ct)
     {
@@ -105,7 +122,9 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
             var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Embedding);
             if (acquisition.ProcessEvicting)
             {
-                throw new IOException("The embedding model is being ejected by the operator; this request was not started.");
+                // Evicting also covers an image-job drain; only the operator's mark turns it into a background wait.
+                var refusal = new IOException("The embedding model is being ejected; this request was not started.");
+                throw IsBackgroundVetoed() ? new OperatorEjectedException(BackgroundVetoMessage, refusal) : refusal;
             }
 
             // "Not running" read against a CACHED adapter is ambiguous (wiki 03), so drop the adapter and take the answer from a process this call actually
@@ -137,6 +156,12 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
     private void InvalidateInner()
     {
         Interlocked.Exchange(ref _inner, null)?.Dispose();
+    }
+
+    /// <summary>Whether this background generator's failure belongs to an operator eject that still marks the embedder.</summary>
+    private bool IsBackgroundVetoed()
+    {
+        return _intent == ModelResidencyIntent.Background && _supervisor.IsBackgroundLaunchBlocked(_modelName, ModelRole.Embedding);
     }
 
     /// <summary>
@@ -207,7 +232,14 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
             LlamaServerEndpoint endpoint;
             try
             {
-                endpoint = await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Embedding, ct).ConfigureAwait(false);
+                // Only a non-Interactive generator calls the intent overload, so a double stubbing the plain member serves the rest.
+                endpoint = _intent == ModelResidencyIntent.Interactive
+                    ? await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Embedding, ct).ConfigureAwait(false)
+                    : await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Embedding, _intent, ct).ConfigureAwait(false);
+            }
+            catch (OperatorEjectedException) when (_intent == ModelResidencyIntent.Background)
+            {
+                throw;
             }
             catch (LlamaRuntimeException exception)
             {

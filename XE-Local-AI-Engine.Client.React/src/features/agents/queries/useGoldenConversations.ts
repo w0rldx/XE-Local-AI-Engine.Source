@@ -7,6 +7,7 @@ import {
 	harvestGoldenConversationsMutation,
 	listGoldenConversationsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { operationInvalidationKey } from "@/core/api/QueryKeys";
 import {
 	toCreateGoldenConversationRequest,
 	toGoldenConversations,
@@ -26,11 +27,6 @@ export const goldenConversationsQueryIds = {
 	list: "listGoldenConversations",
 } as const;
 
-/** Builds the partial generated-query-key filter that matches every cached variant of one golden-conversation endpoint. */
-export function goldenConversationsInvalidationKey(operationId: string): readonly [{ _id: string }] {
-	return [{ _id: operationId }];
-}
-
 export function useGoldenConversations(agentDefinitionId: string | null) {
 	return useQuery({
 		...listGoldenConversationsOptions({ path: { agentDefinitionId: agentDefinitionId ?? "" } }),
@@ -41,7 +37,7 @@ export function useGoldenConversations(agentDefinitionId: string | null) {
 
 function invalidateList(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
 	return queryClient.invalidateQueries({
-		queryKey: goldenConversationsInvalidationKey(goldenConversationsQueryIds.list),
+		queryKey: operationInvalidationKey(goldenConversationsQueryIds.list),
 	});
 }
 

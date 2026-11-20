@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -767,6 +768,24 @@ public sealed class SupervisorSpawnArgsTests
             "A chat launch must never carry a control vector or its file.");
     }
 
+    [Test]
+    [Arguments("--top-k 40 --pooling cls", true)]
+    [Arguments("--top-k 40", false)]
+    public async Task ResolveAsync_StoredOverrideWithManagedFlag_LogsTheRemovalOnce(string stored, bool expectLogged)
+    {
+        var store = Substitute.For<IModelLaunchArgumentsStore>();
+        store.GetRawArgumentsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(stored);
+        await using var services = new ServiceCollection().AddScoped(_ => store).BuildServiceProvider();
+        var logger = new MessageCapturingLogger();
+        var resolver = new LlamaServerExtraLaunchArgumentsResolver(services.GetRequiredService<IServiceScopeFactory>(), logger);
+
+        var resolved = await resolver.ResolveAsync("nomic-embed", ModelRole.Embedding, CancellationToken.None);
+
+        AssertEx.Equal("--top-k 40", string.Join(' ', resolved));
+        AssertEx.Equal(expectLogged ? 1 : 0, logger.Messages.Count(static message => message.StartsWith("Removed app-managed flag(s)", StringComparison.Ordinal)));
+        AssertEx.False(logger.Messages.Any(static message => message.Contains("cls", StringComparison.Ordinal)), "The override text must never reach the log.");
+    }
+
     private static void AssertChatBindsLocalhost(LlamaServerLaunchSpec spec)
     {
         var hostIndex = IndexOf(spec.Arguments, "--host");
@@ -796,5 +815,20 @@ public sealed class SupervisorSpawnArgsTests
     private static LlamaServerProcessSupervisor NewSupervisor(FakeProcessLauncher launcher)
     {
         return SupervisorFactory.Create(launcher);
+    }
+
+    private sealed class MessageCapturingLogger : ILogger<LlamaServerExtraLaunchArgumentsResolver>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull =>
+            null;
+
+        public bool IsEnabled(LogLevel logLevel) =>
+            true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Messages.Add(formatter(state, exception));
     }
 }

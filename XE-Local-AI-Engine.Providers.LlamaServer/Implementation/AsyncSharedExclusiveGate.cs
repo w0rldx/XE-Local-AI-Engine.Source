@@ -17,6 +17,10 @@ internal sealed class AsyncSharedExclusiveGate : IDisposable
     private readonly Lock _sync = new();
     private int _sharedCount;
     private TaskCompletionSource? _sharedDrained;
+    private int _waiterCount;
+
+    /// <summary>Callers inside an enter that has not yet returned, shared or exclusive: demand that is waiting on the gate.</summary>
+    public int WaiterCount => Volatile.Read(ref _waiterCount);
 
     /// <summary>
     ///     Admits a shared holder, waiting while an exclusive holder owns the gate. Passing THROUGH the exclusive
@@ -24,7 +28,16 @@ internal sealed class AsyncSharedExclusiveGate : IDisposable
     /// </summary>
     public async Task EnterSharedAsync(CancellationToken ct)
     {
-        await _exclusive.WaitAsync(ct).ConfigureAwait(false);
+        Interlocked.Increment(ref _waiterCount);
+        try
+        {
+            await _exclusive.WaitAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _waiterCount);
+        }
+
         try
         {
             lock (_sync)
@@ -66,15 +79,23 @@ internal sealed class AsyncSharedExclusiveGate : IDisposable
     /// </remarks>
     public async Task EnterExclusiveAsync(CancellationToken ct)
     {
-        await _exclusive.WaitAsync(ct).ConfigureAwait(false);
+        Interlocked.Increment(ref _waiterCount);
         try
         {
-            await WaitForSharedDrainedAsync().WaitAsync(ct).ConfigureAwait(false);
+            await _exclusive.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await WaitForSharedDrainedAsync().WaitAsync(ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                _exclusive.Release();
+                throw;
+            }
         }
-        catch
+        finally
         {
-            _exclusive.Release();
-            throw;
+            Interlocked.Decrement(ref _waiterCount);
         }
     }
 

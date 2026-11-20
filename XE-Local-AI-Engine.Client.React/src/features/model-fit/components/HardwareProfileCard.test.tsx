@@ -223,7 +223,7 @@ describe("HardwareProfileCard layer placement", () => {
 	});
 
 	it("does not present an expert-offloaded model as fully on the GPU", () => {
-		// llama.cpp reports 41/41 for a --cpu-moe launch that keeps 20.7 GB of experts in system RAM.
+		// llama.cpp reports 41/41 for a --cpu-moe launch that keeps 20.7 GiB of experts in system RAM.
 		renderCard({
 			inferenceBackend: "cuda",
 			gpuOffloadedLayers: 41,

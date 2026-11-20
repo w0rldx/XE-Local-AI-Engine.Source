@@ -7,4 +7,9 @@ public sealed class NullJobCreatedPublisher : IJobCreatedPublisher
     {
         return Task.CompletedTask;
     }
+
+    public Task PublishEndedAsync(CreatedJobKind kind, Guid jobId, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
 }

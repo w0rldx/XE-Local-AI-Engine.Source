@@ -10,6 +10,7 @@ import {
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { formatOneDecimal } from "@/core/formatting/BytesFormatting";
 import { ResponsiveTable, type ResponsiveTableColumn } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
@@ -146,7 +147,7 @@ function MoeOffloadBadge({ recommendation }: { recommendation: ModelFitRecommend
 	}
 	return (
 		<Tooltip
-			label={t("pages.modelFit.recommendations.moeOffload.breakdown", "GPU {{gpuGb}} GB + RAM {{cpuGb}} GB", {
+			label={t("pages.modelFit.recommendations.moeOffload.breakdown", "GPU {{gpuGb}} GiB + RAM {{cpuGb}} GiB", {
 				gpuGb: recommendation.gpuGb,
 				cpuGb: recommendation.cpuGb,
 			})}
@@ -176,8 +177,8 @@ function KvQuantHint({ recommendation }: { recommendation: ModelFitRecommendatio
 			maw={280}
 		>
 			<Text size="xs" c="dimmed" data-testid={`model-fit-kv-quant-hint-${recommendation.rank}`}>
-				{t("pages.modelFit.recommendations.kvQuant.hint", "≈ {{gb}} GB with {{quant}} KV cache", {
-					gb: recommendation.kvQuantEstimatedGb.toFixed(1),
+				{t("pages.modelFit.recommendations.kvQuant.hint", "≈ {{gb}} GiB with {{quant}} KV cache", {
+					gb: formatOneDecimal(recommendation.kvQuantEstimatedGb),
 					quant: recommendation.kvQuant,
 				})}
 			</Text>
@@ -198,8 +199,8 @@ function KvPerTokenHint({ recommendation }: { recommendation: ModelFitRecommenda
 	}
 	const arch = recommendation.attentionArch ?? null;
 	const archLabel = arch === null ? null : t(`pages.modelFit.recommendations.attentionArch.${arch}`, arch.toUpperCase());
-	const perToken = t("pages.modelFit.recommendations.kvPerToken.hint", "{{kb}} KB/token ({{quant}} KV)", {
-		kb: (bytesPerToken / 1024).toFixed(1),
+	const perToken = t("pages.modelFit.recommendations.kvPerToken.hint", "{{kb}} KiB/token ({{quant}} KV)", {
+		kb: formatOneDecimal(bytesPerToken / 1024),
 		quant: quant.toLowerCase(),
 	});
 	return (

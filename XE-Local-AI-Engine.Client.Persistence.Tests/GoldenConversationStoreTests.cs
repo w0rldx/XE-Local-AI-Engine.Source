@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
-using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -29,7 +28,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
     public async Task AddAsync_ThenReadBackInNewContext_DecryptsInputTurnsAssertionAndRubric()
     {
         var databasePath = GetDatabasePath("roundtrip.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid goldenId;
         Guid agentId;
@@ -73,7 +72,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
     public async Task AddAsync_WithNullAssertionAndRubric_RoundTripsNull()
     {
         var databasePath = GetDatabasePath("null-optional.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         Guid goldenId;
         await using (var context = CreateContext(databasePath, keyHolder))
@@ -103,7 +102,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
     public async Task ListEnabledByAgentAsync_ReturnsOnlyEnabledOrderedByCreatedAt()
     {
         var databasePath = GetDatabasePath("list-enabled.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(1_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -148,7 +147,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
     public async Task ListByAgentAsync_IsScopedToTheOwningAgent()
     {
         var databasePath = GetDatabasePath("list-scoped.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -173,7 +172,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
     public async Task DeleteAsync_RemovesRow()
     {
         var databasePath = GetDatabasePath("delete.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -192,7 +191,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
     public async Task DatabaseFile_AfterAdd_DoesNotContainPlaintextFreeText()
     {
         var databasePath = GetDatabasePath("ciphertext.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var input = "SECRET-INPUT-" + Guid.NewGuid().ToString("N");
         var assertion = "SECRET-ASSERTION-" + Guid.NewGuid().ToString("N");
         var rubric = "SECRET-RUBRIC-" + Guid.NewGuid().ToString("N");
@@ -224,7 +223,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
     public async Task AddAsync_WithHarvestedSourceAndProvenance_RoundTripsSourceIdsAndEncryptsContent()
     {
         var databasePath = GetDatabasePath("harvested-roundtrip.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var sourceMessageId = Guid.NewGuid();
         var sourceConversationId = Guid.NewGuid();
         var rubric = "SECRET-RUBRIC-" + Guid.NewGuid().ToString("N");
@@ -287,7 +286,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
     public async Task SetEnabledAsync_OnDisabledRow_FlipsEnabledAndBumpsUpdatedAt()
     {
         var databasePath = GetDatabasePath("set-enabled.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var clock = new MutableTimeProvider(1_000);
 
         await using var context = CreateContext(databasePath, keyHolder);
@@ -316,7 +315,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
     public async Task ListSourceMessageIdsByAgentAsync_ReturnsOnlyHarvestedSourceIdsForTheAgent()
     {
         var databasePath = GetDatabasePath("source-ids.sqlite");
-        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
 
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
@@ -429,11 +428,6 @@ public sealed class GoldenConversationStoreTests : IDisposable
         return Path.Combine(_rootPath, fileName);
     }
 
-    private static byte[] CreateKeyMaterial()
-    {
-        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
-    }
-
     private static bool ContainsSubsequence(byte[] source, byte[] needle)
     {
         if (needle.Length == 0)
@@ -462,55 +456,5 @@ public sealed class GoldenConversationStoreTests : IDisposable
         }
 
         return false;
-    }
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private long _milliseconds;
-
-        public MutableTimeProvider(long initialMilliseconds)
-        {
-            _milliseconds = initialMilliseconds;
-        }
-
-        public void Advance(long milliseconds)
-        {
-            _milliseconds += milliseconds;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return DateTimeOffset.FromUnixTimeMilliseconds(_milliseconds);
-        }
-    }
-
-    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key;
-
-        public FixedNodeSqliteKeyHolder(byte[] key)
-        {
-            _key = key;
-        }
-
-        public ReadOnlyMemory<byte> Key
-        {
-            get
-            {
-                ObjectDisposedException.ThrowIf(_key is null, this);
-                return _key;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_key is null)
-            {
-                return;
-            }
-
-            CryptographicOperations.ZeroMemory(_key);
-            _key = null;
-        }
     }
 }

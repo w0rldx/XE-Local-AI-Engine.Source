@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { ggufFailureText } from "@/core/model-downloads/models/GgufAcquisitionErrors";
 import { isTerminalAcquisitionPhase } from "@/core/model-downloads/models/GgufAcquisitionModels";
 import {
 	type GgufDownloadStatus,
@@ -15,7 +16,7 @@ import {
 import { hasAnyChatModel } from "@/core/models/ChatModelOptions";
 import { ButtonLink } from "@/core/ui/components/ButtonLink/ButtonLink";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
-import { useChatHandOff } from "@/features/home/hooks/useChatHandOff";
+import { useChatHandOff } from "@/core/ui/hooks/useChatHandOff";
 import { greetingPeriod, setupDownloadPercent } from "@/features/home/models/HomeModels";
 import { useRecentConversations } from "@/features/home/queries/useRecentConversations";
 
@@ -93,9 +94,10 @@ export function HomeWelcomeCard() {
 							model: failedDownload.modelName,
 						})}
 					</Text>
-					{failedDownload.sanitizedError ? (
-						<Text c="dimmed" size="sm" data-testid="home-setup-failed-reason">
-							{failedDownload.sanitizedError}
+					{/* Without a code the generic sentence would only repeat the title. */}
+					{failedDownload.errorCode ? (
+						<Text c="dimmed" size="sm" style={{ whiteSpace: "pre-line" }} data-testid="home-setup-failed-reason">
+							{ggufFailureText(t, failedDownload)}
 						</Text>
 					) : null}
 					{startDownload.isError ? (

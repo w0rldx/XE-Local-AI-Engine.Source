@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     Default <see cref="IMemorySemanticDeduplicator" />: it embeds lexically-surviving candidates with the
@@ -78,6 +79,12 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
             // Never swallow a genuine caller cancellation (the extraction run's own token fired).
             throw;
         }
+        catch (OperatorEjectedException)
+        {
+            // The operator ejected the embedder and no user has reloaded it: an expected skip, not an outage worth a Warning.
+            _logger.LogDebug("Semantic memory dedup skipped: the embedding model was ejected by the operator; lexical-only for this run.");
+            return MemorySemanticDedupResult.NotApplied;
+        }
         catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException)
         {
             // Any node-local embedding hiccup — an unpulled model, a down runtime, a transport error, an unregistered
@@ -107,7 +114,10 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {
             ModelName = model,
-            ProviderName = providerName
+            ProviderName = providerName,
+
+            // No user waits on dedup, so an operator's eject keeps this load out (typed veto) until a user reloads it.
+            ResidencyIntent = ModelResidencyIntent.Background
         });
 
         var keys = new EmbeddingCacheKey[existing.Count];
@@ -131,7 +141,7 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
             return MemorySemanticDedupResult.NotApplied;
         }
 
-        return ClassifyCandidates(existing, candidates, existingVectors, candidateVectors);
+        return ClassifyCandidates(existing, candidates, existingVectors, candidateVectors, _options.SemanticDedupSimilarityThreshold);
 
         async Task<IReadOnlyList<ReadOnlyMemory<float>>?> EmbedMissingExistingAsync(IReadOnlyList<EmbeddingCacheKey> missing,
             CancellationToken token)
@@ -171,12 +181,14 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
         }
     }
 
-    private MemorySemanticDedupResult ClassifyCandidates(IReadOnlyList<MemoryDedupExisting> existing,
+    /// <summary>Flags each candidate whose cosine to a same-scope existing memory or earlier accepted candidate is at least <paramref name="threshold" />.</summary>
+    /// <remarks>Internal so the live dedup calibration replays this exact decision over real vectors.</remarks>
+    internal static MemorySemanticDedupResult ClassifyCandidates(IReadOnlyList<MemoryDedupExisting> existing,
         IReadOnlyList<MemoryDedupCandidate> candidates,
         ReadOnlyMemory<float>[] existingVectors,
-        ReadOnlyMemory<float>[] candidateVectors)
+        ReadOnlyMemory<float>[] candidateVectors,
+        double threshold)
     {
-        var threshold = _options.SemanticDedupSimilarityThreshold;
         var duplicateIndexes = new HashSet<int>();
 
         // Indexes of the candidates accepted so far: comparing a later one against them collapses two paraphrases

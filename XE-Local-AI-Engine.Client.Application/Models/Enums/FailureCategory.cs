@@ -70,5 +70,11 @@ public enum FailureCategory
     ///     The node had no room to load the model next to the models already loaded or loading (a capacity refusal of
     ///     the model's launch). The sanitized message names those models and says what to do.
     /// </summary>
-    InsufficientCapacity = 15
+    InsufficientCapacity = 15,
+
+    /// <summary>
+    ///     The model was unloaded under the request, or was being unloaded when it arrived: an operator eject or the node making room
+    ///     for another job. An outcome like <see cref="Cancelled" />, so the invocation ends Cancelled, but the chat shows why.
+    /// </summary>
+    ModelEjected = 16
 }

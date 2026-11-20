@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -243,7 +244,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         {
             try
             {
-                var progress = new Progress<GgufImportProgress>(value => UpdateAndPublish(operationId,
+                var progress = new SynchronousProgress<GgufImportProgress>(value => UpdateAndPublish(operationId,
                     GgufAcquisitionPhase.Copying,
                     value.CompletedBytes,
                     value.TotalBytes));
