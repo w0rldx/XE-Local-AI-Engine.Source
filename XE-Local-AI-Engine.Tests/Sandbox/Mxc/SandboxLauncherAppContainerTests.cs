@@ -34,7 +34,7 @@ public sealed class SandboxLauncherAppContainerTests : IDisposable
 
         var request = AssertEx.NotNull(descriptor.MxcRequest);
         AssertEx.True(request.Containment is Containment.ProcessContainer);
-        AssertEx.Equal("python.exe -c print(1)", request.Command);
+        AssertEx.Equal("\"python.exe\" -c print(1)", request.Command);
         AssertEx.Equal(jail, request.WorkingDirectory);
         AssertEx.Equal(30_000u, request.TimeoutMs!.Value);
         AssertEx.Equal(jail, request.Filesystem!.ReadwritePaths.Single());

@@ -833,7 +833,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
     /// <summary>
     ///     The capture callback alone without an observer, else capture first and then the observer, which also sees lines past the cap.
-    ///     Both keep a cut or partial line as it came.
+    ///     The capture keeps a cut or partial line as it came; the observer gets <see cref="SandboxStderrTail.WithheldLine" /> instead.
     /// </summary>
     private static Action<string?, bool> Observed(Action<string?> capture, GuardedSandboxOutputObserver? observer, SandboxOutputSource source)
     {
@@ -842,12 +842,13 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             return (line, _) => capture(line);
         }
 
-        return (line, _) =>
+        return (line, complete) =>
         {
             capture(line);
             if (line is not null)
             {
-                observer.OnLine(source, line);
+                // A cut value no longer matches its redaction, so the live view gets the marker the stderr tail keeps.
+                observer.OnLine(source, complete ? line : SandboxStderrTail.WithheldLine);
             }
         };
     }

@@ -274,6 +274,39 @@ public sealed class WindowsJobSandboxWindowsTests
     }
 
     [Test]
+    public async Task AMissingProgram_NeverResolvesToALongerNameBuiltFromItsArguments()
+    {
+        // Unquoted, "nosuchtool arg /c exit 9" lets CreateProcessW, finding no nosuchtool.exe, run "nosuchtool arg.exe" instead.
+        var directory = Directory.CreateTempSubdirectory("xe-argv0-");
+        try
+        {
+            File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), Path.Combine(directory.FullName, "nosuchtool arg.exe"));
+            using var provider = Provider();
+            var handle = await provider.CreateOrAttachAsync(Request(new SandboxResourceLimits { MemoryMb = 2048 }));
+            try
+            {
+                var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
+                {
+                    ExecutionId = "windows-job-argv0",
+                    Executable = Path.Combine(directory.FullName, "nosuchtool"),
+                    Arguments = ["arg", "/d", "/c", "exit", "9"],
+                    Timeout = TimeSpan.FromSeconds(60)
+                });
+
+                AssertEx.False(result is { Completed: true, ExitCode: 9 }, "the launch ran 'nosuchtool arg.exe', a program named by an argument");
+            }
+            finally
+            {
+                await provider.KillAsync(handle);
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Test]
     public async Task AFailedMembershipCheck_LeavesNoProcess()
     {
         // The child really lands outside the command's job, in a decoy job with no kill-on-close, so only a process-level terminate

@@ -7,9 +7,9 @@ using System.Text;
 ///     the same argv. MXC takes a command LINE, not an argv; the quoting is ours.
 /// </summary>
 /// <remarks>
-///     argv[0] follows the program-name rule: backslashes are literal and a quote cannot be escaped, so a program path containing
-///     <c>"</c> is rejected. Every later argument follows the regular rule: wrap in quotes when empty or when it contains space, tab or
-///     <c>"</c>; inside quotes a run of backslashes is doubled when it precedes a quote (embedded or closing), and each quote is
+///     argv[0] follows the program-name rule: it is always quoted, backslashes are literal and a quote cannot be escaped, so a program
+///     path containing <c>"</c> is rejected. Every later argument follows the regular rule: wrap in quotes when empty or when it
+///     contains space, tab or <c>"</c>; inside quotes a run of backslashes is doubled when it precedes a quote (embedded or closing), and each quote is
 ///     escaped with a backslash. This is the algorithm .NET's own <c>ProcessStartInfo.ArgumentList</c> uses.
 /// </remarks>
 public static class WindowsCommandLine
@@ -23,15 +23,8 @@ public static class WindowsCommandLine
             throw new ArgumentException("A Windows program path cannot contain a quote or a NUL character.", nameof(executable));
         }
 
-        var builder = new StringBuilder();
-        if (executable.Contains(' ', StringComparison.Ordinal) || executable.Contains('\t', StringComparison.Ordinal))
-        {
-            builder.Append('"').Append(executable).Append('"');
-        }
-        else
-        {
-            builder.Append(executable);
-        }
+        // Always quoted: an unquoted name lets CreateProcessW, finding no such program, try "name arg1.exe" and so on.
+        var builder = new StringBuilder().Append('"').Append(executable).Append('"');
 
         foreach (var argument in arguments)
         {

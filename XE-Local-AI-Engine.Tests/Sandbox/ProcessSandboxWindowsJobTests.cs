@@ -70,6 +70,23 @@ public sealed class ProcessSandboxWindowsJobTests
     }
 
     [Test]
+    public async Task ACutLine_ReachesTheCapture_ButTheLiveObserverGetsItWithheld()
+    {
+        // A cut value no longer matches its redaction, so the live view must not show the fragment that the capture keeps.
+        var api = new FakeWindowsJobApi { StandardOutputText = new string('x', MxcChildProcess.MaxPendingLineChars + 16) + "\nnext\n" };
+        var observer = new RecordingSandboxOutputObserver();
+        using var provider = Provider(api);
+        var handle = await provider.CreateOrAttachAsync(Request());
+
+        var result = await provider.ExecuteAsync(handle, Command("cut-observed", "tool.exe") with { OutputObserver = observer });
+
+        AssertEx.True(result.Completed, result.StandardError);
+        AssertEx.Equal($"{SandboxStderrTail.WithheldLine}|next", string.Join('|', observer.StandardOutput), "the cut line is withheld from the live view, the complete one is not");
+        AssertEx.True(result.StandardOutput.StartsWith(new string('x', 64), StringComparison.Ordinal), "the capture keeps the cut line's text");
+        await provider.KillAsync(handle);
+    }
+
+    [Test]
     public async Task StandardInput_ReachesTheJobChild_AsUtf8()
     {
         var api = new FakeWindowsJobApi();

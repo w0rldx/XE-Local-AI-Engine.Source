@@ -24,7 +24,7 @@ public sealed class WindowsCommandLineTests
     [Arguments(@"a\\""b", "\"a\\\\\\\\\\\"b\"")]
     public async Task Join_QuotesEachArgument_ByCommandLineToArgvWRules(string argument, string expected)
     {
-        AssertEx.Equal("prog.exe " + expected, WindowsCommandLine.Join("prog.exe", [argument]));
+        AssertEx.Equal("\"prog.exe\" " + expected, WindowsCommandLine.Join("prog.exe", [argument]));
         await Task.CompletedTask;
     }
 

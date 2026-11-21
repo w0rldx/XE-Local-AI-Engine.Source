@@ -101,7 +101,7 @@ public sealed class MxcPolicyMapperTests
     {
         var request = MxcPolicyMapper.Build(Request());
 
-        AssertEx.Equal(@"C:\py\python.exe -c ""print('hi there')""", request.Command);
+        AssertEx.Equal(@"""C:\py\python.exe"" -c ""print('hi there')""", request.Command);
         AssertEx.Equal(@"C:\data\jails\j1\work", request.WorkingDirectory);
         AssertEx.Equal<uint?>(30_000u, request.TimeoutMs);
         await Task.CompletedTask;

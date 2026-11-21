@@ -38,7 +38,7 @@ public sealed class ProcessSandboxMxcExecutionTests
         AssertEx.Equal(7, result.ExitCode);
         AssertEx.Equal("hello\nworld\n", result.StandardOutput);
         await runtime.Received(1).SpawnAsync(Arg.Is<ContainerRequest>(request =>
-                request.Command == "python.exe -c print(1)"
+                request.Command == "\"python.exe\" -c print(1)"
                 && request.Containment is Containment.ProcessContainer
                 && request.Filesystem!.ReadwritePaths.Single() == handle.WorkingRoot
                 && request.Environment!["USERPROFILE"] == handle.IsolatedPaths!.Home),
