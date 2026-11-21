@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
@@ -148,38 +147,6 @@ public sealed class ProcessSandboxWindowsJobTests
         }
     }
 
-    /// <summary>A host whose probe failed advertises no ceilings: under <c>low</c> a plain command runs on the plain path, never the job launcher.</summary>
-    [Test]
-    public async Task AFailedProbe_UnderLow_RunsThePlainProcessPath()
-    {
-        var api = new FakeWindowsJobApi();
-        using var provider = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()),
-            TimeProvider.System,
-            logger: null,
-            new SandboxLauncher(new FixedProbe(SandboxContainment.None)),
-            new CountingMarkerStore(),
-            windowsJobLauncher: new WindowsJobLauncher(api));
-        var ceilings = SandboxResourceCeilings.Resolve(SandboxWorkloads.AgentHome, provider.Capabilities, new ComputeOptions(), new LocalContainerOptions());
-        AssertEx.Null(ceilings, "without the probe's flag no ceiling is asked for");
-        AssertEx.False(SandboxSecurityProfilePolicy.Refuses(SandboxWorkloads.AgentHome, provider.Capabilities, SandboxSecurityProfile.Low, configRequiresEgressDenial: false));
-        var handle = await provider.CreateOrAttachAsync(Request() with { ResourceLimits = ceilings });
-        var marker = Path.Combine(Path.GetTempPath(), "xe-job-plain-" + Guid.NewGuid().ToString("N"));
-        try
-        {
-            var result = await provider.ExecuteAsync(handle, WritesMarker("plain", marker));
-
-            AssertEx.True(result.Completed, result.StandardError);
-            AssertEx.Equal(0, result.ExitCode, result.StandardError);
-            AssertEx.True(File.Exists(marker), "the plain command ran");
-            AssertEx.Empty(api.Calls);
-        }
-        finally
-        {
-            File.Delete(marker);
-            await provider.KillAsync(handle);
-        }
-    }
-
     [Test]
     public async Task AChildOutsideItsJob_IsNeverResumed_AndTheCommandIsRefused()
     {
@@ -284,7 +251,7 @@ public sealed class ProcessSandboxWindowsJobTests
             markers ?? new CountingMarkerStore(),
             windowsJobLauncher: new WindowsJobLauncher(api));
 
-    private static SandboxCreateRequest Request() =>
+    internal static SandboxCreateRequest Request() =>
         new()
         {
             AttachKey = new SandboxAttachKey
@@ -309,12 +276,12 @@ public sealed class ProcessSandboxWindowsJobTests
             Timeout = TimeSpan.FromSeconds(30)
         };
 
-    private static SandboxCommandRequest WritesMarker(string id, string marker) =>
+    internal static SandboxCommandRequest WritesMarker(string id, string marker) =>
         OperatingSystem.IsWindows()
             ? Command(id, "cmd.exe", "/d", "/c", $"echo x>{marker}")
             : Command(id, "sh", "-c", $"echo x > '{marker}'");
 
-    private sealed class FixedProbe : ISandboxContainmentProbe
+    internal sealed class FixedProbe : ISandboxContainmentProbe
     {
         public FixedProbe(SandboxContainment containment)
         {
@@ -324,7 +291,7 @@ public sealed class ProcessSandboxWindowsJobTests
         public SandboxContainment Containment { get; }
     }
 
-    private sealed class CountingMarkerStore : ISandboxMarkerStore
+    internal sealed class CountingMarkerStore : ISandboxMarkerStore
     {
         private readonly Dictionary<string, SandboxProcessMarker> _live = [];
 

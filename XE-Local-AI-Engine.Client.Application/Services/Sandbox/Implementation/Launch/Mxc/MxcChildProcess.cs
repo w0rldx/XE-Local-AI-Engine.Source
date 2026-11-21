@@ -226,8 +226,8 @@ public sealed class MxcChildProcess : IDisposable
     /// <remarks>
     ///     A line is held at most <see cref="MaxPendingLineChars" />: past it the line is delivered cut and the rest up to its newline is
     ///     read and discarded, so a command printing without newlines cannot grow the engine. A final unterminated line is delivered at
-    ///     end of stream, and also when the read stops early (closed, cancelled or failed), which always counts as incomplete. Each line
-    ///     goes to <paramref name="onLine" /> with whether it is complete: a cut or partial one may end inside a value redacted whole.
+    ///     end of stream and when the read stops early; only the early stop makes the result incomplete. Each line goes to
+    ///     <paramref name="onLine" /> with whether it is complete: a cut or unterminated one may end inside a value redacted whole.
     /// </remarks>
     internal static async Task<bool> PumpLinesAsync(Stream stream, Action<string, bool> onLine, CancellationToken cancellationToken)
     {
@@ -328,7 +328,8 @@ public sealed class MxcChildProcess : IDisposable
 
         if (line.Length > 0)
         {
-            onLine(line.ToString(), ended);
+            // Unterminated even at a clean end of stream: a writer killed mid-line (a job stopped by force) also reads as end of stream.
+            onLine(line.ToString(), false);
         }
 
         return incomplete;

@@ -280,11 +280,22 @@ public sealed class WindowsJobSandboxWindowsTests
         var directory = Directory.CreateTempSubdirectory("xe-argv0-");
         try
         {
-            File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), Path.Combine(directory.FullName, "nosuchtool arg.exe"));
+            var decoy = Path.Combine(directory.FullName, "nosuchtool arg.exe");
+            File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), decoy);
             using var provider = Provider();
             var handle = await provider.CreateOrAttachAsync(Request(new SandboxResourceLimits { MemoryMb = 2048 }));
             try
             {
+                // The control: the decoy itself runs on this host when named in full.
+                var control = await provider.ExecuteAsync(handle, new SandboxCommandRequest
+                {
+                    ExecutionId = "windows-job-argv0-control",
+                    Executable = decoy,
+                    Arguments = ["/d", "/c", "exit", "9"],
+                    Timeout = TimeSpan.FromSeconds(60)
+                });
+                AssertEx.Equal(9, control.ExitCode, control.StandardError);
+
                 var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
                 {
                     ExecutionId = "windows-job-argv0",
@@ -293,7 +304,7 @@ public sealed class WindowsJobSandboxWindowsTests
                     Timeout = TimeSpan.FromSeconds(60)
                 });
 
-                AssertEx.False(result is { Completed: true, ExitCode: 9 }, "the launch ran 'nosuchtool arg.exe', a program named by an argument");
+                AssertEx.True(result.LaunchFailed, $"the missing program must fail to launch, not run 'nosuchtool arg.exe' (exit {result.ExitCode}, completed {result.Completed})");
             }
             finally
             {

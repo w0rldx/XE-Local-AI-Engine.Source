@@ -181,7 +181,7 @@ public sealed class MxcChildProcessTests
         }, CancellationToken.None);
 
         AssertEx.Equal("a|b|c||d", string.Join('|', lines));
-        AssertEx.True(complete.All(static whole => whole), "a final line ended by end of stream is complete");
+        AssertEx.Equal("True|True|True|True|False", string.Join('|', complete), "terminated lines are complete; the final unterminated one is not, since a killed writer also reads as end of stream");
         AssertEx.False(incomplete, "every line reached its terminator or end of stream");
     }
 
@@ -189,7 +189,7 @@ public sealed class MxcChildProcessTests
     public async Task PumpLinesAsync_CutsALineWithoutNewlines_AtTheCaptureBudget_AndKeepsDraining()
     {
         // Twice the budget without a newline, then one more line: the pump holds at most the budget and still reads to the end.
-        var text = new string('x', 2 * MxcChildProcess.MaxPendingLineChars) + "\nnext";
+        var text = new string('x', 2 * MxcChildProcess.MaxPendingLineChars) + "\nnext\n";
         var lines = new List<string>();
         var complete = new List<bool>();
 
