@@ -135,9 +135,9 @@ public sealed class WindowsJobSandboxWindowsTests
     /// <summary>One core's worth under a two-processor affinity: the rate is against the WHOLE system, not the processors a member may use.</summary>
     /// <remarks>
     ///     <c>start /affinity 3</c> pins powershell from creation, so this test host never runs under a changed affinity (ADR 0025, CPU
-    ///     rule). The same spinners in a job without a CPU rate must first use more than 1.5 cores, or the runner cannot show the cap. The
-    ///     denominator is read in this unrestricted host, where the system and affinity counts agree, so this test cannot catch
-    ///     <c>WindowsJobApi.GetSystemProcessorCount</c> turning affinity-relative.
+    ///     rule). The same spinners without a CPU rate must first use over 1.5 cores in one of three windows, or the runner cannot show
+    ///     the cap. The denominator is read in this unrestricted host, where the system and affinity counts agree, so this test cannot
+    ///     catch <c>WindowsJobApi.GetSystemProcessorCount</c> turning affinity-relative.
     /// </remarks>
     [Test]
     public async Task TheCpuCeiling_HoldsOneCore_UnderRestrictedAffinity()
@@ -145,7 +145,8 @@ public sealed class WindowsJobSandboxWindowsTests
         var system = new WindowsJobLauncher().SystemProcessorCount;
         AssertEx.True(system >= 2, $"this test needs at least two logical processors; the host has {system}");
 
-        var uncapped = await SpinnerCoresAsync(WindowsJobLimits.Map(4096, 64, null, system));
+        // A contended runner can starve one window, so the control gets up to three; the capped run below is held to its one window.
+        var uncapped = await SpinnerCoresAsync(WindowsJobLimits.Map(4096, 64, null, system), maxWindows: 3, enough: 1.5);
         AssertEx.True(uncapped > 1.5, $"without a CPU rate the spinners used only {uncapped:F2} cores, so this runner cannot show a one-core ceiling: a test-environment failure, not a pass");
 
         var cores = await SpinnerCoresAsync(WindowsJobLimits.Map(4096, 64, 1, system));
@@ -1030,8 +1031,9 @@ public sealed class WindowsJobSandboxWindowsTests
             Timeout = TimeSpan.FromSeconds(60)
         };
 
-    // Two powershell spinners pinned to processors 0 and 1 in a job with these limits: the cores the job uses over a 4 s window.
-    private static async Task<double> SpinnerCoresAsync(WindowsJobLimits limits)
+    // Two powershell spinners pinned to processors 0 and 1 in a job with these limits: the cores the job uses over up to maxWindows 4 s
+    // windows, the first above enough, else the highest.
+    private static async Task<double> SpinnerCoresAsync(WindowsJobLimits limits, int maxWindows = 1, double enough = double.PositiveInfinity)
     {
         const string spinners = "1..2 | ForEach-Object { [powershell]::Create().AddScript('[Console]::Out.WriteLine(''spinning''); [Console]::Out.Flush(); while ($true) {}').BeginInvoke() } | Out-Null; Start-Sleep 60";
         using var process = Launch($"cmd /d /c start \"\" /b /wait /affinity 3 powershell -NoProfile -NonInteractive -Command \"{spinners}\"", limits);
@@ -1046,11 +1048,17 @@ public sealed class WindowsJobSandboxWindowsTests
                 AssertEx.Equal("spinning", await reader.ReadLineAsync(announced.Token));
             }
 
-            // real-timer: a CPU measurement window, not a wait for an event; the job's CPU time is read at both ends of it.
-            var before = JobCpuTime(process.Job);
-            var clock = Stopwatch.StartNew();
-            await Task.Delay(TimeSpan.FromSeconds(4));
-            return (JobCpuTime(process.Job) - before).TotalSeconds / clock.Elapsed.TotalSeconds;
+            var best = 0.0;
+            for (var window = 0; window < maxWindows && best <= enough; window++)
+            {
+                // real-timer: a CPU measurement window, not a wait for an event; the job's CPU time is read at both ends of it.
+                var before = JobCpuTime(process.Job);
+                var clock = Stopwatch.StartNew();
+                await Task.Delay(TimeSpan.FromSeconds(4));
+                best = Math.Max(best, (JobCpuTime(process.Job) - before).TotalSeconds / clock.Elapsed.TotalSeconds);
+            }
+
+            return best;
         }
         finally
         {
