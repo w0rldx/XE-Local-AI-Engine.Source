@@ -87,7 +87,7 @@ this file holds only the traps those pages lack. Benchmarks, knowledge base, tra
 
 ### A polling UI reads `ILiveMemorySampler`, never a forced hardware-profile refresh
 
-**Rule:** anything that polls memory for display reads `ILiveMemorySampler` (`GET model-fit/resources`), never `IHardwareProfiler.GetProfileAsync(forceRefresh: true)` or `model-fit/hardware-profile?refresh=true`. **Prevents:** a forced refresh per poll spawns a full probe each time and overwrites `HardwareProfiler`'s process-lifetime cache, the baseline model fit and profile invalidation read, with a transient reading. **Authority:** `LiveMemorySampler` (never touches the profiler cache, one shared probe per ~2 s window), `HardwareProfiler.GetProfileAsync`, `LiveMemorySamplerTests`; wiki 03 "Live memory sampler", 2026-09-29.
+**Rule:** anything that polls memory for display reads `ILiveMemorySampler` (`GET model-fit/resources`), never `IHardwareProfiler.GetProfileAsync(forceRefresh: true)` or `model-fit/hardware-profile?refresh=true`. **Prevents:** a forced refresh per poll spawns a full probe each time and overwrites `HardwareProfiler`'s process-lifetime cache, the baseline model fit and profile invalidation read, with a transient reading. **Authority:** `LiveMemorySampler` (never touches the profiler cache, one shared probe per 14 s window; before/after comparisons use `SampleFreshAsync`), `HardwareProfiler.GetProfileAsync`, `LiveMemorySamplerTests`; wiki 03 "Live memory sampler", 2026-09-29.
 
 ### llama.cpp "offloaded N/N layers to GPU" does not mean GPU-resident under expert offload
 
@@ -117,4 +117,8 @@ Superseded claims; the entries above are the active rules.
 | Advisor runs an llmfit container/HostAgent. | It uses in-process fit estimation and live HF discovery (§3). |
 | Recommendation is raw-size descending. | Explore ranking is capability-bucketed (§3). |
 | `ModelKind` has only Unknown/Chat/Embedding. | Reranker is a fourth kind and is checked first (§3). |
+| A free-VRAM drop below the freeze baseline marks a frozen profile Stale. | It returns `InferenceProfileValidity.UnderPressure`: that launch auto-fits and the profile stays Frozen; only build, launch-policy, hardware and placement drift demote it (`InferenceInvalidationEvaluator.EvaluateAsync`). |
+| A timed-out `nvidia-smi` probe reuses the whole cached hardware profile. | It keeps the cached GPU identity and total VRAM with fresh RAM/disk and null free VRAM, and is not cached (`HardwareProfiler.ProbeAsync`). |
+| A timed-out probe is only a missing free-VRAM figure downstream. | It carries `HardwareProfile.GpuProbeIndeterminate`: the evaluator returns UnderPressure for a GPU row instead of judging hardware drift, the resolver never caches a CPU allocation priced from it (`ProcessContextAllocation.IsTransient`), the device audit memoizes nothing on it, and chat admission refreshes once (`PooledRoleLaunchAdmission.AdmitChatAsync`). |
+| Chat admission can only shrink the window. | An explore chat admission may also change placement against live memory: expert offload before the ladder, a live-share Hybrid with `--fit-target` after it on Windows/WSL2, never cached (`ProcessContextAllocationResolver.TryPlaceWithinLiveBudget`). |
 | An installed GGUF's kind comes from its name alone. | A header `<arch>.decision.type` classifies `Decision` first, ahead of the draft marker, every name rule and the Chat default (`LocalGgufModelKindClassifier.Classify(name, decisionType)`); names still decide the rest. |

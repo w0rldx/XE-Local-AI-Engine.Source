@@ -8,13 +8,20 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
 public sealed class ProcessContextAllocationResolverTests
 {
     private const long Gb = 1024L * 1024 * 1024;
+    private const long Mib = 1024L * 1024;
+
+    // What --cpu-moe installs and llama-fit-params echoes back, and a fitted single-layer expert pin.
+    private const string AllExpertsOverride = @"\.ffn_(up|down|gate|gate_up)_(ch|)exps=CPU";
+    private const string PartialExpertsOverride = @"blk\.14\.ffn_(up|down|gate)_(ch|)exps=CPU";
     private const string Model = "repo/model:Q4_K_M";
 
     // What the process VRAM probe returned on the measured RTX 5090 host, and that host's RAM.
@@ -547,6 +554,127 @@ public sealed class ProcessContextAllocationResolverTests
 
         AssertEx.NotNull(allocation);
         AssertEx.Equal(2, calls);
+    }
+
+    [Test]
+    public async Task Resolve_IndeterminateProfile_CpuAllocationForCudaKey_IsNotCached()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb, audit: TimedOutThenReadAudit());
+
+        var transient = await ResolveChatAsync(resolver);
+        var real = await ResolveChatAsync(resolver);
+
+        AssertEx.Equal(ProcessPlacementMode.Cpu, transient.Placement);
+        AssertEx.True(transient.IsTransient, "a CPU answer for a CUDA key priced from a timed-out probe is transient.");
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, real.Placement, "the next resolve must price the real reading, not the cached timeout.");
+        AssertEx.False(real.IsTransient);
+    }
+
+    [Test]
+    public async Task Resolve_IndeterminateProfile_SoleWaiterCancelled_NextCallerRecomputes()
+    {
+        // No RunContinuationsAsynchronously: the released computation runs to its end inside SetResult, so the next call sees its eviction.
+        var timedOutRead = new TaskCompletionSource<HardwareProfile>();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        var audit = Substitute.For<IRuntimeDeviceAudit>();
+        audit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+             .Returns(_ =>
+             {
+                 if (Interlocked.Increment(ref calls) > 1)
+                 {
+                     return Task.FromResult(Profile(64 * Gb, 32 * Gb, vramKnown: true));
+                 }
+
+                 entered.SetResult();
+                 return timedOutRead.Task;
+             });
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb, audit: audit);
+        using var cts = new CancellationTokenSource();
+
+        // Started on the pool, so the computation's continuation has no captured context to post to.
+        var waiter = Task.Run(() => resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Cuda, ResolvedLaunchArguments.Explore(), cts.Token));
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await cts.CancelAsync();
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => waiter);
+        await Task.Run(() => timedOutRead.SetResult(IndeterminateProfile()));
+
+        var next = await ResolveChatAsync(resolver);
+
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, next.Placement, "the cancelled waiter's computation must not leave its CPU answer cached.");
+        AssertEx.Equal(2, calls);
+    }
+
+    [Test]
+    public async Task Resolve_IndeterminateProfile_OomOnTransientAfterADeterminateResolve_CommitsNoCap()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb, audit: TimedOutThenReadAudit());
+        var transient = await ResolveChatAsync(resolver);
+        var real = await ResolveChatAsync(resolver);
+
+        // The determinate resolve stored the key's context, so only the allocation's own provenance can keep this launch from committing a cap.
+        AssertEx.False(resolver.TryDownTierAfterOutOfMemory(transient, out var retry), "a transient launch is not retried smaller.");
+        AssertEx.Equal(transient, retry);
+        AssertEx.Equal(real, await ResolveChatAsync(resolver), "no out-of-memory cap may stick from the transient launch.");
+        AssertEx.True(resolver.TryGetEffectiveCommittedAllocation(real, out var effective));
+        AssertEx.Equal(real, effective);
+    }
+
+    [Test]
+    public async Task Resolve_IndeterminateProfile_TransientAllocation_AdmissionDownTierAndLiveBudget_ReturnFalse()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true),
+            processBudget: 30 * Gb,
+            facts: SeventyBillionParameterFacts(),
+            audit: TimedOutThenReadAudit(),
+            liveShareHybrid: true);
+        var transient = await ResolveChatAsync(resolver);
+        _ = await ResolveChatAsync(resolver);
+
+        AssertEx.False(resolver.TryDownTierForAdmission(transient, out _), "an admission down-tier must not re-price a transient allocation.");
+        AssertEx.False(resolver.TryPlaceWithinLiveBudget(transient, Live(20 * Gb), PlacementStage.AfterLadder, out _),
+            "a live placement must not re-price a transient allocation.");
+        AssertEx.True(resolver.TryCommitAdmissionAllocation(transient, out var committed));
+        AssertEx.Equal(transient, committed, "a commit passes a transient allocation through.");
+    }
+
+    [Test]
+    public async Task Resolve_DeterminateVramUnknownVulkan_IsCached()
+    {
+        // An AMD or Intel host answers with unknown VRAM by design: that is a reading, so its CPU allocation stays cached.
+        var vulkan = Profile(64 * Gb, 32 * Gb, vramKnown: false) with
+        {
+            VramBytes = null,
+            GpuVendor = GpuVendor.Amd
+        };
+        var audit = Substitute.For<IRuntimeDeviceAudit>();
+        audit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(vulkan));
+        var resolver = BuildResolver(vulkan, audit: audit);
+
+        var first = AssertEx.NotNull(await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Vulkan, ResolvedLaunchArguments.Explore(), CancellationToken.None));
+        var second = AssertEx.NotNull(await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Vulkan, ResolvedLaunchArguments.Explore(), CancellationToken.None));
+
+        AssertEx.Equal(ProcessPlacementMode.Cpu, first.Placement);
+        AssertEx.False(first.IsTransient);
+        AssertEx.Equal(first, second);
+        await audit.Received(1).GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    // The no-cache timeout shape on WSL2: no DRM vendor node, so the vendor is None and VRAM unknown.
+    private static HardwareProfile IndeterminateProfile() =>
+        Profile(64 * Gb, 32 * Gb, vramKnown: false) with
+        {
+            VramBytes = null,
+            GpuVendor = GpuVendor.None,
+            GpuProbeIndeterminate = true
+        };
+
+    private static IRuntimeDeviceAudit TimedOutThenReadAudit()
+    {
+        var audit = Substitute.For<IRuntimeDeviceAudit>();
+        audit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult(IndeterminateProfile()), Task.FromResult(Profile(64 * Gb, 32 * Gb, vramKnown: true)));
+        return audit;
     }
 
     [Test]
@@ -1120,6 +1248,228 @@ public sealed class ProcessContextAllocationResolverTests
             $"{model} books {allocation.Footprint.GpuBytes / (1024 * 1024)} MiB, below the {measuredMib} MiB measured.");
     }
 
+    [Test]
+    public async Task TryPlaceWithinLiveBudget_NeverCaches()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true),
+            processBudget: 30 * Gb,
+            facts: SeventyBillionParameterFacts(),
+            liveShareHybrid: true);
+        var stable = await ResolveChatAsync(resolver);
+
+        AssertEx.True(resolver.TryPlaceWithinLiveBudget(stable, Live(20 * Gb), PlacementStage.AfterLadder, out var placed));
+        AssertEx.True(resolver.TryCommitAdmissionAllocation(placed, out var committed));
+
+        AssertEx.Equal(placed, committed);
+        AssertEx.True(placed.Footprint.GpuBytes < stable.Footprint.GpuBytes, "the live share books less GPU than the stable budget.");
+        AssertEx.Equal(stable, await ResolveChatAsync(resolver));
+        AssertEx.True(resolver.TryGetEffectiveCommittedAllocation(stable, out var effective));
+        AssertEx.Equal(stable, effective);
+    }
+
+    [Test]
+    public async Task TryPlaceWithinLiveBudget_FrozenNonChatOrTinyShare_ReturnsFalse()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true),
+            processBudget: 30 * Gb,
+            facts: SeventyBillionParameterFacts(),
+            liveShareHybrid: true);
+        var frozen = AssertEx.NotNull(await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Cuda, ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 40),
+            CancellationToken.None));
+        var embedding = AssertEx.NotNull(await resolver.ResolveAsync(Model, ModelRole.Embedding, GpuVariant.Cuda, ResolvedLaunchArguments.Explore(), CancellationToken.None));
+        var chat = await ResolveChatAsync(resolver);
+
+        AssertEx.False(resolver.TryPlaceWithinLiveBudget(frozen, Live(20 * Gb), PlacementStage.AfterLadder, out _));
+        AssertEx.False(resolver.TryPlaceWithinLiveBudget(embedding, Live(20 * Gb), PlacementStage.AfterLadder, out _));
+
+        // 1 GiB free leaves a share at the minimum reserve, which is no share at all.
+        AssertEx.False(resolver.TryPlaceWithinLiveBudget(chat, Live(Gb), PlacementStage.AfterLadder, out var unchanged));
+        AssertEx.Equal(chat, unchanged);
+
+        // A dense model has no experts to offload, so the stage before the ladder never applies.
+        AssertEx.False(resolver.TryPlaceWithinLiveBudget(chat, Live(20 * Gb), PlacementStage.BeforeLadder, out _));
+    }
+
+    [Test]
+    public async Task OomDownTier_OfAnAdmittedExpertOffload_KeepsCpuMoe()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb, facts: Qwen36MoeFacts());
+        var stable = await ResolveChatAsync(resolver);
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, stable.Placement);
+        AssertEx.True(resolver.TryPlaceWithinLiveBudget(stable, Live(12 * Gb), PlacementStage.BeforeLadder, out var admitted));
+        AssertEx.Equal(ProcessPlacementMode.ExpertOffload, admitted.Placement);
+
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(admitted, out var retry));
+
+        AssertEx.Equal(ProcessPlacementMode.ExpertOffload, retry.Placement);
+        AssertEx.True(LlamaServerAdmittedBooking.Fits(retry, admitted), "the retry never books more than the failed launch.");
+        var plan = await ExplorePolicy().ResolveAsync(ModelRole.Chat, GpuVariant.Cuda, ResolvedLaunchArguments.Explore(), retry, CancellationToken.None);
+        AssertEx.True(plan.CpuMoe, "the retry keeps the experts in system RAM, as the admission booked.");
+    }
+
+    [Test]
+    public async Task OomDownTier_StoresTheStableCap_ReturnsTheRebuiltPlacement()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb, facts: Qwen36MoeFacts());
+        var stable = await ResolveChatAsync(resolver);
+        AssertEx.True(resolver.TryPlaceWithinLiveBudget(stable, Live(12 * Gb), PlacementStage.BeforeLadder, out var admitted));
+
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(admitted, out var retry));
+
+        // What sticks is the window/slot cap at the stable budget: a pressure-time placement never outlives its admission.
+        var cap = await ResolveChatAsync(resolver);
+        AssertEx.Equal(retry.ProcessContextTokens, cap.ProcessContextTokens);
+        AssertEx.Equal(retry.ChatSlots, cap.ChatSlots);
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, cap.Placement);
+        AssertEx.Equal(32 * Gb, cap.GpuPlacementBudgetBytes);
+        AssertEx.Equal(ProcessPlacementMode.ExpertOffload, retry.Placement);
+        AssertEx.Equal(12 * Gb, retry.GpuPlacementBudgetBytes);
+    }
+
+    [Test]
+    public async Task AdmittedExpertOffload_WithAnOomAdjustedEqualWindow_EmitsCpuMoe()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb, facts: Qwen36MoeFacts());
+        var stable = await ResolveChatAsync(resolver);
+
+        // An earlier resident launch hit an OOM: its slot drop sticks at the stable window.
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(stable, out var slotDrop));
+        AssertEx.True(resolver.TryPlaceWithinLiveBudget(stable, Live(12 * Gb), PlacementStage.BeforeLadder, out var placed));
+        AssertEx.True(resolver.TryCommitAdmissionAllocation(placed, out var admitted));
+        AssertEx.Equal(slotDrop.ProcessContextTokens, admitted.ProcessContextTokens);
+        AssertEx.Equal(slotDrop.ChatSlots, admitted.ChatSlots);
+
+        AssertEx.True(resolver.TryGetEffectiveCommittedAllocation(admitted, out var effective));
+
+        AssertEx.Equal(admitted, effective);
+        var plan = await ExplorePolicy().ResolveAsync(ModelRole.Chat, GpuVariant.Cuda, ResolvedLaunchArguments.Explore(), effective, CancellationToken.None);
+        AssertEx.True(plan.CpuMoe, "an equal out-of-memory window must not replace the admitted expert offload with a resident placement.");
+    }
+
+    [Test]
+    public async Task Resolve_FrozenAllExpertOverride_IsPricedAsOffload()
+    {
+        // A profile frozen from a --cpu-moe explore: the 35B-A3B fits resident at the stable budget, so today's booking ignored the -ot.
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb, facts: Qwen36MoeFacts());
+        var today = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 16384, nGpuLayers: -2));
+
+        var offload = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 16384, nGpuLayers: -2, overrideTensor: AllExpertsOverride));
+
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, today.Placement);
+        AssertEx.Equal(ProcessPlacementMode.ExpertOffload, offload.Placement);
+        AssertEx.True(offload.Footprint.GpuBytes is > 0 && offload.Footprint.GpuBytes < today.Footprint.GpuBytes,
+            $"the experts leave the GPU: {offload.Footprint.GpuBytes / Mib} MiB against {today.Footprint.GpuBytes / Mib} MiB resident.");
+        AssertEx.True(offload.Footprint.RamBytes >= Qwen36MoeFacts().FileSizeBytes, "the memory-mapped file backs the experts in system RAM.");
+    }
+
+    [Test]
+    public async Task Resolve_FrozenPartialExpertOverride_NeverBelowTodayOnEitherAxis()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb, facts: Qwen36MoeFacts());
+        var today = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 16384, nGpuLayers: -2));
+
+        var partial = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 16384, nGpuLayers: -2, overrideTensor: PartialExpertsOverride));
+
+        AssertEx.Equal(today.Footprint.GpuBytes, partial.Footprint.GpuBytes);
+        AssertEx.True(partial.Footprint.RamBytes > today.Footprint.RamBytes && partial.Footprint.RamBytes < Qwen36MoeFacts().FileSizeBytes,
+            $"the pinned experts are booked in RAM, got {partial.Footprint.RamBytes / Mib} MiB.");
+    }
+
+    [Test]
+    public async Task Resolve_FrozenPartialExpertOverride_OverAnExpertOffloadBooking_BooksTheStableHybridShare()
+    {
+        // At a 12 GiB budget the 35B-A3B books expert offload; a replay pinning only block 14 emits no --cpu-moe, so every
+        // other block's experts load on the GPU.
+        var resolver = BuildResolver(Profile(64 * Gb, 12 * Gb, vramKnown: true), processBudget: 12 * Gb, facts: Qwen36MoeFacts());
+        var today = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 16384, nGpuLayers: -2));
+
+        var partial = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 16384, nGpuLayers: -2, overrideTensor: PartialExpertsOverride));
+
+        AssertEx.Equal(ProcessPlacementMode.ExpertOffload, today.Placement);
+        AssertEx.Equal(ProcessPlacementMode.Hybrid, partial.Placement);
+        AssertEx.True(partial.Footprint.GpuBytes >= UsableGpuBudget(12 * Gb) && partial.Footprint.GpuBytes > today.Footprint.GpuBytes,
+            $"the unpinned experts take the stable Hybrid share, got {partial.Footprint.GpuBytes / Mib} MiB against {today.Footprint.GpuBytes / Mib} MiB offloaded.");
+        AssertEx.True(partial.Footprint.RamBytes >= today.Footprint.RamBytes,
+            $"RAM never drops below the expert-offload booking's expert bytes, got {partial.Footprint.RamBytes / Mib} MiB.");
+    }
+
+    [Test]
+    [Arguments(32)]
+    [Arguments(20)]
+    [Arguments(0)]
+    public async Task Resolve_FrozenPartialOrZeroGpuLayers_RamCoversWeightsAndKv(int gpuLayers)
+    {
+        // 32 is the block count: full offload is block count + 1 (the output layer counts), so -ngl 32 leaves block 0 on the CPU.
+        // A dense 8B that fits resident: today's booking is its full estimate on the GPU and nothing in RAM.
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+        var today = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: -2));
+
+        var partial = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: gpuLayers));
+
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, today.Placement);
+        AssertEx.Equal(today.Footprint.GpuBytes, partial.Footprint.GpuBytes);
+        AssertEx.Equal(today.Footprint.GpuBytes, partial.Footprint.RamBytes);
+    }
+
+    [Test]
+    public async Task Resolve_FrozenAllExpertPlusPartialNgl_TreatedAsPartial()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb, facts: Qwen36MoeFacts());
+        var today = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 16384, nGpuLayers: -2));
+
+        var mixed = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 16384, nGpuLayers: 10, overrideTensor: AllExpertsOverride));
+
+        AssertEx.Equal(today.Placement, mixed.Placement);
+        AssertEx.Equal(today.Footprint.GpuBytes, mixed.Footprint.GpuBytes);
+        AssertEx.Equal(today.Footprint.GpuBytes, mixed.Footprint.RamBytes);
+    }
+
+    [Test]
+    public async Task Resolve_FrozenNullBlockCount_ExplicitNglIsPartial()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb, facts: Facts(blockCount: null));
+        var today = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: -2));
+
+        var explicitLayers = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 99));
+
+        AssertEx.Equal(today.Footprint.GpuBytes, explicitLayers.Footprint.GpuBytes);
+        AssertEx.Equal(today.Footprint.GpuBytes, explicitLayers.Footprint.RamBytes);
+    }
+
+    [Test]
+    [Arguments(-2)]
+    [Arguments(33)]
+    [Arguments(99)]
+    public async Task Resolve_FrozenWithoutOverride_IsUnchanged(int gpuLayers)
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+        var unset = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 8192));
+
+        var full = await ResolveReplayAsync(resolver, ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: gpuLayers));
+
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, full.Placement);
+        AssertEx.Equal(unset.Footprint, full.Footprint);
+        AssertEx.Equal(expected: 0L, full.Footprint.RamBytes);
+    }
+
+    private static async Task<ProcessContextAllocation> ResolveReplayAsync(ProcessContextAllocationResolver resolver, ResolvedLaunchArguments replay) =>
+        AssertEx.NotNull(await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Cuda, replay, CancellationToken.None));
+
+    private static async Task<ProcessContextAllocation> ResolveChatAsync(ProcessContextAllocationResolver resolver) =>
+        AssertEx.NotNull(await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Cuda, ResolvedLaunchArguments.Explore(), CancellationToken.None));
+
+    private static LiveBudget Live(long globalFree) =>
+        new()
+        {
+            GlobalFreeGpuBytes = globalFree,
+            ReservedGpuBytes = 0,
+            AvailableRamBytes = 60 * Gb,
+            ReservedRamBytes = 0
+        };
+
+    private static LlamaServerLaunchPolicy ExplorePolicy() =>
+        new(new LlamaServerLaunchPolicyOptions(), new FakeLaunchFallbackStore());
+
     private static GgufModelFootprintFacts PooledReceiptFacts(string model) =>
         model switch
         {
@@ -1146,7 +1496,8 @@ public sealed class ProcessContextAllocationResolverTests
         long? processBudget = null,
         GgufModelFootprintFacts? facts = null,
         LlamaServerLaunchPolicyOptions? options = null,
-        IRuntimeDeviceAudit? audit = null)
+        IRuntimeDeviceAudit? audit = null,
+        bool liveShareHybrid = false)
     {
         var store = Substitute.For<IGgufModelStore>();
         store.ResolveModelFootprintFactsAsync(Model, Arg.Any<CancellationToken>())
@@ -1167,7 +1518,8 @@ public sealed class ProcessContextAllocationResolverTests
             audit,
             probe,
             new MemoryFitEstimator(),
-            options ?? new LlamaServerLaunchPolicyOptions());
+            options ?? new LlamaServerLaunchPolicyOptions(),
+            liveShareHybrid);
     }
 
     private static GgufModelFootprintFacts Facts(string quant = "Q4_K_M",
@@ -1250,6 +1602,10 @@ public sealed class ProcessContextAllocationResolverTests
             ExpertCount = 256,
             ExpertUsedCount = 8
         };
+
+    private static long UsableGpuBudget(long total) =>
+        Math.Max(0, total - Math.Max(LlamaServerLaunchPolicyOptions.MinimumGpuReserveBytes,
+            (long)(total * new LlamaServerLaunchPolicyOptions().GpuReserveFraction)));
 
     private static long UsableRamBudget(long total) =>
         Math.Max(0, total - Math.Max(LlamaServerLaunchPolicyOptions.MinimumRamReserveBytes,

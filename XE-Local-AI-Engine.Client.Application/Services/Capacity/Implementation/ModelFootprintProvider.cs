@@ -95,6 +95,23 @@ public sealed class ModelFootprintProvider : IModelFootprintProvider
         return true;
     }
 
+    public bool TryPlaceWithinLiveBudget(ModelFootprint current, LiveBudget live, PlacementStage stage, out ModelFootprint placed)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        placed = current;
+        if (current.Admission is null
+            || !_allocationResolver.TryPlaceWithinLiveBudget(current.Admission.Allocation, live, stage, out var allocation))
+        {
+            return false;
+        }
+
+        placed = ModelFootprint.Known(current.Admission with
+        {
+            Allocation = allocation
+        });
+        return true;
+    }
+
     public bool TryCommitAdmissionFootprint(ModelFootprint candidate, out ModelFootprint committed)
     {
         ArgumentNullException.ThrowIfNull(candidate);

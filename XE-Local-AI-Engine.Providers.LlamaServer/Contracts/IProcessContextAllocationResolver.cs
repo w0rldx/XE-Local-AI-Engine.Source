@@ -54,4 +54,14 @@ public interface IProcessContextAllocationResolver
     /// override allocations are never changed. At most two lower tiers are issued for one cache identity.
     /// </summary>
     bool TryDownTierAfterOutOfMemory(ProcessContextAllocation current, out ProcessContextAllocation downTiered);
+
+    /// <summary>
+    ///     Re-places a hardware-tier chat allocation against <paramref name="live" /> memory for one admission at <paramref name="stage" />.
+    ///     The result is never cached; false when the stage does not apply or nothing fits.
+    /// </summary>
+    bool TryPlaceWithinLiveBudget(ProcessContextAllocation current, LiveBudget live, PlacementStage stage, out ProcessContextAllocation placed)
+    {
+        placed = current;
+        return false;
+    }
 }

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -343,6 +344,82 @@ public sealed class PooledRoleLaunchAdmissionTests
     }
 
     [Test]
+    public async Task AdmitChat_IndeterminateProfile_RefreshesOnce_AndDecides()
+    {
+        var reservation = new TrackingDisposable();
+        await using var host = Host.Create(TimedOutProfile(), Allow(reservation));
+        host.Audit.GetEffectiveProfileAsync(forceRefreshProfile: true, Arg.Any<CancellationToken>()).Returns(GpuProfile(free: 10 * Gb));
+
+        var returned = await host.Admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: true, new EvictionRecorder().EvictAsync, CancellationToken.None);
+
+        AssertEx.True(ReferenceEquals(reservation, returned), "a recovered reading must reach the decision.");
+        AssertEx.Equal(1, host.Created.Single().Requests.Count);
+        await host.Audit.Received(1).GetEffectiveProfileAsync(forceRefreshProfile: true, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AdmitChat_IndeterminateProfile_RefreshStillIndeterminate_ProceedsUnadmitted()
+    {
+        await using var host = Host.Create(TimedOutProfile(), Shortfall());
+
+        var returned = await host.Admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: true, new EvictionRecorder().EvictAsync, CancellationToken.None);
+
+        AssertEx.Null(returned);
+        AssertEx.Empty(host.Created);
+        await host.Audit.Received(1).GetEffectiveProfileAsync(forceRefreshProfile: true, Arg.Any<CancellationToken>());
+        AssertEx.True(host.Logger.AllText.Contains("no global free-VRAM reading after a refresh", StringComparison.Ordinal), host.Logger.AllText);
+    }
+
+    [Test]
+    public async Task AdmitChat_IndeterminateProfile_RecoveredThenDecisionReadingMissing_FollowsTheDecision()
+    {
+        // The decision takes its own reading under the ledger gate; whatever it decides on that reading stands, with no second refresh here.
+        await using var host = Host.Create(TimedOutProfile(), new CapacityDecision
+        {
+            Verdict = CapacityVerdict.QueueSameModel,
+            Reason = Reason
+        });
+        host.Audit.GetEffectiveProfileAsync(forceRefreshProfile: true, Arg.Any<CancellationToken>()).Returns(GpuProfile(free: 10 * Gb));
+
+        var returned = await host.Admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: true, new EvictionRecorder().EvictAsync, CancellationToken.None);
+
+        AssertEx.Null(returned);
+        AssertEx.Equal(1, host.Created.Single().Requests.Count);
+        await host.Audit.Received(1).GetEffectiveProfileAsync(forceRefreshProfile: true, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AdmitChat_IndeterminateProfile_RecoveredThenInsufficient_Refuses()
+    {
+        // No promise of no new refusals: a recovered reading can refuse a launch that would have gone unadmitted.
+        await using var host = Host.Create(TimedOutProfile(), Shortfall());
+        host.Audit.GetEffectiveProfileAsync(forceRefreshProfile: true, Arg.Any<CancellationToken>()).Returns(GpuProfile(free: 2 * Gb));
+
+        var exception = await AssertEx.ThrowsAsync<LlamaCapacityRefusedException>(() =>
+            host.Admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: false, new EvictionRecorder().EvictAsync, CancellationToken.None));
+
+        AssertEx.Equal(Reason, exception.Message);
+    }
+
+    [Test]
+    public async Task AdmitChat_CpuFallbackNvidia_NeverForceRefreshes()
+    {
+        // ApplyCpuFallback nulls free VRAM by design: that is a determinate answer, not a timed-out probe.
+        var fallback = GpuProfile(free: null) with
+        {
+            VramBytes = null,
+            VramKnown = false,
+            GpuAccelAvailable = false
+        };
+        await using var host = Host.Create(fallback, Shortfall());
+
+        var returned = await host.Admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: true, new EvictionRecorder().EvictAsync, CancellationToken.None);
+
+        AssertEx.Null(returned);
+        await host.Audit.DidNotReceive().GetEffectiveProfileAsync(forceRefreshProfile: true, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     [Arguments(true)]
     [Arguments(false)]
     public async Task GetProtectedChatModels_NamesTheKeepWarmModel_OnlyWhileKeepWarmIsOn(bool keepWarmOn)
@@ -378,6 +455,58 @@ public sealed class PooledRoleLaunchAdmissionTests
         return await admission.GetProtectedChatModelsAsync(CancellationToken.None);
     }
 
+    [Test]
+    public async Task AdmitChat_ProtectedResidentAndExternalHolder_PlacesOffloadInsteadOfRefusing()
+    {
+        // 12 GiB free: the keep-warm model is resident and another process holds VRAM, so nothing can be unloaded and the MoE fits resident at no window.
+        var capacity = new LiveBudgetCapacityHarness(new Dictionary<string, GgufModelFootprintFacts>(StringComparer.Ordinal)
+            {
+                [ChatModel] = Qwen36MoeFacts()
+            },
+            globalFree: 12 * Gb,
+            liveShareHybrid: false);
+        var settings = Substitute.For<INodeRuntimeSettings>();
+        settings.GetKeepModelWarmEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        settings.GetKeepModelWarmModelNameAsync(Arg.Any<CancellationToken>()).Returns("keep/warm-GGUF:Q4_K_M");
+        var services = new ServiceCollection();
+        services.AddScoped<ICapacityService>(_ => capacity.Service);
+        services.AddSingleton(capacity.Audit);
+        services.AddSingleton(settings);
+        await using var provider = services.BuildServiceProvider();
+        var admission = new PooledRoleLaunchAdmission(provider.GetRequiredService<IServiceScopeFactory>(), new SteppingTimeProvider(), NullLogger<PooledRoleLaunchAdmission>.Instance);
+        var evictions = new EvictionRecorder();
+
+        using var reservation = await admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: true, evictions.EvictAsync, CancellationToken.None);
+
+        AssertEx.NotNull(reservation);
+        AssertEx.Equal(1, evictions.Calls);
+        AssertEx.Equal("keep/warm-GGUF:Q4_K_M", evictions.Protected.Single().Single());
+        var booked = capacity.Ledger.Reserved;
+        AssertEx.True(booked.GpuBytes is > 0 and < 12 * Gb, $"expert offload books the non-expert share on the GPU, got {booked.GpuBytes / (1024 * 1024)} MiB.");
+        AssertEx.True(booked.RamBytes >= Qwen36MoeFacts().FileSizeBytes, "the experts are booked in system RAM.");
+    }
+
+    // The real unsloth Qwen3.6-35B-A3B UD-Q4_K_M header: no general.parameter_count (weights = file size), 40 blocks of which every 4th is attention.
+    private static GgufModelFootprintFacts Qwen36MoeFacts() =>
+        new()
+        {
+            Quant = "UD-Q4_K_M",
+            FileSizeBytes = 22_134_528_992,
+            ParamCount = null,
+            BlockCount = 40,
+            AttentionHeadCount = 16,
+            AttentionHeadCountKV = 2,
+            EmbeddingLength = 2048,
+            ContextLength = 262144,
+            AttentionKeyLength = 256,
+            AttentionValueLength = 256,
+            FullAttentionInterval = 4,
+            ContentIdentity = "sha256:qwen36-35b-a3b",
+            Architecture = "qwen35moe",
+            ExpertCount = 256,
+            ExpertUsedCount = 8
+        };
+
     private static CapacityDecision Allow(IDisposable reservation) =>
         new()
         {
@@ -406,6 +535,14 @@ public sealed class PooledRoleLaunchAdmissionTests
             GpuAccelAvailable = true,
             CpuCores = 16,
             FreeDiskBytes = 500 * Gb
+        };
+
+    // What a cold host reads when nvidia-smi times out with nothing cached: the CPU-safe default, marked indeterminate.
+    private static HardwareProfile TimedOutProfile() =>
+        CpuProfile() with
+        {
+            GpuVendor = GpuVendor.None,
+            GpuProbeIndeterminate = true
         };
 
     private static HardwareProfile CpuProfile() =>

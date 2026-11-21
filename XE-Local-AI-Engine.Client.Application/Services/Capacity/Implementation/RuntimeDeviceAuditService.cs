@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 /// <remarks>
 ///     The expensive <c>--list-devices</c> probe is cached in the probe per binary and the audit memoizes its computed state, so a warm
-///     inference path never pays for it. Only a DETERMINATE audit is memoized: an indeterminate probe (timeout or spawn failure) is returned
+///     inference path never pays for it. Only a DETERMINATE audit is memoized: an indeterminate device or GPU probe (timeout or spawn failure) is returned
 ///     uncached, so the next call re-probes instead of pinning "unknown" — and its phantom-VRAM trust — until restart or a forced refresh.
 ///     The device-fallback warning and counter fire once per state change, which is once per binary, never per call.
 /// </remarks>
@@ -83,8 +83,10 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
 
             if (forceRefresh)
             {
-                // A forced refresh follows a runtime change; a failure remembered against the old binary must not answer it.
+                // A forced refresh follows a runtime change; a failure remembered against the old binary must not answer it, and
+                // neither may the old memo when this pass comes back indeterminate.
                 _deviceProbe.ForgetFailedProbes();
+                _cached = null;
             }
 
             var (state, determinate, signalVersion) = await ComputeAsync(ct);
@@ -187,9 +189,9 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
 
         var state = BuildState(raw, variant, inventory);
 
-        // Determinate = safe to memoize: the audit for a CPU variant never depends on the probe, and a GPU variant's
-        // audit is only trustworthy when the probe actually ran.
-        var determinate = variant == GpuVariant.Cpu || inventory.ProbeSucceeded;
+        // Determinate = safe to memoize: the audit for a CPU variant never depends on the device probe, a GPU variant's audit is
+        // trustworthy only when that probe ran, and neither is when the raw profile came from a timed-out GPU probe.
+        var determinate = (variant == GpuVariant.Cpu || inventory.ProbeSucceeded) && !raw.GpuProbeIndeterminate;
         return new DeviceAuditComputation(state, determinate, signalVersion);
     }
 

@@ -86,6 +86,14 @@ public sealed record LlamaServerLaunchProjection
     /// <summary>The <c>--pooling</c> value: the embedding profile's pooling for embedding, <c>rank</c> for the reranker, null otherwise.</summary>
     public required string? Pooling { get; init; }
 
+    /// <summary>The <c>--fit-target</c> margin in MiB beside <c>--fit on</c>, or <see langword="null" /> when none is emitted.</summary>
+    /// <remarks>
+    ///     Excluded from serialization and so from <see cref="ComputeIdentity" />: it follows live admission pressure, while the identity names the
+    ///     launch shape a benchmark or receipt compares.
+    /// </remarks>
+    [JsonIgnore]
+    public int? FitTargetMiB { get; init; }
+
     /// <summary>
     ///     The version of the identity SCHEME this type computes, governed by the same contract as the member list
     ///     above: THE TWO MOVE TOGETHER. A persisted <see langword="null" /> reads as <c>1</c>.
@@ -205,7 +213,8 @@ public sealed record LlamaServerLaunchProjection
                 ModelRole.Embedding => embeddingPooling,
                 ModelRole.Reranker => "rank",
                 _ => null
-            }
+            },
+            FitTargetMiB = isGpuExplore && plan?.FitTargetBytes is { } fitTargetBytes ? checked((int)(fitTargetBytes / (1024 * 1024))) : null
         };
     }
 
@@ -323,6 +332,12 @@ public sealed record LlamaServerLaunchProjection
             {
                 AutoFit = string.Equals(value, "on", StringComparison.Ordinal)
             },
+            "--fit-target" or "-fitt" => TryParseInt(value, out var fitTargetMiB)
+                ? projection with
+                {
+                    FitTargetMiB = fitTargetMiB
+                }
+                : null,
             "-c" or "--ctx-size" => TryParseInt(value, out var contextTokens)
                 ? projection with
                 {
@@ -434,7 +449,7 @@ public sealed record LlamaServerLaunchProjection
     private static bool IsAllowListedValueOption(string argument) =>
         argument switch
         {
-            "--fit" or "-c" or "--ctx-size" or "-ngl" or "--n-gpu-layers" or "-ts" or "--tensor-split"
+            "--fit" or "--fit-target" or "-fitt" or "-c" or "--ctx-size" or "-ngl" or "--n-gpu-layers" or "-ts" or "--tensor-split"
                 or "-ot" or "--override-tensor" or "-ctk" or "--cache-type-k" or "-ctv" or "--cache-type-v"
                 or "-fa" or "--flash-attn" or "-t" or "--threads" or "-tb" or "--threads-batch"
                 or "-b" or "--batch-size" or "-ub" or "--ubatch-size" or "--parallel" or "-np"

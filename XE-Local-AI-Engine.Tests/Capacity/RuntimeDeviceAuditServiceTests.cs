@@ -454,6 +454,50 @@ public sealed class RuntimeDeviceAuditServiceTests
         probe.Received(1).ForgetFailedProbes();
     }
 
+    [Test]
+    public async Task GetAudit_IndeterminateRawProfile_IsNotMemoized()
+    {
+        // The device probe ran, but the raw profile came from a timed-out GPU probe: an audit built on it must be recomputed next time.
+        var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
+        probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult(WithDevices(GpuVariant.Cuda)));
+        var timedOut = GpuProfile(GpuVendor.None) with
+        {
+            VramBytes = null,
+            AvailableVramBytes = null,
+            VramKnown = false,
+            GpuAccelAvailable = false,
+            GpuProbeIndeterminate = true
+        };
+        using var service = BuildService(timedOut, GpuVariant.Cuda, probe);
+
+        await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+
+        await probe.Received(2).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+        AssertEx.Null(service.PeekCached(), "no memo may stand on a timed-out GPU probe.");
+    }
+
+    [Test]
+    public async Task GetAudit_WarmMemo_ForcedIndeterminateRefresh_NextOrdinaryReadRecomputes()
+    {
+        // A forced refresh follows a runtime change: when it comes back indeterminate, the memo for the old binary must not answer the next read.
+        var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
+        probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult(WithDevices(GpuVariant.Cuda)),
+                 Task.FromResult(LlamaDeviceInventory.Unknown(GpuVariant.Cuda)));
+        using var service = BuildService(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, probe);
+
+        var warm = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        var forced = await service.GetAuditAsync(forceRefresh: true, CancellationToken.None);
+        var ordinary = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.Equal("cuda", warm.InferenceBackend);
+        AssertEx.Equal("unknown", forced.InferenceBackend);
+        AssertEx.Equal("unknown", ordinary.InferenceBackend, "the warm memo from before the forced refresh must not be returned.");
+        await probe.Received(3).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+    }
+
     private static HardwareProfile GpuProfile(GpuVendor vendor)
     {
         return new HardwareProfile

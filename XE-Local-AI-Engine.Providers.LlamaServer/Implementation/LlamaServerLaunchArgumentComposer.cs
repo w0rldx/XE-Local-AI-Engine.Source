@@ -180,8 +180,15 @@ internal static class LlamaServerLaunchArgumentComposer
         {
             // Let llama.cpp auto-fit choose and print placement: the explicit context is RESPECTED by it, and the KV/FA flags are not placement flags, so auto-fit
             // stays active. Verified against b9692; the b10201 help output confirms auto-fit adjusts only UNSET arguments.
-            args.Add("--fit");
+            args.Add(LlamaServerManagedFlags.Fit);
             args.Add("on");
+
+            // A live-share Hybrid's margin: what llama.cpp leaves free of the memory it sees, so its fit aims at the admitted booking.
+            if (projection.FitTargetMiB is { } fitTargetMiB)
+            {
+                args.Add(LlamaServerManagedFlags.FitTarget);
+                args.Add(fitTargetMiB.ToString(CultureInfo.InvariantCulture));
+            }
         }
 
         if (projection.ContextTokens is { } contextTokens)
@@ -377,6 +384,11 @@ internal static class LlamaServerLaunchArgumentComposer
         if (resolvedPlan.CpuMoe)
         {
             parts.Add("cpu-moe");
+        }
+
+        if (resolvedPlan.FitTargetBytes is { } fitTargetBytes)
+        {
+            parts.Add($"fit-target={(fitTargetBytes / (1024 * 1024)).ToString(CultureInfo.InvariantCulture)}MiB");
         }
 
         if (resolvedPlan.CpuThreads is { } threads)

@@ -152,27 +152,10 @@ public sealed class MemoryFitEstimator
         // (llama.cpp --n-cpu-moe keeps attention/shared/router tensors on GPU and moves expert tensors to system RAM).
         if (moeFacts is { IsMoe: true } && useGpu)
         {
-            var expertWeightsBytes = EstimateExpertWeightsBytes(weightsBytes, paramCount, moeFacts);
-            var nonExpertWeightsBytes = Math.Max(val1: 0L, weightsBytes - expertWeightsBytes);
-            var gpuMarginBytes = (long)((nonExpertWeightsBytes + kvBytes) * safetyMarginFraction);
-            var gpuBytes = nonExpertWeightsBytes + kvBytes + gpuMarginBytes + OverheadBytes;
-            var cpuBytes = expertWeightsBytes;
-
-            if (gpuBytes <= budgetBytes && cpuBytes <= profile.AvailableRamBytes)
+            var offload = BuildExpertOffloadEstimate(weightsBytes, kvBytes, paramCount, moeFacts, safetyMarginFraction, budgetBytes, mode, confidence, nativeQuantFormat);
+            if (offload.GpuBytes <= budgetBytes && offload.CpuBytes <= profile.AvailableRamBytes)
             {
-                return new MemoryFitEstimate
-                {
-                    Fits = true,
-                    EstimatedBytes = gpuBytes + cpuBytes,
-                    HeadroomBytes = budgetBytes - gpuBytes,
-                    Mode = mode,
-                    MoeVerdict = MoeFitVerdict.FitsWithExpertOffload,
-                    GpuBytes = gpuBytes,
-                    CpuBytes = cpuBytes,
-                    ExpertsOffloaded = true,
-                    Confidence = confidence,
-                    NativeQuantFormat = nativeQuantFormat
-                };
+                return offload;
             }
         }
 
@@ -188,6 +171,59 @@ public sealed class MemoryFitEstimator
             ExpertsOffloaded = false,
             Confidence = confidence,
             NativeQuantFormat = nativeQuantFormat
+        };
+    }
+
+    /// <summary>
+    ///     The expert-offload split (non-expert weights + KV on the GPU, expert weights in RAM) at <paramref name="ctxTarget" />, whether or
+    ///     not the model would fit resident, so a booked offload placement keeps its shape at a smaller window.
+    /// </summary>
+    /// <remarks><see cref="MemoryFitEstimate.Fits" /> reports whether the split fits <paramref name="profile" />; the split itself is returned either way.</remarks>
+    /// <exception cref="ArgumentException"><paramref name="moeFacts" /> describes no Mixture-of-Experts model.</exception>
+    public MemoryFitEstimate EstimateExpertOffload(string quant,
+        long? paramCount,
+        long fileSizeBytes,
+        long blockCount,
+        long attentionHeadCountKV,
+        long embeddingLength,
+        long attentionHeadCount,
+        long ctxTarget,
+        HardwareProfile profile,
+        MoeFacts moeFacts,
+        KvCacheQuant? kvCacheQuant = null,
+        GgufAttentionShape? attention = null,
+        bool nativeQuantFormat = false)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(quant);
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(moeFacts);
+        if (!moeFacts.IsMoe)
+        {
+            throw new ArgumentException("An expert-offload split needs a Mixture-of-Experts model.", nameof(moeFacts));
+        }
+
+        var weightsBytes = EstimateWeightsBytes(quant, paramCount, fileSizeBytes);
+        var kv = EstimateKvCacheFootprint(blockCount,
+            attentionHeadCountKV,
+            embeddingLength,
+            attentionHeadCount,
+            ctxTarget,
+            ResolveKvCacheQuant(kvCacheQuantized: false, kvCacheQuant),
+            attention);
+        var confidence = paramCount is not > 0 || kv.HeadDimDerived ? FitConfidence.Approximate : FitConfidence.Exact;
+        var budgetBytes = ResolveFitBudgetBytes(profile);
+        var offload = BuildExpertOffloadEstimate(weightsBytes,
+            kv.BytesAtContext,
+            paramCount,
+            moeFacts,
+            _safetyMarginFraction(),
+            budgetBytes,
+            UsesGpuBudget(profile) ? FitMode.Gpu : FitMode.Cpu,
+            confidence,
+            nativeQuantFormat);
+        return offload with
+        {
+            Fits = offload.GpuBytes <= budgetBytes && offload.CpuBytes <= profile.AvailableRamBytes
         };
     }
 
@@ -352,6 +388,36 @@ public sealed class MemoryFitEstimator
         }
 
         return (long)(weightsBytes * DefaultExpertWeightShareFraction);
+    }
+
+    // --n-cpu-moe keeps attention, shared and router tensors on the GPU and moves the expert tensors to system RAM.
+    private MemoryFitEstimate BuildExpertOffloadEstimate(long weightsBytes,
+        long kvBytes,
+        long? paramCount,
+        MoeFacts moeFacts,
+        double safetyMarginFraction,
+        long budgetBytes,
+        FitMode mode,
+        FitConfidence confidence,
+        bool nativeQuantFormat)
+    {
+        var expertWeightsBytes = EstimateExpertWeightsBytes(weightsBytes, paramCount, moeFacts);
+        var nonExpertWeightsBytes = Math.Max(val1: 0L, weightsBytes - expertWeightsBytes);
+        var gpuMarginBytes = (long)((nonExpertWeightsBytes + kvBytes) * safetyMarginFraction);
+        var gpuBytes = nonExpertWeightsBytes + kvBytes + gpuMarginBytes + OverheadBytes;
+        return new MemoryFitEstimate
+        {
+            Fits = true,
+            EstimatedBytes = gpuBytes + expertWeightsBytes,
+            HeadroomBytes = budgetBytes - gpuBytes,
+            Mode = mode,
+            MoeVerdict = MoeFitVerdict.FitsWithExpertOffload,
+            GpuBytes = gpuBytes,
+            CpuBytes = expertWeightsBytes,
+            ExpertsOffloaded = true,
+            Confidence = confidence,
+            NativeQuantFormat = nativeQuantFormat
+        };
     }
 
     // The (bool, nullable-enum) pair collapsed to the one enum the KV formula actually needs, byte-identical to the pair it replaces:

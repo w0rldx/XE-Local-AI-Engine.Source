@@ -12,7 +12,8 @@ using XE_Local_AI_Engine.Providers.Capabilities.Options;
 /// <remarks>
 ///     Independent of <see cref="HardwareProfiler" />, whose cache model fit and invalidation depend on: nothing here
 ///     reads or writes it. VRAM is system-wide usage, not llama.cpp's per-process <c>--list-devices</c> budget. A probe
-///     serves every caller that arrives within <see cref="CacheWindow" /> of its start, in flight or complete.
+///     serves every caller that arrives within <see cref="CacheWindow" /> of its start, in flight or complete; a fresh
+///     sample always starts one, which then serves the rest.
 /// </remarks>
 internal sealed class LiveMemorySampler : ILiveMemorySampler
 {
@@ -50,21 +51,29 @@ internal sealed class LiveMemorySampler : ILiveMemorySampler
     /// <inheritdoc />
     public Task<LiveMemorySample> SampleAsync(CancellationToken ct)
     {
-        Task<LiveMemorySample> probe;
+        return SharedProbe(fresh: false).WaitAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public Task<LiveMemorySample> SampleFreshAsync(CancellationToken ct)
+    {
+        return SharedProbe(fresh: true).WaitAsync(ct);
+    }
+
+    // The shared probe runs uncancelled, bounded by its own deadline, so one caller leaving never fails the others.
+    private Task<LiveMemorySample> SharedProbe(bool fresh)
+    {
         lock (_gate)
         {
             var now = _timeProvider.GetUtcNow();
-            if (_probe is null || (_probe.IsCompleted && now - _probeStartedAtUtc >= CacheWindow))
+            if (fresh || _probe is null || (_probe.IsCompleted && now - _probeStartedAtUtc >= CacheWindow))
             {
                 _probe = ProbeAsync();
                 _probeStartedAtUtc = now;
             }
 
-            probe = _probe;
+            return _probe;
         }
-
-        // The shared probe runs uncancelled, bounded by its own deadline, so one caller leaving never fails the others.
-        return probe.WaitAsync(ct);
     }
 
     private async Task<LiveMemorySample> ProbeAsync()

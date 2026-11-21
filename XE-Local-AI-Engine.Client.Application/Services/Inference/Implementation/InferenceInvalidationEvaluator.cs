@@ -7,14 +7,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="IInferenceInvalidationEvaluator" />: runs four checks against the freeze baseline — active
-///     build tag, GPU vendor/VRAM delta, live global-free VRAM, and the placement axis that refuses a row whose
-///     replay would contradict today's expert-offload verdict.
+///     Default <see cref="IInferenceInvalidationEvaluator" />: checks build tag, launch policy and GPU vendor/VRAM (Stale),
+///     then live global-free VRAM (UnderPressure), and only without pressure today's expert-offload placement (Stale).
 /// </summary>
 /// <remarks>
 ///     NVIDIA's refreshed global figure is preferred because llama.cpp's process budget can ignore external WDDM
 ///     pressure. Cold validation deliberately does not launch a process-budget probe; global-free VRAM is the only
-///     live invalidation baseline.
+///     live pressure baseline, and pressure never demotes a profile. A timed-out GPU probe counts as pressure for a
+///     GPU row, before the hardware axis, so it never demotes one either.
 /// </remarks>
 public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvaluator
 {
@@ -50,40 +50,48 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
     }
 
     /// <inheritdoc />
-    public async Task<bool> IsStaleAsync(InferenceProfileRecord profile, CancellationToken ct)
+    public async Task<InferenceProfileValidity> EvaluateAsync(InferenceProfileRecord profile, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
         // (a) Build drift is the cheapest and most decisive axis — check it first and short-circuit.
         if (await HasBuildDriftedAsync(profile, ct))
         {
-            return true;
+            return InferenceProfileValidity.Stale;
         }
 
         // (b) The versioned launch-policy identity is authoritative. Legacy/missing fingerprints are stale rather than
         // being interpreted as equivalent to today's defaults.
         if (await HasLaunchPolicyDriftedAsync(profile, ct))
         {
-            return true;
+            return InferenceProfileValidity.Stale;
         }
 
         // (c) Re-probe under HardwareProfiler's bounded timeout so the global-free verdict cannot reuse an earlier
         // cached idle snapshot. The same refreshed profile supplies both hardware drift and live global-free VRAM.
         var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct);
+
+        // A timed-out probe is no reading: a GPU row auto-fits this launch and is neither demoted nor priced on it.
+        if (hardware.GpuProbeIndeterminate && InferenceBackends.TryGetGpuVariant(profile.Backend, out _))
+        {
+            _logger.LogInformation("GPU probe timed out; profile {ProfileId} auto-fits this launch and stays Frozen", profile.Id);
+            return InferenceProfileValidity.UnderPressure;
+        }
+
         if (HasHardwareDrifted(profile, hardware))
         {
-            return true;
+            return InferenceProfileValidity.Stale;
         }
 
         // (d) Live global-free VRAM below the frozen global-free baseline. Process budget is never launched or substituted.
-        if (HasLiveFreeVramRegressed(profile, hardware))
+        // It short-circuits (e): the resolver caches a placement verdict for the host's lifetime, so pricing it now would pin one.
+        if (IsUnderFreeVramPressure(profile, hardware))
         {
-            return true;
+            return InferenceProfileValidity.UnderPressure;
         }
 
-        // (e) The frozen placement contradicts today's expert-offload verdict. Last because it is the only axis that
-        // prices the model against the current budgets; the cheap short-circuits above have already run.
-        return await ContradictsCurrentPlacementAsync(profile, ct);
+        // (e) The frozen placement contradicts today's expert-offload verdict, judged only against unpressured free VRAM.
+        return await ContradictsCurrentPlacementAsync(profile, ct) ? InferenceProfileValidity.Stale : InferenceProfileValidity.Valid;
     }
 
     /// <inheritdoc />
@@ -187,7 +195,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
                && totalVram < freezeBaseline;
     }
 
-    private bool HasLiveFreeVramRegressed(InferenceProfileRecord profile, HardwareProfile hardware)
+    private bool IsUnderFreeVramPressure(InferenceProfileRecord profile, HardwareProfile hardware)
     {
         if (string.Equals(profile.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase)
             || profile.GlobalFreeVramAtFreezeBytes is not { } freezeBaseline)
@@ -204,13 +212,16 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
         var regression = freezeBaseline - currentFree;
         var materialThreshold = Math.Max(MaterialFreeVramRegressionBytes,
             (long)Math.Ceiling(freezeBaseline * MaterialFreeVramRegressionRatio));
-        if (regression >= materialThreshold)
+        if (regression < materialThreshold)
         {
-            _logger.LogInformation("Inference profile {ProfileId} global-free VRAM dropped materially below the frozen baseline; flagging for re-explore.",
-                profile.Id);
-            return true;
+            return false;
         }
 
-        return false;
+        _logger.LogInformation(
+            "Inference profile {ProfileId} is bypassed for this launch: global free VRAM is {CurrentFreeMib} MiB against a frozen baseline of {BaselineFreeMib} MiB, so it auto-fits and stays frozen.",
+            profile.Id,
+            currentFree / (1024 * 1024),
+            freezeBaseline / (1024 * 1024));
+        return true;
     }
 }

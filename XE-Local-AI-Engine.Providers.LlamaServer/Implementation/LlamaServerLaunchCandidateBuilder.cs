@@ -20,6 +20,7 @@ internal sealed class LlamaServerLaunchCandidateBuilder
         ResolvedLaunchArguments resolved,
         bool applyLaunchPolicy,
         ProcessContextAllocation? admittedAllocation,
+        ProcessLaunchAdmission? booking,
         Func<string, LlamaRuntimeException> reject,
         CancellationToken ct)
     {
@@ -48,14 +49,19 @@ internal sealed class LlamaServerLaunchCandidateBuilder
         {
             allocation = await _allocationResolver.ResolveAsync(key.ModelName, key.Role, variant, resolved, ct).ConfigureAwait(false)
                          ?? throw reject("The requested model's process context could not be allocated.");
+
+            // A ticket issued for another variant: the allocation checked against its booking is the one launched, never a second resolve.
+            if (booking is not null && !LlamaServerAdmittedBooking.Fits(allocation, booking.Allocation))
+            {
+                throw reject($"The local model launch was admitted for the {booking.Variant} runtime, but the {variant} runtime is served and needs more memory than that admission booked. Align the runtime selection and try again.");
+            }
         }
         else if (admittedAllocation.Source == ProcessContextAllocationSource.HardwareTier)
         {
             if (!_allocationResolver.TryGetEffectiveCommittedAllocation(admittedAllocation, out allocation)
                 || !string.Equals(allocation.CacheKey, admittedAllocation.CacheKey, StringComparison.Ordinal)
                 || !string.Equals(allocation.ContentIdentity, admittedAllocation.ContentIdentity, StringComparison.Ordinal)
-                || allocation.ProcessContextTokens > admittedAllocation.ProcessContextTokens
-                || (allocation.ProcessContextTokens == admittedAllocation.ProcessContextTokens && allocation.ChatSlots > admittedAllocation.ChatSlots))
+                || !LlamaServerAdmittedBooking.Fits(allocation, admittedAllocation))
             {
                 throw reject("The admitted local model context allocation is no longer valid.");
             }

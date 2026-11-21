@@ -236,6 +236,11 @@ def argv_value(argv: list[str], *flags: str) -> str | None:
     return next((argv[i + 1] for i, a in enumerate(argv[:-1]) if a in flags), None)
 
 
+def expected_slot_window(argv: list[str]) -> str | None:
+    """The window one slot serves: a 2-slot chat launch sizes -c for both slots and --kv-unified-per-slot for one."""
+    return argv_value(argv, "--kv-unified-per-slot") or argv_value(argv, "-c", "--ctx-size")
+
+
 def expert_offload_flags(argv: list[str]) -> list[str]:
     """Spawn arguments that move MoE experts off the GPU."""
     found = [a for a in argv if a in ("--cpu-moe", "-cmoe", "--n-cpu-moe", "-ncmoe")]
@@ -949,14 +954,16 @@ def check_moe_placement(s: Session) -> dict:
     turn = s.turn("moe-load", "Say OK.", effort="none")
     argv = next((p["argv"] for p in llama_processes(s.model_file)), [])
     offload = expert_offload_flags(argv)
-    ctx = argv_value(argv, "-c", "--ctx-size")
+    window = expected_slot_window(argv)
     surface = [(r.get("effectiveContextTokens"), r.get("expertsOffloaded")) for r in s.running()]
     # Placement is judged on its own: the load turn must complete, its answer text belongs to other checks.
     loaded = turn["outcome"] == "assistant-completed"
-    ok = loaded and bool(argv) and not offload and surface == [(int(ctx or 0), False)]
+    ok = loaded and bool(argv) and not offload and surface == [(int(window or 0), False)]
     return {
         "moe-placement": hard(
-            ok, f"spawn -c {ctx}, offload flags {offload}, running (window, expertsOffloaded) {surface}; {brief(turn)}"
+            ok,
+            f"spawn slot window {window}, offload flags {offload}, running (window, expertsOffloaded) {surface}; "
+            f"{brief(turn)}",
         )
     }
 

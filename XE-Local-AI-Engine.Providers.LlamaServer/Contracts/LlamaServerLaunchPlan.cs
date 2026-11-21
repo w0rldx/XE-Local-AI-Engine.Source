@@ -24,6 +24,9 @@ public readonly record struct LlamaServerLaunchPlan(
     int? CpuMoeLayers = null,
     int ChatSlots = LlamaServerChatSlots.Count)
 {
+    /// <summary>The admitted allocation's <c>--fit-target</c> margin (<see cref="ProcessContextAllocation.FitTargetBytes" />); GPU explore only.</summary>
+    public long? FitTargetBytes { get; init; }
+
     /// <summary>The safe (KV-quant/flash-attention off) variant of this plan used for the one-shot fallback retry.</summary>
     public LlamaServerLaunchPlan WithoutKvCacheQuantization()
     {

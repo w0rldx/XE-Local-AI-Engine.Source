@@ -237,7 +237,8 @@ public static class LlamaServerServiceCollectionExtensions
             spawnReceipts: SpawnReceipts(sp),
             pooledLaunchAdmission: sp.GetService<ILlamaServerPooledLaunchAdmission>(),
             residencyNotifier: sp.GetRequiredService<IRuntimeResidencyChangeNotifier>(),
-            idlePreemption: sp.GetRequiredService<IGpuIdleHolderPreemption>()));
+            idlePreemption: sp.GetRequiredService<IGpuIdleHolderPreemption>(),
+            liveMemorySampler: sp.GetService<ILiveMemorySampler>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
         services.TryAddSingleton<ITransientLlamaServerEvaluationHarness>(static sp =>

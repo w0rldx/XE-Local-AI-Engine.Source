@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
@@ -20,7 +21,6 @@ public sealed class DefaultVulkanDeviceProbe : IVulkanDeviceProbe
     private static readonly string[] IcdManifestDirectories = ["/usr/share/vulkan/icd.d", "/etc/vulkan/icd.d"];
 
     private const string VulkanIcdFilenamesEnvironmentVariable = "VK_ICD_FILENAMES";
-    private const string WslDistroNameEnvironmentVariable = "WSL_DISTRO_NAME";
 
     private readonly Func<bool> _hasExplicitIcdEnvironment;
     private readonly Func<bool> _hasIcdManifest;
@@ -29,7 +29,7 @@ public sealed class DefaultVulkanDeviceProbe : IVulkanDeviceProbe
 
     /// <summary>Creates a probe over the live host: real environment variables and the standard Vulkan ICD directories.</summary>
     public DefaultVulkanDeviceProbe()
-        : this(DetectExplicitIcdEnvironmentFromHost, DetectWslFromHost, DetectIcdManifestFromHost)
+        : this(DetectExplicitIcdEnvironmentFromHost, WslHost.Detect, DetectIcdManifestFromHost)
     {
     }
 
@@ -88,32 +88,6 @@ public sealed class DefaultVulkanDeviceProbe : IVulkanDeviceProbe
     private static bool DetectExplicitIcdEnvironmentFromHost()
     {
         return !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(VulkanIcdFilenamesEnvironmentVariable));
-    }
-
-    private static bool DetectWslFromHost()
-    {
-        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(WslDistroNameEnvironmentVariable)))
-        {
-            return true;
-        }
-
-        return FileContainsWslSignature("/proc/sys/kernel/osrelease") || FileContainsWslSignature("/proc/version");
-    }
-
-    private static bool FileContainsWslSignature(string path)
-    {
-        if (!File.Exists(path))
-        {
-            return false;
-        }
-
-        // Forced sync: this runs behind the Func<bool> probe seam the constructor binds (DetectWslFromHost), which has
-        // no async shape; the source is procfs, which never blocks on a device.
-#pragma warning disable MA0045 // Contract-forced: sync Func<bool> probe seam, procfs read.
-        var contents = File.ReadAllText(path);
-#pragma warning restore MA0045
-        return contents.Contains("microsoft", StringComparison.OrdinalIgnoreCase)
-               || contents.Contains("WSL", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool DetectIcdManifestFromHost()

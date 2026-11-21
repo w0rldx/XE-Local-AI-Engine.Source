@@ -77,7 +77,10 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
             CpuThreads: null,
             CpuThreadsBatch: null,
             allocation.Placement == ProcessPlacementMode.ExpertOffload,
-            ChatSlots: allocation.ChatSlots);
+            ChatSlots: allocation.ChatSlots)
+        {
+            FitTargetBytes = allocation.FitTargetBytes
+        };
     }
 
     /// <inheritdoc />

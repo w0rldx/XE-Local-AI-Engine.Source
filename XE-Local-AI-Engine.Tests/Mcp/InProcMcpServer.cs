@@ -14,20 +14,33 @@ using ModelContextProtocol.Server;
 ///     The server exposes the supplied <see cref="AIFunction" />s as tools. Dispose tears down the client, the server
 ///     loop, and the streams.
 /// </summary>
+/// <remarks>
+///     The whole teardown runs under one deadline, because <c>McpServer.DisposeAsync</c> waits for in-flight handlers. An expiry is
+///     recorded in <see cref="McpTeardownLog" />, never thrown from <c>await using</c>, and the unfinished teardown stays in
+///     <see cref="PendingTeardown" />.
+/// </remarks>
 internal sealed class InProcMcpServer : IAsyncDisposable
 {
+    private static readonly TimeSpan DefaultTeardownBound = TimeSpan.FromSeconds(10);
+
     private readonly Stream _clientInput;
     private readonly Stream _clientOutput;
+    private readonly string _name;
     private readonly McpServer _server;
     private readonly CancellationTokenSource _serverCts;
     private readonly Stream _serverInput;
     private readonly Task _serverLoop;
     private readonly Stream _serverOutput;
     private readonly StreamServerTransport _serverTransport;
+    private readonly TimeSpan _teardownBound;
     private readonly McpServerPrimitiveCollection<McpServerTool> _tools;
+    private bool _disposed;
     private bool _serverStopped;
+    private volatile string _teardownStep = "not started";
 
-    private InProcMcpServer(McpServer server,
+    private InProcMcpServer(string name,
+        TimeSpan teardownBound,
+        McpServer server,
         StreamServerTransport serverTransport,
         Task serverLoop,
         CancellationTokenSource serverCts,
@@ -38,6 +51,8 @@ internal sealed class InProcMcpServer : IAsyncDisposable
         McpClient client,
         McpServerPrimitiveCollection<McpServerTool> tools)
     {
+        _name = name;
+        _teardownBound = teardownBound;
         _tools = tools;
         _server = server;
         _serverTransport = serverTransport;
@@ -53,8 +68,23 @@ internal sealed class InProcMcpServer : IAsyncDisposable
     /// <summary>The connected client bound to this server. Hand this to the test's fake client factory.</summary>
     public McpClient Client { get; }
 
+    /// <summary>A teardown that outlived its deadline, still running; a test awaits it to prove the wedged handler ended.</summary>
+    public Task? PendingTeardown { get; private set; }
+
     public async ValueTask DisposeAsync()
     {
+        await RunBoundedAsync(DisposeCoreAsync);
+    }
+
+    private async Task DisposeCoreAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _teardownStep = "client dispose";
         try
         {
             await Client.DisposeAsync();
@@ -64,10 +94,27 @@ internal sealed class InProcMcpServer : IAsyncDisposable
             // Ignore teardown races between client dispose and the server loop ending.
         }
 
-        await StopServerAsync();
+        await StopServerCoreAsync();
+        _teardownStep = "client streams";
         await _clientInput.DisposeAsync();
         await _clientOutput.DisposeAsync();
         _serverCts.Dispose();
+    }
+
+    private async Task RunBoundedAsync(Func<Task> teardown)
+    {
+        // Both teardown steps are idempotent, so a dispose after a timed-out stop still disposes the client and never waits for that stop.
+        var run = teardown();
+        try
+        {
+            await run.WaitAsync(_teardownBound, CancellationToken.None);
+        }
+        catch (TimeoutException)
+        {
+            // An earlier expiry stays observable alongside this one.
+            PendingTeardown = PendingTeardown is { IsCompleted: false } prior ? Task.WhenAll(prior, run) : run;
+            McpTeardownLog.Record(McpTeardownLog.CurrentScope, _name, _teardownStep);
+        }
     }
 
     /// <summary>
@@ -82,7 +129,12 @@ internal sealed class InProcMcpServer : IAsyncDisposable
     ///     Kills the server side only, the in-process shape of a crashed server: the loop stops and its output stream
     ///     closes, so the still-undisposed <see cref="Client" /> sees end-of-stream and its <c>Completion</c> fires.
     /// </summary>
-    public async Task StopServerAsync()
+    public Task StopServerAsync()
+    {
+        return RunBoundedAsync(StopServerCoreAsync);
+    }
+
+    private async Task StopServerCoreAsync()
     {
         if (_serverStopped)
         {
@@ -90,7 +142,9 @@ internal sealed class InProcMcpServer : IAsyncDisposable
         }
 
         _serverStopped = true;
+        _teardownStep = "server cancel";
         await _serverCts.CancelAsync();
+        _teardownStep = "server loop";
         try
         {
             // Bound the wait: if the SDK's read loop does not observe cancellation promptly (e.g. it is parked on a
@@ -102,8 +156,11 @@ internal sealed class InProcMcpServer : IAsyncDisposable
             // The loop ends when the transport closes; cancellation/timeout/IO during teardown is expected.
         }
 
+        _teardownStep = "server dispose";
         await _server.DisposeAsync();
+        _teardownStep = "server transport";
         await _serverTransport.DisposeAsync();
+        _teardownStep = "server streams";
         await _serverInput.DisposeAsync();
         await _serverOutput.DisposeAsync();
     }
@@ -113,6 +170,12 @@ internal sealed class InProcMcpServer : IAsyncDisposable
         return StartAsync(serverName, protocolVersion: null, tools);
     }
 
+    /// <summary>Starts a server whose whole teardown is bounded by <paramref name="teardownBound" /> instead of the default 10 s.</summary>
+    public static Task<InProcMcpServer> StartAsync(string serverName, TimeSpan teardownBound, params AIFunction[] tools)
+    {
+        return StartCoreAsync(serverName, protocolVersion: null, teardownBound, tools);
+    }
+
     /// <summary>
     ///     Starts a server whose client pins <paramref name="protocolVersion" />, such as <c>2025-11-25</c>.
     /// </summary>
@@ -120,7 +183,12 @@ internal sealed class InProcMcpServer : IAsyncDisposable
     ///     The 2026-07-28 revision delivers <c>*/list_changed</c> only on a <c>subscriptions/listen</c> stream, so a test
     ///     of the unsolicited notification third-party servers send pins an initialize-era revision.
     /// </remarks>
-    public static async Task<InProcMcpServer> StartAsync(string serverName, string? protocolVersion, params AIFunction[] tools)
+    public static Task<InProcMcpServer> StartAsync(string serverName, string? protocolVersion, params AIFunction[] tools)
+    {
+        return StartCoreAsync(serverName, protocolVersion, DefaultTeardownBound, tools);
+    }
+
+    private static async Task<InProcMcpServer> StartCoreAsync(string serverName, string? protocolVersion, TimeSpan teardownBound, AIFunction[] tools)
     {
         // Give every instance a unique diagnostic name so concurrent in-proc servers can never collide on a fixed
         // transport/server name across the parallel suite. This is independent of the connection manager's slug (which
@@ -173,6 +241,6 @@ internal sealed class InProcMcpServer : IAsyncDisposable
             };
         var client = await McpClient.CreateAsync(clientTransport, clientOptions, NullLoggerFactory.Instance, handshakeCts.Token);
 
-        return new InProcMcpServer(server, serverTransport, serverLoop, serverCts, serverInput, serverOutput, clientInput, clientOutput, client, toolCollection);
+        return new InProcMcpServer(uniqueName, teardownBound, server, serverTransport, serverLoop, serverCts, serverInput, serverOutput, clientInput, clientOutput, client, toolCollection);
     }
 }

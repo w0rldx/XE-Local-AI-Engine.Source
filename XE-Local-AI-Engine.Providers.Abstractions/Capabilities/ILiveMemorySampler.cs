@@ -12,4 +12,8 @@ public interface ILiveMemorySampler
 {
     /// <summary>Returns the current memory sample, probing only when the shared reading has expired.</summary>
     Task<LiveMemorySample> SampleAsync(CancellationToken ct);
+
+    /// <summary>Probes now, whatever the shared reading's age, and makes the result the shared reading.</summary>
+    /// <remarks>For a caller comparing two readings around an event shorter than the sharing window, which a shared reading would report as no change.</remarks>
+    Task<LiveMemorySample> SampleFreshAsync(CancellationToken ct);
 }

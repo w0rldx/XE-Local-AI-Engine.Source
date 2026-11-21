@@ -495,16 +495,16 @@ public sealed class HardwareProfilerTests
     }
 
     [Test]
-    public async Task HardwareProfiler_ProbeTimeout_DegradesToLastCachedProfile()
+    public async Task HardwareProfiler_ProbeTimeout_KeepsCachedGpuIdentity_WithFreshRamAndUnknownFreeVram()
     {
-        // First probe succeeds (real GPU), a later forced refresh times out → the profiler reuses the cached GPU profile
-        // (keeping its real VRAM figures) rather than dropping to CPU mode, and still records the timeout metric.
-        const string memInfo = "MemTotal:       32000000 kB\nMemAvailable:   24000000 kB\n";
+        // First probe succeeds (real GPU), a later forced refresh times out → the profiler keeps the cached GPU identity
+        // and total VRAM (no CPU drop), reports the RAM/disk it just read, and never replays the old free VRAM as current.
         var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\n").TimeoutAfterFirstCall();
         var environment = new FakeEnvironment
         {
             IsLinux = true,
-            ProcMemInfo = memInfo,
+            ProcMemInfo = "MemTotal:       32000000 kB\nMemAvailable:   24000000 kB\n",
+            FreeDiskBytes = 500 * Mib,
             ProcessorCount = 16
         };
         var metrics = new FakeHardwareProbeMetrics();
@@ -513,13 +513,51 @@ public sealed class HardwareProfilerTests
 
         var first = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
         AssertEx.True(first.VramKnown);
+        AssertEx.Equal<long?>(8192L * Mib, first.AvailableVramBytes);
 
+        environment.ProcMemInfo = "MemTotal:       32000000 kB\nMemAvailable:   1000000 kB\n";
+        environment.FreeDiskBytes = 100 * Mib;
         var refreshed = await profiler.GetProfileAsync(forceRefresh: true, CancellationToken.None);
 
-        AssertEx.True(refreshed.VramKnown, "the forced refresh must reuse the last good profile when the probe times out.");
+        AssertEx.True(refreshed.VramKnown, "the forced refresh must keep the last good GPU identity when the probe times out.");
+        AssertEx.True(refreshed.GpuAccelAvailable);
         AssertEx.Equal(24564L * Mib, refreshed.VramBytes!.Value);
         AssertEx.Equal(GpuVendor.Nvidia, refreshed.GpuVendor);
+        AssertEx.Null(refreshed.AvailableVramBytes, "a timed-out probe must not report the cached free VRAM as current.");
+        AssertEx.Equal(1000000L * Kb, refreshed.AvailableRamBytes);
+        AssertEx.Equal(100 * Mib, refreshed.FreeDiskBytes);
         AssertEx.Equal(expected: 1, metrics.TimeoutCount);
+
+        var nonForced = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.True(ReferenceEquals(first, nonForced), "the timeout answer must not replace the last real cached profile.");
+        AssertEx.Equal(expected: 2, probe.NvidiaCallCount);
+    }
+
+    [Test]
+    public async Task Probe_Timeout_WithAndWithoutCache_IsIndeterminate()
+    {
+        // Both timeout outcomes carry the flag, so no reader can cache, memoize or demote on them; a real reading never does.
+        var environment = new FakeEnvironment
+        {
+            IsLinux = true,
+            ProcMemInfo = "MemTotal:       32000000 kB\nMemAvailable:   24000000 kB\n",
+            ProcessorCount = 16
+        };
+        var cold = new HardwareProfiler(new FakeProcessProbe().WithTimeout(), environment, new HardwareProfilerOptions());
+        var warm = new HardwareProfiler(new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\n").TimeoutAfterFirstCall(),
+            environment,
+            new HardwareProfilerOptions());
+
+        var noCache = await cold.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+        var reading = await warm.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+        var lastGood = await warm.GetProfileAsync(forceRefresh: true, CancellationToken.None);
+
+        AssertEx.True(noCache.GpuProbeIndeterminate, "the CPU-safe default after a timeout is not a reading.");
+        AssertEx.True(lastGood.GpuProbeIndeterminate, "the last-good identity after a timeout is not a reading.");
+        AssertEx.False(reading.GpuProbeIndeterminate, "a probe that answered is a reading.");
+        AssertEx.False((await warm.GetProfileAsync(forceRefresh: false, CancellationToken.None)).GpuProbeIndeterminate,
+            "the cached real profile stays determinate after a later timeout.");
     }
 
     [Test]
@@ -678,7 +716,7 @@ public sealed class HardwareProfilerTests
 
     private sealed class FakeEnvironment : IHardwareProbeEnvironment
     {
-        public string? ProcMemInfo { get; init; }
+        public string? ProcMemInfo { get; set; }
 
         public IReadOnlyList<string> DrmVendorIds { get; init; } = [];
 
@@ -686,7 +724,7 @@ public sealed class HardwareProfilerTests
 
         public long AvailableRamBytes { get; init; }
 
-        public long FreeDiskBytes { get; init; }
+        public long FreeDiskBytes { get; set; }
         public bool IsWindows { get; init; }
 
         public bool IsLinux { get; init; }

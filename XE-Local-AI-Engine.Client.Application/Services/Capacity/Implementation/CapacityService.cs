@@ -248,7 +248,8 @@ public sealed class CapacityService : ICapacityService
     /// <summary>Steps <paramref name="footprint" /> down admission tiers until it fits the budget, when the request allows it.</summary>
     /// <remarks>
     ///     A caller that NAMED a required window launches AT it (a benchmark replays its frozen -c), so a lower tier must never be admitted: the
-    ///     reservation would under-book the window that process actually allocates. That case sets <paramref name="requiredWindowRefused" />.
+    ///     reservation would under-book the window that process actually allocates. That case sets <paramref name="requiredWindowRefused" />. An
+    ///     explore chat launch is also re-placed against live memory: expert offload before the ladder, a live-share Hybrid after it.
     /// </remarks>
     /// <returns>Whether the final footprint fits.</returns>
     private bool TryFitByDownTier(CapacityRequest request,
@@ -258,11 +259,35 @@ public sealed class CapacityService : ICapacityService
         out bool requiredWindowRefused)
     {
         requiredWindowRefused = false;
+        if (FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad))
+        {
+            return true;
+        }
+
+        if (!request.AllowAdmissionDownTier)
+        {
+            return false;
+        }
+
+        var live = ResolveLiveBudget(request, profile, footprint);
+        if (live is not null && TryPlaceWithinLiveBudget(request, profile, footprint, live, PlacementStage.BeforeLadder, out var offload))
+        {
+            footprint = offload;
+            return true;
+        }
+
+        var stable = footprint;
         while (!FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad))
         {
-            if (!request.AllowAdmissionDownTier || !_footprintProvider.TryDownTierForAdmission(footprint, out var downTiered))
+            if (!_footprintProvider.TryDownTierForAdmission(footprint, out var downTiered))
             {
-                return false;
+                if (live is null || !TryPlaceWithinLiveBudget(request, profile, stable, live, PlacementStage.AfterLadder, out var share))
+                {
+                    return false;
+                }
+
+                footprint = share;
+                return true;
             }
 
             if (request.RequiredContextTokens is { } required
@@ -275,6 +300,52 @@ public sealed class CapacityService : ICapacityService
             footprint = downTiered;
         }
 
+        return true;
+    }
+
+    /// <summary>
+    ///     The live memory an admission may re-place into, or <see langword="null" /> when re-placement does not apply: a chat explore launch that
+    ///     publishes its admission, with no external draft model (its VRAM is not in the booking) and a global free-VRAM reading.
+    /// </summary>
+    private LiveBudget? ResolveLiveBudget(CapacityRequest request, HardwareProfile profile, ModelFootprint footprint)
+    {
+        if (request.Role != ModelRole.Chat
+            || !request.PublishLaunchAdmission
+            || _supervisorOptions.Speculative.RequiresExternalDraftModel
+            || footprint.Admission?.ResolvedArguments.ExploreMode != true
+            || profile.AvailableVramBytes is not { } globalFree)
+        {
+            return null;
+        }
+
+        var reserved = _ledger.Reserved;
+        return new LiveBudget
+        {
+            GlobalFreeGpuBytes = globalFree,
+            ReservedGpuBytes = reserved.GpuBytes,
+            AvailableRamBytes = profile.AvailableRamBytes,
+            ReservedRamBytes = reserved.RamBytes
+        };
+    }
+
+    /// <summary>A live re-placement that meets the caller's required window and fits both axes of the live budget.</summary>
+    private bool TryPlaceWithinLiveBudget(CapacityRequest request,
+        HardwareProfile profile,
+        ModelFootprint current,
+        LiveBudget live,
+        PlacementStage stage,
+        out ModelFootprint placed)
+    {
+        placed = current;
+        if (!_footprintProvider.TryPlaceWithinLiveBudget(current, live, stage, out var candidate)
+            || candidate.Admission is not { } admission
+            || admission.Allocation.ProcessContextTokens < (request.RequiredContextTokens ?? 0)
+            || !FitsResourceBudget(profile, candidate.Resources, hasUnmeasuredGpuLoad: false))
+        {
+            return false;
+        }
+
+        placed = candidate;
         return true;
     }
 

@@ -160,6 +160,7 @@ public sealed partial class LlamaServerProcessSupervisor
                 inputs.Resolved,
                 applyLaunchPolicy,
                 inputs.Admitted?.Allocation,
+                inputs.Booking,
                 ct)
             .ConfigureAwait(false);
         var planCandidates = planSet.Candidates;
@@ -205,6 +206,7 @@ public sealed partial class LlamaServerProcessSupervisor
                     ? await RunFitParamsAsync(spec, ct).ConfigureAwait(false)
                     : null;
 
+                var freeVramBeforeLoad = await SampleAdmittedLoadFreeVramOrNullAsync(inputs, ct).ConfigureAwait(false);
                 readinessStartedTimestamp = _timeProvider.GetTimestamp();
                 handle = _launcher.Launch(spec);
 
@@ -219,6 +221,7 @@ public sealed partial class LlamaServerProcessSupervisor
                 var readinessDuration = _timeProvider.GetElapsedTime(readinessStartedTimestamp.Value);
                 _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms (readiness budget {BudgetSeconds:F0}s).",
                     key.ModelName, key.Role, handle.ProcessId, readinessDuration.TotalMilliseconds, inputs.ReadinessTimeout.TotalSeconds);
+                await WarnIfOverBookedAsync(key, inputs, candidate, freeVramBeforeLoad, placementSniffer, ct).ConfigureAwait(false);
 
                 var running = await RegisterReadyProcessAsync(key,
                         inputs,
@@ -282,7 +285,7 @@ public sealed partial class LlamaServerProcessSupervisor
                     throw;
                 }
 
-                if (await DownTierAfterOutOfMemoryOrNullAsync(key, variant, candidate, automaticCapture, planSet, ct).ConfigureAwait(false) is { } downTieredSet)
+                if (await DownTierAfterOutOfMemoryOrNullAsync(key, variant, candidate, automaticCapture, planSet, inputs.Booking?.Allocation, ct).ConfigureAwait(false) is { } downTieredSet)
                 {
                     planSet = downTieredSet;
                     continue;
@@ -385,7 +388,7 @@ public sealed partial class LlamaServerProcessSupervisor
         }
 
         // Resolve the launch args (frozen-profile replay, explore-mode auto-fit or operator-supplied profiling args) BEFORE the admission gate, so a slow profile
-        // read never stalls admission for other keys. A ticket whose variant the override moved off carries NOTHING that applies here, so drop it. See wiki 03.
+        // read never stalls admission for other keys. A ticket whose variant the override moved off carries no args or allocation that apply here. See wiki 03.
         var admitted = admission?.Variant == variant ? admission : null;
         var resolved = admitted?.ResolvedArguments ?? await resolveArgs(variant, ct).ConfigureAwait(false);
 
@@ -405,6 +408,7 @@ public sealed partial class LlamaServerProcessSupervisor
             binary,
             capabilityManifest,
             admitted,
+            admission,
             resolved,
             extraLaunchArgs);
     }
@@ -596,6 +600,66 @@ public sealed partial class LlamaServerProcessSupervisor
         return capabilityDecision;
     }
 
+    /// <summary>Global free VRAM just before an admitted GPU load, or <see langword="null" /> when nothing is admitted or no reading is available.</summary>
+    /// <remarks>The GPU-load admission gate is held, so no other load moves the reading between this and the post-readiness one.</remarks>
+    private async Task<long?> SampleAdmittedLoadFreeVramOrNullAsync(SpawnLaunchInputs inputs, CancellationToken ct)
+    {
+        if (_liveMemorySampler is null || inputs.Booking is null || inputs.Variant == GpuVariant.Cpu)
+        {
+            return null;
+        }
+
+        try
+        {
+            // Fresh: a load finishes inside the sampler's sharing window, so a shared reading would report no take at all.
+            var sample = await _liveMemorySampler.SampleFreshAsync(ct).ConfigureAwait(false);
+            return sample.Gpus.Count == 0 ? null : sample.Gpus.Sum(static gpu => gpu.AvailableVramBytes);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Detection is report-only: an unreadable sample skips it, never the load.
+            _logger.LogDebug(exception, "Sampling global free VRAM around an admitted llama-server load failed; over-booking detection is skipped.");
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     Logs one Warning when an admitted child took more GPU memory across its load than it booked (beyond the minimum reserve), or llama.cpp
+    ///     reported a failed fit. Report-only: the child keeps serving.
+    /// </summary>
+    private async Task WarnIfOverBookedAsync(ProcessKey key,
+        SpawnLaunchInputs inputs,
+        LlamaServerLaunchCandidate candidate,
+        long? freeVramBeforeLoad,
+        LlamaServerLayerPlacementSniffer? placementSniffer,
+        CancellationToken ct)
+    {
+        // The booking, not the admitted allocation: a served variant launches under the reservation booked for the selected one.
+        if (inputs.Booking is not { } booking)
+        {
+            return;
+        }
+
+        var bookedGpuBytes = booking.Allocation.Footprint.GpuBytes;
+        long? observedGpuBytes = null;
+        if (freeVramBeforeLoad is { } before && await SampleAdmittedLoadFreeVramOrNullAsync(inputs, ct).ConfigureAwait(false) is { } after)
+        {
+            observedGpuBytes = before - after;
+        }
+
+        var overBooked = observedGpuBytes > bookedGpuBytes + LlamaServerLaunchPolicyOptions.MinimumGpuReserveBytes;
+        var fitFailed = placementSniffer?.FitFailed == true;
+        if (!overBooked && !fitFailed)
+        {
+            return;
+        }
+
+        const long mib = 1024 * 1024;
+        _logger.LogWarning(
+            "llama-server for model {ModelName} role {Role} may exceed its admitted GPU booking: booked {BookedMiB} MiB, observed {ObservedMiB} MiB across the load, fit target {FitTargetMiB} MiB, llama.cpp fit failed: {FitFailed}. The model keeps serving.",
+            key.ModelName, key.Role, bookedGpuBytes / mib, observedGpuBytes / mib, candidate.Plan?.FitTargetBytes / mib, fitFailed);
+    }
+
     /// <summary>
     ///     Runs the sibling <c>llama-fit-params</c> helper for an explore spawn; <see langword="null" /> when it is
     ///     missing or failed, in which case the live spawn stays auto-fit and no placement profile is drafted.
@@ -648,7 +712,8 @@ public sealed partial class LlamaServerProcessSupervisor
     {
         var variant = inputs.Variant;
         var inflight = profilingOwned ? null : _inflightSpawns.GetValueOrDefault(key);
-        var expertsOffloaded = PinsExpertsToCpu(spec.Arguments);
+        // Operator args cannot carry --cpu-moe or -ot: both are managed flags.
+        var expertsOffloaded = LlamaServerManagedFlags.PinsExpertsToCpu(spec.Arguments);
         var placement = RecordObservedLayerPlacement(key, variant, placementSniffer, expertsOffloaded);
 
         // Assembled here (the RunningProcess below carries it) but NOT published yet: post-readiness bookkeeping can still throw and tree-kill the child, and
@@ -959,6 +1024,7 @@ public sealed partial class LlamaServerProcessSupervisor
         LlamaServerLaunchCandidate candidate,
         LlamaServerBoundedStartupCapture? automaticCapture,
         LlamaServerLaunchPlanSet planSet,
+        ProcessContextAllocation? admittedAllocation,
         CancellationToken ct)
     {
         if (automaticCapture is null
@@ -967,6 +1033,12 @@ public sealed partial class LlamaServerProcessSupervisor
             || !_allocationResolver.TryDownTierAfterOutOfMemory(planSet.Allocation, out var downTiered))
         {
             return null;
+        }
+
+        // The retry plan is built here rather than by the candidate builder, so the booking guard runs here too.
+        if (admittedAllocation is not null && !LlamaServerAdmittedBooking.Fits(downTiered, admittedAllocation))
+        {
+            throw NonRetryable("The local model's out-of-memory retry would exceed the memory its admission booked; the launch was refused.");
         }
 
         var downTieredSet = planSet with
@@ -990,10 +1062,11 @@ public sealed partial class LlamaServerProcessSupervisor
         ResolvedLaunchArguments resolved,
         bool applyLaunchPolicy,
         ProcessContextAllocation? admittedAllocation,
+        ProcessLaunchAdmission? booking,
         CancellationToken ct)
     {
         var builder = new LlamaServerLaunchCandidateBuilder(_allocationResolver, _launchPolicy);
-        return builder.BuildAsync(key, variant, resolved, applyLaunchPolicy, admittedAllocation, NonRetryable, ct);
+        return builder.BuildAsync(key, variant, resolved, applyLaunchPolicy, admittedAllocation, booking, NonRetryable, ct);
     }
 
     /// <summary>
@@ -1049,11 +1122,6 @@ public sealed partial class LlamaServerProcessSupervisor
 
         return new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.Full, offloaded, total);
     }
-
-    // The admitted --cpu-moe, or a replayed -ot pinning expert tensors ("…_exps=CPU", what a fit-params explore writes). Operator args cannot carry either: both are managed flags.
-    private static bool PinsExpertsToCpu(IReadOnlyList<string> arguments) =>
-        arguments.Any(static argument => string.Equals(argument, LlamaServerManagedFlags.CpuMoe, StringComparison.Ordinal)
-                                         || argument.Contains("exps=CPU", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     ///     Assembles the benchmark launch receipt, non-throwing by construction.
@@ -1274,6 +1342,10 @@ public sealed partial class LlamaServerProcessSupervisor
     /// <summary>
     ///     What a spawn resolved before the admission gate and every launch attempt reads.
     /// </summary>
+    /// <remarks>
+    ///     <c>Admitted</c> is the ticket only when its variant is the one served; <c>Booking</c> is the ticket for any variant, the reservation
+    ///     every launched allocation must fit.
+    /// </remarks>
     private readonly record struct SpawnLaunchInputs(
         string ModelFilePath,
         string? AdapterFilePath,
@@ -1285,6 +1357,7 @@ public sealed partial class LlamaServerProcessSupervisor
         LlamaBinary Binary,
         LlamaServerCapabilityManifest CapabilityManifest,
         ProcessLaunchAdmission? Admitted,
+        ProcessLaunchAdmission? Booking,
         ResolvedLaunchArguments Resolved,
         IReadOnlyList<string> ExtraLaunchArgs);
 }

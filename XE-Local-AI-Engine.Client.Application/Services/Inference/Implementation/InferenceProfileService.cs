@@ -364,6 +364,16 @@ public sealed class InferenceProfileService : IInferenceProfileService
         long? processBudgetVramAtFreeze = null;
         if (!string.Equals(profile.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase))
         {
+            // Only NVIDIA reports free VRAM, so there null means the probe failed; a determinate AMD/Intel Vulkan reading never has a baseline.
+            // A timed-out probe is no reading at all: on WSL its fallback vendor is None, which would freeze a Vulkan row with no baseline.
+            if (hardware.GpuProbeIndeterminate
+                || (hardware.AvailableVramBytes is null
+                    && (hardware.GpuVendor == GpuVendor.Nvidia
+                        || string.Equals(profile.Backend, InferenceBackends.Cuda, StringComparison.OrdinalIgnoreCase))))
+            {
+                return ProfileActionResult.Fail($"Profile {profileId} was not frozen: free VRAM could not be read, so there is no baseline to guard its replay; retry the freeze.");
+            }
+
             globalFreeVramAtFreeze = hardware.AvailableVramBytes;
             processBudgetVramAtFreeze =
                 await _processVramBudgetProbe.GetProcessBudgetBytesOrNullAsync(profile.Backend, ct);
@@ -554,7 +564,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
     }
 
     // The single "is this row still replayable under today's semantics" gate, used by BOTH profile-owned replay decisions (benchmark and freeze): versioned fingerprint identity plus placement.
-    // A row failing the placement axis is not replayable however its hash matches; serving reaches the same check via IInferenceInvalidationEvaluator.IsStaleAsync, both marking Stale on false.
+    // A row failing the placement axis is not replayable however its hash matches; serving reaches the same check via IInferenceInvalidationEvaluator.EvaluateAsync, both marking Stale on false.
     private async Task<bool> IsReplayableUnderCurrentSemanticsAsync(InferenceProfileRecord profile, string modelFilePath, CancellationToken ct)
     {
         if (profile.LaunchPolicyFingerprintVersion is null || string.IsNullOrWhiteSpace(profile.LaunchPolicyFingerprint))

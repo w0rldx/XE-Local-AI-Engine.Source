@@ -64,8 +64,8 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         // wins on the cached field). Avoiding a lock keeps the singleton non-disposable.
         var outcome = await ProbeAsync(ct).ConfigureAwait(false);
 
-        // A CPU-safe degrade caused only by a probe timeout is not a real answer: leave the cache empty so the next
-        // non-forced reader probes again instead of pinning GPU backends to CPU for the whole session.
+        // A probe timeout is not a real answer: leave the cache as it was, so a non-forced reader gets the last real
+        // profile (or probes again) instead of a CPU degrade or an unknown free VRAM pinned for the whole session.
         if (outcome.Cacheable)
         {
             _cachedProfile = outcome.Profile;
@@ -86,12 +86,20 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         {
             _metrics.RecordProbeTimeout(NvidiaSmi);
 
-            // The GPU probe was killed for overrunning its deadline. Prefer the last good profile (it keeps the real
-            // VRAM figures) over a freshly-degraded one; with no cache yet, fall through to the CPU-safe degrade below.
+            // Keep the last good GPU identity and total VRAM, but never replay its free VRAM as current pressure: unknown
+            // free fails closed downstream. Not cached, so non-forced readers keep the last real answer.
             if (_cachedProfile is { } lastGood)
             {
-                _logger.LogWarning("nvidia-smi hardware probe timed out; reusing the last cached hardware profile.");
-                return new ProbeOutcome(lastGood, Cacheable: true);
+                _logger.LogWarning("nvidia-smi hardware probe timed out; keeping the cached GPU identity and total VRAM with free VRAM unknown.");
+                return new ProbeOutcome(lastGood with
+                    {
+                        TotalRamBytes = totalRam,
+                        AvailableRamBytes = availableRam,
+                        AvailableVramBytes = null,
+                        FreeDiskBytes = _environment.GetFreeDiskBytes(_options.ModelsVolumePath),
+                        GpuProbeIndeterminate = true
+                    },
+                    Cacheable: false);
             }
 
             _logger.LogWarning("nvidia-smi hardware probe timed out and no cached profile exists; degrading to the CPU-safe default (VRAM unknown).");
@@ -132,7 +140,8 @@ internal sealed class HardwareProfiler : IHardwareProfiler
             GpuVendor = vendor,
             GpuAccelAvailable = gpuAccelAvailable,
             CpuCores = _environment.ProcessorCount,
-            FreeDiskBytes = _environment.GetFreeDiskBytes(_options.ModelsVolumePath)
+            FreeDiskBytes = _environment.GetFreeDiskBytes(_options.ModelsVolumePath),
+            GpuProbeIndeterminate = nvidia.TimedOut
         };
 
         return new ProbeOutcome(profile, Cacheable: !nvidia.TimedOut);
@@ -427,7 +436,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     [StructLayout(LayoutKind.Auto)]
     private readonly record struct RamSnapshot(long TotalRamBytes, long AvailableRamBytes);
 
-    // A probed profile and whether it may be cached (false for a timeout-only CPU degrade).
+    // A probed profile and whether it may be cached (false whenever nvidia-smi timed out).
     [StructLayout(LayoutKind.Auto)]
     private readonly record struct ProbeOutcome(HardwareProfile Profile, bool Cacheable);
 

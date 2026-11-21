@@ -36,7 +36,8 @@ internal static class SupervisorFactory
         ProcessSpawnReceiptStore? spawnReceipts = null,
         ILlamaServerPooledLaunchAdmission? pooledLaunchAdmission = null,
         IRuntimeResidencyChangeNotifier? residencyNotifier = null,
-        IGpuIdleHolderPreemption? idlePreemption = null)
+        IGpuIdleHolderPreemption? idlePreemption = null,
+        ILiveMemorySampler? liveMemorySampler = null)
     {
         return new LlamaServerProcessSupervisor(binaryManager ?? new FakeBinaryManager(),
             variantSelector ?? new FakeVariantSelector(),
@@ -69,6 +70,7 @@ internal static class SupervisorFactory
             spawnReceipts: spawnReceipts,
             pooledLaunchAdmission: pooledLaunchAdmission,
             residencyNotifier: residencyNotifier,
-            idlePreemption: idlePreemption);
+            idlePreemption: idlePreemption,
+            liveMemorySampler: liveMemorySampler);
     }
 }

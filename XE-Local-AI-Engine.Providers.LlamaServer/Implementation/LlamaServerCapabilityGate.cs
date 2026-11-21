@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+
 /// <summary>
 ///     Refuses a runtime missing correctness/safety flags and removes only explicitly optional optimization or
 ///     diagnostic flags. This keeps bring-your-own/source builds honest without hard-coding behavior from a remembered
@@ -12,6 +14,9 @@ internal static class LlamaServerCapabilityGate
     ///     message. Never localized.
     /// </summary>
     internal const string ExpertOffloadRequiresCpuMoe = "expert-offload-requires-cpu-moe";
+
+    /// <summary>The stable token a live-share Hybrid refusal carries when the runtime cannot take <c>--fit-target</c>. Never localized.</summary>
+    internal const string LiveShareRequiresFitTarget = "live-share-requires-fit-target";
 
     private static readonly IReadOnlyDictionary<string, int> OptionalOptions = new Dictionary<string, int>(StringComparer.Ordinal)
     {
@@ -60,6 +65,15 @@ internal static class LlamaServerCapabilityGate
                 "The selected llama.cpp runtime does not support '--cpu-moe', which this model needs to keep its experts "
                 + "in system RAM. Install a runtime that supports it, or use a model that fits in VRAM. "
                 + "(" + ExpertOffloadRequiresCpuMoe + ")");
+        }
+
+        // Same reasoning for the fit target: it aims the child at the share admission booked, so a runtime without it is refused, never degraded.
+        if (arguments.Contains(LlamaServerManagedFlags.FitTarget) && !SupportsLaunchOption(manifest, LlamaServerManagedFlags.FitTarget))
+        {
+            return Incompatible(spec,
+                "The selected llama.cpp runtime does not support '--fit-target', which this model needs to stay within the GPU memory "
+                + "admitted for it. Install a runtime that supports it, or free GPU memory and try again. "
+                + "(" + LiveShareRequiresFitTarget + ")");
         }
 
         if (!SupportsKvAndFlashValues(arguments, manifest))

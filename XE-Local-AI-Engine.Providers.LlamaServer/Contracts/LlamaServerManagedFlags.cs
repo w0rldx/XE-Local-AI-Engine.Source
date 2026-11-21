@@ -21,6 +21,8 @@ public static class LlamaServerManagedFlags
     public const string TensorSplit = "-ts";
     public const string OverrideTensor = "-ot";
     public const string CpuMoe = "--cpu-moe";
+    public const string Fit = "--fit";
+    public const string FitTarget = "--fit-target";
     public const string CacheTypeK = "-ctk";
     public const string CacheTypeV = "-ctv";
     public const string FlashAttentionShort = "-fa";
@@ -51,6 +53,8 @@ public static class LlamaServerManagedFlags
         // tensor_buft_overrides list -ot writes (llama.cpp common/arg.cpp), so an override could re-place every expert after admission.
         "-cmoe", CpuMoe,
         "-ncmoe", "--n-cpu-moe",
+        // Auto-fit and its margin carry a live-share booking into the child; an override could turn the fit off or retarget it.
+        "-fit", Fit, "-fitt", FitTarget, "-fitc", "--fit-ctx",
         CacheTypeK, "--cache-type-k",
         CacheTypeV, "--cache-type-v",
         FlashAttentionShort, FlashAttention,
@@ -71,4 +75,31 @@ public static class LlamaServerManagedFlags
         // Serving mode: the embedding profile's pooling is part of the stored vector identity, and --rerank flips pooling to rank wherever it lands.
         "--embedding", Embeddings, Pooling, Rerank, "--reranking"
     ];
+
+    // llama.cpp's LLM_FFN_EXPS_REGEX with the CPU buffer: what --cpu-moe installs and llama-fit-params echoes back as -ot.
+    private const string AllExpertsToCpu = @"\.ffn_(up|down|gate|gate_up)_(ch|)exps=CPU";
+
+    /// <summary>Whether <paramref name="arguments" /> keep expert weights in system RAM: the admitted <c>--cpu-moe</c>, or a replayed expert <c>-ot</c>.</summary>
+    public static bool PinsExpertsToCpu(IReadOnlyList<string> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        return arguments.Any(static argument => string.Equals(argument, CpuMoe, StringComparison.Ordinal) || ClassifyExpertPin(argument) != ExpertPinScope.None);
+    }
+
+    /// <summary>
+    ///     Classifies an <c>-ot</c> value: every entry the all-expert pattern, some entry an <c>exps=CPU</c> pin, or none. A mix counts as partial,
+    ///     which prices a frozen replay at no less than today's booking.
+    /// </summary>
+    public static ExpertPinScope ClassifyExpertPin(string? overrideTensor)
+    {
+        if (string.IsNullOrWhiteSpace(overrideTensor) || !overrideTensor.Contains("exps=CPU", StringComparison.OrdinalIgnoreCase))
+        {
+            return ExpertPinScope.None;
+        }
+
+        var entries = overrideTensor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return entries.All(static entry => string.Equals(entry, AllExpertsToCpu, StringComparison.Ordinal))
+            ? ExpertPinScope.AllExperts
+            : ExpertPinScope.Partial;
+    }
 }

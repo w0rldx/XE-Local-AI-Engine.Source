@@ -51,4 +51,10 @@ public sealed record HardwareProfile
 
     /// <summary>Free disk space in bytes on the volume that hosts the models/content root.</summary>
     public required long FreeDiskBytes { get; init; }
+
+    /// <summary>
+    ///     <see langword="true" /> when the GPU probe timed out: the GPU fields are a degrade, not a reading. Nothing derived from
+    ///     this profile may be cached, memoized, made sticky or used to demote a frozen profile.
+    /// </summary>
+    public bool GpuProbeIndeterminate { get; init; }
 }

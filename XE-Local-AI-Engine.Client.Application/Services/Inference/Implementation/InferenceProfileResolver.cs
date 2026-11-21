@@ -12,8 +12,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 /// <remarks>
 ///     A <see cref="InferenceProfileStatus.Frozen" /> profile is re-validated through
-///     <see cref="IInferenceInvalidationEvaluator" /> first and demoted to <see cref="InferenceProfileStatus.Stale" />
-///     when its baseline no longer holds. Singleton on the cold spawn path: <see cref="IInferenceProfileStore" /> is
+///     <see cref="IInferenceInvalidationEvaluator" /> first: demoted to <see cref="InferenceProfileStatus.Stale" /> on
+///     lasting drift, bypassed for one launch under free-VRAM pressure. Singleton: <see cref="IInferenceProfileStore" /> is
 ///     SCOPED, so the resolver resolves it through a fresh <see cref="IServiceScopeFactory" /> scope per call. This
 ///     path must NEVER throw — a corrupt persisted arg combo degrades to explore (auto-fit), never an exception.
 /// </remarks>
@@ -70,13 +70,17 @@ public sealed class InferenceProfileResolver : IInferenceProfileResolver
                 return ResolvedLaunchArguments.Explore();
 
             case InferenceProfileStatus.Frozen:
-                if (await _invalidationEvaluator.IsStaleAsync(record, ct))
+                switch (await _invalidationEvaluator.EvaluateAsync(record, ct))
                 {
-                    await store.MarkStaleAsync(record.Id, ct);
-                    return ResolvedLaunchArguments.Explore();
+                    case InferenceProfileValidity.Stale:
+                        await store.MarkStaleAsync(record.Id, ct);
+                        return ResolvedLaunchArguments.Explore();
+                    case InferenceProfileValidity.UnderPressure:
+                        // Transient pressure: auto-fit this launch only, the profile stays Frozen (the evaluator logged the figures).
+                        return ResolvedLaunchArguments.Explore();
+                    default:
+                        return BuildReplayOrExplore(record);
                 }
-
-                return BuildReplayOrExplore(record);
 
             default:
                 // Stale (or any future status): re-exploration is the only path back to auto-fit.

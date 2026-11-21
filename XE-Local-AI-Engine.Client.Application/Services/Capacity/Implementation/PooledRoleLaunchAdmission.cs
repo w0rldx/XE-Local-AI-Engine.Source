@@ -70,11 +70,11 @@ public sealed class PooledRoleLaunchAdmission : ILlamaServerPooledLaunchAdmissio
 
     /// <inheritdoc />
     /// <remarks>
-    ///     Decided against GLOBAL free VRAM; the window was sized against the per-process budget, and the two are never merged. Decide at
-    ///     the full tier; on a memory shortfall unload one idle chat model, wait for the freed VRAM to show, and decide again. A model only a
-    ///     request in flight keeps loaded is waited for, up to <see cref="BusyResidentWaitCap" />; with nothing left to unload, allow the
-    ///     smaller windows. Eviction and both waits run between decisions, never under a gate but the caller's; a background load skips them.
-    ///     No free-VRAM reading: no-op.
+    ///     Decided against GLOBAL free VRAM, never merged with the per-process budget the window was sized at. Decide at the full tier; on a
+    ///     shortfall unload one idle chat model, wait for the freed VRAM to show, and decide again. A model kept loaded only by a request in
+    ///     flight is waited for, up to <see cref="BusyResidentWaitCap" />; with nothing left to unload, allow smaller windows. Eviction and
+    ///     waits run between decisions, under no gate but the caller's; a background load skips them. No free-VRAM reading: no-op, after one
+    ///     forced refresh when the profile came from a timed-out probe.
     /// </remarks>
     public async Task<IDisposable?> AdmitChatAsync(string modelName,
         bool mayUnloadIdleModels,
@@ -88,12 +88,19 @@ public sealed class PooledRoleLaunchAdmission : ILlamaServerPooledLaunchAdmissio
         var services = scope.ServiceProvider;
         var audit = services.GetRequiredService<IRuntimeDeviceAudit>();
         var profile = await audit.GetEffectiveProfileAsync(forceRefreshProfile: false, ct);
+        var refreshed = profile.GpuProbeIndeterminate;
+        if (refreshed)
+        {
+            // A timed-out probe is no reading, unlike the CPU-fallback profile whose free VRAM is null by design: ask once more.
+            profile = await audit.GetEffectiveProfileAsync(forceRefreshProfile: true, ct);
+        }
+
         if (profile is not { GpuAccelAvailable: true, VramKnown: true, AvailableVramBytes: not null })
         {
             // Without this line a second model loading beside a resident one leaves no trace of why nothing was decided.
             _logger.LogInformation(
-                "Chat admission for model {ModelName} skipped: no global free-VRAM reading (GPU acceleration {GpuAccel}, VRAM known {VramKnown}, free {FreeMiB} MiB); the launch proceeds unadmitted.",
-                modelName, profile.GpuAccelAvailable, profile.VramKnown, profile.AvailableVramBytes / Mib);
+                "Chat admission for model {ModelName} skipped: no global free-VRAM reading{AfterRefresh} (GPU acceleration {GpuAccel}, VRAM known {VramKnown}, free {FreeMiB} MiB); the launch proceeds unadmitted.",
+                modelName, refreshed ? " after a refresh" : string.Empty, profile.GpuAccelAvailable, profile.VramKnown, profile.AvailableVramBytes / Mib);
             return null;
         }
 
@@ -153,9 +160,10 @@ public sealed class PooledRoleLaunchAdmission : ILlamaServerPooledLaunchAdmissio
 
         var allocation = decision.Admission?.Allocation;
         _logger.LogInformation(
-            "Chat admission for model {ModelName} ({LoadKind} load): {Verdict}; global free {GlobalFreeMiB} MiB, footprint {FootprintGpuMiB} MiB GPU, window {ContextTokens}, slots {ChatSlots}, placement {Placement}, evicted [{Evicted}].",
+            "Chat admission for model {ModelName} ({LoadKind} load): {Verdict}; global free {GlobalFreeMiB} MiB, footprint {FootprintGpuMiB} MiB GPU / {FootprintRamMiB} MiB RAM, window {ContextTokens}, slots {ChatSlots}, placement {Placement}, fit target {FitTargetMiB} MiB, evicted [{Evicted}].",
             modelName, mayUnloadIdleModels ? "user" : "background", decision.Verdict, decision.Admission?.GlobalFreeVramBytesAtAdmission / Mib, allocation?.Footprint.GpuBytes / Mib,
-            allocation?.ProcessContextTokens, allocation?.ChatSlots, allocation?.Placement, string.Join(", ", evicted));
+            allocation?.Footprint.RamBytes / Mib, allocation?.ProcessContextTokens, allocation?.ChatSlots, allocation?.Placement, allocation?.FitTargetBytes / Mib,
+            string.Join(", ", evicted));
 
         return ToReservation(decision);
     }

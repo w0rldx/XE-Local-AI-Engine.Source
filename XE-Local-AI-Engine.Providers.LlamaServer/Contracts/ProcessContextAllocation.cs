@@ -24,6 +24,18 @@ public sealed record ProcessContextAllocation
     ///     would cost window or residency. Ignored for every other role, which always runs one slot.
     /// </summary>
     public int ChatSlots { get; init; } = LlamaServerChatSlots.Count;
+
+    /// <summary>The process GPU budget, before its reserve, this allocation was priced at; <see langword="null" /> when it books no GPU.</summary>
+    public long? GpuPlacementBudgetBytes { get; init; }
+
+    /// <summary>The <c>--fit-target</c> margin a live-share Hybrid launches with, so llama.cpp aims at the booking; otherwise <see langword="null" />.</summary>
+    public long? FitTargetBytes { get; init; }
+
+    /// <summary>
+    ///     <see langword="true" /> for a CPU allocation priced for a GPU variant from a timed-out GPU probe: never cached, and no later
+    ///     substitution (commit, effective, down-tier, live placement) acts on it.
+    /// </summary>
+    public bool IsTransient { get; init; }
 }
 
 /// <summary>Dual-axis resources reserved for a process.</summary>

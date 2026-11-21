@@ -103,6 +103,9 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     // Ticked after every change CheckHealthAsync shows: registration, detach, a lease taken or released, an ensure and a process's own exit.
     private readonly IRuntimeResidencyChangeNotifier _residencyNotifier;
 
+    // Global free VRAM around an admitted GPU load, to detect a child over its booking; null in provider-only hosts and tests (no detection).
+    private readonly ILiveMemorySampler? _liveMemorySampler;
+
     /// <summary>
     ///     Creates a supervisor over the supplied collaborators. The reaper loop starts immediately. Constructed via DI
     ///     (same-assembly factory) or in tests — the launcher/health-probe seams are internal, so the ctor is internal.
@@ -131,7 +134,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         ProcessSpawnReceiptStore? spawnReceipts = null,
         ILlamaServerPooledLaunchAdmission? pooledLaunchAdmission = null,
         IRuntimeResidencyChangeNotifier? residencyNotifier = null,
-        IGpuIdleHolderPreemption? idlePreemption = null)
+        IGpuIdleHolderPreemption? idlePreemption = null,
+        ILiveMemorySampler? liveMemorySampler = null)
     {
         ArgumentNullException.ThrowIfNull(binaryManager);
         _binaryManager = binaryManager;
@@ -183,6 +187,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         _loadTelemetry = loadTelemetry ?? new NullLlamaServerLoadTelemetry();
         _pooledLaunchAdmission = pooledLaunchAdmission;
         _residencyNotifier = residencyNotifier ?? NullRuntimeResidencyChangeNotifier.Instance;
+        _liveMemorySampler = liveMemorySampler;
 
         _runtimeMutationGate = new LlamaServerRuntimeMutationGate(typeof(LlamaServerProcessSupervisor), _shutdownCts.Token, idlePreemption);
         _reaper = new LlamaServerIdleReaper(_processes,

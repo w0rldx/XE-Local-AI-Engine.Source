@@ -15,6 +15,11 @@
 #               GET auth/status answers.
 #   auth        always: first-run setup if required, then login; the token goes to .tmp/lab/<profile>/token.
 #   settings    PUT only the node settings that differ from the profile's `settings`.
+#   runtime     with --cpu and no XE_LLAMACPP_SERVER_PATH: a managed llama.cpp runtime is installed. When the node
+#               records none (a fresh node; the Offline profile never downloads one itself), the variant the node selects
+#               is installed and automatic selection restored (lab-driver.py runtime-ensure; reason
+#               `runtime installed <tag> <variant>`, else `runtime present <tag> <variant>`). Skipped for a
+#               bring-your-own llama-server.
 #   model       the model is installed, selected as default, the others ejected; resident is reported honestly.
 #               A model missing from the lab's models dir is first hard-linked from the user-level store when that
 #               store has it (lab-driver.py model-link; reason `linked from <dir>`), unless --download or --no-link.
@@ -28,7 +33,7 @@
 #   --profile NAME   scripts/lab/profiles/NAME.json (default `default`).
 #   --model NAME     Override the profile's `model`; substituted for `<model>` in the profile's settings.
 #                    A model switch on a live host is `--until model --model <other>`.
-#   --until PHASE    data|host|auth|settings|model|first-turn (default: the profile's `stop`).
+#   --until PHASE    data|host|auth|settings|runtime|model|first-turn (default: the profile's `stop`).
 #   --fresh          Start from a clean node: delete this checkout's node state (refused while its host runs).
 #   --snapshot       After settings: stop the host, save the node state to .tmp/lab/<profile>/snapshot, restart.
 #   --download       Install a missing model through the node from the profile's `modelSource`.
@@ -57,7 +62,7 @@
 #
 # Exit codes:
 #   0   — the requested phases are in place; the manifest was written
-#   1   — an interaction failed (transport, auth, contract, settings not verified, download, model link)
+#   1   — an interaction failed (transport, auth, contract, settings not verified, runtime install, download, model link)
 #   2   — prerequisite missing / usage error (no XE_LLAMACPP_SERVER_PATH without --cpu, profile missing, model absent without --download and not
 #         linkable from XE_LAB_MODEL_SOURCE_DIR, lab owned by
 #         another plan without --take-over, XE_ASPIRE_APPHOST
@@ -95,7 +100,7 @@ CLIENT_DIR="${ROOT}/XE-Local-AI-Engine.Client"
 EMAIL="${LAB_EMAIL:-admin@localhost.test}"
 PASSWORD="${LAB_PASSWORD:-!Demo1234567}"
 READY_TIMEOUT="${LAB_READY_TIMEOUT_SECONDS:-240}"
-PHASES=(data host auth settings model first-turn)
+PHASES=(data host auth settings runtime model first-turn)
 
 log() { echo "[lab-up] $*" >&2; }
 die() { local code="$1"; shift; echo "[lab-up] $*" >&2; exit "${code}"; }
@@ -481,6 +486,32 @@ phase_settings() {
   fi
 }
 
+# A driver call longer than the access token's lifetime renews it and prints the new token; keep it.
+keep_renewed_token() {
+  local renewed
+  renewed="$(record_value token "$1")"
+  [[ -n "${renewed}" ]] || return 0
+  TOKEN="${renewed}"
+  (umask 077 && printf '%s\n' "${TOKEN}" >"${TOKEN_FILE}")
+}
+
+phase_runtime() {
+  if [[ -n "${XE_LLAMACPP_SERVER_PATH:-}" ]]; then
+    PHASE_STATE[runtime]="skipped:bring-your-own llama-server (XE_LLAMACPP_SERVER_PATH)"
+    return 0
+  fi
+  local records found
+  records="$(node_drive runtime-ensure --email "${EMAIL}" --password "${PASSWORD}")" \
+    || die 1 "runtime-ensure failed (see ${DRIVER_LOG})."
+  keep_renewed_token "${records}"
+  found="$(record_value tag "${records}") $(record_value variant "${records}")"
+  if [[ "$(record_value present "${records}")" == "true" ]]; then
+    PHASE_STATE[runtime]="skipped:runtime present ${found}"
+  else
+    PHASE_STATE[runtime]="ran:runtime installed ${found}"
+  fi
+}
+
 take_snapshot() {
   log "snapshot: stopping the host to copy its state"
   "${SCRIPT_DIR}/dev-stop.sh" >>"${EVIDENCE}/dev-start.log" 2>&1 || die 1 "dev-stop.sh failed before the snapshot."
@@ -558,13 +589,7 @@ phase_model() {
     records="$(node_drive download --model "${MODEL}" --repo "${SOURCE_REPO}" --file "${SOURCE_FILE}" \
       --email "${EMAIL}" --password "${PASSWORD}")" \
       || die 1 "the download failed (see ${DRIVER_LOG})."
-    # A download longer than the access token's lifetime renews it inside the driver; keep the new token.
-    local renewed
-    renewed="$(record_value token "${records}")"
-    if [[ -n "${renewed}" ]]; then
-      TOKEN="${renewed}"
-      (umask 077 && printf '%s\n' "${TOKEN}" >"${TOKEN_FILE}")
-    fi
+    keep_renewed_token "${records}"
     [[ "$(record_value downloaded "${records}")" == "true" ]] || die 1 "the download of ${MODEL} did not complete."
     records="$(ensure_model)" || die 1 "model-ensure failed after the download (see ${DRIVER_LOG})."
     [[ "$(record_value installed "${records}")" == "true" ]] || die 1 "model ${MODEL} is still not installed after the download."

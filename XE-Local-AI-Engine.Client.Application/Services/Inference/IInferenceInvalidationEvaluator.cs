@@ -3,20 +3,23 @@ namespace XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Decides whether a persisted, frozen inference profile is STALE: the host's runtime build or hardware has
-///     drifted from the freeze baseline, so the frozen launch args can no longer be trusted and a fresh explore is
-///     required.
+///     Judges a persisted, frozen inference profile against the freeze baseline: still replayable, STALE because the
+///     runtime build, launch policy, hardware or placement drifted, or only under transient free-VRAM pressure.
 /// </summary>
 /// <remarks>A PURE verdict: it never evicts, kills or restarts a running process (invariant: stale &#8800; evict).</remarks>
 public interface IInferenceInvalidationEvaluator
 {
     /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="profile" /> should be re-explored: the active
-    ///     llama.cpp build differs from the frozen build, the GPU vendor/VRAM has materially changed, or live free
-    ///     VRAM has dropped below the frozen baseline.
+    ///     Returns <see cref="InferenceProfileValidity.Stale" /> when a lasting axis drifted,
+    ///     <see cref="InferenceProfileValidity.UnderPressure" /> when only live free VRAM dropped below the baseline.
     /// </summary>
-    /// <remarks>Degrades safely — it skips a check rather than reporting stale — when an input is unknown.</remarks>
-    Task<bool> IsStaleAsync(InferenceProfileRecord profile, CancellationToken ct);
+    /// <remarks>
+    ///     Build, launch-policy and hardware drift win over pressure; placement is judged only without pressure, since
+    ///     its verdict is cached and must not be priced against pressured free VRAM. Degrades safely, skipping a check
+    ///     rather than reporting stale, when an input is unknown: an unreadable free VRAM never reports pressure, while a
+    ///     timed-out GPU probe reports pressure for a GPU row, so it can neither demote nor replay one.
+    /// </remarks>
+    Task<InferenceProfileValidity> EvaluateAsync(InferenceProfileRecord profile, CancellationToken ct);
 
     /// <summary>
     ///     Returns <see langword="true" /> when replaying <paramref name="profile" /> would CONTRADICT today's

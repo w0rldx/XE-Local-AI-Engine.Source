@@ -14,6 +14,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 MODULE_PATH = Path(__file__).resolve().parents[2] / "scripts" / "model-matrix-driver.py"
 SPEC = importlib.util.spec_from_file_location("model_matrix_driver", MODULE_PATH)
@@ -464,6 +465,64 @@ class VerdictTests(unittest.TestCase):
         self.assertIn("| eject (hard) | **FAIL** |", text)
         self.assertIn("| moe-placement (hard) | n/a |", text)
         self.assertIn("verdict **FAIL**", text)
+
+
+# A 2-slot and a 1-slot 65,536 chat launch, as LlamaServerLaunchArgumentComposer.AppendChatSlotArgs emits them.
+TWO_SLOT_ARGV = ["llama-server", "-m", "m.gguf", "-c", "73728", "-np", "2", "--kv-unified-per-slot", "65536"]
+ONE_SLOT_ARGV = ["llama-server", "-m", "m.gguf", "-c", "65536", "-np", "1"]
+
+
+class ExpectedSlotWindowTests(unittest.TestCase):
+    def test_the_per_slot_cap_wins_over_the_shared_context(self) -> None:
+        self.assertEqual(driver.expected_slot_window(TWO_SLOT_ARGV), "65536")
+
+    def test_a_single_slot_launch_reads_its_context(self) -> None:
+        self.assertEqual(driver.expected_slot_window(ONE_SLOT_ARGV), "65536")
+
+    def test_no_context_flag_is_none(self) -> None:
+        self.assertIsNone(driver.expected_slot_window(["llama-server", "-m", "m.gguf"]))
+
+
+class MoePlacementCheckTests(unittest.TestCase):
+    class Session:
+        """Just enough of driver.Session for check_moe_placement: a MoE on CUDA and a canned running surface."""
+
+        def __init__(self, window: int) -> None:
+            self.entry, self.variant, self.model_file = {"moe": True, "sizeBytes": 1 << 30}, "cuda", "m.gguf"
+            self.window = window
+
+        def eject(self) -> bool:
+            return True
+
+        def turn(self, label: str, _prompt: str, **_kwargs: object) -> dict:
+            return {
+                "label": label,
+                "outcome": "assistant-completed",
+                "seconds": 0.1,
+                "contentChars": 2,
+                "reasoningChars": 0,
+                "notices": [],
+                "toolsCompleted": [],
+                "error": None,
+                "wire": [],
+            }
+
+        def running(self) -> list[dict]:
+            return [{"effectiveContextTokens": self.window, "expertsOffloaded": False}]
+
+    def verdict(self, argv: list[str], window: int) -> str:
+        with (
+            mock.patch.object(driver, "gpu_memory_mib", return_value=(0, 32768)),
+            mock.patch.object(driver, "llama_processes", return_value=[{"argv": argv}]),
+        ):
+            return driver.check_moe_placement(self.Session(window))["moe-placement"]["verdict"]
+
+    def test_a_two_slot_launch_is_judged_against_its_per_slot_window(self) -> None:
+        self.assertEqual(self.verdict(TWO_SLOT_ARGV, 65536), "pass")
+
+    def test_a_surface_that_disagrees_with_the_launch_fails(self) -> None:
+        self.assertEqual(self.verdict(TWO_SLOT_ARGV, 73728), "fail")
+        self.assertEqual(self.verdict(ONE_SLOT_ARGV, 32768), "fail")
 
 
 if __name__ == "__main__":

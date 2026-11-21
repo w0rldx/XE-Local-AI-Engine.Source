@@ -80,6 +80,29 @@ public sealed class LlamaServerCapabilityGateTests
         AssertEx.True(decision.IsCompatible, "a launch that never asks for --cpu-moe must be unaffected by the new branch.");
     }
 
+    [Test]
+    public void FitTarget_OnARuntimeThatDoesNotAdvertiseIt_IsRefusedWithoutSafeFallback()
+    {
+        var decision = LlamaServerCapabilityGate.Apply(Spec(["--fit", "on", "--fit-target", "3570"]),
+            Manifest(HelpWithoutCpuMoe),
+            requireMetrics: false);
+
+        AssertEx.False(decision.IsCompatible, "a runtime without --fit-target cannot aim the child at the live share that was admitted.");
+        AssertEx.False(decision.CanTrySafeFallback);
+        AssertEx.Contains(AssertEx.NotNull(decision.SanitizedError), LlamaServerCapabilityGate.LiveShareRequiresFitTarget);
+    }
+
+    [Test]
+    public void FitTarget_OnARuntimeThatAdvertisesIt_SurvivesTheGate()
+    {
+        var decision = LlamaServerCapabilityGate.Apply(Spec(["--fit", "on", "--fit-target", "3570"]),
+            Manifest(HelpWithoutCpuMoe + "\n-fitt, --fit-target MiB0,MiB1,MiB2,..."),
+            requireMetrics: false);
+
+        AssertEx.True(decision.IsCompatible);
+        AssertEx.Contains(decision.Spec.Arguments, "--fit-target");
+    }
+
     private static LlamaServerCapabilityManifest Manifest(string help) =>
         LlamaServerCapabilityManifest.FromSuccessfulProbe(new LlamaBinary
             {

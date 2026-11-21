@@ -729,6 +729,53 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- **A chat model larger than the GPU loads on an idle Windows or WSL2 desktop** — such a model was refused even with
+  nothing else loaded, because its GPU share was sized from the per-process budget, which the desktop's own VRAM use
+  does not reduce. A chat load that does not fit now gets the GPU share that is actually free, launched with
+  `--fit-target` so llama.cpp aims at that share, when system RAM holds the rest. This applies to loads that are not
+  replaying a frozen inference profile. A model that exceeds its share, or whose fit fails, is logged as a Warning and
+  keeps serving.
+- **A Mixture-of-Experts chat model under VRAM pressure loads with its experts in system RAM** (`--cpu-moe`) instead of
+  dropping to a small window or being refused, on every platform.
+- **A load can no longer exceed the memory its admission booked** — an out-of-memory retry keeps the admitted
+  placement (an expert-offload load keeps `--cpu-moe`), and a launch whose served llama.cpp build differs from the
+  admitted one is refused, naming both, when it would need more memory than was booked.
+- **A launch on a different llama.cpp build than admitted is checked on the allocation it launches** — the booking
+  check priced a separate resolve, so a load priced from a timed-out GPU reading could pass it and then launch a larger
+  allocation once the reading recovered. Such a launch is now also covered by the over-booking Warning.
+- **The over-booking Warning sees a load's real VRAM take** — the free-VRAM readings before and after a load came from
+  the gauge's shared 14-second reading, so a load that finished inside it showed no take at all. Both readings are now
+  taken fresh, and the gauge reuses the latest one.
+- **Frozen inference profiles are booked by their real placement** — a profile that keeps experts or layers in system
+  RAM now books that RAM, and one frozen from an expert-offload load books the expert-offload split. Such a profile can
+  now be refused where system RAM is short; re-explore it to fit the current host. A profile frozen with `-ngl` equal
+  to the model's block count counts as a partial offload, since llama.cpp then keeps one layer in RAM. A frozen profile
+  that splits a dense model between GPU and RAM is still refused on an idle Windows desktop whose free VRAM sits below
+  its share; re-explore it instead.
+- **A frozen Mixture-of-Experts profile that pins only some experts to system RAM books the GPU its other experts
+  use** — the replay keeps the remaining experts on the GPU, but a host where the model would load with all experts in
+  RAM booked it that way. It now books the GPU share a split load takes, so it can be refused on an idle Windows
+  desktop whose free VRAM sits below that share; re-explore it instead.
+- **A per-model launch-argument override can no longer set `--fit`, `--fit-target` or `--fit-ctx`** (or their short
+  forms): a save naming one is refused, and a stored override has them stripped at spawn.
+- **Transient VRAM pressure no longer demotes a frozen inference profile** — when free VRAM sits well below the freeze
+  baseline, that one launch auto-fits and the profile stays Frozen. A freeze is refused, with a retry hint, when free
+  VRAM could not be read on an NVIDIA host.
+- **A GPU profile is no longer frozen without a baseline after a timed-out `nvidia-smi`** — on WSL2 the timeout read
+  the GPU vendor as none, so a Vulkan profile froze with no free-VRAM baseline to guard its replay. Such a freeze is now
+  refused with the retry hint; AMD and Intel hosts with a good reading still freeze without one.
+- **A timed-out `nvidia-smi` no longer reports old free VRAM as current** — admission sees free VRAM as unknown (and
+  refuses on NVIDIA) and gets the RAM and disk just read, instead of the whole earlier profile.
+- **A timed-out `nvidia-smi` no longer demotes frozen inference profiles or pins a CPU placement** — on WSL2 a single
+  timeout marked every frozen CUDA profile Stale for good; that launch now auto-fits and the profile stays Frozen. A
+  CPU placement priced from the timeout serves that launch only, takes no out-of-memory cap, and the next load prices a
+  real reading; the runtime device audit is not cached on it either.
+- **A chat load after a timed-out `nvidia-smi` re-reads the GPU once before it is admitted** — the load used to go
+  unadmitted whenever the first reading timed out. A recovered reading is admitted like any other load and can refuse it.
+- **A training run refused because free VRAM could not be read says so** and asks to try again, instead of advising to
+  eject a loaded model.
+- **`scripts/lab-up.sh --cpu` installs the managed llama.cpp runtime on a fresh node** in a new `runtime` phase (the
+  variant the node selects), so the first model-fit call on an Offline-profile lab no longer answers 500.
 - **GGUF INT8 metadata values are read as signed** — they were read as 0 to 255.
 - **Regenerating an answer is refused while the conversation's bound workflow run is live**, the same as sending.
 - **A managed runtime publish removes leftover `*.aside` folders** of earlier interrupted publishes (llama.cpp, whisper.cpp,

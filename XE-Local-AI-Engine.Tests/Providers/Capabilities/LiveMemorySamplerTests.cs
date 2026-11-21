@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     <see cref="LiveMemorySampler" /> tests: per-GPU <c>nvidia-smi</c> parsing, empty list on failure, the shared
-///     two-second reading, one probe for concurrent callers, and an untouched profiler cache.
+///     reading and fresh samples, one probe for concurrent callers, and an untouched profiler cache.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LiveMemorySamplerTests
@@ -123,6 +123,25 @@ public sealed class LiveMemorySamplerTests
 
         AssertEx.Equal(expected: 2, probe.CallCount);
         AssertEx.False(ReferenceEquals(first, fresh), "an expired reading must be re-probed.");
+    }
+
+    [Test]
+    public async Task SampleFresh_InsideTheCacheWindow_ProbesEachTime_AndBecomesTheSharedReading()
+    {
+        var probe = new ScriptedProbe("24564, 4000, 20000\n");
+        var sampler = CreateSampler(probe);
+
+        var shared = await sampler.SampleAsync(CancellationToken.None);
+        probe.Output = "24564, 22000, 2000\n";
+        var first = await sampler.SampleFreshAsync(CancellationToken.None);
+        var second = await sampler.SampleFreshAsync(CancellationToken.None);
+        var afterFresh = await sampler.SampleAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 3, probe.CallCount);
+        AssertEx.Equal(2000L * Mib, first.Gpus[0].AvailableVramBytes);
+        AssertEx.False(ReferenceEquals(shared, first), "a fresh sample must not return the shared reading.");
+        AssertEx.False(ReferenceEquals(first, second), "each fresh sample must run its own probe.");
+        AssertEx.True(ReferenceEquals(second, afterFresh), "the gauge must reuse the latest fresh reading.");
     }
 
     [Test]

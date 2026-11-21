@@ -41,6 +41,13 @@ using CategoryAttribute = CategoryAttribute;
 [Category(TestCategories.Unit)]
 public sealed class McpServerConnectionManagerTests
 {
+    /// <summary>Fails a passing test whose in-process server teardown hit its deadline without the test consuming that expiry.</summary>
+    [After(Test)]
+    public void FailOnUnconsumedTeardownTimeout(TestContext context)
+    {
+        McpTeardownLog.ThrowIfUnconsumed(context, context.Execution.Result?.State == TestState.Failed);
+    }
+
     [Test]
     public async Task RefreshAsync_ConnectsEnabledServer_PublishesQualifiedApprovalWrappedTools()
     {
@@ -959,34 +966,44 @@ public sealed class McpServerConnectionManagerTests
         // LastUsedUtc must not move only on acquire, or a call longer than the idle window loses its session mid-call.
         var clock = new ManualTimeProvider();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var pool = new ServerPool();
         var record = StdioRecord("Counter") with
         {
             SessionScope = McpSessionScope.PerConversation
         };
         var factory = new FakeMcpClientFactory();
-        factory.SpawnFor(record.Id, () => pool.StartCounterAsync(gate));
+        factory.SpawnFor(record.Id, () => pool.StartCounterAsync(gate, entered));
         var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
         await using var manager = CreateManager(registry, factory, new FakeMcpServerStore(record), timeProvider: clock);
         await manager.RefreshAsync();
         var executable = Resolve(registry, "mcp__counter__next");
 
-        Task<object?> call;
-        using (AgentRunConversationContext.BeginScope(Guid.NewGuid()))
+        try
         {
-            call = executable.InvokeAsync(new AIFunctionArguments()).AsTask();
+            Task<object?> call;
+            using (AgentRunConversationContext.BeginScope(Guid.NewGuid()))
+            {
+                call = executable.InvokeAsync(new AIFunctionArguments()).AsTask();
+            }
+
+            // The tool running proves the call is in flight; a mapped session alone is visible before the call pins it.
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            AssertEx.Equal(expected: 1, manager.CountConversationSessions(record.Id), "the call opened a session");
+            clock.Advance(McpServerConnectionManager.ConversationSessionIdleTimeout + TimeSpan.FromMinutes(1));
+            AssertEx.Equal(expected: 1, manager.CountConversationSessions(record.Id), "a session with a call in flight survives the sweep");
+
+            gate.SetResult();
+            AssertEx.True(ResultText(await call).Contains("count=1", StringComparison.Ordinal), "the call completes on its own session");
+
+            clock.Advance(McpServerConnectionManager.ConversationSessionIdleTimeout + TimeSpan.FromMinutes(1));
+            await AssertEx.EventuallyAsync(() => manager.CountConversationSessions(record.Id) == 0, TimeSpan.FromSeconds(10),
+                "once the call ended the idle window runs from its end");
         }
-
-        await AssertEx.EventuallyAsync(() => manager.CountConversationSessions(record.Id) == 1, TimeSpan.FromSeconds(10), "the call opened a session");
-        clock.Advance(McpServerConnectionManager.ConversationSessionIdleTimeout + TimeSpan.FromMinutes(1));
-        AssertEx.Equal(expected: 1, manager.CountConversationSessions(record.Id), "a session with a call in flight survives the sweep");
-
-        gate.SetResult();
-        AssertEx.True(ResultText(await call).Contains("count=1", StringComparison.Ordinal), "the call completes on its own session");
-
-        clock.Advance(McpServerConnectionManager.ConversationSessionIdleTimeout + TimeSpan.FromMinutes(1));
-        await AssertEx.EventuallyAsync(() => manager.CountConversationSessions(record.Id) == 0, TimeSpan.FromSeconds(10),
-            "once the call ended the idle window runs from its end");
+        finally
+        {
+            gate.TrySetResult();
+        }
     }
 
     [Test]
@@ -1912,16 +1929,18 @@ public sealed class McpServerConnectionManagerTests
         public Task<McpClient> StartCounterAsync() =>
             StartCounterAsync(gate: null);
 
-        /// <summary>A counter whose "next" tool, when a gate is given, waits on it before answering (an in-flight call).</summary>
-        public async Task<McpClient> StartCounterAsync(TaskCompletionSource? gate)
+        /// <summary>A counter whose "next" tool, when a gate is given, signals <paramref name="entered" /> and waits on the gate before answering.</summary>
+        /// <remarks>The wait honours the call's token, so stopping the server ends a parked call instead of waiting for a gate nobody releases.</remarks>
+        public async Task<McpClient> StartCounterAsync(TaskCompletionSource? gate, TaskCompletionSource? entered = null)
         {
             var count = 0;
             var server = await InProcMcpServer.StartAsync("counter",
-                AIFunctionFactory.Create(async () =>
+                AIFunctionFactory.Create(async (CancellationToken ct) =>
                 {
                     if (gate is not null)
                     {
-                        await gate.Task;
+                        entered?.TrySetResult();
+                        await gate.Task.WaitAsync(ct);
                     }
 
                     return string.Create(CultureInfo.InvariantCulture, $"count={Interlocked.Increment(ref count)}");

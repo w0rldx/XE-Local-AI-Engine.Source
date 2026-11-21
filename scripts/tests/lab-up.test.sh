@@ -3,8 +3,8 @@
 # Behavioural tests for scripts/lab-up.sh and scripts/lab-api.sh.
 #
 # Offline, no host, no network. The scripts under test are copied into a temp checkout; every Python driver in
-# that copy is a dispatcher: the subcommands that talk to a node (auth, settings-ensure, model-ensure, download,
-# first-turn) print scripted records, everything else (snapshot-key, manifest, base-url, model-link) execs the REAL
+# that copy is a dispatcher: the subcommands that talk to a node (auth, settings-ensure, runtime-ensure, model-ensure,
+# download, first-turn) print scripted records, everything else (snapshot-key, manifest, base-url, model-link) execs the REAL
 # driver.
 # dev-start/dev-status/dev-stop, aspire and curl are fakes driven by files in ${CTL}. HOME and XDG point into the
 # temp tree, so the xdg mirror never touches the real home.
@@ -93,7 +93,7 @@ JSON
 cat >"${TEMP_ROOT}/dispatch.py" <<'PY'
 import importlib.util, os, sys
 ctl, real = os.environ["LAB_TEST_CTL"], os.environ["LAB_TEST_REAL"]
-FAKE = ("auth", "settings-ensure", "model-ensure", "download", "first-turn")
+FAKE = ("auth", "settings-ensure", "runtime-ensure", "model-ensure", "download", "first-turn")
 
 
 def main():
@@ -255,13 +255,15 @@ count_lines() { [[ -f "$1" ]] && wc -l <"$1" | tr -d ' ' || echo 0; }
 settings_ok() { ctl settings-ensure.out "changed\texternalAccessProfile\nchanged\tdefaultModelName\nskipped\tfalse\nverified\ttrue\n"; }
 settings_same() { ctl settings-ensure.out "skipped\ttrue\nverified\ttrue\n"; }
 model_same() { ctl model-ensure.out "installed\ttrue\npreviouslySelected\t${MODEL}\nselected\t${MODEL}\nresident\tfalse\n"; }
+runtime_present() { ctl runtime-ensure.out "present\ttrue\ntag\tb100\nvariant\tcuda\n"; }
+runtime_present
 
 echo "== 1. first run, --snapshot --until settings =="
 settings_ok
 run_lab -- --snapshot --until settings
 check "first run exits 0" "0" "${STATUS}"
 for p in data host auth settings; do check "first run: ${p}" "ran" "$(mf "phases.${p}.status")"; done
-for p in model first-turn; do check "first run: ${p} after --until" "stopped" "$(mf "phases.${p}.status")"; done
+for p in runtime model first-turn; do check "first run: ${p} after --until" "stopped" "$(mf "phases.${p}.status")"; done
 check "snapshot saved" "saved" "$(mf snapshot)"
 check "snapshot key = sha256 of sorted migration names" "${EXPECTED_KEY}" "$(cat "${LAB}/snapshot/key" 2>/dev/null)"
 check "snapshot holds AppHost .data" "db-v1" "$(cat "${LAB}/snapshot/AppHost.data/node.db" 2>/dev/null)"
@@ -299,6 +301,8 @@ check "rerun: dev-start not called" "0" "$(count_lines "${CTL}/dev-start.calls")
 check_contains "rerun: host reason says the environment was verified" "this lab's environment" "$(mf phases.host.reason)"
 check "rerun: auth always runs" "ran" "$(mf phases.auth.status)"
 check "rerun: settings" "skipped" "$(mf phases.settings.status)"
+check "rerun: runtime present => skipped" "skipped" "$(mf phases.runtime.status)"
+check "rerun: runtime reason names tag and variant" "runtime present b100 cuda" "$(mf phases.runtime.reason)"
 check "rerun: model" "skipped" "$(mf phases.model.status)"
 check "rerun: first-turn stopped by profile stop" "stopped" "$(mf phases.first-turn.status)"
 check "rerun: modelResident" "false" "$(mf modelResident)"
@@ -339,6 +343,41 @@ run_lab -- --until model --model "${OTHER}"
 check "an eject that found the model already gone exits 0" "0" "${STATUS}"
 check "an already-gone model leaves the model phase skipped" "skipped" "$(mf phases.model.status)"
 check_absent "an already-gone model is no eject failure" "could not eject" "${ERR}"
+
+echo "== 3b. managed llama.cpp runtime =="
+settings_same
+model_same
+ctl runtime-ensure.out "present\tfalse\ntag\tb200\nvariant\tvulkan\n"
+run_lab -- --until model
+check "runtime missing: exits 0" "0" "${STATUS}"
+check "runtime missing: runtime-ensure called once" "1" "$(calls runtime-ensure)"
+check "runtime missing: runtime ran" "ran" "$(mf phases.runtime.status)"
+check "runtime missing: reason names the install" "runtime installed b200 vulkan" "$(mf phases.runtime.reason)"
+check "runtime missing: model phase judged on its own" "skipped" "$(mf phases.model.status)"
+check "runtime-ensure gets --email" "admin@localhost.test" "$(argval "${CTL}/runtime-ensure.argv" --email)"
+check_contains "lab-up.log masks the runtime-ensure password" "--password ***" "$(grep ' runtime-ensure ' "${LAB}/evidence/lab-up.log")"
+ctl runtime-ensure.out "present\tfalse\ntag\tb200\nvariant\tvulkan\ntoken\ttok-runtime-opaque\n"
+run_lab -- --until model
+check "runtime renewal: renewed token kept" "tok-runtime-opaque" "$(cat "${LAB}/token" 2>/dev/null)"
+check "runtime renewal: model-ensure uses the renewed token" "tok-runtime-opaque" "$(argval "${CTL}/model-ensure.argv" --token)"
+runtime_present
+run_lab -- --until settings
+check "--until settings: runtime stopped" "stopped" "$(mf phases.runtime.status)"
+check "--until settings: runtime-ensure not called" "0" "$(calls runtime-ensure)"
+echo 1 >"${CTL}/runtime-ensure.exit"
+run_lab -- --until model
+check "runtime-ensure failure exits 1" "1" "${STATUS}"
+check_contains "runtime-ensure failure is named" "runtime-ensure failed" "${ERR}"
+check "runtime-ensure failure: model phase not reached" "0" "$(calls model-ensure)"
+rm -f "${CTL}/runtime-ensure.exit"
+# A bring-your-own server: the host is (re)started with the override, and nothing is installed.
+echo 3 >"${CTL}/dev-status.exit"
+run_lab XE_LLAMACPP_SERVER_PATH=/opt/byo/llama-server -- --until model
+check "BYO: exits 0" "0" "${STATUS}"
+check "BYO: runtime-ensure never called" "0" "$(calls runtime-ensure)"
+check "BYO: runtime skipped" "skipped" "$(mf phases.runtime.status)"
+check_contains "BYO: reason names the override" "bring-your-own llama-server" "$(mf phases.runtime.reason)"
+echo 0 >"${CTL}/dev-status.exit"
 
 echo "== 4. stale snapshot =="
 echo "not-the-key" >"${LAB}/snapshot/key"
@@ -855,9 +894,30 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
     def do_GET(self):
+        if self.path.endswith("/model-fit/llamacpp/runtime"):
+            # The llama.cpp runtime status: the JSON in <port file>.runtime.
+            self.answer(json.load(open(sys.argv[1] + ".runtime")))
+            return
         # The memory model the node reports: the content of <port file>.memory when present, else unset (null).
         memory = sys.argv[1] + ".memory"
         self.answer(dict(BODY, memoryExtractionModelName=open(memory).read() if os.path.exists(memory) else None))
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers.get("Content-Length") or 0)).decode()
+        with open(sys.argv[1] + ".posts", "a") as log:
+            log.write(f"{self.path}\t{body}\t{self.headers.get('Authorization')}\n")
+        expired = sys.argv[1] + ".expire-once"
+        if self.path.endswith("/variant/automatic") and os.path.exists(expired):
+            os.remove(expired)  # the access token ran out during the install
+            self.send_response(401)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if self.path.endswith("/auth/login"):
+            self.answer({"accessToken": "tok-renewed-runtime"})
+        elif self.path.endswith("/model-fit/llamacpp/version"):
+            self.answer({"version": "b300", "variant": json.loads(body)["variant"], "isPinnedFallback": True, "pinnedTag": "b300"})
+        else:
+            self.answer({})
     def do_PUT(self):
         self.rfile.read(int(self.headers.get("Content-Length") or 0))
         self.answer({})
@@ -919,6 +979,37 @@ check_absent "a password inside a JSON-string arguments field is scrubbed" "sink
 check_absent "an apiKey inside a JSON-string result array is scrubbed" "sink-secret-7" "${SINK}"
 check_contains "the JSON-string arguments keep their other fields" "kept-path" "${SINK}"
 check_contains "a string that only looks like JSON passes through unchanged" "sink-kept-8" "${SINK}"
+# runtime-ensure against the fake node: a recorded runtime is left alone; none installs the node-selected variant.
+NODE_URL="http://127.0.0.1:$(cat "${CTL}/node-port" 2>/dev/null)"
+POSTS="${CTL}/node-port.posts"
+runtime_ensure() {
+  python3 "${REAL}/lab-driver.py" runtime-ensure --base-url "${NODE_URL}" --token t --evidence "${TEMP_ROOT}/driver-evidence-runtime" "$@" 2>&1
+}
+echo '{"installed":{"tag":"b250","variant":"cuda"},"selectedVariant":"cuda"}' >"${CTL}/node-port.runtime"
+out="$(runtime_ensure)"
+check "runtime present: reported with its tag and variant" $'present\ttrue\ntag\tb250\nvariant\tcuda' "${out}"
+check "runtime present: nothing POSTed" "0" "$(count_lines "${POSTS}")"
+echo '{"installed":null,"selectedVariant":"vulkan"}' >"${CTL}/node-port.runtime"
+out="$(runtime_ensure)"
+check "runtime missing: the node-selected variant is installed" $'present\tfalse\ntag\tb300\nvariant\tvulkan' "${out}"
+check "runtime missing: install, then automatic selection restored" \
+  '/api/local/v1/model-fit/llamacpp/version {"variant": "vulkan"}|/api/local/v1/model-fit/llamacpp/variant/automatic {}' \
+  "$(awk -F'\t' '{ print $1 " " $2 }' "${POSTS}" | paste -sd'|' -)"
+rm -f "${POSTS}"
+: >"${CTL}/node-port.expire-once"
+out="$(runtime_ensure --email a@b.test --password pw)"
+check "runtime 401 after the install: re-login, then automatic retried with the new token" \
+  "version Bearer t|automatic Bearer t|login None|automatic Bearer tok-renewed-runtime" \
+  "$(awk -F'\t' '{ n = split($1, part, "/"); print part[n] " " $3 }' "${POSTS}" | paste -sd'|' -)"
+check_contains "runtime 401: the renewed token is emitted" $'token\ttok-renewed-runtime' "${out}"
+rm -f "${POSTS}"
+: >"${CTL}/node-port.expire-once"
+runtime_ensure >/dev/null
+check "runtime 401 without credentials => exit 1" "1" "$?"
+rm -f "${CTL}/node-port.expire-once"
+echo '{"installed":null}' >"${CTL}/node-port.runtime"
+runtime_ensure >/dev/null
+check "runtime status without selectedVariant => exit 1" "1" "$?"
 # model-ensure: cloud rows do not count as a GGUF, another llama.cpp row does.
 model_ensure_listing() {
   python3 -c '

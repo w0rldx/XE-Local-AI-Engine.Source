@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Inference;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -31,13 +32,13 @@ public sealed class InferenceInvalidationEvaluatorTests
         var evaluator = BuildEvaluator(installedTag: "b9999",
             hardware: NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb));
 
-        var stale = await evaluator.IsStaleAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
+        var validity = await evaluator.EvaluateAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
 
-        AssertEx.True(stale);
+        AssertEx.Equal(InferenceProfileValidity.Stale, validity);
     }
 
     [Test]
-    public async Task Invalidation_OnLowerGlobalFreeVram_MarksStale()
+    public async Task Invalidation_OnLowerGlobalFreeVram_IsUnderPressureNotStale()
     {
         var evaluator = BuildEvaluator(installedTag: FrozenBuild,
             hardware: NvidiaProfile(24 * Gb, availableVramBytes: 4 * Gb));
@@ -46,9 +47,73 @@ public sealed class InferenceInvalidationEvaluatorTests
         {
             ProcessBudgetVramAtFreezeBytes = 20 * Gb
         };
-        var stale = await evaluator.IsStaleAsync(profile, CancellationToken.None);
+        var validity = await evaluator.EvaluateAsync(profile, CancellationToken.None);
 
-        AssertEx.True(stale);
+        AssertEx.Equal(InferenceProfileValidity.UnderPressure, validity);
+    }
+
+    [Test]
+    public async Task Invalidation_FreeVramDropBelowTheMaterialThreshold_IsValid()
+    {
+        // 256 MiB below an 8 GiB baseline is under both the 512 MiB floor and 5 % (≈ 410 MiB): not pressure.
+        var evaluator = BuildEvaluator(installedTag: FrozenBuild,
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb - 256L * 1024 * 1024));
+
+        var validity = await evaluator.EvaluateAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
+
+        AssertEx.Equal(InferenceProfileValidity.Valid, validity);
+    }
+
+    [Test]
+    public async Task Invalidation_BuildDriftUnderPressure_IsStale()
+    {
+        // A lasting axis wins over the transient one, so pressure never hides a build change.
+        var evaluator = BuildEvaluator(installedTag: "b9999",
+            hardware: NvidiaProfile(24 * Gb, availableVramBytes: 2 * Gb));
+
+        var validity = await evaluator.EvaluateAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
+
+        AssertEx.Equal(InferenceProfileValidity.Stale, validity);
+    }
+
+    [Test]
+    public async Task Invalidation_PlacementContradictionWithoutPressure_IsStale()
+    {
+        // The control for the pressure case below: with free VRAM at its baseline the placement axis is judged.
+        var evaluator = BuildEvaluatorWithPlacement(ProcessPlacementMode.ExpertOffload,
+            out _,
+            NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb));
+
+        var validity = await evaluator.EvaluateAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
+
+        AssertEx.Equal(InferenceProfileValidity.Stale, validity);
+    }
+
+    [Test]
+    public async Task Invalidation_PlacementContradictionUnderPressure_IsUnderPressure()
+    {
+        // The placement verdict is cached for the host's lifetime, so one priced against pressured free VRAM would keep
+        // the profile Stale after the pressure is gone; under pressure the axis is not judged.
+        var evaluator = BuildEvaluatorWithPlacement(ProcessPlacementMode.ExpertOffload,
+            out _,
+            NvidiaProfile(24 * Gb, availableVramBytes: 2 * Gb));
+
+        var validity = await evaluator.EvaluateAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
+
+        AssertEx.Equal(InferenceProfileValidity.UnderPressure, validity);
+    }
+
+    [Test]
+    public async Task Invalidation_UnderPressure_NeverResolvesThePlacementVerdict()
+    {
+        var evaluator = BuildEvaluatorWithPlacement(ProcessPlacementMode.ExpertOffload,
+            out var allocationResolver,
+            NvidiaProfile(24 * Gb, availableVramBytes: 2 * Gb));
+
+        _ = await evaluator.EvaluateAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
+
+        await allocationResolver.DidNotReceiveWithAnyArgs()
+                                .ResolveAsync(default!, default, default, default!, CancellationToken.None);
     }
 
     [Test]
@@ -63,10 +128,10 @@ public sealed class InferenceInvalidationEvaluatorTests
                         .Returns(Task.FromResult(refreshedHardware));
         var evaluator = BuildEvaluator(FrozenBuild, hardwareProfiler);
 
-        var stale = await evaluator.IsStaleAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb),
+        var validity = await evaluator.EvaluateAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb),
             CancellationToken.None);
 
-        AssertEx.True(stale);
+        AssertEx.Equal(InferenceProfileValidity.UnderPressure, validity);
         await hardwareProfiler.Received(1)
                               .GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>());
         await hardwareProfiler.DidNotReceive()
@@ -89,22 +154,60 @@ public sealed class InferenceInvalidationEvaluatorTests
         {
             ProcessBudgetVramAtFreezeBytes = 8 * Gb
         };
-        var stale = await evaluator.IsStaleAsync(profile, CancellationToken.None);
+        var validity = await evaluator.EvaluateAsync(profile, CancellationToken.None);
 
         AssertEx.False(constructorDependsOnProcessBudgetProbe);
-        AssertEx.False(stale);
+        AssertEx.Equal(InferenceProfileValidity.Valid, validity);
     }
 
     [Test]
     public async Task Invalidation_WhenProbeUnknown_DegradesToBuildAndHwOnly()
     {
-        // Probe returns null (unknown): the live-VRAM check is skipped, so a matching build + matching hardware is NOT stale.
+        // Probe returns null (unknown): the live-VRAM check is skipped, so a matching build + matching hardware is valid.
         var evaluator = BuildEvaluator(installedTag: FrozenBuild,
             hardware: NvidiaProfile(24 * Gb, availableVramBytes: null));
 
-        var stale = await evaluator.IsStaleAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
+        var validity = await evaluator.EvaluateAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None);
 
-        AssertEx.False(stale);
+        AssertEx.Equal(InferenceProfileValidity.Valid, validity);
+    }
+
+    [Test]
+    public async Task Evaluate_CudaProfile_IndeterminateProbeWithVendorNone_IsUnderPressure_NotStale()
+    {
+        // A timed-out probe on WSL2 reads vendor None; judged as hardware drift it would demote every frozen CUDA row for good.
+        var logger = new RecordingLogger<InferenceInvalidationEvaluator>();
+        var evaluator = BuildEvaluator(FrozenBuild, TimedOutProbeProfile(), logger);
+        var profile = FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb);
+
+        var validity = await evaluator.EvaluateAsync(profile, CancellationToken.None);
+
+        AssertEx.Equal(InferenceProfileValidity.UnderPressure, validity);
+        AssertEx.True(logger.HasEntry(LogLevel.Information, $"GPU probe timed out; profile {profile.Id} auto-fits this launch and stays Frozen"), logger.AllText);
+    }
+
+    [Test]
+    public async Task Evaluate_CpuProfile_IndeterminateProbe_TakesTheUsualAxes()
+    {
+        // The GPU probe cannot change a CPU row, so a timeout leaves its verdict to the usual axes.
+        var evaluator = BuildEvaluator(FrozenBuild, TimedOutProbeProfile());
+        var profile = FrozenRecord(FrozenBuild, freeVramAtFreeze: null) with
+        {
+            Backend = InferenceBackends.Cpu
+        };
+
+        AssertEx.Equal(InferenceProfileValidity.Valid, await evaluator.EvaluateAsync(profile, CancellationToken.None));
+        AssertEx.Equal(InferenceProfileValidity.Stale, await BuildEvaluator("b9999", TimedOutProbeProfile()).EvaluateAsync(profile, CancellationToken.None),
+            "build drift still demotes a CPU row during a timeout.");
+    }
+
+    [Test]
+    public async Task Evaluate_CudaProfile_IndeterminateProbe_BuildDriftIsStillStale()
+    {
+        // Build and launch-policy drift never read the probe, so they demote before the timeout is considered.
+        var evaluator = BuildEvaluator("b9999", TimedOutProbeProfile());
+
+        AssertEx.Equal(InferenceProfileValidity.Stale, await evaluator.EvaluateAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb), CancellationToken.None));
     }
 
     [Test]
@@ -117,9 +220,9 @@ public sealed class InferenceInvalidationEvaluatorTests
             Backend = InferenceBackends.Cpu
         };
 
-        var stale = await evaluator.IsStaleAsync(profile, CancellationToken.None);
+        var validity = await evaluator.EvaluateAsync(profile, CancellationToken.None);
 
-        AssertEx.False(stale);
+        AssertEx.Equal(InferenceProfileValidity.Valid, validity);
     }
 
     [Test]
@@ -133,9 +236,9 @@ public sealed class InferenceInvalidationEvaluatorTests
             LaunchPolicyFingerprint = null
         };
 
-        var stale = await evaluator.IsStaleAsync(legacy, CancellationToken.None);
+        var validity = await evaluator.EvaluateAsync(legacy, CancellationToken.None);
 
-        AssertEx.True(stale);
+        AssertEx.Equal(InferenceProfileValidity.Stale, validity);
     }
 
     [Test]
@@ -167,14 +270,16 @@ public sealed class InferenceInvalidationEvaluatorTests
                 NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb),
                 modelPath,
                 frozenAtQ8);
-            AssertEx.False(await unchanged.IsStaleAsync(frozen, CancellationToken.None),
+            AssertEx.Equal(InferenceProfileValidity.Valid,
+                await unchanged.EvaluateAsync(frozen, CancellationToken.None),
                 "Nothing changed, so the profile must still be valid.");
 
             var afterKvChange = BuildEvaluator(FrozenBuild,
                 NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb),
                 modelPath,
                 FingerprintProvider(binaryPath, fileHashCache, LlamaServerKvCacheTypes.Q4_0));
-            AssertEx.True(await afterKvChange.IsStaleAsync(frozen, CancellationToken.None),
+            AssertEx.Equal(InferenceProfileValidity.Stale,
+                await afterKvChange.EvaluateAsync(frozen, CancellationToken.None),
                 "Selecting a different KV-cache type must stale a frozen profile through the launch-policy axis.");
         }
         finally
@@ -243,17 +348,19 @@ public sealed class InferenceInvalidationEvaluatorTests
     }
 
     private static InferenceInvalidationEvaluator BuildEvaluator(string installedTag,
-        HardwareProfile hardware)
+        HardwareProfile hardware,
+        ILogger<InferenceInvalidationEvaluator>? logger = null)
     {
         var hardwareProfiler = Substitute.For<IHardwareProfiler>();
         hardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult(hardware));
 
-        return BuildEvaluator(installedTag, hardwareProfiler);
+        return BuildEvaluator(installedTag, hardwareProfiler, logger);
     }
 
     private static InferenceInvalidationEvaluator BuildEvaluator(string installedTag,
-        IHardwareProfiler hardwareProfiler)
+        IHardwareProfiler hardwareProfiler,
+        ILogger<InferenceInvalidationEvaluator>? logger = null)
     {
         var installedStore = Substitute.For<IInstalledRuntimeStore>();
         installedStore.ReadAsync(Arg.Any<CancellationToken>())
@@ -274,8 +381,19 @@ public sealed class InferenceInvalidationEvaluatorTests
             fingerprintProvider,
             hardwareProfiler,
             Substitute.For<IProcessContextAllocationResolver>(),
-            NullLogger<InferenceInvalidationEvaluator>.Instance);
+            logger ?? NullLogger<InferenceInvalidationEvaluator>.Instance);
     }
+
+    // The no-cache timeout shape on WSL2: no DRM vendor node, so the vendor is None and VRAM unknown.
+    private static HardwareProfile TimedOutProbeProfile() =>
+        NvidiaProfile(24 * Gb, availableVramBytes: null) with
+        {
+            VramBytes = null,
+            VramKnown = false,
+            GpuVendor = GpuVendor.None,
+            GpuAccelAvailable = false,
+            GpuProbeIndeterminate = true
+        };
 
     private static HardwareProfile NvidiaProfile(long vramBytes, long? availableVramBytes)
     {
@@ -365,7 +483,8 @@ public sealed class InferenceInvalidationEvaluatorTests
     }
 
     private static InferenceInvalidationEvaluator BuildEvaluatorWithPlacement(ProcessPlacementMode placement,
-        out IProcessContextAllocationResolver allocationResolver)
+        out IProcessContextAllocationResolver allocationResolver,
+        HardwareProfile? hardware = null)
     {
         var resolver = Substitute.For<IProcessContextAllocationResolver>();
         resolver.ResolveAsync(Arg.Any<string>(),
@@ -386,7 +505,7 @@ public sealed class InferenceInvalidationEvaluatorTests
         allocationResolver = resolver;
 
         return BuildEvaluator(FrozenBuild,
-            NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb),
+            hardware ?? NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb),
             "/models/model.gguf",
             MatchingFingerprintProvider(),
             resolver);

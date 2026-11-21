@@ -11,6 +11,8 @@ Subcommands:
   snapshot-key     sha256 over the sorted EF migration file names; the lab snapshot is valid only for an equal key
   settings-ensure  GET node-settings, PUT only the desired keys that differ, re-GET and verify; a desired null (or the
                    retired "") clears a setting, because the PUT refuses "" and keeps an omitted key
+  runtime-ensure   GET model-fit/llamacpp/runtime; with no installed runtime, install the variant the node selects
+                   (POST model-fit/llamacpp/version) and restore automatic variant selection
   model-ensure     installed?, select as the node default, optionally eject other chat servers, resident?
   download         install a GGUF through the node's own model-fit/download and poll it to a terminal phase
   first-turn       one canned chat turn over the chat hub; wire events and the answer land in the evidence dir
@@ -290,6 +292,42 @@ def command_download(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_runtime_ensure(args: argparse.Namespace) -> int:
+    """Install the managed llama.cpp runtime when the node records none; the Offline profile never fetches it itself.
+
+    The variant is the node's own choice (``selectedVariant``). The explicit install pins that variant, so the pin is
+    dropped again (``variant/automatic``) and the node keeps automatic selection. The install answers only when the
+    download is done, hence ``--timeout``; a 401 on the follow-up call re-logs-in once and the new token is emitted.
+    """
+    client = client_for(args)
+    status = client.get("/model-fit/llamacpp/runtime")
+    installed = status.get("installed")
+    if isinstance(installed, dict):
+        emit("present", True)
+        emit("tag", installed.get("tag"))
+        emit("variant", installed.get("variant"))
+        return 0
+    variant = status.get("selectedVariant")
+    if not isinstance(variant, str) or not variant:
+        raise gsd.DriverError("model-fit/llamacpp/runtime returned no selectedVariant")
+    client.timeout = args.timeout
+    binary = client.send("POST", "/model-fit/llamacpp/version", {"variant": variant})
+    renewed = ""
+    try:
+        client.send("POST", "/model-fit/llamacpp/variant/automatic", {})
+    except gsd.DriverError as error:
+        if "HTTP 401" not in str(error) or not args.email:
+            raise
+        renewed = renew_token(client, args.email, args.password)
+        client.send("POST", "/model-fit/llamacpp/variant/automatic", {})
+    emit("present", False)
+    emit("tag", binary.get("version"))
+    emit("variant", binary.get("variant"))
+    if renewed:
+        emit("token", renewed)
+    return 0
+
+
 def command_first_turn(args: argparse.Namespace) -> int:
     client = client_for(args)
     out = Path(args.evidence) / "first-turn"
@@ -471,6 +509,10 @@ def build_parser() -> argparse.ArgumentParser:
     download.add_argument("--timeout", type=float, default=3600.0)
     download.add_argument("--email", default="")
     download.add_argument("--password", default="")
+    runtime = node("runtime-ensure", command_runtime_ensure)
+    runtime.add_argument("--timeout", type=float, default=1800.0)
+    runtime.add_argument("--email", default="")
+    runtime.add_argument("--password", default="")
     turn = node("first-turn", command_first_turn)
     turn.add_argument("--model", required=True)
     turn.add_argument("--prompt", required=True)

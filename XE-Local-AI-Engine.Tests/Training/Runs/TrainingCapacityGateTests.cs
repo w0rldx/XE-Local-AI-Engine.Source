@@ -74,6 +74,21 @@ public sealed class TrainingCapacityGateTests
     }
 
     [Test]
+    public async Task Reservation_WithUnreadFreeVram_IsRefusedWithoutEjectAdvice()
+    {
+        using var ledger = new PendingFootprintLedger();
+        // A probe timeout keeps the GPU known but leaves its free VRAM unread.
+        var gate = new TrainingCapacityGate(ledger, Audit(vramBytes: 24 * OneGigabyte, availableVramUnread: true));
+
+        using var reservation = await gate.ReserveAsync(Estimate(2 * OneGigabyte));
+
+        AssertEx.False(reservation.Granted, "Unknown free VRAM must fail closed.");
+        AssertEx.Contains(reservation.Reason, "could not be read", message: "The refusal must say the reading failed.");
+        AssertEx.False(reservation.Reason!.Contains("Eject", StringComparison.Ordinal), "Ejecting a model cannot fix a probe that did not answer.");
+        AssertEx.Equal(expected: 0L, ledger.Reserved.GpuBytes, "A refused run reserves nothing.");
+    }
+
+    [Test]
     public async Task Reservation_WithoutEnoughSystemMemory_IsRefused()
     {
         using var ledger = new PendingFootprintLedger();
@@ -94,7 +109,7 @@ public sealed class TrainingCapacityGateTests
             Experimental = false
         };
 
-    private static IRuntimeDeviceAudit Audit(long? vramBytes, long availableRamBytes = 32 * OneGigabyte)
+    private static IRuntimeDeviceAudit Audit(long? vramBytes, long availableRamBytes = 32 * OneGigabyte, bool availableVramUnread = false)
     {
         var audit = Substitute.For<IRuntimeDeviceAudit>();
         _ = audit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
@@ -103,7 +118,7 @@ public sealed class TrainingCapacityGateTests
                      TotalRamBytes = 64 * OneGigabyte,
                      AvailableRamBytes = availableRamBytes,
                      VramBytes = vramBytes,
-                     AvailableVramBytes = vramBytes,
+                     AvailableVramBytes = availableVramUnread ? null : vramBytes,
                      VramKnown = vramBytes is not null,
                      GpuVendor = vramBytes is null ? GpuVendor.None : GpuVendor.Nvidia,
                      GpuAccelAvailable = vramBytes is not null,

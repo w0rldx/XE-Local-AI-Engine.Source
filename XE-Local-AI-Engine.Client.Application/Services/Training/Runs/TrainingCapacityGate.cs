@@ -50,8 +50,19 @@ public sealed class TrainingCapacityGate : ITrainingCapacityGate
                 };
             }
 
+            // A GPU whose free VRAM went unread (a probe timeout) is no reason to tell the operator to eject a model.
+            if (profile.AvailableVramBytes is not { } availableVram)
+            {
+                return new TrainingCapacityReservation
+                {
+                    Granted = false,
+                    Reason = "Free VRAM could not be read right now (the GPU probe did not answer). Try again in a moment.",
+                    Handle = null
+                };
+            }
+
             var reserved = _ledger.Reserved;
-            var freeVram = (profile.AvailableVramBytes ?? 0) - reserved.GpuBytes;
+            var freeVram = availableVram - reserved.GpuBytes;
             if (estimate.GpuBytes > freeVram)
             {
                 return new TrainingCapacityReservation

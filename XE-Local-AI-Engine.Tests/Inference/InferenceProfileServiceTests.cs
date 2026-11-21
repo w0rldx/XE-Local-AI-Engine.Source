@@ -551,6 +551,93 @@ public sealed class InferenceProfileServiceTests
                      .GetProcessBudgetBytesOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task Freeze_NvidiaGpuProfileWhenFreeVramCannotBeRead_IsRefusedWithoutFreezing()
+    {
+        // A null free reading on NVIDIA means the probe failed: freezing would leave the replay with no pressure baseline.
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord();
+        fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
+        fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(BenchmarkRowFor(profile, Guid.NewGuid())));
+        fixture.HardwareProfiler.GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: null)));
+
+        var result = await fixture.CreateService().FreezeAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.False(result.Success);
+        AssertEx.Contains(result.FailureReason, "free VRAM could not be read");
+        await fixture.ProfileStore.DidNotReceive()
+                     .MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Freeze_VulkanProfileOnAGpuThatNeverReportsFreeVram_StillFreezesWithoutABaseline()
+    {
+        // AMD/Intel never report free VRAM, so refusing there would make a Vulkan freeze impossible on those hosts.
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord() with
+        {
+            Backend = InferenceBackends.Vulkan
+        };
+        fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
+        var snapshotId = Guid.NewGuid();
+        fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(BenchmarkRowFor(profile, snapshotId)));
+        fixture.HardwareProfiler.GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: null) with
+               {
+                   GpuVendor = GpuVendor.Amd
+               }));
+        fixture.ProcessVramBudgetProbe.GetProcessBudgetBytesOrNullAsync(profile.Backend, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<long?>(2400));
+        fixture.ProfileStore.MarkFrozenAsync(profile.Id, snapshotId, globalFreeVramAtFreezeBytes: null, processBudgetVramAtFreezeBytes: 2400, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<InferenceProfileFreezeResult>(new InferenceProfileFreezeResult.Frozen
+               {
+                   Profile = profile with
+                   {
+                       Status = InferenceProfileStatus.Frozen,
+                       BenchmarkSnapshotId = snapshotId
+                   }
+               }));
+
+        var result = await fixture.CreateService().FreezeAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.True(result.Success, result.FailureReason);
+        await fixture.ProfileStore.Received(1)
+                     .MarkFrozenAsync(profile.Id, snapshotId, globalFreeVramAtFreezeBytes: null, processBudgetVramAtFreezeBytes: 2400, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Freeze_VulkanProfileAfterATimedOutGpuProbe_IsRefusedWithoutFreezing()
+    {
+        // A cold nvidia-smi timeout on WSL: the fallback vendor read finds no DRM node and answers None, so no vendor rule refuses it.
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord() with
+        {
+            Backend = InferenceBackends.Vulkan
+        };
+        fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
+        fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(BenchmarkRowFor(profile, Guid.NewGuid())));
+        fixture.HardwareProfiler.GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult(NvidiaProfile(availableVramBytes: null) with
+               {
+                   GpuVendor = GpuVendor.None,
+                   GpuProbeIndeterminate = true
+               }));
+
+        var result = await fixture.CreateService().FreezeAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.False(result.Success);
+        AssertEx.Contains(result.FailureReason, "retry the freeze");
+        await fixture.ProfileStore.DidNotReceive()
+                     .MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+    }
+
     /// <summary>The store's write-time gate answers in two ways; each is a failed result naming its own reason, never a throw.</summary>
     [Test]
     [Arguments(false, "No inference profile with id")]

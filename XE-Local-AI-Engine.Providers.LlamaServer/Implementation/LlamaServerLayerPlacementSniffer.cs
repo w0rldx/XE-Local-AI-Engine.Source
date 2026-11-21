@@ -13,9 +13,34 @@ internal sealed class LlamaServerLayerPlacementSniffer
     private int _total;
     private bool _sawModelBuffer;
     private bool _sawGpuModelBuffer;
+    private bool _fitFailed;
+
+    /// <summary>Whether llama.cpp reported that its <c>--fit</c> could not fit the params to free device memory (it keeps loading regardless).</summary>
+    public bool FitFailed
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _fitFailed;
+            }
+        }
+    }
 
     public void Add(string line)
     {
+        // common_fit_params' failure and error lines (common/fit.cpp); both fall through to an unfitted load.
+        if (line.Contains("failed to fit params to free device memory", StringComparison.Ordinal)
+            || line.Contains("error while trying to fit params to free device memory", StringComparison.Ordinal))
+        {
+            lock (_gate)
+            {
+                _fitFailed = true;
+            }
+
+            return;
+        }
+
         if (LlamaLayerOffloadBanner.TryParseModelBufferDevice(line, out var device))
         {
             var isGpu = !LlamaLayerOffloadBanner.IsHostBuffer(device);

@@ -12,8 +12,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     <see cref="InferenceProfileResolver" /> tests: no profile and optimizer drafts explore; a
-///     valid frozen row replays its frozen args without demotion; and a frozen-but-stale row is demoted to Stale and
-///     re-explores. The scoped store is reached through a real <see cref="IServiceScopeFactory" /> over a substituted
+///     valid frozen row replays its frozen args without demotion; a pressured one explores once and stays frozen; and a
+///     frozen-but-stale row is demoted to Stale and re-explores. The scoped store is reached through a real <see cref="IServiceScopeFactory" /> over a substituted
 ///     store; the machine key + invalidation seams are mocked. No DB, no process.
 /// </summary>
 [Category(TestCategories.Unit)]
@@ -93,14 +93,33 @@ public sealed class InferenceProfileResolverTests
         store.GetByKeyAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<InferenceProfileRecord?>(Record(InferenceProfileStatus.Frozen, ctxSize: 4096, nGpuLayers: 20)));
         var resolver = BuildResolver(store, out var invalidation);
-        invalidation.IsStaleAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<CancellationToken>())
-                    .Returns(Task.FromResult(false));
+        invalidation.EvaluateAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult(InferenceProfileValidity.Valid));
 
         var result = await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Cuda, CancellationToken.None);
 
         AssertEx.False(result.ExploreMode);
         AssertEx.Equal(4096, result.CtxSize);
         AssertEx.Equal(20, result.NGpuLayers);
+        await store.DidNotReceive().MarkStaleAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Resolver_FrozenUnderPressure_ExploresThisLaunchOnly_ThenReplaysOncePressureClears()
+    {
+        var store = Substitute.For<IInferenceProfileStore>();
+        store.GetByKeyAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<InferenceProfileRecord?>(Record(InferenceProfileStatus.Frozen, ctxSize: 4096, nGpuLayers: 20)));
+        var resolver = BuildResolver(store, out var invalidation);
+        invalidation.EvaluateAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult(InferenceProfileValidity.UnderPressure), Task.FromResult(InferenceProfileValidity.Valid));
+
+        var pressured = await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Cuda, CancellationToken.None);
+        var cleared = await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Cuda, CancellationToken.None);
+
+        AssertEx.True(pressured.ExploreMode, "Free-VRAM pressure must auto-fit the launch instead of replaying fixed offload.");
+        AssertEx.False(cleared.ExploreMode, "The profile must replay again once the pressure is gone.");
+        AssertEx.Equal(20, cleared.NGpuLayers);
         await store.DidNotReceive().MarkStaleAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
@@ -112,8 +131,8 @@ public sealed class InferenceProfileResolverTests
         store.GetByKeyAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<InferenceProfileRecord?>(record));
         var resolver = BuildResolver(store, out var invalidation);
-        invalidation.IsStaleAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<CancellationToken>())
-                    .Returns(Task.FromResult(true));
+        invalidation.EvaluateAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult(InferenceProfileValidity.Stale));
 
         var result = await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Cuda, CancellationToken.None);
 
@@ -142,8 +161,10 @@ public sealed class InferenceProfileResolverTests
 
         // The launch-policy axis reports drift because the node now selects a different KV type than the row was frozen
         // under; LaunchPolicyFingerprintProviderTests owns the pin that the hash actually moves.
-        invalidation.IsStaleAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<CancellationToken>())
-                    .Returns(Task.FromResult(!string.Equals(frozenKvType, selectedKvType, StringComparison.Ordinal)));
+        invalidation.EvaluateAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult(string.Equals(frozenKvType, selectedKvType, StringComparison.Ordinal)
+                        ? InferenceProfileValidity.Valid
+                        : InferenceProfileValidity.Stale));
 
         var result = await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Cuda, CancellationToken.None);
 
@@ -154,8 +175,8 @@ public sealed class InferenceProfileResolverTests
     private static InferenceProfileResolver BuildResolver(IInferenceProfileStore store, out IInferenceInvalidationEvaluator invalidation)
     {
         invalidation = Substitute.For<IInferenceInvalidationEvaluator>();
-        invalidation.IsStaleAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<CancellationToken>())
-                    .Returns(Task.FromResult(false));
+        invalidation.EvaluateAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult(InferenceProfileValidity.Valid));
 
         var machineKeyProvider = Substitute.For<IMachineKeyProvider>();
         machineKeyProvider.GetMachineKeyAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(MachineKey));

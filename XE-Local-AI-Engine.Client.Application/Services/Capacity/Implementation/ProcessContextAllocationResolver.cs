@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
@@ -15,6 +16,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 /// Resolves one immutable process allocation per content/role/backend/argument/policy identity.
 /// Global free VRAM is deliberately absent from the cache key and tier decision.
 /// </summary>
+/// <remarks>
+///     A chat admission may re-place an explore allocation against live memory (<see cref="TryPlaceWithinLiveBudget" />), never cached. Every
+///     later substitution (commit, effective, out-of-memory retry) keeps the admitted placement and budget. Stages: wiki 03, section 2.8.
+///     A CPU answer for a GPU key priced from a timed-out probe is transient: not cached, and no substitution acts on it.
+/// </remarks>
 public sealed class ProcessContextAllocationResolver : IProcessContextAllocationResolver
 {
     private const int MaximumAutomaticDownTiers = 2;
@@ -42,6 +48,9 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     /// </remarks>
     private const long BackgroundSlotStateAllowanceBytes = 256L * 1024 * 1024;
 
+    /// <summary>The smallest <c>--fit-target</c> margin a live-share Hybrid launches with: llama.cpp's own default margin.</summary>
+    private const long MinimumFitTargetBytes = 1024L * 1024 * 1024;
+
     private readonly ConcurrentDictionary<string, HardwareAllocationContext> _hardwareAllocationContexts =
         new(StringComparer.Ordinal);
 
@@ -53,12 +62,24 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     private readonly LlamaServerLaunchPolicyOptions _options;
     private readonly IProcessVramBudgetProbe _processVramBudgetProbe;
     private readonly IRuntimeDeviceAudit _runtimeAudit;
+    private readonly bool _liveShareHybridEnabled;
 
     public ProcessContextAllocationResolver(IGgufModelStore modelStore,
         IRuntimeDeviceAudit runtimeAudit,
         IProcessVramBudgetProbe processVramBudgetProbe,
         MemoryFitEstimator estimator,
         LlamaServerLaunchPolicyOptions options)
+        : this(modelStore, runtimeAudit, processVramBudgetProbe, estimator, options, IsWddmHost())
+    {
+    }
+
+    /// <summary>Test seam: <paramref name="liveShareHybridEnabled" /> stands in for the Windows/WSL host check that gates the after-ladder Hybrid.</summary>
+    internal ProcessContextAllocationResolver(IGgufModelStore modelStore,
+        IRuntimeDeviceAudit runtimeAudit,
+        IProcessVramBudgetProbe processVramBudgetProbe,
+        MemoryFitEstimator estimator,
+        LlamaServerLaunchPolicyOptions options,
+        bool liveShareHybridEnabled)
     {
         ArgumentNullException.ThrowIfNull(estimator);
         ArgumentNullException.ThrowIfNull(modelStore);
@@ -70,6 +91,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
         _options = options;
         _processVramBudgetProbe = processVramBudgetProbe;
         _runtimeAudit = runtimeAudit;
+        _liveShareHybridEnabled = liveShareHybridEnabled;
     }
 
     public Task<ProcessContextAllocation?> ResolveAsync(string modelName,
@@ -114,15 +136,22 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             KvCacheQuant = kvCacheQuant
         };
         var lazy = _cache.GetOrAdd(key,
-            static (_, captured) => new Lazy<Task<ProcessContextAllocation?>>(() => captured.Resolver.ResolveCoreAsync(captured.Key,
-                    captured.ContentIdentity,
-                    captured.Role,
-                    captured.Variant,
-                    captured.Resolved,
-                    captured.Facts,
-                    captured.KvCacheQuant,
-                    CancellationToken.None),
-                LazyThreadSafetyMode.ExecutionAndPublication),
+            static (_, captured) =>
+            {
+                // The computation gets its own cache entry through the holder, so it can evict exactly that entry when its answer is transient.
+                var holder = new StrongBox<Lazy<Task<ProcessContextAllocation?>>>();
+                holder.Value = new Lazy<Task<ProcessContextAllocation?>>(() => captured.Resolver.ResolveCoreAsync(captured.Key,
+                        holder,
+                        captured.ContentIdentity,
+                        captured.Role,
+                        captured.Variant,
+                        captured.Resolved,
+                        captured.Facts,
+                        captured.KvCacheQuant,
+                        CancellationToken.None),
+                    LazyThreadSafetyMode.ExecutionAndPublication);
+                return holder.Value;
+            },
             state);
 
         var resolution = lazy.Value;
@@ -133,12 +162,11 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
         }
         catch
         {
-            // Caller cancellation only stops this waiter; the shared computation continues and remains cacheable.
+            // Caller cancellation only stops this waiter; the shared computation continues and decides its own cacheability.
             // A faulted/cancelled shared computation, however, must not poison this key for the process lifetime.
             if (resolution.IsFaulted || resolution.IsCanceled)
             {
-                ((ICollection<KeyValuePair<string, Lazy<Task<ProcessContextAllocation?>>>>)_cache)
-                    .Remove(new KeyValuePair<string, Lazy<Task<ProcessContextAllocation?>>>(key, lazy));
+                EvictCachedComputation(key, lazy);
             }
 
             throw;
@@ -153,7 +181,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     {
         ArgumentNullException.ThrowIfNull(current);
         downTiered = current;
-        if (!_hardwareAllocationContexts.TryGetValue(current.CacheKey, out var context) || context.Role != ModelRole.Chat)
+        if (current.IsTransient || !_hardwareAllocationContexts.TryGetValue(current.CacheKey, out var context) || context.Role != ModelRole.Chat)
         {
             return false;
         }
@@ -178,7 +206,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     {
         ArgumentNullException.ThrowIfNull(candidate);
         committed = candidate;
-        if (candidate.Source != ProcessContextAllocationSource.HardwareTier)
+        if (candidate.Source != ProcessContextAllocationSource.HardwareTier || candidate.IsTransient)
         {
             return true;
         }
@@ -190,10 +218,10 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
         }
 
         // An admission down-tier is NOT cached: it reflects the residents of that moment, and the admission carries its window into the launch on its own, so
-        // the next spawn after they leave tiers back up. Only an out-of-memory down-tier is sticky, and an admission never claims more than it allows.
+        // the next spawn after they leave tiers back up. Only an out-of-memory down-tier is sticky, and it keeps the candidate's placement.
         if (_adjustedAllocations.TryGetValue(candidate.CacheKey, out var adjusted) && IsSmaller(adjusted, candidate))
         {
-            committed = adjusted;
+            committed = BuildAllocationAtPlacement(context, candidate, adjusted.ProcessContextTokens, adjusted.ChatSlots);
         }
 
         return true;
@@ -203,7 +231,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     {
         ArgumentNullException.ThrowIfNull(admitted);
         effective = admitted;
-        if (admitted.Source != ProcessContextAllocationSource.HardwareTier)
+        if (admitted.Source != ProcessContextAllocationSource.HardwareTier || admitted.IsTransient)
         {
             return true;
         }
@@ -222,9 +250,10 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
                 return false;
             }
 
-            if (!IsSmaller(admitted, adjusted))
+            // Only a strictly smaller out-of-memory window replaces the admitted one, rebuilt at the admitted placement and budget.
+            if (IsSmaller(adjusted, admitted))
             {
-                effective = adjusted;
+                effective = BuildAllocationAtPlacement(context, admitted, adjusted.ProcessContextTokens, adjusted.ChatSlots);
             }
         }
 
@@ -235,7 +264,8 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     {
         ArgumentNullException.ThrowIfNull(current);
         downTiered = current;
-        if (!_hardwareAllocationContexts.TryGetValue(current.CacheKey, out var context))
+        // A transient launch is not retried smaller: its cap would be priced on a context it never had, and the next launch re-resolves.
+        if (current.IsTransient || !_hardwareAllocationContexts.TryGetValue(current.CacheKey, out var context))
         {
             return false;
         }
@@ -250,7 +280,9 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             // start. The drop is no window step, so it leaves MaximumAutomaticDownTiers whole for the tier walk.
             if (context.Role == ModelRole.Chat && effective.ChatSlots > 1)
             {
-                downTiered = CommitAdjustedAllocation(BuildAllocation(current.CacheKey, context, effective.ProcessContextTokens, chatSlots: 1, effective.Source));
+                // The stable-priced cap is what sticks; the retry keeps the placement and budget the failed launch was booked at.
+                var slotCap = CommitAdjustedAllocation(BuildAllocation(current.CacheKey, context, effective.ProcessContextTokens, chatSlots: 1, effective.Source));
+                downTiered = BuildAllocationAtPlacement(context, current, slotCap.ProcessContextTokens, slotCap.ChatSlots);
                 return true;
             }
 
@@ -265,8 +297,153 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
                 return false;
             }
 
-            downTiered = CommitAdjustedAllocation(BuildAllocation(current.CacheKey, context, next, chatSlots: 1, ProcessContextAllocationSource.HardwareTier));
+            var windowCap = CommitAdjustedAllocation(BuildAllocation(current.CacheKey, context, next, chatSlots: 1, ProcessContextAllocationSource.HardwareTier));
+            downTiered = BuildAllocationAtPlacement(context, current, windowCap.ProcessContextTokens, windowCap.ChatSlots);
             return true;
+        }
+    }
+
+    public bool TryPlaceWithinLiveBudget(ProcessContextAllocation current, LiveBudget live, PlacementStage stage, out ProcessContextAllocation placed)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(live);
+        placed = current;
+        if (current.Source != ProcessContextAllocationSource.HardwareTier
+            || current.IsTransient
+            || !_hardwareAllocationContexts.TryGetValue(current.CacheKey, out var context)
+            || context.Role != ModelRole.Chat
+            || !string.Equals(current.ContentIdentity, context.ContentIdentity, StringComparison.Ordinal)
+            || !BuildEstimationContext(context.Variant, context.Profile, context.ProcessGpuBudget).UseGpu)
+        {
+            return false;
+        }
+
+        var liveGpuBudget = live.GlobalFreeGpuBytes - live.ReservedGpuBytes;
+        if (liveGpuBudget <= 0)
+        {
+            return false;
+        }
+
+        return stage == PlacementStage.BeforeLadder
+            ? TryPlaceExpertOffload(current, context, liveGpuBudget, out placed)
+            : TryPlaceLiveShareHybrid(current, context, live, liveGpuBudget, out placed);
+    }
+
+    /// <summary>The tier walk at the live GPU budget, kept only when it lands on expert offload; a resident answer is left to the ladder.</summary>
+    private bool TryPlaceExpertOffload(ProcessContextAllocation current, HardwareAllocationContext context, long liveGpuBudget, out ProcessContextAllocation placed)
+    {
+        placed = current;
+        if (context.Facts.ExpertCount is not > 0)
+        {
+            return false;
+        }
+
+        var walked = WalkTiers(current.CacheKey, context with
+        {
+            ProcessGpuBudget = liveGpuBudget
+        }, ProcessContextAllocationSource.HardwareTier);
+        if (walked.Placement != ProcessPlacementMode.ExpertOffload)
+        {
+            return false;
+        }
+
+        placed = walked;
+        return true;
+    }
+
+    /// <summary>A single-slot allocation at the live GPU share: the largest chat tier at or below the current window and any OOM cap whose RAM fits live RAM.</summary>
+    /// <remarks>Windows and WSL only, where the child sees a stable per-process budget rather than live free memory.</remarks>
+    private bool TryPlaceLiveShareHybrid(ProcessContextAllocation current,
+        HardwareAllocationContext context,
+        LiveBudget live,
+        long liveGpuBudget,
+        out ProcessContextAllocation placed)
+    {
+        placed = current;
+        if (!_liveShareHybridEnabled || UsableGpuBudget(liveGpuBudget) <= LlamaServerLaunchPolicyOptions.MinimumGpuReserveBytes)
+        {
+            return false;
+        }
+
+        var ceiling = _adjustedAllocations.TryGetValue(current.CacheKey, out var adjusted)
+            ? Math.Min(current.ProcessContextTokens, adjusted.ProcessContextTokens)
+            : current.ProcessContextTokens;
+        var liveContext = context with
+        {
+            ProcessGpuBudget = liveGpuBudget
+        };
+        var freeRam = live.AvailableRamBytes - live.ReservedRamBytes;
+        foreach (var tier in LlamaServerLaunchPolicyOptions.ChatContextTiers)
+        {
+            var window = CapAndAlign(tier, context.TrainCeiling);
+            if (window > ceiling)
+            {
+                continue;
+            }
+
+            var candidate = BuildAllocation(current.CacheKey, liveContext, window, chatSlots: 1, ProcessContextAllocationSource.HardwareTier);
+            if (candidate.Footprint.RamBytes > freeRam || candidate.Footprint.GpuBytes > liveGpuBudget)
+            {
+                continue;
+            }
+
+            placed = candidate.Placement == ProcessPlacementMode.Hybrid
+                ? candidate with
+                {
+                    FitTargetBytes = Math.Max(MinimumFitTargetBytes,
+                        Math.Max(context.ProcessGpuBudget ?? 0, live.GlobalFreeGpuBytes) - candidate.Footprint.GpuBytes)
+                }
+                : candidate;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>A smaller window priced at <paramref name="like" />'s placement budget and kept in its offload or Hybrid placement.</summary>
+    /// <remarks>A substitution after admission never re-places at the stable budget, so it never grows on either axis.</remarks>
+    private ProcessContextAllocation BuildAllocationAtPlacement(HardwareAllocationContext context, ProcessContextAllocation like, int contextTokens, int chatSlots)
+    {
+        var priced = context with
+        {
+            ProcessGpuBudget = like.GpuPlacementBudgetBytes ?? context.ProcessGpuBudget
+        };
+        var forced = like.Placement is ProcessPlacementMode.ExpertOffload or ProcessPlacementMode.Hybrid ? like.Placement : (ProcessPlacementMode?)null;
+        var rebuilt = BuildAllocation(like.CacheKey,
+            priced.ContentIdentity,
+            priced.Role == ModelRole.Chat ? chatSlots : 1,
+            contextTokens,
+            priced.TrainCeiling,
+            like.Source,
+            priced.Variant,
+            priced.Profile,
+            priced.Facts,
+            priced.ProcessGpuBudget,
+            priced.KvCacheQuant,
+            forced);
+        return rebuilt.Placement == ProcessPlacementMode.Hybrid
+            ? rebuilt with
+            {
+                FitTargetBytes = like.FitTargetBytes
+            }
+            : rebuilt;
+    }
+
+    private static bool IsWddmHost()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return true;
+        }
+
+        try
+        {
+            return WslHost.Detect();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Unknown host: keep native-Linux behaviour, which never books a live share.
+            return false;
         }
     }
 
@@ -320,7 +497,15 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
         return string.Equals(normalized, LlamaServerKvCacheTypes.Q4_0, StringComparison.Ordinal) ? KvCacheQuant.Q4_0 : null;
     }
 
+    private void EvictCachedComputation(string key, Lazy<Task<ProcessContextAllocation?>> computation)
+    {
+        // Removes the entry only while it is still this computation, so a newer entry for the key survives.
+        ((ICollection<KeyValuePair<string, Lazy<Task<ProcessContextAllocation?>>>>)_cache)
+            .Remove(new KeyValuePair<string, Lazy<Task<ProcessContextAllocation?>>>(key, computation));
+    }
+
     private async Task<ProcessContextAllocation?> ResolveCoreAsync(string key,
+        StrongBox<Lazy<Task<ProcessContextAllocation?>>> computation,
         string contentIdentity,
         ModelRole role,
         GpuVariant variant,
@@ -356,19 +541,53 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             TrainCeiling = trainCeiling,
             KvCacheQuant = kvCacheQuant
         };
+        var allocation = PriceAllocation(key, allocationContext, source, resolved, deterministicOverride);
+
+        // A timed-out probe priced a GPU key on the CPU: hand that answer to this launch only, so the next resolve prices a real reading.
+        if (profile.GpuProbeIndeterminate && variant != GpuVariant.Cpu && allocation.Placement == ProcessPlacementMode.Cpu)
+        {
+            EvictCachedComputation(key, computation.Value!);
+            return allocation with
+            {
+                IsTransient = true
+            };
+        }
+
         _hardwareAllocationContexts[key] = allocationContext;
+        return allocation;
+    }
+
+    private ProcessContextAllocation PriceAllocation(string key,
+        HardwareAllocationContext allocationContext,
+        ProcessContextAllocationSource source,
+        ResolvedLaunchArguments resolved,
+        int? deterministicOverride)
+    {
         // One chat slot: the profile's -ngl fits a pool whose slot count it does not record. Accepted ceiling: background work shares the chat's
         // slot on a frozen profile; upgrade path: persist the fitted slot count on the profile (a schema change) and replay exactly that.
         if (source == ProcessContextAllocationSource.FrozenProfile)
         {
-            return BuildAllocation(key, allocationContext, Math.Max(1, resolved.CtxSize), chatSlots: 1, source, kvCacheQuant);
+            return PriceFrozenReplay(key, allocationContext, resolved, allocationContext.KvCacheQuant);
         }
 
         if (source == ProcessContextAllocationSource.DeterministicOverride && deterministicOverride is { } overrideTokens)
         {
-            return BuildPreferringTwoSlots(key, allocationContext, CapAndAlign(overrideTokens, trainCeiling), source, kvCacheQuant);
+            return BuildPreferringTwoSlots(key, allocationContext, CapAndAlign(overrideTokens, allocationContext.TrainCeiling), source, allocationContext.KvCacheQuant);
         }
 
+        return WalkTiers(key, allocationContext, source);
+    }
+
+    /// <summary>The role's tier walk at the context's GPU budget: the largest fitting window, resident preferred over offload down to the floor, else the fallback.</summary>
+    private ProcessContextAllocation WalkTiers(string key, HardwareAllocationContext allocationContext, ProcessContextAllocationSource source)
+    {
+        var role = allocationContext.Role;
+        var variant = allocationContext.Variant;
+        var profile = allocationContext.Profile;
+        var facts = allocationContext.Facts;
+        var trainCeiling = allocationContext.TrainCeiling;
+        var processGpuBudget = allocationContext.ProcessGpuBudget;
+        var kvCacheQuant = allocationContext.KvCacheQuant;
         var candidates = role == ModelRole.Chat
             ? LlamaServerLaunchPolicyOptions.ChatContextTiers
             : [_options.ContextTokensForRole(role)];
@@ -416,6 +635,89 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
         var fallback = ResolveFallbackContextTokens(role, candidates, facts, trainCeiling, variant, profile, processGpuBudget);
         return BuildPreferringTwoSlots(key, allocationContext, fallback, source, kvCacheQuant);
     }
+
+    /// <summary>A frozen replay priced by its argv: an all-expert <c>-ot</c> at the expert-offload split, a partial placement never below today's booking.</summary>
+    /// <remarks>
+    ///     Today's booking is the stable-budget allocation at the replayed window. A partial <c>-ngl</c> (at or below the block count, zero, or any explicit
+    ///     count when the block count is unknown) wins over the <c>-ot</c> and adds the full resident estimate to RAM; a partial expert <c>-ot</c> adds
+    ///     the expert bytes, and over an expert-offload booking also takes the stable Hybrid GPU share. Table: wiki 07, "Frozen replay".
+    /// </remarks>
+    private ProcessContextAllocation PriceFrozenReplay(string key, HardwareAllocationContext context, ResolvedLaunchArguments resolved, KvCacheQuant? kvCacheQuant)
+    {
+        var window = Math.Max(1, resolved.CtxSize);
+        var source = ProcessContextAllocationSource.FrozenProfile;
+        var today = BuildAllocation(key, context, window, chatSlots: 1, source, kvCacheQuant);
+        var estimation = BuildEstimationContext(context.Variant, context.Profile, context.ProcessGpuBudget);
+        if (!estimation.UseGpu)
+        {
+            return today;
+        }
+
+        var facts = context.Facts;
+        if (IsPartialGpuLayers(resolved.NGpuLayers, facts.BlockCount))
+        {
+            // Layers left on the CPU keep their weights and their KV in host RAM.
+            return WithRamAtLeast(today, Estimate(facts, window, estimation.Profile, kvCacheQuant).EstimatedBytes);
+        }
+
+        var pin = LlamaServerManagedFlags.ClassifyExpertPin(resolved.OverrideTensor);
+        if (pin == ExpertPinScope.None || facts.ExpertCount is not > 0)
+        {
+            return today;
+        }
+
+        if (pin == ExpertPinScope.AllExperts)
+        {
+            return BuildAllocation(key,
+                context.ContentIdentity,
+                chatSlots: 1,
+                window,
+                context.TrainCeiling,
+                source,
+                context.Variant,
+                context.Profile,
+                facts,
+                context.ProcessGpuBudget,
+                kvCacheQuant,
+                ProcessPlacementMode.ExpertOffload);
+        }
+
+        var expertBytes = EstimateExpertOffload(facts, window, estimation.Profile, kvCacheQuant).CpuBytes ?? 0;
+
+        // A replay emits no --cpu-moe, so experts of unpinned blocks load on the GPU, which an expert-offload booking leaves out: book the stable
+        // Hybrid share instead. Accepted ceiling: conservative, not the exact layer layout; upgrade path: per-block expert pricing (deferred item C).
+        if (today.Placement == ProcessPlacementMode.ExpertOffload)
+        {
+            today = BuildAllocation(key,
+                context.ContentIdentity,
+                chatSlots: 1,
+                window,
+                context.TrainCeiling,
+                source,
+                context.Variant,
+                context.Profile,
+                facts,
+                context.ProcessGpuBudget,
+                kvCacheQuant,
+                ProcessPlacementMode.Hybrid);
+        }
+
+        return WithRamAtLeast(today, expertBytes);
+    }
+
+    // Full offload is block count + 1 (the output layer counts), so -ngl equal to the block count leaves block 0 on the CPU (llama.cpp i_gpu_start).
+    // Negative counts are llama.cpp's all-layers and automatic sentinels.
+    private static bool IsPartialGpuLayers(int? gpuLayers, long? blockCount) =>
+        gpuLayers is >= 0 && (blockCount is not > 0 || gpuLayers <= blockCount);
+
+    private static ProcessContextAllocation WithRamAtLeast(ProcessContextAllocation allocation, long ramBytes) =>
+        allocation with
+        {
+            Footprint = allocation.Footprint with
+            {
+                RamBytes = Math.Max(allocation.Footprint.RamBytes, ramBytes)
+            }
+        };
 
     /// <summary>
     ///     The allocation at <paramref name="contextTokens" />: a chat process with its background slot when that keeps the single-slot
@@ -518,7 +820,8 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
         HardwareProfile profile,
         GgufModelFootprintFacts facts,
         long? processGpuBudget,
-        KvCacheQuant? kvCacheQuant)
+        KvCacheQuant? kvCacheQuant,
+        ProcessPlacementMode? forcedPlacement = null)
     {
         var estimation = BuildEstimationContext(variant, profile, processGpuBudget);
         var useGpu = estimation.UseGpu;
@@ -526,10 +829,16 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
 
         // A chat process with its background slot (LlamaServerChatSlots): the slot's headroom KV rides the window, its state the allowance.
         var backgroundSlot = chatSlots > 1;
-        var estimate = Estimate(facts,
-            backgroundSlot ? checked(contextTokens + LlamaServerChatSlots.BackgroundHeadroomTokens) : contextTokens,
-            estimation.Profile,
-            kvCacheQuant);
+        var estimatedTokens = backgroundSlot ? checked(contextTokens + LlamaServerChatSlots.BackgroundHeadroomTokens) : contextTokens;
+        var estimate = Estimate(facts, estimatedTokens, estimation.Profile, kvCacheQuant);
+        if (useGpu
+            && forcedPlacement == ProcessPlacementMode.ExpertOffload
+            && estimate.MoeVerdict != MoeFitVerdict.FitsWithExpertOffload
+            && facts.ExpertCount is > 0)
+        {
+            estimate = EstimateExpertOffload(facts, estimatedTokens, estimation.Profile, kvCacheQuant);
+        }
+
         var slotStateBytes = backgroundSlot ? BackgroundSlotStateAllowanceBytes : 0;
         var estimatedBytes = estimate.EstimatedBytes + slotStateBytes;
         ResourceFootprint footprint;
@@ -539,13 +848,13 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             footprint = new ResourceFootprint(0, estimatedBytes);
             placement = ProcessPlacementMode.Cpu;
         }
-        else if (estimate.MoeVerdict == MoeFitVerdict.FitsWithExpertOffload)
+        else if (estimate.MoeVerdict == MoeFitVerdict.FitsWithExpertOffload && forcedPlacement != ProcessPlacementMode.Hybrid)
         {
             footprint = new ResourceFootprint((estimate.GpuBytes ?? gpuBudget) + slotStateBytes,
                 Math.Max(estimate.CpuBytes ?? 0, facts.FileSizeBytes));
             placement = ProcessPlacementMode.ExpertOffload;
         }
-        else if (estimatedBytes <= gpuBudget)
+        else if (estimatedBytes <= gpuBudget && forcedPlacement != ProcessPlacementMode.Hybrid)
         {
             // llama.cpp memory-maps the GGUF; a fully GPU-resident placement does not commit a second file-sized RAM
             // allocation. Reserving the on-disk size here made admission reject VRAM-fitting models on low-free-RAM hosts.
@@ -569,7 +878,8 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             Footprint = footprint,
             ContentIdentity = contentIdentity,
             CacheKey = key,
-            ChatSlots = chatSlots
+            ChatSlots = chatSlots,
+            GpuPlacementBudgetBytes = useGpu ? processGpuBudget : null
         };
     }
 
@@ -616,24 +926,48 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             profile,
             kvCacheQuantized: false,
             kvCacheQuant: kvCacheQuant,
-            moeFacts: new MoeFacts
-            {
-                ActiveParamCount = null,
-                ExpertCount = facts.ExpertCount,
-                ExpertUsedCount = facts.ExpertUsedCount
-            },
-            attention: new GgufAttentionShape
-            {
-                KeyLength = facts.AttentionKeyLength,
-                ValueLength = facts.AttentionValueLength,
-                SlidingWindow = facts.SlidingWindow,
-                SlidingWindowPattern = facts.SlidingWindowPattern,
-                KeyLengthMla = facts.AttentionKeyLengthMla,
-                ValueLengthMla = facts.AttentionValueLengthMla,
-                FullAttentionInterval = facts.FullAttentionInterval
-            },
+            moeFacts: ToMoeFacts(facts),
+            attention: ToAttentionShape(facts),
             nativeQuantFormat: QuantLadder.IsNativeFormat(quant));
     }
+
+    private MemoryFitEstimate EstimateExpertOffload(GgufModelFootprintFacts facts, int contextTokens, HardwareProfile profile, KvCacheQuant? kvCacheQuant)
+    {
+        var quant = GgufQuantParser.StripDynamicPrefix(facts.Quant);
+        return _estimator.EstimateExpertOffload(quant,
+            facts.ParamCount,
+            facts.FileSizeBytes,
+            facts.BlockCount ?? 0,
+            facts.AttentionHeadCountKV ?? 0,
+            facts.EmbeddingLength ?? 0,
+            facts.AttentionHeadCount ?? 0,
+            contextTokens,
+            profile,
+            ToMoeFacts(facts),
+            kvCacheQuant,
+            ToAttentionShape(facts),
+            QuantLadder.IsNativeFormat(quant));
+    }
+
+    private static MoeFacts ToMoeFacts(GgufModelFootprintFacts facts) =>
+        new()
+        {
+            ActiveParamCount = null,
+            ExpertCount = facts.ExpertCount,
+            ExpertUsedCount = facts.ExpertUsedCount
+        };
+
+    private static GgufAttentionShape ToAttentionShape(GgufModelFootprintFacts facts) =>
+        new()
+        {
+            KeyLength = facts.AttentionKeyLength,
+            ValueLength = facts.AttentionValueLength,
+            SlidingWindow = facts.SlidingWindow,
+            SlidingWindowPattern = facts.SlidingWindowPattern,
+            KeyLengthMla = facts.AttentionKeyLengthMla,
+            ValueLengthMla = facts.AttentionValueLengthMla,
+            FullAttentionInterval = facts.FullAttentionInterval
+        };
 
     private async Task<long?> ResolveProcessGpuBudgetAsync(GpuVariant variant, HardwareProfile profile, CancellationToken ct)
     {

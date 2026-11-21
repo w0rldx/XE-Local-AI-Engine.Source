@@ -524,6 +524,46 @@ public sealed class LlamaServerLaunchProjectionTests
     }
 
     [Test]
+    public void FitTarget_DoesNotChangeComputeIdentity()
+    {
+        // The margin follows live admission pressure; the identity names the launch shape, so a benchmark or receipt compares equal across it.
+        var plan = new LlamaServerLaunchPlan(RequestedContextTokens: 8192,
+            UseKvCacheQuantization: true,
+            LlamaServerKvCacheTypes.Q8_0,
+            CpuThreads: null,
+            CpuThreadsBatch: null,
+            ChatSlots: 1);
+        var withoutTarget = LlamaServerLaunchProjection.From(GpuVariant.Cuda, ResolvedLaunchArguments.Explore(), plan);
+        var withTarget = LlamaServerLaunchProjection.From(GpuVariant.Cuda, ResolvedLaunchArguments.Explore(), plan with
+        {
+            FitTargetBytes = 3571L * 1024 * 1024
+        });
+
+        AssertEx.Equal(expected: 3571, withTarget.FitTargetMiB);
+        AssertEx.Null(withoutTarget.FitTargetMiB);
+        AssertEx.Equal(withoutTarget.ComputeIdentity(), withTarget.ComputeIdentity());
+        AssertEx.Equal(expected: 3571, AssertEx.NotNull(LlamaServerLaunchProjection.FromArgumentsOrNull([
+            "-m", ModelFilePath, "--parallel", "1", "--fit", "on", "--fit-target", "3571", "-c", "8192"
+        ])).FitTargetMiB);
+    }
+
+    [Test]
+    public void From_GpuReplayOrCpu_NeverProjectsAFitTarget()
+    {
+        var plan = new LlamaServerLaunchPlan(RequestedContextTokens: 8192,
+            UseKvCacheQuantization: false,
+            LlamaServerKvCacheTypes.Q8_0,
+            CpuThreads: null,
+            CpuThreadsBatch: null)
+        {
+            FitTargetBytes = 2L * 1024 * 1024 * 1024
+        };
+
+        AssertEx.Null(LlamaServerLaunchProjection.From(GpuVariant.Cuda, ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 40), plan).FitTargetMiB);
+        AssertEx.Null(LlamaServerLaunchProjection.From(GpuVariant.Cpu, ResolvedLaunchArguments.Explore(), plan).FitTargetMiB);
+    }
+
+    [Test]
     public void From_GpuExploreWithAnExpertOffloadPlan_ProjectsCpuMoe_AndAReplayNeverDoes()
     {
         var offloadPlan = new LlamaServerLaunchPlan(RequestedContextTokens: 8192,

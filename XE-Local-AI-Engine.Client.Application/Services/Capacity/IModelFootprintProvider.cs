@@ -52,6 +52,16 @@ public interface IModelFootprintProvider
     /// lower out-of-memory down-tier already in force. A caller reserves the returned footprint, not the proposed one.
     /// </summary>
     bool TryCommitAdmissionFootprint(ModelFootprint candidate, out ModelFootprint committed);
+
+    /// <summary>
+    ///     Projects <see cref="IProcessContextAllocationResolver.TryPlaceWithinLiveBudget" /> onto a footprint: a never-cached re-placement of an
+    ///     admission's allocation against live memory at <paramref name="stage" />.
+    /// </summary>
+    bool TryPlaceWithinLiveBudget(ModelFootprint current, LiveBudget live, PlacementStage stage, out ModelFootprint placed)
+    {
+        placed = current;
+        return false;
+    }
 }
 
 /// <summary>

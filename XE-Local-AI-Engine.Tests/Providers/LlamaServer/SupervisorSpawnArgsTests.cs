@@ -425,68 +425,6 @@ public sealed class SupervisorSpawnArgsTests
         consumer!.Dispose();
     }
 
-    /// <summary>
-    ///     A CPU admission carries no GPU bytes and a CPU-sized context. Spending it on a served GPU build would put
-    ///     that load outside VRAM capacity accounting, so the allocation is re-resolved for the variant being launched.
-    /// </summary>
-    [Test]
-    public async Task EnsureRunning_AdmittedCpuAllocationOutrankedByServedBuild_ReResolvesAllocation()
-    {
-        var launcher = new FakeProcessLauncher();
-        var cpuAllocation = new ProcessContextAllocation
-        {
-            ProcessContextTokens = 4096,
-            ModelTrainContextTokens = 131072,
-            Source = ProcessContextAllocationSource.HardwareTier,
-            Placement = ProcessPlacementMode.Cpu,
-            Footprint = ResourceFootprint.Zero,
-            ContentIdentity = "llama3:0",
-            CacheKey = "cpu-cache"
-        };
-        var gpuAllocation = cpuAllocation with
-        {
-            ProcessContextTokens = 32768,
-            Placement = ProcessPlacementMode.GpuResident,
-            CacheKey = "gpu-cache"
-        };
-        var allocationResolver = Substitute.For<IProcessContextAllocationResolver>();
-        allocationResolver.ResolveAsync(Arg.Any<string>(),
-                              Arg.Any<ModelRole>(),
-                              Arg.Any<GpuVariant>(),
-                              Arg.Any<ResolvedLaunchArguments>(),
-                              Arg.Any<CancellationToken>())
-                          .Returns(_ => Task.FromResult<ProcessContextAllocation?>(gpuAllocation));
-
-        // Admitted as a CPU launch; the serve hands back the recorded CUDA build instead. Reusing the CPU allocation
-        // would go through TryGetEffectiveCommittedAllocation, which this resolver never satisfies.
-        var launchAdmissions = new ProcessLaunchAdmissionRegistry();
-        var admission = new ProcessLaunchAdmission
-        {
-            ModelName = "llama3",
-            Role = ModelRole.Chat,
-            Variant = GpuVariant.Cpu,
-            ResolvedArguments = ResolvedLaunchArguments.Explore(),
-            Allocation = cpuAllocation
-        };
-        AssertEx.True(launchAdmissions.TryAcquire(admission, out var consumer));
-        await using var supervisor = SupervisorFactory.Create(launcher,
-            variantSelector: new FakeVariantSelector(GpuVariant.Cpu),
-            allocationResolver: allocationResolver,
-            launchAdmissions: launchAdmissions,
-            binaryManager: new FakeBinaryManager(GpuVariant.Cuda));
-
-        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
-
-        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
-        AssertEx.Equal("32768", spec!.Arguments[IndexOf(spec.Arguments, "--kv-unified-per-slot") + 1]);
-        await allocationResolver.Received(1).ResolveAsync(Arg.Any<string>(),
-            Arg.Any<ModelRole>(),
-            GpuVariant.Cuda,
-            Arg.Any<ResolvedLaunchArguments>(),
-            Arg.Any<CancellationToken>());
-        consumer!.Dispose();
-    }
-
     [Test]
     [Arguments(GpuVariant.Vulkan, "llama3:0")]
     [Arguments(GpuVariant.Cuda, "different-content")]
@@ -766,6 +704,32 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.Equal("40", spec!.Arguments[IndexOf(spec.Arguments, "--top-k") + 1], "The override itself must still apply.");
         AssertEx.False(spec.Arguments.Any(static argument => argument.Contains("control-vector", StringComparison.Ordinal) || argument.Contains("v.gguf", StringComparison.Ordinal)),
             "A chat launch must never carry a control vector or its file.");
+    }
+
+    /// <summary>Every auto-fit alias stored as a per-model override, past the write-side refusal, through the real resolver to a GPU explore spawn.</summary>
+    [Test]
+    public async Task OperatorFitOffOverride_IsStrippedFromTheFinalArgv()
+    {
+        var store = Substitute.For<IModelLaunchArgumentsStore>();
+        store.GetRawArgumentsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns("--fit off -fit off --fit=off --fit-target 100 -fitt 100 --fit-ctx 4096 -fitc 4096 --top-k 40");
+        await using var services = new ServiceCollection().AddScoped(_ => store).BuildServiceProvider();
+        var resolver = new LlamaServerExtraLaunchArgumentsResolver(services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<LlamaServerExtraLaunchArgumentsResolver>.Instance);
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            extraArgumentsResolver: resolver);
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Equal("40", spec!.Arguments[IndexOf(spec.Arguments, "--top-k") + 1], "The rest of the override must still apply.");
+        AssertEx.Equal(expected: 1, CountOf(spec.Arguments, "--fit"));
+        AssertEx.Equal("on", spec.Arguments[IndexOf(spec.Arguments, "--fit") + 1]);
+        AssertEx.False(spec.Arguments.Any(static argument => argument is "-fit" or "-fitt" or "--fit-target" or "-fitc" or "--fit-ctx" or "off" or "100"
+                                                          || argument.StartsWith("--fit=", StringComparison.Ordinal)),
+            $"An operator override must not reach llama.cpp's auto-fit: {string.Join(' ', spec.Arguments)}");
     }
 
     [Test]
