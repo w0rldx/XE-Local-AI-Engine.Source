@@ -38,10 +38,11 @@ public sealed class WindowsJobSandboxChildProcessTests
             static (_, _) => { });
 
         var wait = child.WaitForExitAsync(CancellationToken.None);
-        // The clock moves only once stdout's pump holds "partial" and waits on its next read, and stderr reached its end.
+        // The clock moves only once stdout's pump holds "partial" and waits on its next read, and stderr's pump has finished: a pump
+        // still returning from its last read at the deadline would be cut.
         var stdoutReader = AssertEx.NotNull(api.LastStandardOutput);
         await AssertEx.EventuallyAsync(() => stdoutReader.ReadsStarted >= 2, TestBudgets.Contended, "stdout's pump must consume its first read");
-        await AssertEx.CompletesAsync(AssertEx.NotNull(api.LastStandardError).Ended.Task, TestBudgets.Contended, "stderr must reach its end");
+        await AssertEx.EventuallyAsync(() => !child.StandardErrorIncomplete, TestBudgets.Contended, "stderr's pump must finish at its end of stream");
         await AssertEx.EventuallyAsync(() => time.ArmedTimerCount > 0, TestBudgets.Contended, "the drain budget must be armed");
         await AssertEx.StaysIncompleteAsync(wait, "the pumps get their drain budget before their reads are cancelled");
         time.Advance(MxcChildProcess.PumpDrainBudget);

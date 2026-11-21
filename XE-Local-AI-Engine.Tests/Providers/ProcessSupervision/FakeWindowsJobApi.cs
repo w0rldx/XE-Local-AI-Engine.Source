@@ -319,7 +319,7 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
         protected override bool ReleaseHandle() => true;
     }
 
-    /// <summary>A pipe's read end that counts the reads started on it and completes <see cref="Ended" /> once a read returns end of stream.</summary>
+    /// <summary>A pipe's read end that counts the reads started on it.</summary>
     internal sealed class ObservedReader : Stream
     {
         private readonly Stream _inner;
@@ -331,8 +331,6 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
         }
 
         public int ReadsStarted => Volatile.Read(ref _readsStarted);
-
-        public TaskCompletionSource Ended { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public override bool CanRead => true;
 
@@ -351,7 +349,7 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref _readsStarted);
-            return Observe(await _inner.ReadAsync(buffer, cancellationToken));
+            return await _inner.ReadAsync(buffer, cancellationToken);
         }
 
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
@@ -360,7 +358,7 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
         public override int Read(byte[] buffer, int offset, int count)
         {
             Interlocked.Increment(ref _readsStarted);
-            return Observe(_inner.Read(buffer, offset, count));
+            return _inner.Read(buffer, offset, count);
         }
 
         public override void Flush()
@@ -381,16 +379,6 @@ internal sealed class FakeWindowsJobApi : IWindowsJobApi
             }
 
             base.Dispose(disposing);
-        }
-
-        private int Observe(int read)
-        {
-            if (read == 0)
-            {
-                Ended.TrySetResult();
-            }
-
-            return read;
         }
     }
 
