@@ -560,30 +560,22 @@ public sealed class WindowsJobSandboxWindowsTests
     [Test]
     public async Task ClosingTheParentJob_EndsTheHelperAndEveryCommand()
     {
+        // Each owner is disposed on any exit, a failed second launch or assertion included; the parent's own Dispose is idempotent.
         using var native = new RecordingLaunchNative();
-        var parent = new WindowsJobHandleParent(native);
+        using var parent = new WindowsJobHandleParent(native);
         var launcher = new WindowsJobLauncher(new WindowsJobApi(parent));
         var limits = WindowsJobLimits.Map(2048, 64, null, Environment.ProcessorCount);
-        var first = launcher.Start(StartInfo("cmd /d /q /k"), limits);
-        var second = launcher.Start(StartInfo("cmd /d /q /k"), limits);
-        try
-        {
-            AssertEx.False(WaitSignalled(native.Commands[0], TimeSpan.Zero) || WaitSignalled(native.Commands[1], TimeSpan.Zero), "both commands are alive before the close");
+        using var first = launcher.Start(StartInfo("cmd /d /q /k"), limits);
+        using var second = launcher.Start(StartInfo("cmd /d /q /k"), limits);
+        AssertEx.False(WaitSignalled(native.Commands[0], TimeSpan.Zero) || WaitSignalled(native.Commands[1], TimeSpan.Zero), "both commands are alive before the close");
 
-            // Only the parent job closes: both wrappers and their kill-on-close jobs stay open and unterminated.
-            parent.Dispose();
-            native.CloseParentJobCopy();
+        // Only the parent job closes: both wrappers and their kill-on-close jobs stay open and unterminated.
+        parent.Dispose();
+        native.CloseParentJobCopy();
 
-            AssertEx.True(WaitSignalled(native.Helpers[0], TimeSpan.FromSeconds(10)), "the helper outlived the parent job");
-            AssertEx.True(WaitSignalled(native.Commands[0], TimeSpan.FromSeconds(10)), "the first command outlived the parent job");
-            AssertEx.True(WaitSignalled(native.Commands[1], TimeSpan.FromSeconds(10)), "the second command outlived the parent job");
-        }
-        finally
-        {
-            first.Dispose();
-            second.Dispose();
-        }
-
+        AssertEx.True(WaitSignalled(native.Helpers[0], TimeSpan.FromSeconds(10)), "the helper outlived the parent job");
+        AssertEx.True(WaitSignalled(native.Commands[0], TimeSpan.FromSeconds(10)), "the first command outlived the parent job");
+        AssertEx.True(WaitSignalled(native.Commands[1], TimeSpan.FromSeconds(10)), "the second command outlived the parent job");
         await Task.CompletedTask;
     }
 
