@@ -141,7 +141,7 @@ public sealed class MxcSandboxRuntimeWindowsTests
         var lines = new List<string>();
         var gate = new object();
 
-        void Capture(string line)
+        void Capture(string line, bool _)
         {
             lock (gate)
             {

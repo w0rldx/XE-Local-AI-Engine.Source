@@ -30,8 +30,8 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
 
     public WindowsJobSandboxChildProcess(WindowsJobProcess process,
         TimeProvider timeProvider,
-        Action<string>? onStandardOutputLine,
-        Action<string> onStandardErrorLine)
+        Action<string, bool>? onStandardOutputLine,
+        Action<string, bool> onStandardErrorLine)
     {
         ArgumentNullException.ThrowIfNull(process);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -111,7 +111,7 @@ internal sealed class WindowsJobSandboxChildProcess : ISandboxChildProcess
         _process.Dispose();
     }
 
-    private Task<bool> Pump(Stream stream, Action<string> onLine) =>
+    private Task<bool> Pump(Stream stream, Action<string, bool> onLine) =>
         MxcChildProcess.PumpLinesAsync(stream, onLine, _readsCancelled.Token);
 
     /// <summary>

@@ -201,14 +201,14 @@ public sealed class WindowsJobSandboxWindowsTests
         var output = new List<string>();
         using var child = new WindowsJobSandboxChildProcess(Launch($"powershell -NoProfile -NonInteractive -EncodedCommand {encoded}", WindowsJobLimits.Map(4096, 256, null, Environment.ProcessorCount)),
             TimeProvider.System,
-            line =>
+            (line, _) =>
             {
                 lock (output)
                 {
                     output.Add(line);
                 }
             },
-            line =>
+            (line, _) =>
             {
                 lock (errors)
                 {

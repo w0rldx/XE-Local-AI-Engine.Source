@@ -36,8 +36,8 @@ public sealed class MxcChildProcess : IDisposable
 
     public MxcChildProcess(IMxcProcess process,
         TimeProvider timeProvider,
-        Action<string>? onStandardOutputLine = null,
-        Action<string>? onStandardErrorLine = null)
+        Action<string, bool>? onStandardOutputLine = null,
+        Action<string, bool>? onStandardErrorLine = null)
     {
         ArgumentNullException.ThrowIfNull(process);
         _process = process;
@@ -46,7 +46,10 @@ public sealed class MxcChildProcess : IDisposable
         if (onStandardOutputLine is not null && process.StandardOutput is { } standardOutput)
         {
             // The SDK hands out a closer only for a stream already taken, so it is requested right after the stream.
-            _standardOutputPump = PumpLinesAsync(standardOutput, onStandardOutputLine, CancellationToken.None);
+            // A close at the drain deadline can read as a clean end of stream, so a line delivered once the stream is cut is never complete.
+            _standardOutputPump = PumpLinesAsync(standardOutput,
+                (line, complete) => onStandardOutputLine(line, complete && !_standardOutputCut),
+                CancellationToken.None);
             AddCloser(process.StandardOutputCloser);
         }
         else if (process.StandardOutput is { } rawOutput)
@@ -57,7 +60,9 @@ public sealed class MxcChildProcess : IDisposable
 
         if (onStandardErrorLine is not null && process.StandardError is { } standardError)
         {
-            _standardErrorPump = PumpLinesAsync(standardError, onStandardErrorLine, CancellationToken.None);
+            _standardErrorPump = PumpLinesAsync(standardError,
+                (line, complete) => onStandardErrorLine(line, complete && !_standardErrorCut),
+                CancellationToken.None);
             AddCloser(process.StandardErrorCloser);
         }
         else
@@ -221,9 +226,10 @@ public sealed class MxcChildProcess : IDisposable
     /// <remarks>
     ///     A line is held at most <see cref="MaxPendingLineChars" />: past it the line is delivered cut and the rest up to its newline is
     ///     read and discarded, so a command printing without newlines cannot grow the engine. A final unterminated line is delivered at
-    ///     end of stream, and also when the read stops early (closed, cancelled or failed), which always counts as incomplete.
+    ///     end of stream, and also when the read stops early (closed, cancelled or failed), which always counts as incomplete. Each line
+    ///     goes to <paramref name="onLine" /> with whether it is complete: a cut or partial one may end inside a value redacted whole.
     /// </remarks>
-    internal static async Task<bool> PumpLinesAsync(Stream stream, Action<string> onLine, CancellationToken cancellationToken)
+    internal static async Task<bool> PumpLinesAsync(Stream stream, Action<string, bool> onLine, CancellationToken cancellationToken)
     {
         // Yield first so a synchronously completing stream cannot run the whole pump inside the constructor.
         await Task.Yield();
@@ -237,9 +243,9 @@ public sealed class MxcChildProcess : IDisposable
         var discarding = false;
         var afterCarriageReturn = false;
         var incomplete = false;
+        var ended = false;
         try
         {
-            var ended = false;
             while (!ended)
             {
                 var count = await source.ReadAsync(bytes, cancellationToken);
@@ -279,7 +285,7 @@ public sealed class MxcChildProcess : IDisposable
                                 line.Length--;
                             }
 
-                            onLine(line.ToString());
+                            onLine(line.ToString(), false);
                             line.Clear();
                             discarding = true;
                             incomplete = true;
@@ -293,7 +299,7 @@ public sealed class MxcChildProcess : IDisposable
 
                     if (!discarding)
                     {
-                        onLine(line.ToString());
+                        onLine(line.ToString(), true);
                         line.Clear();
                     }
 
@@ -322,7 +328,7 @@ public sealed class MxcChildProcess : IDisposable
 
         if (line.Length > 0)
         {
-            onLine(line.ToString());
+            onLine(line.ToString(), ended);
         }
 
         return incomplete;

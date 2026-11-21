@@ -13,10 +13,10 @@ public sealed class SandboxStderrTailTests
         var tail = new SandboxStderrTail(secretValues: null);
         for (var index = 0; index < 50; index++)
         {
-            tail.Append($"line {index}");
+            tail.Append($"line {index}", complete: true);
         }
 
-        tail.Append(new string('x', SandboxStderrTail.MaxCharacters * 2));
+        tail.Append(new string('x', SandboxStderrTail.MaxCharacters * 2), complete: true);
 
         var lines = tail.Snapshot()!.Split('\n');
         AssertEx.Equal(expected: 1, lines.Length);
@@ -25,7 +25,7 @@ public sealed class SandboxStderrTailTests
         var small = new SandboxStderrTail(secretValues: null);
         for (var index = 0; index < 50; index++)
         {
-            small.Append($"line {index}");
+            small.Append($"line {index}", complete: true);
         }
 
         var kept = small.Snapshot()!.Split('\n');
@@ -38,9 +38,25 @@ public sealed class SandboxStderrTailTests
     {
         var tail = new SandboxStderrTail(["sk-live-0123456789", "1"]);
 
-        tail.Append("auth failed for token sk-live-0123456789 (attempt 1)");
+        tail.Append("auth failed for token sk-live-0123456789 (attempt 1)", complete: true);
 
         AssertEx.Equal("auth failed for token [REDACTED] (attempt 1)", tail.Snapshot());
+    }
+
+    [Test]
+    public void Append_WithholdsAnIncompleteLine_WhoseCutSecretNoLongerMatchesItsRedaction()
+    {
+        // A line cut at the pump's budget or ended by a drain deadline can stop inside a value; redaction by whole value would miss
+        // its prefix, so an incomplete line is withheld whole while a complete one is still redacted.
+        var tail = new SandboxStderrTail(["sk-live-0123456789"]);
+
+        tail.Append("auth failed for token sk-live-0123456789", complete: true);
+        tail.Append("retrying with token sk-live-01234", complete: false);
+        tail.Append("last words before the deadline sk-live-0123", complete: false);
+
+        var snapshot = AssertEx.NotNull(tail.Snapshot());
+        AssertEx.Equal($"auth failed for token [REDACTED]\n{SandboxStderrTail.WithheldLine}\n{SandboxStderrTail.WithheldLine}", snapshot);
+        AssertEx.False(snapshot.Contains("sk-live", StringComparison.Ordinal), "no prefix of the secret reaches the diagnostic");
     }
 
     [Test]
@@ -60,7 +76,7 @@ public sealed class SandboxStderrTailTests
             }
         });
 
-        tail.Append("key arg-secret-0123456789 rejected; token tok-abcdef0123456789; PATH=/opt/server/bin:/usr/bin");
+        tail.Append("key arg-secret-0123456789 rejected; token tok-abcdef0123456789; PATH=/opt/server/bin:/usr/bin", complete: true);
 
         AssertEx.Equal("key [REDACTED] rejected; token [REDACTED]; PATH=/opt/server/bin:/usr/bin", tail.Snapshot());
     }
@@ -78,7 +94,7 @@ public sealed class SandboxStderrTailTests
             Arguments = ["/c", "echo [canary] & echo STEP1canary", path, "arg-secret-0123456789"]
         });
 
-        tail.Append($"[canary] STEP1canary; The application '{path}' does not exist; key arg-secret-0123456789");
+        tail.Append($"[canary] STEP1canary; The application '{path}' does not exist; key arg-secret-0123456789", complete: true);
 
         AssertEx.Equal($"[canary] STEP1canary; The application '{path}' does not exist; key [REDACTED]", tail.Snapshot());
     }
@@ -95,7 +111,7 @@ public sealed class SandboxStderrTailTests
             Arguments = ["/c", "powershell -NoProfile srv --token sk-live-abcdef1234567890", "Authorization: Bearer hdr-9f8e7d6c5b4a3210", "Authorization: Bearer letters-only-token"]
         });
 
-        tail.Append("powershell -NoProfile: invalid value 'sk-live-abcdef1234567890' for '--token'; headers hdr-9f8e7d6c5b4a3210 letters-only-token rejected");
+        tail.Append("powershell -NoProfile: invalid value 'sk-live-abcdef1234567890' for '--token'; headers hdr-9f8e7d6c5b4a3210 letters-only-token rejected", complete: true);
 
         AssertEx.Equal("powershell -NoProfile: invalid value '[REDACTED]' for '--token'; headers [REDACTED] [REDACTED] rejected", tail.Snapshot());
     }
@@ -112,7 +128,7 @@ public sealed class SandboxStderrTailTests
             Arguments = ["/c", "srv --token letters-only-secret --key=assigned-letters-value ordinary-words -NoProfile"]
         });
 
-        tail.Append("letters-only-secret assigned-letters-value ordinary-words -NoProfile srv");
+        tail.Append("letters-only-secret assigned-letters-value ordinary-words -NoProfile srv", complete: true);
 
         AssertEx.Equal("[REDACTED] [REDACTED] ordinary-words -NoProfile srv", tail.Snapshot());
     }
@@ -129,7 +145,7 @@ public sealed class SandboxStderrTailTests
             Arguments = ["/c", "set API_KEY=letters-only-secret & server.exe --verbose"]
         });
 
-        tail.Append("API_KEY is letters-only-secret; server.exe --verbose started");
+        tail.Append("API_KEY is letters-only-secret; server.exe --verbose started", complete: true);
 
         AssertEx.Equal("API_KEY is [REDACTED]; server.exe --verbose started", tail.Snapshot());
     }
@@ -146,7 +162,7 @@ public sealed class SandboxStderrTailTests
             Arguments = ["https://example.test/mcp", "--header", "X-Api-Key: letters-only-secret", "--header", "X-Other:compact-secret-value"]
         });
 
-        tail.Append("letters-only-secret compact-secret-value https://example.test/mcp //example.test refused");
+        tail.Append("letters-only-secret compact-secret-value https://example.test/mcp //example.test refused", complete: true);
 
         AssertEx.Equal("[REDACTED] [REDACTED] [REDACTED] //example.test refused", tail.Snapshot());
     }
@@ -163,7 +179,7 @@ public sealed class SandboxStderrTailTests
             Arguments = ["/c", @"type C:\probe\notes.txt & set KEY=letters-only-secret"]
         });
 
-        tail.Append(@"C:\probe\notes.txt read; KEY letters-only-secret rejected");
+        tail.Append(@"C:\probe\notes.txt read; KEY letters-only-secret rejected", complete: true);
 
         AssertEx.Equal(@"C:\probe\notes.txt read; KEY [REDACTED] rejected", tail.Snapshot());
     }
@@ -172,7 +188,7 @@ public sealed class SandboxStderrTailTests
     public void Snapshot_WhenNothingWasWritten_IsNull()
     {
         var tail = new SandboxStderrTail(secretValues: null);
-        tail.Append("   ");
+        tail.Append("   ", complete: true);
 
         AssertEx.Null(tail.Snapshot());
     }

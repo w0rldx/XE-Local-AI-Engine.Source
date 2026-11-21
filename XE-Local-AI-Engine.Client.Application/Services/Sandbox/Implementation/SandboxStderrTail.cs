@@ -15,6 +15,9 @@ internal sealed class SandboxStderrTail
     internal const int MaxLines = 20;
     internal const int MaxCharacters = 2048;
 
+    /// <summary>What an incomplete line is kept as: a value cut inside it no longer matches its redaction, so none of it is shown.</summary>
+    internal const string WithheldLine = "[incomplete line withheld]";
+
     // Values shorter than this are not redacted, so a debug flag of one digit does not turn every such digit in
     // the tail into a placeholder; a real credential is longer. Lower it only together with a smarter matcher.
     private const int MinSecretLength = 8;
@@ -46,15 +49,15 @@ internal sealed class SandboxStderrTail
         return new SandboxStderrTail(new SecretValueRedactor(SecretValueRedactor.ForCommand(environment, request.Arguments, MinSecretLength)));
     }
 
-    /// <summary>Appends one redacted line, evicting the oldest until both bounds hold again.</summary>
-    public void Append(string? line)
+    /// <summary>Appends one redacted line, or <see cref="WithheldLine" /> for an incomplete one, evicting the oldest until both bounds hold again.</summary>
+    public void Append(string? line, bool complete)
     {
         if (string.IsNullOrWhiteSpace(line))
         {
             return;
         }
 
-        var redacted = _redactor.Redact(line.TrimEnd());
+        var redacted = complete ? _redactor.Redact(line.TrimEnd()) : WithheldLine;
         if (redacted.Length > MaxCharacters)
         {
             redacted = redacted[^MaxCharacters..];

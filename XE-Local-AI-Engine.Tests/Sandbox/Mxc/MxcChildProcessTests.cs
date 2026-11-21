@@ -95,7 +95,7 @@ public sealed class MxcChildProcessTests
         var stdout = new List<string>();
         var stderr = new List<string>();
 
-        using var child = new MxcChildProcess(process, TimeProvider.System, stdout.Add, stderr.Add);
+        using var child = new MxcChildProcess(process, TimeProvider.System, (line, _) => stdout.Add(line), (line, _) => stderr.Add(line));
         await child.WaitForExitAsync(CancellationToken.None);
 
         AssertEx.Null(child.StandardOutput);
@@ -108,8 +108,9 @@ public sealed class MxcChildProcessTests
     [Test]
     public async Task WaitForExitAsync_WhenAPumpedStreamNeverEnds_ClosesItAfterTheDrainBudget_AndReturns()
     {
-        // A grandchild that inherited stdout keeps the pipe open after the child exits: nothing is ever written and EOF never comes.
+        // A grandchild that inherited stdout keeps the pipe open after the child exits: no newline and no EOF come after "partial".
         var stdout = new Pipe();
+        await stdout.Writer.WriteAsync("partial"u8.ToArray());
         var closer = Substitute.For<IMxcStreamCloser>();
         closer.When(c => c.Close()).Do(_ => stdout.Writer.Complete());
         var process = Substitute.For<IMxcProcess>();
@@ -120,7 +121,8 @@ public sealed class MxcChildProcessTests
             ExitCode = 4
         });
         var time = new ManualTimeProvider();
-        using var child = new MxcChildProcess(process, time, static _ => { });
+        var lines = new List<string>();
+        using var child = new MxcChildProcess(process, time, (line, complete) => lines.Add(complete ? line : "incomplete:" + line));
 
         var wait = child.WaitForExitAsync(CancellationToken.None);
         await AssertEx.EventuallyAsync(() => time.ArmedTimerCount > 0, TestBudgets.Contended, "the drain budget must be armed");
@@ -132,6 +134,7 @@ public sealed class MxcChildProcessTests
         AssertEx.Equal(4, await wait);
         closer.Received(1).Close();
         AssertEx.True(child.StandardOutputIncomplete, "a stream closed under its pump at the deadline is cut, though the close read as end of stream");
+        AssertEx.Equal("incomplete:partial", string.Join('|', lines), "the pending line is delivered as incomplete, though the close read as end of stream");
     }
 
     [Test]
@@ -148,7 +151,7 @@ public sealed class MxcChildProcessTests
             ExitCode = 0
         });
         var time = new ManualTimeProvider();
-        using var child = new MxcChildProcess(process, time, static _ => { });
+        using var child = new MxcChildProcess(process, time, static (_, _) => { });
 
         var wait = child.WaitForExitAsync(CancellationToken.None);
         await AssertEx.EventuallyAsync(() => time.ArmedTimerCount > 0, TestBudgets.Contended, "the drain budget must be armed");
@@ -169,10 +172,16 @@ public sealed class MxcChildProcessTests
     public async Task PumpLinesAsync_SplitsLikeReadLine_AndDeliversAFinalUnterminatedLine()
     {
         var lines = new List<string>();
+        var complete = new List<bool>();
 
-        var incomplete = await MxcChildProcess.PumpLinesAsync(new MemoryStream("a\r\nb\rc\n\nd"u8.ToArray()), lines.Add, CancellationToken.None);
+        var incomplete = await MxcChildProcess.PumpLinesAsync(new MemoryStream("a\r\nb\rc\n\nd"u8.ToArray()), (line, whole) =>
+        {
+            lines.Add(line);
+            complete.Add(whole);
+        }, CancellationToken.None);
 
         AssertEx.Equal("a|b|c||d", string.Join('|', lines));
+        AssertEx.True(complete.All(static whole => whole), "a final line ended by end of stream is complete");
         AssertEx.False(incomplete, "every line reached its terminator or end of stream");
     }
 
@@ -182,10 +191,16 @@ public sealed class MxcChildProcessTests
         // Twice the budget without a newline, then one more line: the pump holds at most the budget and still reads to the end.
         var text = new string('x', 2 * MxcChildProcess.MaxPendingLineChars) + "\nnext";
         var lines = new List<string>();
+        var complete = new List<bool>();
 
-        var incomplete = await MxcChildProcess.PumpLinesAsync(new MemoryStream(Encoding.UTF8.GetBytes(text)), lines.Add, CancellationToken.None);
+        var incomplete = await MxcChildProcess.PumpLinesAsync(new MemoryStream(Encoding.UTF8.GetBytes(text)), (line, whole) =>
+        {
+            lines.Add(line);
+            complete.Add(whole);
+        }, CancellationToken.None);
 
         AssertEx.Equal(2, lines.Count);
+        AssertEx.Equal("False|True", string.Join('|', complete), "the cut line is delivered as incomplete, the next one as complete");
         AssertEx.Equal(MxcChildProcess.MaxPendingLineChars, lines[0].Length, "the newline-free run is delivered cut at the budget, never whole");
         AssertEx.Equal("next", lines[1], "the stream is drained past the cut line");
         AssertEx.True(incomplete, "a cut line makes the stream incomplete");
@@ -198,7 +213,7 @@ public sealed class MxcChildProcessTests
         var text = new string('x', MxcChildProcess.MaxPendingLineChars - 1) + "\U0001F600tail\nnext";
         var lines = new List<string>();
 
-        var incomplete = await MxcChildProcess.PumpLinesAsync(new MemoryStream(Encoding.UTF8.GetBytes(text)), lines.Add, CancellationToken.None);
+        var incomplete = await MxcChildProcess.PumpLinesAsync(new MemoryStream(Encoding.UTF8.GetBytes(text)), (line, _) => lines.Add(line), CancellationToken.None);
 
         AssertEx.Equal(2, lines.Count);
         AssertEx.False(char.IsHighSurrogate(lines[0][^1]), "a cut line must not end on an unpaired high surrogate");
@@ -213,7 +228,7 @@ public sealed class MxcChildProcessTests
         var lines = new List<string>();
         await using var stream = new FailsAtEndStream("a\n"u8.ToArray());
 
-        var incomplete = await MxcChildProcess.PumpLinesAsync(stream, lines.Add, CancellationToken.None);
+        var incomplete = await MxcChildProcess.PumpLinesAsync(stream, (line, _) => lines.Add(line), CancellationToken.None);
 
         AssertEx.Equal("a", string.Join('|', lines));
         AssertEx.True(incomplete, "a read that failed before end of stream may have lost what followed");
@@ -223,11 +238,17 @@ public sealed class MxcChildProcessTests
     public async Task PumpLinesAsync_WhenTheSdkReadFails_DeliversThePartialLine_AndReportsIncomplete()
     {
         var lines = new List<string>();
+        var complete = new List<bool>();
         await using var stream = new FailsAtEndStream("a\nparti"u8.ToArray(), new MxcException(ErrorCode.BackendError, "the pipe is closed"));
 
-        var incomplete = await MxcChildProcess.PumpLinesAsync(stream, lines.Add, CancellationToken.None);
+        var incomplete = await MxcChildProcess.PumpLinesAsync(stream, (line, whole) =>
+        {
+            lines.Add(line);
+            complete.Add(whole);
+        }, CancellationToken.None);
 
         AssertEx.Equal("a|parti", string.Join('|', lines), "the SDK's own read failure ends the pump like a broken pipe, never faults it");
+        AssertEx.Equal("True|False", string.Join('|', complete), "the partial line left by the failed read is delivered as incomplete");
         AssertEx.True(incomplete);
     }
 
@@ -240,7 +261,7 @@ public sealed class MxcChildProcessTests
         var lines = new List<string>();
         using var stop = new CancellationTokenSource();
 
-        var pump = MxcChildProcess.PumpLinesAsync(pipe.Reader.AsStream(), line =>
+        var pump = MxcChildProcess.PumpLinesAsync(pipe.Reader.AsStream(), (line, _) =>
         {
             lock (lines)
             {

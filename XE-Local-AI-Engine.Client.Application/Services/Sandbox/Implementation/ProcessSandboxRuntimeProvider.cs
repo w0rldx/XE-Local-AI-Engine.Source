@@ -831,15 +831,18 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         return Task.CompletedTask;
     }
 
-    /// <summary>The capture callback alone without an observer, else capture first and then the observer, which also sees lines past the cap.</summary>
-    private static Action<string?> Observed(Action<string?> capture, GuardedSandboxOutputObserver? observer, SandboxOutputSource source)
+    /// <summary>
+    ///     The capture callback alone without an observer, else capture first and then the observer, which also sees lines past the cap.
+    ///     Both keep a cut or partial line as it came.
+    /// </summary>
+    private static Action<string?, bool> Observed(Action<string?> capture, GuardedSandboxOutputObserver? observer, SandboxOutputSource source)
     {
         if (observer is null)
         {
-            return capture;
+            return (line, _) => capture(line);
         }
 
-        return line =>
+        return (line, _) =>
         {
             capture(line);
             if (line is not null)
@@ -851,13 +854,14 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
     /// <summary>Starts the child the descriptor names: an MXC spawn, a Windows Job Object launch, or the (possibly wrapped) start info.</summary>
     /// <remarks>
-    ///     A null <paramref name="onStandardOutputLine" /> leaves stdout raw for an interactive peer; stderr is always pumped. A descriptor
-    ///     whose ceilings the chosen launcher would not apply throws: the MXC spawn carries none (ADR 0025).
+    ///     A null <paramref name="onStandardOutputLine" /> leaves stdout raw for an interactive peer; stderr is always pumped. Each line
+    ///     callback is told whether the line is complete (<see cref="MxcChildProcess.PumpLinesAsync" />). A descriptor whose ceilings the
+    ///     chosen launcher would not apply throws: the MXC spawn carries none (ADR 0025).
     /// </remarks>
     private async Task<ISandboxChildProcess> StartChildAsync(ProcessStartInfo startInfo,
         SandboxLaunchDescriptor launch,
-        Action<string?>? onStandardOutputLine,
-        Action<string?> onStandardErrorLine,
+        Action<string?, bool>? onStandardOutputLine,
+        Action<string?, bool> onStandardErrorLine,
         CancellationToken cancellationToken)
     {
         if (launch.MxcRequest is { } mxcRequest)
@@ -889,10 +893,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 LogSpawnWarnings(startInfo, warnings);
             }
 
-            return new MxcSandboxChildProcess(new MxcChildProcess(spawned,
-                _timeProvider,
-                onStandardOutputLine is null ? null : line => onStandardOutputLine(line),
-                line => onStandardErrorLine(line)));
+            return new MxcSandboxChildProcess(new MxcChildProcess(spawned, _timeProvider, onStandardOutputLine, onStandardErrorLine));
         }
 
         if (launch.WindowsJobLimits is { } jobLimits)
@@ -907,10 +908,10 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         };
         if (onStandardOutputLine is not null)
         {
-            process.OutputDataReceived += (_, eventArgs) => onStandardOutputLine(eventArgs.Data);
+            process.OutputDataReceived += (_, eventArgs) => onStandardOutputLine(eventArgs.Data, true);
         }
 
-        process.ErrorDataReceived += (_, eventArgs) => onStandardErrorLine(eventArgs.Data);
+        process.ErrorDataReceived += (_, eventArgs) => onStandardErrorLine(eventArgs.Data, true);
         try
         {
             process.Start();
@@ -934,8 +935,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     /// <remarks>Any setup failure throws with nothing running and no handle left; the command line follows the CommandLineToArgvW rules.</remarks>
     private WindowsJobSandboxChildProcess StartInWindowsJob(ProcessStartInfo startInfo,
         WindowsJobLimits limits,
-        Action<string?>? onStandardOutputLine,
-        Action<string?> onStandardErrorLine)
+        Action<string?, bool>? onStandardOutputLine,
+        Action<string?, bool> onStandardErrorLine)
     {
         if (_windowsJobLauncher is null)
         {
@@ -959,10 +960,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 RedirectStandardInput = startInfo.RedirectStandardInput
             },
             limits);
-        return new WindowsJobSandboxChildProcess(process,
-            _timeProvider,
-            onStandardOutputLine is null ? null : line => onStandardOutputLine(line),
-            line => onStandardErrorLine(line));
+        return new WindowsJobSandboxChildProcess(process, _timeProvider, onStandardOutputLine, onStandardErrorLine);
     }
 
     /// <summary>A start failure reported instead of thrown: a plain child that could not be exec'd, or ANY MXC spawn or Job Object launch failure.</summary>

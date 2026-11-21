@@ -28,14 +28,14 @@ public sealed class WindowsJobSandboxChildProcessTests
         var stdout = new List<string>();
         using var child = new WindowsJobSandboxChildProcess(new WindowsJobLauncher(api).Start(Command, Limits()),
             time,
-            line =>
+            (line, complete) =>
             {
                 lock (stdout)
                 {
-                    stdout.Add(line);
+                    stdout.Add(complete ? line : "incomplete:" + line);
                 }
             },
-            static _ => { });
+            static (_, _) => { });
 
         var wait = child.WaitForExitAsync(CancellationToken.None);
         // The clock moves only once stdout's pump holds "partial" and waits on its next read, and stderr reached its end.
@@ -50,7 +50,7 @@ public sealed class WindowsJobSandboxChildProcessTests
         AssertEx.Equal(3, await wait);
         lock (stdout)
         {
-            AssertEx.Equal("partial", string.Join('|', stdout), "the unterminated line is delivered before the wait returns");
+            AssertEx.Equal("incomplete:partial", string.Join('|', stdout), "the unterminated line is delivered, as incomplete, before the wait returns");
         }
 
         AssertEx.True(child.StandardOutputIncomplete, "a line cut off by the drain budget makes stdout incomplete");
@@ -64,7 +64,7 @@ public sealed class WindowsJobSandboxChildProcessTests
     {
         var api = new FakeWindowsJobApi { HoldStandardOutput = true, StandardOutputText = "partial", ExitCodeFor = static _ => 0 };
         var time = new ManualTimeProvider();
-        using var child = new WindowsJobSandboxChildProcess(new WindowsJobLauncher(api).Start(Command, Limits()), time, static _ => { }, static _ => { });
+        using var child = new WindowsJobSandboxChildProcess(new WindowsJobLauncher(api).Start(Command, Limits()), time, static (_, _) => { }, static (_, _) => { });
         using var stop = new CancellationTokenSource();
 
         var wait = child.WaitForExitAsync(stop.Token);
@@ -80,7 +80,7 @@ public sealed class WindowsJobSandboxChildProcessTests
     public async Task TryWaitForExitAsync_TerminatesTheJob_OnceTheRootHasExited()
     {
         var api = new FakeWindowsJobApi { ExitCodeFor = static _ => 0 };
-        using var child = new WindowsJobSandboxChildProcess(new WindowsJobLauncher(api).Start(Command, Limits()), TimeProvider.System, null, static _ => { });
+        using var child = new WindowsJobSandboxChildProcess(new WindowsJobLauncher(api).Start(Command, Limits()), TimeProvider.System, null, static (_, _) => { });
 
         using var budget = new CancellationTokenSource(TestBudgets.Contended);
         AssertEx.True(await child.TryWaitForExitAsync(budget.Token));
@@ -92,7 +92,7 @@ public sealed class WindowsJobSandboxChildProcessTests
     public async Task StandardInput_IsWrittenAsUtf8_WithoutAPreamble()
     {
         var api = new FakeWindowsJobApi { ExitCodeFor = static _ => 0 };
-        using var child = new WindowsJobSandboxChildProcess(new WindowsJobLauncher(api).Start(Command, Limits()), TimeProvider.System, null, static _ => { });
+        using var child = new WindowsJobSandboxChildProcess(new WindowsJobLauncher(api).Start(Command, Limits()), TimeProvider.System, null, static (_, _) => { });
 
         await child.WriteStandardInputAndCloseAsync("grüße", CancellationToken.None);
 
