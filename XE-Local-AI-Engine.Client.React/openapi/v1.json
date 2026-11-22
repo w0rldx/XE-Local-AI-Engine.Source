@@ -44432,6 +44432,13 @@
           },
           "recordAttention": {
             "type": "boolean"
+          },
+          "maxNewTokens": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 256,
+            "minimum": 1,
+            "nullable": true
           }
         }
       },
@@ -53693,6 +53700,11 @@
             "nullable": true
           },
           "maxNewTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "candidateSteps": {
             "type": "integer",
             "format": "int32",
             "nullable": true

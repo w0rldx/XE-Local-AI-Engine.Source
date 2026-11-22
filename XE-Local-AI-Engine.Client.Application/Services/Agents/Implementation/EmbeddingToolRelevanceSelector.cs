@@ -6,9 +6,11 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     Embedding-backed <see cref="IToolRelevanceSelector" />, in the shape of
@@ -93,6 +95,12 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
             // the guard stays honest if a future revision flows a token in.
             throw;
         }
+        catch (OperatorEjectedException)
+        {
+            // An unattended run's reload of an ejected embedder was vetoed: an expected state, logged once without a stack.
+            _logger.LogInformation("Embedding model {EmbeddingModel} is operator-ejected, ranking lexically for {CandidateCount} candidates.", model, candidates.Count);
+            return await _lexical.SelectAsync(query, candidates, threshold, cancellationToken);
+        }
         catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException)
         {
             // Every node-local embedding hiccup lands here: an unpulled model, a downed runtime, a spent profiling
@@ -140,7 +148,8 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {
             ModelName = model,
-            ProviderName = _options.EmbeddingProviderName
+            ProviderName = _options.EmbeddingProviderName,
+            ResidencyIntent = UnattendedRunScope.IsActive ? ModelResidencyIntent.Background : ModelResidencyIntent.Interactive
         });
 
         // Core is never ranked and never trimmed, so it is never embedded either: the round-trip carries only the

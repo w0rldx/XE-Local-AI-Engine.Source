@@ -2,12 +2,24 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- Required by the LibraryImport source generator for DesktopEngineCommand's kill(2) P/Invoke (SYSLIB1062); no
-         hand-written unsafe code exists in this project. -->
+    <!-- Required by the LibraryImport source generator for DesktopEngineCommand's kill(2) and the linked pidfd P/Invokes
+         (SYSLIB1062); no hand-written unsafe code exists in this project. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>XE_Local_AI_Engine.Desktop</RootNamespace>
     <AssemblyName>XE-Local-AI-Engine.Desktop</AssemblyName>
+    <!-- Puts the linked Providers.Abstractions sources below into XE_Local_AI_Engine.Desktop.Linux (see their #if). -->
+    <DefineConstants>$(DefineConstants);XE_DESKTOP</DefineConstants>
   </PropertyGroup>
+
+  <!-- The owned-engine tree kill, compiled from source: the shell has no engine project references (wiki 02). -->
+  <ItemGroup>
+    <Compile Include="..\XE-Local-AI-Engine.Providers.Abstractions\LinuxPidFd.cs" Link="Linux\LinuxPidFd.cs" />
+    <Compile Include="..\XE-Local-AI-Engine.Providers.Abstractions\LinuxPidFdSendResult.cs" Link="Linux\LinuxPidFdSendResult.cs" />
+    <Compile Include="..\XE-Local-AI-Engine.Providers.Abstractions\LinuxProcStat.cs" Link="Linux\LinuxProcStat.cs" />
+    <Compile Include="..\XE-Local-AI-Engine.Providers.Abstractions\LinuxProcessTreeKill.cs" Link="Linux\LinuxProcessTreeKill.cs" />
+    <Compile Include="..\XE-Local-AI-Engine.Providers.Abstractions\LinuxProcessTreeKillCalls.cs" Link="Linux\LinuxProcessTreeKillCalls.cs" />
+    <Compile Include="..\XE-Local-AI-Engine.Providers.Abstractions\LinuxProcessTreeKillResult.cs" Link="Linux\LinuxProcessTreeKillResult.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Velopack" />

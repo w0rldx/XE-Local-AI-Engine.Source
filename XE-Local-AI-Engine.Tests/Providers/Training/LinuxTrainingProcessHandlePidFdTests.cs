@@ -33,7 +33,8 @@ public sealed class LinuxTrainingProcessHandlePidFdTests
         handle.RequestStop();
         handle.KillGroup();
 
-        AssertEx.Equal("send 15 group,send 15 group,send 9 group", string.Join(',', calls.Calls), "No signal leaves the fd, and no fd is opened again.");
+        AssertEx.Equal("send 15 group,send 15 group,send 9 group", string.Join(',', calls.Calls),
+            $"No signal leaves the fd, and no fd is opened again. Calls: {string.Join(',', calls.Calls)}");
         child.End();
         handle.Dispose();
         AssertEx.True(pidFd.IsClosed, "The handle owns the fd and closes it on dispose.");
@@ -51,7 +52,8 @@ public sealed class LinuxTrainingProcessHandlePidFdTests
 
         handle.KillGroup();
 
-        AssertEx.Empty(calls.NumericSignals, "EPERM or EMFILE proves nothing about the pid, so the number is never signalled instead.");
+        AssertEx.Empty(calls.NumericSignals,
+            $"EPERM or EMFILE proves nothing about the pid, so the number is never signalled instead. Calls: {string.Join(',', calls.Calls)}");
         child.End();
     }
 
@@ -84,7 +86,8 @@ public sealed class LinuxTrainingProcessHandlePidFdTests
         handle.KillGroup();
         handle.Dispose();
 
-        AssertEx.Empty(calls.Calls, "A pid the spawn could not prove is this child is never signalled, through an fd or by number.");
+        AssertEx.Empty(calls.Calls,
+            $"A pid the spawn could not prove is this child is never signalled, through an fd or by number. Calls: {string.Join(',', calls.Calls)}");
         child.End();
     }
 
@@ -103,7 +106,7 @@ public sealed class LinuxTrainingProcessHandlePidFdTests
 
         var pid = child.Process.Id;
         AssertEx.Equal($"open {pid},send 15 group,open {pid},send 15 group,open {pid},send 9 group", string.Join(',', calls.Calls),
-            "The real start time and the real run token matched after every open.");
+            $"The real start time and the real run token matched after every open. Calls: {string.Join(',', calls.Calls)}");
         AssertEx.True(calls.Opened.TrueForAll(static pidFd => pidFd.IsClosed), "Each signal's fd is closed with the call.");
         child.End();
     }
@@ -140,7 +143,7 @@ public sealed class LinuxTrainingProcessHandlePidFdTests
 
         handle.KillGroup();
 
-        AssertEx.Empty(calls.NumericSignals);
+        AssertEx.Empty(calls.NumericSignals, $"Calls: {string.Join(',', calls.Calls)}");
         child.End();
     }
 
@@ -173,6 +176,21 @@ public sealed class LinuxTrainingProcessHandlePidFdTests
                 StartTicks = LinuxTrainingProcessInspector.ReadStatOrNull(Process.Id)?.StartTicks
                              ?? throw new InvalidOperationException("The child exited before its start time could be read.")
             };
+
+            // Process.Start returns once setsid is exec'd: wait, as the spawner does, until it has exec'd sleep, so no /proc read spans that exec.
+            var identity = LinuxTrainingProcessSpawner.AwaitTrainerIdentity(Process.Id,
+                LinuxTrainingProcessInspector.ReadStatOrNull,
+                LinuxTrainingProcessInspector.ResolveExecutablePath,
+                LinuxTrainingProcessInspector.ReadRunToken,
+                runToken,
+                File.ResolveLinkTarget(Setsid, returnFinalTarget: true)?.FullName ?? Setsid,
+                timeout => Process.WaitForExit(timeout),
+                TimeProvider.System);
+            if (!identity.LeadsGroup || identity.ExecutablePath is null)
+            {
+                Dispose();
+                Skip.Test($"BLOCKED: the child did not lead its own group past {Setsid} within {LinuxTrainingProcessSpawner.GroupLeaderTimeout}, so its /proc reads may still span an exec.");
+            }
         }
 
         public Process Process { get; }

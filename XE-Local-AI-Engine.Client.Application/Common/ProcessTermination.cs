@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Common;
 
 using System.ComponentModel;
 using System.Diagnostics;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Best-effort termination of a host child process (the <c>git</c> invocations behind AgentHome and Development
@@ -16,13 +17,14 @@ internal static class ProcessTermination
     ///     refusing the signal (<see cref="Win32Exception" />).
     /// </summary>
     /// <remarks>
-    ///     Every other exception still surfaces — a kill failing for an unexpected reason is not cleanup noise.
+    ///     Off Linux every other exception still surfaces — a kill failing for an unexpected reason is not cleanup noise. On Linux the
+    ///     pidfd walk never throws, so a caller's <c>catch { TryKill; throw; }</c> always rethrows its own exception.
     /// </remarks>
     public static void TryKill(Process process)
     {
         try
         {
-            process.Kill(entireProcessTree: true);
+            _ = LinuxProcessTreeKill.Kill(process);
         }
         catch (InvalidOperationException)
         {

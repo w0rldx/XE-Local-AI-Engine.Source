@@ -96,17 +96,35 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     }
 
     [Test]
-    public async Task EmbedAsync_WhenNothingInstalledAndGeneratorFails_UsesConfiguredNameAndSurfacesGracefulFailure()
+    public async Task EmbedAsync_WhenTheInventoryHoldsNoEmbedder_FailsAsUnavailableWithoutCreatingAGenerator()
     {
-        var provider = new CapturingProvider
+        // The inventory answered without an embedding model: llama-server cannot load the fallback name, and asking would
+        // only meet a stale eject mark of a removed model and park the run again.
+        var provider = new CapturingProvider(Descriptor("qwen2.5:Q4_K_M"));
+        var embedder = CreateEmbedder(provider);
+
+        var failure = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() => embedder.EmbedAsync(["chunk one"], CancellationToken.None));
+
+        AssertEx.Equal(KnowledgeChunkEmbedder.EmbeddingUnavailableReason, failure.Reason);
+        AssertEx.Null(provider.LastSelectedModelName);
+        AssertEx.Equal(0, provider.GenerateCalls);
+    }
+
+    [Test]
+    public async Task EmbedAsync_WhenTheInventoryReadFails_StillAsksTheGeneratorWithTheConfiguredName()
+    {
+        var provider = new CapturingProvider(Descriptor(ConfiguredName))
         {
+            ThrowOnListModels = true,
             ThrowOnGenerate = true
         };
         var embedder = CreateEmbedder(provider);
 
-        _ = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() => embedder.EmbedAsync(["chunk one"], CancellationToken.None));
+        var failure = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() => embedder.EmbedAsync(["chunk one"], CancellationToken.None));
 
-        AssertEx.Equal(ConfiguredName, provider.LastSelectedModelName);
+        AssertEx.Equal(KnowledgeChunkEmbedder.EmbeddingUnavailableReason, failure.Reason);
+        AssertEx.Equal(ConfiguredName, provider.LastSelectedModelName, "An unreadable inventory proves nothing missing, so the generator is still asked.");
+        AssertEx.Equal(1, provider.GenerateCalls);
     }
 
     [Test]
@@ -136,15 +154,15 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     }
 
     [Test]
-    public async Task EmbedAsync_WhenNothingInstalledAndProviderIsUnreachable_ReportsMissingModel()
+    public async Task EmbedAsync_OnAnotherProviderWithNoEmbedderInstalled_AsksTheGeneratorOnceAndReportsMissingModel()
     {
         // No installed model matched, so "install an embedding model" IS the correct remediation, and there is no
-        // process worth retrying: the generator is called exactly once.
+        // process worth retrying: the generator is called exactly once. Only the llama.cpp provider fails before asking.
         var provider = new CapturingProvider(Descriptor("qwen2.5:Q4_K_M"))
         {
             ThrowOnGenerate = true
         };
-        var embedder = CreateEmbedder(provider);
+        var embedder = CreateEmbedder(provider, providerName: "another-runtime");
 
         var exception = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() =>
             embedder.EmbedAsync(["chunk one"], CancellationToken.None));
@@ -232,13 +250,15 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     }
 
     [Test]
-    public async Task IsEmbeddingModelBlockedAsync_WhenTheResolutionIsNotConfident_IsTrueWithoutAskingTheSupervisor()
+    public async Task IsEmbeddingModelBlockedAsync_WhenTheInventoryHoldsNoEmbedder_IsFalseWithoutAskingTheSupervisor()
     {
-        // Nothing installed matches, so the resolution is the bare configured name, which need not be the marked model.
+        // The operator ejected the unpinned embedder, then removed it: the inventory answered and nothing matches, so there
+        // is nothing to wait for and the re-admitted run fails with the missing-model reason instead of stranding.
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.IsBackgroundLaunchBlocked(Arg.Any<string>(), Arg.Any<ModelRole>()).Returns(true);
         var embedder = CreateEmbedder(new CapturingProvider(Descriptor("qwen2.5:Q4_K_M")), supervisor: supervisor);
 
-        AssertEx.True(await embedder.IsEmbeddingModelBlockedAsync(CancellationToken.None), "An unknown embedder must keep waiting rows waiting.");
+        AssertEx.False(await embedder.IsEmbeddingModelBlockedAsync(CancellationToken.None), "A removed unpinned embedder must not keep rows waiting.");
         _ = supervisor.DidNotReceiveWithAnyArgs().IsBackgroundLaunchBlocked(default!, default);
     }
 
@@ -254,14 +274,14 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     }
 
     [Test]
-    public async Task EmbedAsync_WhenThePinnedModelWasRemoved_FailsAsUnavailableWithoutCreatingAGenerator()
+    public async Task EmbedAsync_WhenThePinnedModelWasRemoved_FailsWithThePinnedModelMissingReasonWithoutCreatingAGenerator()
     {
         var provider = new CapturingProvider(Descriptor(ConfiguredName));
         var embedder = CreateEmbedder(provider, pinnedModel: "removed-embed.gguf");
 
         var failure = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() => embedder.EmbedAsync(["chunk one"], CancellationToken.None));
 
-        AssertEx.Equal(KnowledgeChunkEmbedder.EmbeddingUnavailableReason, failure.Reason);
+        AssertEx.Equal(KnowledgeChunkEmbedder.EmbeddingPinnedModelMissingReason, failure.Reason, "The remedy is reinstalling or re-choosing the pin, not installing any embedder.");
         AssertEx.Null(provider.LastSelectedModelName, "A removed pinned model must never reach the supervisor, where a stale eject mark would veto it.");
     }
 
@@ -288,6 +308,88 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
 
         AssertEx.False(await embedder.IsEmbeddingModelBlockedAsync(CancellationToken.None));
         _ = supervisor.DidNotReceiveWithAnyArgs().IsBackgroundLaunchBlocked(default!, default);
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task IsEmbeddingModelEjectedAsync_AsksTheSupervisorForTheConfidentlyResolvedEmbedder(bool blocked)
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.HasBackgroundLaunchBlock(ModelRole.Embedding).Returns(true);
+        supervisor.IsBackgroundLaunchBlocked(ConfiguredName, ModelRole.Embedding).Returns(blocked);
+        var embedder = CreateEmbedder(new CapturingProvider(Descriptor(ConfiguredName)), supervisor: supervisor);
+
+        AssertEx.Equal(blocked, await embedder.IsEmbeddingModelEjectedAsync(CancellationToken.None));
+    }
+
+    [Test]
+    public async Task IsEmbeddingModelEjectedAsync_WhenNoEmbeddingMarkExists_IsFalseWithoutResolvingTheModel()
+    {
+        // A large import asks once per chunkless document; with no embedding mark at all, no inventory read is paid.
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.HasBackgroundLaunchBlock(ModelRole.Embedding).Returns(false);
+        supervisor.IsBackgroundLaunchBlocked(Arg.Any<string>(), Arg.Any<ModelRole>()).Returns(true);
+        var provider = new CapturingProvider(Descriptor(ConfiguredName));
+        var embedder = CreateEmbedder(provider, supervisor: supervisor);
+
+        AssertEx.False(await embedder.IsEmbeddingModelEjectedAsync(CancellationToken.None));
+        AssertEx.Equal(0, provider.ListModelsCalls, "No embedding mark means nothing to resolve.");
+        _ = supervisor.DidNotReceiveWithAnyArgs().IsBackgroundLaunchBlocked(default!, default);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task IsEmbeddingModelEjectedAsync_WhenTheResolutionIsNotConfident_IsFalseWithoutAskingTheSupervisor(bool inventoryFails)
+    {
+        // Unlike the wake's blocked check, an unknown embedder never parks a fresh upload: its run meets the real cause.
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.HasBackgroundLaunchBlock(ModelRole.Embedding).Returns(true);
+        supervisor.IsBackgroundLaunchBlocked(Arg.Any<string>(), Arg.Any<ModelRole>()).Returns(true);
+        var provider = new CapturingProvider(Descriptor("qwen2.5:Q4_K_M"))
+        {
+            ThrowOnListModels = inventoryFails
+        };
+        var embedder = CreateEmbedder(provider, supervisor: supervisor);
+
+        AssertEx.False(await embedder.IsEmbeddingModelEjectedAsync(CancellationToken.None));
+        AssertEx.Equal(1, provider.ListModelsCalls, "A standing embedding mark makes the check resolve the model.");
+        _ = supervisor.DidNotReceiveWithAnyArgs().IsBackgroundLaunchBlocked(default!, default);
+    }
+
+    [Test]
+    public async Task IsEmbeddingModelEjectedAsync_OnAnotherProvider_IsFalseWithoutAskingTheSupervisor()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.HasBackgroundLaunchBlock(ModelRole.Embedding).Returns(true);
+        supervisor.IsBackgroundLaunchBlocked(Arg.Any<string>(), Arg.Any<ModelRole>()).Returns(true);
+        var embedder = CreateEmbedder(new CapturingProvider(Descriptor(ConfiguredName)), supervisor: supervisor, providerName: "another-runtime");
+
+        AssertEx.False(await embedder.IsEmbeddingModelEjectedAsync(CancellationToken.None));
+        _ = supervisor.DidNotReceiveWithAnyArgs().IsBackgroundLaunchBlocked(default!, default);
+    }
+
+    [Test]
+    public async Task IsEmbeddingModelEjectedAsync_WhenTheProviderCannotBeResolved_IsFalse()
+    {
+        // An unmapped provider is not an eject; the run's embed step reports it with its own reason.
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProvider(Arg.Any<string>()).Returns(_ => throw new InvalidOperationException("No provider is registered."));
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingModelName = ConfiguredName
+        });
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.HasBackgroundLaunchBlock(ModelRole.Embedding).Returns(true);
+        var embedder = new KnowledgeChunkEmbedder(providerResolver,
+            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
+            new KnowledgeEmbeddingPrefixer(),
+            options,
+            supervisor);
+
+        AssertEx.False(await embedder.IsEmbeddingModelEjectedAsync(CancellationToken.None));
+        _ = providerResolver.Received(1).ResolveProvider(Arg.Any<string>());
     }
 
     [Test]
@@ -415,8 +517,12 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
             return new FixedEmbeddingGenerator(this, VectorDimensions, GenerateFailureStatus);
         }
 
+        /// <summary>Total <c>ListModelsAsync</c> calls, i.e. inventory reads.</summary>
+        public int ListModelsCalls { get; private set; }
+
         public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct)
         {
+            ListModelsCalls++;
             return ThrowOnListModels
                 ? Task.FromException<IReadOnlyList<LocalModelDescriptor>>(new HttpRequestException("fake inventory transport failure"))
                 : Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(_models);

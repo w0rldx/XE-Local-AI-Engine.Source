@@ -97,6 +97,20 @@ public sealed class ServerPushHubTests
     }
 
     [Test]
+    public async Task KnowledgeIndexingNotifier_DocumentsChangedPushIsReceivedByAnAuthorizedClient()
+    {
+        await using var connection = Connect(LocalApiRoutes.KnowledgeBase.Hub);
+        var received = new TaskCompletionSource<KnowledgeDocumentsChangedHubEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = connection.On<KnowledgeDocumentsChangedHubEvent>(KnowledgeBaseHubEvents.DocumentsChanged, evt => received.TrySetResult(evt));
+        await connection.StartAndAwaitRegistrationAsync();
+
+        await Factory.Services.GetRequiredService<IKnowledgeIndexingNotifier>().NotifyDocumentsChangedAsync();
+
+        var evt = await received.Task.WaitAsync(TestBudgets.Contended);
+        AssertEx.Equal(KnowledgeBaseHubEvents.DocumentsChanged, evt.EventType);
+    }
+
+    [Test]
     public async Task GgufDownloadEventPublisher_PushIsReceivedByAnAuthorizedClient()
     {
         await using var connection = Connect(LocalApiRoutes.ModelFit.DownloadHub);

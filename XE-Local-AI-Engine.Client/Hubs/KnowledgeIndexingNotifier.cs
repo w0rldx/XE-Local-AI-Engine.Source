@@ -8,10 +8,10 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 /// </summary>
 /// <remarks>
 ///     Broadcasts each document status change to all connected clients under
-///     <see cref="KnowledgeBaseHubEvents.DocumentChanged" /> as the SignalR method name, so the React client subscribes
-///     by event name and invalidates the documents list. The payload is already sanitized (id + coarse status only).
-///     Publishing is best-effort: a transport failure is swallowed and logged by type, never propagated, so a hub
-///     hiccup can never fail or stall the background ingestion pipeline.
+///     <see cref="KnowledgeBaseHubEvents.DocumentChanged" /> as the SignalR method name (a deletion and a status-free
+///     refresh under their own names), so the React client subscribes by event name and invalidates the documents list.
+///     Payloads carry an id and coarse status at most. Publishing is best-effort: a transport failure is swallowed and
+///     logged by type, never propagated, so a hub hiccup can never fail or stall the background ingestion pipeline.
 /// </remarks>
 internal sealed class KnowledgeIndexingNotifier : IKnowledgeIndexingNotifier
 {
@@ -58,7 +58,19 @@ internal sealed class KnowledgeIndexingNotifier : IKnowledgeIndexingNotifier
             cancellationToken);
     }
 
-    private async Task BroadcastAsync(string method, Guid documentId, object payload, CancellationToken cancellationToken)
+    public Task NotifyDocumentsChangedAsync(CancellationToken cancellationToken = default)
+    {
+        return BroadcastAsync(KnowledgeBaseHubEvents.DocumentsChanged,
+            documentId: null,
+            new KnowledgeDocumentsChangedHubEvent
+            {
+                EventType = KnowledgeBaseHubEvents.DocumentsChanged,
+                OccurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+            },
+            cancellationToken);
+    }
+
+    private async Task BroadcastAsync(string method, Guid? documentId, object payload, CancellationToken cancellationToken)
     {
         try
         {
@@ -68,7 +80,10 @@ internal sealed class KnowledgeIndexingNotifier : IKnowledgeIndexingNotifier
         {
             // Best-effort notification only — the documents-list refetch is the source of truth. A push failure must never
             // fail ingestion, so swallow it and log the exception type only (never document content).
-            _logger.LogWarning("Could not publish a knowledge-base indexing event for document {DocumentId} ({ErrorClass}).", documentId, exception.GetType().Name);
+            _logger.LogWarning("Could not publish the knowledge-base event {HubEvent} for document {DocumentId} ({ErrorClass}).",
+                method,
+                documentId,
+                exception.GetType().Name);
         }
     }
 }

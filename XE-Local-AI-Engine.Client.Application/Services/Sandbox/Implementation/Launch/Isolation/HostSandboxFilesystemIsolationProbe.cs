@@ -321,7 +321,7 @@ internal static class HostSandboxFilesystemIsolationProbe
         {
             try
             {
-                process.Kill(entireProcessTree: true);
+                _ = LinuxProcessTreeKill.Kill(process);
             }
             catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException)
             {

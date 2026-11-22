@@ -108,7 +108,7 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
         startInfo.FileName = SetsidLocator.ResolveAbsolutePath();
         startInfo.ArgumentList.Insert(index: 0, serverPath);
 
-        return LinuxProcessGroupHandle.Start(() => StartProcess(startInfo, label, capture));
+        return LinuxProcessGroupHandle.Start(() => StartProcess(startInfo, label, capture), logger: _logger);
     }
 
     private IProcessTreeHandle LaunchPlain(ProcessStartInfo startInfo, string label, Action<string>? capture)

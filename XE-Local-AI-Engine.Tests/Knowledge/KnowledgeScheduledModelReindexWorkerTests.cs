@@ -48,6 +48,39 @@ public sealed class KnowledgeScheduledModelReindexWorkerTests
         AssertEx.Equal(first, dispatcher.Attempts[0]);
     }
 
+    [Test]
+    public async Task ReconcileOnceAsync_WhenASweepIndexesTheResetRowBeforePublication_PublishesNoPendingAfterIndexed()
+    {
+        var documentId = Guid.NewGuid();
+        var pushes = new List<string>();
+        var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
+        _ = notifier.NotifyDocumentChangedAsync(Arg.Any<Guid>(), Arg.Any<KnowledgeDocumentStatus>(), Arg.Any<CancellationToken>())
+                    .Returns(call =>
+                    {
+                        pushes.Add(call.ArgAt<KnowledgeDocumentStatus>(1).ToString());
+                        return Task.CompletedTask;
+                    });
+        _ = notifier.NotifyDocumentsChangedAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            pushes.Add("refresh");
+            return Task.CompletedTask;
+        });
+        var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();
+        // The reset row is picked up by a drain sweep and indexed before this tick admits it.
+        catalog.ResetStaleDocumentsToPendingAsync(Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            _ = notifier.NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Indexed, call.Arg<CancellationToken>());
+            return Task.FromResult<IReadOnlyList<Guid>>([documentId]);
+        });
+        await using var provider = BuildProvider(catalog);
+        using var worker = CreateWorker(provider, new KnowledgeIngestionDispatcher(notifier));
+
+        await worker.ReconcileOnceAsync(CancellationToken.None);
+
+        // The follow-up run skips the Indexed row without a push, so a Pending here would hold the feed's batch running.
+        AssertEx.Equal("Indexed | refresh", string.Join(" | ", pushes));
+    }
+
     private static ServiceProvider BuildProvider(IKnowledgeDocumentCatalogService catalog)
     {
         var services = new ServiceCollection();

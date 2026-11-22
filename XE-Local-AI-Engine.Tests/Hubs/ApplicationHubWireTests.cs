@@ -70,6 +70,21 @@ public sealed class ApplicationHubWireTests
     }
 
     [Test]
+    public async Task KnowledgeDocumentsChangedPush_KeepsItsWireFrame_WithNoDocumentOrStatus()
+    {
+        var (hubContext, sent) = CapturingHubContext<KnowledgeBaseHub>();
+        var time = new ManualTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(1758000000000));
+        var notifier = new KnowledgeIndexingNotifier(hubContext, time, new RecordingLogger<KnowledgeIndexingNotifier>());
+
+        await notifier.NotifyDocumentsChangedAsync();
+
+        AssertEx.Equal("{\"type\":1,\"target\":\"knowledge.documentsChanged\",\"arguments\":[{\"eventType\":\"knowledge.documentsChanged\","
+                       + "\"occurredAtUtc\":1758000000000}]}"
+                       + RecordSeparator,
+            WriteFrame(sent.Single().Message));
+    }
+
+    [Test]
     public async Task JobCreatedPush_GoesToEveryConnectionOfTheJobsOwnHub()
     {
         var (runs, runFrames) = CapturingHubContext<TrainingRunHub>();

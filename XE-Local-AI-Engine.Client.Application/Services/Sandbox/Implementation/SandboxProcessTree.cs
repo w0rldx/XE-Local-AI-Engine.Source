@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
 using System.Diagnostics;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>The tree-kill both jail owners need.</summary>
 /// <remarks>
@@ -9,16 +10,14 @@ using System.Diagnostics;
 /// </remarks>
 internal static class SandboxProcessTree
 {
-    public static void TreeKill(Process process)
+    /// <summary>Kills the tree; <see langword="false" /> when the walk could not confirm every descendant killed.</summary>
+    public static bool TreeKill(Process process)
     {
         try
         {
-            if (!process.HasExited)
-            {
-                // entireProcessTree:true kills descendants too: on Linux the runtime kills the process group, on Windows it walks the tree
-                // via the OS APIs. A Windows Job Object would be stronger for orphan reaping but is not load-bearing for a Linux runtime.
-                process.Kill(true);
-            }
+            // Linux walks the tree through pidfds (never a recycled pid); Windows walks it via the OS APIs and misses a reparented descendant.
+            return process.HasExited
+                   || LinuxProcessTreeKill.Kill(process) is not (LinuxProcessTreeKillResult.Incomplete or LinuxProcessTreeKillResult.KillFailed);
         }
         catch (InvalidOperationException)
         {
@@ -36,5 +35,7 @@ internal static class SandboxProcessTree
                 // Already exited.
             }
         }
+
+        return true;
     }
 }

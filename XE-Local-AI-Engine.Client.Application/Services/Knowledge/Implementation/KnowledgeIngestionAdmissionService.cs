@@ -8,14 +8,18 @@ public sealed class KnowledgeIngestionAdmissionService : IKnowledgeIngestionAdmi
 {
     private readonly IKnowledgeDocumentCatalogService _catalogService;
     private readonly IKnowledgeIngestionDispatcher _ingestionDispatcher;
+    private readonly IKnowledgeIndexingNotifier _notifier;
 
     public KnowledgeIngestionAdmissionService(IKnowledgeDocumentCatalogService catalogService,
-        IKnowledgeIngestionDispatcher ingestionDispatcher)
+        IKnowledgeIngestionDispatcher ingestionDispatcher,
+        IKnowledgeIndexingNotifier notifier)
     {
         ArgumentNullException.ThrowIfNull(catalogService);
         ArgumentNullException.ThrowIfNull(ingestionDispatcher);
+        ArgumentNullException.ThrowIfNull(notifier);
         _catalogService = catalogService;
         _ingestionDispatcher = ingestionDispatcher;
+        _notifier = notifier;
     }
 
     public async Task<KnowledgeIngestionAdmissionResult> AdmitStoredDocumentAsync(Guid documentId,
@@ -24,23 +28,39 @@ public sealed class KnowledgeIngestionAdmissionService : IKnowledgeIngestionAdmi
     {
         // Resolve the status once: a Pending row has NOT been ingested, so enqueue when the store WROTE the document or
         // it is a dedupe hit in a RETRYABLE state — a stranded or failed upload then recovers instead of faking success.
-        var status = await _catalogService.GetStatusAsync(documentId, cancellationToken)
-                     ?? KnowledgeDocumentStatus.Pending;
-
-        if (!wasWritten && !IsRetryableOnReUpload(status))
+        if (await _catalogService.GetStatusAsync(documentId, cancellationToken) is not { } status)
         {
-            return new KnowledgeIngestionAdmissionResult
-            {
-                Status = status,
-                Enqueue = null
-            };
+            // Purged after the store wrote or deduplicated onto it: nothing to ingest, so a list still showing it refetches.
+            await _notifier.NotifyDocumentsChangedAsync(cancellationToken);
+            return Result(KnowledgeDocumentStatus.Pending, enqueue: null);
         }
 
-        var admission = await _ingestionDispatcher.EnqueueAsync(documentId, cancellationToken);
+        // Any read below may be stale (a run, sweep or purge moved the row, even one this caller just wrote), which is why
+        // the dispatcher only sends a status-free refresh: a Pending push could land after the newer truth.
+        if (!wasWritten)
+        {
+            return IsRetryableOnReUpload(status)
+                ? Result(status, await _ingestionDispatcher.EnqueueAsync(documentId, cancellationToken))
+                : Result(status, enqueue: null);
+        }
+
+        if (status is KnowledgeDocumentStatus.Indexed or KnowledgeDocumentStatus.Failed)
+        {
+            // A drain sweep already ran the written revision to its end: a second run would only repeat that outcome.
+            await _notifier.NotifyDocumentsChangedAsync(cancellationToken);
+            return Result(status, enqueue: null);
+        }
+
+        // Pending, or in flight (a sweep's run, or a replaced revision's run still going): admit so it coalesces one follow-up.
+        return Result(status, await _ingestionDispatcher.EnqueueAsync(documentId, cancellationToken));
+    }
+
+    private static KnowledgeIngestionAdmissionResult Result(KnowledgeDocumentStatus status, KnowledgeIngestionEnqueueResult? enqueue)
+    {
         return new KnowledgeIngestionAdmissionResult
         {
             Status = status,
-            Enqueue = admission
+            Enqueue = enqueue
         };
     }
 

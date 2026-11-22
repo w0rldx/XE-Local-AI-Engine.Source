@@ -47,6 +47,11 @@ updates:
       timezone: Europe/Berlin
     target-branch: develop
     open-pull-requests-limit: 1
+    # torch and torchvision are a hand-pinned pair from the cu129 index: torchvision follows torch.
+    # With target-branch set, ignore applies to version updates only; security updates still open PRs.
+    ignore:
+      - dependency-name: torch
+      - dependency-name: torchvision
 
   # The shipped run_python environment (ComputePythonEnvironment builds it from this lock).
   - package-ecosystem: uv

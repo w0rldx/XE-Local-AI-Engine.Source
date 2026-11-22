@@ -11,7 +11,7 @@ weights, no GPU. Nothing in a job can name code to run. Offline, no remote code,
 The protocol is the trainer's JSON-lines shape with its own contract version, on stdout. Every frame carries
 ``token``, the spawn's ``XE_TRAINING_RUN_TOKEN``, and is one ``os.write`` of at most 64 KiB:
 
-    {"event": "handshake", "contractVersion": 6, ...versions}        "serve": true under --serve
+    {"event": "handshake", "contractVersion": 7, ...versions}        "serve": true under --serve
     {"event": "phase",     "phase": "loading" | "tracing" | "deriving" | "exporting" | "saving"}
     {"event": "progress",  "step", "totalSteps", "vramBytes"}    a token, or a contrast prompt
     {"event": "heartbeat", "phase"}          until the first progress, and while saving; progress proves life between

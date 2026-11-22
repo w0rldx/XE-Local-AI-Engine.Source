@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -658,6 +659,33 @@ public sealed class LinuxTrainingProcessGroupTests
         finally
         {
             child?.KillIfStillOurs();
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>The receipt carries this boot's id, so a reaper after a reboot knows the pid names another process without probing it.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public void Spawn_BindsTheReceiptToThisBoot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "xe-spawn-" + Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(root);
+        try
+        {
+            var spawner = new LinuxTrainingProcessSpawner(TimeProvider.System, NullLogger<LinuxTrainingProcessSpawner>.Instance, root);
+            using var handle = spawner.Spawn(new TrainingSpawnRequest
+            {
+                ExecutablePath = "/bin/cat",
+                Arguments = [],
+                WorkingDirectory = root,
+                RunToken = "token",
+                RedirectStandardInput = true
+            });
+
+            AssertEx.Equal(AssertEx.NotNull(LinuxBootId.Current, "This kernel exposes a boot id."), handle.Receipt.BootId);
+        }
+        finally
+        {
             Directory.Delete(root, recursive: true);
         }
     }

@@ -492,6 +492,9 @@ const knowledgeReducers: Readonly<Record<string, PushReducer<string>>> = {
 		const documentId = stringField(payload, "documentId");
 		return documentId === undefined ? batch : removeKnowledgeDocument(batch, documentId);
 	},
+	// Refresh-only event, ignored by the operations feed: it carries no status, so it never opens or reopens a batch.
+	// Registered so the shared connection does not warn about an unhandled client method on every wake.
+	"knowledge.documentsChanged": (batch: KnowledgeIndexingBatch | undefined) => batch,
 };
 
 /** Knowledge-base indexing (uploads and repository imports) as one batch row. */

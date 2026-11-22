@@ -68,7 +68,8 @@ public sealed class ProcessSpawnReceiptStore
             Pid = pid,
             StartTicks = stat.StartTicks,
             ExecutablePath = canonicalPath,
-            Label = label
+            Label = label,
+            BootId = LinuxBootId.Current
         };
         var path = Path.Combine(_directory, string.Create(CultureInfo.InvariantCulture, $"{pid}.json"));
         try

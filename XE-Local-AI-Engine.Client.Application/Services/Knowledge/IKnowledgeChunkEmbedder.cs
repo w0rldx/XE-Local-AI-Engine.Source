@@ -44,11 +44,20 @@ public interface IKnowledgeChunkEmbedder
     ///     would be refused; false for an embedding provider without eject marks.
     /// </summary>
     /// <remarks>
-    ///     Also true when the embedding model cannot be resolved confidently: the fallback name may not be the marked
-    ///     model, so an unknown answer keeps waiting rows waiting instead of re-admitting them. False when the inventory
-    ///     proved the pinned model removed, so the re-admitted run fails with the missing-model reason.
+    ///     Also true when the inventory could not be read: the fallback name may not be the marked model, so an unknown
+    ///     answer keeps waiting rows waiting instead of re-admitting them. False when the inventory was read and holds no
+    ///     usable embedder (pinned or not), so the re-admitted run fails with its missing-model reason.
     /// </remarks>
     Task<bool> IsEmbeddingModelBlockedAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult(false);
+    }
+
+    /// <summary>
+    ///     Whether an operator eject marks the CONFIDENTLY resolved embedding model, so a new ingestion run can park before
+    ///     paying for extraction; false for an unknown model or a provider without eject marks.
+    /// </summary>
+    Task<bool> IsEmbeddingModelEjectedAsync(CancellationToken cancellationToken)
     {
         return Task.FromResult(false);
     }

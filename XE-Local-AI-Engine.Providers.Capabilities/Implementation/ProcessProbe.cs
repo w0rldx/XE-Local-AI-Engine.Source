@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.Capabilities.Implementation;
 
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Capabilities.Contracts;
 
 /// <summary>
@@ -120,9 +121,10 @@ internal sealed class ProcessProbe : IProcessProbe
 
         try
         {
-            if (!process.HasExited)
+            if (!process.HasExited
+                && LinuxProcessTreeKill.Kill(process) is (LinuxProcessTreeKillResult.Incomplete or LinuxProcessTreeKillResult.KillFailed) and var result)
             {
-                process.Kill(entireProcessTree: true);
+                _logger.LogDebug("The hardware probe '{ProbeTool}' process tree was not fully killed ({Result}).", fileName, result);
             }
         }
         catch (Exception ex)

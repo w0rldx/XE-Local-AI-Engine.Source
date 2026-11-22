@@ -253,7 +253,7 @@ public sealed partial class LlamaServerProcessSupervisor
                 // The safe config still reached readiness where the optimized one failed: that verdict holds whether or not the eject let the process publish.
                 if (isSafeRetry && reachedReadiness)
                 {
-                    await RecordVetoedSafeRetryVerdictAsync(key, variant, candidate, ct).ConfigureAwait(false);
+                    await RecordSafeRetryVerdictWithinBudgetAsync(key, variant, candidate, ct).ConfigureAwait(false);
                 }
 
                 throw;
@@ -810,7 +810,7 @@ public sealed partial class LlamaServerProcessSupervisor
 
         if (candidate.AttemptKind == LlamaServerLoadAttemptKind.SafeRetry)
         {
-            await RecordSafeRetryVerdictAsync(key, variant, candidate, ct).ConfigureAwait(false);
+            await RecordSafeRetryVerdictWithinBudgetAsync(key, variant, candidate, ct).ConfigureAwait(false);
         }
 
         // Every post-readiness step survived, so this spawn really did produce a serving process: raise the Ready observation now.
@@ -854,10 +854,10 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <summary>
-    ///     Records the safe-retry verdict of a candidate whose publication an operator eject vetoed, within
-    ///     <see cref="VetoedSafeRetryVerdictBudget" />, so a slow or failing store never holds or replaces the veto.
+    ///     Records a safe retry's verdict within <see cref="VetoedSafeRetryVerdictBudget" />, so a slow or failing store
+    ///     never holds the waiters, replaces a veto or fails a published process.
     /// </summary>
-    private async Task RecordVetoedSafeRetryVerdictAsync(ProcessKey key, GpuVariant variant, LlamaServerLaunchCandidate candidate, CancellationToken ct)
+    private async Task RecordSafeRetryVerdictWithinBudgetAsync(ProcessKey key, GpuVariant variant, LlamaServerLaunchCandidate candidate, CancellationToken ct)
     {
         // On its own task, so a store that blocks synchronously before its first await is bounded too; an abandoned write finishes or fails on its own.
         var verdict = Task.Run(() => RecordSafeRetryVerdictAsync(key, variant, candidate, ct), CancellationToken.None);
@@ -871,12 +871,12 @@ public sealed partial class LlamaServerProcessSupervisor
         }
         catch (OperationCanceledException ex) when (ct.IsCancellationRequested)
         {
-            _logger.LogDebug(ex, "The safe-retry verdict for vetoed model {ModelName} role {Role} was not recorded: the supervisor is shutting down.",
+            _logger.LogDebug(ex, "The safe-retry verdict for model {ModelName} role {Role} was not recorded: the supervisor is shutting down.",
                 key.ModelName, key.Role);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "The safe-retry verdict for vetoed model {ModelName} role {Role} was not recorded for backend {Variant}.",
+            _logger.LogWarning(ex, "The safe-retry verdict for model {ModelName} role {Role} was not recorded for backend {Variant}.",
                 key.ModelName, key.Role, variant);
         }
     }

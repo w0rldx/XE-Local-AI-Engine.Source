@@ -13,7 +13,7 @@ import struct
 from typing import Any, TypeGuard
 
 # Separate from trainlib.CONTRACT_VERSION: this script and train.py change independently.
-CONTRACT_VERSION = 6
+CONTRACT_VERSION = 7
 
 TRACE_KIND = "trace"
 STEERING_KIND = "steering"
@@ -421,20 +421,49 @@ def _cut_token_texts(result):
         token["text"] = cut_text(token["text"])
 
 
+def _with_candidates_kept(result, candidates, kept):
+    for step, (token, (raw, processed)) in enumerate(zip(result["tokens"], candidates, strict=True)):
+        token["candidates"] = raw if step < kept else None
+        token["processedCandidates"] = processed if step < kept else None
+    result["candidateSteps"] = kept
+    return _trace_result_bytes(result)
+
+
+def _drop_tail_candidates(result, budget):
+    # The most leading steps that fit keep their candidates: the size only grows with the steps kept, so a binary
+    # search finds them. Every token keeps its id, text and logprobs.
+    candidates = [(token["candidates"], token["processedCandidates"]) for token in result["tokens"]]
+    low, high = 0, len(candidates) - 1
+    while low < high:
+        middle = (low + high + 1) // 2
+        if len(_with_candidates_kept(result, candidates, middle)) <= budget:
+            low = middle
+        else:
+            high = middle - 1
+    return _with_candidates_kept(result, candidates, low)
+
+
 def fitted_trace_result(result, budget=TRACE_RESULT_BUDGET_BYTES):
     """A trace's result.json bytes, texts whole unless over the budget: then candidate texts are cut, then the prompt
-    pieces' texts, then token texts.
+    pieces' texts, then token texts, then the candidates of whole steps from the end. ``candidateSteps`` says how many
+    leading steps kept theirs.
 
     Cuts ``result`` in place. Over the budget even then, it raises: the host would refuse the file.
     """
+    result["candidateSteps"] = len(result["tokens"])
     blob = _trace_result_bytes(result)
     for cut in (_cut_candidate_texts, _cut_prompt_texts, _cut_token_texts):
         if len(blob) <= budget:
             return blob
         cut(result)
         blob = _trace_result_bytes(result)
+    if len(blob) > budget and result["tokens"]:
+        blob = _drop_tail_candidates(result, budget)
     if len(blob) > budget:
-        raise ValueError(f"The trace result is {len(blob)} bytes with its texts cut, over its budget of {budget}.")
+        raise ValueError(
+            f"The trace result is {len(blob)} bytes with its texts cut and its candidates dropped, "
+            f"over its budget of {budget}."
+        )
     return blob
 
 

@@ -83,8 +83,11 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 								label={t("pages.knowledgeBase.table.embeddingModel", "Embedding model")}
 							>
 								<Group gap={6} justify="flex-end">
-									<Text size="sm">{detail.embeddingModel || "—"}</Text>
-									{detail.staleModel ? (
+									{/* Only embedded chunks carry a model: an unembedded row would otherwise show the configured default. */}
+									<Text size="sm" data-testid="knowledge-detail-embedding-model">
+										{detail.chunkCount > 0 && detail.embeddingModel ? detail.embeddingModel : "—"}
+									</Text>
+									{detail.chunkCount > 0 && detail.staleModel ? (
 										<Badge color="orange" variant="light" size="xs">
 											{t("pages.knowledgeBase.table.stale", "Stale")}
 										</Badge>

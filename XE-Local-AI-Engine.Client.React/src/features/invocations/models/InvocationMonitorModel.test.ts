@@ -1,4 +1,4 @@
-import type { TFunction } from "i18next";
+import i18next, { type TFunction } from "i18next";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -159,6 +159,66 @@ describe("buildInvocationSummary", () => {
 		expect(getInvocationErrorText(run, keyOnly)).toBe("pages.invocations.monitor.callBudgetReached");
 		expect(de.pages.invocations.monitor.callBudgetReached).toContain("Arbeitssitzung");
 		expect(getInvocationErrorText(summaryInput({ status: "Failed", error: "Other failure." }), keyOnly)).toBe("Other failure.");
+	});
+
+	// Without a usable error text the row reads the localized category label, never the raw wire value (ModelEjected).
+	it("labels a failure without error text by its localized category", () => {
+		const keyOnly = ((key: string) => key) as unknown as TFunction;
+		const ejected = { status: "Failed" as const, failureCategory: "ModelEjected" };
+		const label = "pages.chat.error.categoryLabels.ModelEjected";
+
+		expect(getInvocationErrorText(summaryInput({ ...ejected, error: null }), keyOnly)).toBe(label);
+		expect(getInvocationErrorText(summaryInput({ ...ejected, error: " \t " }), keyOnly)).toBe(label);
+		expect(getInvocationErrorText(summaryInput({ status: "Failed", error: "  ", failureCategory: null }), keyOnly)).toBeNull();
+		expect(de.pages.chat.error.categoryLabels.ModelEjected).toBe("Modell entladen");
+	});
+
+	// Only a category whose server text is a generic sentence trades it for its label; any other keeps the server text,
+	// which can carry specifics such as a rate limit's retry interval.
+	it("prefers the localized label over a generic server sentence, and keeps a specific one, in German", () => {
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		const german = i18next.getFixedT("de");
+		const ejected = summaryInput({ status: "Failed", failureCategory: "ModelEjected", error: "Invocation was cancelled." });
+		const cancelled = summaryInput({ status: "Cancelled", failureCategory: "ModelEjected", error: "Invocation was cancelled." });
+
+		expect(getInvocationErrorText(ejected, german)).toBe("Modell entladen");
+		expect(getInvocationErrorText(cancelled, german)).toBe("Modell entladen");
+		expect(buildInvocationSummary(ejected, german)).toContain("Modell entladen");
+		expect(buildInvocationSummary(ejected, german)).not.toContain("Invocation was cancelled");
+		expect(
+			getInvocationErrorText(summaryInput({ status: "Failed", failureCategory: "BrandNew", error: "Server text." }), german),
+		).toBe("Server text.");
+		expect(getInvocationErrorText(summaryInput({ status: "Failed", error: "Server text." }), german)).toBe("Server text.");
+
+		const generic = "Invocation ended with a failure. See local logs for details.";
+		const rateLimitedGeneric = summaryInput({ status: "Failed", failureCategory: "ProviderRateLimited", error: generic });
+		expect(getInvocationErrorText(rateLimitedGeneric, german)).toBe("Ratenlimit des Anbieters");
+		expect(buildInvocationSummary(rateLimitedGeneric, german)).toContain("Ratenlimit des Anbieters");
+		// A generic sentence for a category without a label stays: there is nothing more specific to show.
+		expect(getInvocationErrorText(summaryInput({ status: "Failed", failureCategory: "BrandNew", error: generic }), german)).toBe(
+			generic,
+		);
+
+		const retryAfter = "The provider's rate limit was reached. Retry after 30 seconds.";
+		const rateLimited = summaryInput({ status: "Failed", failureCategory: "ProviderRateLimited", error: retryAfter });
+		expect(getInvocationErrorText(rateLimited, german)).toBe(retryAfter);
+		expect(buildInvocationSummary(rateLimited, german)).toContain("Retry after 30 seconds");
+		const timedOut = summaryInput({ status: "Failed", failureCategory: "Timeout", error: "The response timed out." });
+		expect(getInvocationErrorText(timedOut, german)).toBe("The response timed out.");
+	});
+
+	it("renders the localized category label inside the failed summary sentence", () => {
+		const labels = ((key: string, defaultValue: string, options?: Record<string, unknown>) =>
+			key === "pages.chat.error.categoryLabels.ModelEjected"
+				? "Modell entladen"
+				: t(key, defaultValue, options as never)) as unknown as TFunction;
+
+		expect(buildInvocationSummary(summaryInput({ status: "Failed", error: " ", failureCategory: "ModelEjected" }), labels)).toBe(
+			"Failed after 4.2 s with gemma3 — Modell entladen.",
+		);
+		expect(
+			buildInvocationSummary(summaryInput({ status: "Failed", error: "Load timeout.", failureCategory: "BrandNew" }), labels),
+		).toBe("Failed after 4.2 s with gemma3 — Load timeout.");
 	});
 
 	// The badge reads the localized status, never the raw wire status (COMPLETED, CANCELLED) on the German page.

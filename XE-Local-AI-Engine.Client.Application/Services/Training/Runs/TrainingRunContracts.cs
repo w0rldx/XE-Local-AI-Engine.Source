@@ -130,6 +130,9 @@ public sealed record TrainingLaunchReceiptV1
     public long StartTicks { get; init; }
 
     public string RunToken { get; init; } = string.Empty;
+
+    /// <summary>The boot the process was spawned in; null when unknown, including every receipt written before it was recorded (still schema 1).</summary>
+    public string? BootId { get; init; }
 }
 
 /// <summary>

@@ -355,7 +355,7 @@ public sealed partial class LlamaCppBinaryManager
             {
                 if (!process.HasExited)
                 {
-                    process.Kill(entireProcessTree: true);
+                    _ = LinuxProcessTreeKill.Kill(process);
                 }
             }
             catch (Exception)

@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
+using XE_Local_AI_Engine.Desktop.Linux;
 
 internal sealed class DesktopEngineSession : IAsyncDisposable
 {
@@ -303,7 +304,7 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
         }
         catch (TimeoutException)
         {
-            _process.Kill(entireProcessTree: true);
+            _ = LinuxProcessTreeKill.Kill(_process);
             await _process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None);
         }
         catch (InvalidOperationException)
@@ -397,7 +398,7 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
         {
             if (!process.HasExited)
             {
-                process.Kill(entireProcessTree: true);
+                _ = LinuxProcessTreeKill.Kill(process);
                 await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None);
             }
         }

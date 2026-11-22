@@ -216,12 +216,13 @@ export function TraceStepper({
 			)}
 			{token && (
 				<>
-					<TraceStepCandidates token={token} step={current} basis={basis} onBasisChange={onBasisChange} />
-					{!token.candidates && (
-						<Text size="sm" c="dimmed">
-							{t("pages.modelLab.trace.noCandidates", "This trace recorded no candidates (made before this version).")}
-						</Text>
-					)}
+					<TraceStepCandidates
+						token={token}
+						step={current}
+						candidateSteps={result.candidateSteps}
+						basis={basis}
+						onBasisChange={onBasisChange}
+					/>
 					<TraceLensPanel
 						experimentId={experimentId}
 						result={result}

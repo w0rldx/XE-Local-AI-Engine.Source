@@ -446,6 +446,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
     {
         var dispatcher = turn.Dispatcher;
         var invocationToken = _lifecycleTracker.GetInvocationCancellationToken(package.InvocationId);
+        // Nobody waits on an unattended turn, so its tool and playbook ranking never reload an embedder the operator ejected.
+        using var unattendedRun = package.IsUnattended ? UnattendedRunScope.Begin() : null;
         // Read LIVE per turn, never captured in a field, INSIDE the try (a throw above it would fail the turn with no failure reported) and on
         // invocationToken, which is what an operator Cancel or the turn watchdog cancels. See docs/wiki/04-agent-mode.md §1.3 for the scope's placement.
         var toolRelevanceActive = await _runtimeSettings.GetToolRelevanceEnabledAsync(invocationToken)

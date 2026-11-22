@@ -34,6 +34,7 @@ public sealed class EmbeddingModelResolverTests
 
         AssertEx.Equal(ConfiguredName, resolution.Name);
         AssertEx.True(resolution.IsConfident, "An exact configured-name match is a confident resolution.");
+        AssertEx.True(resolution.InventoryRead);
         AssertEx.True(resolution.RevisionFingerprint.StartsWith("inventory-v1:", StringComparison.Ordinal));
     }
 
@@ -148,6 +149,7 @@ public sealed class EmbeddingModelResolverTests
         AssertEx.Equal(ConfiguredName, resolution.Name);
         AssertEx.False(resolution.IsConfident, "Nothing installed matched, so this is a bare fallback, not a real resolution.");
         AssertEx.False(resolution.PinnedModelMissing, "Nothing is pinned, so nothing pinned can be missing.");
+        AssertEx.True(resolution.InventoryRead, "The inventory answered, so the missing embedder is proven, not assumed.");
     }
 
     [Test]
@@ -178,6 +180,7 @@ public sealed class EmbeddingModelResolverTests
         AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0", resolution.Name);
         AssertEx.False(resolution.IsConfident, "A missing pin is never a vector identity.");
         AssertEx.True(resolution.PinnedModelMissing);
+        AssertEx.True(resolution.InventoryRead);
     }
 
     [Test]
@@ -204,6 +207,7 @@ public sealed class EmbeddingModelResolverTests
 
         AssertEx.Equal(ConfiguredName, resolution.Name);
         AssertEx.False(resolution.IsConfident, "A transport failure is a degrade, not a real resolution.");
+        AssertEx.False(resolution.InventoryRead, "A failed inventory read proves nothing about what is installed.");
     }
 
     [Test]
@@ -236,6 +240,7 @@ public sealed class EmbeddingModelResolverTests
 
         AssertEx.Equal(ConfiguredName, resolution.Name);
         AssertEx.False(resolution.IsConfident, "A request timeout is a degrade, not a real resolution.");
+        AssertEx.False(resolution.InventoryRead);
     }
 
     private static EmbeddingModelResolver CreateResolver(string? pin = null)

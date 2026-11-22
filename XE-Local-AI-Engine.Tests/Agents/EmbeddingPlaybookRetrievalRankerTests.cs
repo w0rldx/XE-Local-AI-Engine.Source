@@ -1,14 +1,17 @@
 namespace XE_Local_AI_Engine.Tests.Agents;
 
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -144,6 +147,74 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     }
 
     [Test]
+    public async Task SelectTopK_WhenTheOperatorEjectedTheEmbedder_FallsBackToLexicalWithoutAWarning()
+    {
+        // A Background load of an ejected embedder is vetoed with this type, unwrapped: an expected state, not a failure.
+        var candidates = SampleCandidates();
+        var provider = new FakeEmbeddingProvider
+        {
+            GenerateFailure = new OperatorEjectedException("The embedding model was ejected by the operator.")
+        };
+        var logger = new RecordingLogger<EmbeddingPlaybookRetrievalRanker>();
+        var ranker = BuildRanker(provider, EmbeddingModel, logger: logger);
+
+        var result = await ranker.SelectTopKAsync("production deploy", candidates, k: 2, CancellationToken.None);
+
+        var expected = await new LexicalPlaybookRetrievalRanker().SelectTopKAsync("production deploy", candidates, k: 2, CancellationToken.None);
+        AssertEx.True(result.Select(static action => action.Id).SequenceEqual(expected.Select(static action => action.Id)),
+            "An operator eject yields the deterministic lexical order.");
+        AssertEx.False(logger.Entries.Any(static entry => entry.Level >= LogLevel.Warning), "An eject veto logs no Warning.");
+        var line = logger.Entries.Single(static entry => entry.Level == LogLevel.Information);
+        AssertEx.Contains(line.Message, "operator-ejected, ranking lexically");
+        AssertEx.Contains(line.Message, EmbeddingModel);
+        AssertEx.Null(line.Exception, "The veto is logged without the exception object.");
+    }
+
+    [Test]
+    public async Task SelectTopK_WhenTheGeneratorFailsForAnotherReason_StillWarnsWithTheException()
+    {
+        var provider = new FakeEmbeddingProvider
+        {
+            ThrowOnGenerate = true
+        };
+        var logger = new RecordingLogger<EmbeddingPlaybookRetrievalRanker>();
+        var ranker = BuildRanker(provider, EmbeddingModel, logger: logger);
+
+        _ = await ranker.SelectTopKAsync("production deploy", SampleCandidates(), k: 2, CancellationToken.None);
+
+        var warning = logger.Entries.Single(static entry => entry.Level == LogLevel.Warning);
+        AssertEx.True(warning.Exception is HttpRequestException, "Any other failure keeps its Warning with the exception.");
+    }
+
+    [Test]
+    public async Task SelectTopK_InsideAnUnattendedRun_EmbedsAsBackground_WhileAnOverlappingSendStaysInteractive()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider = new FakeEmbeddingProvider
+        {
+            GenerateGate = release.Task
+        };
+        var ranker = BuildRanker(provider, EmbeddingModel);
+        var candidates = SampleCandidates();
+
+        Task<IReadOnlyList<PlaybookActionRecord>> unattended;
+        using (UnattendedRunScope.Begin())
+        {
+            unattended = ranker.SelectTopKAsync("production deploy", candidates, k: 2, CancellationToken.None);
+        }
+
+        // Starts while the unattended ranking is still parked inside its embedding call.
+        var interactive = ranker.SelectTopKAsync("production deploy", candidates, k: 2, CancellationToken.None);
+        var intents = provider.Intents;
+        release.SetResult();
+        _ = await unattended;
+        _ = await interactive;
+
+        AssertEx.True(intents.SequenceEqual([ModelResidencyIntent.Background, ModelResidencyIntent.Interactive]),
+            $"The unattended run embeds as Background and the overlapping send as Interactive, got [{string.Join(", ", intents)}].");
+    }
+
+    [Test]
     public async Task SelectTopK_WhenGeneratorReturnsFewerEmbeddingsThanInputs_FallsBackToLexical()
     {
         var candidates = SampleCandidates();
@@ -228,7 +299,8 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     private static EmbeddingPlaybookRetrievalRanker BuildRanker(FakeEmbeddingProvider provider,
         string? embeddingModel,
         int cacheMaxEntries = 512,
-        string embeddingProviderName = FakeEmbeddingProvider.ProviderKey)
+        string embeddingProviderName = FakeEmbeddingProvider.ProviderKey,
+        ILogger<EmbeddingPlaybookRetrievalRanker>? logger = null)
     {
         var options = Options.Create(new PlaybookRetrievalOptions
         {
@@ -242,7 +314,7 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
         return new EmbeddingPlaybookRetrievalRanker(resolver,
             options,
             new LexicalPlaybookRetrievalRanker(),
-            NullLogger<EmbeddingPlaybookRetrievalRanker>.Instance,
+            logger ?? NullLogger<EmbeddingPlaybookRetrievalRanker>.Instance,
             TimeProvider.System);
     }
 
@@ -281,6 +353,9 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     {
         public const string ProviderKey = "fake";
 
+        private readonly List<ModelResidencyIntent> _intents = [];
+        private readonly Lock _intentsGate = new();
+
         public int CreateGeneratorCallCount { get; private set; }
 
         public int TotalEmbeddedTexts { get; private set; }
@@ -291,11 +366,34 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
 
         public bool ReturnShortResponse { get; set; }
 
+        /// <summary>Thrown by every embedding call when set.</summary>
+        public Exception? GenerateFailure { get; init; }
+
+        /// <summary>When set, every embedding call waits for it first, so a test can overlap two rankings.</summary>
+        public Task? GenerateGate { get; init; }
+
+        /// <summary>The residency intent of every generator created, in creation order.</summary>
+        public IReadOnlyList<ModelResidencyIntent> Intents
+        {
+            get
+            {
+                lock (_intentsGate)
+                {
+                    return _intents.ToArray();
+                }
+            }
+        }
+
         public string ProviderName => ProviderKey;
 
         public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
         {
             CreateGeneratorCallCount++;
+            lock (_intentsGate)
+            {
+                _intents.Add(selection.ResidencyIntent);
+            }
+
             return new FakeEmbeddingGenerator(this);
         }
 
@@ -344,10 +442,15 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
                 _owner = owner;
             }
 
-            public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
+            public async Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
                 EmbeddingGenerationOptions? options = null,
                 CancellationToken cancellationToken = default)
             {
+                if (_owner.GenerateGate is { } gate)
+                {
+                    await gate;
+                }
+
                 if (_owner.ThrowCancellation)
                 {
                     throw new OperationCanceledException(cancellationToken);
@@ -356,6 +459,11 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
                 if (_owner.ThrowOnGenerate)
                 {
                     throw new HttpRequestException("fake embedding transport failure");
+                }
+
+                if (_owner.GenerateFailure is not null)
+                {
+                    throw _owner.GenerateFailure;
                 }
 
                 var embeddings = new List<Embedding<float>>();
@@ -371,7 +479,7 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
                     embeddings.RemoveAt(embeddings.Count - 1);
                 }
 
-                return Task.FromResult(new GeneratedEmbeddings<Embedding<float>>(embeddings));
+                return new GeneratedEmbeddings<Embedding<float>>(embeddings);
             }
 
             public object? GetService(Type serviceType, object? serviceKey = null)

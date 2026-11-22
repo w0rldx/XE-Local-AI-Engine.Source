@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Win32;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     The production <see cref="ISandboxContainmentProbe" />: measures what this host can really do by EXERCISING each mechanism once,
@@ -444,7 +445,7 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
                 // A hung probe is not a working mechanism. Kill the tree so the measurement leaves nothing behind.
                 try
                 {
-                    process.Kill(entireProcessTree: true);
+                    _ = LinuxProcessTreeKill.Kill(process);
                 }
                 catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException)
                 {

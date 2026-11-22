@@ -2,6 +2,7 @@ import { ActionIcon, Paper, ScrollArea, Stack, Tooltip } from "@mantine/core";
 import { IconChevronRight, IconMessage, IconPlus } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { conversationDisplayTitle } from "@/core/chat/models/ConversationDisplayTitle";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 
 function initials(title: string): string {
@@ -57,7 +58,9 @@ export function ConversationListCollapsedRail({
 			<ScrollArea style={{ flex: 1, width: "100%", minHeight: 0 }} type="auto">
 				<Stack gap={6} align="center">
 					{conversations.map((conversation) => {
-						const label = conversation.title.trim() || t("pages.chat.conversationList.untitled", "Untitled conversation");
+						const label =
+							conversationDisplayTitle(conversation.title, t) ||
+							t("pages.chat.conversationList.untitled", "Untitled conversation");
 						return (
 							<Tooltip key={conversation.id} label={label} position="right" withArrow={true}>
 								<ActionIcon

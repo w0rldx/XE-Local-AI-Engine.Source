@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Training.Runs;
 
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
@@ -93,6 +94,90 @@ public sealed class TrainingProcessReaperTests
         AssertEx.Equal(TrainingReapOutcome.NotVerified, reap.Outcome);
         AssertEx.Empty(inspector.ReceivedCalls(), "Nothing is probed or signalled for a receipt that identifies no process.");
         AssertEx.True(reap.Cleared, "The row path keeps clearing a receipt it can never match.");
+    }
+
+    /// <summary>No process of a previous boot survives it: even a pid whose live facts all match is another process now.</summary>
+    [Test]
+    public async Task Reap_WhenTheReceiptIsFromAPreviousBoot_IsVerifiedWithoutProbingOrSignalling_AndClears()
+    {
+        var inspector = new FakeTrainingProcessInspector(LiveFacts);
+
+        var reap = await ReapAsync(inspector, Serialize(Receipt with
+        {
+            BootId = "boot-before"
+        }));
+
+        AssertEx.Equal(TrainingReapOutcome.Verified, reap.Outcome);
+        AssertEx.True(reap.Cleared);
+        AssertEx.Empty(inspector.SignalledGroups);
+        AssertEx.Empty(inspector.SignalledProcesses);
+        AssertEx.Empty(inspector.ProbedGroups);
+    }
+
+    /// <summary>A bound receipt while this boot's id cannot be read proves nothing either way: it is kept, even on the row path, and nothing is signalled.</summary>
+    [Test]
+    public async Task Reap_WhenTheReceiptIsBound_AndTheCurrentBootIdCannotBeRead_KeepsItAndSignalsNothing()
+    {
+        var inspector = new FakeTrainingProcessInspector(LiveFacts)
+        {
+            CurrentBootId = null
+        };
+
+        var logger = new RecordingLogger<TrainingProcessReaperTests>();
+
+        var reap = await ReapAsync(inspector, Serialize(Receipt with
+        {
+            BootId = "boot-now"
+        }), logger);
+
+        AssertEx.Equal(TrainingReapOutcome.NotVerified, reap.Outcome);
+        AssertEx.False(reap.Cleared, "The receipt is retried by a startup that can read the boot id.");
+        AssertEx.Empty(inspector.SignalledGroups);
+        AssertEx.Empty(inspector.SignalledProcesses);
+        var warning = logger.Entries.Single(static entry => entry.Level == LogLevel.Warning);
+        AssertEx.True(warning.Message.Contains("boot's id could not be read", StringComparison.Ordinal), "One warning per receipt, the specific one.");
+    }
+
+    /// <summary>A receipt of this boot, or one that records none (written before the field existed), keeps today's checks and kill.</summary>
+    [Test]
+    [Arguments("boot-now", "boot-now")]
+    [Arguments(null, "boot-now")]
+    [Arguments(null, null)]
+    public async Task Reap_WhenTheReceiptIsFromThisBootOrUnbound_MatchesAndKillsAsBefore(string? recordedBoot, string? currentBoot)
+    {
+        var inspector = new FakeTrainingProcessInspector(LiveFacts)
+        {
+            CurrentBootId = currentBoot
+        };
+
+        var reap = await ReapAsync(inspector, Serialize(Receipt with
+        {
+            BootId = recordedBoot
+        }));
+
+        AssertEx.Equal(TrainingReapOutcome.Verified, reap.Outcome);
+        AssertEx.Equal(Receipt.Pgid, inspector.SignalledGroups.Single());
+        AssertEx.True(reap.Cleared);
+    }
+
+    /// <summary>Run rows and warm worker files persist through the same mapping, and the version stays 1: an older host reads the field as unknown.</summary>
+    [Test]
+    public void ToPersisted_CarriesTheBootId_AndKeepsSchemaVersionOne()
+    {
+        var persisted = TrainingProcessReaper.ToPersisted(new TrainingLaunchReceipt
+        {
+            Pid = 4242,
+            Pgid = 4242,
+            ExecutablePath = "/venv/bin/python",
+            StartTicks = 987654321,
+            RunToken = "token",
+            BootId = "boot-now"
+        });
+
+        var roundTripped = JsonSerializer.Deserialize<TrainingLaunchReceiptV1>(Serialize(persisted).Span, TrainingJson.Options);
+
+        AssertEx.Equal("boot-now", roundTripped?.BootId);
+        AssertEx.Equal(expected: 1, roundTripped?.SchemaVersion);
     }
 
     /// <summary>A receipt read before setsid ran records the host's group, yet the trainer leads one named by its pid: that is the group probed.</summary>
@@ -391,7 +476,7 @@ public sealed class TrainingProcessReaperTests
         AssertEx.False(reap.Cleared, "A receipt whose reap failed is the only trace of a possibly live process.");
     }
 
-    private static async Task<ReapResult> ReapAsync(ITrainingProcessInspector inspector, ReadOnlyMemory<byte>? receiptJson)
+    private static async Task<ReapResult> ReapAsync(ITrainingProcessInspector inspector, ReadOnlyMemory<byte>? receiptJson, ILogger? logger = null)
     {
         var cleared = false;
         var outcome = await TrainingProcessReaper.ReapOneAsync(inspector,
@@ -402,7 +487,7 @@ public sealed class TrainingProcessReaperTests
                 cleared = true;
                 return Task.CompletedTask;
             },
-            NullLogger.Instance,
+            logger ?? NullLogger.Instance,
             CancellationToken.None);
         return new ReapResult
         {

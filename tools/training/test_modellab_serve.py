@@ -399,7 +399,7 @@ def _worker():
         worker = _Worker(directory)
         try:
             handshake = worker.handshake()
-            assert handshake["contractVersion"] == CONTRACT_VERSION == 6
+            assert handshake["contractVersion"] == CONTRACT_VERSION == 7
             assert handshake["serve"] is True
             yield worker
         finally:

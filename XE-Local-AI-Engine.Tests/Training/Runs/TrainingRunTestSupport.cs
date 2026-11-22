@@ -177,6 +177,8 @@ internal sealed class FakeTrainingProcessInspector : ITrainingProcessInspector
 
     public int HostProcessGroupId { get; init; } = 777;
 
+    public string? CurrentBootId { get; init; } = "boot-now";
+
     /// <summary>What a probe reports when <see cref="Inspect" /> found nothing; gone, as a missing <c>/proc</c> entry is.</summary>
     public TrainingProcessPresence AbsentPresence { get; init; } = TrainingProcessPresence.Gone;
 

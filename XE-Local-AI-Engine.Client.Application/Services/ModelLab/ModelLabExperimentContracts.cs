@@ -15,6 +15,12 @@ public interface IModelLabActiveJob
 
     /// <summary>True while a worker not confirmed stopped may still run from the training runtime: a kept receipt, or a receipt scan that failed. Retries their reap first.</summary>
     Task<bool> HasUnconfirmedWorkerAsync(CancellationToken ct);
+
+    /// <summary>
+    ///     Held by a checkpoint delete from before its guards to its directory delete: a start on <paramref name="baseArtifactId" /> is refused
+    ///     as not found meanwhile. Disposing releases it; a second dispose does nothing.
+    /// </summary>
+    IDisposable ClaimForDelete(Guid baseArtifactId);
 }
 
 /// <summary>Bounds on one Model Lab job, each a separate failure.</summary>
@@ -69,7 +75,7 @@ public sealed record ModelLabTraceJobV1
 
     public int MaxNewTokens { get; init; } = ModelLabTraceSpec.MaxNewTokens;
 
-    /// <summary><see cref="ModelLabTraceSpec.TraceByteCapFor" /> of the layer count.</summary>
+    /// <summary><see cref="ModelLabTraceSpec.TraceByteCapFor" /> of the layer count and <see cref="MaxNewTokens" />, like each cap below.</summary>
     public required int TraceByteCap { get; init; }
 
     public int Seed { get; init; } = ModelLabTraceSpec.Seed;
@@ -144,6 +150,9 @@ public sealed record ModelLabExperimentRequest
 
     /// <summary>A trace also records each generated step's attention row at the blocks <see cref="ModelLabTraceSpec.AttentionLayersFor" /> picks.</summary>
     public bool RecordAttention { get; init; }
+
+    /// <summary>The tokens a trace generates, 1 to <see cref="ModelLabTraceSpec.MaxRequestedNewTokens" />. Null for <see cref="ModelLabTraceSpec.MaxNewTokens" />; a steering job has its own.</summary>
+    public int? MaxNewTokens { get; init; }
 }
 
 /// <summary>A steering job's inputs. The arm's prompts are the request's <c>prompt</c> and then <see cref="AdditionalTestPrompts" />.</summary>
@@ -423,6 +432,12 @@ public sealed record ModelLabTraceResult
     public int? Seed { get; init; }
 
     public int? MaxNewTokens { get; init; }
+
+    /// <summary>
+    ///     How many leading steps kept their candidates: a result over its byte budget drops those of its last steps, and their tokens stay.
+    ///     Null on a result saved before contract 7, which dropped none.
+    /// </summary>
+    public int? CandidateSteps { get; init; }
 
     /// <summary>Set on a steering job. The fields above then describe its derive pass, and the tokens stay empty.</summary>
     public ModelLabSteeringResult? Steering { get; init; }

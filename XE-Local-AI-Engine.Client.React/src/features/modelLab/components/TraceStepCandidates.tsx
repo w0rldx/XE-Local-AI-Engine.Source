@@ -3,22 +3,48 @@ import { useTranslation } from "react-i18next";
 
 import type { XeLocalAiEngineClientServicesModelLabModelLabResultToken as ResultToken } from "@/core/api/generated/types.gen";
 import { NextTokenStepView } from "@/features/modelLab/components/NextTokenStepView";
-import { type CandidateBasis, sameCandidates, toStepEntry } from "@/features/modelLab/models/ModelLabTrace";
+import {
+	type CandidateBasis,
+	type CandidateNote,
+	candidateNote,
+	sameCandidates,
+	toStepEntry,
+} from "@/features/modelLab/models/ModelLabTrace";
 
 interface TraceStepCandidatesProps {
 	token: ResultToken;
 	// 0-based.
 	step: number;
+	// The result's count of leading steps that kept their candidates; null or undefined on a result made before it was recorded.
+	candidateSteps: number | null | undefined;
 	basis: CandidateBasis;
 	onBasisChange: (basis: CandidateBasis) => void;
 }
 
-// One traced step's exact candidates, raw or processed; null when the trace was made before candidates were recorded.
-export function TraceStepCandidates({ token, step, basis, onBasisChange }: TraceStepCandidatesProps) {
+// Why a step has no candidates to show; nothing when it has them.
+export function CandidateNoteText({ note }: { note: CandidateNote }) {
+	const { t } = useTranslation();
+	if (note === "kept") {
+		return null;
+	}
+	return (
+		<Text size="sm" c="dimmed" data-testid={`model-lab-candidates-${note}`}>
+			{note === "notKept"
+				? t(
+						"pages.modelLab.trace.candidatesNotKept",
+						"This step's candidates were not kept: a long run keeps them only for its first steps, so its saved result stays within its size limit. The token, its text and its probability are kept.",
+					)
+				: t("pages.modelLab.trace.noCandidates", "This trace recorded no candidates (made before this version).")}
+		</Text>
+	);
+}
+
+// One traced step's exact candidates, raw or processed; otherwise why there are none.
+export function TraceStepCandidates({ token, step, candidateSteps, basis, onBasisChange }: TraceStepCandidatesProps) {
 	const { t } = useTranslation();
 	const entry = toStepEntry(token, basis);
 	if (!entry) {
-		return null;
+		return <CandidateNoteText note={candidateNote(token, step, candidateSteps)} />;
 	}
 	return (
 		<Stack gap="xs" data-testid="model-lab-trace-candidates">

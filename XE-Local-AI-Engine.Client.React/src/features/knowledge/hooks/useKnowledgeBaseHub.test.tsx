@@ -77,6 +77,14 @@ function emit(event: unknown): void {
 	act(() => handler(event));
 }
 
+function emitRefresh(): void {
+	const handler = hubMock.handlers.get("knowledge.documentsChanged");
+	if (!handler) {
+		throw new Error("the hook did not subscribe to knowledge.documentsChanged");
+	}
+	act(() => handler({ eventType: "knowledge.documentsChanged", occurredAtUtc: 1758000000000 }));
+}
+
 describe("useKnowledgeBaseHub", () => {
 	beforeEach(() => {
 		hubMock.handlers.clear();
@@ -183,6 +191,50 @@ describe("useKnowledgeBaseHub", () => {
 		}
 	});
 
+	it("refetches on a status-free refresh without writing any status into the cached rows", async () => {
+		vi.useFakeTimers();
+		try {
+			const { queryClient, wrapper } = harness();
+			const view = renderHook(() => useKnowledgeBaseHub(), { wrapper });
+			const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+
+			emitRefresh();
+			emitRefresh();
+
+			// The sender could not know the row's status, so the row keeps what it showed until the refetch lands.
+			expect(cachedStatus(queryClient)).toBe("Extracting");
+			await vi.advanceTimersByTimeAsync(250);
+			expect(invalidatedIds(invalidateSpy)).toEqual([
+				listKey,
+				operationInvalidationKey(knowledgeQueryIds.getDocument),
+				operationInvalidationKey(knowledgeQueryIds.listCollections),
+			]);
+			view.unmount();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("refetches on a refresh that arrives after a delete without bringing the deleted row back", async () => {
+		vi.useFakeTimers();
+		try {
+			const { queryClient, wrapper } = harness();
+			const view = renderHook(() => useKnowledgeBaseHub(), { wrapper });
+			// The delete already left the list: only the refetch decides what the list shows next.
+			queryClient.setQueryData(listKey, { items: [] });
+			const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+
+			emitRefresh();
+			await vi.advanceTimersByTimeAsync(250);
+
+			expect(queryClient.getQueryData(listKey)).toEqual({ items: [] });
+			expect(invalidatedIds(invalidateSpy)).toContainEqual(listKey);
+			view.unmount();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("subscribes to the knowledge-base hub and releases its lease on unmount", () => {
 		const { wrapper } = harness();
 		const view = renderHook(() => useKnowledgeBaseHub(), { wrapper });
@@ -192,5 +244,6 @@ describe("useKnowledgeBaseHub", () => {
 		view.unmount();
 
 		expect(hubMock.connection.off).toHaveBeenCalledWith("knowledge.documentChanged", expect.any(Function));
+		expect(hubMock.connection.off).toHaveBeenCalledWith("knowledge.documentsChanged", expect.any(Function));
 	});
 });

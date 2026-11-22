@@ -110,6 +110,8 @@ describe("KnowledgeDocumentsTable", () => {
 		expect(screen.getByTestId("knowledge-waiting-doc-1").textContent).toBe(
 			"Waiting for the embedding model, which was unloaded. Ingestion continues once it is loaded again.",
 		);
+		// The hint wraps on a narrow screen: a truncated sentence would hide the "continues once loaded" half.
+		expect(screen.getByTestId("knowledge-waiting-doc-1").hasAttribute("data-truncate")).toBe(false);
 		expect(screen.queryByTestId("knowledge-failure-doc-1")).toBeNull();
 	});
 

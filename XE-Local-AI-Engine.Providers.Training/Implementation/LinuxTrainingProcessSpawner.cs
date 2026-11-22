@@ -149,7 +149,8 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
                 Pgid = stat?.Pgid ?? 0,
                 ExecutablePath = executablePath,
                 StartTicks = stat?.StartTicks ?? 0,
-                RunToken = request.RunToken
+                RunToken = request.RunToken,
+                BootId = LinuxBootId.Current
             };
             return new LinuxTrainingProcessHandle(process, receipt, output, _logger, _timeProvider, pin);
         }

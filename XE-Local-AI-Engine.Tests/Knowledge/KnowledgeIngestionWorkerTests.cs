@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Knowledge;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -14,7 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Lifecycle-safety tests for <see cref="KnowledgeIngestionWorker" />: startup recovery re-dispatches documents left
 ///     non-terminal by a previous run, shutdown drains in-flight documents so a terminal write lands, a hung document is
 ///     abandoned within the bounded drain window rather than blocking shutdown, and a document that completes after the
-///     semaphore is disposed does not fault on <see cref="ObjectDisposedException" />.
+///     worker is disposed does not fault on <see cref="ObjectDisposedException" />.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class KnowledgeIngestionWorkerTests
@@ -130,8 +131,8 @@ public sealed class KnowledgeIngestionWorkerTests
         try
         {
             // The document ignores cancellation and finishes ~500ms after the 1s drain window elapses — i.e. after the
-            // worker is disposed — so its finally releases an already-disposed semaphore. The guarded Release must swallow
-            // the ObjectDisposedException so the background task completes cleanly instead of faulting.
+            // worker is disposed — so its finally releases the concurrency slot on a disposed worker, and the background task
+            // must complete cleanly instead of faulting.
             // real-timer: as above, the document's runtime is the input — it has to outlast the 1 s drain window so its
             // finally runs after disposal. A gate the test releases would not reproduce "completes after we stopped looking".
             var ingestion = new FakeIngestionService((_, _) => Task.Delay(PostDisposalDocumentRuntime, CancellationToken.None));
@@ -155,7 +156,7 @@ public sealed class KnowledgeIngestionWorkerTests
                     worker.Dispose();
                 }
 
-                // Let the abandoned document finish so its finally runs Release() on the now-disposed semaphore.
+                // Let the abandoned document finish so its finally runs Release() on the now-disposed worker.
                 await AssertEx.EventuallyAsync(() => !ingestion.Completed.IsEmpty,
                     PollTimeout,
                     "The abandoned document should have finished after disposal.");
@@ -171,7 +172,7 @@ public sealed class KnowledgeIngestionWorkerTests
 #pragma warning restore S1215
 
             AssertEx.Empty(captured.Where(exception => exception is ObjectDisposedException),
-                "Releasing the disposed semaphore on a post-disposal document completion must not fault the background task.");
+                "Releasing the slot on a post-disposal document completion must not fault the background task.");
         }
         finally
         {
@@ -355,7 +356,7 @@ public sealed class KnowledgeIngestionWorkerTests
     }
 
     [Test]
-    public async Task Wake_OnceTheEmbedderIsBack_ClearsTheWaitNotifiesAndSweepsTheWaitingRowIn()
+    public async Task Wake_OnceTheEmbedderIsBack_ClearsTheWaitRefreshesOnceAndSweepsTheWaitingRowIn()
     {
         var time = new ManualTimeProvider();
         var waiting = Guid.NewGuid();
@@ -379,13 +380,44 @@ public sealed class KnowledgeIngestionWorkerTests
         time.Advance(KnowledgeIngestionWorker.FirstWakeWindow);
         await AssertEx.EventuallyAsync(() => embedder.ReceivedCalls().Count() == 1 && time.ArmedTimerCount == 1, PollTimeout, "still blocked: the next window is armed");
         AssertEx.Equal(1, ingestion.Started.Count(id => id == waiting), "a blocked wake does no document work");
-        await notifier.DidNotReceiveWithAnyArgs().NotifyDocumentChangedAsync(Guid.Empty, default, default);
+        await notifier.DidNotReceiveWithAnyArgs().NotifyDocumentsChangedAsync(default);
 
         time.Advance(KnowledgeIngestionWorker.FirstWakeWindow * 2);
         await AssertEx.EventuallyAsync(() => ingestion.Started.Count(id => id == waiting) == 2, PollTimeout, "the unblocked wake sweeps the cleared row in");
-        await catalog.Received(1).ClearEmbeddingModelWaitAsync(Arg.Any<CancellationToken>());
-        await notifier.Received(1).NotifyDocumentChangedAsync(waiting, KnowledgeDocumentStatus.Pending, Arg.Any<CancellationToken>());
         await worker.StopAsync(CancellationToken.None);
+        await catalog.Received(1).ClearEmbeddingModelWaitAsync(Arg.Any<CancellationToken>());
+        await notifier.Received(1).NotifyDocumentsChangedAsync(Arg.Any<CancellationToken>());
+        await notifier.DidNotReceiveWithAnyArgs().NotifyDocumentChangedAsync(Guid.Empty, default, default);
+    }
+
+    [Test]
+    public async Task Wake_WhenAClearedRowWasIndexedMeanwhile_RefreshesOnceAndPublishesNoPendingForIt()
+    {
+        var time = new ManualTimeProvider();
+        var indexed = Guid.NewGuid();
+        var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
+        var logger = new RecordingLogger<KnowledgeIngestionWorker>();
+        var ingestion = new FakeIngestionService((_, _) => Task.CompletedTask);
+        var catalog = NoRecovery();
+        catalog.ClearEmbeddingModelWaitAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<Guid>>([indexed]));
+
+        // The row left Pending between the clear and the sweep, so a Pending push for it would stick on clients.
+        catalog.ListPendingDocumentIdsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<Guid>>([]));
+        await using var provider = BuildProvider(ingestion, catalog);
+        using var worker = CreateWorker(provider, new KnowledgeIngestionDispatcher(notifier), timeProvider: time, notifier: notifier, logger: logger);
+        await worker.StartAsync(CancellationToken.None);
+
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "the startup wake is armed");
+        time.Advance(KnowledgeIngestionWorker.FirstWakeWindow);
+        await AssertEx.EventuallyAsync(() => catalog.ReceivedCalls().Any(call => call.GetMethodInfo().Name == nameof(IKnowledgeDocumentCatalogService.ListPendingDocumentIdsAsync)),
+            PollTimeout,
+            "the unblocked wake swept");
+        await worker.StopAsync(CancellationToken.None);
+
+        await notifier.DidNotReceiveWithAnyArgs().NotifyDocumentChangedAsync(Guid.Empty, default, default);
+        await notifier.Received(1).NotifyDocumentsChangedAsync(Arg.Any<CancellationToken>());
+        AssertEx.True(logger.HasEntry(LogLevel.Information, "cleared 1 embedding-wait flag"), "the wake logs how many wait flags it cleared");
+        AssertEx.Empty(ingestion.Started);
     }
 
     [Test]
@@ -542,6 +574,37 @@ public sealed class KnowledgeIngestionWorkerTests
     }
 
     [Test]
+    public async Task Dispose_WhileTheReadLoopWaitsForAConcurrencySlot_EndsTheReadLoop()
+    {
+        var first = Guid.NewGuid();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ingestion = new FakeIngestionService((id, _) => id == first ? gate.Task : Task.CompletedTask);
+        var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
+        await using var provider = BuildProvider(ingestion, NoRecovery());
+        var worker = CreateWorker(provider, dispatcher);
+        try
+        {
+            await worker.StartAsync(CancellationToken.None);
+            _ = await dispatcher.EnqueueAsync(first, CancellationToken.None);
+            _ = await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None);
+
+            // The only slot is held by the gated document, so the dequeued second one parks the read loop on the slot.
+            await AssertEx.EventuallyAsync(() => ingestion.Started.Contains(first) && dispatcher.PendingCount == 0, PollTimeout,
+                "the read loop dequeued the second document and waits for the slot");
+        }
+        finally
+        {
+            // A host whose stop timed out disposes the worker without StopAsync.
+            worker.Dispose();
+        }
+
+        await AssertEx.CompletesAsync(AssertEx.NotNull(worker.ExecuteTask), PollTimeout, "the read loop ends once the worker is disposed");
+        AssertEx.True(worker.ExecuteTask!.IsCompletedSuccessfully, "the read loop ends without faulting");
+        gate.SetResult();
+        await AssertEx.EventuallyAsync(() => ingestion.Completed.Contains(first), PollTimeout, "the gated document finished");
+    }
+
+    [Test]
     public async Task Wake_WhenTheCheckThrows_RetriesAtTheNextWindowAndThenSweeps()
     {
         var time = new ManualTimeProvider();
@@ -584,9 +647,10 @@ public sealed class KnowledgeIngestionWorkerTests
             await clearRelease.Task;
             return (IReadOnlyList<Guid>)[];
         });
+        var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
         var dispatcher = new KnowledgeIngestionDispatcher(new NullKnowledgeIndexingNotifier());
         await using var provider = BuildProvider(ingestion, catalog);
-        using var worker = CreateWorker(provider, dispatcher, timeProvider: time);
+        using var worker = CreateWorker(provider, dispatcher, timeProvider: time, notifier: notifier);
         await worker.StartAsync(CancellationToken.None);
 
         await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "the startup wake is armed");
@@ -600,6 +664,7 @@ public sealed class KnowledgeIngestionWorkerTests
 
         await AssertEx.EventuallyAsync(() => time.ArmedTimerCount == 1, PollTimeout, "a waiting row always has an armed wake");
         await worker.StopAsync(CancellationToken.None);
+        await notifier.DidNotReceiveWithAnyArgs().NotifyDocumentsChangedAsync(default);
     }
 
     [Test]
@@ -703,7 +768,8 @@ public sealed class KnowledgeIngestionWorkerTests
         int drainTimeoutSeconds = 30,
         IKnowledgeChunkEmbedder? embedder = null,
         TimeProvider? timeProvider = null,
-        IKnowledgeIndexingNotifier? notifier = null)
+        IKnowledgeIndexingNotifier? notifier = null,
+        ILogger<KnowledgeIngestionWorker>? logger = null)
     {
         var options = Options.Create(new KnowledgeBaseOptions
         {
@@ -718,7 +784,7 @@ public sealed class KnowledgeIngestionWorkerTests
             notifier ?? new NullKnowledgeIndexingNotifier(),
             options,
             timeProvider ?? new ManualTimeProvider(),
-            NullLogger<KnowledgeIngestionWorker>.Instance);
+            logger ?? NullLogger<KnowledgeIngestionWorker>.Instance);
     }
 
     /// <summary>Runs its callback when the DI scope that resolved it is disposed.</summary>

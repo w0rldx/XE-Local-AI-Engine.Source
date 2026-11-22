@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
@@ -479,6 +480,8 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         CancellationToken cancellationToken)
     {
         var frozenItems = new List<FrozenTaskItem>(leafItems.Length);
+        // Nobody waits on a resolve per task item, so its playbook ranking never reloads an embedder the operator ejected.
+        using var unattendedRun = UnattendedRunScope.Begin();
         // Read once per request, the value InvocationRunner would read for the same turn, so the refusal cannot drift from the run.
         var defaultContextTokens = await _runtimeSettings.GetDefaultContextTokensAsync(cancellationToken);
         foreach (var item in leafItems)

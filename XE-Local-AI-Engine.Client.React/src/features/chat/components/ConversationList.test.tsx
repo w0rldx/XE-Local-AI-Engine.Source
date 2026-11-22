@@ -7,7 +7,8 @@ import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConversationList } from "@/features/chat/components/ConversationList";
-import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
+import type { ChatConversationModel, ChatConversationSearchModel } from "@/features/chat/models/ChatModels";
+import de from "@/locales/de.json";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
@@ -705,5 +706,115 @@ describe("ConversationList relative time", () => {
 		await act(() => i18next.changeLanguage("de"));
 
 		expect(screen.getByText("jetzt")).toBeTruthy();
+	});
+});
+
+// The placeholder title is persisted in English and compared by exact string, so only its display is localized.
+describe("ConversationList placeholder title", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(async () => {
+		cleanup();
+		await act(() => i18next.changeLanguage("en"));
+	});
+
+	async function renderGerman(
+		collapsed: boolean,
+		searchQuery?: string,
+		onRename = vi.fn(),
+		searchResults?: ChatConversationSearchModel,
+	) {
+		// The app loads the German bundle lazily after the switch; preloading it keeps the first render from racing it.
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await act(() => i18next.changeLanguage("de"));
+		renderWithProviders(
+			<ConversationList
+				conversations={[
+					conversation({ id: "placeholder", title: "New conversation" }),
+					conversation({ id: "named" }),
+					// What the chat mapper stores for a conversation the server returns without a title.
+					conversation({ id: "untitled", title: "Untitled conversation" }),
+					conversation({ id: "archived-placeholder", title: "New conversation", isArchived: true }),
+				]}
+				collapsed={collapsed}
+				searchQuery={searchQuery}
+				searchResults={searchResults}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+				onSearchChange={vi.fn()}
+				onRename={onRename}
+			/>,
+		);
+	}
+
+	it("finds the placeholder conversation by its displayed title", async () => {
+		await renderGerman(false, "neuer chat");
+
+		expect(screen.getByTestId("conversation-item-placeholder")).toBeTruthy();
+		expect(screen.queryByTestId("conversation-item-named")).toBeNull();
+		expect(screen.queryByTestId("conversation-item-archived-placeholder")).toBeNull();
+	});
+
+	// The server searches the stored English title, so its answer cannot contain a match on the localized one.
+	it("keeps a displayed-title match after an empty server search answer arrives", async () => {
+		await renderGerman(false, "neuer chat", vi.fn(), { conversations: [], indexing: false });
+
+		expect(screen.getByTestId("conversation-item-placeholder").textContent).toContain(de.chat.search.titleMatch);
+		expect(screen.queryByTestId("conversation-item-named")).toBeNull();
+		expect(screen.queryByTestId("conversation-item-untitled")).toBeNull();
+		expect(screen.queryByTestId("conversation-item-archived-placeholder")).toBeNull();
+	});
+
+	it("lists a displayed-title match the server also found only once, with the server's snippet", async () => {
+		const hit = conversation({ id: "placeholder", title: "New conversation", lastMessagePreview: "…Neuer Chat im Text…" });
+		await renderGerman(false, "neuer chat", vi.fn(), { conversations: [hit], indexing: false });
+
+		expect(screen.getAllByTestId("conversation-item-placeholder")).toHaveLength(1);
+		expect(screen.getByTestId("conversation-item-placeholder").textContent).toContain("Neuer Chat im Text");
+	});
+
+	// Prefilling the displayed text would save "Neuer Chat" on an unedited rename and end the automatic titling.
+	it("starts the placeholder's rename empty and saves nothing when it stays empty", async () => {
+		const onRename = vi.fn();
+		await renderGerman(false, undefined, onRename);
+
+		fireEvent.click(screen.getByTestId("conversation-actions-placeholder"));
+		fireEvent.click(await screen.findByTestId("conversation-rename-placeholder"));
+		const input = (await screen.findByTestId("conversation-rename-input-placeholder")) as HTMLInputElement;
+		expect(input.value).toBe("");
+
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		expect(onRename).not.toHaveBeenCalled();
+		expect(screen.getByTestId("conversation-item-placeholder").textContent).toContain("Neuer Chat");
+	});
+
+	it("shows the placeholder title in the UI language in the expanded list", async () => {
+		await renderGerman(false);
+
+		expect(screen.getByTestId("conversation-item-placeholder").textContent).toContain("Neuer Chat");
+		expect(screen.getByTestId("conversation-item-placeholder").textContent).not.toContain("New conversation");
+		expect(screen.getByTestId("conversation-item-named").textContent).toContain("A conversation");
+		expect(screen.getByTestId("conversation-item-untitled").textContent).toContain("Unbenannter Chat");
+	});
+
+	it("labels the placeholder title in the UI language in the collapsed rail", async () => {
+		await renderGerman(true);
+
+		expect(screen.getByTestId("conversation-item-placeholder").getAttribute("aria-label")).toBe("Neuer Chat");
+		expect(screen.getByTestId("conversation-item-named").getAttribute("aria-label")).toBe("A conversation");
+		expect(screen.getByTestId("conversation-item-untitled").getAttribute("aria-label")).toBe("Unbenannter Chat");
+	});
+
+	it("starts an untitled conversation's rename empty", async () => {
+		await renderGerman(false);
+
+		fireEvent.click(screen.getByTestId("conversation-actions-untitled"));
+		fireEvent.click(await screen.findByTestId("conversation-rename-untitled"));
+
+		expect(((await screen.findByTestId("conversation-rename-input-untitled")) as HTMLInputElement).value).toBe("");
 	});
 });

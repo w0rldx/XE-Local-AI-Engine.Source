@@ -136,6 +136,42 @@ describe("SavedExperimentComparison", () => {
 		expect(means.textContent).toContain("3.50");
 	});
 
+	it("says per run whether a step's candidates were dropped by a long run or never recorded by an older one", async () => {
+		const dropped = { ...token(2, "!"), candidates: null, processedCandidates: null };
+		stubRun(row(first, "Trace", "rev-a", { ...traceFacts, text: "Hi!", tokens: [token(1, "Hi"), dropped], candidateSteps: 1 }));
+		stubRun(row(second, "Trace", "rev-a", { ...traceFacts, text: "Hi!", tokens: [token(1, "Hi"), { id: 2, text: "!" }] }));
+
+		renderWithProviders(<SavedExperimentComparison experimentIds={[first, second]} />);
+
+		const rows = await screen.findAllByTestId("model-lab-compare-step-row");
+		fireEvent.click(within(rows[1] as HTMLElement).getByRole("button", { name: "Step 2" }));
+
+		const panels = screen.getByTestId("model-lab-compare-candidates");
+		expect(within(panels).getByTestId("model-lab-candidates-notKept")).toBeTruthy();
+		expect(within(panels).getByTestId("model-lab-candidates-beforeVersion").textContent).toBe(
+			"This trace recorded no candidates (made before this version).",
+		);
+		expect(within(panels).queryAllByTestId("model-lab-next-token-step")).toHaveLength(0);
+	});
+
+	it("keeps steps selectable when every run dropped all its candidates, each saying not kept", async () => {
+		const dropped = (id: number, text: string) => ({ ...token(id, text), candidates: null, processedCandidates: null });
+		for (const id of [first, second]) {
+			stubRun(
+				row(id, "Trace", "rev-a", { ...traceFacts, text: "Hi!", tokens: [dropped(1, "Hi"), dropped(2, "!")], candidateSteps: 0 }),
+			);
+		}
+
+		renderWithProviders(<SavedExperimentComparison experimentIds={[first, second]} />);
+
+		const rows = await screen.findAllByTestId("model-lab-compare-step-row");
+		fireEvent.click(within(rows[0] as HTMLElement).getByRole("button", { name: "Step 1" }));
+
+		const panels = screen.getByTestId("model-lab-compare-candidates");
+		expect(within(panels).getAllByTestId("model-lab-candidates-notKept")).toHaveLength(2);
+		expect(within(panels).queryByTestId("model-lab-candidates-beforeVersion")).toBeNull();
+	});
+
 	it("says no recorded fact differs, and pairs each steering arm's outputs across runs", async () => {
 		const steering = (text: string) => ({
 			...traceFacts,

@@ -28,6 +28,11 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         "No embedding model is installed, so documents cannot be indexed. Use \"Download recommended embedding model\" "
         + "in Node Settings, or install an embedding GGUF from Models → Browse Hugging Face, then retry.";
 
+    // A pinned model is never replaced silently, so installing any embedder is the wrong remedy for a removed one.
+    internal const string EmbeddingPinnedModelMissingReason =
+        "The embedding model selected for the knowledge base in Node Settings is no longer installed. Reinstall it, or "
+        + "choose another embedding model in Node Settings, then retry.";
+
     internal const string EmbeddingIncompleteReason =
         "The embedding model returned an incomplete result. Ensure the configured embedding model is loaded and retry.";
 
@@ -90,6 +95,12 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
 
         // A removed pinned model can never load; asking for it would only meet a stale eject mark and park the run again.
         if (resolution.PinnedModelMissing)
+        {
+            throw new KnowledgeIngestionException(EmbeddingPinnedModelMissingReason);
+        }
+
+        // Likewise when the inventory answered without any embedder: llama-server cannot load the fallback name either.
+        if (!resolution.IsConfident && resolution.InventoryRead && IsLlamaProvider)
         {
             throw new KnowledgeIngestionException(EmbeddingUnavailableReason);
         }
@@ -244,8 +255,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
 
     public async Task<bool> IsEmbeddingModelBlockedAsync(CancellationToken cancellationToken)
     {
-        // Eject marks exist only on the llama.cpp supervisor; any other provider never vetoes a background load.
-        if (!string.Equals(_options.EmbeddingProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
+        if (!IsLlamaProvider)
         {
             return false;
         }
@@ -253,15 +263,37 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
         var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
 
-        // A pinned model the inventory proved removed waits on nothing: the run fails with the missing-model reason instead.
-        if (resolution.PinnedModelMissing)
+        // An unconfident name may not be the marked model, so a failed inventory reads as blocked; a read inventory without
+        // a usable embedder (pinned or not) waits on nothing, and the re-admitted run fails with its missing-model reason.
+        return resolution.IsConfident
+            ? _supervisor.IsBackgroundLaunchBlocked(resolution.Name, ModelRole.Embedding)
+            : !resolution.InventoryRead;
+    }
+
+    public async Task<bool> IsEmbeddingModelEjectedAsync(CancellationToken cancellationToken)
+    {
+        // No embedding mark at all: nothing to resolve, so a large import pays no inventory read per document.
+        if (!IsLlamaProvider || !_supervisor.HasBackgroundLaunchBlock(ModelRole.Embedding))
         {
             return false;
         }
 
-        // Any other unconfident name (failed inventory, nothing matched) may not be the marked model: unknown reads as blocked.
-        return !resolution.IsConfident || _supervisor.IsBackgroundLaunchBlocked(resolution.Name, ModelRole.Embedding);
+        try
+        {
+            var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
+            var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
+            return resolution.IsConfident && _supervisor.IsBackgroundLaunchBlocked(resolution.Name, ModelRole.Embedding);
+        }
+        catch (InvalidOperationException)
+        {
+            // An unmapped provider is not an eject; the run's embed step reports it with its own reason.
+            return false;
+        }
     }
+
+    // Eject marks exist only on the llama.cpp supervisor; any other provider never vetoes a background load.
+    private bool IsLlamaProvider =>
+        string.Equals(_options.EmbeddingProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
 
     private ILocalModelProvider ResolveProvider()
     {

@@ -35,14 +35,25 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         WriteIndented = true
     };
 
+    // Guards the in-memory snapshot only; disk writes never run under it, so a stalled write cannot hold up a reader.
     private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
+
+    // Keys published in memory whose write has not succeeded yet, guarded by _lock.
+    private readonly HashSet<string> _dirty = new(StringComparer.OrdinalIgnoreCase);
     private readonly string _lockPath;
     private readonly ILogger _logger;
+
+    // Serializes the disk writes, one at a time, outside _lock.
+    private readonly SemaphoreSlim _persistLock = new(initialCount: 1, maxCount: 1);
     private readonly string _statePath;
 
     // Null until first load; then the authoritative in-memory snapshot of disabled "{Variant}:{kvType}" keys
     // (case-insensitive).
     private HashSet<string>? _disabled;
+
+    // The single in-flight background re-persist, replaced under _lock only once it completed.
+    private Task _repersist = Task.CompletedTask;
+    private int _repersistFailureLogged;
 
     /// <summary>Creates the store under <paramref name="cacheRoot" /> (defaulting to the shared app cache root).</summary>
     public LlamaServerLaunchFallbackStore(string? cacheRoot = null, ILogger<LlamaServerLaunchFallbackStore>? logger = null)
@@ -53,19 +64,34 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         _logger = logger ?? NullLogger<LlamaServerLaunchFallbackStore>.Instance;
     }
 
+    /// <summary>The latest background re-persist of an unwritten verdict. Test seam; it never faults.</summary>
+    internal Task PendingRepersistForTesting => Volatile.Read(ref _repersist);
+
     public void Dispose()
     {
-        _lock.Dispose();
+        // The semaphores are never disposed: a caller or the background re-persist may still be parked on one.
     }
 
     /// <inheritdoc />
+    /// <remarks>A verdict whose write failed is written again by the read that finds it, on one background task at a time.</remarks>
     public async Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, string kvCacheType, CancellationToken ct)
     {
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             var disabled = await EnsureLoadedAsync(ct).ConfigureAwait(false);
-            return disabled.Contains(PairKey(variant, kvCacheType));
+            var key = PairKey(variant, kvCacheType);
+            if (!disabled.Contains(key))
+            {
+                return false;
+            }
+
+            if (_dirty.Contains(key) && _repersist.IsCompleted)
+            {
+                _repersist = Task.Run(RepersistAsync, CancellationToken.None);
+            }
+
+            return true;
         }
         finally
         {
@@ -80,24 +106,96 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         try
         {
             var disabled = await EnsureLoadedAsync(ct).ConfigureAwait(false);
-            if (!disabled.Add(PairKey(variant, kvCacheType)))
+            var key = PairKey(variant, kvCacheType);
+            if (!disabled.Add(key) && !_dirty.Contains(key))
             {
-                return; // Already recorded — idempotent no-op, no re-write.
+                return; // Already recorded and written — idempotent no-op, no re-write.
             }
 
-            await PersistAsync(disabled, ct).ConfigureAwait(false);
+            _dirty.Add(key);
         }
         finally
         {
             _lock.Release();
         }
+
+        await PersistDirtyAsync(ct).ConfigureAwait(false);
     }
 
     private static string PairKey(GpuVariant variant, string kvCacheType) =>
         string.Concat(variant.ToString(), ":", (kvCacheType ?? string.Empty).Trim());
 
+    /// <summary>
+    ///     Writes a copy of the snapshot under <see cref="_persistLock" /> alone, then merges the disk's verdicts back and
+    ///     marks clean only the keys that copy carried.
+    /// </summary>
+    /// <remarks>A key published while the write ran stays unwritten for the next write; a queued writer finding nothing unwritten returns.</remarks>
+    private async Task PersistDirtyAsync(CancellationToken ct)
+    {
+        await _persistLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            HashSet<string> disabled;
+            HashSet<string> snapshot;
+            string[] written;
+            await _lock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                if (_dirty.Count == 0 || _disabled is null)
+                {
+                    return;
+                }
+
+                disabled = _disabled;
+                snapshot = new HashSet<string>(disabled, StringComparer.OrdinalIgnoreCase);
+                written = [.. _dirty];
+            }
+            finally
+            {
+                _lock.Release();
+            }
+
+            await PersistAsync(snapshot, ct).ConfigureAwait(false);
+
+            await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                disabled.UnionWith(snapshot);
+                _dirty.ExceptWith(written);
+            }
+            finally
+            {
+                _lock.Release();
+            }
+
+            Volatile.Write(ref _repersistFailureLogged, value: 0);
+        }
+        finally
+        {
+            _persistLock.Release();
+        }
+    }
+
+    private async Task RepersistAsync()
+    {
+        try
+        {
+            await PersistDirtyAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Warning once per failure streak: every launch reading the verdict retries, and an unwritable cache root would otherwise warn on each.
+            if (Interlocked.Exchange(ref _repersistFailureLogged, value: 1) == 0)
+            {
+                _logger.LogWarning(ex,
+                    "Could not re-persist the llama-server launch-fallback verdicts to {StatePath}; they hold in memory and the next launch that reads one retries the write.",
+                    _statePath);
+            }
+        }
+    }
+
     /// <summary>Loads the snapshot once.</summary>
-    /// <remarks>Callers already hold <see cref="_lock" />.</remarks>
+    /// <remarks>Callers already hold <see cref="_lock" />, so the first load's disk read still runs under it.</remarks>
     private async Task<HashSet<string>> EnsureLoadedAsync(CancellationToken ct)
     {
         return _disabled ??= await LoadAsync(ct).ConfigureAwait(false);
@@ -155,8 +253,8 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
             });
 
     /// <summary>
-    ///     Replaces the whole state document, folding whatever is already on disk back in first and refreshing the
-    ///     in-memory snapshot under the same lock.
+    ///     Replaces the whole state document with <paramref name="disabled" />, folding whatever is already on disk into
+    ///     it first.
     /// </summary>
     /// <remarks>
     ///     The file is USER-level, so several node processes share it and each write replaces the whole document:

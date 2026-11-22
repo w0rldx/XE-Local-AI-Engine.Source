@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -433,6 +434,122 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         AssertEx.True(Directory.Exists(jail), "a live engine's marker names this jail, whatever the folder's owner record says");
     }
 
+    [Test]
+    public async Task Reap_PassesTheRecordedStartTicks_AndClassifiesTheGroupBeforeTheScopeKill()
+    {
+        // The scope kill takes the leader, and with it the identity the group is verified by, so the group goes first.
+        var unit = SandboxScopeUnit.Create("compute");
+        var calls = new List<string>();
+        var killer = new FakeKiller
+        {
+            Calls = calls
+        };
+        killer.StartTicks[4242] = 77L;
+        var scopeKiller = new FakeScopeKiller(Array.Empty<string>())
+        {
+            Calls = calls
+        };
+        var store = new FakeMarkerStore(Marker(processGroupId: 4242, leaderStartTicks: 77L, jailPath: CreateJailUnderContainerRoot()) with
+        {
+            ScopeUnitName = unit
+        });
+
+        await new SandboxOrphanReaper(store, killer, NullLogger<SandboxOrphanReaper>.Instance, containmentProbe: null, scopeKiller)
+            .StartAsync(CancellationToken.None);
+
+        AssertEx.Equal("4242=77", string.Join(',', killer.Requests.Select(static request => $"{request.Key}={request.Value}")));
+        AssertEx.Equal("group 4242,scope " + unit, string.Join(',', calls));
+    }
+
+    [Test]
+    public async Task Reap_WhenTheGroupKillIsDeferred_KeepsTheMarkerAndTheJail()
+    {
+        var jail = CreateJailUnderContainerRoot();
+        var killer = new FakeKiller();
+        killer.Outcomes[4242] = SandboxGroupKillOutcome.Deferred;
+        var store = new FakeMarkerStore(Marker(processGroupId: 4242, leaderStartTicks: 1, jailPath: jail));
+
+        await CreateReaper(store, killer).StartAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(jail), "members may still run in a Deferred group's jail");
+        AssertEx.Equal(expected: 1, store.Remaining.Count, "the next start retries a Deferred group");
+    }
+
+    /// <summary>Two markers naming one jail: whichever is read first, a Deferred or live one keeps the jail from the other's deletion.</summary>
+    [Test]
+    [Arguments(true, false)]
+    [Arguments(false, false)]
+    [Arguments(true, true)]
+    [Arguments(false, true)]
+    public async Task Reap_WhenAProtectedMarkerSharesTheJail_KeepsTheJailInEitherOrder(bool protectedFirst, bool protectedByLiveOwner)
+    {
+        var jail = CreateJailUnderContainerRoot();
+        var killer = new FakeKiller();
+        killer.StartTicks[5151] = 2L;
+        var protectedMarker = Marker(processGroupId: 4242, leaderStartTicks: 1, jailPath: jail, ownerProcessId: protectedByLiveOwner ? 4321 : 999_999);
+        if (protectedByLiveOwner)
+        {
+            killer.Alive.Add(4321);
+        }
+        else
+        {
+            killer.Outcomes[4242] = SandboxGroupKillOutcome.Deferred;
+        }
+
+        // The killed sibling names the same jail through an alias: a trailing separator.
+        var killedMarker = Marker(processGroupId: 5151, leaderStartTicks: 2L, jailPath: jail + Path.DirectorySeparatorChar);
+        var store = protectedFirst ? new FakeMarkerStore(protectedMarker, killedMarker) : new FakeMarkerStore(killedMarker, protectedMarker);
+
+        await CreateReaper(store, killer).StartAsync(CancellationToken.None);
+
+        AssertEx.Contains(killer.Killed, 5151);
+        AssertEx.True(Directory.Exists(jail), "the shared jail outlives the sibling whose group was killed");
+        AssertEx.Equal(expected: 1, store.Remaining.Count, "only the killed sibling's marker goes");
+    }
+
+    [Test]
+    public async Task Reap_WhenAKilledMarkersJailHoldsADeferredJail_KeepsTheAncestor()
+    {
+        var outer = CreateJailUnderContainerRoot();
+        var inner = Directory.CreateDirectory(Path.Combine(outer, "nested")).FullName;
+        var killer = new FakeKiller();
+        killer.StartTicks[5151] = 2L;
+        killer.Outcomes[4242] = SandboxGroupKillOutcome.Deferred;
+        var store = new FakeMarkerStore(Marker(processGroupId: 5151, leaderStartTicks: 2L, jailPath: outer),
+            Marker(processGroupId: 4242, leaderStartTicks: 1, jailPath: inner),
+            Marker(processGroupId: 6161, leaderStartTicks: 3, jailPath: "\0not a path"));
+
+        await CreateReaper(store, killer).StartAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(inner), "deleting the outer jail would delete the Deferred one inside it");
+    }
+
+    [Test]
+    public async Task SessionSweep_NeverDeletesARootHoldingADeferredMarkersJail()
+    {
+        var containerRoot = CreateScratchContainerRoot();
+        var root = SessionRoot(containerRoot, new SandboxSessionOwner
+        {
+            ProcessId = 111,
+            ProcessStartTimeUtc = DateTime.UnixEpoch
+        });
+        var jail = Path.Combine(root, "process-jail");
+        var killer = new FakeKiller();
+        killer.Outcomes[4242] = SandboxGroupKillOutcome.Deferred;
+        var store = new FakeMarkerStore(Marker(processGroupId: 4242, leaderStartTicks: 1, jailPath: jail));
+
+        await new SandboxOrphanReaper(store,
+                killer,
+                NullLogger<SandboxOrphanReaper>.Instance,
+                containmentProbe: null,
+                scopeKiller: null,
+                containerRoot,
+                isOwnerAlive: static (_, _) => false)
+            .StartAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(jail), "a Deferred group's jail survives the dead-session sweep too");
+    }
+
     // Backdates a session root and its jail folder, as a tree nothing wrote to for that long would be.
     private static void AgeTree(string root, TimeSpan age)
     {
@@ -510,13 +627,23 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         };
     }
 
+    /// <summary>Kills a group whose recorded ticks match, like the real killer after its pin; <see cref="Outcomes" /> scripts any other answer.</summary>
     private sealed class FakeKiller : ISandboxProcessGroupKiller
     {
         public HashSet<int> Alive { get; } = [];
 
         public Dictionary<int, long> StartTicks { get; } = [];
 
+        /// <summary>A scripted outcome per group, which wins over the start-ticks comparison.</summary>
+        public Dictionary<int, SandboxGroupKillOutcome> Outcomes { get; } = [];
+
         public List<int> Killed { get; } = [];
+
+        /// <summary>Every kill request: the group and the start ticks the marker recorded.</summary>
+        public List<KeyValuePair<int, long>> Requests { get; } = [];
+
+        /// <summary>Every call in order, "group 4242" or "scope xe-…", shared with <see cref="FakeScopeKiller" /> when a test links them.</summary>
+        public List<string> Calls { get; init; } = [];
 
         public long? GetProcessStartTicks(int processId)
         {
@@ -528,11 +655,36 @@ public sealed class SandboxOrphanReaperTests : IDisposable
             return Alive.Contains(processId);
         }
 
-        public Task KillProcessGroupAsync(int processGroupId, CancellationToken cancellationToken = default)
+        public Task<SandboxGroupKillOutcome> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default)
         {
-            Killed.Add(processGroupId);
-            return Task.CompletedTask;
+            Requests.Add(new KeyValuePair<int, long>(processGroupId, expectedStartTicks));
+            Calls.Add(string.Create(CultureInfo.InvariantCulture, $"group {processGroupId}"));
+            if (!Outcomes.TryGetValue(processGroupId, out var outcome))
+            {
+                outcome = SandboxGroupKillOutcome.Gone;
+                if (StartTicks.TryGetValue(processGroupId, out var ticks))
+                {
+                    outcome = ticks == expectedStartTicks ? SandboxGroupKillOutcome.Killed : SandboxGroupKillOutcome.Mismatch;
+                }
+            }
+
+            if (outcome == SandboxGroupKillOutcome.Killed)
+            {
+                Killed.Add(processGroupId);
+            }
+
+            return Task.FromResult(outcome);
         }
+
+        public LinuxPidFd PinProcess(int processId) =>
+            throw new InvalidOperationException("The reaper never pins an owned child.");
+
+        public SandboxGroupKillOutcome KillOwnedProcessGroup(LinuxPidFd? leaderPin,
+            LinuxPidFdOpenStatus pinStatus,
+            int processGroupId,
+            Func<bool> leaderExited,
+            Func<bool> killTree) =>
+            throw new InvalidOperationException("The reaper never kills an owned child.");
     }
 
     private sealed class FakeScopeKiller : ISandboxScopeUnitKiller
@@ -559,9 +711,13 @@ public sealed class SandboxOrphanReaperTests : IDisposable
 
         public List<string> Killed { get; } = [];
 
+        /// <summary>Every kill in order, as "scope &lt;unit&gt;", into a list a <see cref="FakeKiller" /> may share.</summary>
+        public List<string> Calls { get; init; } = [];
+
         public Task KillAsync(string unitName, CancellationToken cancellationToken = default)
         {
             Killed.Add(unitName);
+            Calls.Add("scope " + unitName);
 
             return Task.CompletedTask;
         }

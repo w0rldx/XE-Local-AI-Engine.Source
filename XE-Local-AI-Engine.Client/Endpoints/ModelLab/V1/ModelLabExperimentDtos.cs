@@ -43,6 +43,9 @@ public sealed class StartModelLabExperimentRequest
 
     /// <summary>A trace also records each step's attention row at up to eight full-attention blocks the node picks. Not allowed with <see cref="Steering" />.</summary>
     public bool RecordAttention { get; init; }
+
+    /// <summary>The tokens a trace generates, 1 to 256. Left out, 128; not allowed with <see cref="Steering" />.</summary>
+    public int? MaxNewTokens { get; init; }
 }
 
 public sealed class StartModelLabExperimentResponse

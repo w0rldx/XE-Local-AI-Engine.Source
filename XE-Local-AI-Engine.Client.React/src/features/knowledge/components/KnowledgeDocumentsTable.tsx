@@ -61,9 +61,10 @@ export function KnowledgeDocumentsTable({
 					) : null}
 					{/* A row parked while its embedding model is unloaded stays Pending and says why it waits. */}
 					{document.status === "Pending" && document.failureReasonCode === "embedding-model-ejected" ? (
-						<Group gap={4} wrap="nowrap" c="dimmed">
-							<IconHourglass size={13} />
-							<Text size="xs" c="dimmed" truncate="end" data-testid={`knowledge-waiting-${document.documentId}`}>
+						<Group gap={4} wrap="nowrap" align="flex-start" c="dimmed">
+							<IconHourglass size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+							{/* Wraps rather than truncates: the second half says when ingestion resumes. */}
+							<Text size="xs" c="dimmed" data-testid={`knowledge-waiting-${document.documentId}`}>
 								{t(knowledgeFailureReasonKey(document.failureReasonCode), { defaultValue: document.failureReason })}
 							</Text>
 						</Group>

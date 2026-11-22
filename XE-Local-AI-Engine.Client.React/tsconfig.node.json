@@ -6,7 +6,9 @@
 		"moduleResolution": "bundler",
 		"allowSyntheticDefaultImports": true,
 		"allowImportingTsExtensions": true,
+		"emitDeclarationOnly": true,
+		"outDir": "./node_modules/.cache/tsconfig.node",
 		"tsBuildInfoFile": "./node_modules/.cache/tsconfig.node.tsbuildinfo"
 	},
-	"include": ["vite.config.ts", "vite-plugins/**/*.ts"]
+	"include": ["vite.config.ts", "vite-plugins/**/*.ts", "config/signalr-proxy-paths.json"]
 }

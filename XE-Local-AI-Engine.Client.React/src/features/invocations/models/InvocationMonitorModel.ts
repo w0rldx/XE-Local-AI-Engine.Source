@@ -141,7 +141,15 @@ function invocationStatusLabel(status: InvocationStatusDto, t: TFunction): strin
 	}
 }
 
+// The generic sentences InvocationMonitorResponseMapper.ToOperatorError sends in place of a stored error; they name nothing.
+const genericServerSentences: ReadonlySet<string> = new Set([
+	"Invocation was cancelled.",
+	"Invocation ended with a failure. See local logs for details.",
+]);
+
 // The run's error text, translated from the category for a call-budget stop: the server's fixed sentence is English only.
+// A generic server sentence gives way to the category's localized label; specific server text (a rate limit's retry
+// interval) is kept. Without error text the label stands in, or the wire value of a category without one.
 export function getInvocationErrorText(
 	run: { status: InvocationStatusDto; error?: string | null; failureCategory?: InvocationFailureCategoryDto },
 	t: TFunction,
@@ -152,7 +160,12 @@ export function getInvocationErrorText(
 			"Stopped at the provider-call budget; a work session continues on its next step.",
 		);
 	}
-	return run.error ?? run.failureCategory ?? null;
+	const category = run.failureCategory?.trim();
+	const label = category ? t(`pages.chat.error.categoryLabels.${category}`, category) : null;
+	const error = run.error?.trim();
+	// A category without a label translates to its own wire value, which says no more than the generic sentence.
+	const labelIsSpecific = label !== null && label !== category;
+	return error && !(labelIsSpecific && genericServerSentences.has(error)) ? error : label;
 }
 
 export function isInvocationActive(status: InvocationStatusDto | undefined): boolean {
@@ -269,7 +282,7 @@ export function buildInvocationSummary(run: InvocationSummaryInput, t: TFunction
 						);
 			}
 			// The template ends the sentence itself; a reason that already does would read "details..".
-			const reason = formatInvocationText(run.error ?? run.failureCategory).replace(/\.$/, "");
+			const reason = formatInvocationText(getInvocationErrorText(run, t)).replace(/\.$/, "");
 			return durationMs === null
 				? t("pages.invocations.monitor.summary.failedNoDuration", "Failed{{withModel}} — {{reason}}.", { withModel, reason })
 				: t("pages.invocations.monitor.summary.failed", "Failed after {{duration}}{{withModel}} — {{reason}}.", {

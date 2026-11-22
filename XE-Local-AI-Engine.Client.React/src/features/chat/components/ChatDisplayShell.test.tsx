@@ -2,7 +2,8 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import i18next from "i18next";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +12,7 @@ import { defaultChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGate
 import type { ChatMessagePart } from "@/core/models/ChatMessageParts";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import type { ChatConversationModel, ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
+import de from "@/locales/de.json";
 import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 // A streaming tool-call card can fire the resolve-approval TanStack mutation, so the tree needs a
@@ -540,5 +542,38 @@ describe("ChatDisplayShell mobile layout", () => {
 
 		expect(screen.queryByTestId("chat-conversations-toggle")).toBeNull();
 		expect(screen.queryByTestId("chat-conversations-drawer")).toBeNull();
+	});
+});
+
+describe("ChatDisplayShell window title", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(async () => {
+		cleanup();
+		await act(() => i18next.changeLanguage("en"));
+	});
+
+	// The persisted placeholder title stays English on the wire; the header shows it in the UI language.
+	it("shows the placeholder title in the UI language", async () => {
+		// The app loads the German bundle lazily after the switch; preloading it keeps the first render from racing it.
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await act(() => i18next.changeLanguage("de"));
+		const placeholder = { ...conversation, title: "New conversation" };
+
+		renderWithProviders(<ChatDisplayShell {...shellProps({ conversations: [placeholder] })} />);
+
+		expect(screen.getByTestId("chat-window-title").textContent).toBe("Neuer Chat");
+	});
+
+	it("shows an untitled conversation's fallback title in the UI language", async () => {
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await act(() => i18next.changeLanguage("de"));
+		const untitled = { ...conversation, title: "Untitled conversation" };
+
+		renderWithProviders(<ChatDisplayShell {...shellProps({ conversations: [untitled] })} />);
+
+		expect(screen.getByTestId("chat-window-title").textContent).toBe("Unbenannter Chat");
 	});
 });

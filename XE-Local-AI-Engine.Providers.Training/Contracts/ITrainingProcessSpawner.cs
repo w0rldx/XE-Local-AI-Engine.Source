@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Training.Contracts;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
+
 /// <summary>
 ///     Everything the host needs to identify — and later prove the identity of — one trainer process. Persisted as the
 ///     run's <c>launch_receipt_json</c> the moment the spawn returns, before a single line of output is read.
@@ -26,6 +28,9 @@ public sealed class TrainingLaunchReceipt
     ///     <c>/proc/[pid]/environ</c>. The one field a recycled pid running the same interpreter cannot forge.
     /// </summary>
     public required string RunToken { get; init; }
+
+    /// <summary>The boot the trainer was spawned in (<see cref="LinuxBootId" />); null when it could not be read. A receipt of another boot names no live process.</summary>
+    public string? BootId { get; init; }
 }
 
 /// <summary>
@@ -133,6 +138,9 @@ public interface ITrainingProcessInspector
 
     /// <summary>The host's own process group, which no trainer signal may ever target.</summary>
     int HostProcessGroupId { get; }
+
+    /// <summary>The running kernel's boot id, compared against a receipt's <see cref="TrainingLaunchReceipt.BootId" />; null when it cannot be read.</summary>
+    string? CurrentBootId => LinuxBootId.Current;
 
     /// <summary>Whether any process is left in <paramref name="processGroupId" />, by a signal-0 probe that sends nothing. Never throws.</summary>
     /// <remarks>

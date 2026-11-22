@@ -107,6 +107,7 @@ public sealed class ModelLabTraceContractTests
         AssertEx.Equal("-0.3,-1.8", Joined((token.Candidates ?? []).Select(static candidate => (double?)candidate.Logprob)));
         AssertEx.Equal(expected: -0.25, token.ProcessedLogprob);
         AssertEx.Equal(expected: 2, token.ProcessedCandidates?.Count);
+        AssertEx.Equal(expected: 2, result.CandidateSteps, "Both steps kept their candidates.");
 
         var lens = AssertEx.NotNull(result.Lens);
         AssertEx.Equal("0,1|2|2|False|True|16",
@@ -115,6 +116,19 @@ public sealed class ModelLabTraceContractTests
         AssertEx.Equal("1|2|1|8|2|10000|2|False",
             string.Create(CultureInfo.InvariantCulture,
                 $"{string.Join(',', attention.Layers)}|{attention.Heads}|{attention.KvHeads}|{attention.HeadDim}|{attention.TopKeys}|{attention.WeightScale}|{attention.Records}|{attention.Truncated}"));
+    }
+
+    /// <summary>A row saved under contract 6 (frozen fixture) still reads, its candidates whole and no count of the steps that kept them.</summary>
+    [Test]
+    public void AContract6Result_StillReads_WithEveryStepsCandidates_AndNoCandidateSteps()
+    {
+        var saved = Fixture.Load("model-lab-contract-v6.json");
+        var result = AssertEx.NotNull(ModelLabTraceSpec.ReadResultOrNull(Bytes(saved.Result)));
+
+        AssertEx.Equal(expected: 6, saved.ContractVersion);
+        AssertEx.Null(result.CandidateSteps);
+        AssertEx.Equal(expected: 2, result.Tokens.Count);
+        AssertEx.True(result.Tokens.All(static token => token.Candidates is { Count: 2 } && token.ProcessedCandidates is { Count: 2 }));
     }
 
     /// <summary>A key the script renames or drops makes the file unreadable rather than reading as a default.</summary>
@@ -162,9 +176,9 @@ public sealed class ModelLabTraceContractTests
 
         public required string Result { get; init; }
 
-        public static Fixture Load()
+        public static Fixture Load(string name = "model-lab-contract.json")
         {
-            using var document = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "model-lab-contract.json")));
+            using var document = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", name)));
             var root = document.RootElement;
             return new Fixture
             {

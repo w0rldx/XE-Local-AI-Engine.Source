@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -182,6 +184,44 @@ public sealed class SupervisorLifecycleTests
         AssertEx.Equal(LlamaServerEjectOutcome.ForcedWhileBusy, outcome);
         AssertEx.True(launcher.Handles.Single().WasTreeKilled, "A force eject must tree-kill the process.");
         AssertEx.True(lease!.WasEjected, "The in-flight lease must report the process was operator-ejected.");
+    }
+
+    [Test]
+    public async Task Eject_Force_LogsTheInFlightCount_TakenBeforeTheTeardownReleasedTheLease()
+    {
+        IDisposable? heldLease = null;
+        // A real kill fails the in-flight request, whose leaseholder then releases its lease while the teardown is still running.
+#pragma warning disable CA2000 // Ownership transfers to the supervisor through the launcher fake.
+        var launcher = new FakeProcessLauncher(_ => new FakeProcessTreeHandle(4242, onTreeKill: () => heldLease?.Dispose()));
+#pragma warning restore CA2000
+        var logger = new RecordingLogger<LlamaServerProcessSupervisor>();
+        await using var supervisor = SupervisorFactory.Create(launcher, options: OptionsWithDrain(TimeSpan.FromMilliseconds(50)), logger: logger);
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        heldLease = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat).Lease;
+        AssertEx.NotNull(heldLease);
+
+        AssertEx.Equal(LlamaServerEjectOutcome.ForcedWhileBusy, await supervisor.EjectAsync("model-a", ModelRole.Chat, force: true, CancellationToken.None));
+
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "1 in-flight request(s) interrupted"), "The forced eject reports the request it interrupted, not the count left after the teardown.");
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task Eject_LogsAnOperatorEject_OnlyWhenTheOperatorRequestedIt(bool operatorRequested)
+    {
+        var logger = new RecordingLogger<LlamaServerProcessSupervisor>();
+        await using var supervisor = SupervisorFactory.Create(logger: logger);
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(LlamaServerEjectOutcome.Ejected,
+            await supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, CancellationToken.None, operatorRequested));
+
+        var ejectLines = logger.Entries.Where(static entry => entry.Message.Contains("eject", StringComparison.OrdinalIgnoreCase)).ToArray();
+        AssertEx.Equal(!operatorRequested, ejectLines.Any(static entry => entry.Message.StartsWith("Eject requested", StringComparison.Ordinal)),
+            "A system eject is logged neutrally.");
+        AssertEx.Equal(operatorRequested, ejectLines.Any(static entry => entry.Message.StartsWith("Operator eject requested", StringComparison.Ordinal)));
+        AssertEx.Equal(operatorRequested, ejectLines.Any(static entry => entry.Message.StartsWith("Operator eject completed", StringComparison.Ordinal)));
     }
 
     [Test]

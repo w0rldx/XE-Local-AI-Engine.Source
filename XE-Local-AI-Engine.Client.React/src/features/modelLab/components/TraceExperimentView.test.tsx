@@ -108,7 +108,7 @@ const tokensWithCandidates = [
 	},
 ];
 
-function stubSucceededTrace(tokens: unknown[]): void {
+function stubSucceededTrace(tokens: unknown[], candidateSteps?: number): void {
 	server.use(
 		http.get(localApiPath(`model-lab/experiments/${experimentId}`), () =>
 			HttpResponse.json({
@@ -121,7 +121,7 @@ function stubSucceededTrace(tokens: unknown[]): void {
 				prompt: "hello",
 				errorMessage: null,
 				traceByteCount: 10,
-				result: { promptTokens: 3, tokens, text: "Hi!", seconds: 1, peakVramBytes: 10 },
+				result: { promptTokens: 3, tokens, text: "Hi!", seconds: 1, peakVramBytes: 10, candidateSteps },
 				createdAtUtc: "2026-11-03T00:00:00Z",
 				updatedAtUtc: "2026-11-03T00:00:00Z",
 				isPinned: false,
@@ -252,6 +252,66 @@ describe("TraceExperimentView", () => {
 		expect(bars).toHaveLength(2);
 		expect(within(bars[0] as HTMLElement).queryByTestId("model-lab-next-token-chosen")).toBeNull();
 		expect(within(bars[1] as HTMLElement).getByTestId("model-lab-next-token-chosen")).toBeTruthy();
+	});
+
+	it("says a long run kept candidates for its first steps only, and a later step kept its token", async () => {
+		const [first, second] = tokensWithCandidates;
+		const dropped = {
+			id: 5,
+			text: "?",
+			logprob: Math.log(0.1),
+			candidates: null,
+			processedLogprob: Math.log(0.1),
+			processedCandidates: null,
+		};
+		stubSucceededTrace([first, second, dropped], 2);
+
+		renderWithProviders(<TraceExperimentView experimentId={experimentId} isLive={false} />);
+
+		expect((await screen.findByTestId("model-lab-trace-candidates-partial")).textContent).toBe(
+			"Candidates were kept for the first 2 of 3 steps, so the saved result stays within its size limit. Every later step keeps its token, its text and its probability.",
+		);
+		await screen.findByTestId("model-lab-trace-table");
+		fireEvent.click(stepButton("?"));
+		expect(screen.getByTestId("model-lab-candidates-notKept").textContent).toBe(
+			"This step's candidates were not kept: a long run keeps them only for its first steps, so its saved result stays within its size limit. The token, its text and its probability are kept.",
+		);
+		expect(screen.queryByText("Pick a token to see its next-token candidates.")).toBeNull();
+		expect(screen.queryByTestId("model-lab-candidates-beforeVersion")).toBeNull();
+
+		fireEvent.click(stepButton("!"));
+		expect(screen.getByTestId("model-lab-trace-candidates")).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-candidates-notKept")).toBeNull();
+	});
+
+	it("keeps a run that dropped every step's candidates selectable, each step saying not kept, never before this version", async () => {
+		const dropped = (id: number, text: string) => ({
+			id,
+			text,
+			logprob: Math.log(0.5),
+			candidates: null,
+			processedLogprob: Math.log(0.5),
+			processedCandidates: null,
+		});
+		stubSucceededTrace([dropped(1, "Hi"), dropped(4, "!")], 0);
+
+		renderWithProviders(<TraceExperimentView experimentId={experimentId} isLive={false} />);
+
+		expect((await screen.findByTestId("model-lab-trace-candidates-partial")).textContent).toContain("the first 0 of 2 steps");
+		await screen.findByTestId("model-lab-trace-table");
+		expect(screen.queryByTestId("model-lab-trace-no-candidates")).toBeNull();
+		fireEvent.click(stepButton("!"));
+		expect(screen.getByTestId("model-lab-candidates-notKept")).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-candidates-beforeVersion")).toBeNull();
+	});
+
+	it("shows no partial-candidates alert when every step kept its candidates", async () => {
+		stubSucceededTrace(tokensWithCandidates, tokensWithCandidates.length);
+
+		renderWithProviders(<TraceExperimentView experimentId={experimentId} isLive={false} />);
+
+		await screen.findByTestId("model-lab-trace-table");
+		expect(screen.queryByTestId("model-lab-trace-candidates-partial")).toBeNull();
 	});
 
 	it("says an old trace recorded no candidates and keeps its rows plain", async () => {

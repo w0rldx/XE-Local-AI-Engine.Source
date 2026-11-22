@@ -564,24 +564,25 @@ internal sealed class SandboxLifecycleRegistry
             state.MarkDead();
         }
 
-        foreach (var inFlight in state.InFlight.Values)
+        // One snapshot for the kills and the exit wait, so a command finishing in between is handled the same way by both.
+        var inFlights = state.InFlight.Values.ToList();
+        foreach (var inFlight in inFlights)
         {
-            // Signal the in-flight ExecuteAsync that its command was cancelled (Completed=false) AND tree-kill the
-            // process so a sandbox kill terminates every running command immediately.
+            // Cancel the in-flight ExecuteAsync (Completed=false) AND kill through the launch's shared teardown, group before leader; the
+            // command path reads that same outcome when it decides whether to keep its orphan marker.
             inFlight.RequestCancel();
-            // For an isolated command a tree-kill alone is not enough — its processes live in a PID namespace this one cannot see — so the
-            // scope's cgroup is signaled FIRST. Synchronous: the jail is deleted below, and deleting it mid-write half-removes it.
+            _ = inFlight.Teardown.Terminate();
+            // An isolated command lives in a PID namespace the group kill cannot see, so its scope's cgroup follows, AFTER the group kill
+            // that needs a live leader on old kernels. Synchronous: the jail is deleted below, and deleting it mid-write half-removes it.
             if (inFlight.ScopeUnitName is { } unitName)
             {
 #pragma warning disable MA0045 // forced sync: the jail directory is deleted below, see the comment above
                 scopeKiller?.Kill(unitName);
 #pragma warning restore MA0045
             }
-
-            inFlight.Process.Kill();
         }
 
-        var killedMxcChildren = state.InFlight.Values.Select(static inFlight => inFlight.Process).OfType<MxcSandboxChildProcess>().ToList();
+        var killedMxcChildren = inFlights.Select(static inFlight => inFlight.Process).OfType<MxcSandboxChildProcess>().ToList();
         state.InFlight.Clear();
         WaitForExits(killedMxcChildren, exitBudget);
 

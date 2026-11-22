@@ -3,6 +3,7 @@ import { IconMessageCircle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { conversationDisplayTitle } from "@/core/chat/models/ConversationDisplayTitle";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -46,7 +47,7 @@ export function HomeRecentChatsCard() {
 							component="button"
 							type="button"
 							onClick={() => openConversation(conversation.id)}
-							label={conversation.title || t("pages.home.recent.untitled", "Untitled chat")}
+							label={conversationDisplayTitle(conversation.title, t) || t("pages.home.recent.untitled", "Untitled chat")}
 							description={
 								conversation.preview.length > 0
 									? `${formatTimestamp(conversation.lastSeenUtc, lastSeenFormat)} · ${conversation.preview}`

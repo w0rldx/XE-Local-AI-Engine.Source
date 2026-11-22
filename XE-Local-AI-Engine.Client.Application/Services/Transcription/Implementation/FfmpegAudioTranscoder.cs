@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Transcription.Implementation;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
@@ -227,13 +228,14 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
         }
     }
 
-    private static void TryKill(Process process)
+    private void TryKill(Process process)
     {
         try
         {
-            if (!process.HasExited)
+            if (!process.HasExited
+                && LinuxProcessTreeKill.Kill(process) is (LinuxProcessTreeKillResult.Incomplete or LinuxProcessTreeKillResult.KillFailed) and var result)
             {
-                process.Kill(entireProcessTree: true);
+                _logger.LogWarning("The audio converter's process tree (pid {Pid}) was not fully killed ({Result}); a descendant may survive.", process.Id, result);
             }
         }
         catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or Win32Exception or AggregateException)

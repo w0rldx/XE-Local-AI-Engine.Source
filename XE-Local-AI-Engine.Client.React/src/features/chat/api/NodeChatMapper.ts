@@ -8,6 +8,7 @@ import type {
 	XeLocalAiEngineClientServicesChatNodeChatMessagePart,
 	XeLocalAiEngineClientServicesChatNodeChatMessageSource,
 } from "@/core/api/generated";
+import { untitledConversationTitle } from "@/core/chat/models/ConversationDisplayTitle";
 import type { ChatMessagePart, ChatToolCommandOutput, ToolCallState } from "@/core/models/ChatMessageParts";
 import { appendLiveOutputLines, toLiveOutputStream } from "@/core/ui/components/LiveOutputView/LiveOutputLines";
 import type {
@@ -179,7 +180,7 @@ function toOrigin(origin: string | null | undefined): ChatOrigin {
 }
 
 function titleOrFallback(title: string | null | undefined): string {
-	return title?.trim() || "Untitled conversation";
+	return title?.trim() || untitledConversationTitle;
 }
 
 /**

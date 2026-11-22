@@ -15,13 +15,14 @@ public interface IKnowledgeIngestionAdmissionService
     ///     dispatcher's answer.
     /// </summary>
     /// <remarks>
-    ///     Ingestion is enqueued when the store wrote the document — a fresh insert, or a repository document whose
-    ///     bytes changed — or when it is a dedupe hit in a retryable state. The dispatcher's answer is
-    ///     <see langword="null" /> when nothing was enqueued.
+    ///     Ingestion is enqueued when the store wrote the document and the row is still Pending or in flight, or when it
+    ///     is a dedupe hit in a retryable state. No admission announces Pending: the read may be stale by publication, so
+    ///     each sends a status-free refresh. A row already gone or (when written) already terminal is not enqueued; the
+    ///     answer is then <see langword="null" />.
     /// </remarks>
     /// <param name="wasWritten">
-    ///     Whether the store actually wrote this document (<c>WasInserted || WasUpdated</c>): written documents are
-    ///     always queued, dedupe hits only from a retryable status.
+    ///     Whether the store actually wrote this document (<c>WasInserted || WasUpdated</c>) rather than deduplicated
+    ///     onto it.
     /// </param>
     Task<KnowledgeIngestionAdmissionResult> AdmitStoredDocumentAsync(Guid documentId, bool wasWritten, CancellationToken cancellationToken);
 }

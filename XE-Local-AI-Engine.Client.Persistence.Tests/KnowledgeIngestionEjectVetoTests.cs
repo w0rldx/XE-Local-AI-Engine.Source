@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Channels;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DataIngestion;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -392,7 +395,7 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
     }
 
     [Test]
-    public async Task RunAsync_WhenAWaitingRowsPinnedModelWasRemoved_TheWakeReAdmitsItAndItFailsAsUnavailable()
+    public async Task RunAsync_WhenAWaitingRowsPinnedModelWasRemoved_TheWakeReAdmitsItAndItFailsWithThePinnedModelMissingReason()
     {
         var databasePath = await CreateDatabaseAsync();
         var documentId = await SeedAsync(databasePath, KnowledgeDocumentStatus.Pending, attempts: 0, KnowledgeIngestionService.WaitingForEmbeddingModelReason);
@@ -445,7 +448,160 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
         AssertEx.Equal(KnowledgeIngestionRunOutcome.Completed, outcome, "The run must not park again behind a mark that can never clear.");
         var row = AssertEx.NotNull(await ReadAsync(databasePath, documentId));
         AssertEx.Equal(nameof(KnowledgeDocumentStatus.Failed), row.Status);
+        AssertEx.Equal(KnowledgeChunkEmbedder.EmbeddingPinnedModelMissingReason, row.Reason);
+        AssertEx.Equal("embedding-pinned-model-missing", KnowledgeFailureReasonCodes.CodeOf(row.Reason));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAWaitingRowsUnpinnedEmbedderWasRemoved_TheWakeReAdmitsItAndItFailsAsUnavailable()
+    {
+        var databasePath = await CreateDatabaseAsync();
+        var documentId = await SeedAsync(databasePath, KnowledgeDocumentStatus.Pending, attempts: 0, KnowledgeIngestionService.WaitingForEmbeddingModelReason);
+
+        // Nothing is pinned yet: the operator ejected the only embedder, then deleted it. The inventory answers with a chat
+        // model alone, and every eject mark stays, so a background load of any name would still be vetoed.
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ListModelsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([
+            new LocalModelDescriptor
+            {
+                ModelName = "qwen2.5:Q4_K_M",
+                ProviderName = LlamaServerProviderConstants.ProviderName,
+                IsAvailable = true,
+                SizeBytes = 1024,
+                ModifiedAt = DateTimeOffset.UnixEpoch,
+                MaxContextTokens = null,
+                Capabilities = []
+            }
+        ]));
+        provider.CreateEmbeddingGenerator(Arg.Any<LocalModelSelection>())
+                .Returns(_ => throw new OperatorEjectedException("The embedding model was ejected by the operator."));
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProvider(Arg.Any<string>()).Returns(provider);
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.IsBackgroundLaunchBlocked(Arg.Any<string>(), Arg.Any<ModelRole>()).Returns(true);
+        var options = Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingProviderName = LlamaServerProviderConstants.ProviderName
+        });
+        var embedder = new KnowledgeChunkEmbedder(providerResolver,
+            new EmbeddingModelResolver(options, new FakeNodeSettingsStore(new StoredNodeSettings())),
+            new KnowledgeEmbeddingPrefixer(),
+            options,
+            supervisor);
+
+        AssertEx.False(await embedder.IsEmbeddingModelBlockedAsync(CancellationToken.None), "A removed unpinned embedder must not strand waiting rows.");
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            _ = await CreateCatalog(context).ClearEmbeddingModelWaitAsync(CancellationToken.None);
+        }
+
+        var outcome = await RunAsync(databasePath, documentId, embedder);
+
+        AssertEx.Equal(KnowledgeIngestionRunOutcome.Completed, outcome, "The run must not park again behind a mark that can never clear.");
+        var row = AssertEx.NotNull(await ReadAsync(databasePath, documentId));
+        AssertEx.Equal(nameof(KnowledgeDocumentStatus.Failed), row.Status);
         AssertEx.Equal(KnowledgeChunkEmbedder.EmbeddingUnavailableReason, row.Reason);
+        _ = provider.DidNotReceiveWithAnyArgs().CreateEmbeddingGenerator(default!);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAFreshUploadMeetsAnEjectedEmbedder_ParksWithoutExtracting()
+    {
+        var databasePath = await CreateDatabaseAsync();
+        var documentId = await SeedAsync(databasePath, KnowledgeDocumentStatus.Pending, attempts: 1);
+        var embedder = FixedWidthEmbedder();
+        embedder.IsEmbeddingModelEjectedAsync(Arg.Any<CancellationToken>()).Returns(true);
+        var extractor = ExtractingExtractor();
+
+        var outcome = await RunAsync(databasePath, documentId, embedder, extractor: extractor);
+
+        AssertEx.Equal(KnowledgeIngestionRunOutcome.Deferred, outcome);
+        _ = await extractor.DidNotReceiveWithAnyArgs().ExtractStructuredAsync(default!, default!, default!, default);
+        var row = AssertEx.NotNull(await ReadAsync(databasePath, documentId));
+        AssertEx.Equal(nameof(KnowledgeDocumentStatus.Pending), row.Status);
+        AssertEx.Equal("embedding-model-ejected", KnowledgeFailureReasonCodes.CodeOf(row.Reason));
+        AssertEx.Equal(1L, row.Attempts, "The parked start hands its attempt back.");
+        await _notifier.DidNotReceive().NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Failed, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAnIndexedRowIsReindexedWhileTheEmbedderIsEjected_StillExtracts()
+    {
+        var databasePath = await CreateDatabaseAsync();
+        var documentId = await SeedAsync(databasePath, KnowledgeDocumentStatus.Pending, attempts: 0, chunkCount: 3);
+        var embedder = Vetoing();
+        embedder.IsEmbeddingModelEjectedAsync(Arg.Any<CancellationToken>()).Returns(true);
+        var extractor = ExtractingExtractor();
+
+        var outcome = await RunAsync(databasePath, documentId, embedder, extractor: extractor);
+
+        AssertEx.Equal(KnowledgeIngestionRunOutcome.Deferred, outcome, "The embed's own veto still parks it.");
+        _ = await extractor.Received(1).ExtractStructuredAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        _ = await embedder.Received(1).EmbedAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAReplacedRevisionsChunksWouldAllHitTheCache_StillParksBeforeExtracting()
+    {
+        var databasePath = await CreateDatabaseAsync();
+        await using var services = BuildStoreServices(databasePath);
+        var store = CreateStore(services);
+        var documentId = Guid.NewGuid();
+        _ = await store.AddAsync(RepositoryInput(documentId, "original source"), CancellationToken.None);
+        await ExecuteAsync(databasePath, "UPDATE knowledge_documents SET status = 'Indexed', chunk_count = 3 WHERE document_id = $id;", documentId);
+        AssertEx.True((await store.AddAsync(RepositoryInput(Guid.NewGuid(), "changed source"), CancellationToken.None)).WasUpdated,
+            "Precondition: the changed bytes replace the indexed revision in place.");
+        var embedder = FixedWidthEmbedder();
+        embedder.IsEmbeddingModelEjectedAsync(Arg.Any<CancellationToken>()).Returns(true);
+        var extractor = ExtractingExtractor();
+
+        var outcome = await RunAsync(databasePath, documentId, embedder, cache: AllHitCache(), extractor: extractor);
+
+        AssertEx.Equal(KnowledgeIngestionRunOutcome.Deferred, outcome, "A replacement keeps no chunks, so it waits even if every chunk were cached.");
+        _ = await extractor.DidNotReceiveWithAnyArgs().ExtractStructuredAsync(default!, default!, default!, default);
+        _ = await embedder.DidNotReceiveWithAnyArgs().EmbedAsync(default!, default);
+        AssertEx.Equal("embedding-model-ejected", KnowledgeFailureReasonCodes.CodeOf(AssertEx.NotNull(await ReadAsync(databasePath, documentId)).Reason));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenARepairedByteIdenticalUploadMeetsAnEjectedEmbedder_ParksWithoutExtracting()
+    {
+        var databasePath = await CreateDatabaseAsync();
+        await using var services = BuildStoreServices(databasePath);
+        var store = CreateStore(services);
+        var documentId = Guid.NewGuid();
+        var content = Encoding.UTF8.GetBytes("bytes whose blob a crash lost");
+        _ = await store.AddAsync(UploadInput(documentId, content), CancellationToken.None);
+        await ExecuteAsync(databasePath, "UPDATE knowledge_documents SET status = 'Indexed', chunk_count = 3 WHERE document_id = $id;", documentId);
+        File.Delete(Path.Combine(_rootPath, "data", "knowledge-base", "documents", documentId.ToString("D") + ".txt"));
+        AssertEx.Equal(documentId, (await store.AddAsync(UploadInput(Guid.NewGuid(), content), CancellationToken.None)).DocumentId,
+            "Precondition: the re-upload repairs the existing row.");
+        var embedder = FixedWidthEmbedder();
+        embedder.IsEmbeddingModelEjectedAsync(Arg.Any<CancellationToken>()).Returns(true);
+        var extractor = ExtractingExtractor();
+
+        var outcome = await RunAsync(databasePath, documentId, embedder, extractor: extractor);
+
+        AssertEx.Equal(KnowledgeIngestionRunOutcome.Deferred, outcome, "The repair zeroed the chunk count, so the row waits like a fresh upload.");
+        _ = await extractor.DidNotReceiveWithAnyArgs().ExtractStructuredAsync(default!, default!, default!, default);
+        AssertEx.Equal(nameof(KnowledgeDocumentStatus.Pending), AssertEx.NotNull(await ReadAsync(databasePath, documentId)).Status);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheIndexCommits_LogsTheIndexedDocument()
+    {
+        var databasePath = await CreateDatabaseAsync();
+        var documentId = await SeedAsync(databasePath, KnowledgeDocumentStatus.Pending, attempts: 0);
+        var embedder = FixedWidthEmbedder();
+        embedder.EmbedAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+                .Returns(call => Task.FromResult(Embedded(call.Arg<IReadOnlyList<string>>())));
+        var indexWriter = Substitute.For<IKnowledgeIndexWriter>();
+        indexWriter.WriteAsync(Arg.Any<KnowledgeIndexInput>(), Arg.Any<CancellationToken>()).Returns(true);
+        var logger = new RecordingLogger<KnowledgeIngestionService>();
+
+        AssertEx.Equal(KnowledgeIngestionRunOutcome.Completed, await RunAsync(databasePath, documentId, embedder, logger: logger, indexWriter: indexWriter));
+
+        AssertEx.Equal(1, logger.CountContaining($"Knowledge document {documentId} indexed", LogLevel.Information), logger.AllText);
     }
 
     // An embedder whose fixed-width descriptor routes the run through the chunk embedding cache.
@@ -489,7 +645,8 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
         IKnowledgeChunkEmbeddingCache? cache = null,
         IngestionDocument? document = null,
         IKnowledgeIndexWriter? indexWriter = null,
-        int maxConcurrentIngestions = 1)
+        int maxConcurrentIngestions = 1,
+        IDocumentTextExtractor? extractor = null)
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var options = Options.Create(new KnowledgeBaseOptions
@@ -498,18 +655,10 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
         });
         var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
         blobStore.ReadBytesAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<byte[]?>([1, 2, 3]));
-        var extractor = Substitute.For<IDocumentTextExtractor>();
-        extractor.ExtractStructuredAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult(new DocumentStructuredExtractionResult
-                 {
-                     Status = DocumentExtractionStatus.Extracted,
-                     Document = document ?? BuildDocument(),
-                     Error = null
-                 }));
 
         var service = new KnowledgeIngestionService(context,
             blobStore,
-            extractor,
+            extractor ?? ExtractingExtractor(document),
             new HeaderBoundaryChunkingService(options),
             embedder,
             indexWriter ?? Substitute.For<IKnowledgeIndexWriter>(),
@@ -519,6 +668,80 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
             cache,
             options);
         return await service.RunAsync(documentId, CancellationToken.None);
+    }
+
+    private static IDocumentTextExtractor ExtractingExtractor(IngestionDocument? document = null)
+    {
+        var extractor = Substitute.For<IDocumentTextExtractor>();
+        extractor.ExtractStructuredAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(new DocumentStructuredExtractionResult
+                 {
+                     Status = DocumentExtractionStatus.Extracted,
+                     Document = document ?? BuildDocument(),
+                     Error = null
+                 }));
+        return extractor;
+    }
+
+    // The real cache over a committed-vector store that already holds every key, so no chunk would need the embedder.
+    private static KnowledgeChunkEmbeddingCache AllHitCache()
+    {
+        var reuseStore = Substitute.For<IKnowledgeChunkEmbeddingReuseStore>();
+        reuseStore.FindManyAsync(Arg.Any<IReadOnlyList<KnowledgeChunkEmbeddingCacheKey>>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+                  .Returns(call => Task.FromResult<IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>>(
+                      call.Arg<IReadOnlyList<KnowledgeChunkEmbeddingCacheKey>>().Distinct().ToDictionary(static key => key, static _ => new byte[4 * sizeof(float)])));
+        return new KnowledgeChunkEmbeddingCache(reuseStore, Options.Create(new KnowledgeBaseOptions()), TimeProvider.System);
+    }
+
+    // The real blob store, so a replacement or a repair leaves the row exactly as an upload would.
+    private ServiceProvider BuildStoreServices(string databasePath)
+    {
+        var services = new ServiceCollection();
+        services.AddScoped(_ => AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder));
+        return services.BuildServiceProvider();
+    }
+
+    private KnowledgeDocumentBlobStore CreateStore(ServiceProvider services)
+    {
+        return new KnowledgeDocumentBlobStore(services.GetRequiredService<IServiceScopeFactory>(),
+            new FakeNodeDataDirectory(Path.Combine(_rootPath, "data")),
+            _keyHolder,
+            TimeProvider.System);
+    }
+
+    private static KnowledgeDocumentInput UploadInput(Guid documentId, byte[] content)
+    {
+        return new KnowledgeDocumentInput
+        {
+            DocumentId = documentId,
+            OriginalFileName = "notes.txt",
+            MimeType = "text/plain",
+            Extension = ".txt",
+            SizeBytes = content.Length,
+            ContentHash = Convert.ToHexString(SHA256.HashData(content)),
+            Content = content,
+            EmbeddingModel = "nomic-embed-text"
+        };
+    }
+
+    private static KnowledgeDocumentInput RepositoryInput(Guid documentId, string text)
+    {
+        var content = Encoding.UTF8.GetBytes(text);
+        return new KnowledgeDocumentInput
+        {
+            DocumentId = documentId,
+            OriginalFileName = "src/Widget.cs",
+            MimeType = "text/plain",
+            Extension = ".cs",
+            SizeBytes = content.Length,
+            ContentHash = Convert.ToHexString(SHA256.HashData(content)),
+            Content = content,
+            EmbeddingModel = "nomic-embed-text",
+            CollectionId = "REPOSITORY",
+            SourcePath = "src/Widget.cs",
+            SourceKind = "repository",
+            SourceId = "repository-a"
+        };
     }
 
     // An embedder whose model the operator ejected: every embed is the typed veto, after an optional concurrent change.
@@ -617,7 +840,7 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
         return databasePath;
     }
 
-    private static async Task<Guid> SeedAsync(string databasePath, KnowledgeDocumentStatus status, int attempts, string? reason = null)
+    private static async Task<Guid> SeedAsync(string databasePath, KnowledgeDocumentStatus status, int attempts, string? reason = null, int chunkCount = 0)
     {
         var documentId = Guid.NewGuid();
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
@@ -626,8 +849,9 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
         command.CommandText =
             """
             INSERT INTO knowledge_documents (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path, status, failure_reason, chunk_count, embedding_model, ingestion_attempts, created_at_utc, updated_at_utc)
-            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, $status, $reason, 0, 'nomic-embed-text', $attempts, 1, 1);
+            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, $status, $reason, $chunk_count, 'nomic-embed-text', $attempts, 1, 1);
             """;
+        command.Parameters.AddWithValue("$chunk_count", chunkCount);
         command.Parameters.AddWithValue("$id", documentId);
         command.Parameters.AddWithValue("$name", new byte[]
         {

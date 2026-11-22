@@ -383,6 +383,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         }
 
         var agentConfig = (GraphWorkflowAgentConfig)config;
+        // Nobody waits on a workflow node, so the resolve's playbook ranking never reloads an embedder the operator ejected.
+        using var unattendedRun = UnattendedRunScope.Begin();
         IDisposable? reservation = null;
         try
         {

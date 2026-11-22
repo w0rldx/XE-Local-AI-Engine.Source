@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.ProcessSupervision;
 
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
@@ -33,8 +34,7 @@ public sealed class StaleProcessReaperTests
 
         await reaper.StartAsync(CancellationToken.None);
 
-        AssertEx.Equal(expected: 1, scanner.KilledPids.Count);
-        AssertEx.Equal(expected: 1234, scanner.KilledPids[0]);
+        AssertEx.Equal("1234", string.Join(',', scanner.SignalledPids));
     }
 
     [Test]
@@ -46,7 +46,7 @@ public sealed class StaleProcessReaperTests
 
         await reaper.StartAsync(CancellationToken.None);
 
-        AssertEx.Equal(expected: 0, scanner.KilledPids.Count);
+        AssertEx.Empty(scanner.SignalledPids);
     }
 
     [Test]
@@ -62,8 +62,7 @@ public sealed class StaleProcessReaperTests
 
         // An operator's own server build is a completely normal thing to have running. Killing it would be a far worse
         // failure than leaving one of ours behind.
-        AssertEx.Equal(expected: 1, scanner.KilledPids.Count);
-        AssertEx.Equal(expected: 4242, scanner.KilledPids[0]);
+        AssertEx.Equal("4242", string.Join(',', scanner.SignalledPids));
     }
 
     [Test]
@@ -76,7 +75,7 @@ public sealed class StaleProcessReaperTests
 
         await reaper.StartAsync(CancellationToken.None);
 
-        AssertEx.Equal(expected: 0, scanner.KilledPids.Count);
+        AssertEx.Empty(scanner.SignalledPids);
     }
 
     [Test]
@@ -88,7 +87,7 @@ public sealed class StaleProcessReaperTests
 
         await reaper.StartAsync(CancellationToken.None);
 
-        AssertEx.Equal(expected: 0, scanner.KilledPids.Count);
+        AssertEx.Empty(scanner.SignalledPids);
     }
 
     [Test]
@@ -102,7 +101,7 @@ public sealed class StaleProcessReaperTests
 
         // A null root disables the reap entirely — even a clearly-ours binary is left alone.
         AssertEx.Equal(expected: 0, scanner.EnumerateCallCount, "Scanner must not be consulted when the binaries root is unresolved.");
-        AssertEx.Equal(expected: 0, scanner.KilledPids.Count);
+        AssertEx.Empty(scanner.SignalledPids);
     }
 
     [Test]
@@ -121,9 +120,7 @@ public sealed class StaleProcessReaperTests
 
         await reaper.StartAsync(CancellationToken.None);
 
-        AssertEx.Equal(expected: 2, scanner.KilledPids.Count);
-        AssertEx.True(scanner.KilledPids.Contains(1), "Expected the first under-root orphan (pid 1) to be reaped.");
-        AssertEx.True(scanner.KilledPids.Contains(4), "Expected the second under-root orphan (pid 4) to be reaped.");
+        AssertEx.Equal("1,4", string.Join(',', scanner.SignalledPids), "Only the two under-root orphans are reaped.");
     }
 
     [Test]
@@ -139,7 +136,7 @@ public sealed class StaleProcessReaperTests
         AssertEx.True(start.IsCompletedSuccessfully, "A failing process scan must be swallowed so host startup continues.");
         AssertEx.Equal(expected: 1, scanner.EnumerateCallCount,
             "The scan must actually have been attempted, or this proves nothing about swallowing its failure.");
-        AssertEx.Equal(expected: 0, scanner.KilledPids.Count);
+        AssertEx.Empty(scanner.SignalledPids);
     }
 
     [Test]
@@ -150,7 +147,7 @@ public sealed class StaleProcessReaperTests
 
         await reaper.StopAsync(CancellationToken.None);
 
-        AssertEx.Equal(expected: 0, scanner.KilledPids.Count);
+        AssertEx.Empty(scanner.SignalledPids);
     }
 
     [Test]
@@ -168,7 +165,7 @@ public sealed class StaleProcessReaperTests
 
         var reaping = logger.Entries.Single(entry => entry.Message.StartsWith("Reaping stale llama-server orphan (pid 1234)", StringComparison.Ordinal));
         AssertEx.Equal(logExecutablePath, reaping.Message.Contains(ourServer, StringComparison.Ordinal));
-        AssertEx.Equal(expected: 1, scanner.KilledPids.Count);
+        AssertEx.Equal("1234", string.Join(',', scanner.SignalledPids));
     }
 
     // --- Spawn-receipt reap (Linux: the receipt store is disabled elsewhere) ---------------------------------------------------------
@@ -226,16 +223,13 @@ public sealed class StaleProcessReaperTests
         var ourServer = OurServerPath("b9700", "cuda");
         using var receipts = new ReceiptDirectory();
         receipts.Write(Receipt(5005, startTicks: 777, ourServer));
-        var scanner = new FakeStaleProcessScanner([new StaleProcess(5005, ourServer), new StaleProcess(5006, ourServer)])
-        {
-            GuardedKillResult = result
-        };
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5005, ourServer), new StaleProcess(5006, ourServer)]);
+        scanner.GuardedKillResults[5005] = result;
         var logger = new RecordingLogger<StaleProcessReaper>();
 
         await new StaleProcessReaper(scanner, BinariesRoot, ServerName, logExecutablePath: true, logger, receipts.Store).StartAsync(CancellationToken.None);
 
-        AssertEx.Equal(expected: 1, scanner.GuardedKills.Count);
-        AssertEx.Equal("5006", string.Join(',', scanner.KilledPids), "Only the unreceipted orphan under the root is path-reaped.");
+        AssertEx.Equal("5005,5006", string.Join(',', scanner.SignalledPids), "The receipt's pid is tried once; only the unreceipted orphan is path-reaped.");
         AssertEx.Equal(expected: 1, receipts.Count, "A receipt that proved nothing is the only trace of a possibly live server.");
         AssertEx.True(logger.Entries.Any(entry => entry.Message.StartsWith("Reaped 1 ", StringComparison.Ordinal)), "The deferred pid is left out of the reaped count.");
     }
@@ -301,7 +295,7 @@ public sealed class StaleProcessReaperTests
 
         await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
 
-        AssertEx.Equal("5012", string.Join(',', scanner.KilledPids));
+        AssertEx.Equal("5012", string.Join(',', scanner.SignalledPids));
     }
 
     /// <summary>A read failure (EMFILE, EACCES) says nothing about the file: it stays, and the pid its name records is spared by the path match.</summary>
@@ -316,8 +310,7 @@ public sealed class StaleProcessReaperTests
 
         await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
 
-        AssertEx.Empty(scanner.GuardedKills);
-        AssertEx.Equal("5006", string.Join(',', scanner.KilledPids), "Only the unreceipted orphan under the root is path-reaped.");
+        AssertEx.Equal("5006", string.Join(',', scanner.SignalledPids), "Only the unreceipted orphan under the root is path-reaped.");
         AssertEx.Equal(expected: 1, receipts.Count, "A receipt that could not be read may describe a live server.");
     }
 
@@ -355,9 +348,7 @@ public sealed class StaleProcessReaperTests
 
         await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
 
-        AssertEx.Equal(expected: 0, scanner.GuardedKills.Count);
-        AssertEx.Equal(expected: 1, scanner.KilledPids.Count);
-        AssertEx.Equal(expected: 6002, scanner.KilledPids[0]);
+        AssertEx.Equal("6002", string.Join(',', scanner.SignalledPids));
     }
 
     [Test]
@@ -379,19 +370,167 @@ public sealed class StaleProcessReaperTests
         AssertEx.Equal(expected: 0, scanner.KilledPids.Count);
     }
 
+    // --- Boot binding: a receipt of another boot names no live process ---------------------------------------------------------------
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipt_FromAPreviousBoot_SignalsNothing_AndRemovesIt()
+    {
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5020, startTicks: 777, ForeignServer, bootId: "boot-before"));
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5020, ForeignServer)]);
+
+        await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertNothingSignalled(scanner);
+        AssertEx.Equal(expected: 0, receipts.Count, "A receipt of a previous boot can never match again.");
+    }
+
+    /// <summary>The managed-root pass judges a previous boot's pid on its own: the pid now names a process of this boot that the receipt says nothing about.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipt_FromAPreviousBoot_DoesNotClaimItsPid_FromTheManagedRootPass()
+    {
+        var ourServer = OurServerPath("b9700", "cuda");
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5023, startTicks: 777, ourServer, bootId: "boot-before"));
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5023, ourServer)]);
+        scanner.Stats[5023] = new ProcessStat(ParentProcessId: 1, ProcessGroupId: 5023, StartTicks: 31);
+
+        await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(new GuardedKill
+        {
+            Pid = 5023,
+            ExecutablePath = ourServer,
+            StartTicks = 31
+        }, scanner.GuardedKills.Single(), "Only the path match signals it, with the identity it read now.");
+        AssertEx.Equal(expected: 0, receipts.Count);
+    }
+
+    /// <summary>A receipt of this boot, or one that records no boot, keeps every check it had; an unreadable current boot binds nothing to an unbound receipt.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [Arguments("boot-now", "boot-now")]
+    [Arguments(null, "boot-now")]
+    [Arguments(null, null)]
+    public async Task Receipt_FromThisBootOrUnbound_IsVerifiedAndReapedAsBefore(string? recordedBoot, string? currentBoot)
+    {
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5021, startTicks: 777, ForeignServer, recordedBoot));
+        var scanner = new FakeStaleProcessScanner([])
+        {
+            CurrentBootId = currentBoot
+        };
+
+        await CreateReaper(scanner, BinariesRoot, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(new GuardedKill
+        {
+            Pid = 5021,
+            ExecutablePath = ForeignServer,
+            StartTicks = 777
+        }, scanner.GuardedKills.Single());
+        AssertEx.Equal(expected: 0, receipts.Count);
+    }
+
+    /// <summary>A receipt bound to a boot while this boot's id cannot be read proves nothing either way: it stays, and the path match spares its pid.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Receipt_BoundToABoot_WhenTheCurrentBootIdCannotBeRead_KeepsIt_AndNeverSignalsItsPid()
+    {
+        var ourServer = OurServerPath("b9700", "cuda");
+        using var receipts = new ReceiptDirectory();
+        receipts.Write(Receipt(5021, startTicks: 777, ourServer, bootId: "boot-before"));
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5021, ourServer), new StaleProcess(5022, ourServer)])
+        {
+            CurrentBootId = null
+        };
+        var logger = new RecordingLogger<StaleProcessReaper>();
+
+        await new StaleProcessReaper(scanner, BinariesRoot, ServerName, logExecutablePath: true, logger, receipts.Store).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal("5022", string.Join(',', scanner.SignalledPids), "Only the unreceipted orphan under the root is path-reaped.");
+        AssertEx.Equal(expected: 1, receipts.Count, "The receipt is kept for a startup that can read the boot id.");
+        AssertEx.True(logger.Entries.Any(entry => entry.Level == LogLevel.Warning && entry.Message.Contains("pid 5021", StringComparison.Ordinal)));
+    }
+
+    // --- Managed-root pass on Linux: the identity it read, verified after a pidfd pinned it ----------------------------------------------
+
+    /// <summary>A leader and a non-leader alike: the scanner decides group or pid, and a non-leader's descendants are no longer tree-killed here.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [Arguments(5030)]
+    [Arguments(4000)]
+    public async Task PathReap_OnLinux_KillsOnlyTheProcessWhoseStatItRead_AndNeverTreeKills(int processGroupId)
+    {
+        var ourServer = OurServerPath("b9700", "cuda");
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5030, ourServer)]);
+        scanner.Stats[5030] = new ProcessStat(ParentProcessId: 1, processGroupId, StartTicks: 4321);
+        var logger = new RecordingLogger<StaleProcessReaper>();
+
+        await new StaleProcessReaper(scanner, BinariesRoot, ServerName, logExecutablePath: true, logger).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(new GuardedKill
+        {
+            Pid = 5030,
+            ExecutablePath = ourServer,
+            StartTicks = 4321
+        }, scanner.GuardedKills.Single(), "The start time is the one the ownership check read.");
+        AssertEx.Empty(scanner.KilledPids, "A foreign pid is never tree-killed by number on Linux.");
+        AssertEx.True(logger.Entries.Any(entry => entry.Message.StartsWith("Reaped 1 ", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    [ExcludeOn(OS.Linux)]
+    public async Task PathReap_OffLinux_KeepsTheTreeKill()
+    {
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(1234, OurServerPath("b9700", "vulkan"))]);
+
+        await CreateReaper(scanner, BinariesRoot).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal("1234", string.Join(',', scanner.KilledPids));
+        AssertEx.Empty(scanner.GuardedKills);
+    }
+
+    /// <summary>A pid that changed hands, could not be read or could not be pinned was not reaped: nothing is counted, and the miss is a warning.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [Arguments(StaleProcessKillResult.Mismatch)]
+    [Arguments(StaleProcessKillResult.Unreadable)]
+    [Arguments(StaleProcessKillResult.Deferred)]
+    public async Task PathReap_OnLinux_WhenTheIdentityIsNotVerified_CountsNothing_AndWarns(StaleProcessKillResult result)
+    {
+        var ourServer = OurServerPath("b9700", "cuda");
+        var scanner = new FakeStaleProcessScanner([new StaleProcess(5031, ourServer)])
+        {
+            GuardedKillResult = result
+        };
+        var logger = new RecordingLogger<StaleProcessReaper>();
+
+        await new StaleProcessReaper(scanner, BinariesRoot, ServerName, logExecutablePath: true, logger).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, scanner.GuardedKills.Count);
+        AssertEx.Empty(scanner.KilledPids);
+        AssertEx.False(logger.Entries.Any(entry => entry.Message.StartsWith("Reaped ", StringComparison.Ordinal)), "A refused signal is not a reap.");
+        AssertEx.True(logger.Entries.Any(entry => entry.Level == LogLevel.Warning && entry.Message.Contains("pid 5031", StringComparison.Ordinal)
+                                                  && entry.Message.Contains(result.ToString(), StringComparison.Ordinal)));
+    }
+
     private static void AssertNothingSignalled(FakeStaleProcessScanner scanner)
     {
         AssertEx.Equal(expected: 0, scanner.GuardedKills.Count, "A receipt that names no orphan must never reach the guarded kill.");
         AssertEx.Equal(expected: 0, scanner.KilledPids.Count, "A process outside the managed root must never be path-reaped.");
     }
 
-    private static ProcessSpawnReceipt Receipt(int pid, long startTicks, string executablePath) =>
+    private static ProcessSpawnReceipt Receipt(int pid, long startTicks, string executablePath, string? bootId = null) =>
         new()
         {
             Pid = pid,
             StartTicks = startTicks,
             ExecutablePath = executablePath,
-            Label = "model/Chat port 18080"
+            Label = "model/Chat port 18080",
+            BootId = bootId
         };
 
     private static StaleProcessReaper CreateReaper(IStaleProcessScanner scanner, string? binariesRoot, ProcessSpawnReceiptStore receipts) =>
@@ -445,7 +584,15 @@ public sealed class StaleProcessReaperTests
 
         public List<GuardedKill> GuardedKills { get; } = [];
 
+        /// <summary>Every pid signalled, either way: through the identity-verified kill (receipts, and the path match on Linux), then the tree kill.</summary>
+        public List<int> SignalledPids => [.. GuardedKills.Select(static kill => kill.Pid), .. KilledPids];
+
         public StaleProcessKillResult GuardedKillResult { get; init; } = StaleProcessKillResult.Killed;
+
+        /// <summary>Per-pid answers of the guarded kill; any other pid gets <see cref="GuardedKillResult" />.</summary>
+        public Dictionary<int, StaleProcessKillResult> GuardedKillResults { get; } = [];
+
+        public string? CurrentBootId { get; init; } = "boot-now";
 
         public ProcessStat? ReadStat(int pid)
         {
@@ -465,7 +612,7 @@ public sealed class StaleProcessReaperTests
                 ExecutablePath = expectedExecutablePath,
                 StartTicks = expectedStartTicks
             });
-            return GuardedKillResult;
+            return GuardedKillResults.GetValueOrDefault(pid, GuardedKillResult);
         }
     }
 

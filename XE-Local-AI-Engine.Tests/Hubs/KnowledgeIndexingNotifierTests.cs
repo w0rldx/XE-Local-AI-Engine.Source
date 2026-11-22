@@ -51,11 +51,47 @@ public sealed class KnowledgeIndexingNotifierTests
             "The warning must carry the exception type, not its message, so nothing content-bearing can leak into the log.");
     }
 
+    [Test]
+    public async Task NotifyDocumentsChangedAsync_BroadcastsATimestampOnlyRefreshStampedFromTheClock()
+    {
+        var time = new ManualTimeProvider();
+        var (context, clients) = CreateHubContext();
+        var notifier = new KnowledgeIndexingNotifier(context, time, new RecordingLogger<KnowledgeIndexingNotifier>());
+
+        await notifier.NotifyDocumentsChangedAsync();
+
+        await clients.Received(1).SendCoreAsync(KnowledgeBaseHubEvents.DocumentsChanged,
+            Arg.Is<object?[]>(arguments => MatchesRefresh(arguments, time.GetUtcNow().ToUnixTimeMilliseconds())),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task NotifyDocumentsChangedAsync_WhenTheTransportFails_SwallowsAndLogsTheErrorClassOnly()
+    {
+        var (context, clients) = CreateHubContext();
+        _ = clients.SendCoreAsync(Arg.Any<string>(), Arg.Any<object?[]>(), Arg.Any<CancellationToken>())
+                   .ThrowsAsync(new IOException("the connection went away mid-broadcast"));
+        var logger = new RecordingLogger<KnowledgeIndexingNotifier>();
+        var notifier = new KnowledgeIndexingNotifier(context, new ManualTimeProvider(), logger);
+
+        await notifier.NotifyDocumentsChangedAsync();
+
+        AssertEx.ContainsSingle(logger.Entries, entry => entry.Level == LogLevel.Warning);
+        AssertEx.Contains(logger.Entries[0].Message, nameof(IOException));
+        AssertEx.False(logger.Entries[0].Message.Contains("mid-broadcast", StringComparison.Ordinal), "The warning carries the exception type only.");
+    }
+
     private static bool Matches(object?[] arguments, Guid documentId, long occurredAtUtc) =>
         arguments.Length == 1
         && arguments[0] is KnowledgeDocumentChangedHubEvent payload
         && payload.EventType == KnowledgeBaseHubEvents.DocumentChanged
         && payload.DocumentId == documentId
+        && payload.OccurredAtUtc == occurredAtUtc;
+
+    private static bool MatchesRefresh(object?[] arguments, long occurredAtUtc) =>
+        arguments.Length == 1
+        && arguments[0] is KnowledgeDocumentsChangedHubEvent payload
+        && payload.EventType == KnowledgeBaseHubEvents.DocumentsChanged
         && payload.OccurredAtUtc == occurredAtUtc;
 
     private static (IHubContext<KnowledgeBaseHub> Context, IClientProxy All) CreateHubContext()

@@ -214,7 +214,7 @@ public sealed class ModelLabExperimentServiceTests
         var root = job.RootElement;
         AssertEx.Equal(ModelLabTraceSpec.ContractVersion, root.GetProperty("contractVersion").GetInt32());
         AssertEx.Equal(ModelLabTraceSpec.MaxNewTokens, root.GetProperty("maxNewTokens").GetInt32());
-        AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(3), root.GetProperty("traceByteCap").GetInt32());
+        AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(3, ModelLabTraceSpec.MaxNewTokens), root.GetProperty("traceByteCap").GetInt32());
         AssertEx.Equal("[6,12,18]", root.GetProperty("layers").GetRawText());
         AssertEx.Equal(Prompt, root.GetProperty("prompt").GetString());
         foreach (var attentionField in new[]
@@ -294,7 +294,7 @@ public sealed class ModelLabExperimentServiceTests
     {
         using var process = new ScriptedProcess
         {
-            TraceContent = new string('x', ModelLabTraceSpec.TraceByteCapFor(3) + ModelLabTraceSpec.LensByteCapFor(24) + 1)
+            TraceContent = new string('x', ModelLabTraceSpec.TraceByteCapFor(3, ModelLabTraceSpec.MaxNewTokens) + ModelLabTraceSpec.LensByteCapFor(24, ModelLabTraceSpec.MaxNewTokens) + 1)
         };
         await using var host = await LabHost.StartAsync(process);
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
@@ -326,12 +326,82 @@ public sealed class ModelLabExperimentServiceTests
         using (var job = JsonDocument.Parse(process.ReadJobFile()))
         {
             AssertEx.Equal("[0,15,18,23]", job.RootElement.GetProperty("layers").GetRawText());
-            AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(4), job.RootElement.GetProperty("traceByteCap").GetInt32());
+            AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(4, ModelLabTraceSpec.MaxNewTokens), job.RootElement.GetProperty("traceByteCap").GetInt32());
         }
 
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
         AssertEx.True(start.ExperimentId.HasValue);
+    }
+
+    /// <summary>Every byte cap the job carries is sized for the tokens the request asked for, not for the default count.</summary>
+    [Test]
+    public async Task TheRequestsTokenCount_ReachesTheJob_WithEveryCapScaledForIt()
+    {
+        const int tokens = ModelLabTraceSpec.MaxRequestedNewTokens;
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process);
+
+        var start = await host.Service.StartExperimentAsync(host.Request() with
+        {
+            MaxNewTokens = tokens,
+            RecordAttention = true
+        }, CancellationToken.None);
+        await process.Spawned.WaitAsync(TestBudgets.Contended);
+
+        using (var job = JsonDocument.Parse(process.ReadJobFile()))
+        {
+            var root = job.RootElement;
+            AssertEx.Equal(tokens, root.GetProperty("maxNewTokens").GetInt32());
+            AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(3, tokens), root.GetProperty("traceByteCap").GetInt32());
+            AssertEx.Equal(ModelLabTraceSpec.LensByteCapFor(24, tokens), root.GetProperty("lensByteCap").GetInt32());
+            AssertEx.Equal(ModelLabTraceSpec.AttentionByteCapFor(6, 8, tokens), root.GetProperty("attentionByteCap").GetInt32());
+        }
+
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+        AssertEx.True(start.ExperimentId.HasValue);
+    }
+
+    [Test]
+    public async Task TheStartRoute_RefusesATokenCountOutsideItsBounds_AndAnyForASteeringJob()
+    {
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process);
+        using var client = host.Factory.CreateClient();
+
+        foreach (var body in new object[]
+                 {
+                     TokenBody(host, 0),
+                     TokenBody(host, ModelLabTraceSpec.MaxRequestedNewTokens + 1),
+                     new
+                     {
+                         baseArtifactId = host.Request().BaseArtifactId,
+                         installedModelName = Gguf,
+                         prompt = Prompt,
+                         licenseConfirmed = true,
+                         maxNewTokens = 64,
+                         steering = new
+                         {
+                             positivePrompts = new[]
+                             {
+                                 "a"
+                             },
+                             negativePrompts = new[]
+                             {
+                                 "b"
+                             }
+                         }
+                     }
+                 })
+        {
+            using var request = host.Authorized(HttpMethod.Post, "/api/local/v1/model-lab/experiments");
+            request.Content = JsonContent.Create(body);
+            using var response = await client.SendAsync(request);
+            AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, JsonSerializer.Serialize(body));
+        }
+
+        AssertEx.Null(process.Request);
     }
 
     /// <summary>Every block of the 24: the store must keep what the scaled cap and the lens cap allow, which is far past the three-layer cap, and nothing past it.</summary>
@@ -340,8 +410,8 @@ public sealed class ModelLabExperimentServiceTests
     [Arguments(1, ModelLabExperimentStatus.Failed)]
     public async Task AFullDepthTrace_IsKeptUpToItsScaledCap_AndNotPastIt(int bytesOverCap, ModelLabExperimentStatus expected)
     {
-        var cap = ModelLabTraceSpec.TraceByteCapFor(24);
-        var fileCap = cap + ModelLabTraceSpec.LensByteCapFor(24);
+        var cap = ModelLabTraceSpec.TraceByteCapFor(24, ModelLabTraceSpec.MaxNewTokens);
+        var fileCap = cap + ModelLabTraceSpec.LensByteCapFor(24, ModelLabTraceSpec.MaxNewTokens);
         using var process = new ScriptedProcess
         {
             TraceContent = new string('x', fileCap + bytesOverCap)
@@ -435,16 +505,20 @@ public sealed class ModelLabExperimentServiceTests
     }
 
     [Test]
-    public void TheTraceCap_ScalesWithTheLayerCount_AndNeverDropsBelowTheThreeLayerCap()
+    public void TheTraceCap_ScalesWithTheLayerAndTokenCounts_AndNeverDropsBelowTheThreeLayerCap()
     {
         const int threeLayerCap = 256 * 1024;
-        AssertEx.Equal(threeLayerCap, ModelLabTraceSpec.TraceByteCapFor(1));
-        AssertEx.Equal(threeLayerCap, ModelLabTraceSpec.TraceByteCapFor(3), "Four times 3 x 128 x 162 bytes is a little under it.");
-        AssertEx.Equal((24 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(24));
-        AssertEx.Equal((32 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(32));
-        AssertEx.Equal((64 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(64));
-        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.TraceByteCapFor(0));
-        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.TraceByteCapFor(ModelLabTraceSpec.MaxTraceLayers + 1));
+        AssertEx.Equal(threeLayerCap, ModelLabTraceSpec.TraceByteCapFor(1, 128));
+        AssertEx.Equal(threeLayerCap, ModelLabTraceSpec.TraceByteCapFor(3, 128), "Four times 3 x 128 x 162 bytes is a little under it.");
+        AssertEx.Equal(threeLayerCap, ModelLabTraceSpec.TraceByteCapFor(64, 1));
+        AssertEx.Equal((24 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(24, 128));
+        AssertEx.Equal((32 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(32, 128));
+        AssertEx.Equal((64 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(64, 128));
+        AssertEx.Equal((64 * 256 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(64, 256));
+        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.TraceByteCapFor(0, 128));
+        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.TraceByteCapFor(ModelLabTraceSpec.MaxTraceLayers + 1, 128));
+        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.TraceByteCapFor(3, 0));
+        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.TraceByteCapFor(3, ModelLabTraceSpec.MaxRequestedNewTokens + 1));
     }
 
     [Test]
@@ -1348,6 +1422,70 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.Null(host.Service.ActiveBaseArtifactId);
     }
 
+    /// <summary>A delete past its guards but before its row delete holds the checkpoint: the cold start that publishes after it is refused, and the delete lands.</summary>
+    [Test]
+    public async Task ACheckpointDeleteInFlight_RefusesAColdStartAtItsPublication_AndTheDeleteLands()
+    {
+        var rowDelete = new StallingArtifactStore.Stall();
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process, configure: services =>
+        {
+            GateWithHook.Install(services);
+            StallingArtifactStore.Install(services, rowDelete);
+        });
+        Task<BaseArtifactDeleteOutcome>? deleting = null;
+        ((GateWithHook)host.Gate).BeforeBegin = async () =>
+        {
+            deleting = Task.Run(async () =>
+            {
+                await using var scope = host.Services.CreateAsyncScope();
+                return await scope.ServiceProvider.GetRequiredService<IBaseArtifactService>().DeleteAsync(host.Request().BaseArtifactId, CancellationToken.None);
+            });
+            await rowDelete.Entered.Task.WaitAsync(TestBudgets.Contended);
+        };
+
+        ModelLabStart start;
+        try
+        {
+            start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+        }
+        finally
+        {
+            rowDelete.MayProceed.TrySetResult();
+        }
+
+        AssertEx.Equal(ModelLabStartRefusal.CheckpointNotFound, start.Refusal.GetValueOrDefault(), start.RefusalMessage ?? "The start was admitted under a delete in flight.");
+        AssertEx.Equal(BaseArtifactDeleteOutcome.Deleted, await deleting!.WaitAsync(TestBudgets.Contended));
+        AssertEx.Null(process.Request, "The refused start spawned nothing.");
+        AssertEx.Null(host.Gate.ExclusiveKind, "The refusal gives the gate back.");
+        AssertEx.Null(host.Service.ActiveBaseArtifactId);
+        AssertEx.Empty(await host.Service.ListAsync(CancellationToken.None));
+    }
+
+    /// <summary>A delete that fails after its guards still lets go of its checkpoint, so the next start runs.</summary>
+    [Test]
+    public async Task ACheckpointDeleteThatFails_LetsGoOfItsCheckpoint()
+    {
+        var rowDelete = new StallingArtifactStore.Stall
+        {
+            Failure = new InvalidOperationException("database is locked")
+        };
+        rowDelete.MayProceed.SetResult();
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process, configure: services => StallingArtifactStore.Install(services, rowDelete));
+
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+                scope.ServiceProvider.GetRequiredService<IBaseArtifactService>().DeleteAsync(host.Request().BaseArtifactId, CancellationToken.None));
+        }
+
+        var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+        AssertEx.True(start.ExperimentId.HasValue, start.RefusalMessage ?? "The failed delete still holds the checkpoint.");
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+    }
+
     [Test]
     public void TheFixedSpec_IsThreeLayersAndNeverBlockZero()
     {
@@ -1395,6 +1533,16 @@ public sealed class ModelLabExperimentServiceTests
             prompt = Prompt,
             licenseConfirmed = true,
             layers
+        };
+
+    private static object TokenBody(LabHost host, int maxNewTokens) =>
+        new
+        {
+            baseArtifactId = host.Request().BaseArtifactId,
+            installedModelName = Gguf,
+            prompt = Prompt,
+            licenseConfirmed = true,
+            maxNewTokens
         };
 
     private static BaseCheckpointManifest Manifest(string repoId, long weightBytes) =>
@@ -1517,6 +1665,68 @@ public sealed class ModelLabExperimentServiceTests
 
         public Task<IReadOnlyList<Guid>> RecoverOnStartupAsync(CancellationToken cancellationToken = default) =>
             _inner.RecoverOnStartupAsync(cancellationToken);
+    }
+
+    /// <summary>The real checkpoint store, whose row delete waits until the test lets it go, or fails.</summary>
+    internal sealed class StallingArtifactStore : ITrainingBaseArtifactStore
+    {
+        private readonly ITrainingBaseArtifactStore _inner;
+        private readonly Stall _stall;
+
+        private StallingArtifactStore(ITrainingBaseArtifactStore inner, Stall stall)
+        {
+            _inner = inner;
+            _stall = stall;
+        }
+
+        public static void Install(IServiceCollection services, Stall stall)
+        {
+            services.RemoveAll<ITrainingBaseArtifactStore>();
+            services.AddScoped<ITrainingBaseArtifactStore>(provider => new StallingArtifactStore(ActivatorUtilities.CreateInstance<TrainingBaseArtifactStore>(provider), stall));
+        }
+
+        public async Task<bool> DeleteAsync(Guid artifactId, long expectedVersion, CancellationToken cancellationToken = default)
+        {
+            _stall.Entered.TrySetResult();
+            await _stall.MayProceed.Task.WaitAsync(TestBudgets.Contended, cancellationToken);
+            return _stall.Failure is null ? await _inner.DeleteAsync(artifactId, expectedVersion, cancellationToken) : throw _stall.Failure;
+        }
+
+        public Task<TrainingBaseArtifactRecord> StartDownloadAsync(string repoId, string revision, CancellationToken cancellationToken = default) =>
+            _inner.StartDownloadAsync(repoId, revision, cancellationToken);
+
+        public Task<TrainingBaseArtifactRecord?> GetAsync(Guid artifactId, CancellationToken cancellationToken = default) =>
+            _inner.GetAsync(artifactId, cancellationToken);
+
+        public Task<IReadOnlyList<TrainingBaseArtifactRecord>> ListAsync(CancellationToken cancellationToken = default) =>
+            _inner.ListAsync(cancellationToken);
+
+        public Task<TrainingBaseArtifactRecord> MarkReadyAsync(Guid artifactId,
+            long expectedVersion,
+            byte[] filesJson,
+            long totalBytes,
+            byte[]? licenseJson,
+            CancellationToken cancellationToken = default) =>
+            _inner.MarkReadyAsync(artifactId, expectedVersion, filesJson, totalBytes, licenseJson, cancellationToken);
+
+        public Task<TrainingBaseArtifactRecord> MarkFailedAsync(Guid artifactId, long expectedVersion, string errorMessage, CancellationToken cancellationToken = default) =>
+            _inner.MarkFailedAsync(artifactId, expectedVersion, errorMessage, cancellationToken);
+
+        public Task<TrainingBaseArtifactRecord> SetRevisionAsync(Guid artifactId, long expectedVersion, string revision, CancellationToken cancellationToken = default) =>
+            _inner.SetRevisionAsync(artifactId, expectedVersion, revision, cancellationToken);
+
+        public Task<int> RecoverOnStartupAsync(CancellationToken cancellationToken = default) =>
+            _inner.RecoverOnStartupAsync(cancellationToken);
+
+        /// <summary>Where a row delete stops, and what it does once let go.</summary>
+        internal sealed class Stall
+        {
+            public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public TaskCompletionSource MayProceed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public Exception? Failure { get; init; }
+        }
     }
 
     /// <summary>The real gate, with a step just before it is taken (the last moment a delete can pass the guard) and one as an exclusive hold goes.</summary>
@@ -1834,7 +2044,7 @@ public sealed class ModelLabExperimentServiceTests
 
     /// <summary>A scripted <c>modellab.py</c>: it stays running until the test finishes it, and writes the files the job file names.</summary>
     /// <remarks>
-    ///     Spawned with <c>--serve</c> it speaks contract 6 on its own: the handshake at spawn, every protocol line stamped with the spawn's
+    ///     Spawned with <c>--serve</c> it speaks this build's contract on its own: the handshake at spawn, every protocol line stamped with the spawn's
     ///     token and the job's id, a <c>ready</c> after a terminal frame, a cancelled <c>done</c> on a cancel and an exit on an evict.
     /// </remarks>
     internal sealed class ScriptedProcess : ITrainingProcessSpawner, ITrainingProcessHandle

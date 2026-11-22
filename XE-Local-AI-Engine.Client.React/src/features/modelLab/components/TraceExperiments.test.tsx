@@ -451,6 +451,49 @@ describe("TraceExperiments", () => {
 		expect(starts[2]).not.toHaveProperty("recordAttention");
 	});
 
+	it("sends 128 tokens unless changed, the chosen count after, and the default once the field is emptied", async () => {
+		const starts: Record<string, unknown>[] = [];
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json(emptyList)),
+			http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ items: [artifactRow("Ready")] })),
+			http.get(localApiPath("training/base-artifacts/:artifactId"), () => HttpResponse.json(artifactRow("Ready"))),
+			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
+			http.post(localApiPath("model-lab/experiments"), async ({ request }) => {
+				starts.push((await request.json()) as Record<string, unknown>);
+				return HttpResponse.json({ reason: "Busy", message: "busy" }, { status: 409 });
+			}),
+		);
+
+		renderWithProviders(
+			<ConfirmProvider>
+				<TraceExperiments />
+			</ConfirmProvider>,
+		);
+		await chooseOption(/Installed GGUF/, gguf);
+		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
+		fireEvent.click(screen.getByTestId("model-lab-check"));
+		fireEvent.click(await screen.findByRole("checkbox", { name: preflightBase.licenseConfirmationText }));
+		fireEvent.change(await screen.findByRole("textbox", { name: /Prompt/ }), { target: { value: "hello" } });
+
+		const tokens = screen.getByRole("textbox", { name: "Tokens to generate" }) as HTMLInputElement;
+		expect(tokens.value).toBe("128");
+		expect(screen.getByRole("button", { name: "About Tokens to generate" })).toBeTruthy();
+		fireEvent.click(screen.getByTestId("model-lab-start"));
+		await waitFor(() => expect(starts).toHaveLength(1));
+		expect(starts[0]).toMatchObject({ maxNewTokens: 128 });
+
+		fireEvent.change(tokens, { target: { value: "256" } });
+		fireEvent.click(screen.getByTestId("model-lab-start"));
+		await waitFor(() => expect(starts).toHaveLength(2));
+		expect(starts[1]).toMatchObject({ maxNewTokens: 256 });
+
+		fireEvent.change(tokens, { target: { value: "" } });
+		fireEvent.click(screen.getByTestId("model-lab-start"));
+		await waitFor(() => expect(starts).toHaveLength(3));
+		expect(starts[2]).not.toHaveProperty("maxNewTokens");
+	});
+
 	it("offers no Record attention for a checkpoint without a full-attention block, and says why", async () => {
 		stubModels();
 		server.use(

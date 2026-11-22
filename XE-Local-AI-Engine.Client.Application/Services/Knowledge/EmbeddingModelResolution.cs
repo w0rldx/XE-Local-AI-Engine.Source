@@ -22,6 +22,12 @@ public sealed class EmbeddingModelResolution
     /// </summary>
     public bool PinnedModelMissing { get; init; }
 
+    /// <summary>
+    ///     Whether the provider's installed inventory was read. A non-confident resolution with a read inventory PROVES no
+    ///     usable embedder is installed; without one (provider down, timeout) nothing is known.
+    /// </summary>
+    public bool InventoryRead { get; init; }
+
     /// <summary>Content-free fingerprint of the matched immutable installed-inventory record.</summary>
     public string RevisionFingerprint { get; init; } = "unresolved";
 }

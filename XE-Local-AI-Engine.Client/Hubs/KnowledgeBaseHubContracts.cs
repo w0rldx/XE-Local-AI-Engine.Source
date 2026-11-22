@@ -11,6 +11,19 @@ public static class KnowledgeBaseHubEvents
     public const string DocumentChanged = "knowledge.documentChanged";
 
     public const string DocumentRemoved = "knowledge.documentRemoved";
+
+    public const string DocumentsChanged = "knowledge.documentsChanged";
+}
+
+/// <summary>
+///     Status-free refresh payload: the documents list changed, so a client refetches it. Names no document or status,
+///     because the sender cannot know the row's status by the time the push lands.
+/// </summary>
+public sealed class KnowledgeDocumentsChangedHubEvent
+{
+    public required string EventType { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
 }
 
 /// <summary>Sanitized deletion payload: only the deleted document's id and the instant it was removed.</summary>

@@ -8065,6 +8065,7 @@ export const zXeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentReq
 		)
 		.nullish(),
 	recordAttention: z.boolean().optional(),
+	maxNewTokens: z.int().gte(1).lte(256).nullish(),
 });
 
 export const zXeLocalAiEngineClientServicesModelLabModelLabSteeringResult = z.object({
@@ -8132,6 +8133,11 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabTraceResult = z.objec
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
 	maxNewTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	candidateSteps: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })

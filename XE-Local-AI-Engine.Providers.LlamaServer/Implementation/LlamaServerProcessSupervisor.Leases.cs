@@ -180,7 +180,7 @@ public sealed partial class LlamaServerProcessSupervisor
                 await opened().ConfigureAwait(false);
             }
 
-            outcome = await EjectProcessAsync(key, target, force, ct).ConfigureAwait(false);
+            outcome = await EjectProcessAsync(key, target, force, operatorRequested, ct).ConfigureAwait(false);
             return outcome.Value;
         }
         finally
@@ -193,7 +193,8 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <summary>Drains and tears down <paramref name="target" />, the instance the eject read, never a process published under the key after that read.</summary>
-    private async Task<LlamaServerEjectOutcome> EjectProcessAsync(ProcessKey key, RunningProcess? target, bool force, CancellationToken ct)
+    /// <remarks>Its log lines say "Operator eject" only for an operator's request; a system eviction, such as an image job's, logs a plain "Eject".</remarks>
+    private async Task<LlamaServerEjectOutcome> EjectProcessAsync(ProcessKey key, RunningProcess? target, bool force, bool operatorRequested, CancellationToken ct)
     {
         if (target is null || target.Handle.HasExited)
         {
@@ -209,8 +210,16 @@ public sealed partial class LlamaServerProcessSupervisor
         // Mark evicting: new inference leases are refused, so the active-lease count can only fall while we drain, and the process stays registered and reusable until
         // we tear it down or give up. The claim is kept so every release below clears only THIS eject's mark, never one a later teardown took over.
         var evictionClaim = target.MarkEvicting();
-        _logger.LogInformation("Operator eject requested for model {ModelName} role {Role} (force: {Force}); draining {ActiveLeases} in-flight request(s).",
-            key.ModelName, key.Role, force, target.ActiveLeases);
+        if (operatorRequested)
+        {
+            _logger.LogInformation("Operator eject requested for model {ModelName} role {Role} (force: {Force}); draining {ActiveLeases} in-flight request(s).",
+                key.ModelName, key.Role, force, target.ActiveLeases);
+        }
+        else
+        {
+            _logger.LogInformation("Eject requested for model {ModelName} role {Role} (force: {Force}); draining {ActiveLeases} in-flight request(s).",
+                key.ModelName, key.Role, force, target.ActiveLeases);
+        }
 
         bool drained;
         try
@@ -228,25 +237,51 @@ public sealed partial class LlamaServerProcessSupervisor
         if (drained)
         {
             await _reaper.RemoveProcessAsync(key, target).ConfigureAwait(false);
-            _logger.LogInformation("Operator eject completed for model {ModelName} role {Role}: drained and torn down.", key.ModelName, key.Role);
+            if (operatorRequested)
+            {
+                _logger.LogInformation("Operator eject completed for model {ModelName} role {Role}: drained and torn down.", key.ModelName, key.Role);
+            }
+            else
+            {
+                _logger.LogInformation("Eject completed for model {ModelName} role {Role}: drained and torn down.", key.ModelName, key.Role);
+            }
+
             return LlamaServerEjectOutcome.Ejected;
         }
 
         if (force)
         {
             // Force: tear down despite in-flight work. Mark ejected FIRST so the interrupted request's leaseholder can
-            // classify the resulting connection failure as an operator eject rather than a generic provider drop.
+            // classify the resulting connection failure as an operator eject rather than a generic provider drop. Counted first: the kill releases the interrupted leases.
+            var interrupted = target.ActiveLeases;
             target.MarkEjected();
             await _reaper.RemoveProcessAsync(key, target).ConfigureAwait(false);
-            _logger.LogWarning("Operator eject FORCED for model {ModelName} role {Role}: {ActiveLeases} in-flight request(s) interrupted.",
-                key.ModelName, key.Role, target.ActiveLeases);
+            if (operatorRequested)
+            {
+                _logger.LogWarning("Operator eject FORCED for model {ModelName} role {Role}: {ActiveLeases} in-flight request(s) interrupted.",
+                    key.ModelName, key.Role, interrupted);
+            }
+            else
+            {
+                _logger.LogWarning("Eject FORCED for model {ModelName} role {Role}: {ActiveLeases} in-flight request(s) interrupted.",
+                    key.ModelName, key.Role, interrupted);
+            }
+
             return LlamaServerEjectOutcome.ForcedWhileBusy;
         }
 
         // Busy and not forced: never kill silently. Leave the process running and usable, and report that the eject
         // could not complete safely so the caller can decide (retry / force).
         target.ReleaseEvictionClaim(evictionClaim);
-        _logger.LogInformation("Operator eject for model {ModelName} role {Role} did not complete: still busy after the drain window; left running.", key.ModelName, key.Role);
+        if (operatorRequested)
+        {
+            _logger.LogInformation("Operator eject for model {ModelName} role {Role} did not complete: still busy after the drain window; left running.", key.ModelName, key.Role);
+        }
+        else
+        {
+            _logger.LogInformation("Eject for model {ModelName} role {Role} did not complete: still busy after the drain window; left running.", key.ModelName, key.Role);
+        }
+
         return LlamaServerEjectOutcome.TimedOutStillBusy;
     }
 

@@ -21,4 +21,10 @@ public interface IKnowledgeIndexingNotifier
 
     /// <summary>Publishes that one document was deleted, so a feed counting it as queued drops it. Best-effort, id only.</summary>
     Task NotifyDocumentRemovedAsync(Guid documentId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Publishes that the documents list changed without naming a document or status, for a sender whose read status
+    ///     may already be stale (a re-admitted or recovered row). Clients refetch. Best-effort, timestamp only.
+    /// </summary>
+    Task NotifyDocumentsChangedAsync(CancellationToken cancellationToken = default);
 }

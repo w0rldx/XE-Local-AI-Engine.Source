@@ -340,6 +340,16 @@ describe("RecommendationTable", () => {
 		expect(screen.getByTestId("model-fit-moe-offload-badge-1")).toBeTruthy();
 	});
 
+	it("formats the MoE GPU/RAM breakdown in the UI language", async () => {
+		await i18next.changeLanguage("de");
+		const offloaded = makeRecommendation({ rank: 1, expertsOffloaded: true, gpuGb: 3.6, cpuGb: 12.25 });
+
+		renderTable(<RecommendationTable recommendations={[offloaded]} />);
+		fireEvent.mouseEnter(screen.getByTestId("model-fit-moe-offload-badge-1"));
+
+		expect(await screen.findByText("GPU 3,6 GiB + RAM 12,3 GiB")).toBeTruthy();
+	});
+
 	it("shows the MoE-offload badge without a breakdown when the GPU/RAM split is unavailable", () => {
 		const offloaded = makeRecommendation({ rank: 1, expertsOffloaded: true, gpuGb: null, cpuGb: null });
 

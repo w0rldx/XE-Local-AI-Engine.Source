@@ -43,6 +43,22 @@ public sealed class HubJsonProtocolTests
         AssertEx.Contains(frame, "\"occurredAtUtc\":1758000000000");
     }
 
+    /// <summary>The status-free refresh, in the camelCase spelling the SPA's hub handler subscribes to: no id, no status.</summary>
+    [Test]
+    public void KnowledgeDocumentsChanged_CarriesOnlyTheEventTypeAndTimestamp()
+    {
+        var payload = new KnowledgeDocumentsChangedHubEvent
+        {
+            EventType = KnowledgeBaseHubEvents.DocumentsChanged,
+            OccurredAtUtc = 1758000000000
+        };
+
+        var frame = WriteFrame(KnowledgeBaseHubEvents.DocumentsChanged, payload);
+
+        AssertEx.Contains(frame,
+            "\"target\":\"knowledge.documentsChanged\",\"arguments\":[{\"eventType\":\"knowledge.documentsChanged\",\"occurredAtUtc\":1758000000000}]");
+    }
+
     [Test]
     public void SchedulerRun_SerializesBothOfItsEnumsAsNames()
     {

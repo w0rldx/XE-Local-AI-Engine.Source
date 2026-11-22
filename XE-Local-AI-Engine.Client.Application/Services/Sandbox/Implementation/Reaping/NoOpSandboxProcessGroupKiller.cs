@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
+
 /// <summary>The <see cref="ISandboxProcessGroupKiller" /> registered on platforms with no process-group mechanism.</summary>
 /// <remarks>
 ///     Sandbox markers are only written for a <c>setsid</c> launch, which is Linux-only, so off Linux there is nothing to reap, and this
@@ -22,8 +24,24 @@ public sealed class NoOpSandboxProcessGroupKiller : ISandboxProcessGroupKiller
     }
 
     /// <inheritdoc />
-    public Task KillProcessGroupAsync(int processGroupId, CancellationToken cancellationToken = default)
+    public Task<SandboxGroupKillOutcome> KillProcessGroupAsync(int processGroupId, long expectedStartTicks, CancellationToken cancellationToken = default)
     {
-        return Task.CompletedTask;
+        return Task.FromResult(SandboxGroupKillOutcome.Gone);
+    }
+
+    /// <inheritdoc />
+    public LinuxPidFd PinProcess(int processId) =>
+        LinuxPidFd.Unsupported();
+
+    /// <inheritdoc />
+    public SandboxGroupKillOutcome KillOwnedProcessGroup(LinuxPidFd? leaderPin,
+        LinuxPidFdOpenStatus pinStatus,
+        int processGroupId,
+        Func<bool> leaderExited,
+        Func<bool> killTree)
+    {
+        ArgumentNullException.ThrowIfNull(killTree);
+        _ = killTree();
+        return SandboxGroupKillOutcome.Gone;
     }
 }

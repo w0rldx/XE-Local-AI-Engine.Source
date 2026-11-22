@@ -9,8 +9,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 /// </summary>
 /// <remarks>
 ///     Every read and write sits under <see cref="_ejectMarkLock" />, never the per-key ensure gate: profiling holds
-///     that gate while awaiting detached spawns, which publish under this lock. The marks live in memory only, so a
-///     restart starts unmarked.
+///     that gate while awaiting detached spawns, which publish under this lock. Marks live in memory only, and a mark
+///     that blocks nothing is removed; generations come from one supervisor-wide counter, so a recreated mark never
+///     reuses a generation a pending spawn qualified at.
 /// </remarks>
 public sealed partial class LlamaServerProcessSupervisor
 {
@@ -19,14 +20,29 @@ public sealed partial class LlamaServerProcessSupervisor
     private readonly Lock _ejectMarkLock = new();
     private readonly Dictionary<ProcessKey, EjectMark> _ejectMarks = new();
 
+    // The last generation issued to any key, under _ejectMarkLock.
+    private long _ejectGeneration;
+
     /// <summary>How long a vetoed child's teardown waits to see it exit before the reaper holds it; settable so a test can make it immediate.</summary>
     internal TimeSpan VetoedKillExitWait { get; set; } = TimeSpan.FromSeconds(5);
 
-    /// <summary>How long a vetoed safe retry may spend recording its verdict before its waiters get the veto; settable so a test can shorten it.</summary>
+    /// <summary>How long a safe retry, vetoed or published, may spend recording its verdict before its waiters go on; settable so a test can shorten it.</summary>
     internal TimeSpan VetoedSafeRetryVerdictBudget { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>Awaited by an eject right after it opened its attempt and read the table. Test seam for publication races; null in production.</summary>
     internal Func<Task>? OperatorEjectAttemptOpenedForTesting { get; set; }
+
+    /// <summary>How many keys hold an eject mark. Test seam for pruning.</summary>
+    internal int EjectMarkCountForTesting
+    {
+        get
+        {
+            lock (_ejectMarkLock)
+            {
+                return _ejectMarks.Count;
+            }
+        }
+    }
 
     /// <inheritdoc />
     public bool IsBackgroundLaunchBlocked(string modelName, ModelRole role)
@@ -35,6 +51,15 @@ public sealed partial class LlamaServerProcessSupervisor
         lock (_ejectMarkLock)
         {
             return _ejectMarks.TryGetValue(new ProcessKey(modelName, role), out var mark) && mark.IsBlocked;
+        }
+    }
+
+    /// <inheritdoc />
+    public bool HasBackgroundLaunchBlock(ModelRole role)
+    {
+        lock (_ejectMarkLock)
+        {
+            return _ejectMarks.Any(entry => entry.Key.Role == role && entry.Value.IsBlocked);
         }
     }
 
@@ -51,7 +76,7 @@ public sealed partial class LlamaServerProcessSupervisor
         lock (_ejectMarkLock)
         {
             var mark = GetOrAddEjectMark(key);
-            var token = ++mark.Generation;
+            var token = mark.Generation = ++_ejectGeneration;
             mark.ActiveAttempts.Add(token);
             _processes.TryGetValue(key, out target);
             return token;
@@ -70,6 +95,7 @@ public sealed partial class LlamaServerProcessSupervisor
             }
 
             mark.ActiveAttempts.Remove(token);
+            PruneIfUnblocked(key, mark);
         }
     }
 
@@ -148,6 +174,11 @@ public sealed partial class LlamaServerProcessSupervisor
                     mark.ClearedThrough = Math.Max(mark.ClearedThrough, clearedAt);
                 }
 
+                if (mark is not null)
+                {
+                    PruneIfUnblocked(key, mark);
+                }
+
                 _processes[key] = running;
                 return;
             }
@@ -190,6 +221,15 @@ public sealed partial class LlamaServerProcessSupervisor
         _logger.Log(firstForGeneration ? LogLevel.Information : LogLevel.Debug,
             "{What} of model {ModelName} role {Role} skipped: the operator ejected it, and only a user request reloads it.",
             what, key.ModelName, key.Role);
+    }
+
+    /// <summary>Removes a mark with no open attempt and no uncleared eject. Callers hold <see cref="_ejectMarkLock" />.</summary>
+    private void PruneIfUnblocked(ProcessKey key, EjectMark mark)
+    {
+        if (!mark.IsBlocked)
+        {
+            _ejectMarks.Remove(key);
+        }
     }
 
     private EjectMark GetOrAddEjectMark(ProcessKey key)

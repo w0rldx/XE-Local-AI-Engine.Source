@@ -264,6 +264,22 @@ public sealed class SupervisorOperatorEjectMarkTests
     }
 
     [Test]
+    public async Task HasBackgroundLaunchBlock_IsTrueOnlyWhileAMarkOfThatRoleBlocks()
+    {
+        await using var supervisor = SupervisorFactory.Create(new FakeProcessLauncher());
+        AssertEx.False(supervisor.HasBackgroundLaunchBlock(ModelRole.Chat), "No eject, no mark.");
+
+        await OperatorEjectAsync(supervisor);
+
+        AssertEx.True(supervisor.HasBackgroundLaunchBlock(ModelRole.Chat));
+        AssertEx.False(supervisor.HasBackgroundLaunchBlock(ModelRole.Embedding), "A chat mark blocks no embedder.");
+
+        await supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.False(supervisor.HasBackgroundLaunchBlock(ModelRole.Chat), "A user-waited publish clears the only mark.");
+    }
+
+    [Test]
     public async Task NonOperatorEject_LeavesNoMark()
     {
         var launcher = new FakeProcessLauncher();
@@ -325,6 +341,106 @@ public sealed class SupervisorOperatorEjectMarkTests
         await supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None);
 
         AssertEx.False(supervisor.IsBackgroundLaunchBlocked(Model, ModelRole.Chat));
+    }
+
+    [Test]
+    public async Task AUserLoad_ThatClearsTheMark_RemovesIt()
+    {
+        await using var supervisor = SupervisorFactory.Create();
+        await OperatorEjectAsync(supervisor);
+        AssertEx.Equal(expected: 1, supervisor.EjectMarkCountForTesting);
+
+        await supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, supervisor.EjectMarkCountForTesting, "A mark that blocks nothing is removed.");
+    }
+
+    [Test]
+    public async Task AFailedEject_LeavesNoMarkBehind()
+    {
+        await using var supervisor = SupervisorFactory.Create(options: WithDrain(TimeSpan.FromMilliseconds(50)));
+        await supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None);
+        using var lease = AssertEx.NotNull(supervisor.TryAcquireInferenceLease(Model, ModelRole.Chat).Lease);
+
+        AssertEx.Equal(LlamaServerEjectOutcome.TimedOutStillBusy, await OperatorEjectAsync(supervisor));
+
+        AssertEx.Equal(expected: 0, supervisor.EjectMarkCountForTesting);
+    }
+
+    [Test]
+    public async Task Pruning_OneKey_LeavesTheOtherKeysMarkBlocking()
+    {
+        await using var supervisor = SupervisorFactory.Create();
+        await OperatorEjectAsync(supervisor);
+        await supervisor.EjectAsync("model-b", ModelRole.Chat, force: false, CancellationToken.None, operatorRequested: true);
+
+        await supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, supervisor.EjectMarkCountForTesting);
+        AssertEx.False(supervisor.IsBackgroundLaunchBlocked(Model, ModelRole.Chat));
+        AssertEx.True(supervisor.IsBackgroundLaunchBlocked("model-b", ModelRole.Chat), "Another key's mark survives the prune.");
+        await AssertEx.ThrowsAsync<OperatorEjectedException>(() =>
+            supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, ModelResidencyIntent.Background, CancellationToken.None));
+    }
+
+    /// <summary>
+    ///     A user joins the spawn while an eject attempt is open, the attempt rolls back and its mark is pruned: a later
+    ///     eject still outranks that join, because a recreated mark never reuses the generation the join qualified at.
+    /// </summary>
+    [Test]
+    public async Task ACallerQualifiedDuringARolledBackAttempt_IsVetoedByALaterEject_AfterThePrune()
+    {
+        var launcher = new FakeProcessLauncher();
+        var probe = new PublicationGatedHealthProbe();
+        await using var supervisor = SupervisorFactory.Create(launcher, healthProbe: probe);
+        var background = EnsureBackgroundAsync(supervisor);
+        await probe.Entered;
+        Task<LlamaServerEndpoint>? interactive = null;
+        supervisor.OperatorEjectAttemptOpenedForTesting = async () =>
+        {
+            interactive = supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None);
+            await AssertEx.StaysIncompleteAsync(interactive, "The Interactive caller must join the in-flight spawn.");
+            AssertEx.Equal<long?>(expected: 1, supervisor.GetInflightQualifiedAtGeneration(Model, ModelRole.Chat), "The join qualified the spawn at the attempt's generation.");
+            throw new InvalidOperationException("rolled back");
+        };
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => OperatorEjectAsync(supervisor));
+        supervisor.OperatorEjectAttemptOpenedForTesting = null;
+        AssertEx.Equal(expected: 0, supervisor.EjectMarkCountForTesting, "The rolled-back attempt's mark is pruned.");
+
+        AssertEx.Equal(LlamaServerEjectOutcome.NotRunning, await OperatorEjectAsync(supervisor));
+        probe.Release();
+
+        await AssertEx.ThrowsAsync<OperatorEjectedException>(() => interactive!);
+        await AssertEx.ThrowsAsync<OperatorEjectedException>(() => background);
+        AssertEx.Equal(expected: 0, supervisor.CountRunningProcesses());
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
+    }
+
+    /// <summary>A qualifying publish while another attempt is open clears the mark but keeps it until that attempt ends.</summary>
+    [Test]
+    public async Task AQualifyingPublish_DuringAnOpenAttempt_KeepsTheMarkUntilTheAttemptEnds()
+    {
+        var probe = new PublicationGatedHealthProbe();
+        await using var supervisor = SupervisorFactory.Create(healthProbe: probe);
+        var background = EnsureBackgroundAsync(supervisor);
+        await probe.Entered;
+        supervisor.OperatorEjectAttemptOpenedForTesting = async () =>
+        {
+            var interactive = supervisor.EnsureRunningAsync(Model, ModelRole.Chat, CancellationToken.None);
+            await AssertEx.StaysIncompleteAsync(interactive, "The Interactive caller must join the in-flight spawn.");
+            probe.Release();
+            await interactive.WaitAsync(TestBudgets.Contended);
+            AssertEx.Equal(expected: 1, supervisor.EjectMarkCountForTesting, "An open attempt keeps its mark.");
+            AssertEx.True(supervisor.IsBackgroundLaunchBlocked(Model, ModelRole.Chat), "An open attempt still blocks.");
+        };
+
+        AssertEx.Equal(LlamaServerEjectOutcome.NotRunning, await OperatorEjectAsync(supervisor));
+        await background;
+
+        AssertEx.Equal(expected: 0, supervisor.EjectMarkCountForTesting, "The attempt ended cleared, so its mark is pruned.");
+        AssertEx.False(supervisor.IsBackgroundLaunchBlocked(Model, ModelRole.Chat));
+        AssertEx.Equal(expected: 1, supervisor.CountRunningProcesses(), "The published load survives the attempt that read the table before it.");
     }
 
     private static Task<LlamaServerEjectOutcome> OperatorEjectAsync(LlamaServerProcessSupervisor supervisor) =>

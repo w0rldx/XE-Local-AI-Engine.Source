@@ -65,7 +65,7 @@ internal sealed class ProcessSandboxChildProcess : ISandboxChildProcess
         }
     }
 
-    public void Kill() =>
+    public bool Kill() =>
         SandboxProcessTree.TreeKill(_process);
 
     public void Dispose() =>

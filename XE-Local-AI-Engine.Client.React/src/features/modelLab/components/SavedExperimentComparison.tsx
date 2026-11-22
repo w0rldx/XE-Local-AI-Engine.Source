@@ -24,6 +24,7 @@ import type { XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse
 import { logprobPercentLabel, logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { NextTokenStepView } from "@/features/modelLab/components/NextTokenStepView";
+import { CandidateNoteText } from "@/features/modelLab/components/TraceStepCandidates";
 import {
 	commonLayerMeans,
 	compareFacts,
@@ -33,7 +34,7 @@ import {
 	pairSteeringArms,
 	sameCheckpoint,
 } from "@/features/modelLab/models/ModelLabComparison";
-import { type CandidateBasis, toStepEntry } from "@/features/modelLab/models/ModelLabTrace";
+import { type CandidateBasis, candidateNote, toStepEntry } from "@/features/modelLab/models/ModelLabTrace";
 
 const differsBackground = "var(--mantine-color-yellow-light)";
 const selectedBackground = "var(--mantine-primary-color-light)";
@@ -189,7 +190,10 @@ function TraceComparison({ runs }: { runs: Experiment[] }) {
 	const byText = !sameCheckpoint(runs);
 	const divergence = firstDivergence(tokens, byText);
 	const steps = Array.from({ length: Math.max(0, ...tokens.map((list) => list.length)) }, (_, step) => step);
-	const hasCandidates = tokens.some((list) => list.some((token) => token.candidates));
+	// A contract-7 run counts even when it dropped every step's candidates: its steps then say "not kept".
+	const hasCandidates =
+		runs.some((run) => run.result?.candidateSteps !== null && run.result?.candidateSteps !== undefined) ||
+		tokens.some((list) => list.some((token) => token.candidates));
 	const traceError = traces.find((trace) => trace.status === "error")?.error;
 	const records = traces.every((trace) => trace.status === "success")
 		? traces.map((trace) => trace.data?.records ?? [])
@@ -318,6 +322,7 @@ function TraceComparison({ runs }: { runs: Experiment[] }) {
 					{tokens.map((list, index) => {
 						const token = list[selectedStep];
 						const entry = token && toStepEntry(token, basis);
+						const candidateSteps = runs[index]?.result?.candidateSteps;
 						return (
 							// biome-ignore lint/suspicious/noArrayIndexKey: one panel per run, in the runs' fixed order.
 							<Paper key={index} withBorder={true} p="sm">
@@ -343,11 +348,11 @@ function TraceComparison({ runs }: { runs: Experiment[] }) {
 															),
 											}}
 										/>
+									) : token ? (
+										<CandidateNoteText note={candidateNote(token, selectedStep, candidateSteps)} />
 									) : (
 										<Text size="sm" c="dimmed">
-											{token
-												? t("pages.modelLab.trace.noCandidates", "This trace recorded no candidates (made before this version).")
-												: t("pages.modelLab.savedCompare.endedBefore", "This run ended before this step.")}
+											{t("pages.modelLab.savedCompare.endedBefore", "This run ended before this step.")}
 										</Text>
 									)}
 								</Stack>

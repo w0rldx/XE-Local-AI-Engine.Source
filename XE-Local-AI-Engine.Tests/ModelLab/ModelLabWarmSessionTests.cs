@@ -31,7 +31,7 @@ using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     The warm Model Lab session on the node's real DI: real gate, lease, ledger, broker and store. Only the serving worker is scripted; it
-///     speaks contract 6, and every wait here is on a signal the worker or the session gives.
+///     speaks this build's contract, and every wait here is on a signal the worker or the session gives.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class ModelLabWarmSessionTests
@@ -1029,6 +1029,46 @@ public sealed class ModelLabWarmSessionTests
             {
                 AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode, "Once the worker reaps gone, nothing holds the checkpoint.");
             }
+    }
+
+    /// <summary>
+    ///     A warm start on a checkpoint a delete holds is refused before it touches the session, through overlapping holders and a repeated
+    ///     release. Once the last holder lets go without deleting, the same worker runs the next job.
+    /// </summary>
+    [Test]
+    public async Task AWarmStart_WhileDeletesHoldTheCheckpoint_IsRefusedUntouched_AndReusesTheWorkerOnceTheyLetGo()
+    {
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process, configure: GateWithHook.Install, warmIdleSeconds: WarmSeconds);
+        var gate = (GateWithHook)host.Gate;
+        _ = await TraceAsync(host, process);
+        var attempts = gate.ExclusiveAttempts;
+        var artifactId = host.Request().BaseArtifactId;
+
+        using var first = host.Service.ClaimForDelete(artifactId);
+        using var second = host.Service.ClaimForDelete(artifactId);
+        var refused = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+        first.Dispose();
+        first.Dispose();
+        var stillRefused = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+
+        AssertEx.Equal<ModelLabStartRefusal?>(ModelLabStartRefusal.CheckpointNotFound, refused.Refusal);
+        AssertEx.Equal<ModelLabStartRefusal?>(ModelLabStartRefusal.CheckpointNotFound, stillRefused.Refusal, "One holder's repeated release does not free the other's hold.");
+        AssertEx.Equal(RuntimeResidentState.Idle, host.Service.GetResident()!.State, "The refusal left the idle worker as it was.");
+        AssertEx.Equal(GpuWorkKind.ModelLabExperiment, host.Gate.ExclusiveKind!.Value, "And its holds.");
+        AssertEx.False(process.EvictRequested);
+        AssertEx.Null(host.Service.ActiveBaseArtifactId, "A refused start names no checkpoint, so the delete's own guard would pass.");
+
+        second.Dispose();
+        var reused = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+        AssertEx.True(reused.ExperimentId.HasValue, reused.RefusalMessage ?? "The warm start should have started.");
+        await process.WaitForRunAsync(2);
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.Equal(attempts, gate.ExclusiveAttempts, "No start went cold.");
+        AssertEx.Equal(expected: 2, process.WrittenLines.Count(static line => line.Contains("\"op\":\"run\"", StringComparison.Ordinal)), "Both jobs ran in the one process.");
+        AssertEx.Equal(RuntimeResidentState.Idle, host.Service.GetResident()!.State);
     }
 
     /// <summary>A delete while a job holds the checkpoint's worker is refused, and remembered: the job's end evicts the worker so a retry can pass.</summary>

@@ -95,6 +95,54 @@ public sealed class LinuxTrainingPidFdSignalTests
         AssertEx.Equal<string?>(expected, LinuxTrainingProcessInspector.RunTokenIn(Encoding.UTF8.GetBytes(environment)));
     }
 
+    /// <summary>A block that fills the buffer is read again, whole, from a fresh open with a doubled buffer: the token at its end is never cut off.</summary>
+    [Test]
+    [Arguments(3000)]
+    [Arguments(4096)]
+    public async Task ReadEnvironmentBlock_LargerThanTheFirstBuffer_ReadsTheWholeBlock(int blockBytes)
+    {
+        using var temp = new TempDirectory("xe-environ");
+        var path = temp.FilePath("environ");
+        var token = "XE_TRAINING_RUN_TOKEN=token\0";
+        var block = Encoding.UTF8.GetBytes(new string('x', blockBytes - token.Length - 1) + "\0" + token);
+        await File.WriteAllBytesAsync(path, block);
+
+        var read = LinuxTrainingProcessInspector.ReadEnvironmentBlock(path, initialBytes: 1024, maxBytes: 8192);
+
+        AssertEx.Equal(blockBytes, read?.Length);
+        AssertEx.Equal<string?>("token", LinuxTrainingProcessInspector.RunTokenIn(read!));
+    }
+
+    /// <summary>A block past the bound, or a file that cannot be opened, is unreadable: null, which contradicts no receipt.</summary>
+    [Test]
+    [Arguments("too large")]
+    [Arguments("missing")]
+    public async Task ReadEnvironmentBlock_PastTheBoundOrUnreadable_IsNull(string failure)
+    {
+        using var temp = new TempDirectory("xe-environ");
+        var path = temp.FilePath("environ");
+        if (failure == "too large")
+        {
+            await File.WriteAllBytesAsync(path, new byte[4096]);
+        }
+
+        AssertEx.Null(LinuxTrainingProcessInspector.ReadEnvironmentBlock(path, initialBytes: 1024, maxBytes: 4096));
+    }
+
+    /// <summary>procfs answers one read with the whole block: this host's own environment, well past the 512 bytes an unknown-length read starts with.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task ReadEnvironmentBlock_OnProcfs_ReadsTheWholeBlock()
+    {
+        var path = $"/proc/{Environment.ProcessId}/environ";
+
+        var block = LinuxTrainingProcessInspector.ReadEnvironmentBlock(path,
+            LinuxTrainingProcessInspector.InitialEnvironmentBytes,
+            LinuxTrainingProcessInspector.MaxEnvironmentBytes);
+
+        AssertEx.Equal((await File.ReadAllBytesAsync(path)).Length, block?.Length);
+    }
+
     /// <summary>A zombie's environment is gone with its memory; its start time and the fd still prove it, so its group is signalled as before.</summary>
     [Test]
     [RunOn(OS.Linux)]

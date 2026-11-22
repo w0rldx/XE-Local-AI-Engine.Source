@@ -91,6 +91,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     private readonly string _jailRoot;
     private readonly ISandboxLauncher _launcher;
     private readonly ILogger<ProcessSandboxRuntimeProvider> _logger;
+    private readonly ISandboxProcessGroupKiller _groupKiller;
     private readonly ISandboxMarkerStore _markerStore;
     private readonly IMxcSandboxRuntime? _mxcRuntime;
     private readonly IExecutionPreviewPolicy? _previewPolicy;
@@ -109,7 +110,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         ISandboxLauncher? launcher = null,
         ISandboxMarkerStore? markerStore = null,
         IExecutionPreviewPolicy? previewPolicy = null,
-        IMxcSandboxRuntime? mxcRuntime = null)
+        IMxcSandboxRuntime? mxcRuntime = null,
+        ISandboxProcessGroupKiller? groupKiller = null)
     {
         ArgumentNullException.ThrowIfNull(copyOptions);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -117,6 +119,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         _logger = logger ?? NullLogger<ProcessSandboxRuntimeProvider>.Instance;
         _launcher = launcher ?? new SandboxLauncher(new HostSandboxContainmentProbe());
         _markerStore = markerStore ?? new FileSandboxMarkerStore();
+        _groupKiller = groupKiller ?? (OperatingSystem.IsLinux() ? new LinuxSandboxProcessGroupKiller(timeProvider) : new NoOpSandboxProcessGroupKiller());
         _previewPolicy = previewPolicy;
         // The MXC SDK is reached only for a launch the AppContainer boundary serves, which only a Windows probe can produce; elsewhere
         // there is no runtime and such a descriptor fails closed. Injectable so the MXC path is unit-tested on Linux through a fake.
@@ -318,26 +321,24 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // engine's copies are released here: holding them would leak one descriptor per bind per command.
         launch.LaunchResources?.Dispose();
 
+        // Pin the leader before anything else touches it, and snapshot the identity a marker may record.
+        var teardown = SandboxLaunchTeardown.Create(process, launch.AppliedProcessGroup, _groupKiller);
+
         // Record the live process group so a hard host kill, which skips Dispose/KillAsync, leaves something the next start can
         // reap. Only meaningful for a real group leader; the marker's docs say why a non-leader pid must never be a group id.
-        var markerId = CompleteProcessMarker(state, process, launch, pendingMarkerId);
+        var markerId = CompleteProcessMarker(state, teardown, launch, pendingMarkerId);
 
         // A per-command source that best-effort cancel (CancelCommandAsync) and sandbox kill (KillAsync) fire, yielding a
         // non-throwing Completed=false result, distinct from a caller-token cancel (throws) and a timeout (timed-out result).
         var commandCancelSource = new CancellationTokenSource();
-        var inFlight = new InFlightExecution(process, commandCancelSource, launch.ScopeUnitName);
+        var inFlight = new InFlightExecution(teardown, commandCancelSource, launch.ScopeUnitName);
         var registration = TryRegisterInFlight(state, request.ExecutionId, inFlight);
         if (registration != InFlightRegistration.Registered)
         {
             // The sandbox was killed while the child started, or another command is in flight under this execution id: kill the
             // just-started one, which no teardown can reach, and reject.
-            process.Kill();
-            await TerminateLaunchAsync(launch, process);
-            if (markerId is not null)
-            {
-                _markerStore.Delete(markerId);
-            }
-
+            ReleaseMarker(state, markerId, await TerminateLaunchAsync(launch, teardown));
+            teardown.Dispose();
             process.Dispose();
             commandCancelSource.Dispose();
             if (registration == InFlightRegistration.SandboxDead)
@@ -415,16 +416,14 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // The child wrote past the jail disk ceiling: tree-kill and return the same non-throwing incomplete shape as
             // a timeout, with an explanatory StandardError so the AgentHome run flow can tell the user WHY it stopped.
-            process.Kill();
-            await TerminateLaunchAsync(launch, process);
+            _ = await TerminateLaunchAsync(launch, teardown);
             return DiskCeilingResult(request.ExecutionId, jailDiskCeiling, startedAt);
         }
         catch (OperationCanceledException) when (commandCancelSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             // A best-effort cancel or sandbox kill fired: tree-kill and return a non-throwing Completed=false result, so AgentHome
             // reads a cancelled command, not a caller cancel. Scope and group kills run here: a tree walk stops at the helper.
-            process.Kill();
-            await TerminateLaunchAsync(launch, process);
+            _ = await TerminateLaunchAsync(launch, teardown);
 
             // Keep what the command printed before the stop, so the caller sees how far it got. The tree is gone, so the pumps reach end
             // of stream; the wait is bounded as InteractiveProcess bounds its drain, and an expired one keeps the capture so far.
@@ -448,34 +447,29 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // Per-command timeout fired while the caller token stayed un-cancelled: kill the tree and return a
             // non-throwing timed-out result (Completed=false / ExitCode=-1), matching the container/fake timeout shape.
-            process.Kill();
-            await TerminateLaunchAsync(launch, process);
+            _ = await TerminateLaunchAsync(launch, teardown);
             return NotCompleted(request.ExecutionId, "Command timed out.", startedAt);
         }
         catch (OperationCanceledException)
         {
             // A caller cancel tree-kills and propagates OperationCanceledException so AgentHomeService can disambiguate
             // caller-cancel from timeout.
-            process.Kill();
-            await TerminateLaunchAsync(launch, process);
+            _ = await TerminateLaunchAsync(launch, teardown);
             throw;
         }
         finally
         {
             // Teardown on EVERY path, success included: a command's exit says nothing about its DESCENDANTS, and a reparented orphan
             // outlives the RUN in a reused sandbox, unseen by the sweep once its marker goes. Ordered BEFORE that delete; all idempotent.
-            process.Kill();
-            await TerminateLaunchAsync(launch, process);
+            var outcome = await TerminateLaunchAsync(launch, teardown);
 
             _ = state.InFlight.TryRemove(request.ExecutionId, out _);
 
-            // The command is over one way or another, so its marker has done its job. Deleting it here is what keeps the
-            // startup reaper's work proportional to actual orphans rather than to every command ever run.
-            if (markerId is not null)
-            {
-                _markerStore.Delete(markerId);
-            }
+            // The command is over one way or another, so its marker has done its job unless the kill could not be verified. Deleting
+            // it here is what keeps the startup reaper's work proportional to actual orphans rather than to every command ever run.
+            ReleaseMarker(state, markerId, outcome);
 
+            teardown.Dispose();
             process.Dispose();
             commandCancelSource.Dispose();
         }
@@ -619,22 +613,18 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // engine's copies are released here: one leaked descriptor per bind per server would exhaust the table.
         launch.LaunchResources?.Dispose();
 
-        var markerId = CompleteProcessMarker(state, process, launch, pendingMarkerId);
+        var teardown = SandboxLaunchTeardown.Create(process, launch.AppliedProcessGroup, _groupKiller);
+        var markerId = CompleteProcessMarker(state, teardown, launch, pendingMarkerId);
 
         // Registered in the jail's in-flight set under the execution id, which is what makes KillAsync, and so the whole teardown
         // (scope cgroup, process group, tree, jail directory), cover this process with no second path.
         var commandCancelSource = new CancellationTokenSource();
-        var inFlight = new InFlightExecution(process, commandCancelSource, launch.ScopeUnitName);
+        var inFlight = new InFlightExecution(teardown, commandCancelSource, launch.ScopeUnitName);
         var registration = TryRegisterInFlight(state, request.ExecutionId, inFlight);
         if (registration != InFlightRegistration.Registered)
         {
-            process.Kill();
-            await TerminateLaunchAsync(launch, process);
-            if (markerId is not null)
-            {
-                _markerStore.Delete(markerId);
-            }
-
+            ReleaseMarker(state, markerId, await TerminateLaunchAsync(launch, teardown));
+            teardown.Dispose();
             process.Dispose();
             commandCancelSource.Dispose();
             throw registration == InFlightRegistration.SandboxDead
@@ -646,7 +636,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             request.ExecutionId,
             launch.MxcRequest is not null ? "MXC AppContainer" : "process",
             launch.AppliedFilesystemIsolation);
-        return new InteractiveProcess(this, state, request.ExecutionId, process, launch, markerId, commandCancelSource, stderrTail);
+        return new InteractiveProcess(this, state, request.ExecutionId, teardown, launch, markerId, commandCancelSource, stderrTail);
     }
 
     public async Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)
@@ -947,9 +937,9 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///     one for a launch that had no scope to claim. Returns the marker id, or <see langword="null" /> when there is
     ///     nothing reapable to record.
     /// </summary>
-    private string? CompleteProcessMarker(JailState state, ISandboxChildProcess process, SandboxLaunchDescriptor launch, string? pendingMarkerId)
+    private string? CompleteProcessMarker(JailState state, SandboxLaunchTeardown teardown, SandboxLaunchDescriptor launch, string? pendingMarkerId)
     {
-        var marker = BuildProcessMarker(state, process, launch);
+        var marker = BuildProcessMarker(state, teardown, launch);
         if (marker is null)
         {
             if (pendingMarkerId is not null)
@@ -975,36 +965,13 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     /// <summary>Builds the orphan-reaper marker for a just-started child.</summary>
     /// <returns><see langword="null" /> when the launch produced nothing the reaper could act on.</returns>
     /// <remarks>
-    ///     The pid is recorded ONLY when the child was launched under <c>setsid</c>, because the reaper signals with
-    ///     <c>kill(-pgid)</c> and the pid is a process-group id only in that case. A non-leader pid would have the
-    ///     reaper signal whatever group that pid belonged to — in the worst case the worker's own — so the absence of
-    ///     the mechanism must mean the absence of a pid, not a guess.
+    ///     The pid is recorded ONLY for a <c>setsid</c> leader whose start time the teardown read while the child was proven unreaped,
+    ///     because the reaper signals its group and verifies it by that start time. A non-leader pid would have the reaper signal whatever
+    ///     group that pid belonged to, in the worst case the worker's own, so a missing identity means no pid, not a guess.
     /// </remarks>
-    private SandboxProcessMarker? BuildProcessMarker(JailState state, ISandboxChildProcess process, SandboxLaunchDescriptor launch)
+    private SandboxProcessMarker? BuildProcessMarker(JailState state, SandboxLaunchTeardown teardown, SandboxLaunchDescriptor launch)
     {
-        int? processGroupId = null;
-        long? leaderStartTicks = null;
-
-        if (launch.AppliedProcessGroup)
-        {
-            try
-            {
-                var processId = process.Id;
-
-                // The pid-reuse guard is only as good as the start time recorded alongside it; without one, record no
-                // pid at all rather than a group id the reaper could not verify before signaling.
-                if (new LinuxSandboxProcessGroupKiller(_timeProvider).GetProcessStartTicks(processId) is { } startTicks)
-                {
-                    processGroupId = processId;
-                    leaderStartTicks = startTicks;
-                }
-            }
-            catch (InvalidOperationException)
-            {
-                // The process exited before its pid could be read — nothing to signal, so nothing to record.
-            }
-        }
-
+        var processGroupId = teardown.MarkerProcessGroupId;
         if (processGroupId is null && launch.ScopeUnitName is null)
         {
             return null;
@@ -1015,7 +982,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             SandboxId = state.Handle.SandboxId,
             ProcessGroupId = processGroupId,
             ScopeUnitName = launch.ScopeUnitName,
-            LeaderStartTicks = leaderStartTicks,
+            LeaderStartTicks = teardown.MarkerStartTicks,
             JailPath = state.JailRoot,
             PreserveJail = state.PreserveJailRoot,
             OwnerProcessId = Environment.ProcessId,
@@ -1023,18 +990,19 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         };
     }
 
-    /// <summary>Tears down everything one launch started, in order of decreasing reach.</summary>
+    /// <summary>Tears down everything one launch started: its process group and leader once, then its scope.</summary>
+    /// <returns>The shared group outcome; <see cref="SandboxGroupKillOutcome.Deferred" /> keeps the orphan marker.</returns>
     /// <remarks>
-    ///     First the scope's CGROUP, the only complete kill for a command in a PID namespace; then the process GROUP of a group
-    ///     leader, which catches a detached descendant. <see cref="ISandboxChildProcess.Kill" /> has already run; these are the
-    ///     best-effort layers under it. An MXC launch has neither: MXC's kill took the contained tree, and no Linux killer may be
-    ///     pointed at a Windows pid.
+    ///     The group goes first, through the pin taken at launch, then the leader's tree, then the scope's CGROUP, the only complete
+    ///     kill for a command in a PID namespace. An MXC launch has no group or scope: its kill took the contained tree, and no Linux
+    ///     killer may be pointed at a Windows pid, but its kill still runs through the same teardown.
     /// </remarks>
-    private async Task TerminateLaunchAsync(SandboxLaunchDescriptor launch, ISandboxChildProcess process)
+    private async Task<SandboxGroupKillOutcome> TerminateLaunchAsync(SandboxLaunchDescriptor launch, SandboxLaunchTeardown teardown)
     {
+        var outcome = teardown.Terminate();
         if (launch.MxcRequest is not null)
         {
-            return;
+            return outcome;
         }
 
         if (launch.ScopeUnitName is { } unitName
@@ -1051,25 +1019,36 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             }
         }
 
-        if (!launch.AppliedProcessGroup || !OperatingSystem.IsLinux())
+        return outcome;
+    }
+
+    /// <summary>Deletes a finished command's orphan marker unless its group kill could not be verified.</summary>
+    /// <remarks>
+    ///     A kept marker is retried by the startup sweep of a later host once this one is gone, with no age bound; the jail itself may
+    ///     still be removed by this host, since the marker lives outside it.
+    /// </remarks>
+    private void ReleaseMarker(JailState state, string? markerId, SandboxGroupKillOutcome outcome)
+    {
+        if (outcome != SandboxGroupKillOutcome.Deferred)
         {
+            if (markerId is not null)
+            {
+                _markerStore.Delete(markerId);
+            }
+
             return;
         }
 
-        try
+        if (markerId is null)
         {
-            // Explicitly not propagating: best-effort teardown must finish even when the run was cancelled.
-            await new LinuxSandboxProcessGroupKiller(_timeProvider).KillProcessGroupAsync(process.Id, CancellationToken.None);
+            _logger.LogWarning("A process group of sandbox {SandboxId}, or a descendant that left it, could not be verified dead, and no orphan marker was recorded for it, so no later start will retry.",
+                state.Handle.SandboxId);
+            return;
         }
-        catch (InvalidOperationException)
-        {
-            // No associated process any more — the tree-kill already finished the job.
-        }
-        catch (Exception exception)
-        {
-            // Best-effort teardown never throws into the run flow, matching TerminateState/Dispose.
-            _logger.LogDebug(exception, "Best-effort sandbox process-group kill failed.");
-        }
+
+        _logger.LogWarning(
+            "A process group of sandbox {SandboxId}, or a descendant that left it, could not be verified dead; its orphan marker is kept so a later start retries the group kill, which cannot reach such a descendant.",
+            state.Handle.SandboxId);
     }
 
     /// <summary>
@@ -1244,9 +1223,9 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///     tear it down.
     /// </summary>
     /// <remarks>
-    ///     Disposal runs the SAME layers <c>ExecuteAsync</c> runs on an abnormal exit — tree-kill, then the scope
-    ///     cgroup and the process group through <see cref="TerminateLaunchAsync" /> — and then removes the in-flight
-    ///     entry and the reaper marker, so a released process leaves nothing for the next startup sweep.
+    ///     Disposal runs the SAME layers <c>ExecuteAsync</c> runs on an abnormal exit — the shared group-and-leader teardown, then the
+    ///     scope cgroup, through <see cref="TerminateLaunchAsync" /> — and then removes the in-flight entry and the reaper marker
+    ///     (kept when the group kill could not be verified), so a released process leaves nothing for the next startup sweep.
     /// </remarks>
     private sealed class InteractiveProcess : ISandboxInteractiveProcess
     {
@@ -1259,12 +1238,13 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         private readonly ProcessSandboxRuntimeProvider _provider;
         private readonly JailState _state;
         private readonly SandboxStderrTail _stderrTail;
+        private readonly SandboxLaunchTeardown _teardown;
         private int _disposed;
 
         public InteractiveProcess(ProcessSandboxRuntimeProvider provider,
             JailState state,
             string executionId,
-            ISandboxChildProcess process,
+            SandboxLaunchTeardown teardown,
             SandboxLaunchDescriptor launch,
             string? markerId,
             CancellationTokenSource cancelSource,
@@ -1273,7 +1253,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             _provider = provider;
             _state = state;
             _executionId = executionId;
-            _process = process;
+            _teardown = teardown;
+            _process = teardown.Process;
             _launch = launch;
             _markerId = markerId;
             _cancelSource = cancelSource;
@@ -1308,8 +1289,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 return;
             }
 
-            _process.Kill();
-            await _provider.TerminateLaunchAsync(_launch, _process);
+            var outcome = await _provider.TerminateLaunchAsync(_launch, _teardown);
             if (_launch.MxcRequest is not null)
             {
                 // Reap, bounded: MXC clears the run's DACL grants once the workload has exited (ClearPolicyOnExit).
@@ -1318,11 +1298,9 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             }
 
             _ = _state.InFlight.TryRemove(_executionId, out _);
-            if (_markerId is not null)
-            {
-                _provider._markerStore.Delete(_markerId);
-            }
+            _provider.ReleaseMarker(_state, _markerId, outcome);
 
+            _teardown.Dispose();
             _process.Dispose();
             _cancelSource.Dispose();
         }

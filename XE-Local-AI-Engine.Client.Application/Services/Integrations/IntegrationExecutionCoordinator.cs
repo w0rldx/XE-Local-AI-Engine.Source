@@ -545,6 +545,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         CancellationToken runToken)
     {
         var executionId = execution.Id;
+        // Nobody waits on an integration run, so the resolve's playbook ranking never reloads an embedder the operator ejected.
+        using var unattendedRun = UnattendedRunScope.Begin();
 
         var agentDefinitionId = trigger.TargetAgentDefinitionId.GetValueOrDefault();
         context.Describe(trigger.Name, agentDefinitionId);

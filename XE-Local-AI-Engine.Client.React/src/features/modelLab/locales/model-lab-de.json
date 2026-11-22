@@ -792,6 +792,8 @@
 					"keep": "Weiterlaufen lassen",
 					"title": "Dieses Experiment abbrechen?"
 				},
+				"candidatesNotKept": "Die Kandidaten dieses Schritts wurden nicht behalten: Ein langer Lauf behält sie nur für seine ersten Schritte, damit sein gespeichertes Ergebnis die Größengrenze einhält. Das Token, sein Text und seine Wahrscheinlichkeit bleiben erhalten.",
+				"candidatesPartial": "Die Kandidaten wurden für die ersten {{kept}} von {{total}} Schritten behalten, damit das gespeicherte Ergebnis die Größengrenze einhält. Jeder spätere Schritt behält sein Token, dessen Text und seine Wahrscheinlichkeit.",
 				"chatWait": "Chats, die ein lokales Modell brauchen, warten, bis dies fertig ist oder du es abbrichst.",
 				"check": "Prüfen",
 				"checkFailed": "Die Prüfung konnte nicht laufen.",
@@ -830,6 +832,10 @@
 				},
 				"listFailed": "Die Experimente konnten nicht geladen werden.",
 				"loadFailed": "Das Experiment konnte nicht geladen werden.",
+				"maxNewTokens": {
+					"help": "Wie viele Tokens der Trace höchstens generiert; er endet früher, wenn das Modell seine Antwort beendet. 128 ist die übliche Wahl.\n\nMehr Tokens folgen einer längeren Antwort, dauern aber länger und belegen mehr Speicher: Der Trace und die Attention-Zeilen wachsen mit jedem Token. Ab etwa 128 Tokens behält ein Lauf die Kandidaten für das nächste Token unter Umständen nur für seine ersten Schritte, damit sein gespeichertes Ergebnis die Größengrenze einhält. Senken Sie den Wert für einen schnellen Blick auf den Anfang einer Antwort.",
+					"label": "Zu generierende Tokens"
+				},
 				"measured": "Gemessen",
 				"measuredNote": "Von Hooks aus dem Checkpoint in voller Präzision während dieses Laufs gelesen, nicht aus dem GGUF. Eine Norm ist eine Messung, keine Erklärung dessen, was das Modell tut.",
 				"noCandidates": "Dieser Trace hat keine Kandidaten aufgezeichnet (vor dieser Version erstellt).",
@@ -874,7 +880,7 @@
 				"scope": "Der Trace lädt den Checkpoint in voller Präzision auf die GPU und braucht daher dessen Gewichte plus etwa 2 GiB Kartenspeicher. Ein größeres Modell wird abgelehnt, bevor etwas heruntergeladen wird, egal wie es für den Chat quantisiert ist.",
 				"select": "{{repo}} vom {{date}} zum Vergleichen auswählen",
 				"showInArchitecture": "Block {{index}} unter Architektur zeigen",
-				"spec": "Bis zu 128 Tokens, greedy. Der Trace ist je nach Anzahl der Blöcke in der Größe begrenzt und wird mit Prompt und Ausgabe verschlüsselt auf diesem Node gespeichert.",
+				"spec": "Greedy. Der Trace ist je nach Anzahl der Blöcke und Tokens in der Größe begrenzt und wird mit Prompt und Ausgabe verschlüsselt auf diesem Node gespeichert.",
 				"start": "Trace starten",
 				"startFailed": "Das Experiment konnte nicht starten.",
 				"status": {

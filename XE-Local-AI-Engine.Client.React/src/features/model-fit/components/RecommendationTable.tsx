@@ -148,8 +148,8 @@ function MoeOffloadBadge({ recommendation }: { recommendation: ModelFitRecommend
 	return (
 		<Tooltip
 			label={t("pages.modelFit.recommendations.moeOffload.breakdown", "GPU {{gpuGb}} GiB + RAM {{cpuGb}} GiB", {
-				gpuGb: recommendation.gpuGb,
-				cpuGb: recommendation.cpuGb,
+				gpuGb: formatOneDecimal(recommendation.gpuGb),
+				cpuGb: formatOneDecimal(recommendation.cpuGb),
 			})}
 		>
 			{badge}

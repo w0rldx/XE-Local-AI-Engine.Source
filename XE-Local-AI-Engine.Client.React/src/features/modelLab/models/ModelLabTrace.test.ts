@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { activeJobPollMs, stepperBlocks, toTraceTable } from "@/features/modelLab/models/ModelLabTrace";
+import {
+	activeJobPollMs,
+	candidateNote,
+	stepperBlocks,
+	toStepEntry,
+	toTraceTable,
+} from "@/features/modelLab/models/ModelLabTrace";
 
 describe("activeJobPollMs", () => {
 	it("keeps only a floor while the hub is live, and polls otherwise", () => {
@@ -75,5 +81,32 @@ describe("stepperBlocks", () => {
 			{ index: 2, kind: "L", norm: undefined },
 			{ index: 3, kind: "F", norm: 5 },
 		]);
+	});
+});
+
+describe("candidateNote", () => {
+	const kept = { id: 1, text: "a", candidates: [{ id: 1, text: "a", logprob: -0.1 }], processedCandidates: [] };
+	const none = { id: 2, text: "b", candidates: null, processedCandidates: null };
+
+	it("calls a step with its own candidates kept, whatever the count says", () => {
+		expect(candidateNote(kept, 5, 2)).toBe("kept");
+		expect(candidateNote(kept, 0, undefined)).toBe("kept");
+	});
+
+	it("calls a step past the kept count not kept, and one without a count from before this version", () => {
+		expect(candidateNote(none, 2, 2)).toBe("notKept");
+		expect(candidateNote(none, 1, null)).toBe("beforeVersion");
+		expect(candidateNote(none, 1, undefined)).toBe("beforeVersion");
+		expect(candidateNote(none, 1, 2)).toBe("beforeVersion");
+	});
+});
+
+describe("toStepEntry", () => {
+	it("still reads a step saved before candidateSteps existed, whose arrays are all there", () => {
+		const entry = toStepEntry(
+			{ id: 1, text: "a", logprob: -0.1, candidates: [{ id: 1, text: "a", logprob: -0.1 }], processedCandidates: [] },
+			"raw",
+		);
+		expect(entry?.alternatives).toEqual([{ id: 1, text: "a", logprob: -0.1 }]);
 	});
 });

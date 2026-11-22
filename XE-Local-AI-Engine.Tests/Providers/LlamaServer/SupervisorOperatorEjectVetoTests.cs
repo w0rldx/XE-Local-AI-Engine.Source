@@ -564,7 +564,7 @@ public sealed class SupervisorOperatorEjectVetoTests
         var safeChild = launcher.Handles.Last();
         AssertEx.True(safeChild.WasTreeKilled && safeChild.WasDisposed, "The vetoed safe retry must be killed and disposed.");
         AssertEx.Equal(expected: 0, supervisor.CountRunningProcesses());
-        AssertEx.True(logger.HasEntry(LogLevel.Warning, "safe-retry verdict for vetoed model"), "A lost verdict is said out loud.");
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "safe-retry verdict for model"), "A lost verdict is said out loud.");
     }
 
     [Test]
@@ -655,7 +655,7 @@ public sealed class SupervisorOperatorEjectVetoTests
 
             await AssertEx.ThrowsAsync<OperatorEjectedException>(() => background);
             AssertEx.True(logger.HasEntry(LogLevel.Debug, "the supervisor is shutting down"), "A shutdown that cuts the verdict short is logged at Debug.");
-            AssertEx.False(logger.HasEntry(LogLevel.Warning, "safe-retry verdict for vetoed model"), "A shutdown is not a lost-verdict Warning.");
+            AssertEx.False(logger.HasEntry(LogLevel.Warning, "safe-retry verdict for model"), "A shutdown is not a lost-verdict Warning.");
         }
         finally
         {

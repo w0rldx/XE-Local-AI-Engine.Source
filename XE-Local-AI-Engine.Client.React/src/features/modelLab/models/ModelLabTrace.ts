@@ -102,6 +102,18 @@ export function toStepEntry(token: ResultToken, basis: CandidateBasis): NextToke
 	};
 }
 
+// Why a step shows candidates or not: kept; not kept, because a long run drops those of its last steps to fit its saved
+// result (candidateSteps counts the steps that kept theirs); or recorded by a trace made before candidates were.
+// Only the token's own arrays say kept: an older result has no candidateSteps, and that alone never means none.
+export type CandidateNote = "kept" | "notKept" | "beforeVersion";
+
+export function candidateNote(token: ResultToken, step: number, candidateSteps: number | null | undefined): CandidateNote {
+	if (token.candidates) {
+		return "kept";
+	}
+	return candidateSteps !== null && candidateSteps !== undefined && step >= candidateSteps ? "notKept" : "beforeVersion";
+}
+
 // True when the processors changed nothing among the recorded candidates of this step.
 export function sameCandidates(token: ResultToken): boolean {
 	const raw = token.candidates ?? [];

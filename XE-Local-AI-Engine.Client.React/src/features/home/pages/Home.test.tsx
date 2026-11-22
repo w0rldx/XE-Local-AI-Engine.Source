@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
@@ -8,6 +9,7 @@ import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import type { ActiveOperation } from "@/core/operations/models/OperationModels";
 import { usePendingChatConversationStore } from "@/core/ui/stores/PendingChatConversationStore";
 import { Home } from "@/features/home/pages/Home";
+import de from "@/locales/de.json";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // Each card's server read, answered per test. The options keep their real shape apart from the query function, so
@@ -451,6 +453,30 @@ describe("Home recent chats card", () => {
 
 		fireEvent.click(rows[1] as HTMLElement);
 		expect(usePendingChatConversationStore.getState().pendingConversationId).toBe("a");
+	});
+
+	// The placeholder title is persisted in English and compared by exact string, so only its display is localized.
+	it("shows the placeholder title in the UI language", async () => {
+		// The app loads the German bundle lazily after the switch; preloading it keeps the first render from racing it.
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await act(() => i18next.changeLanguage("de"));
+		listConversations.mockResolvedValue({
+			items: [conversation("placeholder", 2_000, { title: "New conversation" }), conversation("named", 1_000)],
+			maxMessageSizeKb: 64,
+			maxUploadFileSizeMb: 10,
+		});
+
+		try {
+			renderHome();
+
+			await waitFor(() => expect(screen.getAllByTestId("home-recent-item")).toHaveLength(2));
+			const labels = screen
+				.getAllByTestId("home-recent-item")
+				.map((row) => row.querySelector(".mantine-NavLink-label")?.textContent);
+			expect(labels).toEqual(["Neuer Chat", "Chat named"]);
+		} finally {
+			await act(() => i18next.changeLanguage("en"));
+		}
 	});
 
 	it("shows at most five conversations", async () => {

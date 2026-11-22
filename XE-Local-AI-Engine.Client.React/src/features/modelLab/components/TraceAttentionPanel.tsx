@@ -236,7 +236,7 @@ function AttentionMap({ matrix, step, steps }: AttentionMapProps) {
 	const missingFill = `url(#${hatchId})`;
 	const pitch = cellSize + cellGap;
 	const gridWidth = matrix.columns.length * pitch - cellGap;
-	// Up to 128 × 256 rects: a step change only moves the outline, so the chart itself is built once per matrix.
+	// A rect per step (up to 256) and key position: a step change only moves the outline, so the chart itself is built once per matrix.
 	const chart = useMemo(
 		() => (
 			<MatrixChart

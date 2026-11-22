@@ -10,8 +10,14 @@ import {
 	IconSearch,
 } from "@tabler/icons-react";
 import { type KeyboardEvent, memo, useRef, useState } from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
+import {
+	conversationDisplayTitle,
+	placeholderConversationTitle,
+	untitledConversationTitle,
+} from "@/core/chat/models/ConversationDisplayTitle";
 import { isImeComposing } from "@/core/ui/models/ImeComposition";
 import { ConversationListCollapsedRail } from "@/features/chat/components/ConversationList/ConversationListCollapsedRail";
 import { ConversationListItem } from "@/features/chat/components/ConversationList/ConversationListItem";
@@ -55,12 +61,12 @@ interface ConversationListProps {
 	importing?: boolean;
 }
 
-function matchesQuery(conversation: ChatConversationModel, query: string): boolean {
+function matchesQuery(conversation: ChatConversationModel, query: string, t: TFunction): boolean {
 	if (query.length === 0) {
 		return true;
 	}
 
-	const haystack = `${conversation.title} ${conversation.lastMessagePreview ?? ""}`.toLowerCase();
+	const haystack = `${conversationDisplayTitle(conversation.title, t)} ${conversation.lastMessagePreview ?? ""}`.toLowerCase();
 	return haystack.includes(query);
 }
 
@@ -104,13 +110,29 @@ export const ConversationList = memo(function ConversationList({
 	// content search covers every conversation and all message text, so its answer replaces the local filter. A hit
 	// without a snippet matched only the title: say so instead of the empty-chat preview.
 	const titleMatchPreview = t("chat.search.titleMatch", "Matches the title");
+	// The server matched the stored English title, so a localized fallback title (placeholder, untitled) matches only here.
+	const localizedTitleMatches = (hits: ChatConversationModel[]): ChatConversationModel[] =>
+		conversations
+			.filter((conversation) => {
+				const displayed = conversationDisplayTitle(conversation.title, t);
+				return (
+					displayed !== conversation.title.trim() &&
+					(showArchived || !conversation.isArchived) &&
+					displayed.toLowerCase().includes(normalizedQuery) &&
+					!hits.some((hit) => hit.id === conversation.id)
+				);
+			})
+			.map((conversation) => ({ ...conversation, lastMessagePreview: titleMatchPreview }));
 	const visible =
 		searching && searchResults
-			? searchResults.conversations.map((hit) =>
-					hit.lastMessagePreview ? hit : { ...hit, lastMessagePreview: titleMatchPreview },
-				)
+			? [
+					...searchResults.conversations.map((hit) =>
+						hit.lastMessagePreview ? hit : { ...hit, lastMessagePreview: titleMatchPreview },
+					),
+					...localizedTitleMatches(searchResults.conversations),
+				]
 			: conversations.filter(
-					(conversation) => (showArchived || !conversation.isArchived) && matchesQuery(conversation, normalizedQuery),
+					(conversation) => (showArchived || !conversation.isArchived) && matchesQuery(conversation, normalizedQuery, t),
 				);
 	const pinned = visible.filter((conversation) => conversation.isPinned && !conversation.isArchived);
 	const recent = visible.filter((conversation) => !conversation.isPinned && !conversation.isArchived);
@@ -133,7 +155,9 @@ export const ConversationList = memo(function ConversationList({
 
 	const beginRename = (conversation: ChatConversationModel): void => {
 		setRenamingId(conversation.id);
-		setRenameDraft(conversation.title.trim());
+		// The placeholder and untitled fallback start empty: prefilled display text would be saved by an unedited rename.
+		const title = conversation.title.trim();
+		setRenameDraft(title === placeholderConversationTitle || title === untitledConversationTitle ? "" : title);
 	};
 
 	const cancelRename = (): void => {

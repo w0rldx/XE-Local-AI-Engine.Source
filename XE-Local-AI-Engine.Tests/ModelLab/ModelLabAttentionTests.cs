@@ -183,7 +183,7 @@ public sealed class ModelLabAttentionTests
     {
         using var process = new ScriptedProcess
         {
-            AttentionContent = overCap < 0 ? null : new string('x', ModelLabTraceSpec.AttentionByteCapFor(6, Heads) + overCap),
+            AttentionContent = overCap < 0 ? null : new string('x', ModelLabTraceSpec.AttentionByteCapFor(6, Heads, ModelLabTraceSpec.MaxNewTokens) + overCap),
             TraceResult = CapturedResult
         };
         await using var host = await LabHost.StartAsync(process);
@@ -294,12 +294,15 @@ public sealed class ModelLabAttentionTests
     [Test]
     public void TheAttentionCap_IsTwiceEveryHeadsTopKeys_AndBoundsTheLargestShape()
     {
-        AssertEx.Equal((6 * 8 * 128 * 32 * 10 * 2) + 160, ModelLabTraceSpec.AttentionByteCapFor(6, 8));
-        AssertEx.Equal(expected: 20_971_680, ModelLabTraceSpec.MaxAttentionByteCap);
-        AssertEx.Equal(ModelLabTraceSpec.AttentionByteCapFor(ModelLabTraceSpec.MaxAttentionLayers, ModelLabTraceSpec.MaxAttentionHeads), ModelLabTraceSpec.MaxAttentionByteCap);
-        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.AttentionByteCapFor(0, 8));
-        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.AttentionByteCapFor(ModelLabTraceSpec.MaxAttentionLayers + 1, 8));
-        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.AttentionByteCapFor(6, ModelLabTraceSpec.MaxAttentionHeads + 1));
+        AssertEx.Equal((6 * 8 * 128 * 32 * 10 * 2) + 160, ModelLabTraceSpec.AttentionByteCapFor(6, 8, 128));
+        AssertEx.Equal((6 * 8 * 256 * 32 * 10 * 2) + 160, ModelLabTraceSpec.AttentionByteCapFor(6, 8, 256));
+        AssertEx.Equal(expected: 41_943_200, ModelLabTraceSpec.MaxAttentionByteCap);
+        AssertEx.Equal(ModelLabTraceSpec.AttentionByteCapFor(ModelLabTraceSpec.MaxAttentionLayers, ModelLabTraceSpec.MaxAttentionHeads, ModelLabTraceSpec.MaxRequestedNewTokens),
+            ModelLabTraceSpec.MaxAttentionByteCap);
+        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.AttentionByteCapFor(0, 8, 128));
+        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.AttentionByteCapFor(ModelLabTraceSpec.MaxAttentionLayers + 1, 8, 128));
+        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.AttentionByteCapFor(6, ModelLabTraceSpec.MaxAttentionHeads + 1, 128));
+        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.AttentionByteCapFor(6, 8, 0));
     }
 
     [Test]

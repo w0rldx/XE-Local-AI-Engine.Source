@@ -232,6 +232,34 @@ describe("TraceStepper", () => {
 		expect(screen.getByTestId("model-lab-stepper-selected").textContent).toBe("Block 7, full attention: residual norm 20");
 	});
 
+	it("says a step past a long run's kept candidates has none kept, while an earlier step shows them", async () => {
+		const [hi, bang, newline] = tokens;
+		await openStepper({
+			...result,
+			tokens: [hi, bang, { ...newline, candidates: null, processedCandidates: null }],
+			candidateSteps: 2,
+		});
+
+		fireEvent.click(screen.getByRole("button", { name: "Next step" }));
+		expect(screen.getByTestId("model-lab-next-token-measured")).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: "Next step" }));
+
+		expect(screen.getByTestId("model-lab-candidates-notKept").textContent).toBe(
+			"This step's candidates were not kept: a long run keeps them only for its first steps, so its saved result stays within its size limit. The token, its text and its probability are kept.",
+		);
+		expect(screen.queryByTestId("model-lab-next-token-measured")).toBeNull();
+		expect(screen.queryByTestId("model-lab-candidates-beforeVersion")).toBeNull();
+	});
+
+	it("says an older run recorded no candidates, though it names no count of kept steps", async () => {
+		await openStepper({ ...result, tokens: tokens.map(({ id, text }) => ({ id, text })) });
+
+		expect(screen.getByTestId("model-lab-candidates-beforeVersion").textContent).toBe(
+			"This trace recorded no candidates (made before this version).",
+		);
+		expect(screen.queryByTestId("model-lab-candidates-notKept")).toBeNull();
+	});
+
 	it("shows the step's raw candidates and its processed ones on the switch", async () => {
 		await openStepper();
 

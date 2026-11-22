@@ -37,27 +37,78 @@ public sealed class KnowledgeIngestionDispatcherTests
     }
 
     [Test]
-    public async Task EnqueueAsync_PushesPendingBeforeTheWorkerCanReadTheId_AndAStrandedReadmitOfAQueuedDocumentPushesNothing()
+    public async Task EnqueueAsync_RefreshesWithoutAStatus_AndAStrandedReadmitOfAQueuedDocumentPushesNothing()
     {
-        // The operations feed keeps one indexing batch open while any member is unfinished, so it must see every queued
-        // document, and the push must precede the worker's first Extracting push for it.
-        var pushes = new List<string>();
-        KnowledgeIngestionDispatcher? dispatcher = null;
+        // The caller's Pending may already be stale when the push lands (a sweep indexed the row, a purge deleted it), so
+        // clients only refetch; the run's own transitions open and settle the operations feed's batch.
         var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
-        _ = notifier.NotifyDocumentChangedAsync(Arg.Any<Guid>(), Arg.Any<KnowledgeDocumentStatus>(), Arg.Any<CancellationToken>())
-                    .Returns(call =>
-                    {
-                        pushes.Add($"{call.ArgAt<KnowledgeDocumentStatus>(1)} queued={dispatcher?.PendingCount}");
-                        return Task.CompletedTask;
-                    });
-        dispatcher = new KnowledgeIngestionDispatcher(notifier);
+        var dispatcher = new KnowledgeIngestionDispatcher(notifier);
         var documentId = Guid.NewGuid();
 
         AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted, await dispatcher.EnqueueAsync(documentId, CancellationToken.None));
         AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted, await dispatcher.EnqueueStrandedAsync(documentId, CancellationToken.None));
 
-        AssertEx.Equal("Pending queued=0", string.Join(" | ", pushes));
-        await notifier.Received(1).NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Pending, Arg.Any<CancellationToken>());
+        await notifier.Received(1).NotifyDocumentsChangedAsync(Arg.Any<CancellationToken>());
+        await notifier.DidNotReceiveWithAnyArgs().NotifyDocumentChangedAsync(Guid.Empty, default, default);
+    }
+
+    [Test]
+    public async Task EnqueueStrandedAsync_OfAnUnqueuedDocument_PushesAStatusFreeRefreshInsteadOfPending()
+    {
+        // A stranded row's status can move before the push lands (its run starts, or it is deleted), so the sweep only
+        // tells clients to refetch; a Pending push could land after that run's Indexed and stick.
+        var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
+        var dispatcher = new KnowledgeIngestionDispatcher(notifier);
+        var documentId = Guid.NewGuid();
+
+        AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted, await dispatcher.EnqueueStrandedAsync(documentId, CancellationToken.None));
+
+        AssertEx.Equal(1, (int)dispatcher.PendingCount);
+        await notifier.Received(1).NotifyDocumentsChangedAsync(Arg.Any<CancellationToken>());
+        await notifier.DidNotReceiveWithAnyArgs().NotifyDocumentChangedAsync(Guid.Empty, default, default);
+    }
+
+    [Test]
+    public async Task EnqueueAsync_RefreshesAndCoalescesAnInFlightRetryIntoOneFollowUp()
+    {
+        var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
+        var dispatcher = new KnowledgeIngestionDispatcher(notifier);
+        var documentId = Guid.NewGuid();
+
+        AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted, await dispatcher.EnqueueAsync(documentId, CancellationToken.None));
+        AssertEx.True(dispatcher.Reader.TryRead(out _));
+
+        // A retry admitted while the first run is in flight keeps the normal coalescing: exactly one deferred run.
+        AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted, await dispatcher.EnqueueAsync(documentId, CancellationToken.None));
+        AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted, await dispatcher.EnqueueAsync(documentId, CancellationToken.None));
+        AssertEx.False(dispatcher.Reader.TryRead(out _), "the follow-up stays deferred while the first run is active");
+        dispatcher.MarkCompleted(documentId);
+        AssertEx.True(dispatcher.Reader.TryRead(out var followUp));
+        AssertEx.Equal(documentId, followUp);
+        AssertEx.False(dispatcher.Reader.TryRead(out _), "the retries coalesce into one follow-up run");
+
+        await notifier.Received(3).NotifyDocumentsChangedAsync(Arg.Any<CancellationToken>());
+        await notifier.DidNotReceiveWithAnyArgs().NotifyDocumentChangedAsync(Guid.Empty, default, default);
+    }
+
+    [Test]
+    public async Task EnqueueAsync_WhenTheQueueIsFull_RejectsWithoutPublishingPending()
+    {
+        var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
+        var dispatcher = new KnowledgeIngestionDispatcher(notifier);
+        for (var i = 0; i < KnowledgeIngestionDispatcher.Capacity; i++)
+        {
+            _ = await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None);
+        }
+
+        notifier.ClearReceivedCalls();
+        var rejected = Guid.NewGuid();
+
+        // A rejected retry leaves its row as it was (Failed, say): a Pending push would show it queued when it is not.
+        AssertEx.Equal(KnowledgeIngestionEnqueueResult.QueueFull, await dispatcher.EnqueueAsync(rejected, CancellationToken.None));
+
+        await notifier.DidNotReceiveWithAnyArgs().NotifyDocumentChangedAsync(Guid.Empty, default, default);
+        AssertEx.Equal(KnowledgeIngestionDispatcher.Capacity, (int)dispatcher.PendingCount);
     }
 
     [Test]

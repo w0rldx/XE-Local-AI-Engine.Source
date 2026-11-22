@@ -3,7 +3,9 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -161,6 +163,79 @@ public sealed class LlamaServerLaunchFallbackStoreTests
         AssertEx.Contains(persisted.DisabledOptimizedConfigs ?? [], "Cuda:q4_0");
         AssertEx.Contains(persisted.DisabledOptimizedConfigs ?? [], "Cuda:q8_0");
     }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task AVerdictWhosePersistFailed_IsWrittenByTheNextLaunchThatReadsIt()
+    {
+        using var root = new TempCacheRoot();
+        using var store = new LlamaServerLaunchFallbackStore(root.Path);
+        var policy = new LlamaServerLaunchPolicy(new LlamaServerLaunchPolicyOptions(), store);
+        File.SetUnixFileMode(root.Path, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            // The policy absorbs the failed write, so the spawn keeps its process; the verdict lives on in memory only.
+            await policy.RecordOptimizedConfigFailedAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None);
+        }
+        finally
+        {
+            File.SetUnixFileMode(root.Path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        AssertEx.False(File.Exists(root.StatePath), "The write failed.");
+
+        var plan = await policy.ResolveAsync(ModelRole.Chat, GpuVariant.Cuda, ResolvedLaunchArguments.Explore(), Allocation(), CancellationToken.None);
+        await store.PendingRepersistForTesting.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.False(plan.UseKvCacheQuantization, "The in-memory verdict already steers the launch.");
+        using var reopened = new LlamaServerLaunchFallbackStore(root.Path);
+        AssertEx.True(await reopened.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None),
+            "The read of an unwritten verdict must write it.");
+    }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task FailingRepersists_WarnOncePerFailureStreak()
+    {
+        using var root = new TempCacheRoot();
+        var logger = new RecordingLogger<LlamaServerLaunchFallbackStore>();
+        using var store = new LlamaServerLaunchFallbackStore(root.Path, logger);
+        File.SetUnixFileMode(root.Path, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() =>
+                store.DisableOptimizedConfigAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None));
+
+            for (var read = 0; read < 2; read++)
+            {
+                AssertEx.True(await store.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None));
+                await store.PendingRepersistForTesting.WaitAsync(TestBudgets.Contended);
+            }
+        }
+        finally
+        {
+            File.SetUnixFileMode(root.Path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        AssertEx.Equal(expected: 1, logger.Entries.Count(static entry => entry.Level == LogLevel.Warning && entry.Message.Contains("re-persist", StringComparison.Ordinal)));
+        AssertEx.True(await store.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None));
+        await store.PendingRepersistForTesting.WaitAsync(TestBudgets.Contended);
+        AssertEx.True(File.Exists(root.StatePath), "The first read after the root became writable writes the verdict.");
+    }
+
+    private static ProcessContextAllocation Allocation() =>
+        new()
+        {
+            ProcessContextTokens = 8192,
+            ModelTrainContextTokens = 131072,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.GpuResident,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = "model-a:0",
+            CacheKey = "cache:model-a"
+        };
 
     private static async Task<LlamaServerLaunchFallbackState> ReadStateAsync(TempCacheRoot root)
     {

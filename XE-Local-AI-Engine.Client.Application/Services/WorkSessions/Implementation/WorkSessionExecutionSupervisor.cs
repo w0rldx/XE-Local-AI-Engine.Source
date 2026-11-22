@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
@@ -443,6 +444,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 
         // Seeded the same way: the resolver offers the state tools to whatever agent drives this step, off this flag.
         using var workSessionTurn = WorkSessionTurnScope.Begin();
+
+        // Seeded the same way: nobody waits on a step, so its ranking never reloads an embedder the operator ejected.
+        using var unattendedRun = UnattendedRunScope.Begin();
 
         // A step reads the AgentHome workspace, never a repository scope the flow that started the session happened to hold.
         using var noRepository = CoderRepositoryScope.Begin(null);

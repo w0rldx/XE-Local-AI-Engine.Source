@@ -104,11 +104,23 @@ public sealed class StaleProcessReaper : IHostedService
         var fullRoot = Path.GetFullPath(_binariesRoot!);
         foreach (var candidate in _scanner.EnumerateProcesses())
         {
+            ProcessStat stat = default;
             if (claimedPids.Contains(candidate.Pid)
                 || candidate.ExecutablePath is not { Length: > 0 } executablePath
                 || !PathContainment.IsUnderRoot(executablePath, fullRoot)
-                || (OperatingSystem.IsLinux() && !IsSomeoneElsesChild(candidate.Pid)))
+                || (OperatingSystem.IsLinux() && !IsSomeoneElsesChild(candidate.Pid, out stat)))
             {
+                continue;
+            }
+
+            if (!OperatingSystem.IsLinux())
+            {
+                _scanner.KillProcessTree(candidate.Pid);
+            }
+            else if (_scanner.KillIfSameProcess(candidate.Pid, executablePath, stat.StartTicks) is var result and not StaleProcessKillResult.Killed)
+            {
+                _logger.LogWarning("The stale {ServerName} orphan (pid {Pid}) under the managed root was not signalled ({Result}): it is gone, changed hands or could not be verified.",
+                    _serverName, candidate.Pid, result);
                 continue;
             }
 
@@ -121,7 +133,6 @@ public sealed class StaleProcessReaper : IHostedService
                 _logger.LogInformation("Reaping stale {ServerName} orphan (pid {Pid}).", _serverName, candidate.Pid);
             }
 
-            _scanner.KillProcessTree(candidate.Pid);
             reaped++;
         }
 
@@ -130,16 +141,22 @@ public sealed class StaleProcessReaper : IHostedService
 
     /// <summary>
     ///     True only when <c>/proc</c> names a parent other than this host: a server it spawned whose receipt write failed has none to claim it,
-    ///     and a stat that cannot be read establishes no ownership either way.
+    ///     and a stat that cannot be read establishes no ownership either way. <paramref name="stat" /> is the stat read.
     /// </summary>
-    private bool IsSomeoneElsesChild(int pid)
+    /// <remarks>
+    ///     The path match kills through <see cref="IStaleProcessScanner.KillIfSameProcess" /> with that stat's start time, so a pid that changed
+    ///     hands since this read is never signalled. A non-leader is signalled alone: its descendants are no longer tree-killed by this pass.
+    /// </remarks>
+    private bool IsSomeoneElsesChild(int pid, out ProcessStat stat)
     {
-        if (_scanner.ReadStat(pid) is not { } stat)
+        if (_scanner.ReadStat(pid) is not { } read)
         {
+            stat = default;
             _logger.LogDebug("Skipping {ServerName} pid {Pid} under the managed root: its stat could not be read, so its owner is unknown.", _serverName, pid);
             return false;
         }
 
+        stat = read;
         if (stat.ParentProcessId == Environment.ProcessId)
         {
             _logger.LogDebug("Skipping {ServerName} pid {Pid} under the managed root: it is this host's own child.", _serverName, pid);
@@ -154,15 +171,15 @@ public sealed class StaleProcessReaper : IHostedService
     ///     finished with. Returns how many were signalled, and adds each pid signalled or kept to <paramref name="claimedPids" />.
     /// </summary>
     /// <remarks>
-    ///     The pid must be live and not this host's own child, and its executable realpath and start time, read after a pidfd pinned it, must equal
-    ///     the recorded ones. A recycled pid, another binary, a zombie or an unparseable receipt signals nothing and deletes the receipt; an unreadable
-    ///     entry or receipt file, a failed pidfd call or this host's own child signals nothing and keeps it. Every pid kept is claimed, so the path
-    ///     match never tree-kills it. The pid is resolved directly, not through the name-filtered scan, because a bring-your-own binary may carry
-    ///     any file name.
+    ///     The pid must be live, not this host's child, and carry the recorded executable realpath and start time, read after a pidfd pinned it.
+    ///     A recycled pid, another binary, a zombie, an unparseable receipt or one of another boot signals nothing and deletes the receipt; an
+    ///     unreadable entry or file, a failed pidfd call, this host's child or, for a receipt bound to a boot, an unreadable current boot id
+    ///     signals nothing and keeps it, claimed, so the path match spares it. The pid is resolved directly: a bring-your-own binary may carry any name.
     /// </remarks>
     private int ReapByReceipt(ProcessSpawnReceiptStore receipts, HashSet<int> claimedPids)
     {
         var reaped = 0;
+        var currentBoot = _scanner.CurrentBootId;
         foreach (var stored in receipts.ReadAll())
         {
             var file = stored.File;
@@ -184,6 +201,19 @@ public sealed class StaleProcessReaper : IHostedService
                 if (receipt is null)
                 {
                     _logger.LogWarning("A {ServerName} spawn receipt is not valid; it was removed and nothing was signalled.", _serverName);
+                }
+                else if (receipt.BootId is not null && currentBoot is null)
+                {
+                    _logger.LogWarning("The {ServerName} spawn receipt for pid {Pid} ({Label}) records a boot, but this boot's id could not be read; nothing was signalled and its receipt was kept.",
+                        _serverName, receipt.Pid, receipt.Label);
+                    _ = claimedPids.Add(receipt.Pid);
+                    continue;
+                }
+                else if (receipt.BootId is not null && !string.Equals(receipt.BootId, currentBoot, StringComparison.Ordinal))
+                {
+                    // No process outlives its boot: the pid now names a process of this boot, which the path match judges on its own.
+                    _logger.LogInformation("A {ServerName} spawn receipt for pid {Pid} ({Label}) was written in a previous boot; it was removed and nothing was signalled.",
+                        _serverName, receipt.Pid, receipt.Label);
                 }
                 else if (_scanner.ReadStat(receipt.Pid) is { } live && live.ParentProcessId == Environment.ProcessId)
                 {

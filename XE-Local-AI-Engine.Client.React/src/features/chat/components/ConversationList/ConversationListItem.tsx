@@ -13,6 +13,7 @@ import {
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 
+import { conversationDisplayTitle } from "@/core/chat/models/ConversationDisplayTitle";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import type { ChatExportFormat } from "@/features/chat/models/ChatExportFile";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
@@ -91,7 +92,8 @@ export function ConversationListItem({
 	const isRemote = conversation.origin === "remote";
 	const canManage = !isRemote && (Boolean(onRename) || Boolean(onTogglePin) || Boolean(onToggleArchive) || Boolean(onDelete));
 	const showMenu = canManage || Boolean(onExport);
-	const title = conversation.title.trim() || t("pages.chat.conversationList.untitled", "Untitled conversation");
+	const title =
+		conversationDisplayTitle(conversation.title, t) || t("pages.chat.conversationList.untitled", "Untitled conversation");
 
 	const activate = (): void => {
 		if (!disabled && !isRenaming) {

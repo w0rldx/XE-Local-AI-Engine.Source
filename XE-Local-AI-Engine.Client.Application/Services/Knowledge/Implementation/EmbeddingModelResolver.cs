@@ -76,7 +76,8 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
             {
                 Name = effectiveName,
                 IsConfident = false,
-                PinnedModelMissing = true
+                PinnedModelMissing = true,
+                InventoryRead = true
             };
         }
 
@@ -91,7 +92,8 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
         return new EmbeddingModelResolution
         {
             Name = effectiveName,
-            IsConfident = false
+            IsConfident = false,
+            InventoryRead = true
         };
     }
 
@@ -111,6 +113,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
         {
             Name = resolvedName,
             IsConfident = true,
+            InventoryRead = true,
             RevisionFingerprint = $"inventory-v1:{Convert.ToHexStringLower(digest)}"
         };
     }

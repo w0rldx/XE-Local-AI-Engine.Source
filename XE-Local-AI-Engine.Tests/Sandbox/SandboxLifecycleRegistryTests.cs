@@ -262,6 +262,49 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
         }
     }
 
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task RemoveAndTerminate_KillsAnInFlightCommandThroughItsSharedTeardown_GroupBeforeLeader()
+    {
+        var registry = CreateRegistry();
+        var handle = await registry.CreateOrAttachAsync(CreateRequest(Key()));
+        var calls = new List<string>();
+        var killer = new FakeOwnedGroupKiller(calls);
+        using var child = new FakeSandboxChildProcess(calls);
+        using var teardown = SandboxLaunchTeardown.Create(child, appliedProcessGroup: true, killer);
+        using var cancel = new CancellationTokenSource();
+        _ = AssertEx.NotNull(registry.FindState(handle.SandboxId)).InFlight.TryAdd("exec-1", new InFlightExecution(teardown, cancel));
+        calls.Clear();
+
+        registry.RemoveAndTerminate(handle.SandboxId);
+
+        AssertEx.True(cancel.IsCancellationRequested, "the command path learns of the kill");
+        AssertEx.Equal("group 4242 Opened,tree", string.Join(',', calls));
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task RemoveAndTerminate_ThenTheCommandsOwnTeardown_KillsOnce_AndBothReadOneOutcome()
+    {
+        var registry = CreateRegistry();
+        var handle = await registry.CreateOrAttachAsync(CreateRequest(Key()));
+        var killer = new FakeOwnedGroupKiller
+        {
+            Outcome = Client.Services.Sandbox.Implementation.Reaping.SandboxGroupKillOutcome.Deferred
+        };
+        using var child = new FakeSandboxChildProcess([]);
+        using var teardown = SandboxLaunchTeardown.Create(child, appliedProcessGroup: true, killer);
+        using var cancel = new CancellationTokenSource();
+        _ = AssertEx.NotNull(registry.FindState(handle.SandboxId)).InFlight.TryAdd("exec-1", new InFlightExecution(teardown, cancel));
+
+        registry.RemoveAndTerminate(handle.SandboxId);
+        var commandOutcome = teardown.Terminate();
+
+        AssertEx.Equal(Client.Services.Sandbox.Implementation.Reaping.SandboxGroupKillOutcome.Deferred, commandOutcome,
+            "the command path keeps its marker on the registry's unverified kill");
+        AssertEx.Equal(expected: 1, killer.OwnedKills);
+    }
+
     private SandboxLifecycleRegistry CreateRegistry(ILogger? logger = null)
     {
         return new SandboxLifecycleRegistry(_jailRoot,

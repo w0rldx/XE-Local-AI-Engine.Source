@@ -26,6 +26,7 @@ public sealed class BaseArtifactServiceTests : IDisposable
     private readonly IBaseCheckpointStore _checkpointStore = Substitute.For<IBaseCheckpointStore>();
     private readonly IFreeSpaceProbe _freeSpaceProbe = Substitute.For<IFreeSpaceProbe>();
     private readonly IJobCreatedPublisher _jobs = Substitute.For<IJobCreatedPublisher>();
+    private readonly IModelLabActiveJob _labJob = Substitute.For<IModelLabActiveJob>();
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-base-svc-" + Guid.NewGuid().ToString("N"));
     private readonly ITrainingBaseArtifactStore _store = Substitute.For<ITrainingBaseArtifactStore>();
 
@@ -184,6 +185,7 @@ public sealed class BaseArtifactServiceTests : IDisposable
 
         AssertEx.Equal(BaseArtifactDeleteOutcome.Downloading, outcome);
         await _store.DidNotReceive().DeleteAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
+        _ = _labJob.DidNotReceive().ClaimForDelete(Arg.Any<Guid>());
     }
 
     [Test]
@@ -218,6 +220,63 @@ public sealed class BaseArtifactServiceTests : IDisposable
         AssertEx.False(Directory.Exists(directory), "A deleted artifact must not leave its weights on disk.");
     }
 
+    /// <summary>A Model Lab start on the checkpoint is refused while the delete holds it: from before the worker's eviction through the row delete.</summary>
+    [Test]
+    public async Task Delete_HoldsTheCheckpointFromBeforeTheWorkerEviction_ThroughTheRowDelete()
+    {
+        var record = Record(TrainingBaseArtifactStatus.Ready);
+        var claim = Substitute.For<IDisposable>();
+        _ = _labJob.ClaimForDelete(record.Id).Returns(claim);
+        _ = _store.GetAsync(record.Id, Arg.Any<CancellationToken>()).Returns(record);
+        var heldAtRowDelete = false;
+        _ = _store.DeleteAsync(record.Id, record.Version, Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            heldAtRowDelete = claim.ReceivedCalls().All(static call => call.GetMethodInfo().Name != nameof(IDisposable.Dispose));
+            return true;
+        });
+
+        AssertEx.Equal(BaseArtifactDeleteOutcome.Deleted, await Service().DeleteAsync(record.Id, CancellationToken.None));
+
+        Received.InOrder(() =>
+        {
+            _ = _labJob.ClaimForDelete(record.Id);
+            _ = _labJob.EvictIdleWorkerAsync(record.Id, Arg.Any<CancellationToken>());
+        });
+        AssertEx.True(heldAtRowDelete, "The hold was let go before the row delete.");
+        claim.Received(1).Dispose();
+    }
+
+    [Test]
+    [Arguments(ModelLabEjectOutcome.Busy, BaseArtifactDeleteOutcome.InUseByExperiment)]
+    [Arguments(ModelLabEjectOutcome.NotConfirmed, BaseArtifactDeleteOutcome.WorkerNotConfirmed)]
+    public async Task Delete_RefusedByTheWorker_LetsGoOfTheCheckpoint(ModelLabEjectOutcome eviction, BaseArtifactDeleteOutcome expected)
+    {
+        var record = Record(TrainingBaseArtifactStatus.Ready);
+        var claim = Substitute.For<IDisposable>();
+        _ = _labJob.ClaimForDelete(record.Id).Returns(claim);
+        _ = _labJob.EvictIdleWorkerAsync(record.Id, Arg.Any<CancellationToken>()).Returns(eviction);
+        _ = _store.GetAsync(record.Id, Arg.Any<CancellationToken>()).Returns(record);
+
+        AssertEx.Equal(expected, await Service().DeleteAsync(record.Id, CancellationToken.None));
+
+        claim.Received(1).Dispose();
+        await _store.DidNotReceive().DeleteAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Delete_WhoseRowDeleteFails_LetsGoOfTheCheckpoint()
+    {
+        var record = Record(TrainingBaseArtifactStatus.Ready);
+        var claim = Substitute.For<IDisposable>();
+        _ = _labJob.ClaimForDelete(record.Id).Returns(claim);
+        _ = _store.GetAsync(record.Id, Arg.Any<CancellationToken>()).Returns(record);
+        _ = _store.DeleteAsync(record.Id, record.Version, Arg.Any<CancellationToken>()).Returns<bool>(static _ => throw new InvalidOperationException("database is locked"));
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => Service().DeleteAsync(record.Id, CancellationToken.None));
+
+        claim.Received(1).Dispose();
+    }
+
     [Test]
     public async Task CancelAsync_WhenNothingIsRunning_ReportsFalse()
     {
@@ -231,7 +290,7 @@ public sealed class BaseArtifactServiceTests : IDisposable
             _coordinator,
             _freeSpaceProbe,
             DataDirectory,
-            Substitute.For<IModelLabActiveJob>(),
+            _labJob,
             TimeProvider.System);
     }
 

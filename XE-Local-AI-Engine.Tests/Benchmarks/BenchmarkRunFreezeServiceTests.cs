@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Tests.Agents;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -723,6 +724,37 @@ public sealed class BenchmarkRunFreezeServiceTests
         // operator nothing about which knob to turn.
         AssertEx.True(failure.Message.Contains("108", StringComparison.Ordinal), "The refusal must name the computed run count.");
         AssertEx.Equal(0, harness.StoreCalls, "Nothing is inserted when the cap refuses the request.");
+    }
+
+    [Test]
+    public async Task Start_ResolvesEachItemAsAnUnattendedRun_WhileAnOverlappingTurnStaysInteractive()
+    {
+        // A freeze resolves the agent per item with the task as retrieval query; nobody waits on it, so it ranks as Background.
+        var harness = new FreezeHarness();
+        var probe = new EmbeddingResidencyProbe();
+        var resolving = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.Resolver.ResolveAsync(harness.AgentId, Arg.Any<string>(), Arg.Any<string>(), true, false, false, Arg.Any<CancellationToken>())
+               .Returns(_ => ResolveThroughTheProbeAsync());
+
+        var start = harness.StartAsync();
+        await resolving.Task;
+        await probe.RankBothAsync();
+        release.SetResult();
+        _ = await start;
+
+        AssertEx.True(probe.Intents.SequenceEqual([
+                ModelResidencyIntent.Background, ModelResidencyIntent.Background, ModelResidencyIntent.Interactive, ModelResidencyIntent.Interactive
+            ]),
+            $"The freeze ranks as Background and the overlapping turn as Interactive, got [{string.Join(", ", probe.Intents)}].");
+
+        async Task<ResolvedAgentRuntime?> ResolveThroughTheProbeAsync()
+        {
+            await probe.RankBothAsync();
+            resolving.SetResult();
+            await release.Task;
+            return new ResolvedAgentRuntime("prompt", [], null, null, 3, harness.AgentId, "Agent", Kind: AgentDefinitionKind.Single);
+        }
     }
 
     [Test]

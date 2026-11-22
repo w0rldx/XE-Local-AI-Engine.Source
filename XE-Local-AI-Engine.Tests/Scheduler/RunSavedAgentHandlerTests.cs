@@ -23,9 +23,11 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Tests.Agents;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -742,6 +744,38 @@ public sealed class RunSavedAgentHandlerTests
         // A blank OR invalid ("banana") override normalizes to null and falls back to the agent's resolved effort
         // ("medium") — it must NOT drop reasoning to null. A recognized override ("HIGH") wins and is canonicalized.
         AssertEx.Equal(expectedEffort, harness.CapturedPackage!.ReasoningEffort!);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_RanksAsAnUnattendedRun_WhileAnOverlappingTurnStaysInteractive()
+    {
+        // The resolve's playbook and tool ranking embed as Background, so a scheduled run never reloads an ejected embedder.
+        using var harness = new Harness();
+        var probe = new EmbeddingResidencyProbe();
+        var resolving = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.Resolver
+               .ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+               .Returns(_ => ResolveThroughTheProbeAsync());
+
+        var run = harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+        await resolving.Task;
+        await probe.RankBothAsync();
+        release.SetResult();
+        await run;
+
+        AssertEx.True(probe.Intents.SequenceEqual([
+                ModelResidencyIntent.Background, ModelResidencyIntent.Background, ModelResidencyIntent.Interactive, ModelResidencyIntent.Interactive
+            ]),
+            $"The run ranks as Background and the overlapping turn as Interactive, got [{string.Join(", ", probe.Intents)}].");
+
+        async Task<ResolvedAgentRuntime?> ResolveThroughTheProbeAsync()
+        {
+            await probe.RankBothAsync();
+            resolving.SetResult();
+            await release.Task;
+            return new ResolvedAgentRuntime("SCAFFOLD+PERSONA", [], null, "medium", 7, AgentId, "Log Summarizer", []);
+        }
     }
 
     private static string ValidParams(string prompt = Prompt)

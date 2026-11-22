@@ -58,9 +58,8 @@ public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
     public async ValueTask<KnowledgeIngestionEnqueueResult> EnqueueAsync(Guid documentId, CancellationToken cancellationToken)
     {
         ValidateAdmission(documentId, cancellationToken);
-        // Every enqueue path passes here, so the operations feed sees each queued document and keeps its batch open.
-        // Pushed before the id reaches the worker, so this run's first status push cannot overtake it.
-        await _notifier.NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Pending, cancellationToken);
+        // Clients only refetch: the run's own pushes open and settle the operations feed's batch.
+        await _notifier.NotifyDocumentsChangedAsync(cancellationToken);
         return Admit(documentId, coalesce: true);
     }
 
@@ -71,10 +70,11 @@ public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
     internal async ValueTask<KnowledgeIngestionEnqueueResult> EnqueueStrandedAsync(Guid documentId, CancellationToken cancellationToken)
     {
         ValidateAdmission(documentId, cancellationToken);
-        // A queued or running document pushes its own state; a Pending push for it could land after its Indexed.
+        // A queued or running document pushes its own state. The row was read Pending earlier and may have been indexed
+        // or deleted since, so a Pending push could stick: clients only refetch.
         if (!IsAdmitted(documentId))
         {
-            await _notifier.NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Pending, cancellationToken);
+            await _notifier.NotifyDocumentsChangedAsync(cancellationToken);
         }
 
         return Admit(documentId, coalesce: false);

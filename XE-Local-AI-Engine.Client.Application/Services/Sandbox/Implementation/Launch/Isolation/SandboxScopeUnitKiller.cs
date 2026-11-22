@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>The seam the transient-scope kill authority is reached through.</summary>
 /// <remarks>
@@ -298,7 +299,7 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
     {
         try
         {
-            process.Kill(entireProcessTree: true);
+            _ = LinuxProcessTreeKill.Kill(process);
         }
         catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException)
         {

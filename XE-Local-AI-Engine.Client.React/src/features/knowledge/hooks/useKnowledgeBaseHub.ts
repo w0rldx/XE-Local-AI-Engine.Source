@@ -18,6 +18,9 @@ import { knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocu
 // row visually stuck. Writing the pushed status directly guarantees the terminal status is never lost. The event
 // name is the string method name the backend invokes on the client.
 const DOCUMENT_CHANGED = "knowledge.documentChanged";
+// Status-free refresh: the sender could not know the row's status by the time the push lands (a re-admitted or recovered
+// row may be indexed or deleted meanwhile), so it only refetches and never writes a status into the cache.
+const DOCUMENTS_CHANGED = "knowledge.documentsChanged";
 const CLOSED_HUB_POLL_MS = 10_000;
 // One document fires several pushes, and a repository import fires them for thousands of documents; every invalidation
 // refetches each list variant (decrypting every row's name). The optimistic write shows each status at once, so the
@@ -97,6 +100,7 @@ export function useKnowledgeBaseHub(): void {
 		};
 
 		connection.on(DOCUMENT_CHANGED, applyDocumentChanged);
+		connection.on(DOCUMENTS_CHANGED, schedulePushRefetch);
 
 		// Hub's own fallback: the hub has no replay, so a reconnect re-reads what changed in the gap, and while it is
 		// closed (until the shared manager's restart reports back) a still-indexing row is polled instead of freezing.
@@ -128,6 +132,7 @@ export function useKnowledgeBaseHub(): void {
 		return () => {
 			stopClosedPoll();
 			connection.off(DOCUMENT_CHANGED, applyDocumentChanged);
+			connection.off(DOCUMENTS_CHANGED, schedulePushRefetch);
 			// A burst still waiting for its refetch leaves the cache invalidated rather than holding pre-push data as fresh.
 			flushPushRefetch();
 			// Release the shared lease: the manager stops the connection only after the LAST subscriber releases, and only

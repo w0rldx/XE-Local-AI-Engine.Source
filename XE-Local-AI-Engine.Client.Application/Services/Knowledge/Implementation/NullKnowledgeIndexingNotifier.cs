@@ -17,4 +17,9 @@ internal sealed class NullKnowledgeIndexingNotifier : IKnowledgeIndexingNotifier
     {
         return Task.CompletedTask;
     }
+
+    public Task NotifyDocumentsChangedAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
 }

@@ -40,7 +40,8 @@ internal static class TrainingProcessReaper
             Pgid = receipt.Pgid,
             ExecutablePath = receipt.ExecutablePath,
             StartTicks = receipt.StartTicks,
-            RunToken = receipt.RunToken
+            RunToken = receipt.RunToken,
+            BootId = receipt.BootId
         };
 
     /// <summary>Inspects one receipt, clears it only once it is safe to, and reports whether the process is proven gone.</summary>
@@ -48,7 +49,8 @@ internal static class TrainingProcessReaper
     ///     A receipt whose inspect or kill THREW is left in place and retried on the next startup: dropping it there would strand a
     ///     live process with nothing left to identify it by. Failures are per-receipt: one unreadable <c>/proc</c> entry must not
     ///     abandon the rest. A row is still cleared on an unreadable entry, as before; the outcome is for callers that must not. A kill
-    ///     deferred by an operational failure (EPERM, EMFILE) keeps the receipt too: nothing about the process was learned.
+    ///     deferred by an operational failure (EPERM, EMFILE), or a boot-bound receipt while this boot's id is unreadable, keeps the receipt
+    ///     too. A receipt of a previous boot is gone without a probe.
     /// </remarks>
     public static async Task<TrainingReapOutcome> ReapOneAsync(ITrainingProcessInspector inspector,
         Guid ownerId,
@@ -65,6 +67,18 @@ internal static class TrainingProcessReaper
                 // A row's unparsable receipt can never be matched, so it is cleared; failing to identify a process is still no proof it exited.
                 logger.LogWarning("The recorded trainer receipt for run {RunId} could not be read; no process could be identified or signalled.", ownerId);
                 presence = receiptJson is null ? TrainingProcessPresence.Gone : TrainingProcessPresence.Unknown;
+            }
+            else if (receipt.BootId is not null && inspector.CurrentBootId is null)
+            {
+                // Bound to a boot this host cannot read: neither same nor previous boot is proven, so it is kept like a deferred kill.
+                logger.LogWarning("The trainer receipt for run {RunId} records a boot, but this boot's id could not be read; nothing was signalled and its receipt was kept so the next startup retries it.",
+                    ownerId);
+                return TrainingReapOutcome.NotVerified;
+            }
+            else if (receipt.BootId is not null && !string.Equals(receipt.BootId, inspector.CurrentBootId, StringComparison.Ordinal))
+            {
+                logger.LogInformation("The trainer receipt for pid {Pid} was written in a previous boot, which no process outlives; nothing was signalled.", receipt.Pid);
+                presence = TrainingProcessPresence.Gone;
             }
             else if (!CanIdentify(receipt))
             {

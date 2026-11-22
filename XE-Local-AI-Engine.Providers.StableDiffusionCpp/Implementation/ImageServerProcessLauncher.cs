@@ -101,7 +101,7 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
         startInfo.FileName = SetsidLocator.ResolveAbsolutePath();
         startInfo.ArgumentList.Insert(index: 0, serverPath);
 
-        return LinuxProcessGroupHandle.Start(() => StartProcess(startInfo, label, stderrTail), stderrTail);
+        return LinuxProcessGroupHandle.Start(() => StartProcess(startInfo, label, stderrTail), stderrTail, _logger);
     }
 
     private IProcessTreeHandle LaunchPlain(ProcessStartInfo startInfo, string label, ProcessStderrTail stderrTail)

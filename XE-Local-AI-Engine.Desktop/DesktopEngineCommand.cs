@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Desktop;
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using XE_Local_AI_Engine.Desktop.Linux;
 
 internal static partial class DesktopEngineCommand
 {
@@ -53,19 +54,44 @@ internal static partial class DesktopEngineCommand
 
     private static async Task StopOwnedAsync(Process process)
     {
-        if (!process.HasExited)
-        {
-            _ = SendSignal(process.Id, 15);
-        }
-
+        SendTerm(process);
         try
         {
             await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(40), CancellationToken.None);
         }
         catch (TimeoutException)
         {
-            process.Kill(entireProcessTree: true);
+            _ = LinuxProcessTreeKill.Kill(process);
             await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None);
+        }
+    }
+
+    private static void SendTerm(Process process) =>
+        SendTerm(process, Environment.ProcessId == 1 ? static _ => LinuxPidFd.Unsupported() : LinuxPidFd.Open,
+            static (pin, signal) => pin.Send(signal, group: false), SendSignal);
+
+    /// <summary>SIGTERM through a pidfd opened, then checked against <c>HasExited</c>, so a recycled pid is never signalled.</summary>
+    /// <remarks>
+    ///     The check holds while the .NET runtime is this host's only reaper, which PID 1 is not. Without a pidfd (none on this platform, a
+    ///     filter, fd exhaustion), with a send through it that did not go out (a filter refusing only <c>pidfd_send_signal</c>) or as PID 1
+    ///     the numeric TERM stays exit-guarded: this host's unreaped child still reserves its pid.
+    /// </remarks>
+    internal static void SendTerm(Process process,
+        Func<int, LinuxPidFd> open,
+        Func<LinuxPidFd, int, LinuxPidFdSendResult> send,
+        Func<int, int, int> signal)
+    {
+        using var pin = open(process.Id);
+        if (pin.OpenStatus == LinuxPidFdOpenStatus.Gone
+            || process.HasExited
+            || (pin.OpenStatus == LinuxPidFdOpenStatus.Opened && send(pin, 15).Status is LinuxPidFdSendStatus.Sent or LinuxPidFdSendStatus.Gone))
+        {
+            return;
+        }
+
+        if (!process.HasExited)
+        {
+            _ = signal(process.Id, 15);
         }
     }
 

@@ -24,6 +24,7 @@ public static class KnowledgeFailureReasonCodes
         [KnowledgeIngestionService.TimedOutReason] = "timed-out",
         [KnowledgeIngestionService.WaitingForEmbeddingModelReason] = "embedding-model-ejected",
         [KnowledgeChunkEmbedder.EmbeddingUnavailableReason] = "embedding-unavailable",
+        [KnowledgeChunkEmbedder.EmbeddingPinnedModelMissingReason] = "embedding-pinned-model-missing",
         [KnowledgeChunkEmbedder.EmbeddingIncompleteReason] = "embedding-incomplete",
         [KnowledgeChunkEmbedder.EmbeddingRejectedReason] = "embedding-rejected",
         [KnowledgeChunkEmbedder.EmbeddingUnreachableReason] = "embedding-unreachable",

@@ -50,6 +50,19 @@ describe("KnowledgeDocumentDrawer", () => {
 		expect(screen.queryByTestId("knowledge-detail-waiting")).toBeNull();
 	});
 
+	// Only embedded chunks carry a model: a Pending row's field holds the configured default, not what embedded it.
+	it("shows the embedding model only once the document has chunks", () => {
+		renderDrawer(documentDetail({ embeddingModel: "configured-default", staleModel: true }));
+
+		expect(screen.getByTestId("knowledge-detail-embedding-model").textContent).toBe("—");
+		expect(screen.queryByText("Stale")).toBeNull();
+		cleanup();
+
+		renderDrawer(documentDetail({ status: "Indexed", chunkCount: 3, embeddingModel: "nomic-embed-text" }));
+
+		expect(screen.getByTestId("knowledge-detail-embedding-model").textContent).toBe("nomic-embed-text");
+	});
+
 	it("keeps a Failed document's translated reason and shows no waiting hint", () => {
 		renderDrawer(
 			documentDetail({

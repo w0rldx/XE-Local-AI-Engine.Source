@@ -77,7 +77,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         var service = new KnowledgeRepositoryImportService(repositories,
             new SensitiveFileExclusionService(),
             blobStore,
-            new KnowledgeIngestionAdmissionService(catalog, dispatcher),
+            new KnowledgeIngestionAdmissionService(catalog, dispatcher, new NullKnowledgeIndexingNotifier()),
             catalog,
             purge,
             extractor,
@@ -137,7 +137,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         var service = new KnowledgeRepositoryImportService(repositories,
             new SensitiveFileExclusionService(),
             blobStore,
-            new KnowledgeIngestionAdmissionService(catalog, dispatcher),
+            new KnowledgeIngestionAdmissionService(catalog, dispatcher, new NullKnowledgeIndexingNotifier()),
             catalog,
             purge,
             extractor,
@@ -147,7 +147,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
 
         AssertEx.Equal(expected: 1, result.DeduplicatedDocuments);
         AssertEx.Equal(expected: 0, result.EnqueuedDocuments);
-        await dispatcher.DidNotReceive().EnqueueAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await dispatcher.DidNotReceiveWithAnyArgs().EnqueueAsync(Guid.Empty, default);
     }
 
     [Test]
@@ -169,9 +169,9 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
                  });
         var dispatcher = new AcceptingDispatcher();
         var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();
-        // Indexed, not Pending: a changed repository file is the one case where an already-indexed document MUST be
-        // re-enqueued. It pins that the admission rule keys on "the store wrote it", not only on a retryable status.
-        catalog.GetStatusAsync(existingId, Arg.Any<CancellationToken>()).Returns(KnowledgeDocumentStatus.Indexed);
+        // Mid-flight, not Pending: the replaced revision's run is still going, and only a written row in that state is
+        // re-enqueued (a dedupe hit is not). It pins that the admission keys on "the store wrote it", not only on status.
+        catalog.GetStatusAsync(existingId, Arg.Any<CancellationToken>()).Returns(KnowledgeDocumentStatus.Embedding);
         catalog.ListAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
                .Returns(Array.Empty<KnowledgeDocumentSummary>());
         var service = CreateService(repositories, blobStore, dispatcher, catalog, Substitute.For<IKnowledgeDocumentPurgeService>());
@@ -391,7 +391,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         return new KnowledgeRepositoryImportService(repositories,
             new SensitiveFileExclusionService(),
             blobStore,
-            new KnowledgeIngestionAdmissionService(catalog, dispatcher),
+            new KnowledgeIngestionAdmissionService(catalog, dispatcher, new NullKnowledgeIndexingNotifier()),
             catalog,
             purge,
             extractor,

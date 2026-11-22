@@ -3,6 +3,7 @@ import {
 	Button,
 	Checkbox,
 	Group,
+	NumberInput,
 	Paper,
 	Progress,
 	SegmentedControl,
@@ -40,6 +41,10 @@ import { starterSteeringDraft } from "@/features/modelLab/models/ModelLabSteerin
 // The transfer has no hub of its own, so the page reads its progress while it runs.
 const downloadPollMs = 5_000;
 
+// The server's default and bound for a trace's token count (ModelLabTraceSpec.MaxNewTokens, MaxRequestedNewTokens).
+const defaultNewTokens = 128;
+const maxNewTokensLimit = 256;
+
 // Pick a checkpoint and a GGUF, check them, confirm the license, download, then trace. Each step is refused by the server before the next can cost anything.
 export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 	const { t } = useTranslation();
@@ -62,6 +67,7 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 	const [steeringDraft, setSteeringDraft] = useState(starterSteeringDraft);
 	const [layers, setLayers] = useState<number[]>([]);
 	const [recordAttention, setRecordAttention] = useState(false);
+	const [maxNewTokens, setMaxNewTokens] = useState<number | string>(defaultNewTokens);
 
 	const preflight = useMutation(preflightModelLabCheckpointMutation());
 	const download = useMutation({
@@ -110,6 +116,7 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 	// Only a full-attention block has weights over earlier positions; the server refuses the rest.
 	const canRecordAttention = check?.checkpointLayerTypes?.includes("full_attention") === true;
 	const recordAttentionLabel = t("pages.modelLab.trace.recordAttention.label", "Record attention");
+	const maxNewTokensLabel = t("pages.modelLab.trace.maxNewTokens.label", "Tokens to generate");
 
 	return (
 		<Paper withBorder={true} p="md">
@@ -321,10 +328,31 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 										data-testid="model-lab-record-attention"
 									/>
 								</FieldWithInfo>
+								<FieldWithInfo
+									label={maxNewTokensLabel}
+									text={t(
+										"pages.modelLab.trace.maxNewTokens.help",
+										"How many tokens the trace generates at most; it stops earlier when the model ends its answer. 128 is the usual choice.\n\nMore tokens follow a longer answer but take longer and store more: the trace and the attention rows grow with each token. Past about 128 tokens a run may keep the next-token candidates for its first steps only, so its saved result stays within its size limit. Lower it for a quick look at the start of an answer.",
+									)}
+									testId="model-lab-max-new-tokens-info"
+								>
+									<NumberInput
+										label={maxNewTokensLabel}
+										min={1}
+										max={maxNewTokensLimit}
+										clampBehavior="strict"
+										allowDecimal={false}
+										allowNegative={false}
+										value={maxNewTokens}
+										onChange={setMaxNewTokens}
+										disabled={busy}
+										data-testid="model-lab-max-new-tokens"
+									/>
+								</FieldWithInfo>
 								<Text size="xs" c="dimmed">
 									{t(
 										"pages.modelLab.trace.spec",
-										"Up to 128 tokens, greedy. The trace is capped in size by the number of blocks and saved encrypted on this node, with the prompt and the output.",
+										"Greedy. The trace is capped in size by the number of blocks and tokens and saved encrypted on this node, with the prompt and the output.",
 									)}
 								</Text>
 								<Group>
@@ -340,6 +368,8 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 													licenseConfirmed,
 													...(layers.length > 0 ? { layers } : {}),
 													...(recordAttention && canRecordAttention ? { recordAttention: true } : {}),
+													// An emptied field asks for the server's default.
+													...(typeof maxNewTokens === "number" ? { maxNewTokens } : {}),
 												},
 											})
 										}

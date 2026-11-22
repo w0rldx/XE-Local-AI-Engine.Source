@@ -24,7 +24,7 @@ internal sealed class MxcSandboxChildProcess : ISandboxChildProcess
     /// <summary>The child's stdin as a <see cref="MxcCancellableStdinStream" />: a cancelled async write kills the child instead of hanging.</summary>
     public Stream StandardInput =>
         _standardInput ??= new MxcCancellableStdinStream(_child.StandardInput ?? throw new InvalidOperationException("The MXC child's stdin is not piped."),
-            Kill);
+            () => _ = Kill());
 
     public Stream StandardOutput => _child.StandardOutput ?? throw new InvalidOperationException("The MXC child's stdout is pumped or not piped.");
 
@@ -46,7 +46,7 @@ internal sealed class MxcSandboxChildProcess : ISandboxChildProcess
     public Task<bool> TryWaitForExitAsync(CancellationToken cancellationToken) =>
         _child.TryWaitForExitAsync(cancellationToken);
 
-    public void Kill()
+    public bool Kill()
     {
         try
         {
@@ -56,6 +56,8 @@ internal sealed class MxcSandboxChildProcess : ISandboxChildProcess
         {
             // Best-effort across the native boundary: an exited, disposed or already-reaped child has nothing left to kill.
         }
+
+        return true;
     }
 
     public void Dispose() =>

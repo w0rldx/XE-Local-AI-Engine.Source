@@ -116,6 +116,9 @@ internal sealed class BaseArtifactService : IBaseArtifactService
             return BaseArtifactDeleteOutcome.Downloading;
         }
 
+        // Held through the directory delete: a Model Lab start on this checkpoint is refused from here, so none publishes after the guards below.
+        using var claim = _labJob.ClaimForDelete(artifactId);
+
         // An idle warm worker holds the weights open: it goes first. One running a job stays, and one not seen to exit may still read them.
         switch (await _labJob.EvictIdleWorkerAsync(artifactId, ct))
         {

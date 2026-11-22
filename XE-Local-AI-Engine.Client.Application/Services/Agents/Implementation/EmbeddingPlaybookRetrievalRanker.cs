@@ -4,9 +4,11 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     Embedding-backed <see cref="IPlaybookRetrievalRanker" />: it ranks candidates by cosine similarity between the
@@ -82,6 +84,12 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
             // Never swallow cancellation — let the send's own cancellation propagate.
             throw;
         }
+        catch (OperatorEjectedException)
+        {
+            // An unattended run's reload of an ejected embedder was vetoed: an expected state, logged once without a stack.
+            _logger.LogInformation("Embedding model {EmbeddingModel} is operator-ejected, ranking lexically for this send.", model);
+            return await _lexical.SelectTopKAsync(query, candidates, k, cancellationToken);
+        }
         catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException)
         {
             // Any node-local embedding hiccup degrades to the deterministic lexical ranker: a model not pulled, a
@@ -115,7 +123,8 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {
             ModelName = model,
-            ProviderName = _options.EmbeddingProviderName
+            ProviderName = _options.EmbeddingProviderName,
+            ResidencyIntent = UnattendedRunScope.IsActive ? ModelResidencyIntent.Background : ModelResidencyIntent.Interactive
         });
 
         var keys = new EmbeddingCacheKey[candidates.Count];

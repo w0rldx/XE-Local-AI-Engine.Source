@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
@@ -177,6 +178,8 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
             // BeginChildScope pushes Depth+1 for the inner run, so any tool that consults SpawnContext (spawn_subagent
             // is not in the list above, but the guard must hold if one ever is) sees a child, not a root.
             using (context.BeginChildScope())
+            // Nobody watches the inner loop's rounds, so its tool ranking never reloads an ejected embedder.
+            using (UnattendedRunScope.Begin())
             {
                 _ = await agent.AsAIFunction().InvokeAsync(arguments, runCts.Token);
             }

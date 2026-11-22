@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
@@ -91,8 +92,15 @@ public sealed class OsStaleProcessScanner : IStaleProcessScanner
     }
 
     /// <inheritdoc />
+    [UnsupportedOSPlatform("linux")]
     public void KillProcessTree(int pid)
     {
+        if (OperatingSystem.IsLinux())
+        {
+            // The runtime's tree kill signals numbers: a foreign pid on Linux is only ever signalled after KillIfSameProcess verifies it.
+            throw new PlatformNotSupportedException("A numeric tree kill of a foreign pid is not allowed on Linux; use KillIfSameProcess.");
+        }
+
         // Best-effort: the pid may have exited between enumeration and here, or be foreign-owned (access denied). All of
         // these are non-fatal for a startup reaper, so swallow the specific failures and let the caller log the attempt.
         try

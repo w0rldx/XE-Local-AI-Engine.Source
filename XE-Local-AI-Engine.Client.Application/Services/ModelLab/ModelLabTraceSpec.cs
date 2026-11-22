@@ -9,16 +9,20 @@ using System.Text.Json.Serialization;
 public static class ModelLabTraceSpec
 {
     /// <summary>Separate from the trainer's: the two scripts change independently. Pinned by <c>modellablib.CONTRACT_VERSION</c>.</summary>
-    public const int ContractVersion = 6;
+    public const int ContractVersion = 7;
 
+    /// <summary>What a trace generates when its request names no count, and what every steering arm generates.</summary>
     public const int MaxNewTokens = 128;
+
+    /// <summary>The most tokens a trace request may ask for. Each byte cap below scales with the job's own count.</summary>
+    public const int MaxRequestedNewTokens = 256;
 
     public const int Seed = 1234;
 
     /// <summary>A request may trace every block of the deepest checkpoint the lab loads; each layer costs about as much generation time as the rest.</summary>
     public const int MaxTraceLayers = 64;
 
-    /// <summary>Texts are written whole; a trace result that would pass 0.9 MiB has its candidate, then token, texts cut to 64 escaped bytes (<c>modellablib.fitted_trace_result</c>; <c>test_modellablib.py</c> pins it).</summary>
+    /// <summary>A trace result that would pass 0.9 MiB has its texts cut to 64 escaped bytes, then its last steps' candidates dropped (<c>modellablib.fitted_trace_result</c>).</summary>
     public const int MaxResultBytes = 1024 * 1024;
 
     public const int MaxPromptCharacters = 8000;
@@ -84,20 +88,21 @@ public static class ModelLabTraceSpec
 
     private const string LensFooterPrefix = "{\"lensFooter\"";
 
-    /// <summary>The largest file a trace can write: every layer traced and a lens at every block; with <see cref="MaxAttentionByteCap" />, the bound on what the blob store keeps.</summary>
-    public static readonly int MaxTraceByteCap = TraceByteCapFor(MaxTraceLayers) + LensByteCapFor(MaxTraceLayers);
+    /// <summary>The largest file a trace can write: every layer traced and a lens at every block, at the most tokens; with <see cref="MaxAttentionByteCap" />, the bound on what the blob store keeps.</summary>
+    public static readonly int MaxTraceByteCap = TraceByteCapFor(MaxTraceLayers, MaxRequestedNewTokens) + LensByteCapFor(MaxTraceLayers, MaxRequestedNewTokens);
 
-    /// <summary>The largest attention cap a checkpoint can ask for: about 20 MiB.</summary>
-    public static readonly int MaxAttentionByteCap = AttentionByteCapFor(MaxAttentionLayers, MaxAttentionHeads);
+    /// <summary>The largest attention cap a checkpoint can ask for: about 40 MiB.</summary>
+    public static readonly int MaxAttentionByteCap = AttentionByteCapFor(MaxAttentionLayers, MaxAttentionHeads, MaxRequestedNewTokens);
 
-    /// <summary>Twice what every head's top keys cost at these many layers for <see cref="MaxNewTokens" /> rows, plus the footer's reserve.</summary>
-    public static int AttentionByteCapFor(int layerCount, int heads)
+    /// <summary>Twice what every head's top keys cost at these many layers for <paramref name="tokens" /> rows, plus the footer's reserve.</summary>
+    public static int AttentionByteCapFor(int layerCount, int heads, int tokens)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(layerCount);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(layerCount, MaxAttentionLayers);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heads);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(heads, MaxAttentionHeads);
-        return (layerCount * heads * MaxNewTokens * AttentionTopKeys * AttentionBytesPerKey * AttentionCapMargin) + TraceFooterReserveBytes;
+        ThrowUnlessTokenCount(tokens);
+        return (layerCount * heads * tokens * AttentionTopKeys * AttentionBytesPerKey * AttentionCapMargin) + TraceFooterReserveBytes;
     }
 
     /// <summary>Every full-attention block, or <see cref="MaxAttentionLayers" /> of them evenly spaced, first and last kept. Empty when there is none.</summary>
@@ -110,20 +115,28 @@ public static class ModelLabTraceSpec
             : [.. Enumerable.Range(0, MaxAttentionLayers).Select(pick => full[pick * (full.Length - 1) / (MaxAttentionLayers - 1)])];
     }
 
-    /// <summary>Four times what <see cref="MaxNewTokens" /> tokens cost at these many layers, plus the footer's reserve, and never under the three-layer cap.</summary>
-    public static int TraceByteCapFor(int layerCount)
+    /// <summary>Four times what <paramref name="tokens" /> tokens cost at these many layers, plus the footer's reserve, and never under the three-layer cap.</summary>
+    public static int TraceByteCapFor(int layerCount, int tokens)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(layerCount);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(layerCount, MaxTraceLayers);
-        return Math.Max(MinTraceByteCap, (layerCount * MaxNewTokens * TraceBytesPerTokenLayer * TraceCapMargin) + TraceFooterReserveBytes);
+        ThrowUnlessTokenCount(tokens);
+        return Math.Max(MinTraceByteCap, (layerCount * tokens * TraceBytesPerTokenLayer * TraceCapMargin) + TraceFooterReserveBytes);
     }
 
-    /// <summary>A lens line per <see cref="MaxNewTokens" /> step at its widest (every block's fields and a text for each of its top tokens), plus the lens footer's own reserve.</summary>
-    public static int LensByteCapFor(int blockCount)
+    /// <summary>A lens line per step of <paramref name="tokens" /> at its widest (every block's fields and a text for each of its top tokens), plus the lens footer's own reserve.</summary>
+    public static int LensByteCapFor(int blockCount, int tokens)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(blockCount);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(blockCount, MaxTraceLayers);
-        return (MaxNewTokens * (LensBytesPerLine + (blockCount * (LensBytesPerBlock + (LensTopTokens * LensBytesPerText))))) + TraceFooterReserveBytes;
+        ThrowUnlessTokenCount(tokens);
+        return (tokens * (LensBytesPerLine + (blockCount * (LensBytesPerBlock + (LensTopTokens * LensBytesPerText))))) + TraceFooterReserveBytes;
+    }
+
+    private static void ThrowUnlessTokenCount(int tokens)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(tokens);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(tokens, MaxRequestedNewTokens);
     }
 
     /// <summary>Three layers spread across the stack. Quarter points, so block 0, which cannot be steered, is not one of them.</summary>

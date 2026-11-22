@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 
+using System.Buffers;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -21,6 +22,12 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
     private const int Sigterm = 15;
     private const int Sigkill = 9;
     private const int Esrch = 3;
+
+    /// <summary>The first read buffer for <c>/proc/[pid]/environ</c>; a fuller environment doubles it up to <see cref="MaxEnvironmentBytes" />.</summary>
+    internal const int InitialEnvironmentBytes = 256 * 1024;
+
+    /// <summary>Twice the default 2 MiB the kernel lets argv and envp take together (a quarter of an 8 MiB stack).</summary>
+    internal const int MaxEnvironmentBytes = 4 * 1024 * 1024;
 
     internal static readonly TimeSpan TerminateGrace = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ExitPollInterval = TimeSpan.FromMilliseconds(50);
@@ -396,22 +403,48 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
 
     /// <summary>The run token in <c>/proc/[pid]/environ</c>: null when unreadable or empty (a process without memory: a zombie, or one past exit_mm), an empty string when absent from a non-empty one.</summary>
     /// <remarks>Which of the two a memoryless process gives depends on the kernel; neither contradicts a receipt.</remarks>
-    internal static string? ReadRunToken(int processId)
+    internal static string? ReadRunToken(int processId) =>
+        ReadEnvironmentBlock(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/environ"), InitialEnvironmentBytes, MaxEnvironmentBytes) is { } raw
+            ? RunTokenIn(raw)
+            : null;
+
+    /// <summary>The whole file in ONE read call, re-opened with a doubled buffer while a read fills it; null when unreadable or larger than <paramref name="maxBytes" />.</summary>
+    /// <remarks>
+    ///     Several reads of one open <c>environ</c> span the target's execve: the open holds the old image's memory, which is gone by a later
+    ///     read, so the block ends at a chunk boundary and its last variables, the run token among them, vanish. One read copies one image or nothing.
+    /// </remarks>
+    internal static byte[]? ReadEnvironmentBlock(string path, int initialBytes, int maxBytes)
     {
-        byte[] raw;
-        try
+        for (var size = initialBytes; size <= maxBytes; size *= 2)
         {
-            // Forced sync: same synchronous ITrainingProcessSpawner.Inspect contract as ReadStatOrNull; procfs source.
+            var buffer = ArrayPool<byte>.Shared.Rent(size);
+            try
+            {
+                int read;
+                using (var handle = File.OpenHandle(path))
+                {
+                    // Forced sync: same synchronous ITrainingProcessSpawner.Inspect contract as ReadStatOrNull; procfs source.
 #pragma warning disable MA0045 // Contract-forced: sync Inspect contract, procfs read.
-            raw = File.ReadAllBytes(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/environ"));
+                    read = RandomAccess.Read(handle, buffer.AsSpan(0, size), fileOffset: 0);
 #pragma warning restore MA0045
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return null;
+                }
+
+                if (read < size)
+                {
+                    return buffer[..read];
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
 
-        return RunTokenIn(raw);
+        return null;
     }
 
     /// <summary>The run token in a raw environment block: null when the block is empty, an empty string when the variable is absent from it.</summary>

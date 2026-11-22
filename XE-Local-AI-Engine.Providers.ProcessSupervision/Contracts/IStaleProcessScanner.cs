@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
+using System.Runtime.Versioning;
+using XE_Local_AI_Engine.Providers.Abstractions;
+
 /// <summary>
 ///     Testability seam for the startup orphan reaper (<see cref="StaleProcessReaper" />): enumerates the host's
 ///     candidate runtime processes and tree-kills one by pid.
@@ -22,6 +25,8 @@ public interface IStaleProcessScanner
     ///     access-denied pid is swallowed (the caller logs the attempt) — this never throws, so a single failure never
     ///     stops the reaper from processing the remaining candidates.
     /// </summary>
+    /// <remarks>Never on Linux: a foreign pid there goes through <see cref="KillIfSameProcess" />, which verifies it before any signal.</remarks>
+    [UnsupportedOSPlatform("linux")]
     void KillProcessTree(int pid);
 
     /// <summary>
@@ -35,6 +40,9 @@ public interface IStaleProcessScanner
     ///     and carries <paramref name="expectedStartTicks" />, both read after a pidfd pinned it, and is not this host's own child. Never throws.
     /// </summary>
     StaleProcessKillResult KillIfSameProcess(int pid, string expectedExecutablePath, long expectedStartTicks);
+
+    /// <summary>The running kernel's boot id, compared against a receipt's <see cref="ProcessSpawnReceipt.BootId" />; null when it cannot be read.</summary>
+    string? CurrentBootId => LinuxBootId.Current;
 }
 
 /// <summary>What <see cref="IStaleProcessScanner.KillIfSameProcess" /> did; only the first two let the reaper drop the receipt.</summary>

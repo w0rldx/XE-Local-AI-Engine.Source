@@ -602,6 +602,37 @@ describe("push sources", () => {
 		expect(hubs.acquire).toHaveBeenCalledExactlyOnceWith("knowledge-base/hub");
 	});
 
+	it("settles each of two serially recovered documents, and a failed one, with the knowledge page closed", async () => {
+		// Every admission, recovery and a rejected (queue-full) retry announce a row only through the status-free refresh,
+		// which the feed ignores: a document joins a batch at its first real transition, so batches settle and never reopen.
+		const { result } = renderHook(() => useKnowledgeIndexingOperation(on), { wrapper });
+		const refreshLeavesBatchUnchanged = () => {
+			const before = result.current;
+			emit("knowledge-base/hub", "knowledge.documentsChanged", {});
+			expect(result.current).toBe(before);
+		};
+		refreshLeavesBatchUnchanged();
+
+		emit("knowledge-base/hub", "knowledge.documentChanged", { documentId: "a", status: "Extracting" });
+		await waitFor(() => expect(result.current?.state).toBe("running"));
+		emit("knowledge-base/hub", "knowledge.documentChanged", { documentId: "a", status: "Indexed" });
+		await waitFor(() => expect(result.current?.state).toBe("succeeded"));
+		refreshLeavesBatchUnchanged();
+
+		emit("knowledge-base/hub", "knowledge.documentChanged", { documentId: "b", status: "Extracting" });
+		await waitFor(() => expect(result.current?.detail).toBe("0 of 1 done"));
+		refreshLeavesBatchUnchanged();
+		emit("knowledge-base/hub", "knowledge.documentChanged", { documentId: "b", status: "Indexed" });
+		await waitFor(() => expect(result.current?.state).toBe("succeeded"));
+
+		emit("knowledge-base/hub", "knowledge.documentChanged", { documentId: "c", status: "Extracting" });
+		await waitFor(() => expect(result.current?.detail).toBe("0 of 1 done"));
+		emit("knowledge-base/hub", "knowledge.documentChanged", { documentId: "c", status: "Failed" });
+		await waitFor(() => expect(result.current?.state).toBe("failed"));
+		refreshLeavesBatchUnchanged();
+		expect(result.current?.state).toBe("failed");
+	});
+
 	it("empties the scheduler runs after a reconnect gap and releases on unmount", async () => {
 		const { result, unmount } = renderHook(() => useSchedulerRunOperations(on), { wrapper });
 		const scheduler = hub("scheduler/hub");

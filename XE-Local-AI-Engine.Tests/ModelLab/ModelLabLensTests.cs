@@ -21,15 +21,18 @@ public sealed class ModelLabLensTests
     [Test]
     public void TheLensCap_IsTheWidestLinePerStep_AndRaisesTheTraceFilesBound()
     {
-        AssertEx.Equal(expected: 1_547_424, ModelLabTraceSpec.LensByteCapFor(24));
-        AssertEx.Equal(expected: 2_060_448, ModelLabTraceSpec.LensByteCapFor(32));
-        AssertEx.Equal(expected: 4_112_544, ModelLabTraceSpec.LensByteCapFor(64));
-        AssertEx.Equal((128 * (64 + (24 * (121 + (5 * 76))))) + 160, ModelLabTraceSpec.LensByteCapFor(24));
-        AssertEx.Equal(expected: 9_421_120, ModelLabTraceSpec.MaxTraceByteCap);
-        AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(ModelLabTraceSpec.MaxTraceLayers) + ModelLabTraceSpec.LensByteCapFor(ModelLabTraceSpec.MaxTraceLayers), ModelLabTraceSpec.MaxTraceByteCap);
+        AssertEx.Equal(expected: 1_547_424, ModelLabTraceSpec.LensByteCapFor(24, 128));
+        AssertEx.Equal(expected: 2_060_448, ModelLabTraceSpec.LensByteCapFor(32, 128));
+        AssertEx.Equal(expected: 4_112_544, ModelLabTraceSpec.LensByteCapFor(64, 128));
+        AssertEx.Equal(expected: 8_224_928, ModelLabTraceSpec.LensByteCapFor(64, 256));
+        AssertEx.Equal((128 * (64 + (24 * (121 + (5 * 76))))) + 160, ModelLabTraceSpec.LensByteCapFor(24, 128));
+        AssertEx.Equal(expected: 18_841_920, ModelLabTraceSpec.MaxTraceByteCap);
+        AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(ModelLabTraceSpec.MaxTraceLayers, ModelLabTraceSpec.MaxRequestedNewTokens)
+                       + ModelLabTraceSpec.LensByteCapFor(ModelLabTraceSpec.MaxTraceLayers, ModelLabTraceSpec.MaxRequestedNewTokens), ModelLabTraceSpec.MaxTraceByteCap);
         AssertEx.True(ModelLabTraceSpec.MaxTraceByteCap < ModelLabTraceSpec.MaxAttentionByteCap, "The blob store's bound stays the attention cap.");
-        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.LensByteCapFor(0));
-        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.LensByteCapFor(ModelLabTraceSpec.MaxTraceLayers + 1));
+        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.LensByteCapFor(0, 128));
+        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.LensByteCapFor(ModelLabTraceSpec.MaxTraceLayers + 1, 128));
+        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.LensByteCapFor(24, ModelLabTraceSpec.MaxRequestedNewTokens + 1));
     }
 
     [Test]
@@ -44,8 +47,8 @@ public sealed class ModelLabLensTests
         using (var job = JsonDocument.Parse(process.ReadJobFile()))
         {
             AssertEx.Equal(ModelLabTraceSpec.LensTopTokens, job.RootElement.GetProperty("lensTopTokens").GetInt32());
-            AssertEx.Equal(ModelLabTraceSpec.LensByteCapFor(24), job.RootElement.GetProperty("lensByteCap").GetInt32(), "All 24 blocks, not the three traced layers.");
-            AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(3), job.RootElement.GetProperty("traceByteCap").GetInt32(), "The hook records keep their own cap.");
+            AssertEx.Equal(ModelLabTraceSpec.LensByteCapFor(24, ModelLabTraceSpec.MaxNewTokens), job.RootElement.GetProperty("lensByteCap").GetInt32(), "All 24 blocks, not the three traced layers.");
+            AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(3, ModelLabTraceSpec.MaxNewTokens), job.RootElement.GetProperty("traceByteCap").GetInt32(), "The hook records keep their own cap.");
         }
 
         process.Finish(CompleteRun, exitCode: 0);

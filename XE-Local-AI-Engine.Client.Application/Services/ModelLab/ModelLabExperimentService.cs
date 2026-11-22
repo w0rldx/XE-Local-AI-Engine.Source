@@ -51,6 +51,8 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
 
     private const string StoppingMessage = "The node is stopping. Start the experiment again once it is back.";
 
+    private const string CheckpointNotFoundMessage = "The checkpoint was not found. Download it first.";
+
     /// <summary>One F32 value per hidden dimension: about 10 kB at a hidden size of 2560, so this bounds a vector for any model that fits a card.</summary>
     private const int MaxVectorBytes = 256 * 1024;
 
@@ -76,6 +78,9 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
 
     /// <summary>Receipt files not proven gone, with what an unverified eviction kept for each (nothing for the startup sweep's). Under the job lock.</summary>
     private readonly Dictionary<string, UnresolvedReceipt> _unresolvedReceipts = new(StringComparer.Ordinal);
+
+    /// <summary>Checkpoints a delete holds, with how many deletes hold each. Under the job lock.</summary>
+    private readonly Dictionary<Guid, int> _deleteClaims = [];
 
     private ActiveJob? _active;
     private bool _receiptScanFailed;
@@ -273,7 +278,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
         catch (TrainingNotFoundException)
         {
-            return Refuse(ModelLabStartRefusal.CheckpointNotFound, "The checkpoint was not found. Download it first.");
+            return Refuse(ModelLabStartRefusal.CheckpointNotFound, CheckpointNotFoundMessage);
         }
 
         if (artifact.Status != nameof(TrainingBaseArtifactStatus.Ready))
@@ -320,6 +325,12 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             if (request.RecordAttention && AttentionRefusalOrNull(preflight) is { } noAttention)
             {
                 return Refuse(ModelLabStartRefusal.AttentionUnavailable, noAttention);
+            }
+
+            // The validator's bound, which the job's byte caps rely on; past it the caps would throw once the holds are taken.
+            if (request.MaxNewTokens is < 1 or > ModelLabTraceSpec.MaxRequestedNewTokens)
+            {
+                throw new ArgumentOutOfRangeException(nameof(request), request.MaxNewTokens, "A trace generates 1 to 256 tokens.");
             }
 
             return await AdmitAndStartAsync(request, artifact, preflight, layer: null, interpreter, scriptPath, services, ct);
@@ -632,6 +643,32 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     public async Task<bool> HasUnconfirmedWorkerAsync(CancellationToken ct) =>
         await OrphanRefusalOrNullAsync(ct) is not null;
 
+    /// <inheritdoc />
+    public IDisposable ClaimForDelete(Guid baseArtifactId)
+    {
+        lock (_jobLock)
+        {
+            _deleteClaims[baseArtifactId] = _deleteClaims.GetValueOrDefault(baseArtifactId) + 1;
+        }
+
+        return new DeleteClaim(this, baseArtifactId);
+    }
+
+    private void ReleaseDeleteClaim(Guid baseArtifactId)
+    {
+        lock (_jobLock)
+        {
+            if (_deleteClaims[baseArtifactId] == 1)
+            {
+                _deleteClaims.Remove(baseArtifactId);
+            }
+            else
+            {
+                _deleteClaims[baseArtifactId]--;
+            }
+        }
+    }
+
     private ModelLabGpuSession? CurrentSession()
     {
         lock (_jobLock)
@@ -662,6 +699,12 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             if (_stopping)
             {
                 return Refuse(ModelLabStartRefusal.Busy, StoppingMessage);
+            }
+
+            // Before the claim below, so a refusal leaves a warm session exactly as it was.
+            if (_deleteClaims.ContainsKey(artifact.Id))
+            {
+                return Refuse(ModelLabStartRefusal.CheckpointNotFound, CheckpointNotFoundMessage);
             }
 
             // Before the gate: a warm start takes nothing the session does not already hold, so it can neither be refused nor wait on itself.
@@ -714,10 +757,16 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                 return Refuse(ModelLabStartRefusal.Busy, "The GPU is busy with other work. Wait for it to finish, or cancel it, and start the experiment again.");
             }
 
-            // The job is held from here, before the lease wait and the row, so a delete in the wait is refused. Like the warm claim, never once stopping.
+            // The job is held from here, before the lease wait and the row, so a delete in the wait is refused. Like the warm claim, never once
+            // stopping, and never while a delete holds the checkpoint: the delete either sees this job or this start sees the delete.
+            var refused = Refuse(ModelLabStartRefusal.Busy, StoppingMessage);
             lock (_jobLock)
             {
-                if (!_stopping)
+                if (!_stopping && _deleteClaims.ContainsKey(artifact.Id))
+                {
+                    refused = Refuse(ModelLabStartRefusal.CheckpointNotFound, CheckpointNotFoundMessage);
+                }
+                else if (!_stopping)
                 {
                     _session = session;
                     active = NewJob(id, artifact.Id, session, layer);
@@ -729,7 +778,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             {
                 admission.Dispose();
                 session.Abandon();
-                return Refuse(ModelLabStartRefusal.Busy, StoppingMessage);
+                return refused;
             }
 
             // Only now can a residents read find the Starting row.
@@ -749,7 +798,6 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             }
 
             // The delete guard could not see this job until _active was set, so the first read may be stale.
-            // Accepted ceiling: a delete already past its guard can still land after this read; closing that needs a lock shared with the delete.
             if (await RereadRefusalOrNullAsync(services, artifact.Id, ct) is { } gone)
             {
                 return gone;
@@ -812,6 +860,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             var attentionLayers = layer is null && request.RecordAttention ? ModelLabTraceSpec.AttentionLayersFor(preflight.CheckpointLayerTypes!) : null;
             // Every block, when there are few enough to cap; a deeper checkpoint traces as it did before the lens. One block has no earlier block to read.
             var lensBlocks = preflight.CheckpointBlockCount is { } blocks and >= 2 and <= ModelLabTraceSpec.MaxTraceLayers ? blocks : (int?)null;
+            var tokens = request.MaxNewTokens ?? ModelLabTraceSpec.MaxNewTokens;
             Func<Task<ModelLabExperimentCompletion>> execute = layer is { } steeredLayer
                 ? () => ExecuteSteeringAsync(active, request, checkpoint, steeredLayer, script)
                 : () => ExecuteTraceAsync(active, new ModelLabTraceJobV1
@@ -822,13 +871,14 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                     TracePath = Path.Combine(WorkDirectory(id), TraceFileName),
                     ResultPath = Path.Combine(WorkDirectory(id), ResultFileName),
                     Layers = traced,
-                    TraceByteCap = ModelLabTraceSpec.TraceByteCapFor(traced.Count),
+                    MaxNewTokens = tokens,
+                    TraceByteCap = ModelLabTraceSpec.TraceByteCapFor(traced.Count, tokens),
                     AttentionPath = attentionLayers is null ? null : Path.Combine(WorkDirectory(id), AttentionFileName),
                     AttentionLayers = attentionLayers,
                     AttentionTopKeys = attentionLayers is null ? null : ModelLabTraceSpec.AttentionTopKeys,
-                    AttentionByteCap = attentionLayers is null ? null : ModelLabTraceSpec.AttentionByteCapFor(attentionLayers.Count, preflight.CheckpointAttentionHeads!.Value),
+                    AttentionByteCap = attentionLayers is null ? null : ModelLabTraceSpec.AttentionByteCapFor(attentionLayers.Count, preflight.CheckpointAttentionHeads!.Value, tokens),
                     LensTopTokens = lensBlocks is null ? null : ModelLabTraceSpec.LensTopTokens,
-                    LensByteCap = lensBlocks is { } lensBlockCount ? ModelLabTraceSpec.LensByteCapFor(lensBlockCount) : null
+                    LensByteCap = lensBlocks is { } lensBlockCount ? ModelLabTraceSpec.LensByteCapFor(lensBlockCount, tokens) : null
                 }, script);
 
             lock (_jobLock)
@@ -895,7 +945,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
         catch (TrainingNotFoundException)
         {
-            return Refuse(ModelLabStartRefusal.CheckpointNotFound, "The checkpoint was not found. Download it first.");
+            return Refuse(ModelLabStartRefusal.CheckpointNotFound, CheckpointNotFoundMessage);
         }
     }
 
@@ -1540,6 +1590,27 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
 
         /// <summary>The checkpoint the worker held; null for a receipt the startup sweep kept.</summary>
         public Guid? BaseArtifactId { get; init; }
+    }
+
+    private sealed class DeleteClaim : IDisposable
+    {
+        private readonly ModelLabExperimentService _owner;
+        private readonly Guid _baseArtifactId;
+        private int _released;
+
+        public DeleteClaim(ModelLabExperimentService owner, Guid baseArtifactId)
+        {
+            _owner = owner;
+            _baseArtifactId = baseArtifactId;
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _released, 1) == 0)
+            {
+                _owner.ReleaseDeleteClaim(_baseArtifactId);
+            }
+        }
     }
 
     private sealed class ActiveJob

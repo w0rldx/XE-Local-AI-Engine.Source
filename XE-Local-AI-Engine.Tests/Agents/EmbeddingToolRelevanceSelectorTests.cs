@@ -7,8 +7,10 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -154,6 +156,55 @@ public sealed class EmbeddingToolRelevanceSelectorTests
         var selection = await selector.SelectAsync(Query, candidates, Threshold, CancellationToken.None);
 
         await AssertMatchesLexicalAsync(selection, candidates);
+    }
+
+    [Test]
+    public async Task SelectAsync_WhenTheOperatorEjectedTheEmbedder_FallsBackToLexicalWithoutAWarning()
+    {
+        // A Background load of an ejected embedder is vetoed with this type, unwrapped: an expected state, not a failure.
+        var provider = new FakeEmbeddingProvider
+        {
+            GenerateFailure = new OperatorEjectedException("The embedding model was ejected by the operator.")
+        };
+        var (selector, logger) = BuildSelector(provider);
+        var candidates = SampleCandidates();
+
+        var selection = await selector.SelectAsync(Query, candidates, Threshold, CancellationToken.None);
+
+        await AssertMatchesLexicalAsync(selection, candidates);
+        AssertEx.False(logger.Entries.Any(static entry => entry.Level >= LogLevel.Warning), "An eject veto logs no Warning.");
+        var line = logger.Entries.Single(static entry => entry.Level == LogLevel.Information);
+        AssertEx.Contains(line.Message, "operator-ejected, ranking lexically");
+        AssertEx.Contains(line.Message, EmbeddingModel);
+        AssertEx.Null(line.Exception, "The veto is logged without the exception object.");
+    }
+
+    [Test]
+    public async Task SelectAsync_InsideAnUnattendedRun_EmbedsAsBackground_WhileAnOverlappingTurnStaysInteractive()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider = new FakeEmbeddingProvider
+        {
+            GenerateGate = release.Task
+        };
+        var (selector, _) = BuildSelector(provider);
+        var candidates = SampleCandidates();
+
+        Task<ToolRelevanceSelection> unattended;
+        using (UnattendedRunScope.Begin())
+        {
+            unattended = selector.SelectAsync(Query, candidates, Threshold, CancellationToken.None);
+        }
+
+        // Starts while the unattended selection is still parked inside its embedding call.
+        var interactive = selector.SelectAsync(Query, candidates, Threshold, CancellationToken.None);
+        var intents = provider.Intents;
+        release.SetResult();
+        _ = await unattended;
+        _ = await interactive;
+
+        AssertEx.True(intents.SequenceEqual([ModelResidencyIntent.Background, ModelResidencyIntent.Interactive]),
+            $"The unattended run embeds as Background and the overlapping turn as Interactive, got [{string.Join(", ", intents)}].");
     }
 
     [Test]
@@ -465,7 +516,24 @@ public sealed class EmbeddingToolRelevanceSelectorTests
         private readonly List<string> _embeddedTexts = [];
         private readonly Lock _gate = new();
 
+        private readonly List<ModelResidencyIntent> _intents = [];
+
         public int CreateGeneratorCallCount { get; private set; }
+
+        /// <summary>The residency intent of every generator created, in creation order.</summary>
+        public IReadOnlyList<ModelResidencyIntent> Intents
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _intents.ToArray();
+                }
+            }
+        }
+
+        /// <summary>When set, every embedding call waits for it first, so a test can overlap two selections.</summary>
+        public Task? GenerateGate { get; init; }
 
         public IReadOnlyList<string> EmbeddedTexts
         {
@@ -501,6 +569,11 @@ public sealed class EmbeddingToolRelevanceSelectorTests
         public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
         {
             CreateGeneratorCallCount++;
+            lock (_gate)
+            {
+                _intents.Add(selection.ResidencyIntent);
+            }
+
             return new FakeEmbeddingGenerator(this);
         }
 
@@ -561,6 +634,11 @@ public sealed class EmbeddingToolRelevanceSelectorTests
                 EmbeddingGenerationOptions? options = null,
                 CancellationToken cancellationToken = default)
             {
+                if (_owner.GenerateGate is { } gate)
+                {
+                    await gate;
+                }
+
                 if (_owner.GenerateDelay > TimeSpan.Zero)
                 {
                     await Task.Delay(_owner.GenerateDelay, cancellationToken);

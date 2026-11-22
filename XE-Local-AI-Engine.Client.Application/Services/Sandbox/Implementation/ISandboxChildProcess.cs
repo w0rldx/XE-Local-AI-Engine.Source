@@ -39,5 +39,6 @@ internal interface ISandboxChildProcess : IDisposable
     Task<bool> TryWaitForExitAsync(CancellationToken cancellationToken);
 
     /// <summary>Best-effort kill of the whole child tree. Never throws.</summary>
-    void Kill();
+    /// <returns><see langword="false" /> when the kill could not be confirmed for every descendant, so one may survive.</returns>
+    bool Kill();
 }

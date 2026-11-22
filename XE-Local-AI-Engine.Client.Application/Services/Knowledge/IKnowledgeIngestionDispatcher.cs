@@ -20,12 +20,13 @@ public interface IKnowledgeIngestionDispatcher
     ///     Returns <see cref="KnowledgeIngestionEnqueueResult.Accepted" /> when the id was admitted; an id already
     ///     queued or in flight is coalesced into one deferred follow-up run. Returns
     ///     <see cref="KnowledgeIngestionEnqueueResult.QueueFull" /> when the bounded queue is at capacity, and the
-    ///     caller then reports a retryable busy condition.
+    ///     caller then reports a retryable busy condition. Publishes a status-free refresh, never a Pending push: a sweep
+    ///     can index the row, or a purge delete it, before that push lands, even one the caller just wrote.
     /// </remarks>
     ValueTask<KnowledgeIngestionEnqueueResult> EnqueueAsync(Guid documentId, CancellationToken cancellationToken);
 }
 
-/// <summary>Outcome of an <see cref="IKnowledgeIngestionDispatcher.EnqueueAsync" /> admission attempt.</summary>
+/// <summary>Outcome of an <see cref="IKnowledgeIngestionDispatcher.EnqueueAsync(Guid, CancellationToken)" /> admission attempt.</summary>
 public enum KnowledgeIngestionEnqueueResult
 {
     /// <summary>The document id was admitted now or coalesced into a deferred follow-up and will be ingested by the background worker.</summary>

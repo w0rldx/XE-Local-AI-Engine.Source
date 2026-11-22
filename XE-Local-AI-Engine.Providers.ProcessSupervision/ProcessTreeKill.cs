@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 using System.ComponentModel;
 using System.Diagnostics;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>Kills a short-lived helper process and its descendants, then waits a bounded time for the exit.</summary>
 public static class ProcessTreeKill
@@ -18,7 +19,8 @@ public static class ProcessTreeKill
         {
             if (!process.HasExited)
             {
-                process.Kill(entireProcessTree: true);
+                // On Linux the pidfd walk never throws, so the bounded wait follows every attempt; its outcome has no caller to report to.
+                _ = LinuxProcessTreeKill.Kill(process);
                 _ = process.WaitForExit(ExitWaitMilliseconds);
             }
         }

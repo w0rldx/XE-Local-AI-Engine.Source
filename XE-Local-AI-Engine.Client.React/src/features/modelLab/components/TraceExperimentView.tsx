@@ -34,7 +34,7 @@ import { SteeringExperimentResult } from "@/features/modelLab/components/Steerin
 import { TraceStepCandidates } from "@/features/modelLab/components/TraceStepCandidates";
 import { TraceStepper } from "@/features/modelLab/components/TraceStepper";
 import type { ModelLabJump } from "@/features/modelLab/models/ModelLabNavigation";
-import { activeJobPollMs, type CandidateBasis, toStepEntry, toTraceTable } from "@/features/modelLab/models/ModelLabTrace";
+import { activeJobPollMs, type CandidateBasis, toTraceTable } from "@/features/modelLab/models/ModelLabTrace";
 
 // The server's own bound (SetModelLabExperimentNotesRequestValidator).
 const maxNotesLength = 8000;
@@ -158,10 +158,14 @@ export function TraceExperimentView({ experimentId, isLive, onJump }: TraceExper
 	const result = data.result;
 	const tokens = result?.tokens ?? [];
 	const table = trace.data ? toTraceTable(trace.data.records ?? [], tokens) : undefined;
-	// A trace made before this version recorded no candidates: its rows are not selectable.
-	const hasCandidates = tokens.some((token) => token.candidates);
+	// Set on every contract-7 result, even one whose steps all lost their candidates (0).
+	const candidateSteps = result?.candidateSteps;
+	// A trace made before candidates were recorded has none: its rows are not selectable. A contract-7 one always is.
+	const hasCandidates = (candidateSteps !== null && candidateSteps !== undefined) || tokens.some((token) => token.candidates);
+	// Set only when a long run dropped the candidates of its last steps.
+	const keptCandidateSteps =
+		candidateSteps !== null && candidateSteps !== undefined && candidateSteps < tokens.length ? candidateSteps : undefined;
 	const selectedToken = selectedStep === undefined ? undefined : tokens[selectedStep];
-	const selectedEntry = selectedToken && toStepEntry(selectedToken, basis);
 	const showBlockLabel = (index: number): string =>
 		t("pages.modelLab.trace.showInArchitecture", "Show block {{index}} in Architecture", { index });
 	return (
@@ -256,6 +260,15 @@ export function TraceExperimentView({ experimentId, isLive, onJump }: TraceExper
 						)}
 					</Alert>
 				)}
+				{keptCandidateSteps !== undefined && (
+					<Alert color="yellow" data-testid="model-lab-trace-candidates-partial">
+						{t(
+							"pages.modelLab.trace.candidatesPartial",
+							"Candidates were kept for the first {{kept}} of {{total}} steps, so the saved result stays within its size limit. Every later step keeps its token, its text and its probability.",
+							{ kept: keptCandidateSteps, total: tokens.length },
+						)}
+					</Alert>
+				)}
 				{table && (
 					<SegmentedControl
 						value={view}
@@ -345,13 +358,19 @@ export function TraceExperimentView({ experimentId, isLive, onJump }: TraceExper
 						{t("pages.modelLab.trace.noCandidates", "This trace recorded no candidates (made before this version).")}
 					</Text>
 				)}
-				{view === "table" && table && hasCandidates && !selectedEntry && (
+				{view === "table" && table && hasCandidates && !selectedToken && (
 					<Text size="sm" c="dimmed">
 						{t("pages.modelLab.trace.pickStep", "Pick a token to see its next-token candidates.")}
 					</Text>
 				)}
 				{view === "table" && selectedToken && selectedStep !== undefined && (
-					<TraceStepCandidates token={selectedToken} step={selectedStep} basis={basis} onBasisChange={setBasis} />
+					<TraceStepCandidates
+						token={selectedToken}
+						step={selectedStep}
+						candidateSteps={candidateSteps}
+						basis={basis}
+						onBasisChange={setBasis}
+					/>
 				)}
 				{view === "stepper" && table && result && (
 					<TraceStepper

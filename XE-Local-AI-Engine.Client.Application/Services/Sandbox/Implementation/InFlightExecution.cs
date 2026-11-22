@@ -9,14 +9,17 @@ internal sealed class InFlightExecution
 {
     private readonly CancellationTokenSource _cancelSource;
 
-    public InFlightExecution(ISandboxChildProcess process, CancellationTokenSource cancelSource, string? scopeUnitName = null)
+    public InFlightExecution(SandboxLaunchTeardown teardown, CancellationTokenSource cancelSource, string? scopeUnitName = null)
     {
-        Process = process;
+        Teardown = teardown;
         _cancelSource = cancelSource;
         ScopeUnitName = scopeUnitName;
     }
 
-    public ISandboxChildProcess Process { get; }
+    /// <summary>The child's one shared group-and-leader kill, which a sandbox kill runs instead of a kill of its own.</summary>
+    public SandboxLaunchTeardown Teardown { get; }
+
+    public ISandboxChildProcess Process => Teardown.Process;
 
     /// <summary>The transient systemd scope this command runs in, when it runs behind a filesystem boundary.</summary>
     /// <remarks>

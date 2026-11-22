@@ -46,5 +46,15 @@ public sealed class StartModelLabExperimentRequestValidator : Validator<StartMod
             .Equal(false)
             .WithMessage("A steering job does not record attention. Leave it off.")
             .When(static request => request.Steering is not null);
+
+        RuleFor(static request => request.MaxNewTokens)
+            .InclusiveBetween(1, ModelLabTraceSpec.MaxRequestedNewTokens)
+            .WithMessage($"A trace generates 1 to {ModelLabTraceSpec.MaxRequestedNewTokens} tokens.")
+            .When(static request => request.MaxNewTokens is not null);
+
+        RuleFor(static request => request.MaxNewTokens)
+            .Null()
+            .WithMessage("A steering job generates its own token count. Leave out the token count.")
+            .When(static request => request.Steering is not null);
     }
 }

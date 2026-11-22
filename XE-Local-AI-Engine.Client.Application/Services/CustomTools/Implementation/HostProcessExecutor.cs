@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>Executes a <c>Command</c> custom tool on the host, porting the sandbox provider's host-exec posture minus the jail.</summary>
 /// <remarks>
@@ -298,7 +299,7 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         }
     }
 
-    private static async Task<CustomToolExecution> RunAsync(string toolName,
+    private async Task<CustomToolExecution> RunAsync(string toolName,
         ProcessStartInfo startInfo,
         CommandConfig config,
         int maxTimeoutSeconds,
@@ -381,13 +382,14 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         return builder.ToString();
     }
 
-    private static void TreeKill(Process process)
+    private void TreeKill(Process process)
     {
         try
         {
-            if (!process.HasExited)
+            if (!process.HasExited
+                && LinuxProcessTreeKill.Kill(process) is (LinuxProcessTreeKillResult.Incomplete or LinuxProcessTreeKillResult.KillFailed) and var result)
             {
-                process.Kill(entireProcessTree: true);
+                _logger.LogWarning("The custom tool's process tree (pid {Pid}) was not fully killed ({Result}); a descendant may survive.", process.Id, result);
             }
         }
         catch (InvalidOperationException)

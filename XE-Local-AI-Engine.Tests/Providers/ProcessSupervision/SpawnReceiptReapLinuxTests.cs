@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.ProcessSupervision;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.Versioning;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
@@ -51,6 +52,11 @@ public sealed class SpawnReceiptReapLinuxTests : IDisposable
         // The tracked handle is deliberately never disposed: that would remove the receipt, as a clean teardown does.
         _ = await store.TrackAsync(handle, sleep, "ours", CancellationToken.None);
         AssertEx.Equal(expected: 1, ReceiptCount());
+        var written = JsonSerializer.Deserialize<ProcessSpawnReceipt>(
+            await File.ReadAllBytesAsync(Path.Combine(_root, "runtime", "sleep", string.Create(CultureInfo.InvariantCulture, $"{ours}.json"))),
+            JsonSerializerOptions.Web);
+        AssertEx.Equal(AssertEx.NotNull(LinuxBootId.Current, "This kernel exposes a boot id."), written?.BootId,
+            "The receipt is bound to this boot, and the reap below proves a same-boot receipt is still acted on.");
 
         // A binaries root that holds neither: only the receipt can claim anything.
         var reaper = new StaleProcessReaper(new OsStaleProcessScanner("sleep"),

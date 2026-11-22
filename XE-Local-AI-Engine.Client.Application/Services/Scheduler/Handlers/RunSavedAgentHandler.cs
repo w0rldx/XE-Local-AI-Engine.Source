@@ -99,6 +99,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         ArgumentNullException.ThrowIfNull(context);
 
         var parameters = ParseAndValidate(context.Parameters);
+        // Covers the resolve's playbook ranking and the run: nobody waits on a scheduled run, so neither reloads an ejected embedder.
+        using var unattendedRun = UnattendedRunScope.Begin();
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = scope.ServiceProvider;

@@ -29,8 +29,7 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
     private readonly TimeSpan _drainTimeout;
     private readonly ILogger<KnowledgeIngestionWorker> _logger;
 
-    // Every in-flight ProcessDocumentAsync task, so shutdown can await them before the scope factory and the semaphore are
-    // disposed. Each task removes itself on completion via a synchronous continuation, so the set only holds running work.
+    // Every in-flight ProcessDocumentAsync task, so shutdown can await them before the scope factory is disposed. Each task removes itself on completion via a synchronous continuation, so the set only holds running work.
     private readonly ConcurrentDictionary<Task, byte> _inFlight = new();
 
     // Cancelled ONLY when the shutdown drain window elapses. Per-document work runs on this token, uncancelled in normal
@@ -171,9 +170,12 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
                     return next;
                 }
 
-                foreach (var documentId in await catalog.ClearEmbeddingModelWaitAsync(stoppingToken))
+                // One status-free refresh: a cleared row can be indexed or deleted before the sweep, so a Pending push could stick.
+                var cleared = await catalog.ClearEmbeddingModelWaitAsync(stoppingToken);
+                if (cleared.Count > 0)
                 {
-                    await _notifier.NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Pending, stoppingToken);
+                    _logger.LogInformation("Knowledge ingestion cleared {ClearedCount} embedding-wait flag(s).", cleared.Count);
+                    await _notifier.NotifyDocumentsChangedAsync(stoppingToken);
                 }
             }
         }
@@ -385,11 +387,6 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
         {
             _ = _concurrency.Release();
         }
-        catch (ObjectDisposedException)
-        {
-            // A document abandoned past the drain window can complete after Dispose has run; releasing a disposed semaphore
-            // is a no-op we deliberately swallow — there is no longer anything to gate.
-        }
         catch (SemaphoreFullException)
         {
             // Defensive: a release-count anomaly must never escape the finally and fault the background task.
@@ -398,10 +395,9 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
 
     public override void Dispose()
     {
-        // _wakeSignal is never disposed: the wake loop may still wait on it until base.Dispose cancels the stopping token,
-        // and a SemaphoreSlim whose AvailableWaitHandle is never read holds no unmanaged resource.
+        // Neither semaphore is disposed: the read loop and the wake loop may still wait on them until base.Dispose cancels the
+        // stopping token, and a SemaphoreSlim whose AvailableWaitHandle is never read holds no unmanaged resource.
         _drainDeadline.Dispose();
-        _concurrency.Dispose();
         base.Dispose();
     }
 }

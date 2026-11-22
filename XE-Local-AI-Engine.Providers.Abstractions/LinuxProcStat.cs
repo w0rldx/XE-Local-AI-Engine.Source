@@ -1,4 +1,9 @@
+// The Desktop shell compiles this file as linked source under its own namespace (it has no engine references).
+#if XE_DESKTOP
+namespace XE_Local_AI_Engine.Desktop.Linux;
+#else
 namespace XE_Local_AI_Engine.Providers.Abstractions;
+#endif
 
 using System.Globalization;
 
@@ -45,6 +50,9 @@ public sealed class LinuxProcStat
 
     /// <summary>State (field 3) Z (zombie) or X (dead): the process runs nothing and holds no memory; only its parent's wait is left.</summary>
     public bool Exited { get; init; }
+
+    /// <summary>State (field 3) T: stopped by a signal. A tracing stop (t) is not counted: the tracer can resume it at any time.</summary>
+    public bool Stopped { get; init; }
 
     /// <summary>Reads and parses one stat file. Never throws for a read failure: missing is <see cref="Missing" />, anything else <see cref="Unreadable" />.</summary>
     public static LinuxProcStat Read(string path)
@@ -94,7 +102,8 @@ public sealed class LinuxProcStat
             ParentProcessId = parent,
             ProcessGroupId = group,
             StartTicks = startTicks,
-            Exited = fields[stateIndex] is "Z" or "X"
+            Exited = fields[stateIndex] is "Z" or "X",
+            Stopped = fields[stateIndex] is "T"
         };
     }
 }

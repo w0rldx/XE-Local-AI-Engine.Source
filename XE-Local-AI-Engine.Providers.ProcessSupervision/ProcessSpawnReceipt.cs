@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.ProcessSupervision;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
+
 /// <summary>
 ///     What a supervisor recorded about one runtime child it spawned: the identity the startup reaper must see again, field for
 ///     field, before it may signal that pid.
@@ -17,4 +19,7 @@ public sealed class ProcessSpawnReceipt
 
     /// <summary>Diagnostics only: which model, role and port the child served.</summary>
     public required string Label { get; init; }
+
+    /// <summary>The boot the child was spawned in (<see cref="LinuxBootId" />); null when it could not be read then, or in a receipt written before it was recorded.</summary>
+    public string? BootId { get; init; }
 }

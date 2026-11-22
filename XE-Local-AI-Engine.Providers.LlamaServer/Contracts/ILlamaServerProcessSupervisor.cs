@@ -142,6 +142,16 @@ public interface ILlamaServerProcessSupervisor
     bool IsBackgroundLaunchBlocked(string modelName, ModelRole role);
 
     /// <summary>
+    ///     Whether any operator eject currently blocks a Background launch of a <paramref name="role" /> process, so a caller
+    ///     can skip resolving a model name while nothing is marked. A synchronous in-memory read.
+    /// </summary>
+    /// <remarks>The default answers true, so an implementation without marks falls back to the per-key check.</remarks>
+    bool HasBackgroundLaunchBlock(ModelRole role)
+    {
+        return true;
+    }
+
+    /// <summary>
     ///     Acquires a reference-counted inference lease against the running <c>(model, role)</c> process, so a graceful
     ///     <see cref="EjectAsync" /> waits for the request to finish before teardown.
     /// </summary>

@@ -88,6 +88,12 @@ public sealed class SandboxOrphanReaper : IHostedService
         return Task.CompletedTask;
     }
 
+    /// <summary>Classifies every dead owner's marker, then deletes jails and markers in a second pass.</summary>
+    /// <remarks>
+    ///     A group that could not be verified dead (<see cref="SandboxGroupKillOutcome.Deferred" />) keeps its marker and its jail, and
+    ///     protects that jail from both deletion layers, as a live owner's does. The retry has no age bound: such a marker is tried again
+    ///     at every start until its group is proven gone.
+    /// </remarks>
     private async Task ReapAsync(CancellationToken cancellationToken)
     {
         // Deliberately NOT short-circuited on an empty marker set: the transient-scope sweep below is the only thing that finds a scope
@@ -101,7 +107,9 @@ public sealed class SandboxOrphanReaper : IHostedService
 
         var scopeKiller = _scopeKillerOverride ?? SandboxScopeUnitKiller.CreateOrNull(_containmentProbe?.Containment.FilesystemIsolation);
         var liveScopeUnits = new HashSet<string>(StringComparer.Ordinal);
-        var liveJailPaths = new List<string>();
+        // Jails no deletion may touch: a live owner's, and a Deferred group's, whose members may still run in it.
+        var protectedJailPaths = new List<string>();
+        var classified = new List<KeyValuePair<string, SandboxProcessMarker>>();
 
         foreach (var (markerId, marker) in markers)
         {
@@ -115,13 +123,21 @@ public sealed class SandboxOrphanReaper : IHostedService
                     _ = liveScopeUnits.Add(liveUnit);
                 }
 
-                // And its jail: the session sweep below must not delete the folder holding it.
+                // And its jail: no deletion below may touch the folder holding it.
                 if (!string.IsNullOrWhiteSpace(marker.JailPath))
                 {
-                    liveJailPaths.Add(marker.JailPath);
+                    protectedJailPaths.Add(marker.JailPath);
                 }
 
                 continue;
+            }
+
+            // Gate 2: only signal the group when the leader is still the process we launched. Classified BEFORE the scope kill, which
+            // could take the leader and with it the identity the group is verified by.
+            var group = await TryReapProcessGroupAsync(marker, cancellationToken);
+            if (group == SandboxGroupKillOutcome.Killed)
+            {
+                reapedGroups++;
             }
 
             // The scope's cgroup, when there was one. Unlike the process-group signal this needs no pid-reuse guard: a unit NAME carries a
@@ -132,14 +148,28 @@ public sealed class SandboxOrphanReaper : IHostedService
                 reapedScopes++;
             }
 
-            // Gate 2: only signal the group when the leader is still the process we launched.
-            if (await TryReapProcessGroupAsync(marker, cancellationToken))
+            if (group == SandboxGroupKillOutcome.Deferred)
             {
-                reapedGroups++;
+                // Members may still run in the jail: keep the marker for the next start (no age bound) and the jail with it.
+                _logger.LogWarning("Sandbox orphan process group {Pgid} from sandbox {SandboxId} could not be verified dead; its marker and jail are kept for the next start.",
+                    marker.ProcessGroupId,
+                    marker.SandboxId);
+                if (!string.IsNullOrWhiteSpace(marker.JailPath))
+                {
+                    protectedJailPaths.Add(marker.JailPath);
+                }
+
+                continue;
             }
 
-            // Gate 3: delete the jail only when we own the path and it is not a preserved workspace.
-            if (TryDeleteJail(marker, containerRoot))
+            classified.Add(new KeyValuePair<string, SandboxProcessMarker>(markerId, marker));
+        }
+
+        // Each jail is decided only after every marker naming it was classified, so the order markers are read in cannot matter.
+        foreach (var (markerId, marker) in classified)
+        {
+            // Gate 3: delete the jail only when we own the path, it is not a preserved workspace, and no live or Deferred marker shares it.
+            if (TryDeleteJail(marker, containerRoot, protectedJailPaths))
             {
                 deletedJails++;
             }
@@ -148,7 +178,7 @@ public sealed class SandboxOrphanReaper : IHostedService
         }
 
         reapedScopes += await SweepUnreferencedScopesAsync(scopeKiller, liveScopeUnits, cancellationToken);
-        var deletedSessionRoots = SweepDeadSessionRoots(containerRoot, liveJailPaths);
+        var deletedSessionRoots = SweepDeadSessionRoots(containerRoot, protectedJailPaths);
 
         if (reapedGroups > 0 || reapedScopes > 0 || deletedJails > 0 || deletedSessionRoots > 0)
         {
@@ -167,9 +197,9 @@ public sealed class SandboxOrphanReaper : IHostedService
     /// </summary>
     /// <remarks>
     ///     Only <c>Dispose</c> removes a session root, which a killed engine never runs, and Windows writes no markers. A root with no
-    ///     owner record, one holding a live marker's jail, the markers folder and links are always left.
+    ///     owner record, one overlapping a live or Deferred marker's jail, the markers folder and links are always left.
     /// </remarks>
-    private int SweepDeadSessionRoots(string containerRoot, IReadOnlyList<string> liveJailPaths)
+    private int SweepDeadSessionRoots(string containerRoot, IReadOnlyList<string> protectedJailPaths)
     {
         if (!Directory.Exists(containerRoot))
         {
@@ -189,7 +219,7 @@ public sealed class SandboxOrphanReaper : IHostedService
             // No owner record proves nothing about who uses the folder (an older build may still run beside this one): never deleted.
             var dead = SandboxSessionOwner.ReadFromOrNull(directory.FullName) is { } owner
                        && !_isOwnerAlive(owner.ProcessId, owner.ProcessStartTimeUtc);
-            if (!dead || liveJailPaths.Any(jail => PathContainment.IsUnderRoot(jail, directory.FullName)))
+            if (!dead || protectedJailPaths.Any(jail => Overlaps(jail, directory.FullName)))
             {
                 continue;
             }
@@ -259,13 +289,13 @@ public sealed class SandboxOrphanReaper : IHostedService
         return swept;
     }
 
-    private async Task<bool> TryReapProcessGroupAsync(SandboxProcessMarker marker, CancellationToken cancellationToken)
+    private async Task<SandboxGroupKillOutcome> TryReapProcessGroupAsync(SandboxProcessMarker marker, CancellationToken cancellationToken)
     {
         if (marker.ProcessGroupId is not { } processGroupId || marker.LeaderStartTicks is not { } recordedStartTicks)
         {
             // A marker pre-registered before its launch whose owner died before the pid was recorded, or a launch with no signallable
-            // group. Nothing to signal — the scope kill above covers an isolated workload — and kill(-0) would signal the REAPER's group.
-            return false;
+            // group. Nothing to signal — the scope kill covers an isolated workload — and kill(-0) would signal the REAPER's group.
+            return SandboxGroupKillOutcome.Gone;
         }
 
         if (processGroupId <= 1)
@@ -275,35 +305,48 @@ public sealed class SandboxOrphanReaper : IHostedService
             _logger.LogDebug("Skipping sandbox orphan marker from sandbox {SandboxId}: {Pgid} is not a signallable process group.",
                 marker.SandboxId,
                 processGroupId);
-            return false;
+            return SandboxGroupKillOutcome.Mismatch;
         }
 
-        var currentStartTicks = _killer.GetProcessStartTicks(processGroupId);
-        if (currentStartTicks is null)
+        // The killer verifies the recorded start time AFTER pinning the pid, so a recycled pid is never signalled; an absent leader is
+        // not taken for an empty group, and an unreadable identity defers.
+        var outcome = await _killer.KillProcessGroupAsync(processGroupId, recordedStartTicks, cancellationToken);
+        if (outcome == SandboxGroupKillOutcome.Killed)
         {
-            // The group leader is already gone — the common case for a short-lived command. Nothing to signal.
-            return false;
-        }
-
-        if (currentStartTicks != recordedStartTicks)
-        {
-            // The pid was recycled onto an unrelated process. Killing its group would take out something that was never
-            // ours, so refuse — the stale marker is simply discarded by the caller.
-            _logger.LogDebug("Skipping sandbox orphan pgid {Pgid}: the pid was recycled (start ticks {Actual} != recorded {Recorded}).",
+            _logger.LogInformation("Reaped orphaned sandbox process group {Pgid} from sandbox {SandboxId}.",
                 processGroupId,
-                currentStartTicks,
-                recordedStartTicks);
-            return false;
+                marker.SandboxId);
+        }
+        else if (outcome == SandboxGroupKillOutcome.Mismatch)
+        {
+            _logger.LogDebug("Skipping sandbox orphan pgid {Pgid}: the pid now names another process.", processGroupId);
         }
 
-        _logger.LogInformation("Reaping orphaned sandbox process group {Pgid} from sandbox {SandboxId}.",
-            processGroupId,
-            marker.SandboxId);
-        await _killer.KillProcessGroupAsync(processGroupId, cancellationToken);
-        return true;
+        return outcome;
     }
 
-    private bool TryDeleteJail(SandboxProcessMarker marker, string containerRoot)
+    /// <summary>Whether deleting one of the two paths would remove the other or part of it: equal, ancestor or descendant.</summary>
+    /// <remarks>Both are normalized with trailing separators trimmed; an unparseable path overlaps nothing, so it protects nothing.</remarks>
+    private static bool Overlaps(string left, string right)
+    {
+        string fullLeft;
+        string fullRight;
+        try
+        {
+            fullLeft = Path.TrimEndingDirectorySeparator(Path.GetFullPath(left));
+            fullRight = Path.TrimEndingDirectorySeparator(Path.GetFullPath(right));
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+
+        return string.Equals(fullLeft, fullRight, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
+               || PathContainment.IsUnderRoot(fullLeft, fullRight)
+               || PathContainment.IsUnderRoot(fullRight, fullLeft);
+    }
+
+    private bool TryDeleteJail(SandboxProcessMarker marker, string containerRoot, IReadOnlyList<string> protectedJailPaths)
     {
         if (marker.PreserveJail)
         {
@@ -312,7 +355,9 @@ public sealed class SandboxOrphanReaper : IHostedService
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(marker.JailPath) || !PathContainment.IsUnderRoot(marker.JailPath, containerRoot))
+        if (string.IsNullOrWhiteSpace(marker.JailPath)
+            || !PathContainment.IsUnderRoot(marker.JailPath, containerRoot)
+            || protectedJailPaths.Any(jail => Overlaps(jail, marker.JailPath)))
         {
             return false;
         }

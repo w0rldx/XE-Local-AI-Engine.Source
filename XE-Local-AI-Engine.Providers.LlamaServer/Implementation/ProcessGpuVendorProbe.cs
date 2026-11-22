@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -401,7 +402,7 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
 
         public void Kill()
         {
-            _process.Kill(true);
+            _ = LinuxProcessTreeKill.Kill(_process);
         }
 
         public void Dispose()

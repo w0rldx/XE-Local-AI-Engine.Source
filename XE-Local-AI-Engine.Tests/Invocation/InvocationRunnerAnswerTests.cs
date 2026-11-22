@@ -11,7 +11,9 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Tests.Agents;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using static InvocationRunnerTestSupport;
@@ -378,6 +380,40 @@ public sealed class InvocationRunnerAnswerTests
                                     .GetArguments()[1]!;
         AssertEx.Equal(Math.Clamp(window, 8_192, 65_536), budgetDuringTheRun, "Tool results are sized to the window the model was launched with.");
         AssertEx.Null(ToolResultBudgetScope.Current, "The scope ends with the turn.");
+    }
+
+    [Test]
+    public async Task RunAsync_AnUnattendedTurnRanksAsBackground_WhileAnOverlappingAttendedTurnStaysInteractive()
+    {
+        // Tool relevance runs inside the turn's stream, so the probe ranks there: an unattended turn must not reload an ejected embedder.
+        var probe = new EmbeddingResidencyProbe();
+        var unattendedRanked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attendedRanked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var unattendedRunner = CreateRunner(eventDispatcher: Substitute.For<IWorkerEventDispatcher>(), agentUpdates: RankingInsideTheTurn(probe, unattendedRanked, release.Task));
+        var attendedRunner = CreateRunner(eventDispatcher: Substitute.For<IWorkerEventDispatcher>(), agentUpdates: RankingInsideTheTurn(probe, attendedRanked, release.Task));
+
+        var unattended = RunAsync(unattendedRunner, RuntimePackageBuilder.Valid().AsUnattended().Build());
+        // WhenAny, so a turn that fails before its stream ends the test on the assertion below instead of hanging it.
+        _ = await Task.WhenAny(unattendedRanked.Task, unattended);
+        var attended = RunAsync(attendedRunner, RuntimePackageBuilder.Valid().Build());
+        _ = await Task.WhenAny(attendedRanked.Task, attended);
+        release.SetResult();
+        await Task.WhenAll(unattended, attended);
+
+        AssertEx.True(probe.Intents.SequenceEqual([
+                ModelResidencyIntent.Background, ModelResidencyIntent.Background, ModelResidencyIntent.Interactive, ModelResidencyIntent.Interactive
+            ]),
+            $"The unattended turn ranks as Background and the overlapping attended turn as Interactive, got [{string.Join(", ", probe.Intents)}].");
+        AssertEx.False(UnattendedRunScope.IsActive, "The scope ends with the turn.");
+
+        static async IAsyncEnumerable<AgentResponseUpdate> RankingInsideTheTurn(EmbeddingResidencyProbe turnProbe, TaskCompletionSource ranked, Task proceed)
+        {
+            await turnProbe.RankBothAsync();
+            ranked.SetResult();
+            await proceed;
+            yield return new AgentResponseUpdate(ChatRole.Assistant, "ok");
+        }
     }
 
     [Test]

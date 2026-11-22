@@ -185,7 +185,7 @@ This is the safety property the launcher exists for. `LlamaServerProcessLauncher
 | OS | Containment | Tree-kill mechanism |
 |---|---|---|
 | Windows | `WindowsJobObjectProcessHandle` | Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` — disposing the job handle kills the tree |
-| Linux | `LinuxProcessGroupHandle` | child launched under `setsid` (new session/process-group); teardown does `kill(-pgid)` |
+| Linux | `LinuxProcessGroupHandle` | child launched under `setsid` (new session/process-group) and pinned by pidfd; teardown signals the group through the pin, numerically only while the leader lives |
 | macOS / other Unix | `PlainProcessHandle` | plain process; own-tree-kill (CPU floor only — no dedicated primitive) |
 
 Each native path is reached only under its own `OperatingSystem.Is*` guard, so no cross-OS native call leaks. Teardown is two steps in `LlamaServerIdleReaper`: `DetachProcess` removes the process from the map, retires its layer placement and releases the port, then `KillDetachedProcess` tree-kills + disposes the handle; `RemoveProcessAsync` runs both for eviction (`EvictCoreAsync`), the reaper and prune. `DisposeAsync` cancels the reaper, takes the runtime gate exclusively (`EnterExclusiveForTeardownAsync`), detaches and kills every remaining process, and disposes all gates — guaranteeing no orphaned `llama-server` survives a clean node shutdown.

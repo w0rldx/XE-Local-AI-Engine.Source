@@ -36,7 +36,8 @@ public sealed class StartModelLabExperimentEndpoint : Endpoint<StartModelLabExpe
             LicenseConfirmed = request.LicenseConfirmed,
             Steering = request.Steering,
             Layers = request.Layers,
-            RecordAttention = request.RecordAttention
+            RecordAttention = request.RecordAttention,
+            MaxNewTokens = request.MaxNewTokens
         }, ct);
         if (start.ExperimentId is { } id)
         {

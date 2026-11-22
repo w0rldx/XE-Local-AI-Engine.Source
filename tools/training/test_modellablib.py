@@ -217,13 +217,13 @@ def test_a_long_text_is_cut_by_its_escaped_bytes_and_says_so():
         assert len(json.dumps(cut, ensure_ascii=False).encode()) - 2 <= CANDIDATE_TEXT_BYTES
 
 
-def _trace_result(text):
-    """ModelLabTraceSpec.MaxNewTokens steps, ids and logprobs at full width, every text the given one."""
+def _trace_result(text, steps=128):
+    """Steps at ModelLabTraceSpec.MaxNewTokens by default, ids and logprobs at full width, every text the given one."""
     step = (-12.345678, [151_000 + i for i in range(20)], [text] * 20, [-12.345678 - i for i in range(20)])
     return {
         "promptTokens": 4096,
-        "tokens": [scored_token(151_643, text, step, step) for _ in range(128)],
-        "text": text * 128,
+        "tokens": [scored_token(151_643, text, step, step) for _ in range(steps)],
+        "text": text * steps,
         "seconds": 12.345,
     }
 
@@ -258,6 +258,7 @@ def test_the_worst_result_is_cut_and_fits_the_hosts_result_cap():
     assert written["text"] == text * 128
     assert written["tokens"][0]["candidates"][19]["id"] == 151_019
     assert written["tokens"][0]["id"] == 151_643
+    assert written["candidateSteps"] == 128, "At 128 tokens cutting texts is enough: every step keeps its candidates."
 
 
 def test_candidate_texts_are_cut_before_token_texts():
@@ -300,6 +301,52 @@ def test_prompt_piece_texts_are_cut_after_candidate_texts_and_before_token_texts
     result = with_pieces()
     fitted_trace_result(result, budget=pieces_cut - 1)
     assert cut(result) == [True, True, True]
+
+
+def _worst_long_result():
+    # 256 steps whose every text is a control-character run, the full output, and a prompt at its 8,000-character limit
+    # tokenised one costliest character a piece: what no cut text alone brings under the budget.
+    text = "\x01" * 200
+    return {**_trace_result(text, steps=256), "promptPieces": [{"id": 9, "text": "\x01"} for _ in range(8000)]}
+
+
+def test_a_long_trace_drops_the_candidates_of_its_last_steps_and_keeps_every_token():
+    result = _worst_long_result()
+    blob = fitted_trace_result(result)
+
+    assert len(blob) <= TRACE_RESULT_BUDGET_BYTES, len(blob)
+    written = json.loads(blob)
+    kept = written["candidateSteps"]
+    assert 0 < kept < 256, kept
+    tokens = written["tokens"]
+    assert all(token["candidates"] and token["processedCandidates"] for token in tokens[:kept])
+    assert all(token["candidates"] is None and token["processedCandidates"] is None for token in tokens[kept:])
+    for token in tokens:
+        assert token["id"] == 151_643
+        assert token["logprob"] == token["processedLogprob"] == -12.3457
+        assert token["text"].endswith(CUT_MARK), "Dropping candidates keeps the token texts the stage before cut."
+    assert written["text"] == "\x01" * 200 * 256, "The generation itself is never cut."
+    assert len(written["promptPieces"]) == 8000
+
+
+def test_the_candidates_kept_are_the_most_that_fit():
+    written = json.loads(fitted_trace_result(_worst_long_result()))
+    kept = written["candidateSteps"]
+
+    one_more = written["tokens"][kept]
+    one_more["candidates"] = written["tokens"][0]["candidates"]
+    one_more["processedCandidates"] = written["tokens"][0]["processedCandidates"]
+    written["candidateSteps"] = kept + 1
+
+    assert len(json.dumps(written, ensure_ascii=False).encode()) > TRACE_RESULT_BUDGET_BYTES
+
+
+def test_a_typical_long_trace_keeps_every_steps_candidates():
+    result = _trace_result("word", steps=256)
+    written = json.loads(fitted_trace_result(result))
+
+    assert written["candidateSteps"] == 256
+    assert all(token["candidates"] for token in written["tokens"])
 
 
 def test_a_result_over_its_budget_even_cut_is_refused():
@@ -1133,14 +1180,14 @@ VALID_SOURCE_JOB = {
 }
 
 
-def test_the_contract_is_version_6_and_a_version_5_job_is_refused():
-    assert CONTRACT_VERSION == 6
+def test_the_contract_is_version_7_and_a_version_6_job_is_refused():
+    assert CONTRACT_VERSION == 7
     for job in (VALID_JOB, VALID_STEERING_JOB, VALID_SOURCE_JOB):
         try:
-            validate_job({**job, "contractVersion": 5})
+            validate_job({**job, "contractVersion": 6})
         except JobError:
             continue
-        raise AssertionError(f"A version 5 {job['kind']} job must be refused.")
+        raise AssertionError(f"A version 6 {job['kind']} job must be refused.")
 
 
 def test_a_source_job_carries_no_model_key():

@@ -59,6 +59,7 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
@@ -99,7 +100,7 @@ public static class ConfigureServices
                       .Enrich.FromLogContext()
                       .Enrich.With<SensitiveQueryLogEnricher>()
                       .Filter.ByExcluding(static logEvent => logEvent.Exception is HubException && FromHubDispatcher(logEvent))
-                      .Filter.ByExcluding(IsCancelledGenAiOperation)
+                      .Filter.ByExcluding(IsExpectedGenAiOperationOutcome)
                       .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate);
 
                 if (logFileDirectory is not null)
@@ -541,14 +542,14 @@ public static class ConfigureServices
 
     /// <summary>
     ///     True for MEAI's <c>gen_ai.client.operation.exception</c> event from <c>OpenTelemetryChatClient</c> when its exception is a
-    ///     cancellation: a user Stop is an outcome, not a Warning with a stack trace.
+    ///     cancellation or an operator eject: a user Stop or an eject is an expected outcome, not a Warning with a stack trace.
     /// </summary>
     /// <remarks>
     ///     A type filter, because the event carries no cancel origin: a watchdog or timeout cancellation is dropped too, and the invocation
-    ///     layer still logs that one. Any other exception, event or source still logs.
+    ///     layer still logs that one and reports the eject. Any other exception, event or source still logs.
     /// </remarks>
-    internal static bool IsCancelledGenAiOperation(LogEvent logEvent) =>
-        logEvent.Exception is OperationCanceledException
+    internal static bool IsExpectedGenAiOperationOutcome(LogEvent logEvent) =>
+        logEvent.Exception is OperationCanceledException or LlamaServerModelEjectedException or OperatorEjectedException
         && FromOpenTelemetryChatClient(logEvent)
         && logEvent.Properties.TryGetValue("EventId", out var eventId)
         && eventId is StructureValue structure

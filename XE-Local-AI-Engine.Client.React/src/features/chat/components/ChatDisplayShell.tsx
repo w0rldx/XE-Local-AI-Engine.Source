@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 
 import { getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { defaultChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGates";
+import { conversationDisplayTitle } from "@/core/chat/models/ConversationDisplayTitle";
 import { isCompactViewport, TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
@@ -215,7 +216,7 @@ export function ChatDisplayShell({
 		/>
 	);
 
-	const windowTitle = conversation?.title?.trim() || t("pages.chat.windowTitle", "Chat window");
+	const windowTitle = conversationDisplayTitle(conversation?.title, t) || t("pages.chat.windowTitle", "Chat window");
 	const chatPaneHeader = (
 		<Stack gap={4}>
 			<Group gap="xs" wrap="nowrap" align="center">

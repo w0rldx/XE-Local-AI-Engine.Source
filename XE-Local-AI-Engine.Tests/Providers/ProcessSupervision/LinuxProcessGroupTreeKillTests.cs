@@ -54,6 +54,52 @@ public sealed class LinuxProcessGroupTreeKillTests
         }
     }
 
+    /// <summary>The leader dies of the group TERM while a member ignores it: the pin still reaches the member after the leader is reaped.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [SupportedOSPlatform("linux")]
+    public async Task TreeKill_LeaderExitsOnTerm_MemberIgnoringTerm_IsKilledThroughThePin()
+    {
+        using (var self = LinuxPidFd.Open(Environment.ProcessId))
+        {
+            if (self.OpenStatus != LinuxPidFdOpenStatus.Opened || self.Send(0, group: true).Status == LinuxPidFdSendStatus.GroupFlagUnsupported)
+            {
+                Skip.Test("BLOCKED: this kernel has no pidfd group signal (before 6.9), so the pinned group kill cannot be measured here.");
+            }
+        }
+
+        var markerFile = Path.Combine(Path.GetTempPath(), $"xe-pgid-test-{Guid.NewGuid():N}.pid");
+        // The member ignores TERM (inherited across exec) and has closed stdio; the leader waits on it and dies of the TERM.
+        var script = $"( trap '' TERM; exec sleep 600 ) </dev/null >/dev/null 2>&1 & echo $! > '{markerFile}'; wait";
+        var handle = LinuxProcessGroupHandle.Wrap(StartUnderSetsid(script));
+        LinuxPidFd? member = null;
+        try
+        {
+            await AssertEx.EventuallyAsync(() => File.Exists(markerFile) && new FileInfo(markerFile).Length > 0,
+                TimeSpan.FromSeconds(5), "Member PID marker was not written.");
+            var memberPid = int.Parse((await File.ReadAllTextAsync(markerFile)).Trim(), CultureInfo.InvariantCulture);
+            member = LinuxPidFd.Open(memberPid);
+            AssertEx.Equal(LinuxPidFdOpenStatus.Opened, member.OpenStatus, "the member must be alive before the kill");
+            // Only once it exec'd sleep has it installed the TERM ignore the test is about.
+            var comm = string.Create(CultureInfo.InvariantCulture, $"/proc/{memberPid}/comm");
+            await AssertEx.EventuallyAsync(() => File.Exists(comm) && string.Equals(File.ReadAllText(comm).Trim(), "sleep", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(5),
+                "The member never reached its exec.");
+
+            AssertEx.True(handle.Terminate(), "the kill is complete only once the group is seen empty");
+            AssertEx.True(handle.HasExited, "the leader died of the TERM");
+            AssertEx.Equal(LinuxPidFdSendStatus.Gone, member.Send(0, group: false).Status, "the TERM-ignoring member was killed after its leader");
+        }
+        finally
+        {
+            // Cleanup independent of the code under test: only through the member's own pin.
+            _ = member?.Send(9, group: false);
+            member?.Dispose();
+            handle.Dispose();
+            TryDelete(markerFile);
+        }
+    }
+
     /// <summary>Starts <c>/bin/sh -c script</c> under <c>setsid</c>, exactly as the runtime launchers start their servers.</summary>
     [SupportedOSPlatform("linux")]
     private static Process StartUnderSetsid(string script)

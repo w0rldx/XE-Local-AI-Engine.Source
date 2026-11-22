@@ -4952,6 +4952,7 @@ export type XeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentReque
 	steering?: XeLocalAiEngineClientServicesModelLabModelLabSteeringRequest | null;
 	layers?: Array<number> | null;
 	recordAttention?: boolean;
+	maxNewTokens?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentResponse = {
@@ -7456,6 +7457,7 @@ export type XeLocalAiEngineClientServicesModelLabModelLabTraceResult = {
 	layers?: Array<number> | null;
 	seed?: number | null;
 	maxNewTokens?: number | null;
+	candidateSteps?: number | null;
 	steering?: XeLocalAiEngineClientServicesModelLabModelLabSteeringResult | null;
 	promptPieces?: Array<XeLocalAiEngineClientServicesModelLabModelLabPromptPiece> | null;
 	layerKinds?: string | null;

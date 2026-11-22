@@ -174,6 +174,13 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
             return;
         }
 
+        // A row without chunks has nothing searchable to refresh, so it parks before paying for extraction; an indexed
+        // row's re-index still extracts and meets the veto at its embed.
+        if (revision.ChunkCount == 0 && await _embedder.IsEmbeddingModelEjectedAsync(cancellationToken))
+        {
+            throw new OperatorEjectedException("The embedding model was ejected by the operator.");
+        }
+
         var bytes = await _blobStore.ReadBytesAsync(documentId, cancellationToken);
         if (bytes is null)
         {
@@ -288,6 +295,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         var indexed = await _indexWriter.WriteAsync(input, cancellationToken);
         if (indexed)
         {
+            _logger.LogInformation("Knowledge document {DocumentId} indexed.", documentId);
             await PinEmbeddingModelIfUnsetAsync(embeddingResult.ResolvedModel, cancellationToken);
             await _notifier.NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Indexed, cancellationToken);
         }
@@ -425,7 +433,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT extension, source_path, content_hash, status FROM knowledge_documents WHERE document_id = $document_id;";
+        command.CommandText = "SELECT extension, source_path, content_hash, status, chunk_count FROM knowledge_documents WHERE document_id = $document_id;";
         AddParameter(command, "$document_id", documentId);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
@@ -436,7 +444,8 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         return new DocumentRevision(reader.GetString(0),
             await reader.IsDBNullAsync(1, cancellationToken) ? null : reader.GetString(1),
             reader.GetString(2),
-            reader.GetString(3));
+            reader.GetString(3),
+            reader.GetInt64(4));
     }
 
     private static KnowledgeChunkingResult ApplySourceMetadata(KnowledgeChunkingResult chunking, string extension, string? sourcePath)
@@ -704,7 +713,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         return await command.ExecuteNonQueryAsync(CancellationToken.None) == 1;
     }
 
-    private readonly record struct DocumentRevision(string Extension, string? SourcePath, string ContentHash, string Status);
+    private readonly record struct DocumentRevision(string Extension, string? SourcePath, string ContentHash, string Status, long ChunkCount);
 
     // How a chunk's source file is labeled for retrieval: the coarse kind ("code", "log", "markup", "structured",
     // "text") plus the concrete language when the extension names one.
