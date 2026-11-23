@@ -115,13 +115,13 @@ override. `agent_execution_logs` rows terminalize asynchronously (re-read).
 
 ### an `XDG_DATA_HOME` override for a scratch host also blinds a per-user tool-version manager
 
-**Rule:** with a scratch `XDG_DATA_HOME`, also export the tool-version manager's own data-dir variable at the real location
-(for mise, `MISE_DATA_DIR=$HOME/.local/share/mise`) on EVERY command of the round: start, status, `aspire logs`, stop.
-Otherwise the `aspire`/`python3` shim fails, `dev_aspire_ps_json` discards its stderr, and `dev-start.sh` only says "Could
-not query Aspire state safely"; diagnose by running `aspire ps` without discarding stderr. Run the backend gate and
-contract lane without the mise shims first on `PATH`: the Development validation sandbox cannot reach a shimmed `dotnet`/`python3`
-(`runner_not_installed`). **Prevents:** a toolchain failure read as a stale-AppHost or sandbox bug. **Authority:** `dev_aspire_ps_json`, `dev_matching_app_json` in
-`scripts/dev-aspire-common.sh`; the `query_status -ne 3` branch in `scripts/dev-start.sh`.
+**Rule:** with a scratch `XDG_DATA_HOME`, export the tool-version manager's data-dir variable at its real location (for
+mise, `MISE_DATA_DIR=$HOME/.local/share/mise`) on EVERY command of the round: start, status, `aspire logs`, stop.
+Otherwise the `aspire`/`python3` shims fail; `dev-start.sh` then prints the probe's error and this remedy. The backend gate
+puts the `mise bin-paths` directories before the shims itself, because the Development sandbox cannot reach a shimmed
+`dotnet` (`runner_not_installed`); a direct `dotnet test` outside the gate needs the same. **Prevents:** a toolchain
+failure read as a stale-AppHost or sandbox bug. **Authority:** `dev_require_runnable_aspire` in
+`scripts/dev-aspire-common.sh`; the mise block in `scripts/run-backend-tests.sh`.
 
 ### two hosts on one box must never share a llama-server BINARY PATH, or one host's reaper kills the other's models
 

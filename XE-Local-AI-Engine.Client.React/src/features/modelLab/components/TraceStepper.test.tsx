@@ -1171,6 +1171,26 @@ describe("TraceStepper with recorded routing", () => {
 		});
 	});
 
+	it("offers no jump to Architecture for a block the run did not route", async () => {
+		// Block 3 has residual records but no router rows.
+		stubRouting(() =>
+			routingResponse({
+				layers: [0, 1, 2],
+				steps: routingSteps.map((entry) => ({ ...entry, blocks: entry.blocks.filter((block) => block.layer !== 3) })),
+			}),
+		);
+		stubTrace(v8Result, v8Records);
+		renderWithProviders(<TraceExperimentView experimentId={experimentId} isLive={false} onJump={vi.fn()} />);
+		await screen.findByTestId("model-lab-trace-table");
+		fireEvent.click(screen.getByRole("radio", { name: "Step through" }));
+		await screen.findByTestId("model-lab-stepper-routing-table");
+		const block = screen.getByRole("button", { name: "Block 3, full attention: residual norm 1" });
+		fireEvent.click(block);
+
+		expect(block.getAttribute("aria-pressed")).toBe("true");
+		expect(screen.queryByTestId("model-lab-stepper-routing-show-block")).toBeNull();
+	});
+
 	it("offers no jump to Architecture without a page to jump in", async () => {
 		stubRouting();
 		await openStepper(v8Result, v8Records);

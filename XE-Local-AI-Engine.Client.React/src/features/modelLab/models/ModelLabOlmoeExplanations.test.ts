@@ -38,8 +38,8 @@ const olmoeNodes = [
 const levels: ExplanationLevel[] = ["overview", "detail", "math"];
 
 // The ids whose shared text is false or undecided for OLMoE, with the levels overridden. Most at every level, so no wrong level
-// shows through; q, k and v only where the shared text names the separate tensor, which a fused attn_qkv file does not have.
-const projection: ExplanationLevel[] = ["detail", "math"];
+// shows through; q, k and v only in the math, which adds that the OLMoE checkpoint has no bias.
+const projection: ExplanationLevel[] = ["math"];
 const overridden: Record<string, ExplanationLevel[]> = {
 	q: projection,
 	k: projection,
@@ -101,12 +101,12 @@ describe.each([
 
 	it("name both storage forms of the Q, K and V projections", () => {
 		for (const id of ["q", "k", "v"]) {
-			for (const level of projection) {
-				expect(textAt(i18n, `arch.olmoe.op.${id}.${level}`)).toContain(`\`attn_${id}\``);
-				expect(textAt(i18n, `arch.olmoe.op.${id}.${level}`)).toContain("`attn_qkv`");
+			for (const level of ["detail", "math"] as const) {
+				expect(shownText(i18n, id, level)).toContain(`\`attn_${id}\``);
+				expect(shownText(i18n, id, level)).toContain("`attn_qkv`");
 			}
 			// build_qkv adds the optional bias before the q/k norm.
-			expect(textAt(i18n, `arch.olmoe.op.${id}.math`)).toContain(`+ b_${id.toUpperCase()}$$`);
+			expect(shownText(i18n, id, "math")).toContain(`+ b_${id.toUpperCase()}$$`);
 		}
 	});
 

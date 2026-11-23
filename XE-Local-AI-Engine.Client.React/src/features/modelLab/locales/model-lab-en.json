@@ -2,8 +2,10 @@
 	"pages": {
 		"modelLab": {
 			"architecture": {
+				"blockMissing": "Block {{index}} is not in this file. One possible reason: the file is one part of a split GGUF and the block is in another part.",
 				"blockTraced": "Block {{index}}: {{kind}}, traced",
 				"blockUntraceable": "Block {{index}}: {{kind}}, not traceable",
+				"clearTrace": "Clear the laid-over trace",
 				"component": {
 					"attention": "Attention",
 					"embedding": "Embedding",
@@ -111,8 +113,7 @@
 								"overview": "Adds the weighted sum of the chosen experts to the stream."
 							},
 							"k": {
-								"detail": "`attn_k` (or the K rows of a fused `attn_qkv`) produces one key per key/value head. There can be fewer key/value heads than query heads (grouped-query attention); each serves a group of query heads. Keys go into the KV cache after RoPE.",
-								"math": "$$k = W_K\\,x + b_K$$\n\n- $W_K$: `attn_k`, or the K rows of `attn_qkv`; output length $n_{kv} d_h$.\n- $b_K$: `attn_k.bias`, or the K rows of `attn_qkv.bias`; zero if absent (the OLMoE checkpoint has none).\n- $n_{kv}$: number of key/value heads."
+								"math": "$$k = W_K\\,x + b_K$$\n\n- $W_K$: `attn_k`, or the K rows of `attn_qkv`; output length $n_{kv} d_h$.\n- $b_K$: `attn_k.bias` (separate weights); with a fused `attn_qkv`, the K entries of `attn_qkv.bias`, or `attn_k.bias` only when all three Q/K/V biases exist; zero otherwise (the OLMoE checkpoint has none).\n- $n_{kv}$: number of key/value heads."
 							},
 							"k_norm": {
 								"detail": "RMSNorm over the whole key projection with `attn_k_norm`: one weight per dimension of the projection, stored as the Hugging Face value. The split into heads and RoPE follow.",
@@ -120,8 +121,7 @@
 								"overview": "Normalizes the whole key projection, all key/value heads together, before it is split into heads."
 							},
 							"q": {
-								"detail": "`attn_q` (or the Q rows of a fused `attn_qkv`) produces one query per head, all heads side by side in one vector. Queries are compared with the cached keys; they are not cached themselves.",
-								"math": "$$q = W_Q\\,x + b_Q$$\n\n- $W_Q$: `attn_q`, or the Q rows of `attn_qkv`; output length $n_h d_h$.\n- $b_Q$: `attn_q.bias`, or the Q rows of `attn_qkv.bias`; zero if absent (the OLMoE checkpoint has none).\n- $n_h$: number of query heads; $d_h$: head size."
+								"math": "$$q = W_Q\\,x + b_Q$$\n\n- $W_Q$: `attn_q`, or the Q rows of `attn_qkv`; output length $n_h d_h$.\n- $b_Q$: `attn_q.bias` (separate weights); with a fused `attn_qkv`, the Q entries of `attn_qkv.bias`, or `attn_q.bias` only when all three Q/K/V biases exist; zero otherwise (the OLMoE checkpoint has none).\n- $n_h$: number of query heads; $d_h$: head size."
 							},
 							"q_norm": {
 								"detail": "RMSNorm over the whole query projection with `attn_q_norm`: one weight per dimension of the projection, stored as the Hugging Face value. The split into heads and RoPE follow.",
@@ -139,8 +139,7 @@
 								"overview": "Uses the chosen experts' router probabilities as their weights, without renormalizing them."
 							},
 							"v": {
-								"detail": "`attn_v` (or the V rows of a fused `attn_qkv`) produces one value per key/value head. Values get no norm and no RoPE; they go into the KV cache as they are.",
-								"math": "$$v = W_V\\,x + b_V$$\n\n- $W_V$: `attn_v`, or the V rows of `attn_qkv`; output length $n_{kv} d_h$.\n- $b_V$: `attn_v.bias`, or the V rows of `attn_qkv.bias`; zero if absent (the OLMoE checkpoint has none)."
+								"math": "$$v = W_V\\,x + b_V$$\n\n- $W_V$: `attn_v`, or the V rows of `attn_qkv`; output length $n_{kv} d_h$.\n- $b_V$: `attn_v.bias` (separate weights); with a fused `attn_qkv`, the V entries of `attn_qkv.bias`, or `attn_v.bias` only when all three Q/K/V biases exist; zero otherwise (the OLMoE checkpoint has none)."
 							}
 						}
 					},
@@ -160,7 +159,7 @@
 								"math": "$$g = W_{\\text{gate}}\\,x'$$\n\n- $x'$: output of `post_attention_norm`.\n- $W_{\\text{gate}}$: `ffn_gate`, from $d$ to $d_{ff}$."
 							},
 							"k": {
-								"detail": "`attn_k` produces one key per key/value head. There can be fewer key/value heads than query heads (grouped-query attention); each serves a group of query heads. Keys go into the KV cache after norm and RoPE."
+								"detail": "`attn_k` (or the K rows of a fused `attn_qkv`) produces one key per key/value head. There can be fewer key/value heads than query heads (grouped-query attention); each serves a group of query heads. Keys go into the KV cache after norm and RoPE."
 							},
 							"mixer_out": {
 								"detail": "`attn_output` takes the concatenated, gated heads and mixes them into one vector of width `n_embd`.",
@@ -172,8 +171,8 @@
 								"math": "$$x' = \\frac{h'}{\\mathrm{rms}(h')} \\odot w$$\n\n- $h'$: output of the first residual add.\n- $w$: `post_attention_norm`.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ from the file."
 							},
 							"q": {
-								"detail": "`attn_q` outputs twice the usual query size: per head, the first half is the query and the second half the gate input.",
-								"math": "$$[\\,q^{(j)}\\,;\\,g^{(j)}\\,] = (W_Q\\,x)^{(j)}$$\n\n- $W_Q$: `attn_q`, output length $2 n_h d_h$.\n- $j$: query head; $n_h$ heads of size $d_h$.\n- $q^{(j)}$: query; $g^{(j)}$: gate input.",
+								"detail": "`attn_q` (or the Q rows of a fused `attn_qkv`) outputs twice the usual query size: per head, the first half is the query and the second half the gate input.",
+								"math": "$$[\\,q^{(j)}\\,;\\,g^{(j)}\\,] = (W_Q\\,x + b_Q)^{(j)}$$\n\n- $W_Q$: `attn_q`, or the Q rows of `attn_qkv`; output length $2 n_h d_h$.\n- $b_Q$: `attn_q.bias` (separate weights); with a fused `attn_qkv`, the Q entries of `attn_qkv.bias`, or `attn_q.bias` only when all three Q/K/V biases exist; zero otherwise.\n- $j$: query head; $n_h$ heads of size $d_h$.\n- $q^{(j)}$: query; $g^{(j)}$: gate input.",
 								"overview": "Projects the normed input into queries, plus a second half per head that becomes the output gate."
 							},
 							"rope": {
@@ -373,8 +372,8 @@
 						"overview": "Widens the normed vector into the value branch of the feed-forward network."
 					},
 					"gate": {
-						"detail": "A sigmoid on the second half of each head's `attn_q` output. One factor per output dimension lets the model damp or pass each part of the attention result for this token.",
-						"math": "$$\\sigma^{(j)} = \\mathrm{sigmoid}(g^{(j)}) \\in (0,1)^{d_h}$$\n\n- $g^{(j)}$: gate half of head $j$ from `attn_q`.",
+						"detail": "A sigmoid on the second half of each head's Q output (`attn_q`, or the Q rows of `attn_qkv`). One factor per output dimension lets the model damp or pass each part of the attention result for this token.",
+						"math": "$$\\sigma^{(j)} = \\mathrm{sigmoid}(g^{(j)}) \\in (0,1)^{d_h}$$\n\n- $g^{(j)}$: gate half of head $j$ from `attn_q` or the Q rows of `attn_qkv`.",
 						"overview": "Turns the gate half of the query projection into factors between 0 and 1."
 					},
 					"gated": {
@@ -413,8 +412,8 @@
 						"overview": "The vector this block receives: the running sum of everything the embedding and earlier blocks have added (the residual stream)."
 					},
 					"k": {
-						"detail": "`attn_k` produces one key per key/value head. There can be fewer key/value heads than query heads (grouped-query attention); each serves a group of query heads. Keys go into the KV cache after RoPE.",
-						"math": "$$k = W_K\\,x$$\n\n- $W_K$: `attn_k`, output length $n_{kv} d_h$.\n- $n_{kv}$: number of key/value heads.",
+						"detail": "`attn_k` (or the K rows of a fused `attn_qkv`) produces one key per key/value head. There can be fewer key/value heads than query heads (grouped-query attention); each serves a group of query heads. Keys go into the KV cache after RoPE.",
+						"math": "$$k = W_K\\,x + b_K$$\n\n- $W_K$: `attn_k`, or the K rows of `attn_qkv`; output length $n_{kv} d_h$.\n- $b_K$: `attn_k.bias` (separate weights); with a fused `attn_qkv`, the K entries of `attn_qkv.bias`, or `attn_k.bias` only when all three Q/K/V biases exist; zero otherwise.\n- $n_{kv}$: number of key/value heads.",
 						"overview": "Projects the normed input into keys, the labels that queries are compared with."
 					},
 					"k_norm": {
@@ -453,8 +452,8 @@
 						"overview": "Normalizes the stream again before the feed-forward network."
 					},
 					"q": {
-						"detail": "`attn_q` produces one query per head, all heads side by side in one vector. Queries are compared with the cached keys; they are not cached themselves.",
-						"math": "$$q = W_Q\\,x$$\n\n- $W_Q$: `attn_q`, output length $n_h d_h$.\n- $n_h$: number of query heads; $d_h$: head size.",
+						"detail": "`attn_q` (or the Q rows of a fused `attn_qkv`) produces one query per head, all heads side by side in one vector. Queries are compared with the cached keys; they are not cached themselves.",
+						"math": "$$q = W_Q\\,x + b_Q$$\n\n- $W_Q$: `attn_q`, or the Q rows of `attn_qkv`; output length $n_h d_h$.\n- $b_Q$: `attn_q.bias` (separate weights); with a fused `attn_qkv`, the Q entries of `attn_qkv.bias`, or `attn_q.bias` only when all three Q/K/V biases exist; zero otherwise.\n- $n_h$: number of query heads; $d_h$: head size.",
 						"overview": "Projects the normed input into queries: what each token looks for among the tokens it attends to."
 					},
 					"q_norm": {
@@ -533,8 +532,8 @@
 						"overview": "The weights the chosen experts' outputs are mixed with, taken from the router probabilities."
 					},
 					"v": {
-						"detail": "`attn_v` produces one value per key/value head. Values get no norm and no RoPE; they go into the KV cache as they are.",
-						"math": "$$v = W_V\\,x$$\n\n- $W_V$: `attn_v`, output length $n_{kv} d_h$.",
+						"detail": "`attn_v` (or the V rows of a fused `attn_qkv`) produces one value per key/value head. Values get no norm and no RoPE; they go into the KV cache as they are.",
+						"math": "$$v = W_V\\,x + b_V$$\n\n- $W_V$: `attn_v`, or the V rows of `attn_qkv`; output length $n_{kv} d_h$.\n- $b_V$: `attn_v.bias` (separate weights); with a fused `attn_qkv`, the V entries of `attn_qkv.bias`, or `attn_v.bias` only when all three Q/K/V biases exist; zero otherwise.",
 						"overview": "Projects the normed input into values, the content a token passes on when it is attended to."
 					},
 					"z": {

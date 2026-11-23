@@ -54,7 +54,13 @@ internal sealed class ModelLabLlamaArchitecture : IModelLabArchitectureDescripto
         ["output.weight"] = Hf("lm_head.weight", Equal)
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
-    private static readonly ModelLabArchitectureTemplate FullAttentionTemplate = BuildFullAttention();
+    private static readonly ModelLabArchitectureTemplate FullAttentionTemplate = BuildFullAttention(ModelLabQkvLabels.Query, ModelLabQkvLabels.Key, ModelLabQkvLabels.Value);
+
+    private static readonly ModelLabArchitectureTemplate FusedQkvTemplate =
+        BuildFullAttention(ModelLabQkvLabels.FusedQuery, ModelLabQkvLabels.FusedKey, ModelLabQkvLabels.FusedValue);
+
+    private static readonly ModelLabArchitectureTemplate MixedQkvTemplate =
+        BuildFullAttention(ModelLabQkvLabels.MixedQuery, ModelLabQkvLabels.MixedKey, ModelLabQkvLabels.MixedValue);
 
     public string Architecture => "llama";
 
@@ -85,7 +91,9 @@ internal sealed class ModelLabLlamaArchitecture : IModelLabArchitectureDescripto
     {
         var mixtureOfExperts = inspection.ExpertCount > 0
                                || blocks.SelectMany(static block => block.Groups).SelectMany(static group => group.Tensors).Any(static tensor => IsExpertTensor(tensor.GgufName));
-        return !mixtureOfExperts && blocks.Any(static block => block.Kind == ModelLabArchitectureBuilder.FullAttentionKind) ? [FullAttentionTemplate] : [];
+        return !mixtureOfExperts && ModelLabQkvLabels.ByLayout(blocks, ModelLabArchitectureBuilder.FullAttentionKind, FullAttentionTemplate, FusedQkvTemplate, MixedQkvTemplate) is { } template
+            ? [template]
+            : [];
     }
 
     private static bool IsExpertTensor(string ggufName)
@@ -101,17 +109,17 @@ internal sealed class ModelLabLlamaArchitecture : IModelLabArchitectureDescripto
             Relation = relation
         };
 
-    // graph: RMSNorm, Q/K/V (build_qkv also takes a fused attn_qkv), RoPE with the optional rope_freqs factors, attention,
+    // graph: RMSNorm, Q/K/V (build_qkv, fused attn_qkv or separate), RoPE with the optional rope_freqs factors, attention,
     // dense SiLU FFN, then build_cvec. The Llama4-derived use_kq_norm branch (an L2 norm after RoPE) is not drawn.
-    private static ModelLabArchitectureTemplate BuildFullAttention()
+    private static ModelLabArchitectureTemplate BuildFullAttention(string queryLabel, string keyLabel, string valueLabel)
     {
         const string attention = ModelLabArchitectureBuilder.Attention;
         var nodes = new List<ModelLabArchitectureTemplateNode>();
         Node(nodes, "input", "Block input (residual stream)", component: null);
         Node(nodes, "attn_norm", "RMSNorm · attn_norm", ModelLabArchitectureBuilder.Norm);
-        Node(nodes, "q", "Query projection · attn_q", attention);
-        Node(nodes, "k", "Key projection · attn_k", attention);
-        Node(nodes, "v", "Value projection · attn_v", attention);
+        Node(nodes, "q", queryLabel, attention);
+        Node(nodes, "k", keyLabel, attention);
+        Node(nodes, "v", valueLabel, attention);
         Node(nodes, "rope", "RoPE on Q and K", attention);
         Node(nodes, "attn", "Attention over the KV cache", attention);
         Node(nodes, "mixer_out", "Output projection · attn_output", attention);

@@ -158,6 +158,20 @@
 #   except under COVERAGE_DIR, where a killed host never restores the ones its instrumentation
 #   rewrote, so a cancelled coverage run leaves that project's output tree to the next build.
 #
+# Version-manager shims
+#   The Development sandbox tests bind the dotnet toolchain they resolve, and a mise shim resolves to the
+#   mise binary, whose install root it rightly refuses to bind; the release contract tests run python3 and
+#   node under an isolated HOME, where a mise shim cannot find its trust store and refuses. So when
+#   `command -v` of dotnet, python3 or node resolves (readlink -f) to a file named mise, the instance that
+#   runs the lanes asks that mise, from the repo root, for the real bin directories of every tool it
+#   activates for this checkout (`mise bin-paths`), inserts each one that exists, in mise's order, right
+#   before that shims directory on PATH (entries compared without trailing slashes; at the front if none matches), for the build and every
+#   lane (the contract lane included), and says so in one ">> mise shims on PATH:" line. Before the shims,
+#   not at the front: an ordinary tool placed earlier on PATH on purpose still wins. Those three tools, not "the shims directory is on PATH", decide: they are what the gate
+#   and its lanes run, and a shim of any other tool alone changes nothing here. An inherited DOTNET_ROOT is
+#   never consulted: it may name another SDK. No such shim, a failing `mise bin-paths` or one that lists no
+#   existing directory, or an ordinary dotnet (CI's setup-dotnet) leaves PATH as it was.
+#
 # Usage:
 #   scripts/run-backend-tests.sh                     # build Release, then both lanes
 #   XE_TEST_PROFILE=low-memory scripts/run-backend-tests.sh # serialize test lanes; width 1 unless overridden
@@ -408,6 +422,44 @@ fi
 SLN="$REPO/XE-Local-AI-Engine.slnx"
 BATCHED_MODULE="XE-Local-AI-Engine.Tests"
 RESULTS_ROOT="${COVERAGE_DIR:-$REPO/.tmp/backend-test-results}"
+
+# The Development sandbox refuses a toolchain it cannot bind, and a mise shim canonicalizes to mise's own
+# binary (see "Version-manager shims"). Here, under the lock, so it logs once.
+mise_bin=""
+for mise_tool in dotnet python3 node; do
+  mise_tool_cmd="$(command -v "$mise_tool")" || continue
+  if [[ "$(basename "$(readlink -f "$mise_tool_cmd")")" == mise ]]; then
+    mise_bin="$(readlink -f "$mise_tool_cmd")" mise_shims="$(dirname "$mise_tool_cmd")"
+    break
+  fi
+done
+if [[ -n "$mise_bin" ]] && mise_paths="$(cd "$REPO" && "$mise_bin" bin-paths 2>/dev/null)"; then
+  mise_prefix="" mise_dirs=0
+  while IFS= read -r mise_dir; do
+    [[ -n "$mise_dir" && -d "$mise_dir" ]] || continue
+    mise_prefix+="$mise_dir:"
+    mise_dirs=$((mise_dirs + 1))
+  done <<<"$mise_paths"
+  if (( mise_dirs > 0 )); then
+    # Entries compare without trailing slashes (`/x/shims/` is the dir `dirname` reports as `/x/shims`); every
+    # entry, empty ones included, is kept as written.
+    mise_want="$mise_shims"
+    while [[ "$mise_want" == ?*/ ]]; do mise_want="${mise_want%/}"; done
+    mise_path="" mise_rest="$PATH:" mise_hit=0
+    while [[ -n "$mise_rest" ]]; do
+      mise_entry="${mise_rest%%:*}" mise_rest="${mise_rest#*:}"
+      mise_cmp="$mise_entry"
+      while [[ "$mise_cmp" == ?*/ ]]; do mise_cmp="${mise_cmp%/}"; done
+      if (( mise_hit == 0 )) && [[ "$mise_cmp" == "$mise_want" ]]; then
+        mise_path+="$mise_prefix" mise_hit=1
+      fi
+      mise_path+="$mise_entry:"
+    done
+    (( mise_hit == 1 )) || mise_path="$mise_prefix$mise_path"
+    export PATH="${mise_path%:}"
+    echo ">> mise shims on PATH: using the real tool directories from 'mise bin-paths' first ($mise_dirs dirs)"
+  fi
+fi
 
 # Stale MSBuild worker nodes carry a deleted NUGET_PACKAGES across worktrees (NU5037 / CS0006 on a
 # branch that is fine) — AGENTS.md "Validation". Exported for the build AND for every `dotnet test`,

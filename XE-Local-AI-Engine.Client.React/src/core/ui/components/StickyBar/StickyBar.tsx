@@ -20,7 +20,9 @@ export function StickyBar({ children, edge, "data-testid": testId }: StickyBarPr
 			bottom={edge === "bottom" ? 0 : undefined}
 			py={edge === "bottom" ? "xs" : undefined}
 			className={edge === "top" ? `${classes["bar"]} ${classes["top"]}` : classes["bar"]}
-			style={{ zIndex: 2 }}
+			// Above Mantine's in-flow layers (at most 5, Table), so a Slider thumb or segment label never paints over it;
+			// below the nav (100) and overlays (200 and up).
+			style={{ zIndex: 10 }}
 			data-testid={testId}
 		>
 			{children}

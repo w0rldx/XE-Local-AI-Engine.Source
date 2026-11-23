@@ -2,8 +2,10 @@
 	"pages": {
 		"modelLab": {
 			"architecture": {
+				"blockMissing": "Block {{index}} ist nicht in dieser Datei. Ein möglicher Grund: Die Datei ist ein Teil eines aufgeteilten GGUF, und der Block liegt in einem anderen Teil.",
 				"blockTraced": "Block {{index}}: {{kind}}, getraced",
 				"blockUntraceable": "Block {{index}}: {{kind}}, nicht tracebar",
+				"clearTrace": "Den darübergelegten Trace entfernen",
 				"component": {
 					"attention": "Attention",
 					"embedding": "Embedding",
@@ -111,8 +113,7 @@
 								"overview": "Addiert die gewichtete Summe der gewählten Experten zum Strom."
 							},
 							"k": {
-								"detail": "`attn_k` (oder die K-Zeilen eines zusammengefassten `attn_qkv`) erzeugt einen Key pro Key/Value-Head. Es kann weniger Key/Value-Heads als Query-Heads geben (Grouped-Query Attention); jeder bedient eine Gruppe von Query-Heads. Keys kommen nach RoPE in den KV-Cache.",
-								"math": "$$k = W_K\\,x + b_K$$\n\n- $W_K$: `attn_k` oder die K-Zeilen von `attn_qkv`; Ausgabelänge $n_{kv} d_h$.\n- $b_K$: `attn_k.bias` oder die K-Zeilen von `attn_qkv.bias`; null, wenn die Datei keinen hat (der OLMoE-Checkpoint hat keinen).\n- $n_{kv}$: Anzahl der Key/Value-Heads."
+								"math": "$$k = W_K\\,x + b_K$$\n\n- $W_K$: `attn_k` oder die K-Zeilen von `attn_qkv`; Ausgabelänge $n_{kv} d_h$.\n- $b_K$: `attn_k.bias` (getrennte Gewichte); bei fusioniertem `attn_qkv` die K-Einträge von `attn_qkv.bias` oder `attn_k.bias` nur, wenn alle drei Q/K/V-Biases vorhanden sind; sonst null (der OLMoE-Checkpoint hat keinen).\n- $n_{kv}$: Anzahl der Key/Value-Heads."
 							},
 							"k_norm": {
 								"detail": "RMSNorm über die ganze Key-Projektion mit `attn_k_norm`: ein Gewicht pro Dimension der Projektion, unverändert als Hugging-Face-Wert gespeichert. Danach folgen die Aufteilung in Heads und RoPE.",
@@ -120,8 +121,7 @@
 								"overview": "Normiert die gesamte Key-Projektion, alle Key/Value-Heads zusammen, bevor sie in Heads aufgeteilt wird."
 							},
 							"q": {
-								"detail": "`attn_q` (oder die Q-Zeilen eines zusammengefassten `attn_qkv`) erzeugt eine Query pro Head, alle Heads nebeneinander in einem Vektor. Queries werden mit den Keys im Cache verglichen; sie selbst kommen nicht in den Cache.",
-								"math": "$$q = W_Q\\,x + b_Q$$\n\n- $W_Q$: `attn_q` oder die Q-Zeilen von `attn_qkv`; Ausgabelänge $n_h d_h$.\n- $b_Q$: `attn_q.bias` oder die Q-Zeilen von `attn_qkv.bias`; null, wenn die Datei keinen hat (der OLMoE-Checkpoint hat keinen).\n- $n_h$: Anzahl der Query-Heads; $d_h$: Head-Größe."
+								"math": "$$q = W_Q\\,x + b_Q$$\n\n- $W_Q$: `attn_q` oder die Q-Zeilen von `attn_qkv`; Ausgabelänge $n_h d_h$.\n- $b_Q$: `attn_q.bias` (getrennte Gewichte); bei fusioniertem `attn_qkv` die Q-Einträge von `attn_qkv.bias` oder `attn_q.bias` nur, wenn alle drei Q/K/V-Biases vorhanden sind; sonst null (der OLMoE-Checkpoint hat keinen).\n- $n_h$: Anzahl der Query-Heads; $d_h$: Head-Größe."
 							},
 							"q_norm": {
 								"detail": "RMSNorm über die ganze Query-Projektion mit `attn_q_norm`: ein Gewicht pro Dimension der Projektion, unverändert als Hugging-Face-Wert gespeichert. Danach folgen die Aufteilung in Heads und RoPE.",
@@ -139,8 +139,7 @@
 								"overview": "Nimmt die Router-Wahrscheinlichkeiten der gewählten Experten als ihre Gewichte, ohne sie neu zu normieren."
 							},
 							"v": {
-								"detail": "`attn_v` (oder die V-Zeilen eines zusammengefassten `attn_qkv`) erzeugt einen Value pro Key/Value-Head. Values erhalten weder Normierung noch RoPE; sie kommen unverändert in den KV-Cache.",
-								"math": "$$v = W_V\\,x + b_V$$\n\n- $W_V$: `attn_v` oder die V-Zeilen von `attn_qkv`; Ausgabelänge $n_{kv} d_h$.\n- $b_V$: `attn_v.bias` oder die V-Zeilen von `attn_qkv.bias`; null, wenn die Datei keinen hat (der OLMoE-Checkpoint hat keinen)."
+								"math": "$$v = W_V\\,x + b_V$$\n\n- $W_V$: `attn_v` oder die V-Zeilen von `attn_qkv`; Ausgabelänge $n_{kv} d_h$.\n- $b_V$: `attn_v.bias` (getrennte Gewichte); bei fusioniertem `attn_qkv` die V-Einträge von `attn_qkv.bias` oder `attn_v.bias` nur, wenn alle drei Q/K/V-Biases vorhanden sind; sonst null (der OLMoE-Checkpoint hat keinen)."
 							}
 						}
 					},
@@ -160,7 +159,7 @@
 								"math": "$$g = W_{\\text{gate}}\\,x'$$\n\n- $x'$: Ausgabe von `post_attention_norm`.\n- $W_{\\text{gate}}$: `ffn_gate`, von $d$ auf $d_{ff}$."
 							},
 							"k": {
-								"detail": "`attn_k` erzeugt einen Key pro Key/Value-Head. Es kann weniger Key/Value-Heads als Query-Heads geben (Grouped-Query Attention); jeder bedient eine Gruppe von Query-Heads. Keys kommen nach Normierung und RoPE in den KV-Cache."
+								"detail": "`attn_k` (oder die K-Zeilen eines zusammengefassten `attn_qkv`) erzeugt einen Key pro Key/Value-Head. Es kann weniger Key/Value-Heads als Query-Heads geben (Grouped-Query Attention); jeder bedient eine Gruppe von Query-Heads. Keys kommen nach Normierung und RoPE in den KV-Cache."
 							},
 							"mixer_out": {
 								"detail": "`attn_output` nimmt die verketteten, gegateten Heads und mischt sie zu einem Vektor der Breite `n_embd`.",
@@ -172,8 +171,8 @@
 								"math": "$$x' = \\frac{h'}{\\mathrm{rms}(h')} \\odot w$$\n\n- $h'$: Ausgabe der ersten Residual-Addition.\n- $w$: `post_attention_norm`.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ aus der Datei."
 							},
 							"q": {
-								"detail": "`attn_q` liefert die doppelte übliche Query-Größe: Pro Head ist die erste Hälfte die Query, die zweite die Gate-Eingabe.",
-								"math": "$$[\\,q^{(j)}\\,;\\,g^{(j)}\\,] = (W_Q\\,x)^{(j)}$$\n\n- $W_Q$: `attn_q`, Ausgabelänge $2 n_h d_h$.\n- $j$: Query-Head; $n_h$ Heads der Größe $d_h$.\n- $q^{(j)}$: Query; $g^{(j)}$: Gate-Eingabe.",
+								"detail": "`attn_q` (oder die Q-Zeilen eines zusammengefassten `attn_qkv`) liefert die doppelte übliche Query-Größe: Pro Head ist die erste Hälfte die Query, die zweite die Gate-Eingabe.",
+								"math": "$$[\\,q^{(j)}\\,;\\,g^{(j)}\\,] = (W_Q\\,x + b_Q)^{(j)}$$\n\n- $W_Q$: `attn_q` oder die Q-Zeilen von `attn_qkv`; Ausgabelänge $2 n_h d_h$.\n- $b_Q$: `attn_q.bias` (getrennte Gewichte); bei fusioniertem `attn_qkv` die Q-Einträge von `attn_qkv.bias` oder `attn_q.bias` nur, wenn alle drei Q/K/V-Biases vorhanden sind; sonst null.\n- $j$: Query-Head; $n_h$ Heads der Größe $d_h$.\n- $q^{(j)}$: Query; $g^{(j)}$: Gate-Eingabe.",
 								"overview": "Projiziert die normierte Eingabe auf Queries, dazu pro Head eine zweite Hälfte, die zum Ausgabe-Gate wird."
 							},
 							"rope": {
@@ -373,8 +372,8 @@
 						"overview": "Verbreitert den normierten Vektor zum Werte-Zweig des Feed-Forward-Netzes."
 					},
 					"gate": {
-						"detail": "Eine Sigmoid-Funktion auf der zweiten Hälfte der `attn_q`-Ausgabe jedes Heads. Ein Faktor pro Ausgabedimension lässt das Modell jeden Teil des Attention-Ergebnisses für dieses Token dämpfen oder durchlassen.",
-						"math": "$$\\sigma^{(j)} = \\mathrm{sigmoid}(g^{(j)}) \\in (0,1)^{d_h}$$\n\n- $g^{(j)}$: Gate-Hälfte von Head $j$ aus `attn_q`.",
+						"detail": "Eine Sigmoid-Funktion auf der zweiten Hälfte der Q-Ausgabe jedes Heads (`attn_q` oder die Q-Zeilen von `attn_qkv`). Ein Faktor pro Ausgabedimension lässt das Modell jeden Teil des Attention-Ergebnisses für dieses Token dämpfen oder durchlassen.",
+						"math": "$$\\sigma^{(j)} = \\mathrm{sigmoid}(g^{(j)}) \\in (0,1)^{d_h}$$\n\n- $g^{(j)}$: Gate-Hälfte von Head $j$ aus `attn_q` oder den Q-Zeilen von `attn_qkv`.",
 						"overview": "Macht aus der Gate-Hälfte der Query-Projektion Faktoren zwischen 0 und 1."
 					},
 					"gated": {
@@ -413,8 +412,8 @@
 						"overview": "Der Vektor, den dieser Block erhält: die laufende Summe aus Embedding und allem, was frühere Blöcke addiert haben (der Residualstrom)."
 					},
 					"k": {
-						"detail": "`attn_k` erzeugt einen Key pro Key/Value-Head. Es kann weniger Key/Value-Heads als Query-Heads geben (Grouped-Query Attention); jeder bedient eine Gruppe von Query-Heads. Keys kommen nach RoPE in den KV-Cache.",
-						"math": "$$k = W_K\\,x$$\n\n- $W_K$: `attn_k`, Ausgabelänge $n_{kv} d_h$.\n- $n_{kv}$: Anzahl der Key/Value-Heads.",
+						"detail": "`attn_k` (oder die K-Zeilen eines zusammengefassten `attn_qkv`) erzeugt einen Key pro Key/Value-Head. Es kann weniger Key/Value-Heads als Query-Heads geben (Grouped-Query Attention); jeder bedient eine Gruppe von Query-Heads. Keys kommen nach RoPE in den KV-Cache.",
+						"math": "$$k = W_K\\,x + b_K$$\n\n- $W_K$: `attn_k` oder die K-Zeilen von `attn_qkv`; Ausgabelänge $n_{kv} d_h$.\n- $b_K$: `attn_k.bias` (getrennte Gewichte); bei fusioniertem `attn_qkv` die K-Einträge von `attn_qkv.bias` oder `attn_k.bias` nur, wenn alle drei Q/K/V-Biases vorhanden sind; sonst null.\n- $n_{kv}$: Anzahl der Key/Value-Heads.",
 						"overview": "Projiziert die normierte Eingabe auf Keys, die Kennungen, mit denen Queries verglichen werden."
 					},
 					"k_norm": {
@@ -453,8 +452,8 @@
 						"overview": "Normiert den Strom erneut vor dem Feed-Forward-Netz."
 					},
 					"q": {
-						"detail": "`attn_q` erzeugt eine Query pro Head, alle Heads nebeneinander in einem Vektor. Queries werden mit den Keys im Cache verglichen; sie selbst kommen nicht in den Cache.",
-						"math": "$$q = W_Q\\,x$$\n\n- $W_Q$: `attn_q`, Ausgabelänge $n_h d_h$.\n- $n_h$: Anzahl der Query-Heads; $d_h$: Head-Größe.",
+						"detail": "`attn_q` (oder die Q-Zeilen eines zusammengefassten `attn_qkv`) erzeugt eine Query pro Head, alle Heads nebeneinander in einem Vektor. Queries werden mit den Keys im Cache verglichen; sie selbst kommen nicht in den Cache.",
+						"math": "$$q = W_Q\\,x + b_Q$$\n\n- $W_Q$: `attn_q` oder die Q-Zeilen von `attn_qkv`; Ausgabelänge $n_h d_h$.\n- $b_Q$: `attn_q.bias` (getrennte Gewichte); bei fusioniertem `attn_qkv` die Q-Einträge von `attn_qkv.bias` oder `attn_q.bias` nur, wenn alle drei Q/K/V-Biases vorhanden sind; sonst null.\n- $n_h$: Anzahl der Query-Heads; $d_h$: Head-Größe.",
 						"overview": "Projiziert die normierte Eingabe auf Queries: das, wonach jedes Token unter den Tokens sucht, auf die es achtet."
 					},
 					"q_norm": {
@@ -533,8 +532,8 @@
 						"overview": "Die Gewichte, mit denen die Ausgaben der gewählten Experten gemischt werden, aus den Router-Wahrscheinlichkeiten genommen."
 					},
 					"v": {
-						"detail": "`attn_v` erzeugt einen Value pro Key/Value-Head. Values erhalten weder Normierung noch RoPE; sie kommen unverändert in den KV-Cache.",
-						"math": "$$v = W_V\\,x$$\n\n- $W_V$: `attn_v`, Ausgabelänge $n_{kv} d_h$.",
+						"detail": "`attn_v` (oder die V-Zeilen eines zusammengefassten `attn_qkv`) erzeugt einen Value pro Key/Value-Head. Values erhalten weder Normierung noch RoPE; sie kommen unverändert in den KV-Cache.",
+						"math": "$$v = W_V\\,x + b_V$$\n\n- $W_V$: `attn_v` oder die V-Zeilen von `attn_qkv`; Ausgabelänge $n_{kv} d_h$.\n- $b_V$: `attn_v.bias` (getrennte Gewichte); bei fusioniertem `attn_qkv` die V-Einträge von `attn_qkv.bias` oder `attn_v.bias` nur, wenn alle drei Q/K/V-Biases vorhanden sind; sonst null.",
 						"overview": "Projiziert die normierte Eingabe auf Values, den Inhalt, den ein Token weitergibt, wenn es beachtet wird."
 					},
 					"z": {

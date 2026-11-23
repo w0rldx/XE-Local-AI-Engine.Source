@@ -1,7 +1,7 @@
 import { Alert, Button, Group, Loader, Select, Stack, Text } from "@mantine/core";
 import { IconArrowRight } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -44,6 +44,7 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 	const [traceId, setTraceId] = useState<string | null>(null);
 	const [explanationLevel, setExplanationLevel] = useState<ExplanationLevel>("overview");
 	const [appliedNonce, setAppliedNonce] = useState<number>();
+	const traceInput = useRef<HTMLInputElement>(null);
 	if (intent && intent.nonce !== appliedNonce) {
 		setAppliedNonce(intent.nonce);
 		setModelName(intent.modelName);
@@ -80,6 +81,8 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 
 	const data = descriptor.data;
 	const block = typeof selection === "number" ? data?.blocks.find((candidate) => candidate.index === selection) : undefined;
+	// A jump can name a block the file does not hold; Embedding and Output always open.
+	const blockMissing = typeof selection === "number" && block === undefined;
 	const template =
 		block && data?.support === "detailed" ? data.templates.find((candidate) => candidate.kind === block.kind) : undefined;
 	// Only a family whose graph has a router can have routing: a dense model's overlay never asks for it.
@@ -112,6 +115,15 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 					value={overlayId}
 					onChange={setTraceId}
 					clearable={true}
+					ref={traceInput}
+					// Mantine leaves the clear button out of the Tab order and unnamed; a keyboard user must reach it too.
+					clearButtonProps={{
+						"aria-label": t("pages.modelLab.architecture.clearTrace", "Clear the laid-over trace"),
+						tabIndex: 0,
+						"aria-hidden": false,
+					}}
+					// The clear button unmounts with the value, so focus goes back to the field instead of the page.
+					onClear={() => traceInput.current?.focus()}
 				/>
 			)}
 			{onJump && overlayId !== null && (
@@ -206,7 +218,16 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 						tracedBlocks={traceSummaries ? new Set(traceSummaries.keys()) : null}
 						onSelect={setSelection}
 					/>
-					{selection !== null && (
+					{blockMissing && (
+						<Alert color="yellow" data-testid="model-lab-architecture-block-missing">
+							{t(
+								"pages.modelLab.architecture.blockMissing",
+								"Block {{index}} is not in this file. One possible reason: the file is one part of a split GGUF and the block is in another part.",
+								{ index: selection },
+							)}
+						</Alert>
+					)}
+					{selection !== null && !blockMissing && (
 						<ArchitectureBlockDetail
 							// A same-block jump to another model must not keep the last model's form state.
 							key={`${modelName}:${selection}`}

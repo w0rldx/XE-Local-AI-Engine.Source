@@ -264,6 +264,14 @@ function stubRoutes(descriptor: Record<string, unknown>, experiments: unknown[] 
 	);
 }
 
+// Where Tab goes next: the following element in document order that takes focus from the keyboard.
+function nextTabStop(from: HTMLElement): HTMLElement | undefined {
+	const stops = [...document.querySelectorAll<HTMLElement>("button, input, select, textarea, a[href], [tabindex]")].filter(
+		(element) => element.tabIndex >= 0 && !element.hasAttribute("disabled"),
+	);
+	return stops[stops.indexOf(from) + 1];
+}
+
 // Opens a select's dropdown and returns its listbox.
 async function openOptions(label: RegExp): Promise<HTMLElement> {
 	const select = await screen.findByRole("combobox", { name: label });
@@ -386,16 +394,39 @@ describe("ArchitectureExplorer", () => {
 		const rows = within(screen.getByTestId("model-lab-architecture-group-blk.1.attention")).getByRole("region", {
 			name: "Attention",
 		});
+		// The focusable region is the ScrollArea's viewport, the element that scrolls, not the container around it.
 		expect(rows.tabIndex).toBe(0);
-		expect(rows.style.getPropertyValue("--table-overflow")).toBe("auto");
+		expect(rows.hasAttribute("data-scrollarea-viewport")).toBe(true);
+		const container = rows.parentElement as HTMLElement;
+		expect(container.hasAttribute("tabindex")).toBe(false);
+		// A ScrollArea with its own bar, not a native overflow box whose bar a phone hides.
+		expect(container.style.getPropertyValue("--table-overflow")).toBe("");
+		expect(container.classList.contains("mantine-ScrollArea-root")).toBe(true);
 		// Cells keep one line, so "144 MiB" never breaks; the box scrolls instead.
-		expect(rows.style.getPropertyValue("--table-min-width")).toBe("max-content");
+		expect(container.style.getPropertyValue("--table-min-width")).toBe("max-content");
 
 		fireEvent.click(screen.getByRole("button", { name: "attn_q.weight" }));
 		const hfName = within(screen.getByTestId("model-lab-architecture-tensor")).getByText(
 			"model.layers.1.self_attn.q_proj.weight",
 		);
 		expect(hfName.style.overflowWrap).toBe("anywhere");
+	});
+
+	it("says a block a jump asked for is not in this file, opens no detail, and still opens Embedding", async () => {
+		stubRoutes(detailed, [traceRow(traceId)]);
+		stubRun(traceId, routingA);
+		renderWithProviders(
+			<ArchitectureExplorer intent={{ tab: "architecture", nonce: 1, modelName: gguf, traceId, blockIndex: 9 }} />,
+		);
+
+		expect((await screen.findByTestId("model-lab-architecture-block-missing")).textContent).toContain(
+			"Block 9 is not in this file.",
+		);
+		expect(screen.queryByTestId("model-lab-architecture-detail")).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: "Embedding" }));
+		expect(screen.getByTestId("model-lab-architecture-detail")).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-architecture-block-missing")).toBeNull();
 	});
 
 	it("opens the embedding's tensors from Embedding, not the output's", async () => {
@@ -1445,12 +1476,29 @@ describe("ArchitectureExplorer routing of a laid-over run", () => {
 		renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} />);
 		await screen.findByTestId("model-lab-architecture-routing");
 
-		const select = await screen.findByRole("combobox", { name: /Trace to lay over the blocks/ });
-		const clear = select.closest(".mantine-Input-wrapper")?.querySelector("button");
-		fireEvent.click(clear as HTMLButtonElement);
+		fireEvent.click(screen.getByRole("button", { name: "Clear the laid-over trace" }));
 
 		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
 		expect(screen.queryByTestId("model-lab-architecture-trace-summary")).toBeNull();
+	});
+
+	it("reaches the named clear button by Tab, clears the trace from it and puts focus back on the field", async () => {
+		stubRoutes(olmoe, [traceRow(traceId)]);
+		stubRun(traceId, routingA);
+		renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} />);
+		await screen.findByTestId("model-lab-architecture-routing");
+		const field = screen.getByRole("combobox", { name: /Trace to lay over the blocks/ });
+		const clear = screen.getByRole("button", { name: "Clear the laid-over trace" });
+
+		expect(nextTabStop(field)).toBe(clear);
+		clear.focus();
+		expect(document.activeElement).toBe(clear);
+		// Enter or Space on a focused native button fires its click; jsdom does not synthesize that, so the test does.
+		fireEvent.click(document.activeElement as HTMLElement);
+
+		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
+		expect(screen.queryByRole("button", { name: "Clear the laid-over trace" })).toBeNull();
+		expect(document.activeElement).toBe(field);
 	});
 
 	it("drops a run deleted since it was laid over once the list refreshes without it", async () => {

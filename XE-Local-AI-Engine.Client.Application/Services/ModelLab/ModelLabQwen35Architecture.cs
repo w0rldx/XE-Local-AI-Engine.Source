@@ -22,6 +22,14 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
     private const string Equal = "equal";
     private const string PlusOne = "plus_one";
 
+    // The Q part of a gated block is 2·n_head·d rows, each head's query then its gate; a fused attn_qkv starts with it.
+    private const string Query = "Query + gate projection · attn_q";
+    private const string Gate = "sigmoid(gate half of attn_q)";
+    private const string FusedQuery = "Query + gate rows of the fused projection · attn_qkv";
+    private const string FusedGate = "sigmoid(gate half of the Q rows of attn_qkv)";
+    private const string MixedQuery = "Query + gate projection · attn_q or Q + gate rows of attn_qkv";
+    private const string MixedGate = "sigmoid(gate half of attn_q or of the Q rows of attn_qkv)";
+
     // Keyed by the name after "blk.N.", shared by both families; each adds its FFN rows below. The converter adds 1 to
     // every norm but linear_attn.norm and stores -exp(A_log).
     private static readonly FrozenDictionary<string, ModelLabHfTensor> BlockTensors = new Dictionary<string, ModelLabHfTensor>(StringComparer.Ordinal)
@@ -92,8 +100,13 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
 
     private readonly FrozenDictionary<string, ModelLabHfTensor> _ffnTensors;
 
-    // In the order linear attention, full attention, MTP.
-    private readonly ModelLabArchitectureTemplate[] _templates;
+    private readonly ModelLabArchitectureTemplate _linearAttention;
+    private readonly ModelLabArchitectureTemplate _fullAttention;
+    private readonly ModelLabArchitectureTemplate _fusedFullAttention;
+    private readonly ModelLabArchitectureTemplate _mixedFullAttention;
+    private readonly ModelLabArchitectureTemplate _mtp;
+    private readonly ModelLabArchitectureTemplate _fusedMtp;
+    private readonly ModelLabArchitectureTemplate _mixedMtp;
 
     /// <param name="mixtureOfExperts">True for <c>qwen35moe</c>: routed experts plus a gated shared expert in place of the dense FFN.</param>
     public ModelLabQwen35Architecture(bool mixtureOfExperts)
@@ -101,7 +114,13 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
         Architecture = mixtureOfExperts ? "qwen35moe" : "qwen35";
         _ffnTensors = mixtureOfExperts ? ExpertFfnTensors : DenseFfnTensors;
         var source = "llama.cpp src/models/" + Architecture + ".cpp @ " + TemplateLlamaCppTag;
-        _templates = [BuildLinearAttention(source, mixtureOfExperts), BuildFullAttention(source, mixtureOfExperts), BuildMtp(source, mixtureOfExperts)];
+        _linearAttention = BuildLinearAttention(source, mixtureOfExperts);
+        _fullAttention = BuildFullAttention(source, mixtureOfExperts, Query, ModelLabQkvLabels.Key, ModelLabQkvLabels.Value, Gate);
+        _fusedFullAttention = BuildFullAttention(source, mixtureOfExperts, FusedQuery, ModelLabQkvLabels.FusedKey, ModelLabQkvLabels.FusedValue, FusedGate);
+        _mixedFullAttention = BuildFullAttention(source, mixtureOfExperts, MixedQuery, ModelLabQkvLabels.MixedKey, ModelLabQkvLabels.MixedValue, MixedGate);
+        _mtp = BuildMtp(source, mixtureOfExperts, Query, ModelLabQkvLabels.Key, ModelLabQkvLabels.Value, Gate);
+        _fusedMtp = BuildMtp(source, mixtureOfExperts, FusedQuery, ModelLabQkvLabels.FusedKey, ModelLabQkvLabels.FusedValue, FusedGate);
+        _mixedMtp = BuildMtp(source, mixtureOfExperts, MixedQuery, ModelLabQkvLabels.MixedKey, ModelLabQkvLabels.MixedValue, MixedGate);
     }
 
     public string Architecture { get; }
@@ -137,11 +156,17 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
     public ModelLabHfTensor? NonBlockHfName(string ggufName) =>
         NonBlockTensors.GetValueOrDefault(ggufName);
 
-    // One template per distinct block kind present, in the order linear attention, full attention, MTP.
+    // One template per distinct block kind present, in the order linear attention, full attention, MTP. Full-attention and MTP
+    // blocks pick their Q/K/V labels apart; a linear block's attn_qkv is the delta-net projection and never counts.
     public IReadOnlyList<ModelLabArchitectureTemplate> TemplatesFor(IReadOnlyList<ModelLabArchitectureBlock> blocks, GgufTensorInspection inspection)
     {
-        var present = blocks.Select(static block => block.Kind).ToHashSet(StringComparer.Ordinal);
-        return [.. _templates.Where(template => present.Contains(template.Kind))];
+        ModelLabArchitectureTemplate?[] templates =
+        [
+            blocks.Any(static block => block.Kind == ModelLabArchitectureBuilder.LinearAttentionKind) ? _linearAttention : null,
+            ModelLabQkvLabels.ByLayout(blocks, ModelLabArchitectureBuilder.FullAttentionKind, _fullAttention, _fusedFullAttention, _mixedFullAttention),
+            ModelLabQkvLabels.ByLayout(blocks, ModelLabArchitectureBuilder.MtpKind, _mtp, _fusedMtp, _mixedMtp)
+        ];
+        return [.. templates.OfType<ModelLabArchitectureTemplate>()];
     }
 
     private static ModelLabHfTensor Hf(string name, string relation) =>
@@ -179,21 +204,22 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
     }
 
     // graph::build_layer_attn: Q carries a gate half, Q and K are RMS-normed, then MRoPE, attention and sigmoid(gate).
-    private static ModelLabArchitectureTemplate BuildFullAttention(string source, bool mixtureOfExperts)
+    private static ModelLabArchitectureTemplate BuildFullAttention(string source, bool mixtureOfExperts, string queryLabel, string keyLabel, string valueLabel,
+        string gateLabel)
     {
         var nodes = new List<ModelLabArchitectureTemplateNode>();
         var edges = new List<ModelLabArchitectureTemplateEdge>();
         Node(nodes, "input", "Block input (residual stream)", component: null);
         Node(nodes, "attn_norm", "RMSNorm · attn_norm", ModelLabArchitectureBuilder.Norm);
         edges.Add(E("input", "attn_norm"));
-        AddGatedAttention(nodes, edges);
+        AddGatedAttention(nodes, edges, queryLabel, keyLabel, valueLabel, gateLabel);
         AddTail(nodes, edges, residualFrom: "input", trunk: true, mixtureOfExperts);
         return Template(ModelLabArchitectureBuilder.FullAttentionKind, source, nodes, edges);
     }
 
     // graph_mtp: the normed trunk state and the token embedding are joined by eh_proj, run one full-attention block
     // and a head of their own. It runs as a separate draft graph, never inside the main forward pass.
-    private static ModelLabArchitectureTemplate BuildMtp(string source, bool mixtureOfExperts)
+    private static ModelLabArchitectureTemplate BuildMtp(string source, bool mixtureOfExperts, string queryLabel, string keyLabel, string valueLabel, string gateLabel)
     {
         var nodes = new List<ModelLabArchitectureTemplateNode>();
         var edges = new List<ModelLabArchitectureTemplateEdge>();
@@ -207,7 +233,7 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
         edges.AddRange([
             E("hidden", "hnorm"), E("token", "enorm"), E("enorm", "concat"), E("hnorm", "concat"), E("concat", "eh_proj"), E("eh_proj", "attn_norm")
         ]);
-        AddGatedAttention(nodes, edges);
+        AddGatedAttention(nodes, edges, queryLabel, keyLabel, valueLabel, gateLabel);
         AddTail(nodes, edges, residualFrom: "eh_proj", trunk: false, mixtureOfExperts);
         Node(nodes, "head_norm", "RMSNorm · nextn.shared_head_norm, else output_norm", ModelLabArchitectureBuilder.Mtp);
         Node(nodes, "head", "LM head · nextn.shared_head_head, else output", component: null);
@@ -216,17 +242,18 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
         return Template(ModelLabArchitectureBuilder.MtpKind, source, nodes, edges);
     }
 
-    private static void AddGatedAttention(List<ModelLabArchitectureTemplateNode> nodes, List<ModelLabArchitectureTemplateEdge> edges)
+    private static void AddGatedAttention(List<ModelLabArchitectureTemplateNode> nodes, List<ModelLabArchitectureTemplateEdge> edges, string queryLabel, string keyLabel,
+        string valueLabel, string gateLabel)
     {
         const string attention = ModelLabArchitectureBuilder.Attention;
-        Node(nodes, "q", "Query + gate projection · attn_q", attention);
-        Node(nodes, "k", "Key projection · attn_k", attention);
-        Node(nodes, "v", "Value projection · attn_v", attention);
+        Node(nodes, "q", queryLabel, attention);
+        Node(nodes, "k", keyLabel, attention);
+        Node(nodes, "v", valueLabel, attention);
         Node(nodes, "q_norm", "RMSNorm · attn_q_norm", attention);
         Node(nodes, "k_norm", "RMSNorm · attn_k_norm", attention);
         Node(nodes, "rope", "MRoPE on Q and K", attention);
         Node(nodes, "attn", "Attention over the KV cache", attention);
-        Node(nodes, "gate", "sigmoid(gate half of attn_q)", attention);
+        Node(nodes, "gate", gateLabel, attention);
         Node(nodes, "gated", "Attention × gate", attention);
         Node(nodes, "mixer_out", "Output projection · attn_output", attention);
         edges.AddRange([

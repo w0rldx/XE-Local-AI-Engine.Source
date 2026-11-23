@@ -32,6 +32,14 @@ internal static class LlamaTensorFixture
         "ffn_down", "ffn_residual", "control_vector", "output"
     ];
 
+    /// <summary>The template's edges in order, the same for every Q/K/V layout.</summary>
+    public static readonly string[] TemplateEdges =
+    [
+        "input->attn_norm", "attn_norm->q", "attn_norm->k", "attn_norm->v", "q->rope", "k->rope", "rope->attn", "v->attn", "attn->mixer_out",
+        "mixer_out->attn_residual", "input->attn_residual", "attn_residual->post_norm", "post_norm->ffn_gate", "post_norm->ffn_up", "ffn_gate->ffn_act",
+        "ffn_up->ffn_act", "ffn_act->ffn_down", "ffn_down->ffn_residual", "attn_residual->ffn_residual", "ffn_residual->control_vector", "control_vector->output"
+    ];
+
     /// <summary>16 dense blocks, <c>token_embd</c>, <c>output_norm</c> and <c>rope_freqs</c>; tied, so no <c>output.weight</c>.</summary>
     public static GgufTensorInspection Llama3_2_1B() =>
         Qwen35TensorFixture.Inspection("llama",

@@ -555,6 +555,10 @@ unreachable). A refused virtual environment (a `pyvenv.cfg` in the entry's prefi
 interpreter would run without the venv's packages, so a refused venv stays reported unreachable and the
 `runner_not_installed` detail names it.
 
+A version-manager shim cannot be bound: mise's `dotnet` resolves to `~/.local/bin/mise`, whose install root `~/.local`
+holds the node data directory, so put the real tool directories (`mise bin-paths`) first on `PATH`.
+`scripts/run-backend-tests.sh` does this itself; a focused `dotnet test` outside the gate needs the same.
+
 A toolchain tree must pass the descriptor opener's read-only rule: owned by the engine's user or by root, and not
 group- or world-writable, the same for every ancestor, so a root-owned `/opt/dotnet` or `/snap/bin` is bound like
 `/usr`. A tree that fails it is left out at resolve time, so only the tool inside it fails "not found"; it never fails

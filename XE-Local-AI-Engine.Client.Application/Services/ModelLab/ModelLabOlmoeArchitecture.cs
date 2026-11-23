@@ -50,16 +50,13 @@ internal sealed class ModelLabOlmoeArchitecture : IModelLabArchitectureDescripto
         ["output.weight"] = Hf("lm_head.weight", Equal)
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
-    private static readonly ModelLabArchitectureTemplate FullAttentionTemplate =
-        BuildFullAttention("Query projection · attn_q", "Key projection · attn_k", "Value projection · attn_v");
+    private static readonly ModelLabArchitectureTemplate FullAttentionTemplate = BuildFullAttention(ModelLabQkvLabels.Query, ModelLabQkvLabels.Key, ModelLabQkvLabels.Value);
 
-    // build_qkv projects once with a fused attn_qkv and splits the result: same graph, only the Q/K/V labels differ.
-    private static readonly ModelLabArchitectureTemplate FusedQkvTemplate = BuildFullAttention("Query rows of the fused projection · attn_qkv",
-        "Key rows of the fused projection · attn_qkv", "Value rows of the fused projection · attn_qkv");
+    private static readonly ModelLabArchitectureTemplate FusedQkvTemplate =
+        BuildFullAttention(ModelLabQkvLabels.FusedQuery, ModelLabQkvLabels.FusedKey, ModelLabQkvLabels.FusedValue);
 
-    // llama.cpp picks fused or separate per layer, so a file mixing both gets labels true for either.
-    private static readonly ModelLabArchitectureTemplate MixedQkvTemplate = BuildFullAttention("Query projection · attn_q or Q rows of attn_qkv",
-        "Key projection · attn_k or K rows of attn_qkv", "Value projection · attn_v or V rows of attn_qkv");
+    private static readonly ModelLabArchitectureTemplate MixedQkvTemplate =
+        BuildFullAttention(ModelLabQkvLabels.MixedQuery, ModelLabQkvLabels.MixedKey, ModelLabQkvLabels.MixedValue);
 
     public string Architecture => "olmoe";
 
@@ -84,24 +81,10 @@ internal sealed class ModelLabOlmoeArchitecture : IModelLabArchitectureDescripto
     public ModelLabHfTensor? NonBlockHfName(string ggufName) =>
         NonBlockTensors.GetValueOrDefault(ggufName);
 
-    public IReadOnlyList<ModelLabArchitectureTemplate> TemplatesFor(IReadOnlyList<ModelLabArchitectureBlock> blocks, GgufTensorInspection inspection)
-    {
-        var full = blocks.Where(static block => block.Kind == ModelLabArchitectureBuilder.FullAttentionKind).ToList();
-        if (full.Count == 0)
-        {
-            return [];
-        }
-
-        // By the weight: a fused attn_qkv.weight may sit beside separate attn_q/k/v biases (create_tensor_qkv).
-        var fusedCount = full.Count(static block => block.Groups.SelectMany(static group => group.Tensors).Any(static tensor => tensor.GgufName.EndsWith(".attn_qkv.weight", StringComparison.Ordinal)));
-        var template = fusedCount switch
-        {
-            0 => FullAttentionTemplate,
-            _ when fusedCount == full.Count => FusedQkvTemplate,
-            _ => MixedQkvTemplate
-        };
-        return [template];
-    }
+    public IReadOnlyList<ModelLabArchitectureTemplate> TemplatesFor(IReadOnlyList<ModelLabArchitectureBlock> blocks, GgufTensorInspection inspection) =>
+        ModelLabQkvLabels.ByLayout(blocks, ModelLabArchitectureBuilder.FullAttentionKind, FullAttentionTemplate, FusedQkvTemplate, MixedQkvTemplate) is { } template
+            ? [template]
+            : [];
 
     private static ModelLabHfTensor Hf(string name, string relation) =>
         new()

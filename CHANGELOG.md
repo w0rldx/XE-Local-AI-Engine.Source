@@ -165,6 +165,25 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   checkpoint preflight now returns `modelType`, `attentionSupported` with `attentionRefusalMessage`, and
   `traceRefusalMessage` (a config with `output_router_logits` set cannot be traced but can be steered), and refuses a
   checkpoint whose family does not match the GGUF's architecture with `ArchitectureMismatch`, even at equal sizes.
+- **Model Lab follow-ups.**
+  - **Fused Q/K/V labels.** Llama and Qwen3.5 GGUFs, both Qwen3.5 families including their MTP blocks, now label
+    Q/K/V, and Qwen's gate, for the file's own storage: separate `attn_q/k/v`, rows of a fused `attn_qkv`, or a mix of
+    both. OLMoE already did this.
+  - **Both storage forms in the texts.** The explanations name both forms and the optional bias.
+  - **Missing block.** A jump to a block that the file does not contain says so instead of opening Embedding.
+  - **Show block** is offered only for a block the run routed.
+  - **Clear button.** The trace overlay's clear button has a name and is reachable by keyboard.
+  - **Narrow screens.** The tensor table's scrollbar is visible, and it scrolls by keyboard. The sticky tab and action
+    bars stay above sliders and segmented controls.
+- **Developer scripts.**
+  - `scripts/run-backend-tests.sh` detects when `dotnet`, `python3` or `node` is a mise shim. It then inserts the real
+    tool directories from `mise bin-paths` right before the shims entry on `PATH`, so tools placed earlier keep
+    winning. An inherited `DOTNET_ROOT` is never consulted. The Development sandbox cannot bind a shim's install root,
+    and the release-contract tests' isolated `HOME` blinds the shims.
+  - `scripts/dev-start.sh` explains a missing or failing Aspire CLI:
+    - when the CLI is missing, it gives the install command for the matching version;
+    - when the CLI is present but fails, it shows the probe's error and, under a scratch `XDG_DATA_HOME`, the
+      `MISE_DATA_DIR` remedy.
 - **Model Lab: one complete mixture-of-experts investigation on OLMoE.** An `olmoe` GGUF (such as
   `allenai/OLMoE-1B-7B-0924-Instruct-GGUF`) is now `detailed` in the Architecture tab: one operation graph with the
   whole-projection Q/K norms, NEOX RoPE, the router, top-k experts whose chosen probabilities are used as is, and no

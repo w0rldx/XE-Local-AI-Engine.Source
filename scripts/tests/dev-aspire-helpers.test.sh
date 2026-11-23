@@ -15,6 +15,14 @@ set -euo pipefail
 printf '%q ' "$@" >>"${FAKE_ASPIRE_LOG}"
 printf '\n' >>"${FAKE_ASPIRE_LOG}"
 case "${1:-}" in
+  --version)
+    [[ "${FAKE_VERSION_MODE:-ok}" != "fail" ]] || { echo "simulated: no aspire-cli under this Node" >&2; exit 1; }
+    if [[ "${FAKE_VERSION_MODE:-ok}" == "fail-noisy" ]]; then
+      printf '\n   %s   \nsecond line\n' "$(printf 'x%.0s' $(seq 1 250))" >&2
+      exit 1
+    fi
+    echo "13.6.5"
+    ;;
   ps)
     [[ "${FAKE_PS_MODE:-ok}" != "fail" ]] || exit 1
     [[ ! -f "${FAKE_PS_FAIL_MARKER}" ]] || exit 1
@@ -84,6 +92,72 @@ assert_process_gone() {
   echo "FAIL: lingering startup-session PID ${pid} survived cleanup" >&2
   return 1
 }
+
+# An aspire that does not run, or none at all: dev-start prints one line on stderr (led by the failed probe's first
+# error line, when there was a probe), nothing on stdout, exits 2 and launches nothing (the only aspire call is the
+# probe, or none). Arguments after the expected lead, hint and aspire log are env assignments for dev-start alone;
+# XDG_DATA_HOME and MISE_DATA_DIR start unset.
+sdk_version="$(sed -n 's/.*Name="Aspire\.AppHost\.Sdk" Version="\([^"]*\)".*/\1/p' "${APPHOST}")"
+[[ -n "${sdk_version}" ]] || { echo "FAIL: no Aspire.AppHost.Sdk version in ${APPHOST}" >&2; exit 1; }
+run_refused_start() {
+  local expected_log="$1" status
+  shift
+  : >"${FAKE_ASPIRE_LOG}"
+  set +e
+  env -u XDG_DATA_HOME -u MISE_DATA_DIR "$@" "${SCRIPT_DIR}/dev-start.sh" >"${TEMP_ROOT}/hint.out" 2>"${TEMP_ROOT}/hint.err"
+  status=$?
+  set -e
+  [[ "${status}" -eq 2 ]] || { echo "FAIL: dev-start exited ${status}, not 2, without a runnable aspire ($*)" >&2; exit 1; }
+  [[ ! -s "${TEMP_ROOT}/hint.out" ]] || { echo "FAIL: dev-start wrote stdout: $(cat "${TEMP_ROOT}/hint.out")" >&2; exit 1; }
+  [[ "$(wc -l <"${TEMP_ROOT}/hint.err")" -eq 1 ]] \
+    || { echo "FAIL: wanted one stderr line ($*), got: $(cat "${TEMP_ROOT}/hint.err")" >&2; exit 1; }
+  [[ "$(cat "${FAKE_ASPIRE_LOG}")" == "${expected_log}" ]] \
+    || { echo "FAIL: aspire ran more than the probe ($*): $(cat "${FAKE_ASPIRE_LOG}")" >&2; exit 1; }
+}
+assert_cli_hint() {
+  local lead="$1" expected="$2" expected_log="$3"
+  shift 3
+  run_refused_start "${expected_log}" "$@"
+  [[ "$(cat "${TEMP_ROOT}/hint.err")" == "[dev-aspire] ${lead}The Aspire CLI is missing or does not run"*"${expected}, then mise reshim"* ]] \
+    || { echo "FAIL: wanted the hint led by '${lead}' naming ${expected} ($*), got: $(cat "${TEMP_ROOT}/hint.err")" >&2; exit 1; }
+}
+probe_lead="aspire --version failed: simulated: no aspire-cli under this Node. "
+assert_cli_hint "${probe_lead}" "npm install -g @microsoft/aspire-cli@${sdk_version}" "--version " FAKE_VERSION_MODE=fail
+# A scratch XDG_DATA_HOME without MISE_DATA_DIR: the probe's error, the MISE_DATA_DIR remedy, then the install hint.
+scratch_lead="${probe_lead}If this is a scratch XDG_DATA_HOME, it hides mise's tool store: export MISE_DATA_DIR=${HOME}/.local/share/mise. Otherwise: "
+assert_cli_hint "${scratch_lead}" "npm install -g @microsoft/aspire-cli@${sdk_version}" "--version " FAKE_VERSION_MODE=fail \
+  XDG_DATA_HOME="${TEMP_ROOT}/xdg"
+# XDG_DATA_HOME set to the default (through a symlink, in a fake HOME) hides nothing: the install hint alone.
+mkdir -p "${TEMP_ROOT}/home/.local/share"
+ln -s "${TEMP_ROOT}/home/.local/share" "${TEMP_ROOT}/share-link"
+assert_cli_hint "${probe_lead}" "npm install -g @microsoft/aspire-cli@${sdk_version}" "--version " FAKE_VERSION_MODE=fail \
+  HOME="${TEMP_ROOT}/home" XDG_DATA_HOME="${TEMP_ROOT}/home/.local/share"
+assert_cli_hint "${probe_lead}" "npm install -g @microsoft/aspire-cli@${sdk_version}" "--version " FAKE_VERSION_MODE=fail \
+  HOME="${TEMP_ROOT}/home" XDG_DATA_HOME="${TEMP_ROOT}/share-link"
+# Both set: the tool store is reachable, so the failure is the CLI's own and the install hint stays.
+assert_cli_hint "${probe_lead}" "npm install -g @microsoft/aspire-cli@${sdk_version}" "--version " FAKE_VERSION_MODE=fail \
+  XDG_DATA_HOME="${TEMP_ROOT}/xdg" MISE_DATA_DIR="${TEMP_ROOT}/mise"
+# Only the first non-blank error line leads, trimmed and capped at 200 characters.
+assert_cli_hint "aspire --version failed: $(printf 'x%.0s' $(seq 1 200)). " "npm install -g @microsoft/aspire-cli@${sdk_version}" \
+  "--version " FAKE_VERSION_MODE=fail-noisy
+# No Sdk line in the AppHost (a fake one): the hint drops the version.
+printf '<Project Sdk="Microsoft.NET.Sdk"/>\n' >"${TEMP_ROOT}/NoSdk.csproj"
+assert_cli_hint "${probe_lead}" "npm install -g @microsoft/aspire-cli" "--version " FAKE_VERSION_MODE=fail \
+  XE_ASPIRE_APPHOST="${TEMP_ROOT}/NoSdk.csproj"
+# No aspire on PATH: only the tools dev-start needs before the check, linked into a bare directory.
+mkdir -p "${TEMP_ROOT}/no-aspire"
+for tool in bash dirname basename realpath sed head; do
+  ln -s "$(command -v "${tool}")" "${TEMP_ROOT}/no-aspire/${tool}"
+done
+[[ -z "$(PATH="${TEMP_ROOT}/no-aspire" command -v aspire)" ]] || { echo "FAIL: aspire still on the bare PATH" >&2; exit 1; }
+assert_cli_hint "" "npm install -g @microsoft/aspire-cli@${sdk_version}" "" PATH="${TEMP_ROOT}/no-aspire"
+# ...even with a scratch XDG_DATA_HOME: a missing CLI is installed, not looked up elsewhere.
+assert_cli_hint "" "npm install -g @microsoft/aspire-cli@${sdk_version}" "" PATH="${TEMP_ROOT}/no-aspire" \
+  XDG_DATA_HOME="${TEMP_ROOT}/xdg"
+# ...and an AppHost path that does not exist: the hint still prints (the failed read is no exit), without a version.
+assert_cli_hint "" "npm install -g @microsoft/aspire-cli" "" PATH="${TEMP_ROOT}/no-aspire" \
+  XE_ASPIRE_APPHOST="${TEMP_ROOT}/missing/XE-Local-AI-Engine.AppHost.csproj"
+: >"${FAKE_ASPIRE_LOG}"
 
 set +e
 stopped_output="$("${SCRIPT_DIR}/dev-status.sh" --json 2>&1)"

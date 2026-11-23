@@ -47,14 +47,15 @@ export function ArchitectureTensorGroups({
 									</Text>
 								</Group>
 							</UnstyledButton>
-							{/* Rows keep one line and a narrow screen scrolls the table, not the page; the scroller takes
-							    focus so a keyboard can scroll it too. */}
+							{/* Rows keep one line and a narrow screen scrolls the table, not the page. A ScrollArea, since a
+							    native bar is an overlay a phone never shows; its viewport is what scrolls, so it takes focus.
+							    `type` restates the theme default, so these scrollAreaProps read on their own. */}
 							<Table.ScrollContainer
 								minWidth="max-content"
-								type="native"
-								tabIndex={0}
-								role="region"
-								aria-label={componentLabel(t, group.component)}
+								scrollAreaProps={{
+									type: "auto",
+									viewportProps: { tabIndex: 0, role: "region", "aria-label": componentLabel(t, group.component) },
+								}}
 							>
 								<Table fz="xs" withRowBorders={false}>
 									<Table.Tbody>

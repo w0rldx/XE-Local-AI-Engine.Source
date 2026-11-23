@@ -49,6 +49,24 @@ internal static class Qwen35TensorFixture
     public static readonly string[] NextnTensors =
         ["nextn.eh_proj.weight", "nextn.enorm.weight", "nextn.hnorm.weight", "nextn.shared_head_norm.weight"];
 
+    // The dense qwen35 full-attention and MTP edges in order; each qwen35moe one swaps the FFN for the MoE edges.
+    public static readonly string[] FullAttentionTemplateEdges =
+    [
+        "input->attn_norm", "attn_norm->q", "attn_norm->k", "attn_norm->v", "q->q_norm", "k->k_norm", "q_norm->rope", "k_norm->rope", "rope->attn", "v->attn",
+        "q->gate", "attn->gated", "gate->gated", "gated->mixer_out", "mixer_out->attn_residual", "input->attn_residual", "attn_residual->post_norm",
+        "post_norm->ffn_gate", "post_norm->ffn_up", "ffn_gate->ffn_act", "ffn_up->ffn_act", "ffn_act->ffn_down", "ffn_down->ffn_residual",
+        "attn_residual->ffn_residual", "ffn_residual->control_vector", "control_vector->output"
+    ];
+
+    public static readonly string[] MtpTemplateEdges =
+    [
+        "hidden->hnorm", "token->enorm", "enorm->concat", "hnorm->concat", "concat->eh_proj", "eh_proj->attn_norm", "attn_norm->q", "attn_norm->k",
+        "attn_norm->v", "q->q_norm", "k->k_norm", "q_norm->rope", "k_norm->rope", "rope->attn", "v->attn", "q->gate", "attn->gated", "gate->gated",
+        "gated->mixer_out", "mixer_out->attn_residual", "eh_proj->attn_residual", "attn_residual->post_norm", "post_norm->ffn_gate", "post_norm->ffn_up",
+        "ffn_gate->ffn_act", "ffn_up->ffn_act", "ffn_act->ffn_down", "ffn_down->ffn_residual", "attn_residual->ffn_residual", "ffn_residual->head_norm",
+        "head_norm->head", "head->logits"
+    ];
+
     public static bool IsFull(int block) =>
         (block + 1) % 4 == 0;
 

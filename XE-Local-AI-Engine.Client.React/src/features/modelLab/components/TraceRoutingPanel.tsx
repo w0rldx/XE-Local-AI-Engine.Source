@@ -248,7 +248,8 @@ export function TraceRoutingPanel({
 					))}
 				</Stack>
 			)}
-			{onJump && selectedBlock !== undefined && (
+			{/* Only a block the run routed has routing for Architecture to show. */}
+			{onJump && selectedBlock !== undefined && data?.layers.includes(selectedBlock) && (
 				<Group>
 					<Button
 						size="compact-sm"

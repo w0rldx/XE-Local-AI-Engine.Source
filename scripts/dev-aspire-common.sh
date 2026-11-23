@@ -89,9 +89,39 @@ dev_warn_orphaned_dev_data() {
   echo "[dev-aspire] Encrypted *.enc credential files beside the key ring are orphaned with it." >&2
 }
 
+# One actionable line for a missing CLI and for one that is on PATH but does not run (a version-manager shim
+# whose Node lacks the package): install the AppHost's Aspire.AppHost.Sdk version under the repo's pinned Node.
+# An optional argument leads the line (the failed probe's own error). Printed before any caller redirects the
+# aspire queries' streams.
+dev_aspire_cli_hint() {
+  local sdk node
+  sdk="$(sed -n 's/.*Name="Aspire\.AppHost\.Sdk" Version="\([^"]*\)".*/\1/p' "${DEV_APPHOST}" 2>/dev/null | head -n 1)" || true
+  node="$(sed -n 's/^node = "\([^"]*\)".*/\1/p' "${DEV_PROJECT_ROOT}/mise.toml" 2>/dev/null | head -n 1)" || true
+  echo "[dev-aspire] ${1:-}The Aspire CLI is missing or does not run. Install it under the repo's pinned Node: mise exec node${node:+@${node}} -- npm install -g @microsoft/aspire-cli${sdk:+@${sdk}}, then mise reshim (other installs: https://aspire.dev/get-started/install-cli/)." >&2
+}
+
+# dev-start.sh's probe: an aspire on PATH that cannot run must stop the launch with its first error line and the
+# remedy, not as an unreadable query. A scratch XDG_DATA_HOME without MISE_DATA_DIR may send a mise shim to an empty
+# tool store, so that case also names the variable; the install remedy always follows, as the probe cannot tell
+# which. Only here, so dev-status and dev-stop add no aspire call to every query they make.
+dev_require_runnable_aspire() {
+  local err reason xdg default_xdg
+  err="$(timeout "${DEV_QUERY_TIMEOUT}s" aspire --version 2>&1 >/dev/null)" && return 0
+  err="$(printf '%s\n' "${err}" | sed -n '/[^[:space:]]/{s/^[[:space:]]*//;s/[[:space:]]*$//;p;q;}')" || true
+  reason="aspire --version failed${err:+: ${err:0:200}}. "
+  if [[ -n "${XDG_DATA_HOME:-}" && -z "${MISE_DATA_DIR:-}" ]]; then
+    xdg="$(realpath -- "${XDG_DATA_HOME}" 2>/dev/null || printf '%s' "${XDG_DATA_HOME}")"
+    default_xdg="$(realpath -- "${HOME}/.local/share" 2>/dev/null || printf '%s' "${HOME}/.local/share")"
+    [[ "${xdg}" == "${default_xdg}" ]] \
+      || reason+="If this is a scratch XDG_DATA_HOME, it hides mise's tool store: export MISE_DATA_DIR=${HOME}/.local/share/mise. Otherwise: "
+  fi
+  dev_aspire_cli_hint "${reason}"
+  return 2
+}
+
 dev_require_tools() {
   command -v aspire >/dev/null 2>&1 || {
-    echo "[dev-aspire] Aspire CLI is required (https://aspire.dev/get-started/install-cli/)." >&2
+    dev_aspire_cli_hint
     return 2
   }
   command -v python3 >/dev/null 2>&1 || {

@@ -25,6 +25,7 @@ EOF
 esac
 
 dev_require_tools
+dev_require_runnable_aspire || exit 2
 
 # One model store for every worktree's dev host: the `<data dir>/models` layout DesktopBootstrap gives the desktop
 # build, instead of each host re-downloading GGUFs into its own bin/. A scratch XDG_DATA_HOME yields a scratch store,

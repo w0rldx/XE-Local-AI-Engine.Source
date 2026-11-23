@@ -17,6 +17,8 @@ cp "$ROOT"/scripts/lib/*.sh "$FAKE/scripts/lib/"
 printf 'MemAvailable:   67108864 kB\n' >"$TMP/meminfo-64g"
 printf 'MemAvailable:    6291456 kB\n' >"$TMP/meminfo-6g"
 export XE_SIZING_MEMINFO="$TMP/meminfo-64g"
+# The mise-shim cases below set it themselves; the caller's must never steer which dotnet a case runs.
+unset DOTNET_ROOT
 
 write_solution() {
   {
@@ -301,6 +303,91 @@ run_gate clean-exit env
 last_line="$(printf '%s\n' "$output" | grep -v '^[[:space:]]*$' | tail -1)"
 [[ "$last_line" == "BACKEND GATE GREEN" ]] || { echo "last line was '$last_line'" >&2; exit 1; }
 refute_grep -E 'unbound variable|command not found|: line [0-9]+:' <<<"$output"
+
+# --- mise shims: the directories `mise bin-paths` lists go first on PATH, logged once; otherwise PATH is untouched ---
+# The dotnet and python3 shims are symlinks to a file named mise (as `command -v` finds them under mise), which still
+# works as the tool and answers `bin-paths` with two fake real tool dirs plus one that does not exist
+# (FAKE_MISE_BIN_PATHS=fail makes that fail). An inherited DOTNET_ROOT names a third dotnet the gate must never pick.
+# Each executable records which of them ran.
+mkdir -p "$TMP/shim" "$TMP/mise-bin" "$TMP/mise-dotnet" "$TMP/mise-python" "$TMP/dotnet-root"
+cat >"$TMP/mise-bin/mise" <<MISE
+#!/usr/bin/env bash
+if [[ "\$1" == bin-paths ]]; then
+  [[ "\${FAKE_MISE_BIN_PATHS:-}" != fail ]] || exit 1
+  printf '%s\\n' "$TMP/mise-dotnet" "$TMP/mise-missing" "$TMP/mise-python"
+  exit
+fi
+echo "via-mise \$1" >>"\$FAKE_LOG"
+exec "$FAKE/bin/dotnet" "\$@"
+MISE
+printf '#!/usr/bin/env bash\necho "via-real $1" >>"$FAKE_LOG"\nexec "%s" "$@"\n' "$FAKE/bin/dotnet" >"$TMP/mise-dotnet/dotnet"
+printf '#!/usr/bin/env bash\necho "via-real-python $1" >>"$FAKE_LOG"\n' >"$TMP/mise-python/python3"
+printf '#!/usr/bin/env bash\necho "via-root $1" >>"$FAKE_LOG"\nexec "%s" "$@"\n' "$FAKE/bin/dotnet" >"$TMP/dotnet-root/dotnet"
+chmod +x "$TMP/mise-bin/mise" "$TMP/mise-dotnet/dotnet" "$TMP/mise-python/python3" "$TMP/dotnet-root/dotnet"
+ln -s "$TMP/mise-bin/mise" "$TMP/shim/dotnet"
+ln -s "$TMP/mise-bin/mise" "$TMP/shim/python3"
+# Runs python3 on the PATH the contract lane inherited (its fake dumps its env), proving the lane sees the real one.
+contract_python() {
+  local contract_path
+  contract_path="$(sed -n 's/^PATH=//p' "$TMP/$1.log.contract-env")"
+  FAKE_LOG="$TMP/$1.log" PATH="$contract_path" python3 contract
+}
+run_gate mise-shim env PATH="$TMP/shim:$PATH" DOTNET_ROOT="$TMP/dotnet-root" XE_GATE_CONTRACT_TESTS=run
+[[ "$status" -eq 0 ]] || { echo "mise-shim run exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+[[ "$(grep -c '^>> mise shims on PATH' <<<"$output")" -eq 1 ]] \
+  || { echo "the mise line was not printed exactly once:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fxq ">> mise shims on PATH: using the real tool directories from 'mise bin-paths' first (2 dirs)" <<<"$output"
+[[ "$(grep -c '^via-real test' "$TMP/mise-shim.log")" -eq 2 ]] \
+  || { echo "the lanes did not run the real dotnet:" >&2; cat "$TMP/mise-shim.log" >&2; exit 1; }
+grep -Fxq "PATH=$TMP/mise-dotnet:$TMP/mise-python:$TMP/shim:$PATH" "$TMP/mise-shim.log.contract-env" \
+  || { echo "the contract lane did not inherit the bin-paths dirs, in order, before the shims:" >&2
+       grep '^PATH=' "$TMP/mise-shim.log.contract-env" >&2; exit 1; }
+contract_python mise-shim
+grep -Fxq 'via-real-python contract' "$TMP/mise-shim.log"
+refute_grep -E '^via-(mise|root)' "$TMP/mise-shim.log"
+# Only python3 is a shim, behind an ordinary dotnet: the dirs go right before the shims, so that dotnet still runs.
+mkdir -p "$TMP/py-shim"
+ln -s "$TMP/mise-bin/mise" "$TMP/py-shim/python3"
+run_gate mise-py-shim env PATH="$FAKE/bin:$TMP/py-shim:$PATH" XE_GATE_CONTRACT_TESTS=run
+[[ "$status" -eq 0 ]] || { echo "mise-py-shim run exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+[[ "$(grep -c '^>> mise shims on PATH' <<<"$output")" -eq 1 ]] \
+  || { echo "the mise line was not printed exactly once:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fxq "PATH=$FAKE/bin:$TMP/mise-dotnet:$TMP/mise-python:$TMP/py-shim:$PATH" "$TMP/mise-py-shim.log.contract-env" \
+  || { echo "the bin-paths dirs were not inserted right before the shims:" >&2
+       grep '^PATH=' "$TMP/mise-py-shim.log.contract-env" >&2; exit 1; }
+[[ "$(grep -c '^test project=' "$TMP/mise-py-shim.log")" -eq 2 ]] \
+  || { echo "the lanes did not run the ordinary dotnet:" >&2; cat "$TMP/mise-py-shim.log" >&2; exit 1; }
+contract_python mise-py-shim
+grep -Fxq 'via-real-python contract' "$TMP/mise-py-shim.log"
+refute_grep -E '^via-(mise|real |root)' "$TMP/mise-py-shim.log"
+# The same with the shims entry written with a trailing slash: it still matches, so that dotnet still runs and the
+# entry keeps its slash.
+run_gate mise-slash-shim env PATH="$FAKE/bin:$TMP/py-shim/:$PATH" XE_GATE_CONTRACT_TESTS=run
+[[ "$status" -eq 0 ]] || { echo "mise-slash-shim run exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fxq "PATH=$FAKE/bin:$TMP/mise-dotnet:$TMP/mise-python:$TMP/py-shim/:$PATH" "$TMP/mise-slash-shim.log.contract-env" \
+  || { echo "the bin-paths dirs were not inserted right before the slash-terminated shims entry:" >&2
+       grep '^PATH=' "$TMP/mise-slash-shim.log.contract-env" >&2; exit 1; }
+[[ "$(grep -c '^test project=' "$TMP/mise-slash-shim.log")" -eq 2 ]] \
+  || { echo "the lanes did not run the ordinary dotnet:" >&2; cat "$TMP/mise-slash-shim.log" >&2; exit 1; }
+refute_grep -E '^via-(mise|real |root)' "$TMP/mise-slash-shim.log"
+# `mise bin-paths` fails: the shims stay first and nothing is said.
+run_gate mise-bin-paths-fails env PATH="$TMP/shim:$PATH" DOTNET_ROOT="$TMP/dotnet-root" FAKE_MISE_BIN_PATHS=fail \
+  XE_GATE_CONTRACT_TESTS=run
+[[ "$status" -eq 0 ]] || { echo "mise-bin-paths-fails run exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+refute_grep -F '>> mise shims' <<<"$output"
+[[ "$(grep -c '^via-mise test' "$TMP/mise-bin-paths-fails.log")" -eq 2 ]] \
+  || { echo "the lanes did not run the shim:" >&2; cat "$TMP/mise-bin-paths-fails.log" >&2; exit 1; }
+contract_python mise-bin-paths-fails
+grep -Fxq 'via-mise contract' "$TMP/mise-bin-paths-fails.log"
+refute_grep -E '^via-(real|root)' "$TMP/mise-bin-paths-fails.log"
+# CI: an ordinary dotnet first (setup-dotnet's) wins even with a different one under DOTNET_ROOT. No mise on the
+# runner, so none here either: a developer box's own python3/node shims must not trigger the mise path.
+run_gate ci-dotnet env GITHUB_ACTIONS=true DOTNET_ROOT="$TMP/dotnet-root" PATH="$FAKE/bin:/usr/bin:/bin"
+[[ "$status" -eq 0 ]] || { echo "ci-dotnet run exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+refute_grep -F '>> mise shims' <<<"$output"
+[[ "$(grep -c '^test project=' "$TMP/ci-dotnet.log")" -eq 2 ]] \
+  || { echo "the lanes did not run the ordinary dotnet:" >&2; cat "$TMP/ci-dotnet.log" >&2; exit 1; }
+refute_grep '^via-' "$TMP/ci-dotnet.log"
 
 # --- Architecture fail-fast pre-lane ---
 # Green: listed before any lane starts, then run beside the lanes with the batched runner's own filter.

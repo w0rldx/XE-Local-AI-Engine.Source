@@ -146,6 +146,8 @@ public sealed class ModelLabArchitectureBuilderTests
             descriptor.Blocks[63].Groups.Single(static group => group.Component == "ffn").Tensors.Single(static tensor => tensor.GgufName == "blk.63.ffn_down.weight").HfName!);
         AssertEx.Equal("lm_head.weight", descriptor.NonBlock.Single(static group => group.ComponentId == "output").Tensors.Single().HfName!);
         AssertEx.Equal("linearAttention,fullAttention,mtp", string.Join(',', descriptor.Templates.Select(static template => template.Kind)));
+        AssertEx.Equal(string.Join(',', Qwen35TensorFixture.FullAttentionTemplateEdges), EdgeLines(descriptor.Templates[1]));
+        AssertEx.Equal(string.Join(',', Qwen35TensorFixture.MtpTemplateEdges), EdgeLines(descriptor.Templates[2]));
     }
 
     [Test]
@@ -262,6 +264,83 @@ public sealed class ModelLabArchitectureBuilderTests
         AssertEx.Null(byName["blk.1.attn_qkv.weight"].HfName);
         AssertEx.Null(byName["blk.1.attn_qkv.weight"].ValueRelation);
         AssertEx.Equal("model.language_model.layers.1.self_attn.o_proj.weight", byName["blk.1.attn_output.weight"].HfName);
+    }
+
+    /// <summary>
+    ///     Full-attention and MTP blocks pick their Q/K/V and gate labels apart, and a linear block's delta-net <c>attn_qkv</c> never
+    ///     counts: the separate side keeps today's template byte for byte, the fused side names the rows of <c>attn_qkv</c>.
+    /// </summary>
+    [Test]
+    [Arguments("qwen35", false)]
+    [Arguments("qwen35", true)]
+    [Arguments("qwen35moe", false)]
+    [Arguments("qwen35moe", true)]
+    public void QwenFullAttentionAndMtpBlocks_PickTheirQkvLabelsApart_AndLinearBlocksNeverCount(string architecture, bool fusedTrunk)
+    {
+        string[] separate = ["attn_q.weight", "attn_k.weight", "attn_v.weight"];
+        string[] fused = ["attn_qkv.weight"];
+        var inspection = Qwen35TensorFixture.Inspection(architecture,
+            new[] { "ssm_a", "attn_qkv.weight" }.Select(static suffix => $"blk.0.{suffix}")
+                .Concat(new[] { "attn_norm.weight", "attn_output.weight" }.Concat(fusedTrunk ? fused : separate).Select(static suffix => $"blk.1.{suffix}"))
+                .Concat(new[] { "nextn.eh_proj.weight", "attn_norm.weight", "attn_output.weight" }.Concat(fusedTrunk ? separate : fused).Select(static suffix => $"blk.2.{suffix}"))
+                .Select(static name => Qwen35TensorFixture.Tensor(name, [64], "F32")));
+
+        var templates = ModelLabArchitectureBuilder.Build(ModelName, inspection).Templates.ToDictionary(static template => template.Kind, StringComparer.Ordinal);
+
+        var reference = SeparateQwenTemplates(architecture);
+        AssertEx.Equal("linearAttention,fullAttention,mtp", string.Join(',', templates.Keys));
+        AssertEx.Equal(NodeLines(reference["linearAttention"]), NodeLines(templates["linearAttention"]));
+        var fusedKind = fusedTrunk ? "fullAttention" : "mtp";
+        var separateKind = fusedTrunk ? "mtp" : "fullAttention";
+        AssertEx.Equal(NodeLines(reference[separateKind]), NodeLines(templates[separateKind]));
+        AssertEx.Equal("q: Query + gate projection · attn_q\nk: Key projection · attn_k\nv: Value projection · attn_v\ngate: sigmoid(gate half of attn_q)",
+            string.Join('\n', templates[separateKind].Nodes.Where(static node => node.Id is "q" or "k" or "v" or "gate").Select(static node => $"{node.Id}: {node.Label}")));
+        AssertEx.Equal(Relabelled(reference[fusedKind], FusedQwenQkv), NodeLines(templates[fusedKind]));
+        foreach (var kind in templates.Keys)
+        {
+            AssertEx.Equal(EdgeLines(reference[kind]), EdgeLines(templates[kind]), kind);
+        }
+    }
+
+    /// <summary>Full-attention blocks mixing fused and separate Q/K/V get labels true for either, while separate MTP blocks keep theirs.</summary>
+    [Test]
+    [Arguments("qwen35")]
+    [Arguments("qwen35moe")]
+    public void QwenFullAttentionBlocksMixingQkvLayouts_GetLayoutNeutralLabels_WhileSeparateMtpKeepsItsOwn(string architecture)
+    {
+        var inspection = Qwen35TensorFixture.Inspection(architecture,
+            new[] { "blk.0.attn_norm.weight", "blk.0.attn_qkv.weight", "blk.1.attn_norm.weight", "blk.1.attn_q.weight", "blk.2.nextn.eh_proj.weight", "blk.2.attn_q.weight" }
+                .Select(static name => Qwen35TensorFixture.Tensor(name, [64], "F32")));
+
+        var templates = ModelLabArchitectureBuilder.Build(ModelName, inspection).Templates.ToDictionary(static template => template.Kind, StringComparer.Ordinal);
+
+        var reference = SeparateQwenTemplates(architecture);
+        AssertEx.Equal("fullAttention,mtp", string.Join(',', templates.Keys));
+        AssertEx.Equal(Relabelled(reference["fullAttention"], MixedQwenQkv), NodeLines(templates["fullAttention"]));
+        AssertEx.Equal(NodeLines(reference["mtp"]), NodeLines(templates["mtp"]));
+    }
+
+    /// <summary>
+    ///     A part of a split file can list a block without its Q weight: beside separate blocks of its kind it proves no layout, so the
+    ///     full-attention and MTP templates both get the layout-neutral labels.
+    /// </summary>
+    [Test]
+    [Arguments("qwen35", "attn_q.bias")]
+    [Arguments("qwen35", "attn_norm.weight")]
+    [Arguments("qwen35moe", "attn_q.bias")]
+    [Arguments("qwen35moe", "attn_norm.weight")]
+    public void AQwenBlockWithoutAQWeight_BesideSeparateBlocks_GetsLayoutNeutralLabels(string architecture, string mtpPartTensor)
+    {
+        var inspection = Qwen35TensorFixture.Inspection(architecture,
+            new[] { "blk.0.attn_q.weight", "blk.1.attn_q.bias", "blk.2.nextn.eh_proj.weight", "blk.2.attn_q.weight", "blk.3.nextn.eh_proj.weight", $"blk.3.{mtpPartTensor}" }
+                .Select(static name => Qwen35TensorFixture.Tensor(name, [64], "F32")));
+
+        var templates = ModelLabArchitectureBuilder.Build(ModelName, inspection).Templates.ToDictionary(static template => template.Kind, StringComparer.Ordinal);
+
+        var reference = SeparateQwenTemplates(architecture);
+        AssertEx.Equal("fullAttention,mtp", string.Join(',', templates.Keys));
+        AssertEx.Equal(Relabelled(reference["fullAttention"], MixedQwenQkv), NodeLines(templates["fullAttention"]));
+        AssertEx.Equal(Relabelled(reference["mtp"], MixedQwenQkv), NodeLines(templates["mtp"]));
     }
 
     [Test]
@@ -396,6 +475,7 @@ public sealed class ModelLabArchitectureBuilderTests
         var template = descriptor.Templates.Single();
         AssertEx.Equal("fullAttention", template.Kind);
         AssertEx.Equal(string.Join(',', LlamaTensorFixture.TemplateNodeIds), string.Join(',', template.Nodes.Select(static node => node.Id)));
+        AssertEx.Equal(string.Join(',', LlamaTensorFixture.TemplateEdges), EdgeLines(template));
         AssertEx.Equal("rope_freqs.weight", string.Join(',', AllTensors(descriptor).Where(static tensor => tensor.HfName is null).Select(static tensor => tensor.GgufName)));
         var nonBlock = descriptor.NonBlock.ToDictionary(static group => group.ComponentId, static group => group.Tensors.Single(), StringComparer.Ordinal);
         AssertEx.Equal("embedding,other,output_norm", string.Join(',', nonBlock.Keys.Order(StringComparer.Ordinal)));
@@ -453,9 +533,12 @@ public sealed class ModelLabArchitectureBuilderTests
         AssertEx.Equal("model.layers.0.self_attn.k_proj.bias", AllTensors(descriptor).Single(static tensor => tensor.GgufName == "blk.0.attn_k.bias").HfName!);
     }
 
-    /// <summary>A fused <c>attn_qkv</c> runs the same graph through <c>build_qkv</c>, but the table names no source for it and nothing is guessed.</summary>
+    /// <summary>
+    ///     A fused <c>attn_qkv</c> runs the same graph through <c>build_qkv</c>, with the Q/K/V nodes naming its rows; the table names no
+    ///     source for it and nothing is guessed.
+    /// </summary>
     [Test]
-    public void AFusedLlamaQkv_GetsNoHfName_WhileTheRestMap_AndTheTemplateStays()
+    public void AFusedLlamaQkv_GetsNoHfName_WhileTheRestMap_AndTheTemplateNamesTheFusedRows()
     {
         var inspection = Qwen35TensorFixture.Inspection("llama",
         [
@@ -474,7 +557,42 @@ public sealed class ModelLabArchitectureBuilderTests
         AssertEx.Null(qkv.HfName);
         AssertEx.Null(qkv.ValueRelation);
         AssertEx.True(AllTensors(descriptor).Where(tensor => tensor != qkv).All(static tensor => tensor.HfName is not null));
-        AssertEx.Equal("fullAttention", descriptor.Templates.Single().Kind);
+        AssertEx.Equal(Relabelled(SeparateLlamaTemplate(), FusedQkv), NodeLines(descriptor.Templates.Single()));
+        AssertEx.Equal(string.Join(',', LlamaTensorFixture.TemplateEdges), EdgeLines(descriptor.Templates.Single()));
+    }
+
+    /// <summary>A fused <c>attn_qkv.weight</c> beside separate Q/K/V biases is still fused: the fused labels, and the biases keep their reordered HF names.</summary>
+    [Test]
+    public void AFusedLlamaQkvWeightWithSeparateBiases_GetsTheFusedLabels_AndTheBiasesKeepTheirHfNames()
+    {
+        var inspection = Qwen35TensorFixture.Inspection("llama",
+            Enumerable.Range(0, 2).SelectMany(static block => new[] { "attn_norm.weight", "attn_qkv.weight", "attn_q.bias", "attn_k.bias", "attn_v.bias", "attn_output.weight" }
+                .Select(suffix => Qwen35TensorFixture.Tensor($"blk.{block}.{suffix}", [64], "F32"))));
+
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
+
+        AssertEx.Equal(Relabelled(SeparateLlamaTemplate(), FusedQkv), NodeLines(descriptor.Templates.Single()));
+        var byName = AllTensors(descriptor).ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
+        AssertEx.Equal("model.layers.1.self_attn.q_proj.bias reordered", $"{byName["blk.1.attn_q.bias"].HfName} {byName["blk.1.attn_q.bias"].ValueRelation}");
+        AssertEx.Equal("model.layers.1.self_attn.v_proj.bias equal", $"{byName["blk.1.attn_v.bias"].HfName} {byName["blk.1.attn_v.bias"].ValueRelation}");
+        AssertEx.Null(byName["blk.0.attn_qkv.weight"].HfName);
+    }
+
+    /// <summary>A Llama file mixing fused and separate Q/K/V gets labels true for either; separate-only keeps today's labels.</summary>
+    [Test]
+    public void ALlamaFileMixingFusedAndSeparateQkv_GetsLayoutNeutralLabels_OnTheSameGraph()
+    {
+        var inspection = Qwen35TensorFixture.Inspection("llama",
+            new[] { "attn_norm.weight", "attn_qkv.weight", "attn_output.weight" }.Select(static suffix => Qwen35TensorFixture.Tensor($"blk.0.{suffix}", [64], "F32"))
+                .Concat(new[] { "attn_norm.weight", "attn_q.weight", "attn_k.weight", "attn_v.weight", "attn_output.weight" }
+                    .Select(static suffix => Qwen35TensorFixture.Tensor($"blk.1.{suffix}", [64], "F32"))));
+
+        var template = ModelLabArchitectureBuilder.Build(ModelName, inspection).Templates.Single();
+
+        AssertEx.Equal(Relabelled(SeparateLlamaTemplate(), MixedQkv), NodeLines(template));
+        AssertEx.Equal(string.Join(',', LlamaTensorFixture.TemplateEdges), EdgeLines(template));
+        AssertEx.Equal("q: Query projection · attn_q\nk: Key projection · attn_k\nv: Value projection · attn_v",
+            string.Join('\n', SeparateLlamaTemplate().Nodes.Where(static node => node.Id is "q" or "k" or "v").Select(static node => $"{node.Id}: {node.Label}")));
     }
 
     [Test]
@@ -796,6 +914,50 @@ public sealed class ModelLabArchitectureBuilderTests
             "v: Value projection · attn_v" => $"v: {valueLabel}",
             _ => node
         });
+
+    private static readonly Dictionary<string, string> FusedQkv = new(StringComparer.Ordinal)
+    {
+        ["q"] = "Query rows of the fused projection · attn_qkv",
+        ["k"] = "Key rows of the fused projection · attn_qkv",
+        ["v"] = "Value rows of the fused projection · attn_qkv"
+    };
+
+    private static readonly Dictionary<string, string> MixedQkv = new(StringComparer.Ordinal)
+    {
+        ["q"] = "Query projection · attn_q or Q rows of attn_qkv",
+        ["k"] = "Key projection · attn_k or K rows of attn_qkv",
+        ["v"] = "Value projection · attn_v or V rows of attn_qkv"
+    };
+
+    private static readonly Dictionary<string, string> FusedQwenQkv = new(FusedQkv, StringComparer.Ordinal)
+    {
+        ["q"] = "Query + gate rows of the fused projection · attn_qkv",
+        ["gate"] = "sigmoid(gate half of the Q rows of attn_qkv)"
+    };
+
+    private static readonly Dictionary<string, string> MixedQwenQkv = new(MixedQkv, StringComparer.Ordinal)
+    {
+        ["q"] = "Query + gate projection · attn_q or Q + gate rows of attn_qkv",
+        ["gate"] = "sigmoid(gate half of attn_q or of the Q rows of attn_qkv)"
+    };
+
+    private static ModelLabArchitectureTemplate SeparateLlamaTemplate() =>
+        ModelLabArchitectureBuilder.Build(ModelName, LlamaTensorFixture.Llama3_2_1B()).Templates.Single();
+
+    // The templates of a separate-tensor file of the family, one per kind.
+    private static Dictionary<string, ModelLabArchitectureTemplate> SeparateQwenTemplates(string architecture) =>
+        ModelLabArchitectureBuilder.Build(ModelName, architecture == "qwen35moe" ? Qwen35MoeTensorFixture.Qwen36_35B_A3B(withMtpBlock: true) : Qwen35TensorFixture.Qwen35_27BLike())
+                                   .Templates.ToDictionary(static template => template.Kind, StringComparer.Ordinal);
+
+    // A template's nodes as "id: label" lines, with the given nodes relabelled.
+    private static string Relabelled(ModelLabArchitectureTemplate template, IReadOnlyDictionary<string, string> labels) =>
+        string.Join('\n', template.Nodes.Select(node => $"{node.Id}: {labels.GetValueOrDefault(node.Id, node.Label)}"));
+
+    private static string NodeLines(ModelLabArchitectureTemplate template) =>
+        string.Join('\n', template.Nodes.Select(static node => $"{node.Id}: {node.Label}"));
+
+    private static string EdgeLines(ModelLabArchitectureTemplate template) =>
+        string.Join(',', template.Edges.Select(static edge => $"{edge.From}->{edge.To}"));
 
     private static IEnumerable<ModelLabArchitectureTensor> AllTensors(ModelLabArchitectureResponse descriptor) =>
         descriptor.Blocks.SelectMany(static block => block.Groups).Concat(descriptor.NonBlock).SelectMany(static group => group.Tensors);

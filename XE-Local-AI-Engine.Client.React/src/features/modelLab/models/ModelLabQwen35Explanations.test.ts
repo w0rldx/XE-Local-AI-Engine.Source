@@ -146,8 +146,8 @@ describe.each([
 		i18n = await instanceFor(language, bundle);
 	});
 
-	// The snapshot was written from the texts before the shared ones were rewritten for any family; qwen35 must read the same.
-	it("show every node at every level exactly as before the shared texts became family-neutral", async () => {
+	// The snapshot pins every text qwen35 shows, so a shared text rewritten for another family cannot change it unreviewed.
+	it("show every node at every level exactly as the reviewed snapshot", async () => {
 		const texts = Object.fromEntries(
 			Object.entries(qwen35Nodes).flatMap(([kind, ids]) =>
 				ids.flatMap((id) => levels.map((level) => [`${kind}.${id}.${level}`, shownText(i18n, kind, id, level)])),
@@ -157,6 +157,19 @@ describe.each([
 		await expect(`${JSON.stringify(texts, null, "\t")}\n`).toMatchFileSnapshot(
 			`__snapshots__/ModelLabQwen35Explanations.${language}.json`,
 		);
+	});
+
+	// create_tensor_qkv loads a fused attn_qkv or separate attn_q/k/v per block, and the gate is half of each head's Q rows.
+	it("name both storage forms of the Q, K, V and gate texts in full attention and MTP", () => {
+		for (const kind of ["fullAttention", "mtp"]) {
+			for (const id of ["q", "k", "v", "gate"]) {
+				for (const level of ["detail", "math"] as const) {
+					expect(shownText(i18n, kind, id, level)).toContain(`\`attn_${id === "gate" ? "q" : id}\``);
+					expect(shownText(i18n, kind, id, level)).toContain("`attn_qkv`");
+				}
+			}
+			expect(shownText(i18n, kind, "q", "math")).toContain("$2 n_h d_h$");
+		}
 	});
 
 	it("keep the per-kind texts ahead of qwen35's own for linear attention's output and the MTP residual", () => {
