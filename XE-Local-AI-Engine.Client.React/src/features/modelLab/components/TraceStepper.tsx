@@ -49,7 +49,7 @@ export function TraceStepper({
 	basis,
 	onBasisChange,
 }: TraceStepperProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const [pickedBlock, setPickedBlock] = useState<number>();
 	const tokens = result.tokens ?? [];
 	const total = tokens.length;
@@ -200,7 +200,7 @@ export function TraceStepper({
 			{selected && (
 				<>
 					<Text size="sm" data-testid="model-lab-stepper-selected">
-						{blockLabel(t, selected, captured.includes(selected.index))}
+						{blockLabel(t, i18n.language, selected, captured.includes(selected.index))}
 					</Text>
 					{selected.kind !== "L" && captured.includes(selected.index) ? (
 						<TraceAttentionPanel
@@ -244,7 +244,7 @@ export function TraceStepper({
 	);
 }
 
-function blockLabel(t: TFunction, block: StepperBlock, recorded: boolean): string {
+function blockLabel(t: TFunction, language: string, block: StepperBlock, recorded: boolean): string {
 	const kind =
 		block.kind === "F"
 			? t("pages.modelLab.trace.stepper.kind.full", "full attention")
@@ -256,7 +256,10 @@ function blockLabel(t: TFunction, block: StepperBlock, recorded: boolean): strin
 			? t("pages.modelLab.trace.stepper.notTraced", "not traced in this run")
 			: block.norm === null
 				? t("pages.modelLab.trace.stepper.noRecord", "no record at this step")
-				: t("pages.modelLab.trace.stepper.norm", "residual norm {{norm}}", { norm: block.norm });
+				: t("pages.modelLab.trace.stepper.norm", "residual norm {{norm}}", {
+						// The run stores norms at three decimals; this keeps them and uses the language's separator.
+						norm: new Intl.NumberFormat(language, { maximumFractionDigits: 3 }).format(block.norm),
+					});
 	const label = t("pages.modelLab.trace.stepper.block", "Block {{index}}, {{kind}}: {{norm}}", {
 		index: block.index,
 		kind,
@@ -275,12 +278,12 @@ interface BlockCellProps {
 }
 
 function BlockCell({ block, peak, recorded, selected, onSelect }: BlockCellProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const shade = typeof block.norm === "number" && peak > 0 ? Math.round((maxShadePercent * block.norm) / peak) : 0;
 	return (
 		<UnstyledButton
 			aria-pressed={selected}
-			aria-label={blockLabel(t, block, recorded)}
+			aria-label={blockLabel(t, i18n.language, block, recorded)}
 			onClick={onSelect}
 			ff="monospace"
 			fz="xs"

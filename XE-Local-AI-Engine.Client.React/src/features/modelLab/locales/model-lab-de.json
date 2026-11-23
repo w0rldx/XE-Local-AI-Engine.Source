@@ -1091,7 +1091,7 @@
 					"norm": "Residual-Norm {{norm}}",
 					"notCaptured": "Dieser Lauf hat Attention nur für die Blöcke {{layers}} aufgezeichnet; dieser Block war nicht dabei.",
 					"notRecorded": "Dieser Lauf hat keine Attention aufgezeichnet.",
-					"notTraced": "in diesem Lauf nicht aufgezeichnet",
+					"notTraced": "in diesem Lauf nicht gemessen",
 					"position": "Schritt {{step}} von {{total}}: {{text}}",
 					"previous": "Vorheriger Schritt",
 					"provenance": "Hugging-Face-Checkpoint, bf16, transformers {{transformers}}; nicht das GGUF. Jeder Wert unten stammt aus diesem einen gespeicherten Lauf.",

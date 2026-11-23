@@ -558,6 +558,12 @@ class _Lens(LogitsProcessor):
 
 
 def trace(job, run):
+    # The trace files close however the job ends; a finished trace closed them already, and a second close does nothing.
+    with contextlib.ExitStack() as files:
+        _trace(job, run, files)
+
+
+def _trace(job, run, files):
     tokenizer, model, warm, load_seconds = _SLOT.take(job, run)
     blocks = blocks_of(model)
     if outside := out_of_range_layers(job["layers"], len(blocks)):
@@ -590,6 +596,7 @@ def trace(job, run):
     torch.cuda.reset_peak_memory_stats()
 
     writer = CappedTraceWriter(job["tracePath"], job["traceByteCap"])
+    files.callback(writer._handle.close)
     # Every hook and the sdpa swap live on this stack and are gone when generate ends, however it ends.
     with contextlib.ExitStack() as stack:
         _Tracer(stack, blocks, job["layers"], writer, kinds)
@@ -722,6 +729,7 @@ def trace(job, run):
     writer.close()
     if attention:
         attention_writer = CappedTraceWriter(job["attentionPath"], job["attentionByteCap"])
+        files.callback(attention_writer._handle.close)
         for record in attention.recorded():
             attention_writer.write(record)
         attention_writer.close()

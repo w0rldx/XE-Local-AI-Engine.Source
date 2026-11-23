@@ -47,28 +47,38 @@ export function ArchitectureTensorGroups({
 									</Text>
 								</Group>
 							</UnstyledButton>
-							<Table fz="xs" withRowBorders={false}>
-								<Table.Tbody>
-									{group.tensors.map((tensor) => (
-										<Table.Tr key={tensor.ggufName}>
-											<Table.Td>
-												<Button
-													variant={tensor.ggufName === selectedTensorName ? "light" : "subtle"}
-													size="compact-xs"
-													ff="monospace"
-													aria-pressed={tensor.ggufName === selectedTensorName}
-													onClick={() => onSelectTensor(group.componentId, tensor.ggufName)}
-												>
-													{shortTensorName(tensor.ggufName, blockIndex)}
-												</Button>
-											</Table.Td>
-											<Table.Td ff="monospace">{tensor.shape.join(" × ")}</Table.Td>
-											<Table.Td>{tensor.ggmlType ?? t("pages.models.details.unknown", "Unknown")}</Table.Td>
-											<Table.Td>{tensorSizeLabel(t, tensor.byteSize)}</Table.Td>
-										</Table.Tr>
-									))}
-								</Table.Tbody>
-							</Table>
+							{/* Rows keep one line and a narrow screen scrolls the table, not the page; the scroller takes
+							    focus so a keyboard can scroll it too. */}
+							<Table.ScrollContainer
+								minWidth="max-content"
+								type="native"
+								tabIndex={0}
+								role="region"
+								aria-label={componentLabel(t, group.component)}
+							>
+								<Table fz="xs" withRowBorders={false}>
+									<Table.Tbody>
+										{group.tensors.map((tensor) => (
+											<Table.Tr key={tensor.ggufName}>
+												<Table.Td>
+													<Button
+														variant={tensor.ggufName === selectedTensorName ? "light" : "subtle"}
+														size="compact-xs"
+														ff="monospace"
+														aria-pressed={tensor.ggufName === selectedTensorName}
+														onClick={() => onSelectTensor(group.componentId, tensor.ggufName)}
+													>
+														{shortTensorName(tensor.ggufName, blockIndex)}
+													</Button>
+												</Table.Td>
+												<Table.Td ff="monospace">{tensor.shape.join(" × ")}</Table.Td>
+												<Table.Td>{tensor.ggmlType ?? t("pages.models.details.unknown", "Unknown")}</Table.Td>
+												<Table.Td>{tensorSizeLabel(t, tensor.byteSize)}</Table.Td>
+											</Table.Tr>
+										))}
+									</Table.Tbody>
+								</Table>
+							</Table.ScrollContainer>
 						</Stack>
 					</Paper>
 				);

@@ -371,6 +371,26 @@ describe("ArchitectureExplorer", () => {
 		);
 	});
 
+	it("scrolls a group's tensor rows in their own focusable box and wraps a long name, so a phone's page stays its width", async () => {
+		stubRoutes(detailed);
+		await openModel();
+		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention" }));
+
+		const rows = within(screen.getByTestId("model-lab-architecture-group-blk.1.attention")).getByRole("region", {
+			name: "Attention",
+		});
+		expect(rows.tabIndex).toBe(0);
+		expect(rows.style.getPropertyValue("--table-overflow")).toBe("auto");
+		// Cells keep one line, so "144 MiB" never breaks; the box scrolls instead.
+		expect(rows.style.getPropertyValue("--table-min-width")).toBe("max-content");
+
+		fireEvent.click(screen.getByRole("button", { name: "attn_q.weight" }));
+		const hfName = within(screen.getByTestId("model-lab-architecture-tensor")).getByText(
+			"model.layers.1.self_attn.q_proj.weight",
+		);
+		expect(hfName.style.overflowWrap).toBe("anywhere");
+	});
+
 	it("opens the embedding's tensors from Embedding, not the output's", async () => {
 		stubRoutes(detailed);
 		await openModel();

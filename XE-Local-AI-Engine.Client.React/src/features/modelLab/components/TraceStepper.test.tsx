@@ -4,7 +4,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import i18next from "i18next";
 import { HttpResponse, http } from "msw";
 import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 
@@ -389,6 +390,34 @@ describe("TraceStepper with recorded attention", () => {
 		expect(within(blocks[0] as HTMLElement).queryByTestId("model-lab-stepper-block-recorded")).toBeNull();
 		expect(blocks.filter((block) => within(block).queryByTestId("model-lab-stepper-block-recorded"))).toHaveLength(2);
 		expect(screen.getByText("The eye marks the blocks whose attention this run recorded.")).toBeTruthy();
+	});
+
+	it("keeps 'not measured' apart from 'recorded' in German and writes the norm with a decimal comma", async () => {
+		await loadModelLabStrings("de");
+		await act(() => i18next.changeLanguage("de"));
+		try {
+			renderWithProviders(
+				<TraceStepper
+					experimentId={experimentId}
+					result={{ ...v4Result, attention: { ...v4Result.attention, layers: [3] } }}
+					table={toTraceTable([{ step: 0, layer: 7, kind: "F", norm: 0.725 }], tokens)}
+					layerKinds={[..."LLLFLLLF"]}
+					step={0}
+					onStepChange={vi.fn()}
+					basis="raw"
+					onBasisChange={vi.fn()}
+				/>,
+			);
+
+			const blocks = within(screen.getByTestId("model-lab-stepper-blocks")).getAllByRole("button");
+			expect(blocks[0]?.getAttribute("aria-label")).toBe("Block 0, lineare Attention: in diesem Lauf nicht gemessen");
+			expect(blocks[3]?.getAttribute("aria-label")).toBe(
+				"Block 3, volle Attention: in diesem Lauf nicht gemessen, Attention aufgezeichnet",
+			);
+			expect(blocks[7]?.getAttribute("aria-label")).toBe("Block 7, volle Attention: Residual-Norm 0,725");
+		} finally {
+			await act(() => i18next.changeLanguage("en"));
+		}
 	});
 
 	it("names the kernel, and fetches a captured block's rows only when it is selected, once per block", async () => {

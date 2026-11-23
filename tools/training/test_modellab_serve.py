@@ -180,6 +180,20 @@ def _on_the_cpu(modellab):
         yield
 
 
+@contextlib.contextmanager
+def _writers(modellab):
+    """The real CappedTraceWriter, keeping every writer the trace opens for the test to inspect."""
+    opened = []
+    real = modellab.CappedTraceWriter
+
+    def writer(*args, **kwargs):
+        opened.append(real(*args, **kwargs))
+        return opened[-1]
+
+    with mock.patch.object(modellab, "CappedTraceWriter", writer):
+        yield opened
+
+
 def _routed_job(directory):
     return {
         "modelKey": "k",
@@ -351,22 +365,25 @@ def test_a_cancel_during_generate_stops_it_and_the_trace_ends_before_its_checks_
     job = {"modelKey": "k", "layers": [0], "prompt": "p", "maxNewTokens": 4, "seed": 1}
     events = []
     with (
+        tempfile.TemporaryDirectory() as directory,
         mock.patch.object(modellab, "prompt_ids", return_value=mock.Mock(to=lambda _device: ids)),
         mock.patch.object(modellab, "_Tracer", tracer),
-        mock.patch.object(modellab, "CappedTraceWriter"),
+        _writers(modellab) as writers,
         mock.patch.object(modellab, "check_aligned") as check_aligned,
         mock.patch.object(modellab, "emit", lambda event, **fields: events.append((event, fields))),
         mock.patch.object(torch.cuda, "reset_peak_memory_stats"),
         mock.patch.object(torch.cuda, "synchronize"),
     ):
+        paths = {"tracePath": os.path.join(directory, "trace.jsonl"), "resultPath": os.path.join(directory, "r.json")}
         try:
-            modellab.trace({**job, "tracePath": "unused", "traceByteCap": 1000, "resultPath": "unused"}, run)
+            modellab.trace({**job, **paths, "traceByteCap": 1000}, run)
         except modellab.JobCancelled:
             pass
         else:
             raise AssertionError("A trace cancelled during generate must end as cancelled.")
     assert seen == {"stop": [True], "hooks": 2}
     assert _hooks(model) == 0
+    assert [writer._handle.closed for writer in writers] == [True], "A cancelled trace closes its file."
     check_aligned.assert_not_called()
     assert [fields.get("phase") for event, fields in events if event == "phase"] == ["tracing"]
     assert all(fields["jobId"] == "j" for _, fields in events)
@@ -424,7 +441,7 @@ def test_a_routed_trace_whose_router_registration_fails_midway_leaves_no_hook():
         tempfile.TemporaryDirectory() as directory,
         _on_the_cpu(modellab),
         mock.patch.object(modellab, "emit"),
-        mock.patch.object(modellab, "CappedTraceWriter"),
+        _writers(modellab) as writers,
         # The hook records' (1), the candidates' (2), block 0's router (3), then block 1's router fails.
         mock.patch.object(torch.nn.Module, "register_forward_hook", _register_failing_on(4)),
     ):
@@ -435,6 +452,7 @@ def test_a_routed_trace_whose_router_registration_fails_midway_leaves_no_hook():
         else:
             raise AssertionError("The injected registration failure must surface.")
     assert _hooks(model) == 0
+    assert [writer._handle.closed for writer in writers] == [True], "A failed trace closes its file."
 
 
 def test_a_cancel_during_a_routed_generation_ends_it_cancelled_before_the_routing_check_with_no_hook_left():
@@ -445,7 +463,7 @@ def test_a_cancel_during_a_routed_generation_ends_it_cancelled_before_the_routin
         tempfile.TemporaryDirectory() as directory,
         _on_the_cpu(modellab),
         mock.patch.object(modellab, "emit"),
-        mock.patch.object(modellab, "CappedTraceWriter"),
+        _writers(modellab) as writers,
     ):
         job = _routed_job(directory)
         try:
@@ -456,6 +474,7 @@ def test_a_cancel_during_a_routed_generation_ends_it_cancelled_before_the_routin
             raise AssertionError("A trace cancelled during generate must end as cancelled, not fail its row count.")
         assert not os.path.exists(job["resultPath"])
     assert _hooks(model) == 0
+    assert [writer._handle.closed for writer in writers] == [True], "A cancelled trace closes its file."
 
 
 def test_a_cancel_while_a_routed_trace_saves_lets_it_finish_whole():
