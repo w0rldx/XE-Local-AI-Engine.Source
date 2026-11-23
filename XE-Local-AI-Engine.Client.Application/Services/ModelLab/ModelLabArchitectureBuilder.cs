@@ -35,7 +35,8 @@ public static class ModelLabArchitectureBuilder
             {
                 new ModelLabQwen35Architecture(mixtureOfExperts: false),
                 new ModelLabQwen35Architecture(mixtureOfExperts: true),
-                new ModelLabLlamaArchitecture()
+                new ModelLabLlamaArchitecture(),
+                new ModelLabOlmoeArchitecture()
             }
             .ToFrozenDictionary(static descriptor => descriptor.Architecture, StringComparer.Ordinal);
 

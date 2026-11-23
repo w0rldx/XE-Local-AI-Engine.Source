@@ -432,7 +432,9 @@ runs can be **compared** side by side (2 to 4 of one kind), with every setting t
 blocks of that step, the candidates behind the token and, if the trace was started with **Record attention**, where
 each attention head of a full-attention block looked. Blocks of the linear kind have no such map and say so. Each step also shows a **logit lens**: what every block would
 predict if the model's final readout were applied there, labelled as a derived analysis, not the model's decision. For a mixture-of-experts checkpoint such as OLMoE, each step
-also shows which experts every block's router chose and with which weights, as measured while the model ran.
+also shows which experts every block's router chose and with which weights, as measured while the model ran. The
+**Architecture** tab draws an OLMoE file's operations in detail; with an OLMoE trace laid over it, each block shows
+its most-picked experts in that run and how often, and the stepper and the block link to each other.
 
 Training and Model Lab are **experimental**: no 1.0 stability promise, and they may change or be cut.
 [Feature tiers](for-experienced-users.md#feature-tiers)

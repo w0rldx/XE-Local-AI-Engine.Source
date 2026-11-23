@@ -16,8 +16,8 @@ import {
 // Every component the descriptor can name: the backend's ModelLabArchitectureBuilder constants, as componentLabel lists them.
 const components = ["attention", "embedding", "ffn", "mtp", "norm", "other", "output", "ssm"];
 
-// Every node id the templates send: ModelLabQwen35Architecture (all three templates of both families) and
-// ModelLabLlamaArchitecture, whose ids are a subset of qwen35's full-attention ones.
+// Every node id the templates send: ModelLabQwen35Architecture (all three templates of both families),
+// ModelLabLlamaArchitecture and ModelLabOlmoeArchitecture, whose ids all appear among qwen35's and qwen35moe's.
 // shortcut: copied by hand, so a node added there passes here unnoticed (the panel shows no text for it); the llama.cpp
 // pin test that forces a template re-check is the reminder to extend this list. Upgrade to a descriptor fixture if one appears.
 const operations = [
@@ -133,7 +133,7 @@ describe.each([
 
 	it("override operations only for ids a template sends, each with text at the levels it overrides", () => {
 		const architectures = valueAt(bundle, "pages.modelLab.explain.arch") as Record<string, { op: Record<string, object> }>;
-		expect(Object.keys(architectures).sort()).toEqual(["llama", "qwen35", "qwen35moe"]);
+		expect(Object.keys(architectures).sort()).toEqual(["llama", "olmoe", "qwen35", "qwen35moe"]);
 		for (const { op } of Object.values(architectures)) {
 			expect(Object.keys(op).filter((id) => !operations.includes(id))).toEqual([]);
 			expect(

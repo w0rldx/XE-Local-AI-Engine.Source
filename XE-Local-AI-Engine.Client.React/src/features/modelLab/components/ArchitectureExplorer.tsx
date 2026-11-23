@@ -66,9 +66,15 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 				]
 			: [],
 	);
+	// A run deleted since it was chosen drops out of a refreshed list, and with it out of every overlay. Checked against
+	// whatever list is held: a later failed refetch keeps that data but leaves the success state.
+	const overlayId =
+		traceId !== null && experiments.data !== undefined && !traceOptions.some((option) => option.value === traceId)
+			? null
+			: traceId;
 	const trace = useQuery({
-		...getModelLabExperimentTraceOptions({ path: { experimentId: traceId ?? "" } }),
-		enabled: traceId !== null,
+		...getModelLabExperimentTraceOptions({ path: { experimentId: overlayId ?? "" } }),
+		enabled: overlayId !== null,
 	});
 	const traceSummaries = trace.data ? summarizeTraceByBlock(trace.data.records) : undefined;
 
@@ -76,6 +82,8 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 	const block = typeof selection === "number" ? data?.blocks.find((candidate) => candidate.index === selection) : undefined;
 	const template =
 		block && data?.support === "detailed" ? data.templates.find((candidate) => candidate.kind === block.kind) : undefined;
+	// Only a family whose graph has a router can have routing: a dense model's overlay never asks for it.
+	const routedArchitecture = data?.templates.some((candidate) => candidate.nodes.some((node) => node.id === "router")) ?? false;
 
 	return (
 		<Stack gap="md">
@@ -101,18 +109,18 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 					)}
 					placeholder={t("pages.modelLab.architecture.noTraceChosen", "No trace")}
 					data={traceOptions}
-					value={traceId}
+					value={overlayId}
 					onChange={setTraceId}
 					clearable={true}
 				/>
 			)}
-			{onJump && traceId !== null && (
+			{onJump && overlayId !== null && (
 				<Group>
 					<Button
 						size="compact-sm"
 						variant="light"
 						rightSection={<IconArrowRight size={14} aria-hidden={true} />}
-						onClick={() => onJump({ tab: "trace", experimentId: traceId })}
+						onClick={() => onJump({ tab: "trace", experimentId: overlayId })}
 						data-testid="model-lab-architecture-open-trace"
 					>
 						{t("pages.modelLab.architecture.openTrace", "Open trace")}
@@ -200,7 +208,8 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 					/>
 					{selection !== null && (
 						<ArchitectureBlockDetail
-							key={selection}
+							// A same-block jump to another model must not keep the last model's form state.
+							key={`${modelName}:${selection}`}
 							modelName={data.modelName}
 							architecture={data.architecture}
 							suggestedBaseRepo={data.suggestedBaseRepo}
@@ -209,6 +218,8 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 							groups={block?.groups ?? outsideGroups(data.nonBlock, selection === "output" ? "output" : "embedding")}
 							template={template}
 							traceSummaries={traceSummaries}
+							traceId={overlayId}
+							routedArchitecture={routedArchitecture}
 							explanationLevel={explanationLevel}
 							onExplanationLevel={setExplanationLevel}
 						/>

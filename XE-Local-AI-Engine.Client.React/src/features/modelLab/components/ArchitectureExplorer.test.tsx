@@ -6,16 +6,21 @@
 // the one click the view listens for.
 
 import { QueryClient } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { Node } from "@xyflow/react";
 import i18next from "i18next";
 import { HttpResponse, http } from "msw";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
+import {
+	getModelLabExperimentRoutingQueryKey,
+	listModelLabExperimentsQueryKey,
+} from "@/core/api/generated/@tanstack/react-query.gen";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ArchitectureExplorer } from "@/features/modelLab/components/ArchitectureExplorer";
 import modelLabEn from "@/features/modelLab/locales/model-lab-en.json";
+import type { ModelLabIntent } from "@/features/modelLab/models/ModelLabNavigation";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -244,6 +249,8 @@ function stubRoutes(descriptor: Record<string, unknown>, experiments: unknown[] 
 		// No index built yet, unless a test says otherwise.
 		http.get(localApiPath("model-lab/architecture/:modelName/pytorch"), () => new HttpResponse(null, { status: 404 })),
 		http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ items: [] })),
+		// A dense run keeps no routing, unless a test says otherwise.
+		http.get(localApiPath("model-lab/experiments/:experimentId/routing"), () => new HttpResponse(null, { status: 404 })),
 		http.get(localApiPath("model-lab/experiments"), () =>
 			HttpResponse.json({
 				platformSupported: true,
@@ -1214,5 +1221,293 @@ describe("ArchitectureExplorer explanations", () => {
 		expect(operations.getByRole("button", { name: "SwiGLU FFN" }).getAttribute("aria-expanded")).toBe("true");
 		expect(operations.queryByTestId("model-lab-explain-entry")).toBeNull();
 		expect(document.body.textContent).not.toContain("pages.modelLab.explain");
+	});
+});
+
+// An OLMoE-like file: its graph has a router, so a laid-over run may have routing. Otherwise the fixture above.
+const olmoe = {
+	...detailed,
+	architecture: "olmoe",
+	templates: detailed.templates.map((template) => ({
+		...template,
+		nodes: [...template.nodes, { id: "router", label: "Router", component: "ffn" }],
+	})),
+};
+const otherTraceId = "66666666-6666-4666-8666-666666666666";
+const routed = (layer: number, experts: number[]) => ({ layer, experts, weights: experts.map(() => 0.25) });
+
+function traceRow(id: string, modelName = gguf) {
+	return {
+		id,
+		kind: "Trace",
+		status: "Succeeded",
+		installedModelName: modelName,
+		repoId: "allenai/OLMoE-1B-7B-0924-Instruct",
+		revision: "rev",
+		prompt: `prompt of ${id.slice(0, 1)}`,
+		errorMessage: null,
+		traceByteCount: 10,
+		result: null,
+		createdAtUtc: "2026-11-23T00:00:00Z",
+		updatedAtUtc: "2026-11-23T00:00:00Z",
+		isPinned: false,
+		appVersion: null,
+		notes: null,
+	};
+}
+
+// One saved run: block 1 traced, and its routing as `routing` answers. Returns how often the routing was asked for.
+function stubRun(id: string, routing: () => Response): { requests: number } {
+	const seen = { requests: 0 };
+	server.use(
+		http.get(localApiPath(`model-lab/experiments/${id}/trace`), () =>
+			HttpResponse.json({
+				records: [{ step: 0, layer: 1, kind: "F", norm: 2, percentiles: [0, 1, 5], topIndices: [7], topValues: [1] }],
+				truncated: false,
+				droppedRecords: 0,
+				byteCap: 1000,
+			}),
+		),
+		http.get(localApiPath(`model-lab/experiments/${id}/routing`), () => {
+			seen.requests++;
+			return routing();
+		}),
+	);
+	return seen;
+}
+
+function routingOf(
+	steps: { step: number; blocks: ReturnType<typeof routed>[] }[],
+	truncated = false,
+	layers = [0, 1],
+): () => Response {
+	return () =>
+		HttpResponse.json({
+			layers,
+			experts: 64,
+			expertsPerToken: 2,
+			normalizedTopK: false,
+			steps,
+			truncated,
+			droppedSteps: truncated ? 1 : 0,
+		});
+}
+
+// Run A: block 1 chose experts 5 and 9, then 5 and 12; block 0 chose 40 and 41. Run B, cut after two steps: block 1
+// chose 21 and 20, then 21 and 22.
+const routingA = routingOf([
+	{ step: 0, blocks: [routed(0, [40, 41]), routed(1, [5, 9])] },
+	{ step: 1, blocks: [routed(0, [40, 41]), routed(1, [12, 5])] },
+]);
+const routingB = routingOf(
+	[
+		{ step: 0, blocks: [routed(0, [30, 31]), routed(1, [21, 20])] },
+		{ step: 1, blocks: [routed(0, [30, 31]), routed(1, [21, 22])] },
+	],
+	true,
+);
+
+type ArchitectureJump = Omit<ModelLabIntent<"architecture">, "nonce">;
+
+// Stands in for the page: each "Next jump" hands the explorer the next jump under a new nonce, as ModelLabPage does.
+function JumpingExplorer({ jumps, onJump }: { jumps: ArchitectureJump[]; onJump?: () => void }) {
+	const [at, setAt] = useState(0);
+	return (
+		<>
+			<button type="button" onClick={() => setAt((value) => value + 1)}>
+				Next jump
+			</button>
+			<ArchitectureExplorer intent={{ ...(jumps[at % jumps.length] as ArchitectureJump), nonce: at + 1 }} onJump={onJump} />
+		</>
+	);
+}
+
+// Every jump lands on block 1, the one both runs trace.
+const jumpTo = (id: string, modelName = gguf): ArchitectureJump => ({
+	tab: "architecture",
+	modelName,
+	traceId: id,
+	blockIndex: 1,
+});
+
+function usageRows(): (string | null)[] {
+	return screen.getAllByTestId("model-lab-architecture-routing-usage-row").map((row) => row.textContent);
+}
+
+describe("ArchitectureExplorer routing of a laid-over run", () => {
+	it("shows the block's expert usage over the run as derived, and says where it was measured", async () => {
+		stubRoutes(olmoe, [traceRow(traceId)]);
+		stubRun(traceId, routingA);
+		renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} />);
+
+		const panel = await screen.findByTestId("model-lab-architecture-routing");
+		expect(within(panel).getByText("Experts this block chose in the laid-over run")).toBeTruthy();
+		expect(within(panel).getByText("Most picked in this run (2 steps)")).toBeTruthy();
+		expect(within(panel).getByTestId("model-lab-explain-basis").textContent).toBe("Derived analysis");
+		expect(screen.getByTestId("model-lab-architecture-routing-note").textContent).toBe(
+			"Read from each block's router as the model ran in PyTorch on the Hugging Face checkpoint. The GGUF in llama.cpp may route differently.",
+		);
+		// Two experts per token, so the two most picked; ties by expert id.
+		expect(usageRows()).toEqual(["E5: picked in 2 of 2 steps", "E9: picked in 1 of 2 steps"]);
+		// The residual summary still shows beside it; the page's own Open trace is the way back to the run.
+		expect(screen.getByTestId("model-lab-architecture-trace-summary")).toBeTruthy();
+		expect(within(panel).queryByRole("button")).toBeNull();
+	});
+
+	it("adds nothing for an OLMoE run that kept no routing", async () => {
+		stubRoutes(olmoe, [traceRow(traceId)]);
+		stubRun(traceId, () => new HttpResponse(null, { status: 404 }));
+		const { queryClient } = renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} />);
+
+		await screen.findByTestId("model-lab-architecture-trace-summary");
+		// Only once the routing query has settled on the 404 is the panel's absence a result.
+		const key = getModelLabExperimentRoutingQueryKey({ path: { experimentId: traceId } });
+		await waitFor(() => expect(queryClient.getQueryState(key)?.status).toBe("error"));
+		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
+	});
+
+	it("asks an OLMoE run without routing once, however often the operator changes block", async () => {
+		stubRoutes(olmoe, [traceRow(traceId)]);
+		const routing = stubRun(traceId, () => new HttpResponse(null, { status: 404 }));
+		const { queryClient } = renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} />);
+		const key = getModelLabExperimentRoutingQueryKey({ path: { experimentId: traceId } });
+		await waitFor(() => expect(queryClient.getQueryState(key)?.status).toBe("error"));
+
+		fireEvent.click(screen.getByRole("button", { name: "Block 0: Linear attention" }));
+		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention, traced" }));
+		fireEvent.click(screen.getByRole("button", { name: "Block 0: Linear attention" }));
+
+		// A remount that refetched would be fetching now; idle means any such request has already been counted.
+		await waitFor(() => expect(queryClient.getQueryState(key)?.fetchStatus).toBe("idle"));
+		expect(routing.requests).toBe(1);
+		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
+	});
+
+	it("never asks a Qwen3.5 trace for routing: its graph has no router", async () => {
+		stubRoutes(detailed, [traceRow(traceId)]);
+		const routing = stubRun(traceId, routingA);
+		const { queryClient } = renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} />);
+
+		// The block detail is up with the trace laid over it, so the routing panel would have mounted by now.
+		await screen.findByTestId("model-lab-architecture-trace-summary");
+		expect(queryClient.getQueryState(getModelLabExperimentRoutingQueryKey({ path: { experimentId: traceId } }))).toBeUndefined();
+		expect(routing.requests).toBe(0);
+		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
+	});
+
+	it("adds nothing for a block the run's routing does not cover", async () => {
+		stubRoutes(olmoe, [traceRow(traceId)]);
+		stubRun(traceId, routingOf([{ step: 0, blocks: [routed(0, [40, 41])] }], false, [0]));
+		renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} />);
+
+		await screen.findByTestId("model-lab-architecture-trace-summary");
+		fireEvent.click(screen.getByRole("button", { name: "Block 0: Linear attention" }));
+		expect(await screen.findByTestId("model-lab-architecture-routing")).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention, traced" }));
+		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
+	});
+
+	it("shows each run's own usage when two runs are laid over the same block in turn", async () => {
+		stubRoutes(olmoe, [traceRow(traceId), traceRow(otherTraceId)]);
+		stubRun(traceId, routingA);
+		stubRun(otherTraceId, routingB);
+		renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId), jumpTo(otherTraceId)]} />);
+
+		await screen.findByTestId("model-lab-architecture-routing");
+		expect(usageRows()).toEqual(["E5: picked in 2 of 2 steps", "E9: picked in 1 of 2 steps"]);
+
+		fireEvent.click(screen.getByRole("button", { name: "Next jump" }));
+
+		// The cut-off run counts over its saved steps only.
+		expect(await screen.findByText("Most picked in the 2 saved steps")).toBeTruthy();
+		expect(usageRows()).toEqual(["E21: picked in 2 of 2 steps", "E20: picked in 1 of 2 steps"]);
+	});
+
+	it("applies the same jump again after a later pick, from the run's one fetched routing", async () => {
+		stubRoutes(olmoe, [traceRow(traceId)]);
+		const routing = stubRun(traceId, routingA);
+		renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} />);
+
+		await screen.findByTestId("model-lab-architecture-routing");
+		fireEvent.click(screen.getByRole("button", { name: "Block 0: Linear attention" }));
+		expect(usageRows()).toEqual(["E40: picked in 2 of 2 steps", "E41: picked in 2 of 2 steps"]);
+
+		fireEvent.click(screen.getByRole("button", { name: "Next jump" }));
+
+		expect(screen.getByRole("button", { name: "Block 1: Full attention, traced" }).getAttribute("aria-pressed")).toBe("true");
+		expect(usageRows()).toEqual(["E5: picked in 2 of 2 steps", "E9: picked in 1 of 2 steps"]);
+		expect(routing.requests).toBe(1);
+	});
+
+	it("hides the routing when the operator clears the laid-over trace", async () => {
+		stubRoutes(olmoe, [traceRow(traceId)]);
+		stubRun(traceId, routingA);
+		renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} />);
+		await screen.findByTestId("model-lab-architecture-routing");
+
+		const select = await screen.findByRole("combobox", { name: /Trace to lay over the blocks/ });
+		const clear = select.closest(".mantine-Input-wrapper")?.querySelector("button");
+		fireEvent.click(clear as HTMLButtonElement);
+
+		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
+		expect(screen.queryByTestId("model-lab-architecture-trace-summary")).toBeNull();
+	});
+
+	it("drops a run deleted since it was laid over once the list refreshes without it", async () => {
+		stubRoutes(olmoe, [traceRow(traceId)]);
+		stubRun(traceId, routingA);
+		const { queryClient } = renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} onJump={vi.fn()} />);
+		await screen.findByTestId("model-lab-architecture-routing");
+		expect(screen.getByRole("button", { name: "Open trace" })).toBeTruthy();
+
+		stubRoutes(olmoe, []);
+		await act(() => queryClient.invalidateQueries({ queryKey: listModelLabExperimentsQueryKey() }));
+
+		await waitFor(() => expect(screen.queryByRole("button", { name: "Open trace" })).toBeNull());
+		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
+		expect(screen.queryByTestId("model-lab-architecture-trace-summary")).toBeNull();
+	});
+
+	it("keeps a deleted run off the overlay when a later list refresh fails", async () => {
+		stubRoutes(olmoe, [traceRow(traceId)]);
+		stubRun(traceId, routingA);
+		const { queryClient } = renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} onJump={vi.fn()} />);
+		await screen.findByTestId("model-lab-architecture-routing");
+		stubRoutes(olmoe, []);
+		await act(() => queryClient.invalidateQueries({ queryKey: listModelLabExperimentsQueryKey() }));
+		await waitFor(() => expect(screen.queryByRole("button", { name: "Open trace" })).toBeNull());
+
+		server.use(http.get(localApiPath("model-lab/experiments"), () => new HttpResponse(null, { status: 500 })));
+		await act(() => queryClient.invalidateQueries({ queryKey: listModelLabExperimentsQueryKey() }));
+
+		// The failed refetch keeps the list without the run, so the run stays off.
+		await waitFor(() => expect(queryClient.getQueryState(listModelLabExperimentsQueryKey())?.status).toBe("error"));
+		expect(screen.queryByRole("button", { name: "Open trace" })).toBeNull();
+		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
+	});
+});
+
+describe("ArchitectureExplorer jumps between models", () => {
+	it("starts the block's detail afresh on a same-block jump to another model", async () => {
+		const otherModel = "org/Other-GGUF:Q4_K_M";
+		stubRoutes(detailed, [traceRow(traceId), traceRow(otherTraceId, otherModel)]);
+		stubRun(traceId, routingA);
+		stubRun(otherTraceId, routingB);
+		// Other model first and kept cached, so coming back to it shows block 1 in the same render as the jump: only the
+		// detail's key can then tell the two models' forms apart.
+		renderWithProviders(<JumpingExplorer jumps={[jumpTo(otherTraceId, otherModel), jumpTo(traceId)]} />, {
+			queryClient: new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } } }),
+		});
+		await screen.findByTestId("model-lab-architecture-detail");
+		fireEvent.click(screen.getByRole("button", { name: "Next jump" }));
+
+		fireEvent.click(await screen.findByRole("radio", { name: "Hugging Face config.json" }));
+		fireEvent.change(screen.getByRole("textbox", { name: "Repository" }), { target: { value: "org/Typed-For-Tiny" } });
+		fireEvent.click(screen.getByRole("button", { name: "Next jump" }));
+
+		// The other model's form starts from its own defaults, not the repository typed for this one.
+		await screen.findByRole("radio", { name: "Downloaded checkpoint" });
+		expect(screen.queryByRole("textbox", { name: "Repository" })).toBeNull();
+		expect((screen.getByRole("radio", { name: "Downloaded checkpoint" }) as HTMLInputElement).checked).toBe(true);
 	});
 });

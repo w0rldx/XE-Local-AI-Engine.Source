@@ -312,11 +312,13 @@ public sealed class ModelLabArchitectureBuilderTests
     [Arguments("qwen35", 3)]
     [Arguments("qwen35moe", 3)]
     [Arguments("llama", 1)]
+    [Arguments("olmoe", 1)]
     public void EveryTemplate_IsMarkedInferred_ConnectsOnlyItsOwnNodes_AndNamesOnlyComponentsItsBlocksHave(string architecture, int templateCount)
     {
         var inspection = architecture switch
         {
             "llama" => LlamaTensorFixture.Llama3_2_1B(),
+            "olmoe" => OlmoeTensorFixture.Olmoe1B7B(),
             "qwen35moe" => Qwen35MoeTensorFixture.Qwen36_35B_A3B(withMtpBlock: true),
             _ => Qwen35TensorFixture.Qwen35_27BLike()
         };
@@ -345,7 +347,7 @@ public sealed class ModelLabArchitectureBuilderTests
     {
         var descriptors = ModelLabArchitectureBuilder.RegisteredDescriptors.ToList();
 
-        AssertEx.Equal("llama,qwen35,qwen35moe", string.Join(',', descriptors.Select(static descriptor => descriptor.Architecture).Order(StringComparer.Ordinal)));
+        AssertEx.Equal("llama,olmoe,qwen35,qwen35moe", string.Join(',', descriptors.Select(static descriptor => descriptor.Architecture).Order(StringComparer.Ordinal)));
         // A pin bump fails here on purpose: re-read each descriptor's upstream files at the new tag first.
         foreach (var descriptor in descriptors)
         {
@@ -566,6 +568,170 @@ public sealed class ModelLabArchitectureBuilderTests
     }
 
     [Test]
+    public void AnOlmoeFile_IsDetailed_WithOneFullAttentionKind_OneTemplate_AndNoUnmappedTensor()
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, OlmoeTensorFixture.Olmoe1B7B());
+
+        AssertEx.Equal("detailed", descriptor.Support);
+        AssertEx.Equal("olmoe", descriptor.Architecture!);
+        AssertEx.Equal(OlmoeTensorFixture.BlockCount, descriptor.Blocks.Count);
+        AssertEx.Equal("fullAttention", string.Join(',', descriptor.Blocks.Select(static block => block.Kind).Distinct(StringComparer.Ordinal)));
+        AssertEx.Equal("blk.0.attention,blk.0.ffn,blk.0.norm", string.Join(',', descriptor.Blocks[0].Groups.Select(static group => group.ComponentId)));
+        var tensors = AllTensors(descriptor).ToList();
+        AssertEx.Equal(OlmoeTensorFixture.BlockCount * OlmoeTensorFixture.Block.Length + 3, tensors.Count);
+        AssertEx.Empty(tensors.Where(static tensor => tensor.HfName is null).Select(static tensor => tensor.GgufName));
+        var template = descriptor.Templates.Single();
+        AssertEx.Equal("fullAttention", template.Kind);
+        AssertEx.Equal("llama.cpp src/models/olmoe.cpp @ b12014", template.Source);
+    }
+
+    /// <summary>OLMoE's own graph: whole-projection Q/K norms before RoPE, unrenormalized top-k weights, no shared expert, the routed sum into the residual.</summary>
+    [Test]
+    public void TheOlmoeTemplate_HasItsOwnOrderedNodesLabelsAndEdges_AndNoSharedExpert()
+    {
+        var template = ModelLabArchitectureBuilder.Build(ModelName, OlmoeTensorFixture.Olmoe1B7B()).Templates.Single();
+
+        AssertEx.Equal(string.Join('\n', OlmoeTensorFixture.TemplateNodes), string.Join('\n', template.Nodes.Select(static node => $"{node.Id}: {node.Label}")));
+        AssertEx.Equal(string.Join(',', OlmoeTensorFixture.TemplateEdges), string.Join(',', template.Edges.Select(static edge => $"{edge.From}->{edge.To}")));
+        AssertEx.Empty(template.Nodes.Where(static node => node.Id.StartsWith("shexp_", StringComparison.Ordinal) || node.Id == "moe_out").Select(static node => node.Id));
+        string[] moeNodes = ["router", "router_probs", "topk", "topk_weights", "exp_gate", "exp_up", "exp_act", "exp_down", "exp_weighted"];
+        AssertEx.True(template.Nodes.Where(node => moeNodes.Contains(node.Id, StringComparer.Ordinal)).All(static node => node.Component == "ffn"));
+        AssertEx.Equal(moeNodes.Length, template.Nodes.Count(node => moeNodes.Contains(node.Id, StringComparer.Ordinal)));
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(15)]
+    public void EveryRecordedOlmoeRow_GetsItsHfName_AndValueRelation(int blockIndex)
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, OlmoeTensorFixture.Olmoe1B7B());
+        var byName = descriptor.Blocks[blockIndex].Groups.SelectMany(static group => group.Tensors).ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
+
+        AssertEx.Equal(OlmoeTensorFixture.Block.Length, byName.Count);
+        foreach (var row in OlmoeTensorFixture.Block)
+        {
+            var tensor = byName[$"blk.{blockIndex}.{row.GgufSuffix}"];
+            AssertEx.Equal($"model.layers.{blockIndex}.{row.HfSuffix}", tensor.HfName, row.GgufSuffix);
+            AssertEx.Equal(row.Relation, tensor.ValueRelation, row.GgufSuffix);
+        }
+    }
+
+    /// <summary>
+    ///     Unquantized, every OLMoE row shows its converter relation: Q and K equal (NEOX RoPE, no permutation), the Q/K norms equal (no 1 + w),
+    ///     the expert gate and up halves sliced from <c>gate_up_proj</c>; a fused <c>attn_qkv</c> gets no HF name.
+    /// </summary>
+    [Test]
+    public void AnF32OlmoeBlock_ShowsTheConverterRelationOfEveryRow_AndLeavesAFusedQkvUnnamed()
+    {
+        var expected = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["attn_norm.weight"] = "input_layernorm.weight equal",
+            ["attn_q.weight"] = "self_attn.q_proj.weight equal",
+            ["attn_q.bias"] = "self_attn.q_proj.bias equal",
+            ["attn_k.weight"] = "self_attn.k_proj.weight equal",
+            ["attn_k.bias"] = "self_attn.k_proj.bias equal",
+            ["attn_v.weight"] = "self_attn.v_proj.weight equal",
+            ["attn_v.bias"] = "self_attn.v_proj.bias equal",
+            ["attn_output.weight"] = "self_attn.o_proj.weight equal",
+            ["attn_q_norm.weight"] = "self_attn.q_norm.weight equal",
+            ["attn_k_norm.weight"] = "self_attn.k_norm.weight equal",
+            ["ffn_norm.weight"] = "post_attention_layernorm.weight equal",
+            ["ffn_gate_inp.weight"] = "mlp.gate.weight equal",
+            ["ffn_gate_exps.weight"] = "mlp.experts.gate_up_proj sliced",
+            ["ffn_up_exps.weight"] = "mlp.experts.gate_up_proj sliced",
+            ["ffn_down_exps.weight"] = "mlp.experts.down_proj equal"
+        };
+        var inspection = Qwen35TensorFixture.Inspection("olmoe",
+            expected.Keys.Append("attn_qkv.weight").Select(static suffix => Qwen35TensorFixture.Tensor($"blk.3.{suffix}", [64], "F32")));
+
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
+
+        var byName = AllTensors(descriptor).ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
+        foreach (var (suffix, hfAndRelation) in expected)
+        {
+            var tensor = byName[$"blk.3.{suffix}"];
+            AssertEx.Equal($"model.layers.3.{hfAndRelation}", $"{tensor.HfName} {tensor.ValueRelation}", suffix);
+        }
+
+        AssertEx.Null(byName["blk.3.attn_qkv.weight"].HfName);
+        AssertEx.Null(byName["blk.3.attn_qkv.weight"].ValueRelation);
+    }
+
+    /// <summary>A file storing Q, K and V as one <c>attn_qkv</c> gets the same graph with the Q/K/V nodes naming the fused rows; that tensor stays unnamed.</summary>
+    [Test]
+    public void AFusedQkvOlmoeFile_GetsTheSameGraph_WithFusedRowLabels_AndAnUnnamedAttnQkv()
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, OlmoeTensorFixture.Olmoe1B7B(fusedQkv: true));
+
+        AssertEx.True(descriptor.Blocks.All(static block => block.Kind == "fullAttention"));
+        var template = descriptor.Templates.Single();
+        var expectedNodes = OlmoeTensorFixture.TemplateNodes.Select(static node => node switch
+        {
+            "q: Query projection · attn_q" => "q: Query rows of the fused projection · attn_qkv",
+            "k: Key projection · attn_k" => "k: Key rows of the fused projection · attn_qkv",
+            "v: Value projection · attn_v" => "v: Value rows of the fused projection · attn_qkv",
+            _ => node
+        });
+        AssertEx.Equal(string.Join('\n', expectedNodes), string.Join('\n', template.Nodes.Select(static node => $"{node.Id}: {node.Label}")));
+        AssertEx.Equal(string.Join(',', OlmoeTensorFixture.TemplateEdges), string.Join(',', template.Edges.Select(static edge => $"{edge.From}->{edge.To}")));
+        var unnamed = AllTensors(descriptor).Where(static tensor => tensor.HfName is null).ToList();
+        AssertEx.Equal(OlmoeTensorFixture.BlockCount, unnamed.Count);
+        AssertEx.True(unnamed.All(static tensor => tensor.GgufName.EndsWith(".attn_qkv.weight", StringComparison.Ordinal) && tensor.ValueRelation is null));
+    }
+
+    /// <summary>A fused <c>attn_qkv.weight</c> beside separate Q/K/V biases is still a fused block: the biases keep their HF names, the fused weight none.</summary>
+    [Test]
+    public void AFusedQkvWeightWithSeparateBiases_GetsTheFusedLabels_AndTheBiasesKeepTheirHfNames()
+    {
+        var inspection = Qwen35TensorFixture.Inspection("olmoe",
+            Enumerable.Range(0, 2).SelectMany(static block => new[] { "attn_norm.weight", "attn_qkv.weight", "attn_q.bias", "attn_k.bias", "attn_v.bias", "attn_output.weight" }
+                .Select(suffix => Qwen35TensorFixture.Tensor($"blk.{block}.{suffix}", [64], "F32"))));
+
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
+
+        AssertEx.Equal(string.Join('\n', ExpectedOlmoeNodes("Query rows of the fused projection · attn_qkv", "Key rows of the fused projection · attn_qkv",
+                "Value rows of the fused projection · attn_qkv")),
+            string.Join('\n', descriptor.Templates.Single().Nodes.Select(static node => $"{node.Id}: {node.Label}")));
+        var byName = AllTensors(descriptor).ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
+        AssertEx.Equal("model.layers.1.self_attn.q_proj.bias equal", $"{byName["blk.1.attn_q.bias"].HfName} {byName["blk.1.attn_q.bias"].ValueRelation}");
+        AssertEx.Equal("model.layers.1.self_attn.k_proj.bias equal", $"{byName["blk.1.attn_k.bias"].HfName} {byName["blk.1.attn_k.bias"].ValueRelation}");
+        AssertEx.Equal("model.layers.1.self_attn.v_proj.bias equal", $"{byName["blk.1.attn_v.bias"].HfName} {byName["blk.1.attn_v.bias"].ValueRelation}");
+        AssertEx.Null(byName["blk.0.attn_qkv.weight"].HfName);
+        AssertEx.Null(byName["blk.1.attn_qkv.weight"].ValueRelation);
+    }
+
+    /// <summary>llama.cpp decides fused or separate per layer, so a file mixing both gets Q/K/V labels true for either, on the same graph.</summary>
+    [Test]
+    public void AnOlmoeFileMixingFusedAndSeparateQkv_GetsLayoutNeutralLabels_OnTheSameGraph()
+    {
+        var inspection = Qwen35TensorFixture.Inspection("olmoe",
+            new[] { "attn_norm.weight", "attn_qkv.weight", "attn_output.weight" }.Select(static suffix => Qwen35TensorFixture.Tensor($"blk.0.{suffix}", [64], "F32"))
+                .Concat(Enumerable.Range(1, 2).SelectMany(static block => new[] { "attn_norm.weight", "attn_q.weight", "attn_k.weight", "attn_v.weight", "attn_output.weight" }
+                    .Select(suffix => Qwen35TensorFixture.Tensor($"blk.{block}.{suffix}", [64], "F32")))));
+
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
+
+        AssertEx.True(descriptor.Blocks.All(static block => block.Kind == "fullAttention"));
+        var template = descriptor.Templates.Single();
+        AssertEx.Equal(string.Join('\n', ExpectedOlmoeNodes("Query projection · attn_q or Q rows of attn_qkv", "Key projection · attn_k or K rows of attn_qkv",
+                "Value projection · attn_v or V rows of attn_qkv")),
+            string.Join('\n', template.Nodes.Select(static node => $"{node.Id}: {node.Label}")));
+        AssertEx.Equal(string.Join(',', OlmoeTensorFixture.TemplateEdges), string.Join(',', template.Edges.Select(static edge => $"{edge.From}->{edge.To}")));
+    }
+
+    [Test]
+    public void TheOlmoeNonBlockTensors_MapToTheEmbeddingTheNormAndTheUntiedHead()
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, OlmoeTensorFixture.Olmoe1B7B());
+
+        var nonBlock = descriptor.NonBlock.ToDictionary(static group => group.ComponentId, static group => group.Tensors.Single(), StringComparer.Ordinal);
+        AssertEx.Equal("embedding,output,output_norm", string.Join(',', nonBlock.Keys.Order(StringComparer.Ordinal)));
+        AssertEx.Equal("model.embed_tokens.weight quantized", $"{nonBlock["embedding"].HfName} {nonBlock["embedding"].ValueRelation}");
+        AssertEx.Equal("model.norm.weight equal", $"{nonBlock["output_norm"].HfName} {nonBlock["output_norm"].ValueRelation}");
+        AssertEx.Equal("lm_head.weight quantized", $"{nonBlock["output"].HfName} {nonBlock["output"].ValueRelation}");
+    }
+
+    [Test]
     public void AnUnreadableFile_SaysWhy_AndListsNothing()
     {
         var inspection = Qwen35TensorFixture.Inspection("qwen35", [Qwen35TensorFixture.Tensor("blk.0.attn_norm.weight", [64], "F32")],
@@ -620,6 +786,16 @@ public sealed class ModelLabArchitectureBuilderTests
     {
         AssertEx.Null(ModelLabArchitectureBuilder.Build(ModelName, Qwen35TensorFixture.Qwen35_0_8B()).SuggestedBaseRepo);
     }
+
+    // The separate-tensor OLMoE nodes as "id: label", with the q, k and v labels replaced.
+    private static IEnumerable<string> ExpectedOlmoeNodes(string queryLabel, string keyLabel, string valueLabel) =>
+        OlmoeTensorFixture.TemplateNodes.Select(node => node switch
+        {
+            "q: Query projection · attn_q" => $"q: {queryLabel}",
+            "k: Key projection · attn_k" => $"k: {keyLabel}",
+            "v: Value projection · attn_v" => $"v: {valueLabel}",
+            _ => node
+        });
 
     private static IEnumerable<ModelLabArchitectureTensor> AllTensors(ModelLabArchitectureResponse descriptor) =>
         descriptor.Blocks.SelectMany(static block => block.Groups).Concat(descriptor.NonBlock).SelectMany(static group => group.Tensors);

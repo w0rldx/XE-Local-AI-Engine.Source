@@ -21,6 +21,7 @@
 				"kindUntraceable": "{{kind}} (nicht tracebar)",
 				"layoutNote": {
 					"llama": "Die Hugging-Face-Namen setzen die Standardkonvertierung von LlamaForCausalLM voraus (model.layers.N.…). Eine Datei aus einem anderen Quellformat, etwa dem konsolidierten Format von Mistral oder dem Sprachteil eines Vision-Modells, hat andere Quell-Tensornamen.",
+					"olmoe": "Der Graph ist der OLMoE-Graph von llama.cpp. Die Hugging-Face-Namen sind die, die transformers im Speicher verwendet (model.layers.N.…): Der Checkpoint auf der Festplatte speichert die Experten einzeln (mlp.experts.N.gate_proj, up_proj, down_proj), und transformers stapelt sie beim Laden. Messungen des Expert-Routings stammen aus dem Lauf des PyTorch-Checkpoints, nicht aus diesem GGUF.",
 					"qwen35moe": "Die Hugging-Face-Namen setzen einen Checkpoint voraus, der die Experten jedes Blocks zusammengefasst speichert (model.language_model.layers.N.mlp.experts.gate_up_proj und …down_proj), wie die Checkpoints im Katalog. Ein Checkpoint pro Experte stapelt stattdessen Tensoren mlp.experts.N.*, und keine Metadaten der Datei sagen, aus welchem Layout sie konvertiert wurde."
 				},
 				"loadFailed": "Die Struktur des Modells konnte nicht gelesen werden.",
@@ -42,7 +43,10 @@
 					"plusOne": "Der Hugging-Face-Wert plus eins",
 					"quantized": "Aus den Hugging-Face-Werten quantisiert",
 					"reordered": "Gegenüber dem Hugging-Face-Tensor umsortiert (Heads oder Rotationspaare umgruppiert); ein quantisierter Typ ändert zusätzlich die Werte",
-					"sliced": "Eine Hälfte eines zusammengefassten Hugging-Face-Tensors (Gate- oder Up-Zeilen), unter der Annahme des zusammengefassten Checkpoint-Layouts im Katalog; ein quantisierter Typ ändert zusätzlich die Werte"
+					"sliced": "Eine Hälfte eines zusammengefassten Hugging-Face-Tensors (Gate- oder Up-Zeilen); der Hinweis zur Architektur sagt, woher dieses zusammengefasste Layout stammt. Ein quantisierter Typ ändert zusätzlich die Werte"
+				},
+				"routing": {
+					"title": "Experten, die dieser Block im über die Blöcke gelegten Lauf gewählt hat"
 				},
 				"shape": "Form (GGUF-Reihenfolge)",
 				"tab": "Architektur",
@@ -76,6 +80,67 @@
 							"rope": {
 								"detail": "Wird auf die Queries und Keys angewandt, nicht auf Values; kein eigenes gespeichertes Gewicht. Dateien mit der RoPE-Skalierung von Llama 3 enthalten zusätzlich `rope_freqs`: einen Frequenzfaktor pro gedrehtem Paar, der die langsamsten Paare weiter verlangsamt, damit Positionen über einen längeren Kontext unterscheidbar bleiben. Die übrigen Parameter stehen in den Metadaten der Datei.",
 								"math": "$$\\begin{pmatrix} u'_{2i} \\\\ u'_{2i+1} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_{2i} \\\\ u_{2i+1} \\end{pmatrix}, \\qquad \\theta_i = \\frac{b^{-i/r}}{f_i}$$\n\n- $u$: ein Query- oder Key-Head; $i < r$: llama.cpp paart benachbarte Dimensionen.\n- $2r$: Anzahl gedrehter Dimensionen; die übrigen bleiben unverändert.\n- $b$: Basisfrequenz; $p$: Position.\n- $f_i$: Frequenzfaktor aus `rope_freqs`, wenn die Datei ihn enthält, sonst 1.\n\nDas Llama von Hugging Face paart Dimension $i$ stattdessen mit $i + r$; deshalb ordnet der Konverter die Zeilen von Q und K passend um. Die Attention-Werte bleiben gleich."
+							}
+						}
+					},
+					"olmoe": {
+						"op": {
+							"attn": {
+								"detail": "Keys und Values aller früheren Tokens und des aktuellen kommen aus dem KV-Cache. Queries und Keys kommen über die ganze Projektion normiert und mit RoPE gedreht an. Der OLMoE-Graph von llama.cpp legt die Skalierung auf $1/\\sqrt{d_h}$ fest und speichert keine Attention-Gewichte. Ein PyTorch-Trace des Checkpoints kann ausgewählte Attention-Zeilen aufzeichnen, wenn „Attention aufzeichnen“ eingeschaltet ist; der Stepper zeigt sie an.",
+								"math": "$$a^{(j)}_t = \\sum_{s \\le t} \\mathrm{softmax}_s\\!\\left(\\frac{\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s}{\\sqrt{d_h}}\\right) v^{(m)}_s$$\n\n- $t$: aktuelle Position; $s$: Positionen im Cache.\n- $m$: Key/Value-Head, den Query-Head $j$ nutzt.\n- $\\tilde q$, $\\tilde k$: nach der Norm über die ganze Projektion und RoPE.\n- $1/\\sqrt{d_h}$: vom Graphen fest vorgegeben.",
+								"overview": "Jeder Query-Head bewertet die Keys seines Key/Value-Heads im Cache, die Werte werden zu Gewichten mit Summe 1, und die Ausgabe ist die gewichtete Mischung der Values."
+							},
+							"exp_down": {
+								"detail": "`ffn_down_exps` stapelt eine Down-Matrix pro Experte; nur die Matrizen der gewählten Experten werden genutzt, danach folgen die Router-Gewichte. Der Checkpoint auf der Festplatte speichert `mlp.experts.N.down_proj` für jeden Experten einzeln; `mlp.experts.down_proj` ist der gestapelte Tensor von transformers im Speicher.",
+								"math": "$$E_e(x') = W_{d,e}\\,m_e, \\qquad e \\in S$$\n\n- $m_e$: SiLU-Produkt von Experte $e$.\n- $W_{d,e}$: der Teil von `ffn_down_exps` für Experte $e$, von $d_{\\text{exp}}$ auf $d$.",
+								"overview": "Bildet den breiten Vektor jedes gewählten Experten mit seinem Teil von `ffn_down_exps` zurück auf die Residualbreite ab."
+							},
+							"exp_gate": {
+								"detail": "`ffn_gate_exps` stapelt eine Gate-Matrix pro Experte, getrennt von `ffn_up_exps` gespeichert; für dieses Token werden nur die Matrizen der gewählten Experten genutzt. Der Checkpoint auf der Festplatte speichert `mlp.experts.N.gate_proj` für jeden Experten einzeln; `mlp.experts.gate_up_proj`, dessen erste Hälfte das Gate ist, ist der zusammengefasste Tensor von transformers im Speicher.",
+								"math": "$$g_e = W_{g,e}\\,x', \\qquad e \\in S$$\n\n- $x'$: Ausgabe von `ffn_norm`, für jeden gewählten Experten dieselbe.\n- $W_{g,e}$: der Teil von `ffn_gate_exps` für Experte $e$, von $d$ auf die Expertenbreite $d_{\\text{exp}}$.",
+								"overview": "Jeder gewählte Experte verbreitert den normierten Vektor mit seinem eigenen Teil von `ffn_gate_exps` zu seinem Gate-Zweig."
+							},
+							"exp_up": {
+								"detail": "`ffn_up_exps` stapelt eine Up-Matrix pro Experte, getrennt von `ffn_gate_exps` gespeichert; nur die Matrizen der gewählten Experten werden genutzt, mit derselben Eingabe wie das Gate. Der Checkpoint auf der Festplatte speichert `mlp.experts.N.up_proj` für jeden Experten einzeln; im Speicher hält transformers ihn als zweite Hälfte von `mlp.experts.gate_up_proj`.",
+								"math": "$$u_e = W_{u,e}\\,x', \\qquad e \\in S$$\n\n- $W_{u,e}$: der Teil von `ffn_up_exps` für Experte $e$, von $d$ auf $d_{\\text{exp}}$.\n- $x'$: Ausgabe von `ffn_norm`.",
+								"overview": "Jeder gewählte Experte verbreitert den normierten Vektor mit seinem eigenen Teil von `ffn_up_exps` zu seinem Up-Zweig."
+							},
+							"ffn_residual": {
+								"detail": "Die unnormierte Ausgabe der ersten Residual-Addition plus die gewichtete Summe der gerouteten Experten; es gibt kein dichtes `ffn_down` und keinen Shared Expert. Das ist die Blockausgabe, sofern kein Control Vector geladen ist.",
+								"math": "$$h'' = h' + y_{\\text{routed}}$$\n\n- $h'$: Ausgabe der ersten Residual-Addition.\n- $y_{\\text{routed}}$: die gewichtete Summe der Experten.",
+								"overview": "Addiert die gewichtete Summe der gewählten Experten zum Strom."
+							},
+							"k": {
+								"detail": "`attn_k` (oder die K-Zeilen eines zusammengefassten `attn_qkv`) erzeugt einen Key pro Key/Value-Head. Es kann weniger Key/Value-Heads als Query-Heads geben (Grouped-Query Attention); jeder bedient eine Gruppe von Query-Heads. Keys kommen nach RoPE in den KV-Cache.",
+								"math": "$$k = W_K\\,x + b_K$$\n\n- $W_K$: `attn_k` oder die K-Zeilen von `attn_qkv`; Ausgabelänge $n_{kv} d_h$.\n- $b_K$: `attn_k.bias` oder die K-Zeilen von `attn_qkv.bias`; null, wenn die Datei keinen hat (der OLMoE-Checkpoint hat keinen).\n- $n_{kv}$: Anzahl der Key/Value-Heads."
+							},
+							"k_norm": {
+								"detail": "RMSNorm über die ganze Key-Projektion mit `attn_k_norm`: ein Gewicht pro Dimension der Projektion, unverändert als Hugging-Face-Wert gespeichert. Danach folgen die Aufteilung in Heads und RoPE.",
+								"math": "$$\\tilde k = \\frac{k}{\\mathrm{rms}(k)} \\odot w_k$$\n\n- $k$: die ganze Key-Projektion, Länge $n_{kv} d_h$.\n- $w_k$: `attn_k_norm`, gleiche Länge.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ aus der Datei.",
+								"overview": "Normiert die gesamte Key-Projektion, alle Key/Value-Heads zusammen, bevor sie in Heads aufgeteilt wird."
+							},
+							"q": {
+								"detail": "`attn_q` (oder die Q-Zeilen eines zusammengefassten `attn_qkv`) erzeugt eine Query pro Head, alle Heads nebeneinander in einem Vektor. Queries werden mit den Keys im Cache verglichen; sie selbst kommen nicht in den Cache.",
+								"math": "$$q = W_Q\\,x + b_Q$$\n\n- $W_Q$: `attn_q` oder die Q-Zeilen von `attn_qkv`; Ausgabelänge $n_h d_h$.\n- $b_Q$: `attn_q.bias` oder die Q-Zeilen von `attn_qkv.bias`; null, wenn die Datei keinen hat (der OLMoE-Checkpoint hat keinen).\n- $n_h$: Anzahl der Query-Heads; $d_h$: Head-Größe."
+							},
+							"q_norm": {
+								"detail": "RMSNorm über die ganze Query-Projektion mit `attn_q_norm`: ein Gewicht pro Dimension der Projektion, unverändert als Hugging-Face-Wert gespeichert. Danach folgen die Aufteilung in Heads und RoPE.",
+								"math": "$$\\tilde q = \\frac{q}{\\mathrm{rms}(q)} \\odot w_q$$\n\n- $q$: die ganze Query-Projektion, Länge $n_h d_h$.\n- $w_q$: `attn_q_norm`, gleiche Länge.\n- $\\mathrm{rms}(u) = \\sqrt{\\mathrm{mean}(u^2) + \\epsilon}$, $\\epsilon$ aus der Datei.",
+								"overview": "Normiert die gesamte Query-Projektion, alle Heads zusammen, bevor sie in Heads aufgeteilt wird."
+							},
+							"rope": {
+								"detail": "Hier werden die normierten Q und K zu Heads der Größe $d_h$. RoPE dreht dann jede Dimension jedes Heads und paart sie mit der Dimension, die einen halben Head weiter liegt (NEOX-Typ von llama.cpp). Values werden nicht gedreht, und es gibt kein gespeichertes Gewicht. Basisfrequenz und eine etwaige Kontextskalierung stehen in den Metadaten der Datei.",
+								"math": "$$\\begin{pmatrix} u'_i \\\\ u'_{i+r} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_i \\\\ u_{i+r} \\end{pmatrix}, \\qquad \\theta_i = b^{-i/r}$$\n\n- $u$: ein Query- oder Key-Head; $i < r = d_h/2$, also wird jede Dimension gedreht.\n- $b$: Basisfrequenz; $p$: Position.",
+								"overview": "Teilt die normierten Queries und Keys in Heads auf und kodiert dann die Position jedes Tokens, indem Wertepaare innerhalb jedes Heads gedreht werden."
+							},
+							"topk_weights": {
+								"detail": "Der OLMoE-Graph von llama.cpp lässt die gewählten Wahrscheinlichkeiten unverändert (`norm_w = false`), die Gewichte ergeben also zusammen höchstens 1. Eine weitere Skalierung gibt es nicht: llama.cpp liest `expert_weights_scale` für OLMoE nie.",
+								"math": "$$w_e = p_e, \\qquad e \\in S, \\qquad \\sum_{e \\in S} w_e \\le 1$$\n\n- $p_e$: Router-Wahrscheinlichkeit von Experte $e$; $S$: die $k$ gewählten Experten.\n- Keine Division durch $\\sum_{j \\in S} p_j$ und keine weitere Skalierung.",
+								"overview": "Nimmt die Router-Wahrscheinlichkeiten der gewählten Experten als ihre Gewichte, ohne sie neu zu normieren."
+							},
+							"v": {
+								"detail": "`attn_v` (oder die V-Zeilen eines zusammengefassten `attn_qkv`) erzeugt einen Value pro Key/Value-Head. Values erhalten weder Normierung noch RoPE; sie kommen unverändert in den KV-Cache.",
+								"math": "$$v = W_V\\,x + b_V$$\n\n- $W_V$: `attn_v` oder die V-Zeilen von `attn_qkv`; Ausgabelänge $n_{kv} d_h$.\n- $b_V$: `attn_v.bias` oder die V-Zeilen von `attn_qkv.bias`; null, wenn die Datei keinen hat (der OLMoE-Checkpoint hat keinen)."
 							}
 						}
 					},

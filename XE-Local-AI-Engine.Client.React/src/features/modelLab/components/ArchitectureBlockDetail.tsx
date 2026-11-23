@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { blockKindLabels } from "@/core/models/inspect/GgufInspectInsights";
+import { ArchitectureBlockRouting } from "@/features/modelLab/components/ArchitectureBlockRouting";
 import { ArchitectureBlockTrace } from "@/features/modelLab/components/ArchitectureBlockTrace";
 import {
 	ExplanationEntry,
@@ -38,6 +39,10 @@ interface ArchitectureBlockDetailProps {
 	// Undefined when this support level or block kind has none: no graph is ever drawn without one.
 	template: ArchitectureTemplate | undefined;
 	traceSummaries: ReadonlyMap<number, BlockTraceSummary> | undefined;
+	// The trace laid over the blocks, null while none is chosen.
+	traceId: string | null;
+	// The file's graph has a router, so a laid-over run can have routing; never asked for otherwise.
+	routedArchitecture: boolean;
 	// Owned above this panel, so the chosen level stays while the operator moves between blocks.
 	explanationLevel: ExplanationLevel;
 	onExplanationLevel: (level: ExplanationLevel) => void;
@@ -53,6 +58,8 @@ export function ArchitectureBlockDetail({
 	groups,
 	template,
 	traceSummaries,
+	traceId,
+	routedArchitecture,
 	explanationLevel,
 	onExplanationLevel,
 }: ArchitectureBlockDetailProps) {
@@ -105,6 +112,10 @@ export function ArchitectureBlockDetail({
 						blockIndex={block.index}
 						level={explanationLevel}
 					/>
+				)}
+				{/* Apart from the residual summary: a block can have routing whatever the trace records say about it. */}
+				{block && traceId !== null && routedArchitecture && (
+					<ArchitectureBlockRouting traceId={traceId} blockIndex={block.index} />
 				)}
 				<Group gap="xs">
 					<Text size="sm" fw={600}>

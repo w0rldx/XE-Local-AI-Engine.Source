@@ -382,6 +382,8 @@ export function TraceExperimentView({ experimentId, isLive, onJump }: TraceExper
 						onStepChange={setSelectedStep}
 						basis={basis}
 						onBasisChange={setBasis}
+						modelName={data.installedModelName}
+						onJump={onJump}
 					/>
 				)}
 				<ExperimentNotes experimentId={experimentId} notes={data.notes ?? ""} running={data.status === "Running"} />

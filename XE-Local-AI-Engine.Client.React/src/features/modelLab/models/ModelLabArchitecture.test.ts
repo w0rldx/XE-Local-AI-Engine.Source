@@ -38,11 +38,11 @@ describe("valueRelationLabel", () => {
 		await i18n.init();
 
 		expect(valueRelationLabel(i18n.t, "sliced")).toBe(
-			"One half of a fused Hugging Face tensor (gate or up rows), assuming the catalog's fused checkpoint layout; a quantized type also changes the values",
+			"One half of a fused Hugging Face tensor (gate or up rows); the architecture's note says where that fused layout comes from. A quantized type also changes the values",
 		);
 		await i18n.changeLanguage("de");
 		expect(valueRelationLabel(i18n.t, "sliced")).toBe(
-			"Eine Hälfte eines zusammengefassten Hugging-Face-Tensors (Gate- oder Up-Zeilen), unter der Annahme des zusammengefassten Checkpoint-Layouts im Katalog; ein quantisierter Typ ändert zusätzlich die Werte",
+			"Eine Hälfte eines zusammengefassten Hugging-Face-Tensors (Gate- oder Up-Zeilen); der Hinweis zur Architektur sagt, woher dieses zusammengefasste Layout stammt. Ein quantisierter Typ ändert zusätzlich die Werte",
 		);
 	});
 });

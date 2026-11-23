@@ -13,6 +13,7 @@ import { TraceRoutingPanel } from "@/features/modelLab/components/TraceRoutingPa
 import { TraceStepCandidates } from "@/features/modelLab/components/TraceStepCandidates";
 import { type ExplanationLevel, explanationKey } from "@/features/modelLab/models/ModelLabExplanation";
 import { moveFocusAmongButtons } from "@/features/modelLab/models/ModelLabFocus";
+import type { ModelLabJump } from "@/features/modelLab/models/ModelLabNavigation";
 import {
 	type CandidateBasis,
 	type StepperBlock,
@@ -35,6 +36,9 @@ interface TraceStepperProps {
 	onStepChange: (step: number) => void;
 	basis: CandidateBasis;
 	onBasisChange: (basis: CandidateBasis) => void;
+	// The run's GGUF, for the jump to its architecture.
+	modelName: string;
+	onJump?: (to: ModelLabJump) => void;
 }
 
 // One saved trace run replayed token by token: the step, its blocks, and the candidates behind its token. It reads only
@@ -48,6 +52,8 @@ export function TraceStepper({
 	onStepChange,
 	basis,
 	onBasisChange,
+	modelName,
+	onJump,
 }: TraceStepperProps) {
 	const { t, i18n } = useTranslation();
 	const [pickedBlock, setPickedBlock] = useState<number>();
@@ -237,6 +243,8 @@ export function TraceStepper({
 						step={current}
 						selectedBlock={selected?.index}
 						layerKinds={layerKinds}
+						modelName={modelName}
+						onJump={onJump}
 					/>
 				</>
 			)}

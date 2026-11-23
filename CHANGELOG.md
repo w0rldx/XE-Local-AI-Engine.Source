@@ -165,6 +165,15 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   checkpoint preflight now returns `modelType`, `attentionSupported` with `attentionRefusalMessage`, and
   `traceRefusalMessage` (a config with `output_router_logits` set cannot be traced but can be steered), and refuses a
   checkpoint whose family does not match the GGUF's architecture with `ArchitectureMismatch`, even at equal sizes.
+- **Model Lab: one complete mixture-of-experts investigation on OLMoE.** An `olmoe` GGUF (such as
+  `allenai/OLMoE-1B-7B-0924-Instruct-GGUF`) is now `detailed` in the Architecture tab: one operation graph with the
+  whole-projection Q/K norms, NEOX RoPE, the router, top-k experts whose chosen probabilities are used as is, and no
+  shared expert, explained at three levels in English and German, with Hugging Face names for every tensor
+  (`ffn_gate_exps`/`ffn_up_exps` are `sliced` halves of transformers' in-memory `mlp.experts.gate_up_proj`); a
+  file that stores Q, K and V fused in one `attn_qkv` gets the same graph with its Q/K/V nodes labelled as rows of it (a file mixing both layouts names both). With an
+  OLMoE trace laid over the file, the selected block shows its most-picked experts in that run and how often (derived from
+  the measured routing), and the stepper's routing panel has **Show block in Architecture**. An overlaid run that was
+  deleted is no longer shown.
 - **Model Lab: the Architecture tab describes Qwen3.5/3.6 mixture-of-experts GGUFs.** A `qwen35moe` file (such as
   Qwen3.6-35B-A3B) is now `detailed` instead of `overview`: Hugging Face names for the router, the routed experts and the
   gated shared expert, and one operation graph per block kind with the router, top-k selection, experts and shared

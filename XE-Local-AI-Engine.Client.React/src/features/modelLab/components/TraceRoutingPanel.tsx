@@ -1,4 +1,5 @@
-import { Alert, Badge, Group, Loader, Paper, Progress, Stack, Table, Text } from "@mantine/core";
+import { Alert, Badge, Button, Group, Loader, Paper, Progress, Stack, Table, Text } from "@mantine/core";
+import { IconArrowRight } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,7 +15,13 @@ import {
 	ExplanationList,
 } from "@/features/modelLab/components/ArchitectureExplanation";
 import { type ExplanationLevel, explanationKey, type routingTopics } from "@/features/modelLab/models/ModelLabExplanation";
+import type { ModelLabJump } from "@/features/modelLab/models/ModelLabNavigation";
 import { expertChoices, expertUsage } from "@/features/modelLab/models/ModelLabRouting";
+import {
+	routingProvenanceNote,
+	routingUsageCount,
+	routingUsageTitle,
+} from "@/features/modelLab/models/ModelLabRoutingProvenance";
 
 const notRecorded = ["stepper.routingNotRecorded"];
 
@@ -26,11 +33,22 @@ interface TraceRoutingPanelProps {
 	// The block picked in the stepper's block strip; its row is highlighted and its weights and usage shown in full.
 	selectedBlock: number | undefined;
 	layerKinds?: readonly string[];
+	// The run's GGUF, which the Architecture tab opens with this run laid over it.
+	modelName: string;
+	onJump?: (to: ModelLabJump) => void;
 }
 
 // The experts each mixture-of-experts block chose at one step of a saved run, as its router measured them, and how often
 // the selected block chose each over the run. The run's routing is fetched once, when the stepper first shows it.
-export function TraceRoutingPanel({ experimentId, result, step, selectedBlock, layerKinds }: TraceRoutingPanelProps) {
+export function TraceRoutingPanel({
+	experimentId,
+	result,
+	step,
+	selectedBlock,
+	layerKinds,
+	modelName,
+	onJump,
+}: TraceRoutingPanelProps) {
 	const { t, i18n } = useTranslation();
 	const [level, setLevel] = useState<ExplanationLevel>("overview");
 	const [open, setOpen] = useState<string | null>(null);
@@ -108,10 +126,7 @@ export function TraceRoutingPanel({ experimentId, result, step, selectedBlock, l
 				<BasisBadge basis="measurement" />
 			</Group>
 			<Text size="xs" c="dimmed" data-testid="model-lab-stepper-routing-note">
-				{t(
-					"pages.modelLab.trace.stepper.routing.note",
-					"Read from each block's router as the model ran in PyTorch on the Hugging Face checkpoint. The GGUF in llama.cpp may route differently.",
-				)}
+				{routingProvenanceNote(t)}
 			</Text>
 			{routing.status === "pending" && <Loader size="sm" />}
 			{routing.status === "error" && (
@@ -222,26 +237,29 @@ export function TraceRoutingPanel({ experimentId, result, step, selectedBlock, l
 				<Stack gap={4} data-testid="model-lab-stepper-routing-usage">
 					<Group gap="xs">
 						<Text size="sm" fw={600}>
-							{data.truncated
-								? t("pages.modelLab.trace.stepper.routing.usageTruncated", "Most picked in the {{count}} saved steps", {
-										count: data.steps.length,
-									})
-								: t("pages.modelLab.trace.stepper.routing.usage", "Most picked in this run ({{count}} steps)", {
-										count: data.steps.length,
-									})}
+							{routingUsageTitle(t, data)}
 						</Text>
 						<BasisBadge basis="derived" />
 					</Group>
 					{usage.slice(0, data.expertsPerToken).map((entry) => (
 						<Text key={entry.expert} size="sm" ff="monospace" data-testid="model-lab-stepper-routing-usage-row">
-							{t("pages.modelLab.trace.stepper.routing.usageCount", "E{{expert}}: picked in {{picks}} of {{count}} steps", {
-								expert: entry.expert,
-								picks: entry.picks,
-								count: data.steps.length,
-							})}
+							{routingUsageCount(t, entry, data)}
 						</Text>
 					))}
 				</Stack>
+			)}
+			{onJump && selectedBlock !== undefined && (
+				<Group>
+					<Button
+						size="compact-sm"
+						variant="light"
+						rightSection={<IconArrowRight size={14} aria-hidden={true} />}
+						onClick={() => onJump({ tab: "architecture", modelName, traceId: experimentId, blockIndex: selectedBlock })}
+						data-testid="model-lab-stepper-routing-show-block"
+					>
+						{t("pages.modelLab.trace.showInArchitecture", "Show block {{index}} in Architecture", { index: selectedBlock })}
+					</Button>
+				</Group>
 			)}
 			<ExplanationLevelSwitch value={level} onChange={setLevel} />
 			<ExplanationList

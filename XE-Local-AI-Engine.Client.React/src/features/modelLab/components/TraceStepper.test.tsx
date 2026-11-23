@@ -286,6 +286,7 @@ describe("TraceStepper", () => {
 				onStepChange={vi.fn()}
 				basis="raw"
 				onBasisChange={vi.fn()}
+				modelName="org/Tiny-GGUF:Q4_K_M"
 			/>,
 		);
 
@@ -406,6 +407,7 @@ describe("TraceStepper with recorded attention", () => {
 					onStepChange={vi.fn()}
 					basis="raw"
 					onBasisChange={vi.fn()}
+					modelName="org/Tiny-GGUF:Q4_K_M"
 				/>,
 			);
 
@@ -1146,6 +1148,35 @@ describe("TraceStepper with recorded routing", () => {
 		);
 		expect(within(panel).getByTestId("model-lab-explain-entry").textContent).toContain("This run has no routing.");
 		expect(routing.requests).toBe(0);
+	});
+
+	it("jumps to the selected block in Architecture with this run laid over it", async () => {
+		stubRouting();
+		stubTrace(v8Result, v8Records);
+		const onJump = vi.fn();
+		renderWithProviders(<TraceExperimentView experimentId={experimentId} isLive={false} onJump={onJump} />);
+		await screen.findByTestId("model-lab-trace-table");
+		fireEvent.click(screen.getByRole("radio", { name: "Step through" }));
+		await screen.findByTestId("model-lab-stepper-routing-table");
+		fireEvent.click(screen.getByRole("button", { name: "Block 3, full attention: residual norm 1" }));
+
+		const routing = within(screen.getByTestId("model-lab-stepper-routing"));
+		fireEvent.click(routing.getByRole("button", { name: "Show block 3 in Architecture" }));
+
+		expect(onJump).toHaveBeenCalledExactlyOnceWith({
+			tab: "architecture",
+			modelName: "org/Tiny-GGUF:Q4_K_M",
+			traceId: experimentId,
+			blockIndex: 3,
+		});
+	});
+
+	it("offers no jump to Architecture without a page to jump in", async () => {
+		stubRouting();
+		await openStepper(v8Result, v8Records);
+		await screen.findByTestId("model-lab-stepper-routing-table");
+
+		expect(screen.queryByTestId("model-lab-stepper-routing-show-block")).toBeNull();
 	});
 
 	it("says the run kept no routing on a 404", async () => {

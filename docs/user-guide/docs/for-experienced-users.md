@@ -282,7 +282,8 @@ Everything lives in one directory (`%LOCALAPPDATA%\XE-Local-AI-Engine`), separat
   exact weights they received; **Step through** shows them with how often each expert was picked over the run. An
   expert number is a position in its block, not a topic, and the GGUF in llama.cpp may pick other experts. Traces
   saved by an older version open as before, without routing. The Architecture tab also describes Qwen3.5/3.6
-  mixture-of-experts GGUFs (`qwen35moe`) in detail. A steering vector is now scaled against the median residual
+  mixture-of-experts GGUFs (`qwen35moe`) and OLMoE GGUFs (`olmoe`) in detail; with an OLMoE trace laid over an OLMoE
+  file, a block shows its most-picked experts and how often, and the stepper jumps to that block. A steering vector is now scaled against the median residual
   length, so the same scale steers slightly differently on Qwen3.5 than before.
 
 ---
