@@ -94,7 +94,7 @@ export function TraceAttentionPanel({ experimentId, result, layer, step }: Trace
 			<Text size="xs" c="dimmed" data-testid="model-lab-stepper-attention-note">
 				{t(
 					"pages.modelLab.trace.stepper.attentionNote",
-					"Recomputed in fp32 from the kernel's own query/key tensors, top K kept, floored. This run kept the top {{topKeys}} keys per row and head; its {{heads}} query heads share {{kvHeads}} key/value heads.",
+					"Recomputed in fp32 from the kernel's own query/key tensors, top K kept, floored. This run kept the top {{topKeys}} keys per row and head; the model has {{heads}} query heads and {{kvHeads}} key/value heads.",
 					{ topKeys, heads, kvHeads },
 				)}
 			</Text>

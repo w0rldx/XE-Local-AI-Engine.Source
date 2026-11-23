@@ -32,7 +32,8 @@ internal sealed class GgufImportInspector : IGgufImportInspector
         "starcoder2",
         "internlm2",
         "granite",
-        "lfm2moe"
+        "lfm2moe",
+        "olmoe"
     };
 
     private readonly HuggingFaceOptions _options;

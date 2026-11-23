@@ -648,7 +648,13 @@ const preflight = (hiddenSize: number | null) => ({
 	ggufEmbeddingLength: hiddenSize === null ? null : 1024,
 	ggufBlockCount: hiddenSize === null ? null : 3,
 	steerableBlockCount: hiddenSize === null ? null : 2,
+	modelType: hiddenSize === null ? null : "qwen3_5",
 	checkpointLayerTypes: null,
+	attentionSupported: false,
+	attentionRefusalMessage: null,
+	attentionRefusal: null,
+	traceRefusalMessage: null,
+	traceRefusal: null,
 	defaultSteeringLayer: null,
 	licenseConfirmationText: null,
 	refusal: null,
@@ -1096,9 +1102,10 @@ describe("ArchitectureExplorer explanations", () => {
 		});
 		await openModel();
 
-		expect(screen.getByTestId("model-lab-architecture-layout-note").textContent).toContain(
-			"assume the standard LlamaForCausalLM conversion",
-		);
+		const layoutNote = screen.getByTestId("model-lab-architecture-layout-note");
+		expect(layoutNote.textContent).toContain("assume the standard LlamaForCausalLM conversion");
+		// The note's module paths wrap on a narrow screen instead of being clipped.
+		expect(layoutNote.style.overflowWrap).toBe("anywhere");
 		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention" }));
 		const operations = within(screen.getByTestId("model-lab-explain-operations"));
 

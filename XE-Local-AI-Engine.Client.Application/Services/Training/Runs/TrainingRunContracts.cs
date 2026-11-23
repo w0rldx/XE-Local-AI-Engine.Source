@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Runs;
 
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 /// <summary>
@@ -175,6 +176,20 @@ public sealed record BaseCheckpointConfigV1
     /// <summary>On a hybrid model that leaves out <see cref="LayerTypes" />: every this-many-th block is full attention.</summary>
     [JsonPropertyName("full_attention_interval")]
     public int? FullAttentionInterval { get; init; }
+
+    /// <summary>Kept as read, of any JSON type: Model Lab only asks whether a window is set. The two below likewise.</summary>
+    [JsonPropertyName("sliding_window")]
+    public JsonElement? SlidingWindow { get; init; }
+
+    [JsonPropertyName("attention_chunk_size")]
+    public JsonElement? AttentionChunkSize { get; init; }
+
+    [JsonPropertyName("num_kv_shared_layers")]
+    public JsonElement? NumKvSharedLayers { get; init; }
+
+    /// <summary>A mixture-of-experts model's switch for returning its router logits, which a Model Lab trace does not support.</summary>
+    [JsonPropertyName("output_router_logits")]
+    public bool? OutputRouterLogits { get; init; }
 
     /// <summary>The nested text model of a multimodal checkpoint; <see cref="TrainingFootprintEstimator.ReadConfigOrNull" /> lifts its fields to this level.</summary>
     [JsonPropertyName("text_config")]

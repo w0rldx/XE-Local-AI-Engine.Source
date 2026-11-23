@@ -1,8 +1,8 @@
 """Model Lab: reads chosen layers of a local safetensors checkpoint with forward hooks that change no value.
 
 Three kinds of ``job.json``. A trace (``ModelLabTraceJobV1`` on the C# side) records statistics while generating; the
-host fixes the layers, token count and byte cap, and may ask for the attention rows of full-attention blocks and for
-the logit lens of every block. A
+host fixes the layers, token count and byte cap, and may ask for the attention rows of full-attention blocks, for
+the logit lens of every block and for the router choices of every block that has a router. A
 steering job (``ModelLabSteeringJobV1``) derives a control vector from two contrasting prompt sets and writes it with
 a random one of the same norm. A source job
 (``ModelLabSourceJobV1``) indexes the PyTorch code of a model from its config.json alone, on the meta device: no
@@ -11,7 +11,7 @@ weights, no GPU. Nothing in a job can name code to run. Offline, no remote code,
 The protocol is the trainer's JSON-lines shape with its own contract version, on stdout. Every frame carries
 ``token``, the spawn's ``XE_TRAINING_RUN_TOKEN``, and is one ``os.write`` of at most 64 KiB:
 
-    {"event": "handshake", "contractVersion": 7, ...versions}        "serve": true under --serve
+    {"event": "handshake", "contractVersion": 8, ...versions}        "serve": true under --serve
     {"event": "phase",     "phase": "loading" | "tracing" | "deriving" | "exporting" | "saving"}
     {"event": "progress",  "step", "totalSteps", "vramBytes"}    a token, or a contrast prompt
     {"event": "heartbeat", "phase"}          until the first progress, and while saving; progress proves life between
@@ -63,6 +63,7 @@ from modellablib import (
     ATTENTION_WEIGHT_SCALE,
     CONTRACT_VERSION,
     MAX_FRAME_BYTES,
+    ROUTING_WEIGHT_ENCODING,
     SOURCE_KIND,
     STEERING_KIND,
     CappedTraceWriter,
@@ -70,6 +71,7 @@ from modellablib import (
     ProtocolError,
     SourceRefusalError,
     attention_record,
+    attention_refusal,
     block_index_of,
     captures_attention,
     check_aligned,
@@ -91,10 +93,13 @@ from modellablib import (
     parse_command,
     read_raw_config,
     records_lens,
+    reference_norm_of,
     register_anchors,
     relative_source_file,
     remove_outputs,
     representatives,
+    routing_record,
+    routing_shape,
     sanitized_export_error,
     scaled_to_norm,
     scored_token,
@@ -184,15 +189,14 @@ class _Run:
 class _Tracer:
     """Per-token statistics from forward hooks on the chosen layers. They return nothing, so they change no value."""
 
-    def __init__(self, stack, blocks, chosen, writer):
+    def __init__(self, stack, blocks, chosen, writer, kinds):
         self._writer = writer
         self._first = chosen[0]
         self._step = -1
         self._quantiles = torch.tensor(PERCENTILES, device="cuda")
         # Each handle onto the job's stack as it is made: a later failure must leave no hook behind.
         for i in chosen:
-            kind = layer_kind(getattr(blocks[i], "block_type", None))
-            stack.enter_context(blocks[i].register_forward_hook(self._hook(i, kind)))
+            stack.enter_context(blocks[i].register_forward_hook(self._hook(i, kinds[i])))
 
     def _hook(self, index, kind):
         def run(_module, _args, output):
@@ -231,14 +235,15 @@ class _AttentionRows:
     kernel, whose result is returned unchanged. Wraps the "sdpa" entry, which every attention module resolves per call.
     """
 
-    def __init__(self, stack, chosen, prompt_tokens, top_keys):
-        from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Attention
-
+    def __init__(self, stack, blocks, chosen, prompt_tokens, top_keys):
         self.rows = []
+        # By identity, and the block index from this map: a module's own layer_idx is not trusted, and the vision
+        # tower's attention, which shares the registry, is in no block.
+        self._blocks = {blocks[i].self_attn: i for i in chosen}
+        self.head_dim = blocks[chosen[0]].self_attn.head_dim
         self._steps = dict.fromkeys(chosen, -1)
         self._prompt_tokens = prompt_tokens
         self._top_keys = top_keys
-        self._module_class = Qwen3_5Attention
         functions = _attention_functions()
         self._kernel = functions["sdpa"]
         # The restore goes onto the stack before the swap: a constructor failing after it hands back nothing to undo.
@@ -247,13 +252,11 @@ class _AttentionRows:
 
     def _wrapper(self, module, query, key, value, attention_mask, **kwargs):
         result = self._kernel(module, query, key, value, attention_mask, **kwargs)
-        # The vision tower's attention shares the registry and has no layer_idx.
-        if isinstance(module, self._module_class) and module.layer_idx in self._steps:
-            self._capture(module, query, key)
+        if (layer := self._blocks.get(module)) is not None:
+            self._capture(module, layer, query, key)
         return result
 
-    def _capture(self, module, query, key):
-        layer = module.layer_idx
+    def _capture(self, module, layer, query, key):
         self._steps[layer] += 1
         step = self._steps[layer]
         length = key.shape[2]
@@ -277,6 +280,70 @@ class _AttentionRows:
             attention_record(step, layer, position, keys.tolist(), weights.tolist())
             for step, layer, position, keys, weights in self.rows
         ]
+
+
+def routers_of(blocks):
+    """(block index, router) for every block whose ``mlp.gate`` is a top-k router; a dense model has none."""
+    found = []
+    for index, block in enumerate(blocks):
+        gate = getattr(getattr(block, "mlp", None), "gate", None)
+        shape = [getattr(gate, name, None) for name in ("top_k", "num_experts", "norm_topk_prob")]
+        if gate is not None and [type(value) for value in shape] == [int, int, bool]:
+            found.append((index, gate))
+    return found
+
+
+class _Routing(LogitsProcessor):
+    """Each step's routing in every routed block: the experts the router chose for the predicting position and the
+    bfloat16 weights it handed them, as bit patterns. Hooks that clone and return nothing, so the experts get the
+    router's own output; the rows stay on the GPU until saving. The processor returns scores unchanged.
+    """
+
+    def __init__(self, stack, routers):
+        self.layers = [index for index, _ in routers]
+        self.steps = []
+        self._stash = {}
+        # Each handle onto the job's stack as it is made: a later failure must leave no hook behind.
+        for index, gate in routers:
+            stack.enter_context(gate.register_forward_hook(self._hook(index, gate.top_k, gate.num_experts)))
+
+    def _hook(self, index, top_k, experts):
+        def run(_module, _args, output):
+            if not isinstance(output, tuple) or len(output) != 3:
+                raise JobError(f"The router of block {index} returned {type(output).__name__}, not three tensors.")
+            logits, scores, indices = output
+            tokens = logits.shape[0] if logits.dim() == 2 else -1
+            if (
+                tuple(logits.shape) != (tokens, experts)
+                or tuple(indices.shape) != (tokens, top_k)
+                or tuple(scores.shape) != (tokens, top_k)
+                or indices.dtype not in (torch.int32, torch.int64)
+                or scores.dtype != torch.bfloat16
+            ):
+                raise JobError(
+                    f"The router of block {index} returned logits {tuple(logits.shape)}, weights "
+                    f"{tuple(scores.shape)} {scores.dtype} and experts {tuple(indices.shape)} {indices.dtype}, not "
+                    f"[tokens, {experts}], bfloat16 [tokens, {top_k}] and integer [tokens, {top_k}]."
+                )
+            # Copies of the last position only, overwritten by a later call: a view would keep the whole prefill.
+            self._stash[index] = (indices[-1].to(torch.int16).clone(), scores[-1].view(torch.int16).clone())
+
+        return run
+
+    def __call__(self, input_ids, scores):
+        if missing := [index for index in self.layers if index not in self._stash]:
+            raise RuntimeError(f"A routing step ran without the routers of blocks {missing}.")
+        row = [self._stash[index] for index in self.layers]
+        self._stash.clear()
+        # [2, blocks, k] int16 a step: saving stacks them again, so the rows cross to the host in one transfer.
+        self.steps.append(torch.stack([torch.stack([ids for ids, _ in row]), torch.stack([bits for _, bits in row])]))
+        return scores
+
+    def recorded(self, generated):
+        """Per step (expert ids [blocks][k], weight bits [blocks][k]) as Python ints, one step per generated token."""
+        if len(self.steps) != generated:
+            raise RuntimeError(f"Routing was recorded for {len(self.steps)} steps of {generated} generated tokens.")
+        return [tuple(step) for step in torch.stack(self.steps).tolist()] if self.steps else []
 
 
 class _Progress(StoppingCriteria):
@@ -495,11 +562,21 @@ def trace(job, run):
     blocks = blocks_of(model)
     if outside := out_of_range_layers(job["layers"], len(blocks)):
         raise JobError(f"The job names layers {outside}, and this checkpoint has {len(blocks)} blocks.")
+    model_type = model.config.model_type
+    text_config = model.config.get_text_config(decoder=True)
+    kinds = "".join(layer_kind(getattr(block, "block_type", None), model_type) for block in blocks)
+    routers = routers_of(blocks)
+    # Its own capture hooks would stay on the routers after the job.
+    if routers and getattr(text_config, "output_router_logits", False):
+        raise JobError("This model's config sets output_router_logits, which a trace does not support.")
+    # None for a dense model, and for routers that differ or exceed the caps: then the trace records no routing.
+    shape = routing_shape([(gate.top_k, gate.num_experts, gate.norm_topk_prob) for _, gate in routers])
+    records_routing = shape is not None and job.get("routingByteCap") is not None
     capture = captures_attention(job)
     attention_layers = job["attentionLayers"] if capture else []
-    if other := [
-        i for i in attention_layers if i >= len(blocks) or getattr(blocks[i], "block_type", None) != "full_attention"
-    ]:
+    if capture and (refusal := attention_refusal(model_type, text_config, len(blocks))):
+        raise JobError(refusal)
+    if other := [i for i in attention_layers if i >= len(blocks) or kinds[i] != "F"]:
         raise JobError(f"The job asks for attention in blocks {other}, which are not full-attention blocks.")
     kernel = model.config._attn_implementation
     if capture and kernel != "sdpa":
@@ -515,24 +592,27 @@ def trace(job, run):
     writer = CappedTraceWriter(job["tracePath"], job["traceByteCap"])
     # Every hook and the sdpa swap live on this stack and are gone when generate ends, however it ends.
     with contextlib.ExitStack() as stack:
-        _Tracer(stack, blocks, job["layers"], writer)
+        _Tracer(stack, blocks, job["layers"], writer, kinds)
         candidates = _Candidates(stack, model)
         lens = None
         if records_lens(job):
             norm, head = final_norm_of(model), model.get_output_embeddings()
-            if lens_readable(len(blocks), norm, head, model.config.get_text_config(decoder=True)):
+            if lens_readable(len(blocks), norm, head, text_config):
                 lens = _Lens(stack, model, blocks, job["lensTopTokens"], norm, head)
-        attention = _AttentionRows(stack, attention_layers, prompt_tokens, job["attentionTopKeys"]) if capture else None
-        # Pinned with capture on: a checkpoint's static cache or chunked prefill would break the position check.
-        pinned_cache = (
-            {
-                "past_key_values": DynamicCache(config=model.config.get_text_config(decoder=True)),
+        attention = (
+            _AttentionRows(stack, blocks, attention_layers, prompt_tokens, job["attentionTopKeys"]) if capture else None
+        )
+        routing = _Routing(stack, routers) if records_routing else None
+        # Pinned with capture on: a checkpoint's static cache or chunked prefill would break the position check. With
+        # routing on, an unchunked prefill: the routers' last call before step 0 is then the prompt's last token.
+        if capture:
+            pinned_cache = {
+                "past_key_values": DynamicCache(config=text_config),
                 "cache_implementation": None,
                 "prefill_chunk_size": None,
             }
-            if capture
-            else {}
-        )
+        else:
+            pinned_cache = {"prefill_chunk_size": None} if routing else {}
         run.enter("tracing")
         started = time.perf_counter()
         with torch.inference_mode():
@@ -542,7 +622,9 @@ def trace(job, run):
                 do_sample=False,
                 num_beams=1,  # a checkpoint's beam setting would break the step alignment below
                 max_new_tokens=total,
-                logits_processor=LogitsProcessorList([candidates] + ([lens] if lens else [])),
+                logits_processor=LogitsProcessorList(
+                    [candidates] + [processor for processor in (lens, routing) if processor]
+                ),
                 # Explicit, because a checkpoint's generation_config fills what is not passed: a tensor result, and
                 # no per-step scores, logits, attentions or hidden states kept until generate returns.
                 return_dict_in_generate=False,
@@ -568,6 +650,7 @@ def trace(job, run):
     lens_steps = lens.recorded() if lens else []
     if lens:
         check_aligned([step[0] for step in lens_steps], generated, "lens")
+    routing_steps = routing.recorded(len(generated)) if routing else []
     if attention and len(attention.rows) != len(generated) * len(attention_layers):
         raise RuntimeError(
             f"Attention was captured {len(attention.rows)} times for {len(generated)} tokens in "
@@ -598,7 +681,7 @@ def trace(job, run):
         "seed": job["seed"],
         "maxNewTokens": total,
         "promptPieces": [{"id": token, "text": tokenizer.decode([token])} for token in ids[0].tolist()],
-        "layerKinds": "".join(layer_kind(getattr(block, "block_type", None)) for block in blocks),
+        "layerKinds": kinds,
         "attnImplementation": kernel,
         "warm": warm,
         "loadSeconds": round(load_seconds, 3),
@@ -620,18 +703,33 @@ def trace(job, run):
             "tiedEmbeddings": lens.tied_embeddings,
             "vocabSize": lens.vocab_size,
         }
+    if routing and shape:  # shape is set whenever routing is
+        # After the lens, under its own cap and footer, like the lens.
+        routing_writer = writer.section(job["routingByteCap"], "routingFooter")
+        for step, (ids, bits) in enumerate(routing_steps):
+            routing_writer.write(routing_record(step, ids, bits))
+        routing_writer.close()
+        experts_per_token, experts, normalized = shape
+        result["routing"] = {
+            "layers": routing.layers,
+            "experts": experts,
+            "expertsPerToken": experts_per_token,
+            "normalizedTopK": normalized,
+            "weightEncoding": ROUTING_WEIGHT_ENCODING,
+            "records": routing_writer.records,
+            "truncated": routing_writer.truncated,
+        }
     writer.close()
     if attention:
         attention_writer = CappedTraceWriter(job["attentionPath"], job["attentionByteCap"])
         for record in attention.recorded():
             attention_writer.write(record)
         attention_writer.close()
-        text_config = model.config.get_text_config(decoder=True)
         result["attention"] = {
             "layers": attention_layers,
             "heads": text_config.num_attention_heads,
             "kvHeads": text_config.num_key_value_heads,
-            "headDim": text_config.head_dim,
+            "headDim": attention.head_dim,
             "topKeys": job["attentionTopKeys"],
             "weightScale": ATTENTION_WEIGHT_SCALE,
             "records": attention_writer.records,
@@ -642,7 +740,8 @@ def trace(job, run):
 
 
 class _ResidualReader:
-    """The chosen block's output for one prompt: its mean over positions and its residuals' mean length. Reads only."""
+    """The chosen block's output for one prompt: its mean over positions and each position's residual length. Reads
+    only."""
 
     def __init__(self, stack, block):
         self._last = torch.empty(0)
@@ -653,7 +752,7 @@ class _ResidualReader:
 
     def take(self):
         residuals = self._last
-        return residuals.mean(0), residuals.norm(dim=-1).mean().item()
+        return residuals.mean(0), residuals.norm(dim=-1).tolist()
 
 
 def derive(job, run):
@@ -670,34 +769,40 @@ def derive(job, run):
     torch.cuda.manual_seed_all(job["seed"])
     torch.cuda.reset_peak_memory_stats()
     done = 0
+    # Every position's residual length over both sets, for the median the vector is scaled against.
+    norms = []
+    # A forward collecting router logits installs transformers' capture hooks, which stay on the cached model. Only
+    # such a config gets the kwarg: a dense model may not accept it.
+    text_config = model.config.get_text_config(decoder=True)
+    no_router_logits = {"output_router_logits": False} if getattr(text_config, "output_router_logits", False) else {}
 
     def set_mean(reader, prompts):
         nonlocal done
-        means, norms = [], []
+        means = []
         for text in prompts:
             run.check_cancelled()
             ids = tokenizer(text, return_tensors="pt").input_ids.to("cuda")
-            model(ids, use_cache=False)
-            mean, norm = reader.take()
+            model(ids, use_cache=False, **no_router_logits)
+            mean, position_norms = reader.take()
             means.append(mean)
-            norms.append(norm)
+            norms.extend(position_norms)
             done += 1
             run.progress_seen = True
             run.emit("progress", step=done, totalSteps=total, vramBytes=torch.cuda.memory_allocated())
-        return torch.stack(means).mean(0), sum(norms) / len(norms)
+        return torch.stack(means).mean(0)
 
     with contextlib.ExitStack() as stack:
         reader = _ResidualReader(stack, blocks[layer])
         run.enter("deriving")
         started = time.perf_counter()
         with torch.inference_mode():
-            positive_mean, positive_norm = set_mean(reader, positive)
-            negative_mean, negative_norm = set_mean(reader, negative)
+            positive_mean = set_mean(reader, positive)
+            negative_mean = set_mean(reader, negative)
         torch.cuda.synchronize()
         seconds = time.perf_counter() - started
 
     run.enter("saving")
-    reference_norm = (positive_norm + negative_norm) / 2
+    reference_norm = reference_norm_of(norms)
     vector, difference_norm = steering_vector(positive_mean.tolist(), negative_mean.tolist(), reference_norm)
     # On the CPU generator, so the control does not depend on the GPU's random state or on the prompts.
     noise = torch.randn(
@@ -717,7 +822,7 @@ def derive(job, run):
             "loadSeconds": round(load_seconds, 3),
             "steering": {
                 "layer": layer,
-                "layerKind": layer_kind(getattr(blocks[layer], "block_type", None)),
+                "layerKind": layer_kind(getattr(blocks[layer], "block_type", None), model.config.model_type),
                 "referenceNorm": reference_norm,
                 "differenceNorm": difference_norm,
                 "vectorNorm": vector_norm(vector),

@@ -15,7 +15,24 @@ public enum ModelLabCheckpointRefusal
     BlockCountMismatch,
     LicenseNotConfirmed,
     DownloadRejected,
-    UnsupportedModelType
+    UnsupportedModelType,
+    ArchitectureMismatch
+}
+
+/// <summary>Why a trace of a checkpoint cannot record attention. The value is the API's stable code.</summary>
+public enum ModelLabAttentionRefusal
+{
+    UnsupportedModelType,
+    NotFullAttention,
+    ShapeNotStated,
+    NoFullAttentionBlock,
+    HeadCountOutOfRange
+}
+
+/// <summary>Why a checkpoint cannot be traced while it can still be steered. The value is the API's stable code.</summary>
+public enum ModelLabTraceRefusal
+{
+    RouterLogitsRequested
 }
 
 /// <summary>The sizes and shapes behind a preflight answer. A value stays null until the check that reads it has run.</summary>
@@ -50,11 +67,32 @@ public sealed record ModelLabCheckpointPreflight
     /// <summary>Blocks llama.cpp can apply a vector at: an MTP block counts in <see cref="GgufBlockCount" />, but a vector there is dropped.</summary>
     public long? GgufSteerableBlockCount { get; init; }
 
-    /// <summary>Each block's kind from the checkpoint's config, derived from its full-attention interval for a traced type that lists none; null when neither says.</summary>
+    /// <summary>The config's <c>model_type</c>, or null when it does not say.</summary>
+    public string? ModelType { get; init; }
+
+    /// <summary>
+    ///     Each block's kind by the traced family's rule: an OLMoE block is always full attention; a Qwen3.5 config's own list, else its full-attention
+    ///     interval. Null for another family, or when neither says.
+    /// </summary>
     public IReadOnlyList<string>? CheckpointLayerTypes { get; init; }
 
     /// <summary>The config's query heads per block, or null when it does not say.</summary>
     public int? CheckpointAttentionHeads { get; init; }
+
+    /// <summary>Why a trace of this checkpoint cannot record attention, or null when it can. Set once the config has been read.</summary>
+    public string? AttentionRefusalMessage { get; init; }
+
+    /// <summary>The code of <see cref="AttentionRefusalMessage" />, set together with it.</summary>
+    public ModelLabAttentionRefusal? AttentionRefusal { get; init; }
+
+    /// <summary>The config was read and nothing in it stops attention being recorded.</summary>
+    public bool AttentionSupported => ModelType is not null && AttentionRefusalMessage is null;
+
+    /// <summary>Why this checkpoint cannot be traced while it can still be steered, or null when it can. Set once the config has been read.</summary>
+    public string? TraceRefusalMessage { get; init; }
+
+    /// <summary>The code of <see cref="TraceRefusalMessage" />, set together with it.</summary>
+    public ModelLabTraceRefusal? TraceRefusal { get; init; }
 
     /// <summary>The layer a steering job takes when none is named, or null on a model too short to steer.</summary>
     public int? DefaultSteeringLayer { get; init; }

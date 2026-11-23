@@ -150,6 +150,56 @@ public sealed class ModelLabPyTorchJoinerTests
         AssertEx.Equal("model.embed_tokens", links["embedding"]);
     }
 
+    /// <summary>A <c>qwen35moe</c> block links its router, both expert halves and the shared expert to their own modules under <c>mlp</c>.</summary>
+    [Test]
+    public void AQwen35MoeGguf_LinksTheRouterExpertsAndSharedExpertThroughTheirHfNames()
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, Qwen35TensorFixture.Inspection("qwen35moe",
+            Qwen35MoeTensorFixture.BlockTensors(0, Qwen35MoeTensorFixture.LinearBlock), ssmGroupCount: 16, ssmTimeStepRank: 32));
+        var index = new ModelLabPyTorchIndex
+        {
+            Blocks =
+            [
+                new ModelLabPyTorchBlock
+                {
+                    Index = 0,
+                    Path = "model.layers.0",
+                    Modules =
+                    [
+                        Module("model.layers.0"),
+                        Module("model.layers.0.linear_attn"),
+                        Module("model.layers.0.mlp"),
+                        Module("model.layers.0.mlp.gate"),
+                        Module("model.layers.0.mlp.experts"),
+                        Module("model.layers.0.mlp.shared_expert"),
+                        Module("model.layers.0.mlp.shared_expert.gate_proj"),
+                        Module("model.layers.0.mlp.shared_expert.up_proj"),
+                        Module("model.layers.0.mlp.shared_expert.down_proj"),
+                        Module("model.layers.0.mlp.shared_expert_gate"),
+                        Module("model.layers.0.input_layernorm"),
+                        Module("model.layers.0.post_attention_layernorm")
+                    ]
+                }
+            ],
+            Outside = [Module("model"), Module("model.layers")]
+        };
+
+        var join = ModelLabPyTorchJoiner.Join(descriptor, index);
+
+        AssertEx.True(join.BlocksJoined, join.Reason ?? "joined");
+        var tensors = join.Tensors.ToDictionary(static link => link.GgufName, static link => link.ModulePath, StringComparer.Ordinal);
+        AssertEx.Equal("model.layers.0.mlp.gate", tensors["blk.0.ffn_gate_inp.weight"]);
+        AssertEx.Equal("model.layers.0.mlp.experts", tensors["blk.0.ffn_gate_exps.weight"]);
+        AssertEx.Equal("model.layers.0.mlp.experts", tensors["blk.0.ffn_up_exps.weight"]);
+        AssertEx.Equal("model.layers.0.mlp.experts", tensors["blk.0.ffn_down_exps.weight"]);
+        AssertEx.Equal("model.layers.0.mlp.shared_expert_gate", tensors["blk.0.ffn_gate_inp_shexp.weight"]);
+        AssertEx.Equal("model.layers.0.mlp.shared_expert.gate_proj", tensors["blk.0.ffn_gate_shexp.weight"]);
+        AssertEx.Equal("model.layers.0.mlp.shared_expert.down_proj", tensors["blk.0.ffn_down_shexp.weight"]);
+        var links = join.Components.ToDictionary(static link => link.ComponentId, static link => string.Join(',', link.ModulePaths), StringComparer.Ordinal);
+        AssertEx.Equal("model.layers.0.mlp", links["blk.0.ffn"]);
+        AssertEx.Equal("model.layers.0.linear_attn", links["blk.0.ssm"]);
+    }
+
     [Test]
     [Arguments("model.language_model.layers.3.mlp.gate_proj.weight", 3, "mlp.gate_proj")]
     [Arguments("model.language_model.layers.0.linear_attn.A_log", 0, "linear_attn")]

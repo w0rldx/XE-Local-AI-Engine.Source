@@ -112,6 +112,59 @@ public sealed class ModelLabArchitectureEndpointTests
     }
 
     [Test]
+    public async Task ARegisteredQwen35MoeGguf_IsDescribedInDetail_WithSlicedExpertHalvesAndTheMoeTemplate()
+    {
+        using var dir = new TempDirectory("xe-hf-test");
+        var path = dir.FilePath("tiny.gguf");
+        await File.WriteAllBytesAsync(path,
+            new GgufHeaderBytesBuilder()
+                .WithString("general.architecture", "qwen35moe")
+                .WithUint32("qwen35moe.block_count", value: 1)
+                .WithUint32("qwen35moe.expert_count", value: 8)
+                .WithUint32("qwen35moe.ssm.group_count", value: 16)
+                .WithUint32("qwen35moe.ssm.time_step_rank", value: 32)
+                .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
+                .WithTensor("blk.0.ssm_a", [16], ggmlType: 0, offset: 1_024)
+                .WithTensor("blk.0.ffn_gate_inp.weight", [256, 8], ggmlType: 0, offset: 1_088)
+                .WithTensor("blk.0.ffn_gate_exps.weight", [256, 4, 8], ggmlType: 12, offset: 9_280)
+                .WithTensor("blk.0.ffn_gate_inp_shexp.weight", [256], ggmlType: 0, offset: 13_888)
+                .WithTensor("blk.0.ffn_gate_shexp.weight", [256, 4], ggmlType: 8, offset: 14_912)
+                .Build());
+        await using var factory = CreateFactory(path);
+        using var client = factory.CreateClient();
+
+        using var request = Authorized(factory, Uri.EscapeDataString(RegisteredModel));
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<ModelLabArchitectureResponse>(JsonOptions));
+        AssertEx.Equal("detailed", body.Support);
+        AssertEx.Equal("qwen35moe", body.Architecture);
+        var block = body.Blocks.Single();
+        AssertEx.Equal("linearAttention", block.Kind);
+        // F32 norms, ssm_a and router (1 024 + 64 + 8 192 + 1 024), 32 Q4_K rows of 144 bytes, 32 Q8_0 blocks of 34.
+        AssertEx.Equal(expected: 10_304L + 4_608 + 1_088, block.ByteSize!.Value);
+        AssertEx.Equal("blk.0.ssm,blk.0.ffn,blk.0.norm", string.Join(',', block.Groups.Select(static group => group.ComponentId)));
+        var ffn = block.Groups[1].Tensors.ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
+        AssertEx.Equal("model.language_model.layers.0.mlp.experts.gate_up_proj", ffn["blk.0.ffn_gate_exps.weight"].HfName);
+        // One half of the fused HF tensor, kept as such though Q4_K also changed the values.
+        AssertEx.Equal("sliced", ffn["blk.0.ffn_gate_exps.weight"].ValueRelation);
+        AssertEx.Equal("Q4_K", ffn["blk.0.ffn_gate_exps.weight"].GgmlType);
+        AssertEx.Equal("equal", ffn["blk.0.ffn_gate_inp.weight"].ValueRelation);
+        AssertEx.Equal("model.language_model.layers.0.mlp.shared_expert_gate.weight", ffn["blk.0.ffn_gate_inp_shexp.weight"].HfName);
+        AssertEx.Equal("quantized", ffn["blk.0.ffn_gate_shexp.weight"].ValueRelation);
+        var template = body.Templates.Single();
+        AssertEx.Equal("linearAttention", template.Kind);
+        AssertEx.Equal("llama.cpp src/models/qwen35moe.cpp @ b12014", template.Source);
+        AssertEx.True(template.Nodes.Any(static node => node.Id == "router") && template.Nodes.All(static node => node.Id != "ffn_gate"));
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var wire = json.RootElement.GetProperty("blocks")[0].GetProperty("groups")[1].GetProperty("tensors").EnumerateArray()
+                       .Single(static tensor => tensor.GetProperty("ggufName").GetString() == "blk.0.ffn_gate_exps.weight");
+        AssertEx.Equal("sliced", wire.GetProperty("valueRelation").GetString());
+    }
+
+    [Test]
     public async Task ARegisteredLlamaGguf_IsDescribedInDetail()
     {
         using var dir = new TempDirectory("xe-hf-test");

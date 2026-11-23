@@ -11,17 +11,21 @@ import struct
 import sys
 import tempfile
 import threading
+from types import SimpleNamespace
 from unittest import mock
 
 from modellablib import (
+    ATTENTION_FAMILIES,
     ATTENTION_WEIGHT_SCALE,
     CANDIDATE_TEXT_BYTES,
     CONTRACT_VERSION,
     CUT_MARK,
     FOOTER_RESERVE_BYTES,
     MAX_CONFIG_BYTES,
+    MAX_EXPERTS,
     MAX_FRAME_BYTES,
     MAX_LENS_TOP_TOKENS,
+    MAX_ROUTED_EXPERTS_PER_TOKEN,
     SOURCE_KIND,
     STEERING_KIND,
     TRACE_KIND,
@@ -31,6 +35,7 @@ from modellablib import (
     ProtocolError,
     SourceRefusalError,
     attention_record,
+    attention_refusal,
     block_index_of,
     captures_attention,
     check_aligned,
@@ -54,10 +59,13 @@ from modellablib import (
     parse_command,
     read_raw_config,
     records_lens,
+    reference_norm_of,
     register_anchors,
     relative_source_file,
     remove_outputs,
     representatives,
+    routing_record,
+    routing_shape,
     sanitized_export_error,
     scaled_to_norm,
     scored_token,
@@ -1051,10 +1059,130 @@ def test_layers_past_the_last_block_are_named():
     assert out_of_range_layers([3, 23], 24) == []
 
 
-def test_layer_kinds():
-    assert layer_kind("linear_attention") == "L"
-    assert layer_kind("full_attention") == "F"
-    assert layer_kind(None) == "?"
+def test_layer_kinds_read_qwen_literally_and_every_olmoe_block_as_full():
+    for model_type in ("qwen3_5", "qwen3_5_text", "llama"):
+        assert layer_kind("linear_attention", model_type) == "L"
+        assert layer_kind("full_attention", model_type) == "F"
+        assert layer_kind(None, model_type) == "?"
+        assert layer_kind("sliding_attention", model_type) == "?"
+    for block_type in (None, "full_attention", "linear_attention", "sliding_attention"):
+        assert layer_kind(block_type, "olmoe") == "F"
+
+
+def test_attention_is_admitted_for_the_proven_families_only():
+    full = SimpleNamespace()
+    assert {"qwen3_5", "qwen3_5_text", "olmoe"} == ATTENTION_FAMILIES
+    for model_type in ATTENTION_FAMILIES:
+        assert attention_refusal(model_type, full, 16) is None
+    for model_type in ("qwen3_5_moe", "olmo2", "llama", None):
+        assert "Qwen3.5 and OLMoE" in (attention_refusal(model_type, full, 16) or "")
+
+
+def test_an_olmoe_config_that_contradicts_all_full_attention_is_refused():
+    assert attention_refusal("olmoe", SimpleNamespace(layer_types=["full_attention"] * 4), 4) is None
+    assert attention_refusal("olmoe", SimpleNamespace(layer_types=None, sliding_window=None), 4) is None
+    contradictory = [
+        {"layer_types": ["full_attention", "sliding_attention"] * 2},  # mixed
+        {"layer_types": ["full_attention"] * 3 + ["chunked_attention"]},  # unknown
+        {"layer_types": ["full_attention"] * 3},  # too short
+        {"layer_types": ["full_attention"] * 5},  # too long
+        {"sliding_window": 4096},
+        {"attention_chunk_size": 8192},
+        {"num_kv_shared_layers": 2},
+    ]
+    for fields in contradictory:
+        assert attention_refusal("olmoe", SimpleNamespace(**fields), 4), fields
+    # Qwen states its own mixed kinds; only the block check applies there.
+    assert attention_refusal("qwen3_5", SimpleNamespace(layer_types=["linear_attention", "full_attention"]), 2) is None
+
+
+def test_routing_is_recorded_for_one_shared_router_shape_within_the_caps():
+    assert routing_shape([(8, 64, False)] * 16) == (8, 64, False)
+    assert routing_shape([(MAX_ROUTED_EXPERTS_PER_TOKEN, MAX_EXPERTS, True)]) == (16, 1024, True)
+    for routers in (
+        [],
+        [(8, 64, False), (8, 64, True)],
+        [(8, 64, False), (4, 64, False)],
+        [(MAX_ROUTED_EXPERTS_PER_TOKEN + 1, 64, False)],
+        [(8, MAX_EXPERTS + 1, False)],
+        [(8, 4, False)],
+        [(0, 64, False)],
+    ):
+        assert routing_shape(routers) is None, routers
+
+
+def test_a_routing_record_keeps_ids_and_weight_bits_per_block_in_order():
+    record = routing_record(3, [(5, 1), (0, 63)], [(16128, 15872), (16256, 0)])
+    assert record == {"routing": {"s": 3, "x": [[5, 1], [0, 63]], "w": [[16128, 15872], [16256, 0]]}}
+
+
+def _routing_cap(blocks, tokens):
+    # The host's RoutingByteCapFor: 36 B a line, 11k + 4 B a block at k = 16, plus the footer reserve.
+    return tokens * (36 + blocks * (11 * MAX_ROUTED_EXPERTS_PER_TOKEN + 4)) + FOOTER_RESERVE_BYTES
+
+
+def _widest_routing_record(step, blocks):
+    ids = [[MAX_EXPERTS - 1] * MAX_ROUTED_EXPERTS_PER_TOKEN] * blocks
+    # 0x3F80, a weight of exactly 1: the widest pattern a weight in [0, 1] has.
+    return routing_record(step, ids, [[16256] * MAX_ROUTED_EXPERTS_PER_TOKEN] * blocks)
+
+
+def test_the_widest_routing_line_fits_the_per_token_share_of_the_cap():
+    line = _line_bytes(_widest_routing_record(255, 64))
+    assert line <= (_routing_cap(64, 256) - FOOTER_RESERVE_BYTES) // 256
+    assert _routing_cap(16, 256) == 746_656
+    assert _routing_cap(64, 256) == 2_958_496
+
+
+def test_a_routing_section_holds_every_widest_row_then_counts_the_first_one_over():
+    tokens, blocks = 4, 3
+    with tempfile.TemporaryDirectory() as directory:
+        path = os.path.join(directory, "trace.jsonl")
+        writer = CappedTraceWriter(path, 1_000)
+        writer.write({"s": 0})
+        section = writer.section(_routing_cap(blocks, tokens), "routingFooter")
+        for step in range(tokens + 1):
+            assert section.write(_widest_routing_record(step, blocks)) is (step < tokens)
+        section.close()
+        writer.close()
+        with open(path, "rb") as handle:
+            raw = handle.read()
+    lines = [json.loads(line) for line in raw.splitlines()]
+    assert raw.endswith(b"\n")
+    rows = [line["routing"] for line in lines if "routing" in line]
+    assert [row["s"] for row in rows] == list(range(tokens))
+    (footer,) = [line["routingFooter"] for line in lines if "routingFooter" in line]
+    assert footer["truncated"] is True
+    assert footer["records"] + footer["dropped"] == tokens + 1
+    assert footer["payloadBytes"] <= footer["cap"] - FOOTER_RESERVE_BYTES
+    assert lines[-1]["footer"] is True
+    assert lines[-1]["records"] == 1
+
+
+def test_a_routing_byte_cap_is_optional_and_refused_when_unusable():
+    assert validate_job({**VALID_JOB, "routingByteCap": 746_656})["routingByteCap"] == 746_656
+    assert "routingByteCap" not in validate_job(dict(VALID_JOB))
+    assert validate_job({**VALID_JOB, "routingByteCap": None})
+    for value in (FOOTER_RESERVE_BYTES, 0, "9", True, 1.5):
+        try:
+            validate_job({**VALID_JOB, "routingByteCap": value})
+        except JobError as error:
+            assert "routingByteCap" in str(error), str(error)
+            continue
+        raise AssertionError(f"routingByteCap={value!r} must be refused.")
+
+
+def test_the_reference_norm_is_the_median_position_so_a_massive_first_position_does_not_set_it():
+    # Synthetic lengths: one family flat, one with a first position many times the rest.
+    flat = [2.0, 3.0, 2.5, 3.5, 2.8]
+    assert reference_norm_of(flat) == 2.8
+    assert reference_norm_of([2.0, 3.0, 4.0, 5.0]) == 3.5
+    outlier = [80.0, *flat[1:]]
+    assert reference_norm_of(outlier) == reference_norm_of([3.2, *flat[1:]]) == 3.0
+    # The mean it replaces follows the outlier.
+    assert sum(outlier) / len(outlier) > 5 * reference_norm_of(outlier)
+    # Two prompts pooled, each with its own first-position outlier.
+    assert reference_norm_of([90.0, 2.0, 3.0, 2.5, 70.0, 2.2, 2.9, 2.6]) == 2.75
 
 
 VALID_STEERING_JOB = {
@@ -1180,14 +1308,15 @@ VALID_SOURCE_JOB = {
 }
 
 
-def test_the_contract_is_version_7_and_a_version_6_job_is_refused():
-    assert CONTRACT_VERSION == 7
+def test_the_contract_is_version_8_and_a_version_7_or_6_job_is_refused():
+    assert CONTRACT_VERSION == 8
     for job in (VALID_JOB, VALID_STEERING_JOB, VALID_SOURCE_JOB):
-        try:
-            validate_job({**job, "contractVersion": 6})
-        except JobError:
-            continue
-        raise AssertionError(f"A version 6 {job['kind']} job must be refused.")
+        for version in (7, 6):
+            try:
+                validate_job({**job, "contractVersion": version})
+            except JobError:
+                continue
+            raise AssertionError(f"A version {version} {job['kind']} job must be refused.")
 
 
 def test_a_source_job_carries_no_model_key():

@@ -9,11 +9,12 @@ import json
 import math
 import os
 import re
+import statistics
 import struct
 from typing import Any, TypeGuard
 
 # Separate from trainlib.CONTRACT_VERSION: this script and train.py change independently.
-CONTRACT_VERSION = 7
+CONTRACT_VERSION = 8
 
 TRACE_KIND = "trace"
 STEERING_KIND = "steering"
@@ -42,6 +43,17 @@ MAX_ATTENTION_LAYERS = 8
 MAX_ATTENTION_TOP_KEYS = 64
 # Attention weights are stored as integers in 1/ATTENTION_WEIGHT_SCALE, rounded down.
 ATTENTION_WEIGHT_SCALE = 10_000
+# The model types whose attention the float32 recompute reproduces: plain causal softmax(q·kᵀ·scaling), no window,
+# chunking, softcap or sink. The host's AttentionModelTypes holds the same set.
+ATTENTION_FAMILIES = frozenset(("qwen3_5", "qwen3_5_text", "olmoe"))
+# Config fields the pinned DynamicCache reads; set on an OLMoE config, its blocks would not all be plain full ones.
+_OLMOE_ATTENTION_FIXED = ("sliding_window", "attention_chunk_size", "num_kv_shared_layers")
+
+# A routed model records routing only within both; past either, none is recorded.
+MAX_ROUTED_EXPERTS_PER_TOKEN = 16
+MAX_EXPERTS = 1024
+# Each routing weight is written as its bfloat16 bit pattern; the host's RoutingWeightEncoding.
+ROUTING_WEIGHT_ENCODING = "bfloat16-bits"
 
 # A trace reads every block through the output head with both, a null one counting as absent.
 _LENS_FIELDS = ("lensTopTokens", "lensByteCap")
@@ -152,6 +164,9 @@ def validate_job(job):
         raise JobError("The job has no usable 'seed'.")
     _validate_attention_fields(job)
     _validate_lens_fields(job)
+    routing_cap = job.get("routingByteCap")
+    if routing_cap is not None and (not _is_int(routing_cap) or routing_cap <= FOOTER_RESERVE_BYTES):
+        raise JobError("The job has no usable 'routingByteCap'.")
     return job
 
 
@@ -257,11 +272,46 @@ def out_of_range_layers(layers, block_count):
     return [layer for layer in layers if layer >= block_count]
 
 
-def layer_kind(block_type):
-    """One letter for the trace: L for a linear-attention block, F for a full one, ? when the model does not say."""
-    if block_type is None:
-        return "?"
-    return "L" if block_type == "linear_attention" else "F"
+def layer_kind(block_type, model_type):
+    """One letter for the trace: L for a linear-attention block, F for a full one, ? for any other or none.
+
+    Every OLMoE block is full attention and names no block_type. Elsewhere only the literal names count.
+    """
+    if model_type == "olmoe":
+        return "F"
+    return {"full_attention": "F", "linear_attention": "L"}.get(block_type, "?")
+
+
+def attention_refusal(model_type, text_config, block_count):
+    """Why a trace of this model may not capture attention, or None when it may."""
+    if model_type not in ATTENTION_FAMILIES:
+        return "Attention capture is implemented for Qwen3.5 and OLMoE checkpoints; start the trace without it."
+    if model_type != "olmoe":
+        return None
+    layer_types = getattr(text_config, "layer_types", None)
+    if layer_types is not None and list(layer_types) != ["full_attention"] * block_count:
+        return "This OLMoE config states layer types other than full attention in every block."
+    if fixed := [name for name in _OLMOE_ATTENTION_FIXED if getattr(text_config, name, None) is not None]:
+        return f"This OLMoE config sets {fixed}, so its attention is not plain full attention."
+    return None
+
+
+def routing_shape(routers):
+    """The (experts per token, experts, normalized top-k) every router of (top_k, num_experts, norm_topk_prob)
+    shares, or None when there is no router, they differ, or either count is past its cap: then none is recorded."""
+    shapes = set(routers)
+    if len(shapes) != 1:
+        return None
+    ((top_k, experts, normalized),) = shapes
+    if not 1 <= top_k <= min(experts, MAX_ROUTED_EXPERTS_PER_TOKEN) or experts > MAX_EXPERTS:
+        return None
+    return top_k, experts, normalized
+
+
+def routing_record(step, ids, bits):
+    """One step's routing, blocks in the result's ``layers`` order: per block the chosen expert ids and the bit
+    patterns of the bfloat16 weights the experts consumed, so the host decodes them exactly."""
+    return {"routing": {"s": step, "x": [list(row) for row in ids], "w": [list(row) for row in bits]}}
 
 
 def heartbeat_counts(phase, progress_seen):
@@ -284,6 +334,13 @@ def scaled_to_norm(values, norm):
     if not math.isfinite(current) or current == 0:
         raise ValueError("The vector has no usable length: its prompts may not differ at this layer.")
     return [value * norm / current for value in values]
+
+
+def reference_norm_of(position_norms):
+    """The residual length a steering vector is scaled against: the median over every position of every contrast
+    prompt. Not the mean: a first position carrying a massive activation would set it, and the vector would then
+    outweigh a typical token's residual."""
+    return statistics.median(position_norms)
 
 
 def steering_vector(positive_mean, negative_mean, reference_norm):

@@ -82,12 +82,13 @@ public sealed record ModelLabArchitectureTensor
 
     /// <summary>
     ///     GGUF value per HF value: <c>equal</c>, <c>plus_one</c>, <c>neg_exp</c> (−exp), <c>reordered</c> (heads or rotary pairs
-    ///     regrouped) or <c>quantized</c> (not a float type); null when not stated.
+    ///     regrouped), <c>sliced</c> (one half of a fused HF tensor) or <c>quantized</c> (not a float type); null when not stated.
     /// </summary>
     /// <remarks>
-    ///     <c>reordered</c> wins over <c>quantized</c>: the converter permutes before quantizing (<c>qwen35</c> linear-attention
-    ///     value heads when the key and value head counts differ, <c>llama</c> Q and K for its RoPE), so dequantized values still
-    ///     sit in another order. Null when <see cref="HfName" /> is, or when the file does not state what decides it.
+    ///     <c>reordered</c> and <c>sliced</c> win over <c>quantized</c>: the converter permutes (<c>qwen35</c> linear-attention value
+    ///     heads, <c>llama</c> Q and K) or splits (<c>qwen35moe</c> expert gate and up) before quantizing. <c>sliced</c> assumes the
+    ///     fused HF layout, which no metadata confirms. Null when <see cref="HfName" /> is, or when the file does not state what
+    ///     decides it.
     /// </remarks>
     public required string? ValueRelation { get; init; }
 }

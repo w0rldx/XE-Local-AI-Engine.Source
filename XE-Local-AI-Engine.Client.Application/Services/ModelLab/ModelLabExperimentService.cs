@@ -314,6 +314,11 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
 
         if (request.Steering is null)
         {
+            if (preflight.TraceRefusalMessage is { } noTrace)
+            {
+                return Refuse(ModelLabStartRefusal.PreflightRefused, noTrace);
+            }
+
             // The range depends on the checkpoint, and a layer past it would fail only after the model has loaded. The rest repeats the validator's bounds the cap relies on.
             if (request.Layers is { } layers
                 && (layers.Count is 0 or > ModelLabTraceSpec.MaxTraceLayers || layers.Distinct().Count() != layers.Count || layers.Any(traced => traced < 0 || traced >= blockCount)))
@@ -322,7 +327,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                     $"This checkpoint has blocks 0 to {blockCount - 1}. Choose distinct trace layers in that range."));
             }
 
-            if (request.RecordAttention && AttentionRefusalOrNull(preflight) is { } noAttention)
+            if (request.RecordAttention && preflight.AttentionRefusalMessage is { } noAttention)
             {
                 return Refuse(ModelLabStartRefusal.AttentionUnavailable, noAttention);
             }
@@ -353,25 +358,6 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
 
         return await AdmitAndStartAsync(request, artifact, preflight, layer, interpreter, scriptPath, services, ct);
-    }
-
-    /// <summary>The cap is computed from the checkpoint's own shape, so a config that does not state it cannot record attention.</summary>
-    private static string? AttentionRefusalOrNull(ModelLabCheckpointPreflight preflight)
-    {
-        if (preflight.CheckpointLayerTypes is not { } layerTypes || preflight.CheckpointAttentionHeads is not { } heads)
-        {
-            return "This checkpoint's config does not state its block kinds and attention heads, so attention cannot be recorded. Start the trace without it.";
-        }
-
-        if (ModelLabTraceSpec.AttentionLayersFor(layerTypes).Count == 0)
-        {
-            return "This checkpoint has no full-attention block, and only those have attention weights to record. Start the trace without it.";
-        }
-
-        return heads is < 1 or > ModelLabTraceSpec.MaxAttentionHeads
-            ? string.Create(CultureInfo.InvariantCulture,
-                $"This checkpoint has {heads} attention heads per block, and a recording holds 1 to {ModelLabTraceSpec.MaxAttentionHeads}. Start the trace without it.")
-            : null;
     }
 
     private static async Task<string?> GetRuntimeRefusalAsync(IServiceProvider services, CancellationToken ct)
@@ -519,41 +505,55 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     }
 
     /// <summary>The trace's logit lens. Not found for a steering row or a trace that recorded none: one saved before contract 5, or of a checkpoint too deep for it.</summary>
-    public async Task<ModelLabLens> ReadLensAsync(Guid id, CancellationToken ct)
+    public Task<ModelLabLens> ReadLensAsync(Guid id, CancellationToken ct) =>
+        ReadTraceSectionAsync(id,
+            static result => result.Lens,
+            static (content, summary, result) => ModelLabTraceSpec.ParseLens(content, summary, result.Tokens.Count),
+            static status => new ModelLabLens
+            {
+                Status = status
+            },
+            ct);
+
+    /// <summary>The trace's router choices. Not found for a steering row or a trace that recorded none: one saved before contract 8, or of a model with no router.</summary>
+    public Task<ModelLabRouting> ReadRoutingAsync(Guid id, CancellationToken ct) =>
+        ReadTraceSectionAsync(id,
+            static result => result.Routing,
+            static (content, summary, result) => ModelLabTraceSpec.ParseRouting(content, summary, result.BlockCount, result.Tokens.Count),
+            static status => new ModelLabRouting
+            {
+                Status = status
+            },
+            ct);
+
+    /// <summary>A section of the trace blob named by <paramref name="summaryOf" />: not found when the run recorded none, unavailable when it cannot be read back.</summary>
+    private async Task<T> ReadTraceSectionAsync<TSummary, T>(Guid id,
+        Func<ModelLabTraceResult, TSummary?> summaryOf,
+        Func<ReadOnlyMemory<byte>, TSummary, ModelLabTraceResult, T> parse,
+        Func<ModelLabTraceReadStatus, T> withStatus,
+        CancellationToken ct)
+        where TSummary : class
     {
         var record = await GetAsync(id, ct);
         if (record is not { Kind: ModelLabExperimentKind.Trace, TraceBlobId: { } blobId, TraceSha256: { } hash, TraceByteCount: { } bytes })
         {
-            return new ModelLabLens
-            {
-                Status = ModelLabTraceReadStatus.NotFound
-            };
+            return withStatus(ModelLabTraceReadStatus.NotFound);
         }
 
-        // The lines are checked against the run's own summary and token count, so without a readable result they cannot be.
-        if ((record.ResultJson is { } json ? ModelLabTraceSpec.ReadResultOrNull(json) : null) is not { } result)
+        // The lines are checked against the run's own summary and token count, so without a readable result they cannot be;
+        // a stored "tokens": null deserializes, and is no count either.
+        if ((record.ResultJson is { } json ? ModelLabTraceSpec.ReadResultOrNull(json) : null) is not { Tokens: not null } result)
         {
-            return new ModelLabLens
-            {
-                Status = ModelLabTraceReadStatus.Unavailable
-            };
+            return withStatus(ModelLabTraceReadStatus.Unavailable);
         }
 
-        if (result.Lens is not { } summary)
+        if (summaryOf(result) is not { } summary)
         {
-            return new ModelLabLens
-            {
-                Status = ModelLabTraceReadStatus.NotFound
-            };
+            return withStatus(ModelLabTraceReadStatus.NotFound);
         }
 
         var read = await _blobs.ReadAsync(id, blobId, hash, bytes, ct);
-        return read.Status == ManagedBlobReadStatus.Found
-            ? ModelLabTraceSpec.ParseLens(read.Content, summary, result.Tokens.Count)
-            : new ModelLabLens
-            {
-                Status = ModelLabTraceReadStatus.Unavailable
-            };
+        return read.Status == ManagedBlobReadStatus.Found ? parse(read.Content, summary, result) : withStatus(ModelLabTraceReadStatus.Unavailable);
     }
 
     public Task StartAsync(CancellationToken cancellationToken) =>
@@ -860,6 +860,8 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             var attentionLayers = layer is null && request.RecordAttention ? ModelLabTraceSpec.AttentionLayersFor(preflight.CheckpointLayerTypes!) : null;
             // Every block, when there are few enough to cap; a deeper checkpoint traces as it did before the lens. One block has no earlier block to read.
             var lensBlocks = preflight.CheckpointBlockCount is { } blocks and >= 2 and <= ModelLabTraceSpec.MaxTraceLayers ? blocks : (int?)null;
+            // Sized for every block: the script records the blocks that have a router, and none for a dense model.
+            var routingBlocks = preflight.CheckpointBlockCount is { } routable and >= 1 and <= ModelLabTraceSpec.MaxTraceLayers ? routable : (int?)null;
             var tokens = request.MaxNewTokens ?? ModelLabTraceSpec.MaxNewTokens;
             Func<Task<ModelLabExperimentCompletion>> execute = layer is { } steeredLayer
                 ? () => ExecuteSteeringAsync(active, request, checkpoint, steeredLayer, script)
@@ -878,7 +880,8 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                     AttentionTopKeys = attentionLayers is null ? null : ModelLabTraceSpec.AttentionTopKeys,
                     AttentionByteCap = attentionLayers is null ? null : ModelLabTraceSpec.AttentionByteCapFor(attentionLayers.Count, preflight.CheckpointAttentionHeads!.Value, tokens),
                     LensTopTokens = lensBlocks is null ? null : ModelLabTraceSpec.LensTopTokens,
-                    LensByteCap = lensBlocks is { } lensBlockCount ? ModelLabTraceSpec.LensByteCapFor(lensBlockCount, tokens) : null
+                    LensByteCap = lensBlocks is { } lensBlockCount ? ModelLabTraceSpec.LensByteCapFor(lensBlockCount, tokens) : null,
+                    RoutingByteCap = routingBlocks is { } routingBlockCount ? ModelLabTraceSpec.RoutingByteCapFor(routingBlockCount, tokens) : null
                 }, script);
 
             lock (_jobLock)
@@ -1514,7 +1517,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
 
         // The script holds the cap itself. This is the check that does not depend on the script being right.
-        if (trace.Length > job.TraceByteCap + (job.LensByteCap ?? 0) || result.Length > ModelLabTraceSpec.MaxResultBytes || (attention is not null && attention.Length > job.AttentionByteCap))
+        if (trace.Length > job.TraceByteCap + (job.LensByteCap ?? 0) + (job.RoutingByteCap ?? 0) || result.Length > ModelLabTraceSpec.MaxResultBytes || (attention is not null && attention.Length > job.AttentionByteCap))
         {
             return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, "The Model Lab script wrote more than its byte cap, so nothing was kept.");
         }

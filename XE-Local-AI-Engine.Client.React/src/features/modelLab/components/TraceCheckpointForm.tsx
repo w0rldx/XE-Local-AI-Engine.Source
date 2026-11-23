@@ -29,6 +29,10 @@ import {
 	startModelLabCheckpointDownloadMutation,
 	startModelLabExperimentMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import type {
+	XeLocalAiEngineClientServicesModelLabModelLabAttentionRefusal as AttentionRefusal,
+	XeLocalAiEngineClientServicesModelLabModelLabTraceRefusal as TraceRefusal,
+} from "@/core/api/generated/types.gen";
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
 import { FieldWithInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
@@ -113,8 +117,42 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 			: undefined;
 	const ready = artifact.data?.status === "Ready";
 	const progress = artifact.data?.progress;
-	// Only a full-attention block has weights over earlier positions; the server refuses the rest.
-	const canRecordAttention = check?.checkpointLayerTypes?.includes("full_attention") === true;
+	// Only a full-attention block has weights over earlier positions, and only a family and config the node can reconstruct
+	// are recorded; the server refuses the rest and says why.
+	const canRecordAttention = check?.checkpointLayerTypes?.includes("full_attention") === true && check.attentionSupported;
+	// Each code in the page's language; the server's English text when it gives none.
+	const attentionRefusals: Record<AttentionRefusal, string> = {
+		HeadCountOutOfRange: t(
+			"pages.modelLab.trace.recordAttention.refusal.headCountOutOfRange",
+			"This checkpoint has more attention heads per block than a recording holds. Start the trace without it.",
+		),
+		NoFullAttentionBlock: t(
+			"pages.modelLab.trace.recordAttention.unavailable",
+			"This checkpoint has no full-attention block, so there is no attention to record.",
+		),
+		NotFullAttention: t(
+			"pages.modelLab.trace.recordAttention.refusal.notFullAttention",
+			"This OLMoE checkpoint's config describes attention other than full attention at every block, and attention is recorded only for full attention. Start the trace without it.",
+		),
+		ShapeNotStated: t(
+			"pages.modelLab.trace.recordAttention.refusal.shapeNotStated",
+			"This checkpoint's config does not state its block kinds and attention heads, so attention cannot be recorded. Start the trace without it.",
+		),
+		UnsupportedModelType: t(
+			"pages.modelLab.trace.recordAttention.refusal.unsupportedModelType",
+			"Attention capture is implemented for Qwen3.5 and OLMoE checkpoints; start the trace without it.",
+		),
+	};
+	const traceRefusals: Record<TraceRefusal, string> = {
+		RouterLogitsRequested: t(
+			"pages.modelLab.trace.traceRefusal.routerLogitsRequested",
+			"This checkpoint's config sets output_router_logits, which a trace does not support. It can still be steered.",
+		),
+	};
+	const attentionRefusal =
+		(check?.attentionRefusal && attentionRefusals[check.attentionRefusal]) || check?.attentionRefusalMessage;
+	// A checkpoint the script cannot trace can still be steered.
+	const traceRefusal = (check?.traceRefusal && traceRefusals[check.traceRefusal]) || check?.traceRefusalMessage;
 	const recordAttentionLabel = t("pages.modelLab.trace.recordAttention.label", "Record attention");
 	const maxNewTokensLabel = t("pages.modelLab.trace.maxNewTokens.label", "Tokens to generate");
 
@@ -217,6 +255,12 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 								revision: check.revision?.slice(0, 12),
 							})}
 						</Text>
+						{/* Shown before the download, which steering alone may still be worth. */}
+						{traceRefusal && (
+							<Alert color="yellow" data-testid="model-lab-trace-refused">
+								{traceRefusal}
+							</Alert>
+						)}
 						<FieldWithInfo
 							label={t("pages.modelLab.trace.license.englishOriginal", "English original")}
 							text={licenseOriginal}
@@ -317,10 +361,11 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 										description={
 											canRecordAttention
 												? undefined
-												: t(
+												: (attentionRefusal ??
+													t(
 														"pages.modelLab.trace.recordAttention.unavailable",
 														"This checkpoint has no full-attention block, so there is no attention to record.",
-													)
+													))
 										}
 										checked={recordAttention && canRecordAttention}
 										onChange={(event) => setRecordAttention(event.currentTarget.checked)}
@@ -357,7 +402,7 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 								</Text>
 								<Group>
 									<Button
-										disabled={busy || prompt.trim().length === 0 || !licenseConfirmed}
+										disabled={busy || prompt.trim().length === 0 || !licenseConfirmed || Boolean(traceRefusal)}
 										loading={start.isPending}
 										onClick={() =>
 											start.mutate({

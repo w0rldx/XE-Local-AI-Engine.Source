@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 public static class ModelLabTraceSpec
 {
     /// <summary>Separate from the trainer's: the two scripts change independently. Pinned by <c>modellablib.CONTRACT_VERSION</c>.</summary>
-    public const int ContractVersion = 7;
+    public const int ContractVersion = 8;
 
     /// <summary>What a trace generates when its request names no count, and what every steering arm generates.</summary>
     public const int MaxNewTokens = 128;
@@ -88,8 +88,31 @@ public static class ModelLabTraceSpec
 
     private const string LensFooterPrefix = "{\"lensFooter\"";
 
-    /// <summary>The largest file a trace can write: every layer traced and a lens at every block, at the most tokens; with <see cref="MaxAttentionByteCap" />, the bound on what the blob store keeps.</summary>
-    public static readonly int MaxTraceByteCap = TraceByteCapFor(MaxTraceLayers, MaxRequestedNewTokens) + LensByteCapFor(MaxTraceLayers, MaxRequestedNewTokens);
+    /// <summary>The most experts a router may pick per token for its choices to be recorded (<c>modellablib.MAX_ROUTED_EXPERTS_PER_TOKEN</c>).</summary>
+    public const int MaxRoutedExpertsPerToken = 16;
+
+    /// <summary>The most experts a recorded router may choose from (<c>modellablib.MAX_EXPERTS</c>).</summary>
+    public const int MaxRoutedExperts = 1024;
+
+    /// <summary>The routing file's weight encoding: each weight's bfloat16 bit pattern, so the stored value is exactly what the experts consumed.</summary>
+    public const string RoutingWeightEncoding = "bfloat16-bits";
+
+    /// <summary>bfloat16 1.0: a router weight is a probability, so no stored pattern lies above it.</summary>
+    private const int MaxRoutingWeightBits = 0x3F80;
+
+    /// <summary><c>{"routing":{"s":255,"x":[</c>, <c>],"w":[</c>, <c>]}}</c> and the newline.</summary>
+    private const int RoutingBytesPerLine = 36;
+
+    /// <summary>Worst-case widths at the most experts per token: ids of 4 digits and bit patterns of 5, each with a comma, plus both lists' brackets and separating commas.</summary>
+    private const int RoutingBytesPerBlock = (11 * MaxRoutedExpertsPerToken) + 4;
+
+    private const string RoutingLinePrefix = "{\"routing\"";
+
+    private const string RoutingFooterPrefix = "{\"routingFooter\"";
+
+    /// <summary>The largest file a trace can write: every layer traced, a lens and routing at every block, at the most tokens; with <see cref="MaxAttentionByteCap" />, the bound on what the blob store keeps.</summary>
+    public static readonly int MaxTraceByteCap = TraceByteCapFor(MaxTraceLayers, MaxRequestedNewTokens) + LensByteCapFor(MaxTraceLayers, MaxRequestedNewTokens)
+                                                 + RoutingByteCapFor(MaxTraceLayers, MaxRequestedNewTokens);
 
     /// <summary>The largest attention cap a checkpoint can ask for: about 40 MiB.</summary>
     public static readonly int MaxAttentionByteCap = AttentionByteCapFor(MaxAttentionLayers, MaxAttentionHeads, MaxRequestedNewTokens);
@@ -131,6 +154,15 @@ public static class ModelLabTraceSpec
         ArgumentOutOfRangeException.ThrowIfGreaterThan(blockCount, MaxTraceLayers);
         ThrowUnlessTokenCount(tokens);
         return (tokens * (LensBytesPerLine + (blockCount * (LensBytesPerBlock + (LensTopTokens * LensBytesPerText))))) + TraceFooterReserveBytes;
+    }
+
+    /// <summary>A routing line per step of <paramref name="tokens" /> at its widest (every MoE block at the most experts per token), plus the routing footer's own reserve.</summary>
+    public static int RoutingByteCapFor(int blockCount, int tokens)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(blockCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(blockCount, MaxTraceLayers);
+        ThrowUnlessTokenCount(tokens);
+        return (tokens * (RoutingBytesPerLine + (blockCount * RoutingBytesPerBlock))) + TraceFooterReserveBytes;
     }
 
     private static void ThrowUnlessTokenCount(int tokens)
@@ -264,6 +296,78 @@ public static class ModelLabTraceSpec
             };
     }
 
+    /// <summary>A trace file's routing lines, skipping every other line. Unavailable when a line does not parse or the lines fail the checks below.</summary>
+    /// <remarks>
+    ///     The summary names the bfloat16 encoding, distinct blocks below <paramref name="blockCount" />, 1 to 1,024 experts and 1 to 16 picks per token, at
+    ///     most the experts. Exactly one routing footer, whose kept and dropped steps add up to <paramref name="generated" /> and whose counts the summary
+    ///     repeats. The steps run 0, 1, 2, ... in order; every step has, per block, the picks' distinct ids below the expert count and their bit patterns
+    ///     from 0 to bfloat16 1.0. The weights are not checked to sum to 1: an unnormalized router's picks hold only part of the probability.
+    /// </remarks>
+    internal static ModelLabRouting ParseRouting(ReadOnlyMemory<byte> content, ModelLabRoutingSummary summary, int blockCount, int generated)
+    {
+        var records = new List<ModelLabRoutingRecord>();
+        var footers = new List<ModelLabTraceFooter?>();
+        try
+        {
+            foreach (var line in Lines(content))
+            {
+                if (line.StartsWith(RoutingFooterPrefix, StringComparison.Ordinal))
+                {
+                    footers.Add(JsonSerializer.Deserialize<RoutingFooterLine>(line, JsonSerializerOptions.Default)?.RoutingFooter);
+                }
+                else if (line.StartsWith(RoutingLinePrefix, StringComparison.Ordinal))
+                {
+                    records.Add(JsonSerializer.Deserialize<RoutingLine>(line, JsonSerializerOptions.Default)?.Routing ?? throw new JsonException("A routing line without its record."));
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            return new ModelLabRouting
+            {
+                Status = ModelLabTraceReadStatus.Unavailable
+            };
+        }
+
+        var readable = footers is [{ } footer]
+                       && string.Equals(summary.WeightEncoding, RoutingWeightEncoding, StringComparison.Ordinal)
+                       && summary is { Layers.Count: > 0, Experts: >= 1 and <= MaxRoutedExperts, ExpertsPerToken: >= 1 and <= MaxRoutedExpertsPerToken }
+                       && summary.ExpertsPerToken <= summary.Experts
+                       && summary.Layers.Distinct().Count() == summary.Layers.Count
+                       && summary.Layers.All(layer => layer >= 0 && layer < blockCount)
+                       && footer.Dropped >= 0
+                       && footer.Truncated == footer.Dropped > 0
+                       && footer.Records + footer.Dropped == generated
+                       && summary.Records == footer.Records
+                       && summary.Truncated == footer.Truncated
+                       && records.Count == footer.Records
+                       && records.Select(static record => record.Step).SequenceEqual(Enumerable.Range(0, records.Count))
+                       && records.TrueForAll(record => IsWellFormed(record, summary.Layers.Count, summary.ExpertsPerToken, summary.Experts));
+        return readable
+            ? new ModelLabRouting
+            {
+                Status = ModelLabTraceReadStatus.Found,
+                Summary = summary,
+                Records = records,
+                Footer = footers[0]
+            }
+            : new ModelLabRouting
+            {
+                Status = ModelLabTraceReadStatus.Unavailable
+            };
+    }
+
+    /// <summary>A stored bit pattern's weight, exactly: a bfloat16 is the top half of a float.</summary>
+    public static float RoutingWeight(int bits) =>
+        BitConverter.Int32BitsToSingle(bits << 16);
+
+    private static bool IsWellFormed(ModelLabRoutingRecord record, int blocks, int picks, int experts) =>
+        record is { Experts: { } ids, WeightBits: { } bits }
+        && ids.Count == blocks
+        && bits.Count == blocks
+        && ids.All(block => block is { } chosen && chosen.Count == picks && chosen.All(id => id >= 0 && id < experts) && chosen.Distinct().Count() == picks)
+        && bits.All(block => block is { } weights && weights.Count == picks && weights.All(static weight => weight is >= 0 and <= MaxRoutingWeightBits));
+
     private static bool IsWellFormed(ModelLabLensRecord record, int blocks, int topTokens) =>
         record is { Ids: { } ids, Logprobs: { } logprobs, ChosenLogprobs: { } chosen, ChosenRanks: { } ranks, Entropies: { } entropies, Texts: { } texts }
         && ids.Count == blocks
@@ -287,7 +391,7 @@ public static class ModelLabTraceSpec
     private static string[] Lines(ReadOnlyMemory<byte> content) =>
         Encoding.UTF8.GetString(content.Span).Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-    /// <summary>The JSON lines both capped files share: records, then the writer's footer. Lens lines and their footer are skipped, never read as a default record. Null when a line does not parse.</summary>
+    /// <summary>The JSON lines both capped files share: records, then the writer's footer. Lens and routing lines and their footers are skipped, never read as a default record. Null when a line does not parse.</summary>
     private static ParsedLines<T>? ParseLinesOrNull<T>(ReadOnlyMemory<byte> content)
     {
         var records = new List<T>();
@@ -296,7 +400,10 @@ public static class ModelLabTraceSpec
         {
             try
             {
-                if (line.StartsWith(LensLinePrefix, StringComparison.Ordinal) || line.StartsWith(LensFooterPrefix, StringComparison.Ordinal))
+                if (line.StartsWith(LensLinePrefix, StringComparison.Ordinal)
+                    || line.StartsWith(LensFooterPrefix, StringComparison.Ordinal)
+                    || line.StartsWith(RoutingLinePrefix, StringComparison.Ordinal)
+                    || line.StartsWith(RoutingFooterPrefix, StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -334,6 +441,18 @@ public static class ModelLabTraceSpec
     {
         [JsonPropertyName("lensFooter")]
         public ModelLabTraceFooter? LensFooter { get; init; }
+    }
+
+    private sealed class RoutingLine
+    {
+        [JsonPropertyName("routing")]
+        public ModelLabRoutingRecord? Routing { get; init; }
+    }
+
+    private sealed class RoutingFooterLine
+    {
+        [JsonPropertyName("routingFooter")]
+        public ModelLabTraceFooter? RoutingFooter { get; init; }
     }
 
     private sealed class ParsedLines<T>

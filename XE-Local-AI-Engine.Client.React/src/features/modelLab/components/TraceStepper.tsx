@@ -9,6 +9,7 @@ import { logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
 import { BasisBadge, ExplanationEntry, ExplanationLevelSwitch } from "@/features/modelLab/components/ArchitectureExplanation";
 import { TraceAttentionPanel } from "@/features/modelLab/components/TraceAttentionPanel";
 import { TraceLensPanel } from "@/features/modelLab/components/TraceLensPanel";
+import { TraceRoutingPanel } from "@/features/modelLab/components/TraceRoutingPanel";
 import { TraceStepCandidates } from "@/features/modelLab/components/TraceStepCandidates";
 import { type ExplanationLevel, explanationKey } from "@/features/modelLab/models/ModelLabExplanation";
 import { moveFocusAmongButtons } from "@/features/modelLab/models/ModelLabFocus";
@@ -224,6 +225,13 @@ export function TraceStepper({
 						onBasisChange={onBasisChange}
 					/>
 					<TraceLensPanel
+						experimentId={experimentId}
+						result={result}
+						step={current}
+						selectedBlock={selected?.index}
+						layerKinds={layerKinds}
+					/>
+					<TraceRoutingPanel
 						experimentId={experimentId}
 						result={result}
 						step={current}

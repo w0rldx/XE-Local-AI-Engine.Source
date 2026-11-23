@@ -20,7 +20,8 @@
 				"inferredBadge": "Inferred from llama.cpp ({{source}})",
 				"kindUntraceable": "{{kind}} (not traceable)",
 				"layoutNote": {
-					"llama": "The Hugging Face names assume the standard LlamaForCausalLM conversion (model.layers.N.…). A file converted from another source layout, such as Mistral's consolidated format or a vision model's language tower, has other source tensor names."
+					"llama": "The Hugging Face names assume the standard LlamaForCausalLM conversion (model.layers.N.…). A file converted from another source layout, such as Mistral's consolidated format or a vision model's language tower, has other source tensor names.",
+					"qwen35moe": "The Hugging Face names assume a checkpoint that stores each block's experts fused (model.language_model.layers.N.mlp.experts.gate_up_proj and …down_proj), as the catalog's checkpoints do. A per-expert checkpoint stacks mlp.experts.N.* tensors instead, and no metadata in the file tells which layout it was converted from."
 				},
 				"loadFailed": "The model's structure could not be read.",
 				"noHfName": "None",
@@ -40,7 +41,8 @@
 					"notStated": "Not stated",
 					"plusOne": "The Hugging Face value plus one",
 					"quantized": "Quantized from the Hugging Face values",
-					"reordered": "Reordered from the Hugging Face tensor (heads or rotary pairs regrouped); a quantized type also changes the values"
+					"reordered": "Reordered from the Hugging Face tensor (heads or rotary pairs regrouped); a quantized type also changes the values",
+					"sliced": "One half of a fused Hugging Face tensor (gate or up rows), assuming the catalog's fused checkpoint layout; a quantized type also changes the values"
 				},
 				"shape": "Shape (GGUF order)",
 				"tab": "Architecture",
@@ -112,6 +114,20 @@
 							"rope": {
 								"detail": "Applied to the normed queries and keys, not to values; no stored weight. qwen35 uses multi-axis RoPE (MRoPE): each rotated pair is assigned to a time, height or width position. For text all three positions are equal, so it acts like ordinary RoPE. The parameters come from the file's metadata.",
 								"math": "$$\\begin{pmatrix} u'_i \\\\ u'_{i+r} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_i \\\\ u_{i+r} \\end{pmatrix}, \\qquad \\theta_i = b^{-i/r}$$\n\n- $u$: one query or key head; $i < r$.\n- $2r$: number of rotated dimensions; the rest pass unchanged.\n- $b$: base frequency; $p$: position.\n\nThe score $\\langle R_p q, R_s k \\rangle$ then depends on $p$ and $s$ only through $p - s$."
+							}
+						}
+					},
+					"qwen35moe": {
+						"op": {
+							"ffn_residual": {
+								"detail": "The unnormed sum from the first residual add plus `moe_out`, the routed and shared experts together; this block has no dense `ffn_down`. In a trunk block this is the block output unless a control vector is loaded; in the MTP block it goes to the head norm.",
+								"math": "$$h'' = h' + y$$\n\n- $h'$: output of the first residual add.\n- $y$: output of `moe_out`.",
+								"overview": "Adds the mixture-of-experts result to the stream."
+							},
+							"topk_weights": {
+								"detail": "qwen35moe always renormalizes: the chosen experts' probabilities are divided by their sum, so their weights add up to 1 however much probability the other experts had. No further scale is applied to the weights.",
+								"math": "$$w_e = \\frac{p_e}{\\max\\big(\\sum_{j \\in S} p_j,\\ \\epsilon\\big)}, \\qquad e \\in S, \\qquad \\sum_{e \\in S} w_e = 1$$\n\n- $p_e$: router probability of expert $e$; $S$: the $k$ chosen experts.\n- $\\epsilon$: a tiny lower bound llama.cpp puts on the sum, so it never divides by zero.\n- llama.cpp's optional extra scale of the weights is unset for qwen35moe, so none applies.",
+								"overview": "Renormalizes the chosen experts' probabilities so their weights add up to 1."
 							}
 						}
 					}
@@ -241,6 +257,31 @@
 						"math": "$$\\hat e = \\frac{e}{\\mathrm{rms}(e)} \\odot w_e$$\n\n- $e$: token embedding.\n- $w_e$: `nextn.enorm`.",
 						"overview": "Normalizes the token embedding before it is joined with the trunk hidden state."
 					},
+					"exp_act": {
+						"detail": "SiLU on each chosen expert's gate branch, multiplied element-wise by its up branch (SwiGLU), separately for every chosen expert. No stored weight.",
+						"math": "$$m_e = \\mathrm{SiLU}(g_e) \\odot u_e, \\qquad e \\in S$$\n\n- $g_e$, $u_e$: expert $e$'s gate and up branches.\n- $\\mathrm{SiLU}(z) = z \\cdot \\mathrm{sigmoid}(z)$.\n- $S$: the chosen experts.",
+						"overview": "Combines each chosen expert's two branches, as a dense feed-forward network does."
+					},
+					"exp_down": {
+						"detail": "`ffn_down_exps` stacks one down matrix per expert (`mlp.experts.down_proj` in the Hugging Face checkpoint); only the chosen experts' matrices are used. The result is still one vector per chosen expert; the router weights are applied next.",
+						"math": "$$E_e(x') = W_{d,e}\\,m_e, \\qquad e \\in S$$\n\n- $m_e$: expert $e$'s SiLU product.\n- $W_{d,e}$: expert $e$'s slice of `ffn_down_exps`, from the expert width $d_{\\text{exp}}$ to $d$.\n\nPer expert: $E_e(x) = W_{d,e}\\big(\\mathrm{SiLU}(W_{g,e}\\,x) \\odot W_{u,e}\\,x\\big)$.",
+						"overview": "Maps each chosen expert's wide vector back to the residual width."
+					},
+					"exp_gate": {
+						"detail": "`ffn_gate_exps` stacks one gate matrix per expert in one tensor; only the matrices of the chosen experts are used for this token. Some files store gate and up together as `ffn_gate_up_exps`; this node is then the logical gate half of that tensor, computed the same way. In the Hugging Face checkpoint the gate rows are the first half of `mlp.experts.gate_up_proj`.",
+						"math": "$$g_e = W_{g,e}\\,x', \\qquad e \\in S$$\n\n- $x'$: output of the norm before the FFN; every chosen expert reads the same $x'$.\n- $W_{g,e}$: expert $e$'s slice of `ffn_gate_exps` (or the gate half of `ffn_gate_up_exps`), from $d$ to the expert width $d_{\\text{exp}}$.\n- $S$: the chosen experts.",
+						"overview": "Each chosen expert widens the normed vector into its own gate branch."
+					},
+					"exp_up": {
+						"detail": "`ffn_up_exps` stacks one up matrix per expert; only the chosen experts' matrices are used, from the same input as the gate. When the file stores `ffn_gate_up_exps`, this node is the logical up half of that tensor. In the Hugging Face checkpoint the up rows are the second half of `mlp.experts.gate_up_proj`.",
+						"math": "$$u_e = W_{u,e}\\,x', \\qquad e \\in S$$\n\n- $W_{u,e}$: expert $e$'s slice of `ffn_up_exps` (or the up half of `ffn_gate_up_exps`), from $d$ to $d_{\\text{exp}}$.\n- $S$: the chosen experts.",
+						"overview": "Each chosen expert widens the normed vector into its own up branch."
+					},
+					"exp_weighted": {
+						"detail": "Each chosen expert's output is multiplied by its router weight, and the results are added. llama.cpp applies the weights after the down projection; because that projection is linear, weighting earlier would give the same sum. Experts that were not chosen contribute nothing.",
+						"math": "$$y_{\\text{routed}} = \\sum_{e \\in S} w_e\\, E_e(x')$$\n\n- $S$: the chosen experts; $w_e$: their weights.\n- $E_e(x')$: expert $e$'s output after `ffn_down_exps`.",
+						"overview": "Mixes the chosen experts' outputs, each scaled by its router weight."
+					},
 					"ffn_act": {
 						"detail": "SiLU on the gate branch, multiplied element-wise by the up branch (SwiGLU). No stored weight.",
 						"math": "$$m = \\mathrm{SiLU}(g) \\odot u, \\qquad \\mathrm{SiLU}(z) = z \\cdot \\mathrm{sigmoid}(z)$$\n\n- $g$, $u$: outputs of `ffn_gate` and `ffn_up`.",
@@ -331,6 +372,11 @@
 						"math": "$$y = W_O\\,[\\,a^{(1)};\\dots;a^{(n_h)}\\,]$$\n\n- $a^{(j)}$: attention output of query head $j$.\n- $W_O$: `attn_output`, from $n_h d_h$ to $d$.",
 						"overview": "Maps the attention output of all heads back to the residual width."
 					},
+					"moe_out": {
+						"detail": "The routed mix plus the gated shared expert takes the place of a dense FFN's `ffn_down` output and goes to the second residual add. For each token only the k chosen experts and the shared expert did any work; the other experts' weights were not read.",
+						"math": "$$y = \\sum_{e \\in S} w_e\\, E_e(x') + \\mathrm{sigmoid}\\big(g^{\\top} x'\\big)\\, E_{\\text{sh}}(x')$$\n\n$$p = \\mathrm{softmax}(W_r\\,x'), \\qquad S = \\mathrm{TopK}_k(p), \\qquad E(x) = W_d\\big(\\mathrm{SiLU}(W_g\\,x) \\odot W_u\\,x\\big)$$\n\n- $W_r$: the router `ffn_gate_inp`; $w_e$: the chosen experts' weights.\n- $g$: `ffn_gate_inp_shexp`; $E_{\\text{sh}}$: the shared expert.",
+						"overview": "Adds the routed experts' mix and the gated shared expert: the feed-forward result of this block."
+					},
 					"output": {
 						"detail": "Same width as the input. The next block reads it as its input; after the last block, `output_norm` and the LM head turn it into logits. Model Lab traces measure this vector, without a control vector.",
 						"math": "$$h^{(i+1)} = h_{\\text{out}}^{(i)}$$\n\nAfter the last block: $\\ell = W_{\\text{out}}\\,\\mathrm{Norm}(h^{(L)})$.\n\n- $\\ell$: logits; $W_{\\text{out}}$: `output`, or `token_embd` when tied.",
@@ -361,6 +407,46 @@
 						"math": "$$\\begin{pmatrix} u'_{i_1} \\\\ u'_{i_2} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_{i_1} \\\\ u_{i_2} \\end{pmatrix}, \\qquad \\theta_i = b^{-i/r}$$\n\n- $u$: one query or key head; pair $i < r$ rotates its dimensions $i_1$ and $i_2$.\n- Which two dimensions form a pair depends on the model: neighbours ($i_1 = 2i$, $i_2 = 2i + 1$) or the two halves ($i_1 = i$, $i_2 = i + r$).\n- $2r$: number of rotated dimensions; the rest pass unchanged.\n- $b$: base frequency; $p$: position.\n\nThe score $\\langle R_p q, R_s k \\rangle$ then depends on $p$ and $s$ only through $p - s$.",
 						"overview": "Encodes each token's position by rotating pairs of query and key values by an angle that grows with the position. The attention score then depends on how far apart two tokens are."
 					},
+					"router": {
+						"detail": "`ffn_gate_inp` has one row per expert (`mlp.gate.weight` in the Hugging Face checkpoint). Its product with the normed vector gives one logit per expert; nothing is chosen yet. Files usually keep it unquantized: it is small, and it decides which experts run.",
+						"math": "$$z = W_r\\,x'$$\n\n- $x'$: output of the norm before the FFN.\n- $W_r$: `ffn_gate_inp`, from $d$ to $n_{\\text{exp}}$, one row per expert.\n- $z$: router logits, one per expert.",
+						"overview": "Scores every expert for this token: one logit per expert, from the normed input."
+					},
+					"router_probs": {
+						"detail": "A softmax over every expert, not only the ones that will be chosen, so the probabilities of all experts add up to 1. Both the choice and the weights of the chosen experts start from these probabilities.",
+						"math": "$$p_e = \\frac{\\exp(z_e)}{\\sum_{j=1}^{n_{\\text{exp}}} \\exp(z_j)}$$\n\n- $z$: router logits; $e$: expert index.\n- $n_{\\text{exp}}$: number of experts in the block.\n- $\\sum_e p_e = 1$ over all experts.",
+						"overview": "Turns the router logits into probabilities over all experts."
+					},
+					"shexp_act": {
+						"detail": "SiLU on the shared expert's gate branch, multiplied element-wise by its up branch (SwiGLU). No stored weight.",
+						"math": "$$m_{\\text{sh}} = \\mathrm{SiLU}(g_{\\text{sh}}) \\odot u_{\\text{sh}}$$\n\n- $g_{\\text{sh}}$, $u_{\\text{sh}}$: outputs of `ffn_gate_shexp` and `ffn_up_shexp`.",
+						"overview": "Combines the shared expert's two branches."
+					},
+					"shexp_down": {
+						"detail": "`ffn_down_shexp` (`mlp.shared_expert.down_proj` in the Hugging Face checkpoint). Its output is scaled by the shared expert's gate before it joins the routed experts.",
+						"math": "$$E_{\\text{sh}}(x') = W_{d,\\text{sh}}\\,m_{\\text{sh}}$$\n\n- $m_{\\text{sh}}$: the shared expert's SiLU product.\n- $W_{d,\\text{sh}}$: `ffn_down_shexp`, from the shared expert's width to $d$.",
+						"overview": "Maps the shared expert's wide vector back to the residual width."
+					},
+					"shexp_gate": {
+						"detail": "Besides the routed experts, this block has a shared expert: an ordinary gated feed-forward network that every token passes through, whatever the router picked. `ffn_gate_shexp` is its gate projection (`mlp.shared_expert.gate_proj` in the Hugging Face checkpoint).",
+						"math": "$$g_{\\text{sh}} = W_{g,\\text{sh}}\\,x'$$\n\n- $x'$: output of the norm before the FFN.\n- $W_{g,\\text{sh}}$: `ffn_gate_shexp`, from $d$ to the shared expert's width.",
+						"overview": "The shared expert, which runs for every token, widens the normed vector into its gate branch."
+					},
+					"shexp_gated": {
+						"detail": "The shared expert's output, multiplied by the single factor from its gate. No stored weight.",
+						"math": "$$y_{\\text{sh}} = s\\, E_{\\text{sh}}(x')$$\n\n- $s$: the shared expert's gate.\n- $E_{\\text{sh}}(x')$: output of `ffn_down_shexp`.",
+						"overview": "Scales the shared expert's output by its gate."
+					},
+					"shexp_scale": {
+						"detail": "`ffn_gate_inp_shexp` is a single vector (`mlp.shared_expert_gate.weight` in the Hugging Face checkpoint). Its dot product with the normed input, passed through a sigmoid, gives one factor for the whole shared-expert output. Unlike the router it chooses nothing; it only scales.",
+						"math": "$$s = \\mathrm{sigmoid}\\big(g^{\\top} x'\\big) \\in (0, 1)$$\n\n- $g$: `ffn_gate_inp_shexp`, one value per dimension.\n- $x'$: output of the norm before the FFN.",
+						"overview": "Decides for each token how much of the shared expert's output is used: one number between 0 and 1."
+					},
+					"shexp_up": {
+						"detail": "`ffn_up_shexp` (`mlp.shared_expert.up_proj` in the Hugging Face checkpoint) widens the normed input in parallel with the shared expert's gate projection.",
+						"math": "$$u_{\\text{sh}} = W_{u,\\text{sh}}\\,x'$$\n\n- $W_{u,\\text{sh}}$: `ffn_up_shexp`, from $d$ to the shared expert's width.",
+						"overview": "Widens the normed vector into the shared expert's up branch."
+					},
 					"split": {
 						"detail": "The first part gives the queries, the next the keys, the rest the values, each reshaped into heads. When there are fewer key heads than value heads, each query and key head serves several value heads.",
 						"math": "$$c_t = [\\,q_t\\,;\\,k_t\\,;\\,v_t\\,]$$\n\n- $q_t, k_t \\in \\mathbb{R}^{n_k d_k}$: queries and keys, in heads of size $d_k$.\n- $v_t \\in \\mathbb{R}^{n_v d_v}$: values, in heads of size $d_v$.",
@@ -370,6 +456,16 @@
 						"detail": "Looked up in `nextn.embed_tokens` when the file has it, else in the shared `token_embd`.",
 						"math": "$$e = E[t]$$\n\n- $t$: token id.\n- $E$: `nextn.embed_tokens`, else `token_embd`.",
 						"overview": "The embedding of a token, the second input of the MTP block: the token the trunk has just produced."
+					},
+					"topk": {
+						"detail": "The `n_expert_used` experts with the largest probabilities are kept (k, from the file's metadata); the others are skipped for this token. That is why a mixture-of-experts model computes only a fraction of its weights per token. The choice is per token and per block: the next token, or the next block, can pick other experts.",
+						"math": "$$S = \\mathrm{TopK}_k(p) \\subset \\{1, \\dots, n_{\\text{exp}}\\}, \\qquad |S| = k$$\n\n- $p$: router probabilities.\n- $k$: `n_expert_used` from the file's metadata.\n- Experts outside $S$ are not computed for this token.",
+						"overview": "Picks the experts with the highest probabilities; only these run for this token."
+					},
+					"topk_weights": {
+						"detail": "Each chosen expert gets its router probability as its weight. Some architectures then divide these by their sum, so the chosen weights add up to 1; others keep them as they are, so they add up to less than 1. Which one applies is a property of the architecture.",
+						"math": "$$w_e = p_e \\quad \\text{or} \\quad w_e = \\frac{p_e}{\\sum_{j \\in S} p_j}, \\qquad e \\in S$$\n\n- $p_e$: router probability of expert $e$; $S$: the chosen experts.\n- The second form renormalizes the chosen probabilities to add up to 1; the architecture decides which form applies.",
+						"overview": "The weights the chosen experts' outputs are mixed with, taken from the router probabilities."
 					},
 					"v": {
 						"detail": "`attn_v` produces one value per key/value head. Values get no norm and no RoPE; they go into the KV cache as they are.",
@@ -405,18 +501,18 @@
 						"overview": "The map stacks the rows of all steps: one row per generated token, one column per key position. A darker cell means more weight; the current step's row is marked."
 					},
 					"attentionRow": {
-						"detail": "The query belongs to the position the step reads, so the row of generated token $s$ covers key positions 0 to $P+s-1$. A weight shows where the head reads from, not what it writes: the values are mixed by these weights, then a gate per dimension and the output projection decide how much reaches the residual stream, so a large weight on a small or gated-off value changes little. Attention is therefore neither an explanation nor an importance score. Template tokens and the first token often take a large share (attention sinks); a high weight there says nothing about relevant content. The weights are recomputed in fp32 from the query and key tensors the kernel used; only the top keys are kept, rounded down to 1/10,000.",
-						"math": "$$a^{(j)}_{t,s} = \\frac{\\exp\\big(\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s / \\sqrt{d_h}\\big)}{\\sum_{u \\le t} \\exp\\big(\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_u / \\sqrt{d_h}\\big)}, \\qquad s \\le t$$\n\n$$o^{(j)}_t = \\mathrm{sigmoid}\\big(g^{(j)}_t\\big) \\odot \\sum_{s \\le t} a^{(j)}_{t,s}\\, v^{(m)}_s, \\qquad y_t = W_O\\big[o^{(1)}_t; \\dots; o^{(H)}_t\\big]$$\n\n- $t$: query position; $s$: key position; $j$: query head; $m$: the key/value head of its group.\n- $\\tilde q = \\mathrm{RoPE}(\\mathrm{RMSNorm}(q))$, $\\tilde k$ likewise: RMSNorm per head (`q_norm`, `k_norm`), then RoPE on the first part of each head only; the checkpoint config sets that share.\n- $d_h$: head dimension; this model scales by exactly $1/\\sqrt{d_h}$.\n- $g^{(j)}_t$: gate half of the query projection; $W_O$: `o_proj`.\n\nThe row shown is $a^{(j)}_{t,\\cdot}$; the values, the gate and $W_O$ act after it and are not recorded.",
+						"detail": "The query belongs to the position the step reads, so the row of generated token $s$ covers key positions 0 to $P+s-1$. A weight shows where the head reads from, not what it writes: the values are mixed by these weights, then the output projection (in Qwen3.5 after a gate per dimension) decides how much reaches the residual stream, so a large weight on a small or gated-off value changes little. Attention is therefore neither an explanation nor an importance score. Template tokens and the first token often take a large share (attention sinks); a high weight there says nothing about relevant content. The weights are recomputed in fp32 from the query and key tensors the kernel used; only the top keys are kept, rounded down to 1/10,000.",
+						"math": "$$a^{(j)}_{t,s} = \\frac{\\exp\\big(\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s / \\sqrt{d_h}\\big)}{\\sum_{u \\le t} \\exp\\big(\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_u / \\sqrt{d_h}\\big)}, \\qquad s \\le t$$\n\n$$o^{(j)}_t = \\mathrm{sigmoid}\\big(g^{(j)}_t\\big) \\odot \\sum_{s \\le t} a^{(j)}_{t,s}\\, v^{(m)}_s \\;\\; (\\text{Qwen3.5}), \\qquad o^{(j)}_t = \\sum_{s \\le t} a^{(j)}_{t,s}\\, v^{(m)}_s \\;\\; (\\text{OLMoE})$$\n\n$$y_t = W_O\\big[o^{(1)}_t; \\dots; o^{(H)}_t\\big]$$\n\n- $t$: query position; $s$: key position; $j$: query head; $m$: the key/value head of its group.\n- Qwen3.5: $\\tilde q = \\mathrm{RoPE}(\\mathrm{RMSNorm}(q))$, $\\tilde k$ likewise: RMSNorm per head (`q_norm`, `k_norm`), then RoPE on the first part of each head only; the checkpoint config sets that share.\n- OLMoE: $\\tilde q = \\mathrm{RoPE}(\\mathrm{clip}_c(\\mathrm{RMSNorm}(q)))$, $\\tilde k$ likewise: RMSNorm over the whole projection, all heads at once (`q_norm`, `k_norm`), then, when the config sets `clip_qkv` $= c$, every value clamped to $[-c, c]$ (the values $v$ too), then RoPE on the full head.\n- $d_h$: head dimension; both families scale by exactly $1/\\sqrt{d_h}$.\n- $g^{(j)}_t$: gate half of the query projection, Qwen3.5 only; OLMoE has no gate. $W_O$: `o_proj`.\n\nThe row shown is $a^{(j)}_{t,\\cdot}$; the values, any gate and $W_O$ act after it and are not recorded.",
 						"overview": "For the chosen step, block and head, this row shows how the head's query spread its weight over all earlier positions and its own. Each weight lies between 0 and 1, and the row adds up to 1."
 					},
 					"heads": {
-						"detail": "The checkpoint config sets the head counts. With grouped-query attention, several query heads share one key/value head: they compare against the same keys, but with their own queries, so their rows still differ. The default Qwen3.5 config, for example, has 16 query heads sharing 4 key/value heads (groups of 4) and a full-attention block every 4th block; the run states the values of this checkpoint. A recorded block stores all of its query heads. Head numbers are positions in the model, not a ranking; this view does not rate any head as important.",
-						"math": "$$G = H / H_{kv}, \\qquad j = m\\,G + g, \\quad 0 \\le g < G$$\n\n- $H$: query heads; $H_{kv}$: key/value heads; $G$: query heads per group.\n- Query head $j$ reads key/value head $m = \\lfloor j / G \\rfloor$.\n- Heads of one group share $\\tilde k^{(m)}$ and $v^{(m)}$ and differ in $\\tilde q^{(j)}$ and in their gate.\n\nAll $H$ head outputs are concatenated before $W_O$, so what one head contributes also depends on $W_O$.",
+						"detail": "The checkpoint config sets the head counts. With grouped-query attention, several query heads share one key/value head: they compare against the same keys, but with their own queries, so their rows still differ. The default Qwen3.5 config, for example, has 16 query heads sharing 4 key/value heads (groups of 4) and a full-attention block every 4th block; OLMoE-1B-7B has 16 query heads and 16 key/value heads (groups of 1, so every head has its own keys) and full attention in every block. The run states the values of this checkpoint. A recorded block stores all of its query heads. Head numbers are positions in the model, not a ranking; this view does not rate any head as important.",
+						"math": "$$G = H / H_{kv}, \\qquad j = m\\,G + g, \\quad 0 \\le g < G$$\n\n- $H$: query heads; $H_{kv}$: key/value heads; $G$: query heads per group.\n- Query head $j$ reads key/value head $m = \\lfloor j / G \\rfloor$.\n- Heads of one group share $\\tilde k^{(m)}$ and $v^{(m)}$ and differ in $\\tilde q^{(j)}$ (and, in Qwen3.5, in their gate).\n- At $G = 1$ (OLMoE) each group is one head, so $m = j$.\n\nAll $H$ head outputs are concatenated before $W_O$, so what one head contributes also depends on $W_O$.",
 						"overview": "Attention runs as several heads side by side, each with its own query and its own weights. You view one head at a time; different heads can look at very different positions."
 					},
 					"lens": {
-						"detail": "For each generated step, the run keeps every block's output at the position the step reads passes the blocks before the last through the final RMSNorm and the output projection (`lm_head`) in one batched call, takes the last block's row straight from the model's own output logits, then applies one softmax over the whole vocabulary. The modules are the model's own, so the norm's $(1 + w)$ scaling, its float32 arithmetic and any weight sharing with the token embeddings are exactly those of the real readout. The lens uses the raw logits; the checkpoint's generation settings do not apply to it. Each block keeps its top N tokens (the run states N), the chosen token's log-probability and rank, and the readout's spread; log-probabilities are rounded down to 1/10,000. At the last block the lens is the model's own output; at every earlier block it is the final readout applied early, which the model never does. The vocabulary size V comes from the checkpoint (about 248k tokens for Qwen3.5, for example).",
-						"math": "$$p^{(b)}_t = \\mathrm{softmax}\\big(W_U\\, \\mathrm{RMSNorm}_f(h^{(b)}_t)\\big), \\qquad \\mathrm{RMSNorm}_f(x) = \\frac{x}{\\sqrt{\\tfrac{1}{d}\\sum_i x_i^2 + \\epsilon}} \\odot (1 + w)$$\n\n- $h^{(b)}_t$: output of block $b$ at position $t = P+s-1$, the position step $s$ reads; $b = 0, \\dots, B-1$.\n- $W_U \\in \\mathbb{R}^{V \\times d}$: the output projection (`lm_head`), without bias; whether it equals the token embedding matrix depends on the checkpoint config.\n- $w$, $\\epsilon$: weight and epsilon of the final norm, which runs in float32 and casts its result back to bf16; the logits stay bf16, softmax runs in float32.\n- $B$, $d$ (hidden size) and $V$ come from the checkpoint.\n- The norm shown is Qwen3.5's, the family traces support; other families scale by $w$ instead of $(1 + w)$, and the lens always runs the checkpoint's own norm module.\n\nAt $b = B-1$ this is the model's output: $W_U\\,\\mathrm{RMSNorm}_f(h^{(B-1)}_t) = \\ell^{(s)}$. For $b < B-1$ it is a readout the model never computes.",
+						"detail": "For each generated step, the run keeps every block's output at the position the step reads passes the blocks before the last through the final RMSNorm and the output projection (`lm_head`) in one batched call, takes the last block's row straight from the model's own output logits, then applies one softmax over the whole vocabulary. The modules are the model's own, so the norm's effective weight $\\gamma$ ($1 + w$ in Qwen3.5, $w$ in OLMoE), its float32 arithmetic and any weight sharing with the token embeddings are exactly those of the real readout. The lens uses the raw logits; the checkpoint's generation settings do not apply to it. Each block keeps its top N tokens (the run states N), the chosen token's log-probability and rank, and the readout's spread; log-probabilities are rounded down to 1/10,000. At the last block the lens is the model's own output; at every earlier block it is the final readout applied early, which the model never does. The vocabulary size V comes from the checkpoint (about 248k tokens for Qwen3.5, for example).",
+						"math": "$$p^{(b)}_t = \\mathrm{softmax}\\big(W_U\\, \\mathrm{RMSNorm}_f(h^{(b)}_t)\\big), \\qquad \\mathrm{RMSNorm}_f(x) = \\frac{x}{\\sqrt{\\tfrac{1}{d}\\sum_i x_i^2 + \\epsilon}} \\odot \\gamma$$\n\n- $h^{(b)}_t$: output of block $b$ at position $t = P+s-1$, the position step $s$ reads; $b = 0, \\dots, B-1$.\n- $W_U \\in \\mathbb{R}^{V \\times d}$: the output projection (`lm_head`), without bias; whether it equals the token embedding matrix depends on the checkpoint config.\n- $\\gamma$: the final norm's effective weight, $1 + w$ in Qwen3.5 and $w$ in OLMoE, where $w$ is its stored weight; $\\epsilon$: its epsilon. The norm normalizes in float32 and returns bf16; the logits stay bf16, softmax runs in float32.\n- $B$, $d$ (hidden size) and $V$ come from the checkpoint.\n- The lens always runs the checkpoint's own norm module, so $\\gamma$ is the family's own.\n\nAt $b = B-1$ this is the model's output: $W_U\\,\\mathrm{RMSNorm}_f(h^{(B-1)}_t) = \\ell^{(s)}$. For $b < B-1$ it is a readout the model never computes.",
 						"overview": "The logit lens reads every block's output at this step through the model's own final norm and output projection, as if the model stopped after that block. It shows which tokens that early readout favours. It is a derived analysis computed beside the run, not what the model computed: only the last block's output reached the output layer."
 					},
 					"lensCaveats": {
@@ -453,6 +549,31 @@
 						"detail": "The weights cannot be rebuilt from a finished trace: they need the query and the keys of every position, and a trace keeps neither, only residual norms and candidates. Runs saved before attention recording existed never have them. For a new run, turn on \"Record attention\" in the trace form; it costs storage and some generation time, so leave it off when norms and candidates are enough. Linear-attention blocks have no weights to record in any run.",
 						"math": "$$a_{t,s} = \\mathrm{softmax}_s\\big(\\tilde q_t \\cdot \\tilde k_s / \\sqrt{d_h}\\big)$$\n\n- Needs $\\tilde q_t$ and every $\\tilde k_s$, $s \\le t$, of the block; a trace without recording stores neither.\n- A residual norm $\\lVert h_t \\rVert$ does not determine $\\tilde q_t$ or $\\tilde k_s$, so the weights cannot be derived from it.",
 						"overview": "This run has no attention weights for this block. They are recorded only when a trace starts with \"Record attention\" on, and then only for the full-attention blocks the node records by default."
+					},
+					"routing": {
+						"detail": "Each block's router scores all of its experts at the position the step reads (the last prompt token for the first step, otherwise the token generated before it), keeps the top k and gives them weights. The run records exactly these k expert ids and the weights the experts received, for every block with a router, read by a hook on the router as the model ran. Expert numbers are positions in the block, not names: expert 12 of one block has nothing to do with expert 12 of another. The run used the Hugging Face checkpoint in PyTorch (bf16); the GGUF that \"Next token\" runs may choose other experts.",
+						"math": "$$p^{(b)} = \\mathrm{softmax}\\big(W^{(b)}_r\\, x'^{(b)}_t\\big), \\qquad S^{(b)}_s = \\mathrm{TopK}_k\\big(p^{(b)}\\big)$$\n\n- $t = P+s-1$: the position step $s$ reads; $b$: a block with a router.\n- $x'^{(b)}_t$: the normed input of block $b$'s feed-forward part at $t$; $W^{(b)}_r$: its router.\n- Recorded per step and block: the ids in $S^{(b)}_s$ and their weights $w^{(b)}_e$.\n\nOnly the position the step reads is recorded; during the prefill the router also ran on every other prompt position.",
+						"overview": "For the chosen step, this shows which experts each mixture-of-experts block sent the token through, and with which weights. It is the routing used to predict this token, read from each block's router while the model ran."
+					},
+					"routingCaveats": {
+						"detail": "Three limits apply. An expert is not a topic or a skill: routers are trained to spread tokens over the experts, and what an expert adds depends on its weights and on the rest of the block, so a label such as \"the math expert\" cannot be read off these ids. One prompt is not specialization: the picks of one run reflect this prompt and its answer; a claim about what an expert handles needs many prompts and a controlled comparison, which this view does not make. And this is the Hugging Face checkpoint in PyTorch, not the GGUF that \"Next token\" runs: quantization changes the router's logits slightly, so where two experts score almost the same the GGUF can pick the other one, and its tokens can then differ too.",
+						"math": "$$S = \\mathrm{TopK}_k\\big(\\mathrm{softmax}(W_r\\,x')\\big)$$\n\n- $p_{(k)}$, $p_{(k+1)}$: the $k$-th and $(k+1)$-th largest router probabilities.\n- A small change in $W_r$ or $x'$ (quantization, another kernel) changes $S$ when it moves these two past each other, which takes little when $p_{(k)} - p_{(k+1)}$ is small.\n- The ids in $S$ are positions in the block's expert tensors; nothing in the model attaches a meaning to them.",
+						"overview": "Routing shows which experts ran, not what they mean. An expert is not a topic, one prompt does not show specialization, and the GGUF may route differently."
+					},
+					"routingNotRecorded": {
+						"detail": "Routing cannot be rebuilt from a finished trace: it needs each block's router output at every step, and a trace without it keeps only residual-norm statistics and output candidates. Runs saved before routing recording existed never have it, a dense checkpoint has no router to read, and steering runs do not record it. When a run reached its routing size limit, the first steps keep their rows and later steps say \"not kept\"; the generated tokens are not affected.",
+						"math": "$$S^{(b)}_s = \\mathrm{TopK}_k\\big(\\mathrm{softmax}(W^{(b)}_r\\, x'^{(b)}_{P+s-1})\\big)$$\n\n- Needs all $d$ components of $x'^{(b)}_{P+s-1}$, the normed input of block $b$'s feed-forward part, at every step; a residual norm or a few top dimensions do not determine it.\n- A dense block has no $W_r$, so there is nothing to record.",
+						"overview": "This run has no routing. Traces record it only from the node version that added it, and only for checkpoints whose blocks have a mixture-of-experts router."
+					},
+					"routingUsage": {
+						"detail": "For the selected block, every recorded step counts one pick for each expert it chose; the list shows the experts picked most often and in how many steps. When the run reached its routing size limit, only the saved steps count, and the view says how many. The counts describe this one prompt and its answer: an expert picked in many steps here is not shown to handle a topic, and another prompt can spread the picks quite differently.",
+						"math": "$$c_e = \\big|\\{\\, s \\in R : e \\in S^{(b)}_s \\,\\}\\big|, \\qquad \\sum_e c_e = k\\,|R|$$\n\n- $R$: the recorded steps (every generated token, or the saved ones when the run was cut at its size limit).\n- $S^{(b)}_s$: the experts block $b$ chose at step $s$; $c_e$: in how many of those steps expert $e$ was picked.\n- If the router spread its picks evenly, each expert would be picked in about $k\\,|R| / n_{\\text{exp}}$ steps.",
+						"overview": "Counts how often each expert of the selected block was chosen over the steps of this run. It is derived from the recorded routing, not something the model computed."
+					},
+					"routingWeights": {
+						"detail": "The weights are the ones the experts actually received: the router probabilities of the chosen experts in bf16, stored bit for bit; the chips round them for display only. Some models divide them by their sum so they add up to 1 (the run states whether this checkpoint does); others keep the raw probabilities, which then add up to less than 1. The view then also shows their sum: the share of the router's probability that fell on the chosen experts; a small share means the router spread its probability over many experts. A large weight means that expert's output counts more in this block's mix, not that the expert matters more for the token: the mix is then added to the residual stream like every other block's output.",
+						"math": "$$w_e = p_e \\;\\; (\\text{not renormalized}), \\qquad w_e = \\frac{p_e}{\\sum_{j \\in S} p_j} \\;\\; (\\text{renormalized}), \\qquad e \\in S$$\n\n$$y = \\sum_{e \\in S} w_e\\, E_e(x')$$\n\n- $p_e$: router probability of expert $e$; $S$: the chosen experts; $E_e$: expert $e$'s output.\n- Shown sum, only when not renormalized: $\\sum_{e \\in S} w_e \\le 1$, the share of the probability on the chosen experts.\n- Stored: the 16 bits of each bf16 weight, so the view reads exactly the value the expert's output was multiplied by.",
+						"overview": "Each chosen expert's weight says how strongly its output counts in the block's mix. The chips show the weights rounded; the stored values are exact."
 					},
 					"step": {
 						"detail": "The prompt pass (prefill) runs every prompt token through all blocks; the output at its last position gives the candidates for the first generated token. Each later step reads one token: full-attention blocks look up the keys and values of all earlier positions in the KV cache, which grows by one entry per step, and linear-attention blocks update their fixed-size state. The trace decodes greedily, so the chosen token is the top candidate after the checkpoint's generation settings. Everything shown comes from this one saved run of the Hugging Face checkpoint in bf16, not from the GGUF that \"Next token\" runs.",
@@ -868,6 +989,12 @@
 				"recordAttention": {
 					"help": "Also stores, for every generated token, where each head of the full-attention blocks read from: the top keys of its row and the weight of the rest. The model's output is unchanged.\n\nIt costs a few MiB of storage per run and makes the trace slightly slower. Turn it on to step through a run's attention; leave it off when you only need norms and candidates, or to keep runs small.",
 					"label": "Record attention",
+					"refusal": {
+						"headCountOutOfRange": "This checkpoint has more attention heads per block than a recording holds. Start the trace without it.",
+						"notFullAttention": "This OLMoE checkpoint's config describes attention other than full attention at every block, and attention is recorded only for full attention. Start the trace without it.",
+						"shapeNotStated": "This checkpoint's config does not state its block kinds and attention heads, so attention cannot be recorded. Start the trace without it.",
+						"unsupportedModelType": "Attention capture is implemented for Qwen3.5 and OLMoE checkpoints; start the trace without it."
+					},
 					"unavailable": "This checkpoint has no full-attention block, so there is no attention to record."
 				},
 				"repo": "Checkpoint repository",
@@ -894,7 +1021,7 @@
 					"attention": "Attention at block {{index}}",
 					"attentionFailed": "The attention rows could not be read.",
 					"attentionNotFound": "This run kept no attention rows for block {{index}}.",
-					"attentionNote": "Recomputed in fp32 from the kernel's own query/key tensors, top K kept, floored. This run kept the top {{topKeys}} keys per row and head; its {{heads}} query heads share {{kvHeads}} key/value heads.",
+					"attentionNote": "Recomputed in fp32 from the kernel's own query/key tensors, top K kept, floored. This run kept the top {{topKeys}} keys per row and head; the model has {{heads}} query heads and {{kvHeads}} key/value heads.",
 					"attentionTruncated_one": "The attention file reached its cap: {{count}} row of this block was not kept, and the map marks it as missing.",
 					"attentionTruncated_other": "The attention file reached its cap: {{count}} rows of this block were not kept, and the map marks them as missing.",
 					"attentionTruncated_zero": "The attention file reached its cap, but every row of this block was kept.",
@@ -971,6 +1098,33 @@
 					"provenanceKernel": "Hugging Face checkpoint, bf16, transformers {{transformers}}, attention kernel {{kernel}}; not the GGUF. Every value below is from this one saved run.",
 					"recorded": "{{block}}, attention recorded",
 					"recordedLegend": "The eye marks the blocks whose attention this run recorded.",
+					"routing": {
+						"block": "Block",
+						"caption": "Experts each mixture-of-experts block chose at step {{step}}, with their weights",
+						"chip": "E{{expert}} {{weight}}",
+						"detailTitle": "Router weights of block {{index}}",
+						"experts": "Chosen experts and weights",
+						"explain": {
+							"caveats": "What routing cannot tell",
+							"routing": "What the routing shows",
+							"usage": "Counting picks over the run",
+							"weights": "The router weights"
+						},
+						"failed": "The routing could not be read.",
+						"notFound": "This run kept no routing.",
+						"note": "Read from each block's router as the model ran in PyTorch on the Hugging Face checkpoint. The GGUF in llama.cpp may route differently.",
+						"share": "Sum of weights",
+						"stepMissing": "This step's routing was not kept.",
+						"title": "Routing used to predict this token",
+						"truncated": "The routing reached its size limit: the first steps kept their rows, later steps were not kept. The generated tokens are not affected.",
+						"unavailable": "This run has no routing: it was saved before routing recording, it is a steering run, its checkpoint has no mixture-of-experts router, or its routing is past what a trace records (more than 64 blocks, more than 1024 experts or more than 16 experts per token).",
+						"usageCount_one": "E{{expert}}: picked in {{picks}} of {{count}} step",
+						"usageCount_other": "E{{expert}}: picked in {{picks}} of {{count}} steps",
+						"usageTruncated_one": "Most picked in the {{count}} saved step",
+						"usageTruncated_other": "Most picked in the {{count}} saved steps",
+						"usage_one": "Most picked in this run ({{count}} step)",
+						"usage_other": "Most picked in this run ({{count}} steps)"
+					},
 					"rowCaption": "Stored keys of head {{head}} at step {{step}}, in position order, each with its neighbours",
 					"rowMissing": "This step's row was not kept.",
 					"rowPosition": "Position",
@@ -984,6 +1138,9 @@
 				"tab": "Trace and steer",
 				"token": "Token",
 				"traceFailed": "The trace could not be loaded.",
+				"traceRefusal": {
+					"routerLogitsRequested": "This checkpoint's config sets output_router_logits, which a trace does not support. It can still be steered."
+				},
 				"truncated": "The trace reached its {{cap}} cap: {{dropped}} records were not kept. Generation was not affected.",
 				"tryNextToken": "Try in Next token",
 				"unsupported": "Tracing runs on Linux only for now, because it needs the Python training runtime, which is available on Linux only. The other Model Lab tools work here.",

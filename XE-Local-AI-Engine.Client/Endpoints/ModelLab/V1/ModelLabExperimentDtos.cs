@@ -264,6 +264,49 @@ public sealed class ModelLabLensResponse
     public required int DroppedSteps { get; init; }
 }
 
+/// <summary>One MoE block's router choice at one step.</summary>
+public sealed class ModelLabRoutingBlockResponse
+{
+    public required int Layer { get; init; }
+
+    /// <summary>The picked expert ids, in the router's order.</summary>
+    public required IReadOnlyList<int> Experts { get; init; }
+
+    /// <summary>The weights the picked experts were given, matching <see cref="Experts" />: the bfloat16 values the model used, exactly.</summary>
+    public required IReadOnlyList<double> Weights { get; init; }
+}
+
+public sealed class ModelLabRoutingStepResponse
+{
+    public required int Step { get; init; }
+
+    /// <summary>One per MoE block, in <see cref="ModelLabRoutingResponse.Layers" /> order.</summary>
+    public required IReadOnlyList<ModelLabRoutingBlockResponse> Blocks { get; init; }
+}
+
+/// <summary>Measured: the router choices behind each generated token, read at the position whose logits chose it.</summary>
+public sealed class ModelLabRoutingResponse
+{
+    /// <summary>The MoE blocks.</summary>
+    public required IReadOnlyList<int> Layers { get; init; }
+
+    /// <summary>The experts each router chooses from.</summary>
+    public required int Experts { get; init; }
+
+    public required int ExpertsPerToken { get; init; }
+
+    /// <summary>True when the picks' weights sum to 1; false when they keep their share of the router's probability.</summary>
+    public required bool NormalizedTopK { get; init; }
+
+    /// <summary>From step 0, in order; a truncated recording keeps a prefix.</summary>
+    public required IReadOnlyList<ModelLabRoutingStepResponse> Steps { get; init; }
+
+    /// <summary>True when the routing cap dropped steps; the trace's other sections are not affected.</summary>
+    public required bool Truncated { get; init; }
+
+    public required int DroppedSteps { get; init; }
+}
+
 public sealed class ModelLabTraceResponse
 {
     public required IReadOnlyList<ModelLabTraceRecordResponse> Records { get; init; }

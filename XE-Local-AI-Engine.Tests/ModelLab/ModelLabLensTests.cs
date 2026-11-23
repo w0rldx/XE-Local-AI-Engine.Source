@@ -26,9 +26,10 @@ public sealed class ModelLabLensTests
         AssertEx.Equal(expected: 4_112_544, ModelLabTraceSpec.LensByteCapFor(64, 128));
         AssertEx.Equal(expected: 8_224_928, ModelLabTraceSpec.LensByteCapFor(64, 256));
         AssertEx.Equal((128 * (64 + (24 * (121 + (5 * 76))))) + 160, ModelLabTraceSpec.LensByteCapFor(24, 128));
-        AssertEx.Equal(expected: 18_841_920, ModelLabTraceSpec.MaxTraceByteCap);
+        AssertEx.Equal(expected: 21_800_416, ModelLabTraceSpec.MaxTraceByteCap);
         AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(ModelLabTraceSpec.MaxTraceLayers, ModelLabTraceSpec.MaxRequestedNewTokens)
-                       + ModelLabTraceSpec.LensByteCapFor(ModelLabTraceSpec.MaxTraceLayers, ModelLabTraceSpec.MaxRequestedNewTokens), ModelLabTraceSpec.MaxTraceByteCap);
+                       + ModelLabTraceSpec.LensByteCapFor(ModelLabTraceSpec.MaxTraceLayers, ModelLabTraceSpec.MaxRequestedNewTokens)
+                       + ModelLabTraceSpec.RoutingByteCapFor(ModelLabTraceSpec.MaxTraceLayers, ModelLabTraceSpec.MaxRequestedNewTokens), ModelLabTraceSpec.MaxTraceByteCap);
         AssertEx.True(ModelLabTraceSpec.MaxTraceByteCap < ModelLabTraceSpec.MaxAttentionByteCap, "The blob store's bound stays the attention cap.");
         AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.LensByteCapFor(0, 128));
         AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.LensByteCapFor(ModelLabTraceSpec.MaxTraceLayers + 1, 128));
@@ -75,6 +76,9 @@ public sealed class ModelLabLensTests
             AssertEx.False(job.RootElement.TryGetProperty("lensTopTokens", out _), "The script sees both lens fields absent.");
             AssertEx.False(job.RootElement.TryGetProperty("lensByteCap", out _));
             AssertEx.Equal(layers, job.RootElement.GetProperty("layers").GetRawText());
+            // Routing needs no earlier block: a single block still gets its cap, a checkpoint past the cap none.
+            AssertEx.Equal(blocks <= ModelLabTraceSpec.MaxTraceLayers ? ModelLabTraceSpec.RoutingByteCapFor(blocks, ModelLabTraceSpec.MaxNewTokens) : (int?)null,
+                job.RootElement.TryGetProperty("routingByteCap", out var routingCap) ? routingCap.GetInt32() : (int?)null);
         }
 
         process.Finish(CompleteRun, exitCode: 0);

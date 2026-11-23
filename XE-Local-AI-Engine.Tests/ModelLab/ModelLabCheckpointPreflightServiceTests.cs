@@ -245,6 +245,7 @@ public sealed class ModelLabCheckpointPreflightServiceTests : IDisposable
     [Test]
     [Arguments("gpt2")]
     [Arguments("llama")]
+    [Arguments("qwen3_5_moe")]
     public async Task AModelTypeTheScriptDoesNotKnow_IsRefused_FetchingOnlyTheConfig(string modelType)
     {
         GgufHeader(embeddingLength: 1024, blockCount: 24);
@@ -327,6 +328,183 @@ public sealed class ModelLabCheckpointPreflightServiceTests : IDisposable
         AssertEx.Equal(heads, result.CheckpointAttentionHeads);
     }
 
+    /// <summary>OLMoE has no linear blocks: its kinds are all full by family rule, never Qwen's interval and never a stated list, so steering defaults to block 10 of 16.</summary>
+    [Test]
+    [Arguments("")]
+    [Arguments(""","full_attention_interval":4""")]
+    [Arguments(""","layer_types":["linear_attention","full_attention"]""")]
+    public async Task AnOlmoeCheckpoint_Passes_WithEveryBlockFull_WhateverItsConfigStates(string extra)
+    {
+        GgufHeader(embeddingLength: 1024, blockCount: 16, architecture: "olmoe");
+        using var files = Files(Config08B);
+
+        var result = await Service(files, Weights08B).CheckDownloadedAsync(Saved(OlmoeConfig(extra), license: null), Gguf, CancellationToken.None);
+
+        AssertEx.Null(result.Refusal, result.RefusalMessage);
+        AssertEx.Equal("olmoe", result.ModelType!);
+        AssertEx.Equal(string.Join(',', Enumerable.Repeat("full_attention", 16)), string.Join(',', result.CheckpointLayerTypes!));
+        AssertEx.Equal(expected: 10, result.DefaultSteeringLayer!.Value);
+        AssertEx.Equal(expected: 16, result.CheckpointAttentionHeads!.Value);
+    }
+
+    /// <summary>Width and depth match, but a vector derived in one family's residual stream does not describe another's.</summary>
+    [Test]
+    [Arguments("olmoe", "qwen35")]
+    [Arguments("qwen3_5", "olmoe")]
+    [Arguments("qwen3_5", "llama")]
+    public async Task ACheckpointPairedWithAnotherFamilysGguf_OfTheSameShape_IsRefused(string modelType, string ggufArchitecture)
+    {
+        GgufHeader(embeddingLength: 1024, blockCount: 16, architecture: ggufArchitecture);
+        using var files = Files(Config08B);
+        var config = modelType == "olmoe" ? OlmoeConfig(string.Empty) : $$"""{"model_type":"{{modelType}}","hidden_size":1024,"num_hidden_layers":16}""";
+
+        var result = await Service(files, Weights08B).CheckDownloadedAsync(Saved(config, license: null), Gguf, CancellationToken.None);
+
+        AssertEx.Equal(ModelLabCheckpointRefusal.ArchitectureMismatch, result.Refusal, result.RefusalMessage ?? "admitted");
+        AssertEx.Contains(result.RefusalMessage!, $"'{ggufArchitecture}'", StringComparison.Ordinal);
+    }
+
+    /// <summary>The script refuses a trace of it only once the weights are on the GPU; steering never asks for router logits.</summary>
+    [Test]
+    [Arguments(""","output_router_logits":true""", true)]
+    [Arguments(""","output_router_logits":false""", false)]
+    [Arguments("", false)]
+    public async Task AnOlmoeConfigThatAsksForRouterLogits_PassesForSteering_ButCannotBeTraced(string extra, bool refused)
+    {
+        GgufHeader(embeddingLength: 1024, blockCount: 16, architecture: "olmoe");
+        using var files = Files(Config08B);
+
+        var result = await Service(files, Weights08B).CheckDownloadedAsync(Saved(OlmoeConfig(extra), license: null), Gguf, CancellationToken.None);
+
+        AssertEx.Null(result.Refusal, result.RefusalMessage);
+        AssertEx.Equal(refused, result.TraceRefusalMessage?.Contains("output_router_logits", StringComparison.Ordinal) ?? false, result.TraceRefusalMessage ?? "traceable");
+        AssertEx.Equal(refused ? ModelLabTraceRefusal.RouterLogitsRequested : null, result.TraceRefusal);
+    }
+
+    /// <summary>A dense model has no router for transformers to hook, so the flag is a harmless extra field there.</summary>
+    [Test]
+    public async Task ADenseConfigThatAsksForRouterLogits_CanStillBeTraced()
+    {
+        GgufHeader(embeddingLength: 1024, blockCount: 24);
+        using var files = Files(Config08B);
+        const string config = """{"model_type":"qwen3_5","text_config":{"hidden_size":1024,"num_hidden_layers":24,"output_router_logits":true}}""";
+
+        var result = await Service(files, Weights08B).CheckDownloadedAsync(Saved(config, license: null), Gguf, CancellationToken.None);
+
+        AssertEx.Null(result.Refusal, result.RefusalMessage);
+        AssertEx.Null(result.TraceRefusal, result.TraceRefusalMessage ?? "traceable");
+        AssertEx.Null(result.TraceRefusalMessage);
+    }
+
+    /// <summary>The family rule names every block full, so a config that says otherwise describes attention the recompute would not match. The trace itself is still allowed.</summary>
+    [Test]
+    [Arguments(""","layer_types":["full_attention","linear_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention"]""")]
+    [Arguments(""","layer_types":["full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","sliding_attention"]""")]
+    [Arguments(""","layer_types":["full_attention","full_attention"]""")]
+    [Arguments(""","sliding_window":4096""")]
+    [Arguments(""","attention_chunk_size":8192""")]
+    [Arguments(""","num_kv_shared_layers":2""")]
+    public async Task AnOlmoeConfigThatContradictsFullAttention_PassesButCannotRecordAttention(string extra)
+    {
+        GgufHeader(embeddingLength: 1024, blockCount: 16, architecture: "olmoe");
+        using var files = Files(Config08B);
+
+        var result = await Service(files, Weights08B).CheckDownloadedAsync(Saved(OlmoeConfig(extra), license: null), Gguf, CancellationToken.None);
+
+        AssertEx.Null(result.Refusal, result.RefusalMessage);
+        AssertEx.False(result.AttentionSupported, extra);
+        AssertEx.Contains(result.AttentionRefusalMessage!, "OLMoE checkpoint's config", StringComparison.Ordinal);
+        AssertEx.Equal(ModelLabAttentionRefusal.NotFullAttention, result.AttentionRefusal);
+    }
+
+    [Test]
+    [Arguments("")]
+    [Arguments(""","sliding_window":null,"attention_chunk_size":null""")]
+    [Arguments(""","layer_types":["full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention"]""")]
+    public async Task AnOlmoeConfigOfPlainFullAttention_CanRecordAttention(string extra)
+    {
+        GgufHeader(embeddingLength: 1024, blockCount: 16, architecture: "olmoe");
+        using var files = Files(Config08B);
+
+        var result = await Service(files, Weights08B).CheckDownloadedAsync(Saved(OlmoeConfig(extra), license: null), Gguf, CancellationToken.None);
+
+        AssertEx.Null(result.Refusal, result.RefusalMessage);
+        AssertEx.True(result.AttentionSupported, result.AttentionRefusalMessage ?? extra);
+        AssertEx.Null(result.AttentionRefusal);
+    }
+
+    [Test]
+    [Arguments(""","num_attention_heads":8""", true)]
+    [Arguments("", false)]
+    public async Task AQwenCheckpoint_CanRecordAttention_OnlyWhenItsConfigStatesItsHeads(string extra, bool supported)
+    {
+        GgufHeader(embeddingLength: 1024, blockCount: 24);
+        using var files = Files(Config08B);
+        var config = $$$"""{"model_type":"qwen3_5","text_config":{"hidden_size":1024,"num_hidden_layers":24{{{extra}}}}}""";
+
+        var result = await Service(files, Weights08B).CheckDownloadedAsync(Saved(config, license: null), Gguf, CancellationToken.None);
+
+        AssertEx.Equal("qwen3_5", result.ModelType!);
+        AssertEx.Equal(supported, result.AttentionSupported, result.AttentionRefusalMessage ?? "supported");
+        AssertEx.Equal(supported ? null : ModelLabAttentionRefusal.ShapeNotStated, result.AttentionRefusal);
+    }
+
+    /// <summary>The attention allow-set is its own gate: a family whose shape would size a recording still needs its recompute proven first.</summary>
+    [Test]
+    public void AFamilyOutsideTheAttentionSet_IsRefusedAttention_EvenWithAFullBlockAndValidHeads()
+    {
+        IReadOnlyList<string> kinds = ["full_attention", "full_attention"];
+
+        var refusal = ModelLabCheckpointPreflightService.AttentionRefusalOrNull(new BaseCheckpointConfigV1
+        {
+            ModelType = "llama",
+            NumHiddenLayers = 2,
+            NumAttentionHeads = 8
+        }, kinds);
+
+        AssertEx.Equal(ModelLabAttentionRefusal.UnsupportedModelType, refusal!.Value.Reason);
+        AssertEx.Equal("Attention capture is implemented for Qwen3.5 and OLMoE checkpoints; start the trace without it.", refusal.Value.Message);
+        AssertEx.Null(ModelLabCheckpointPreflightService.AttentionRefusalOrNull(new BaseCheckpointConfigV1
+        {
+            ModelType = "olmoe",
+            NumHiddenLayers = 2,
+            NumAttentionHeads = 8
+        }, kinds), "The same shape in an admitted family records attention.");
+    }
+
+    /// <summary>The page translates each code, so a shape the recording cannot hold names its own.</summary>
+    [Test]
+    [Arguments("linear_attention", 8, ModelLabAttentionRefusal.NoFullAttentionBlock)]
+    [Arguments("full_attention", 0, ModelLabAttentionRefusal.HeadCountOutOfRange)]
+    [Arguments("full_attention", ModelLabTraceSpec.MaxAttentionHeads + 1, ModelLabAttentionRefusal.HeadCountOutOfRange)]
+    public void AQwenShapeTheRecordingCannotHold_IsRefusedAttentionWithItsCode(string kind, int heads, ModelLabAttentionRefusal expected)
+    {
+        var refusal = ModelLabCheckpointPreflightService.AttentionRefusalOrNull(new BaseCheckpointConfigV1
+        {
+            ModelType = "qwen3_5",
+            NumHiddenLayers = 2,
+            NumAttentionHeads = heads
+        }, [kind, kind]);
+
+        AssertEx.Equal(expected, refusal!.Value.Reason, refusal.Value.Message);
+    }
+
+    /// <summary>The fit is the weights plus the working allowance against the card's total, inclusive.</summary>
+    [Test]
+    [Arguments(0, true)]
+    [Arguments(-1, false)]
+    public async Task ACheckpoint_FitsACardOfExactlyItsWeightsAndWorkingMemory(long spare, bool fits)
+    {
+        _ = _audit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                  .Returns(Profile(Weights08B + ModelLabCheckpointPreflightService.WorkingMemoryBytes + spare));
+        GgufHeader(embeddingLength: 1024, blockCount: 16, architecture: "olmoe");
+        using var files = Files(Config08B);
+
+        var result = await Service(files, Weights08B).CheckDownloadedAsync(Saved(OlmoeConfig(string.Empty), license: null), Gguf, CancellationToken.None);
+
+        AssertEx.Equal(fits ? null : (ModelLabCheckpointRefusal?)ModelLabCheckpointRefusal.CannotFitCard, result.Refusal, result.RefusalMessage ?? "fits");
+    }
+
     [Test]
     public async Task AModelTypeTheScriptDoesNotKnow_GetsNoDerivedBlockKinds()
     {
@@ -351,6 +529,10 @@ public sealed class ModelLabCheckpointPreflightServiceTests : IDisposable
         AssertEx.Contains(result.LicenseConfirmationText!, "no license metadata", StringComparison.Ordinal);
         AssertEx.False(result.MetadataPresent, "The page builds its translated sentence from this flag.");
     }
+
+    /// <summary>OLMoE's shape at the GGUF's embedding width: 16 blocks of 16 heads, no <c>layer_types</c>.</summary>
+    private static string OlmoeConfig(string extra) =>
+        $$"""{"model_type":"olmoe","hidden_size":1024,"num_hidden_layers":16,"num_attention_heads":16,"num_experts":64,"num_experts_per_tok":8{{extra}}}""";
 
     private static string ConfigOfType(string modelType) =>
         $$"""{"model_type":"{{modelType}}","hidden_size":1024,"num_hidden_layers":24}""";
@@ -407,13 +589,13 @@ public sealed class ModelLabCheckpointPreflightServiceTests : IDisposable
             Content = new StringContent(body)
         };
 
-    private void GgufHeader(long? embeddingLength, long? blockCount, GgufTensorReadFailure failure = GgufTensorReadFailure.None) =>
+    private void GgufHeader(long? embeddingLength, long? blockCount, GgufTensorReadFailure failure = GgufTensorReadFailure.None, string architecture = "qwen35") =>
         _ggufReader.ReadTensorsAsync("/models/some.gguf", Arg.Any<CancellationToken>())
                    .Returns(new GgufTensorInspection
                    {
                        Failure = failure,
                        Version = 3,
-                       Architecture = "qwen35",
+                       Architecture = architecture,
                        ModelName = null,
                        ParamCount = null,
                        FileType = null,

@@ -87,6 +87,10 @@ export function valueRelationLabel(t: TFunction, relation: string | null): strin
 			"pages.modelLab.architecture.relation.reordered",
 			"Reordered from the Hugging Face tensor (heads or rotary pairs regrouped); a quantized type also changes the values",
 		),
+		sliced: t(
+			"pages.modelLab.architecture.relation.sliced",
+			"One half of a fused Hugging Face tensor (gate or up rows), assuming the catalog's fused checkpoint layout; a quantized type also changes the values",
+		),
 	};
 	return relation === null ? t("pages.modelLab.architecture.relation.notStated", "Not stated") : (labels[relation] ?? relation);
 }

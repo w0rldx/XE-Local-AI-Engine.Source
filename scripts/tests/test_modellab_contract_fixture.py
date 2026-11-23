@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The Model Lab C#<->Python contract fixture: trace, lens, attention and result bytes from the real writers in
+"""The Model Lab C#<->Python contract fixture: trace, lens, routing, attention and result bytes from the real writers in
 tools/training/modellablib.py, checked against the committed copy the C# parser reads (``ModelLabTraceContractTests``).
 
 Outside tools/training on purpose: the fixture belongs to the host's tests, not to the shipped runtime. Synthetic
@@ -32,6 +32,9 @@ SPEC.loader.exec_module(LIB)
 CAP = 100_000
 HEADS = 2
 TEXTS = {11: "a", 12: " b", 13: "é"}
+# Block 1 of 2 has a router choosing 2 of 4 experts; per step the ids and the bfloat16 bits of 0.5, 0.25, 1.0 and 0.125.
+ROUTING_IDS = ([[3, 0]], [[1, 2]])
+ROUTING_BITS = ([[0x3F00, 0x3E80]], [[0x3F80, 0x3E00]])
 
 
 def _written(write) -> str:
@@ -58,6 +61,10 @@ def _write_trace(path: str) -> None:
         )
     )
     lens.close()
+    routing = writer.section(CAP, "routingFooter")
+    for step, (ids, bits) in enumerate(zip(ROUTING_IDS, ROUTING_BITS, strict=True)):
+        routing.write(LIB.routing_record(step, ids, bits))
+    routing.close()
     writer.close()
 
 
@@ -103,6 +110,15 @@ def _result() -> dict[str, Any]:
             "truncated": False,
             "tiedEmbeddings": True,
             "vocabSize": 16,
+        },
+        "routing": {
+            "layers": [1],
+            "experts": 4,
+            "expertsPerToken": 2,
+            "normalizedTopK": False,
+            "weightEncoding": LIB.ROUTING_WEIGHT_ENCODING,
+            "records": 2,
+            "truncated": False,
         },
         "attention": {
             "layers": [1],

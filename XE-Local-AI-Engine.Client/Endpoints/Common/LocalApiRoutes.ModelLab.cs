@@ -25,6 +25,9 @@ public static partial class LocalApiRoutes
         // A trace's logit lens, apart from the trace: two of the trace's three readers never show it, and it is most of the blob.
         public const string ExperimentLens = "model-lab/experiments/{experimentId:guid}/lens";
 
+        // A trace's router choices per step and MoE block, apart from the trace like the lens: only the stepper's routing panel reads them.
+        public const string ExperimentRouting = "model-lab/experiments/{experimentId:guid}/routing";
+
         public const string ExperimentNotes = "model-lab/experiments/{experimentId:guid}/notes";
 
         // A pinned experiment is exempt from retention's trim.

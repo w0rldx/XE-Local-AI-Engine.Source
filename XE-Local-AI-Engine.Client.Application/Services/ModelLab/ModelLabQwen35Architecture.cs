@@ -5,11 +5,12 @@ using System.Globalization;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using static ModelLabTemplateParts;
 
-/// <summary>The static <c>qwen35</c> (Qwen3.5/3.8) knowledge behind a detailed descriptor: HF tensor names and one operation template per block kind.</summary>
+/// <summary>The static <c>qwen35</c> (Qwen3.5/3.8) or <c>qwen35moe</c> knowledge behind a detailed descriptor: HF tensor names and one operation template per block kind.</summary>
 /// <remarks>
 ///     HF names and value relations follow llama.cpp <c>gguf-py/gguf/tensor_mapping.py</c> and <c>conversion/qwen.py</c>
-///     (<c>Qwen3NextModel.modify_tensors</c>); templates follow <c>src/models/qwen35.cpp</c> (<c>graph</c>,
-///     <c>build_layer_attn</c>, <c>build_layer_attn_linear</c>, <c>graph_mtp</c>), all at <see cref="TemplateLlamaCppTag" />.
+///     (<c>Qwen3NextModel</c>, <c>Qwen2MoeModel.modify_tensors</c>); templates follow <c>src/models/qwen35.cpp</c> or
+///     <c>qwen35moe.cpp</c> (<c>graph</c>, <c>build_layer_attn</c>, <c>build_layer_attn_linear</c>, <c>build_layer_ffn</c>,
+///     <c>graph_mtp</c>) and <c>src/llama-graph.cpp</c> (<c>build_moe_ffn</c>), all at <see cref="TemplateLlamaCppTag" />.
 /// </remarks>
 internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescriptor
 {
@@ -17,12 +18,12 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
     // it, so a bump re-reads the upstream files above before changing this.
     private const string TemplateLlamaCppTag = "b12014";
 
-    private const string Source = "llama.cpp src/models/qwen35.cpp @ " + TemplateLlamaCppTag;
     private const string LayerPrefix = "model.language_model.layers.";
     private const string Equal = "equal";
     private const string PlusOne = "plus_one";
 
-    // Keyed by the name after "blk.N.". The converter adds 1 to every norm but linear_attn.norm and stores -exp(A_log).
+    // Keyed by the name after "blk.N.", shared by both families; each adds its FFN rows below. The converter adds 1 to
+    // every norm but linear_attn.norm and stores -exp(A_log).
     private static readonly FrozenDictionary<string, ModelLabHfTensor> BlockTensors = new Dictionary<string, ModelLabHfTensor>(StringComparer.Ordinal)
     {
         ["attn_norm.weight"] = Hf("input_layernorm.weight", PlusOne),
@@ -41,10 +42,30 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
         ["attn_v.weight"] = Hf("self_attn.v_proj.weight", Equal),
         ["attn_output.weight"] = Hf("self_attn.o_proj.weight", Equal),
         ["attn_q_norm.weight"] = Hf("self_attn.q_norm.weight", PlusOne),
-        ["attn_k_norm.weight"] = Hf("self_attn.k_norm.weight", PlusOne),
+        ["attn_k_norm.weight"] = Hf("self_attn.k_norm.weight", PlusOne)
+    }.ToFrozenDictionary(StringComparer.Ordinal);
+
+    private static readonly FrozenDictionary<string, ModelLabHfTensor> DenseFfnTensors = new Dictionary<string, ModelLabHfTensor>(StringComparer.Ordinal)
+    {
         ["ffn_gate.weight"] = Hf("mlp.gate_proj.weight", Equal),
         ["ffn_up.weight"] = Hf("mlp.up_proj.weight", Equal),
         ["ffn_down.weight"] = Hf("mlp.down_proj.weight", Equal)
+    }.ToFrozenDictionary(StringComparer.Ordinal);
+
+    // The converter splits the fused HF gate_up_proj (first half of its rows → gate); --fuse-gate-up-exps keeps it whole,
+    // in HF order. A per-expert checkpoint (mlp.experts.N.*) is stacked instead, and no metadata tells the two apart.
+    private static readonly FrozenDictionary<string, ModelLabHfTensor> ExpertFfnTensors = new Dictionary<string, ModelLabHfTensor>(StringComparer.Ordinal)
+    {
+        ["ffn_gate_inp.weight"] = Hf("mlp.gate.weight", Equal),
+        ["ffn_gate_exps.weight"] = Hf("mlp.experts.gate_up_proj", ModelLabArchitectureBuilder.Sliced),
+        ["ffn_up_exps.weight"] = Hf("mlp.experts.gate_up_proj", ModelLabArchitectureBuilder.Sliced),
+        ["ffn_gate_up_exps.weight"] = Hf("mlp.experts.gate_up_proj", Equal),
+        ["ffn_down_exps.weight"] = Hf("mlp.experts.down_proj", Equal),
+        // HF [1, hidden]; a requantized file stores [hidden] (gguf writes ggml_n_dims, dropping the trailing 1).
+        ["ffn_gate_inp_shexp.weight"] = Hf("mlp.shared_expert_gate.weight", Equal),
+        ["ffn_gate_shexp.weight"] = Hf("mlp.shared_expert.gate_proj.weight", Equal),
+        ["ffn_up_shexp.weight"] = Hf("mlp.shared_expert.up_proj.weight", Equal),
+        ["ffn_down_shexp.weight"] = Hf("mlp.shared_expert.down_proj.weight", Equal)
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     // The linear_attn tensors _LinearAttentionVReorderBase.modify_tensors permutes when the key and value head counts
@@ -69,19 +90,31 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
         ["output.weight"] = Hf("lm_head.weight", Equal)
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
-    private static readonly ModelLabArchitectureTemplate LinearAttentionTemplate = BuildLinearAttention();
-    private static readonly ModelLabArchitectureTemplate FullAttentionTemplate = BuildFullAttention();
-    private static readonly ModelLabArchitectureTemplate MtpTemplate = BuildMtp();
+    private readonly FrozenDictionary<string, ModelLabHfTensor> _ffnTensors;
 
-    public string Architecture => "qwen35";
+    // In the order linear attention, full attention, MTP.
+    private readonly ModelLabArchitectureTemplate[] _templates;
+
+    /// <param name="mixtureOfExperts">True for <c>qwen35moe</c>: routed experts plus a gated shared expert in place of the dense FFN.</param>
+    public ModelLabQwen35Architecture(bool mixtureOfExperts)
+    {
+        Architecture = mixtureOfExperts ? "qwen35moe" : "qwen35";
+        _ffnTensors = mixtureOfExperts ? ExpertFfnTensors : DenseFfnTensors;
+        var source = "llama.cpp src/models/" + Architecture + ".cpp @ " + TemplateLlamaCppTag;
+        _templates = [BuildLinearAttention(source, mixtureOfExperts), BuildFullAttention(source, mixtureOfExperts), BuildMtp(source, mixtureOfExperts)];
+    }
+
+    public string Architecture { get; }
 
     public string LlamaCppTag => TemplateLlamaCppTag;
 
-    public ModelLabHfTensor? BlockHfName(string ggufName, int blockIndex, GgufTensorInspection inspection)
+    public ModelLabHfTensor? BlockHfName(string ggufName, int blockIndex, string blockKind, GgufTensorInspection inspection)
     {
         var prefix = string.Create(CultureInfo.InvariantCulture, $"blk.{blockIndex}.");
         var suffix = ggufName.StartsWith(prefix, StringComparison.Ordinal) ? ggufName[prefix.Length..] : null;
-        if (suffix is null || !BlockTensors.TryGetValue(suffix, out var entry))
+        // Outside a linear block attn_qkv is q_proj, k_proj and v_proj fused (create_tensor_qkv): no one HF tensor to name.
+        if (suffix is null || (suffix == "attn_qkv.weight" && blockKind != ModelLabArchitectureBuilder.LinearAttentionKind)
+                           || !(BlockTensors.TryGetValue(suffix, out var entry) || _ffnTensors.TryGetValue(suffix, out entry)))
         {
             return null;
         }
@@ -108,15 +141,7 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
     public IReadOnlyList<ModelLabArchitectureTemplate> TemplatesFor(IReadOnlyList<ModelLabArchitectureBlock> blocks, GgufTensorInspection inspection)
     {
         var present = blocks.Select(static block => block.Kind).ToHashSet(StringComparer.Ordinal);
-        return
-        [
-            .. new[]
-            {
-                LinearAttentionTemplate,
-                FullAttentionTemplate,
-                MtpTemplate
-            }.Where(template => present.Contains(template.Kind))
-        ];
+        return [.. _templates.Where(template => present.Contains(template.Kind))];
     }
 
     private static ModelLabHfTensor Hf(string name, string relation) =>
@@ -127,7 +152,7 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
         };
 
     // graph::build_layer_attn_linear: projections, causal conv, L2-normed Q and K into the gated delta rule, gated norm.
-    private static ModelLabArchitectureTemplate BuildLinearAttention()
+    private static ModelLabArchitectureTemplate BuildLinearAttention(string source, bool mixtureOfExperts)
     {
         var nodes = new List<ModelLabArchitectureTemplateNode>();
         var edges = new List<ModelLabArchitectureTemplateEdge>();
@@ -149,12 +174,12 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
             E("alpha", "decay"), E("qkv", "conv"), E("conv", "split"), E("split", "l2_norm"), E("split", "delta"), E("l2_norm", "delta"),
             E("decay", "delta"), E("beta", "delta"), E("delta", "gated_norm"), E("z", "gated_norm"), E("gated_norm", "mixer_out")
         ]);
-        AddTail(nodes, edges, residualFrom: "input", trunk: true);
-        return Template(ModelLabArchitectureBuilder.LinearAttentionKind, Source, nodes, edges);
+        AddTail(nodes, edges, residualFrom: "input", trunk: true, mixtureOfExperts);
+        return Template(ModelLabArchitectureBuilder.LinearAttentionKind, source, nodes, edges);
     }
 
     // graph::build_layer_attn: Q carries a gate half, Q and K are RMS-normed, then MRoPE, attention and sigmoid(gate).
-    private static ModelLabArchitectureTemplate BuildFullAttention()
+    private static ModelLabArchitectureTemplate BuildFullAttention(string source, bool mixtureOfExperts)
     {
         var nodes = new List<ModelLabArchitectureTemplateNode>();
         var edges = new List<ModelLabArchitectureTemplateEdge>();
@@ -162,13 +187,13 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
         Node(nodes, "attn_norm", "RMSNorm · attn_norm", ModelLabArchitectureBuilder.Norm);
         edges.Add(E("input", "attn_norm"));
         AddGatedAttention(nodes, edges);
-        AddTail(nodes, edges, residualFrom: "input", trunk: true);
-        return Template(ModelLabArchitectureBuilder.FullAttentionKind, Source, nodes, edges);
+        AddTail(nodes, edges, residualFrom: "input", trunk: true, mixtureOfExperts);
+        return Template(ModelLabArchitectureBuilder.FullAttentionKind, source, nodes, edges);
     }
 
     // graph_mtp: the normed trunk state and the token embedding are joined by eh_proj, run one full-attention block
     // and a head of their own. It runs as a separate draft graph, never inside the main forward pass.
-    private static ModelLabArchitectureTemplate BuildMtp()
+    private static ModelLabArchitectureTemplate BuildMtp(string source, bool mixtureOfExperts)
     {
         var nodes = new List<ModelLabArchitectureTemplateNode>();
         var edges = new List<ModelLabArchitectureTemplateEdge>();
@@ -183,12 +208,12 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
             E("hidden", "hnorm"), E("token", "enorm"), E("enorm", "concat"), E("hnorm", "concat"), E("concat", "eh_proj"), E("eh_proj", "attn_norm")
         ]);
         AddGatedAttention(nodes, edges);
-        AddTail(nodes, edges, residualFrom: "eh_proj", trunk: false);
+        AddTail(nodes, edges, residualFrom: "eh_proj", trunk: false, mixtureOfExperts);
         Node(nodes, "head_norm", "RMSNorm · nextn.shared_head_norm, else output_norm", ModelLabArchitectureBuilder.Mtp);
         Node(nodes, "head", "LM head · nextn.shared_head_head, else output", component: null);
         Node(nodes, "logits", "Draft-token logits", component: null);
         edges.AddRange([E("ffn_residual", "head_norm"), E("head_norm", "head"), E("head", "logits")]);
-        return Template(ModelLabArchitectureBuilder.MtpKind, Source, nodes, edges);
+        return Template(ModelLabArchitectureBuilder.MtpKind, source, nodes, edges);
     }
 
     private static void AddGatedAttention(List<ModelLabArchitectureTemplateNode> nodes, List<ModelLabArchitectureTemplateEdge> edges)
@@ -210,26 +235,64 @@ internal sealed class ModelLabQwen35Architecture : IModelLabArchitectureDescript
         ]);
     }
 
-    // Both residual adds and the dense SiLU FFN (build_layer_ffn); a trunk block then adds a loaded control vector.
-    private static void AddTail(List<ModelLabArchitectureTemplateNode> nodes, List<ModelLabArchitectureTemplateEdge> edges, string residualFrom, bool trunk)
+    // Both residual adds and the SiLU FFN (build_layer_ffn), dense or mixture of experts; a trunk block then adds a
+    // loaded control vector.
+    private static void AddTail(List<ModelLabArchitectureTemplateNode> nodes, List<ModelLabArchitectureTemplateEdge> edges, string residualFrom, bool trunk,
+        bool mixtureOfExperts)
     {
         Node(nodes, "attn_residual", "Add residual", component: null);
         Node(nodes, "post_norm", "RMSNorm · post_attention_norm", ModelLabArchitectureBuilder.Norm);
-        Node(nodes, "ffn_gate", "Gate projection · ffn_gate", ModelLabArchitectureBuilder.Ffn);
-        Node(nodes, "ffn_up", "Up projection · ffn_up", ModelLabArchitectureBuilder.Ffn);
-        Node(nodes, "ffn_act", "SiLU(gate) × up", ModelLabArchitectureBuilder.Ffn);
-        Node(nodes, "ffn_down", "Down projection · ffn_down", ModelLabArchitectureBuilder.Ffn);
+        edges.AddRange([E("mixer_out", "attn_residual"), E(residualFrom, "attn_residual"), E("attn_residual", "post_norm")]);
+        if (mixtureOfExperts)
+        {
+            AddMixtureOfExperts(nodes, edges);
+        }
+        else
+        {
+            Node(nodes, "ffn_gate", "Gate projection · ffn_gate", ModelLabArchitectureBuilder.Ffn);
+            Node(nodes, "ffn_up", "Up projection · ffn_up", ModelLabArchitectureBuilder.Ffn);
+            Node(nodes, "ffn_act", "SiLU(gate) × up", ModelLabArchitectureBuilder.Ffn);
+            Node(nodes, "ffn_down", "Down projection · ffn_down", ModelLabArchitectureBuilder.Ffn);
+            edges.AddRange([E("post_norm", "ffn_gate"), E("post_norm", "ffn_up"), E("ffn_gate", "ffn_act"), E("ffn_up", "ffn_act"), E("ffn_act", "ffn_down")]);
+        }
+
         Node(nodes, "ffn_residual", "Add residual", component: null);
-        edges.AddRange([
-            E("mixer_out", "attn_residual"), E(residualFrom, "attn_residual"), E("attn_residual", "post_norm"), E("post_norm", "ffn_gate"),
-            E("post_norm", "ffn_up"), E("ffn_gate", "ffn_act"), E("ffn_up", "ffn_act"), E("ffn_act", "ffn_down"), E("ffn_down", "ffn_residual"),
-            E("attn_residual", "ffn_residual")
-        ]);
+        edges.AddRange([E(mixtureOfExperts ? "moe_out" : "ffn_down", "ffn_residual"), E("attn_residual", "ffn_residual")]);
         if (trunk)
         {
             Node(nodes, "control_vector", "Add control vector (when one is loaded)", component: null);
             Node(nodes, "output", "Block output", component: null);
             edges.AddRange([E("ffn_residual", "control_vector"), E("control_vector", "output")]);
         }
+    }
+
+    // build_moe_ffn (softmax gating, norm_w, weighting after down) plus the sigmoid-gated shared expert. Not drawn: the
+    // fused gate_up path (same operations), the weight scale (0, unused), the unset SwiGLU clamp, the expert-cache slots.
+    private static void AddMixtureOfExperts(List<ModelLabArchitectureTemplateNode> nodes, List<ModelLabArchitectureTemplateEdge> edges)
+    {
+        const string ffn = ModelLabArchitectureBuilder.Ffn;
+        Node(nodes, "router", "Router logits · ffn_gate_inp", ffn);
+        Node(nodes, "router_probs", "Softmax over every expert", ffn);
+        Node(nodes, "topk", "Top-k experts", ffn);
+        Node(nodes, "topk_weights", "Chosen probabilities ÷ their sum", ffn);
+        Node(nodes, "exp_gate", "Expert gate projection · ffn_gate_exps (logical half when the file stores ffn_gate_up_exps)", ffn);
+        Node(nodes, "exp_up", "Expert up projection · ffn_up_exps (logical half when the file stores ffn_gate_up_exps)", ffn);
+        Node(nodes, "exp_act", "SiLU(gate) × up, per expert", ffn);
+        Node(nodes, "exp_down", "Expert down projection · ffn_down_exps", ffn);
+        Node(nodes, "exp_weighted", "× router weight, summed over the chosen experts", ffn);
+        Node(nodes, "shexp_gate", "Shared-expert gate projection · ffn_gate_shexp", ffn);
+        Node(nodes, "shexp_up", "Shared-expert up projection · ffn_up_shexp", ffn);
+        Node(nodes, "shexp_act", "SiLU(gate) × up", ffn);
+        Node(nodes, "shexp_down", "Shared-expert down projection · ffn_down_shexp", ffn);
+        Node(nodes, "shexp_scale", "sigmoid(ffn_gate_inp_shexp · x)", ffn);
+        Node(nodes, "shexp_gated", "Shared expert × its gate", ffn);
+        Node(nodes, "moe_out", "Add routed and shared experts", ffn);
+        edges.AddRange([
+            E("post_norm", "router"), E("router", "router_probs"), E("router_probs", "topk"), E("router_probs", "topk_weights"), E("topk", "topk_weights"),
+            E("post_norm", "exp_gate"), E("post_norm", "exp_up"), E("topk", "exp_gate"), E("topk", "exp_up"), E("exp_gate", "exp_act"), E("exp_up", "exp_act"),
+            E("exp_act", "exp_down"), E("topk", "exp_down"), E("exp_down", "exp_weighted"), E("topk_weights", "exp_weighted"), E("post_norm", "shexp_gate"),
+            E("post_norm", "shexp_up"), E("shexp_gate", "shexp_act"), E("shexp_up", "shexp_act"), E("shexp_act", "shexp_down"), E("post_norm", "shexp_scale"),
+            E("shexp_down", "shexp_gated"), E("shexp_scale", "shexp_gated"), E("exp_weighted", "moe_out"), E("shexp_gated", "moe_out")
+        ]);
     }
 }

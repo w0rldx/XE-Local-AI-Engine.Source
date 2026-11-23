@@ -12,7 +12,8 @@ internal interface IModelLabArchitectureDescriptor
     string LlamaCppTag { get; }
 
     /// <summary>The HF tensor a block tensor was converted from, or null for a name the table does not hold.</summary>
-    ModelLabHfTensor? BlockHfName(string ggufName, int blockIndex, GgufTensorInspection inspection);
+    /// <param name="blockKind">The block's kind from <see cref="ModelLabArchitectureBuilder.BlockKind" />: one GGUF name can come from different HF tensors per kind.</param>
+    ModelLabHfTensor? BlockHfName(string ggufName, int blockIndex, string blockKind, GgufTensorInspection inspection);
 
     /// <summary>The HF tensor a tensor outside the blocks was converted from, or null for a name the table does not hold.</summary>
     ModelLabHfTensor? NonBlockHfName(string ggufName);

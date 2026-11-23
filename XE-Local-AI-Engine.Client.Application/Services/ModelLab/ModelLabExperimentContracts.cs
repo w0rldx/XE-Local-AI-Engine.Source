@@ -102,6 +102,13 @@ public sealed record ModelLabTraceJobV1
     /// <summary><see cref="ModelLabTraceSpec.LensByteCapFor" /> of the block count: the lens lines' own cap, on top of <see cref="TraceByteCap" /> in the same file.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? LensByteCap { get; init; }
+
+    /// <summary>
+    ///     <see cref="ModelLabTraceSpec.RoutingByteCapFor" /> of the block count: the routing lines' own cap, on top of the others in the same file. Set for a checkpoint of
+    ///     up to <see cref="ModelLabTraceSpec.MaxTraceLayers" /> blocks and left out of the file otherwise; the script writes routing only for a model whose blocks have routers.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? RoutingByteCap { get; init; }
 }
 
 /// <summary>What <c>modellab.py</c> reads for a steering job. Holds the plaintext contrast prompts, in the owner-only work directory.</summary>
@@ -368,6 +375,40 @@ public sealed record ModelLabLens
     public ModelLabTraceFooter? Footer { get; init; }
 }
 
+/// <summary>
+///     The router choices behind one generated token: per MoE block, at the last position of the forward whose logits chose it, the experts picked
+///     and the weights they were given. The short names are the file's.
+/// </summary>
+public sealed record ModelLabRoutingRecord
+{
+    /// <summary>The index of the generated token.</summary>
+    [JsonRequired]
+    [JsonPropertyName("s")]
+    public int Step { get; init; }
+
+    /// <summary>Per block, the picked expert ids in the router's order.</summary>
+    [JsonRequired]
+    [JsonPropertyName("x")]
+    public IReadOnlyList<IReadOnlyList<int>> Experts { get; init; } = [];
+
+    /// <summary>Per block, each pick's weight as its bfloat16 bit pattern (<see cref="ModelLabTraceSpec.RoutingWeight" />), matching <see cref="Experts" />.</summary>
+    [JsonRequired]
+    [JsonPropertyName("w")]
+    public IReadOnlyList<IReadOnlyList<int>> WeightBits { get; init; } = [];
+}
+
+/// <summary>A trace's routing lines, with the run's routing summary and the routing section's own footer.</summary>
+public sealed record ModelLabRouting
+{
+    public required ModelLabTraceReadStatus Status { get; init; }
+
+    public ModelLabRoutingSummary? Summary { get; init; }
+
+    public IReadOnlyList<ModelLabRoutingRecord> Records { get; init; } = [];
+
+    public ModelLabTraceFooter? Footer { get; init; }
+}
+
 /// <summary>One generated token. The text is what the tokenizer decodes the id to on its own.</summary>
 public sealed record ModelLabResultToken
 {
@@ -457,6 +498,9 @@ public sealed record ModelLabTraceResult
     /// <summary>Null on a result saved before contract 5, and for a checkpoint with fewer than 2 or more than <see cref="ModelLabTraceSpec.MaxTraceLayers" /> blocks.</summary>
     public ModelLabLensSummary? Lens { get; init; }
 
+    /// <summary>Null on a result saved before contract 8, and for a model with no router.</summary>
+    public ModelLabRoutingSummary? Routing { get; init; }
+
     /// <summary>True when the worker already held the model. Null on a result saved before contract 6.</summary>
     public bool? Warm { get; init; }
 
@@ -482,6 +526,30 @@ public sealed record ModelLabLensSummary
 
     /// <summary>The output layer's width: the V an entropy is bounded by, ln V.</summary>
     public int VocabSize { get; init; }
+}
+
+/// <summary>What a trace's routing capture recorded. The lines themselves follow the lens lines in the trace blob.</summary>
+public sealed record ModelLabRoutingSummary
+{
+    /// <summary>The MoE blocks, in the order each line lists them.</summary>
+    public IReadOnlyList<int> Layers { get; init; } = [];
+
+    /// <summary>The experts each router chooses from.</summary>
+    public int Experts { get; init; }
+
+    /// <summary>The experts each router picks per token.</summary>
+    public int ExpertsPerToken { get; init; }
+
+    /// <summary>True when the picks' weights are rescaled to sum to 1; false when they keep their share of the router's probability.</summary>
+    public bool NormalizedTopK { get; init; }
+
+    /// <summary><see cref="ModelLabTraceSpec.RoutingWeightEncoding" />; any other value makes the lines unreadable.</summary>
+    public string? WeightEncoding { get; init; }
+
+    public int Records { get; init; }
+
+    /// <summary>True when the routing cap dropped steps.</summary>
+    public bool Truncated { get; init; }
 }
 
 /// <summary>One token of the rendered prompt. The text is what the tokenizer decodes the id to on its own, and can be cut to keep the result under its cap.</summary>

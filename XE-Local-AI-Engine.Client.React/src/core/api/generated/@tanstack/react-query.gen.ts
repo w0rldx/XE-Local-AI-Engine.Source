@@ -220,6 +220,7 @@ import {
 	getModelLabExperiment,
 	getModelLabExperimentAttention,
 	getModelLabExperimentLens,
+	getModelLabExperimentRouting,
 	getModelLabExperimentTrace,
 	getModelLabPyTorchIndex,
 	getModelLabPyTorchSource,
@@ -1015,6 +1016,9 @@ import type {
 	GetModelLabExperimentLensError,
 	GetModelLabExperimentLensResponse,
 	GetModelLabExperimentResponse,
+	GetModelLabExperimentRoutingData,
+	GetModelLabExperimentRoutingError,
+	GetModelLabExperimentRoutingResponse,
 	GetModelLabExperimentTraceData,
 	GetModelLabExperimentTraceError,
 	GetModelLabExperimentTraceResponse,
@@ -9378,6 +9382,28 @@ export const setModelLabExperimentPinMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getModelLabExperimentRoutingQueryKey = (options: Options<GetModelLabExperimentRoutingData>) =>
+	createQueryKey("getModelLabExperimentRouting", options, false, ["Model-Lab"]);
+
+export const getModelLabExperimentRoutingOptions = (options: Options<GetModelLabExperimentRoutingData>) =>
+	queryOptions<
+		GetModelLabExperimentRoutingResponse,
+		AxiosError<GetModelLabExperimentRoutingError>,
+		GetModelLabExperimentRoutingResponse,
+		ReturnType<typeof getModelLabExperimentRoutingQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelLabExperimentRouting({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelLabExperimentRoutingQueryKey(options),
+	});
 
 export const getModelLabExperimentTraceQueryKey = (options: Options<GetModelLabExperimentTraceData>) =>
 	createQueryKey("getModelLabExperimentTrace", options, false, ["Model-Lab"]);

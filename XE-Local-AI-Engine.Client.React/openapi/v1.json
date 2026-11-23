@@ -18425,6 +18425,64 @@
         ]
       }
     },
+    "/api/local/v1/model-lab/experiments/{experimentId}/routing": {
+      "get": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "getModelLabExperimentRouting",
+        "parameters": [
+          {
+            "name": "experimentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabRoutingResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-lab/experiments/{experimentId}/trace": {
       "get": {
         "tags": [
@@ -43819,7 +43877,13 @@
           "ggufEmbeddingLength",
           "ggufBlockCount",
           "steerableBlockCount",
+          "modelType",
           "checkpointLayerTypes",
+          "attentionSupported",
+          "attentionRefusalMessage",
+          "attentionRefusal",
+          "traceRefusalMessage",
+          "traceRefusal",
           "defaultSteeringLayer",
           "licenseConfirmationText",
           "refusal",
@@ -43877,12 +43941,43 @@
             "type": "integer",
             "nullable": true
           },
+          "modelType": {
+            "type": "string",
+            "nullable": true
+          },
           "checkpointLayerTypes": {
             "type": "array",
             "nullable": true,
             "items": {
               "type": "string"
             }
+          },
+          "attentionSupported": {
+            "type": "boolean"
+          },
+          "attentionRefusalMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "attentionRefusal": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabAttentionRefusal"
+              }
+            ]
+          },
+          "traceRefusalMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "traceRefusal": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabTraceRefusal"
+              }
+            ]
           },
           "defaultSteeringLayer": {
             "type": "integer",
@@ -44259,6 +44354,101 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabRoutingBlockResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "layer",
+          "experts",
+          "weights"
+        ],
+        "properties": {
+          "layer": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "experts": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "weights": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabRoutingResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "layers",
+          "experts",
+          "expertsPerToken",
+          "normalizedTopK",
+          "steps",
+          "truncated",
+          "droppedSteps"
+        ],
+        "properties": {
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "experts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "expertsPerToken": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "normalizedTopK": {
+            "type": "boolean"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabRoutingStepResponse"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "droppedSteps": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabRoutingStepResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "step",
+          "blocks"
+        ],
+        "properties": {
+          "step": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabRoutingBlockResponse"
+            }
           }
         }
       },
@@ -52876,6 +53066,24 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabAttentionRefusal": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "UnsupportedModelType",
+          "NotFullAttention",
+          "ShapeNotStated",
+          "NoFullAttentionBlock",
+          "HeadCountOutOfRange"
+        ],
+        "enum": [
+          "UnsupportedModelType",
+          "NotFullAttention",
+          "ShapeNotStated",
+          "NoFullAttentionBlock",
+          "HeadCountOutOfRange"
+        ]
+      },
       "XE_Local_AI_EngineClientServicesModelLabModelLabAttentionSummary": {
         "type": "object",
         "additionalProperties": false,
@@ -52932,7 +53140,8 @@
           "BlockCountMismatch",
           "LicenseNotConfirmed",
           "DownloadRejected",
-          "UnsupportedModelType"
+          "UnsupportedModelType",
+          "ArchitectureMismatch"
         ],
         "enum": [
           "UnsupportedPlatform",
@@ -52947,7 +53156,8 @@
           "BlockCountMismatch",
           "LicenseNotConfirmed",
           "DownloadRejected",
-          "UnsupportedModelType"
+          "UnsupportedModelType",
+          "ArchitectureMismatch"
         ]
       },
       "XE_Local_AI_EngineClientServicesModelLabModelLabLensSummary": {
@@ -53431,6 +53641,41 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabRoutingSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "experts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "expertsPerToken": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "normalizedTopK": {
+            "type": "boolean"
+          },
+          "weightEncoding": {
+            "type": "string",
+            "nullable": true
+          },
+          "records": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientServicesModelLabModelLabStartRefusal": {
         "type": "string",
         "description": "",
@@ -53634,6 +53879,16 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabTraceRefusal": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "RouterLogitsRequested"
+        ],
+        "enum": [
+          "RouterLogitsRequested"
+        ]
+      },
       "XE_Local_AI_EngineClientServicesModelLabModelLabTraceResult": {
         "type": "object",
         "additionalProperties": false,
@@ -53745,6 +54000,14 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabLensSummary"
+              }
+            ]
+          },
+          "routing": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabRoutingSummary"
               }
             ]
           },

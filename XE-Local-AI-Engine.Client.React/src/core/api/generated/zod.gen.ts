@@ -4948,6 +4948,52 @@ export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokensRespon
 	truncated: z.boolean(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabRoutingBlockResponse = z.object({
+	layer: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	experts: z.array(
+		z
+			.int()
+			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	),
+	weights: z.array(z.number()),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabRoutingStepResponse = z.object({
+	step: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	blocks: z.array(zXeLocalAiEngineClientEndpointsModelLabV1ModelLabRoutingBlockResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabRoutingResponse = z.object({
+	layers: z.array(
+		z
+			.int()
+			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	),
+	experts: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	expertsPerToken: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	normalizedTopK: z.boolean(),
+	steps: z.array(zXeLocalAiEngineClientEndpointsModelLabV1ModelLabRoutingStepResponse),
+	truncated: z.boolean(),
+	droppedSteps: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceRecordResponse = z.object({
 	step: z
 		.int()
@@ -7692,6 +7738,14 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabArmOutput = z.object(
 	finishReason: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientServicesModelLabModelLabAttentionRefusal = z.enum([
+	"UnsupportedModelType",
+	"NotFullAttention",
+	"ShapeNotStated",
+	"NoFullAttentionBlock",
+	"HeadCountOutOfRange",
+]);
+
 export const zXeLocalAiEngineClientServicesModelLabModelLabAttentionSummary = z.object({
 	layers: z
 		.array(
@@ -7748,46 +7802,8 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabCheckpointRefusal = z
 	"LicenseNotConfirmed",
 	"DownloadRejected",
 	"UnsupportedModelType",
+	"ArchitectureMismatch",
 ]);
-
-export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPreflightResponse = z.object({
-	repoId: z.string(),
-	revision: z.string().nullable(),
-	weightBytes: z.int().nullable(),
-	requiredVramBytes: z.int().nullable(),
-	cardVramBytes: z.int().nullable(),
-	license: z.string().nullable(),
-	isGated: z.boolean(),
-	metadataPresent: z.boolean(),
-	checkpointHiddenSize: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
-	checkpointBlockCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
-	ggufEmbeddingLength: z.int().nullable(),
-	ggufBlockCount: z.int().nullable(),
-	steerableBlockCount: z.int().nullable(),
-	checkpointLayerTypes: z.array(z.string()).nullable(),
-	defaultSteeringLayer: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
-	licenseConfirmationText: z.string().nullable(),
-	refusal: zXeLocalAiEngineClientServicesModelLabModelLabCheckpointRefusal.nullable(),
-	refusalMessage: z.string().nullable(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadResponse = z.object({
-	preflight: zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPreflightResponse,
-	baseArtifactId: z.guid().nullable(),
-	artifactStatus: z.string().nullable(),
-});
 
 export const zXeLocalAiEngineClientServicesModelLabModelLabLensSummary = z.object({
 	layers: z
@@ -8001,6 +8017,35 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabResultToken = z.objec
 	processedCandidates: z.array(zXeLocalAiEngineClientServicesModelLabModelLabResultCandidate).nullish(),
 });
 
+export const zXeLocalAiEngineClientServicesModelLabModelLabRoutingSummary = z.object({
+	layers: z
+		.array(
+			z
+				.int()
+				.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+				.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+		)
+		.optional(),
+	experts: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	expertsPerToken: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	normalizedTopK: z.boolean().optional(),
+	weightEncoding: z.string().nullish(),
+	records: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	truncated: z.boolean().optional(),
+});
+
 export const zXeLocalAiEngineClientServicesModelLabModelLabStartRefusal = z.enum([
 	"UnsupportedPlatform",
 	"CheckpointNotFound",
@@ -8098,6 +8143,53 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabSteeringResult = z.ob
 	arms: z.array(zXeLocalAiEngineClientServicesModelLabModelLabSteeringArm).optional(),
 });
 
+export const zXeLocalAiEngineClientServicesModelLabModelLabTraceRefusal = z.enum(["RouterLogitsRequested"]);
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPreflightResponse = z.object({
+	repoId: z.string(),
+	revision: z.string().nullable(),
+	weightBytes: z.int().nullable(),
+	requiredVramBytes: z.int().nullable(),
+	cardVramBytes: z.int().nullable(),
+	license: z.string().nullable(),
+	isGated: z.boolean(),
+	metadataPresent: z.boolean(),
+	checkpointHiddenSize: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	checkpointBlockCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	ggufEmbeddingLength: z.int().nullable(),
+	ggufBlockCount: z.int().nullable(),
+	steerableBlockCount: z.int().nullable(),
+	modelType: z.string().nullable(),
+	checkpointLayerTypes: z.array(z.string()).nullable(),
+	attentionSupported: z.boolean(),
+	attentionRefusalMessage: z.string().nullable(),
+	attentionRefusal: zXeLocalAiEngineClientServicesModelLabModelLabAttentionRefusal.nullable(),
+	traceRefusalMessage: z.string().nullable(),
+	traceRefusal: zXeLocalAiEngineClientServicesModelLabModelLabTraceRefusal.nullable(),
+	defaultSteeringLayer: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	licenseConfirmationText: z.string().nullable(),
+	refusal: zXeLocalAiEngineClientServicesModelLabModelLabCheckpointRefusal.nullable(),
+	refusalMessage: z.string().nullable(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadResponse = z.object({
+	preflight: zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPreflightResponse,
+	baseArtifactId: z.guid().nullable(),
+	artifactStatus: z.string().nullable(),
+});
+
 export const zXeLocalAiEngineClientServicesModelLabModelLabTraceResult = z.object({
 	promptTokens: z
 		.int()
@@ -8148,6 +8240,7 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabTraceResult = z.objec
 	attnImplementation: z.string().nullish(),
 	attention: zXeLocalAiEngineClientServicesModelLabModelLabAttentionSummary.nullish(),
 	lens: zXeLocalAiEngineClientServicesModelLabModelLabLensSummary.nullish(),
+	routing: zXeLocalAiEngineClientServicesModelLabModelLabRoutingSummary.nullish(),
 	warm: z.boolean().nullish(),
 	loadSeconds: z.number().nullish(),
 });
@@ -13151,6 +13244,15 @@ export const zSetModelLabExperimentPinPath = z.object({
  * No Content
  */
 export const zSetModelLabExperimentPinResponse = z.void();
+
+export const zGetModelLabExperimentRoutingPath = z.object({
+	experimentId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetModelLabExperimentRoutingResponse = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabRoutingResponse;
 
 export const zGetModelLabExperimentTracePath = z.object({
 	experimentId: z.guid(),

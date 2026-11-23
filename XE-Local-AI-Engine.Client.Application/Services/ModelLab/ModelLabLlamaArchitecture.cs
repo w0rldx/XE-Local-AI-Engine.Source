@@ -60,7 +60,7 @@ internal sealed class ModelLabLlamaArchitecture : IModelLabArchitectureDescripto
 
     public string LlamaCppTag => TemplateLlamaCppTag;
 
-    public ModelLabHfTensor? BlockHfName(string ggufName, int blockIndex, GgufTensorInspection inspection)
+    public ModelLabHfTensor? BlockHfName(string ggufName, int blockIndex, string blockKind, GgufTensorInspection inspection)
     {
         var prefix = string.Create(CultureInfo.InvariantCulture, $"blk.{blockIndex}.");
         var suffix = ggufName.StartsWith(prefix, StringComparison.Ordinal) ? ggufName[prefix.Length..] : null;

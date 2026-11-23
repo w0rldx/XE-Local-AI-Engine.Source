@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelLab;
 
 using System.Globalization;
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Models.Implementation;
@@ -34,11 +35,28 @@ public sealed class ModelLabCheckpointPreflightService
     /// <summary>A bound on a list built from a downloaded number, far past any model this card can trace.</summary>
     private const int MaxDerivedBlocks = 1024;
 
-    /// <summary>What <c>modellab.py</c> has traced. Its hooks need <c>model.model</c>'s blocks, which not every layout has; extend this after tracing one.</summary>
-    private static readonly HashSet<string> TracedModelTypes = new(StringComparer.Ordinal)
+    private const string FullAttention = "full_attention";
+
+    private const string Olmoe = "olmoe";
+
+    /// <summary>
+    ///     What <c>modellab.py</c> has traced, each with the <c>general.architecture</c> llama.cpp writes for its GGUF. Its hooks need <c>model.model</c>'s
+    ///     blocks, which not every layout has; extend this after tracing one.
+    /// </summary>
+    private static readonly Dictionary<string, string> TracedModelTypes = new(StringComparer.Ordinal)
+    {
+        ["qwen3_5"] = "qwen35",
+        ["qwen3_5_text"] = "qwen35",
+        [Olmoe] = Olmoe
+    };
+
+    /// <summary><c>modellablib.ATTENTION_FAMILIES</c>: families whose attention source was read and whose recomputed rows were checked against an eager pass.</summary>
+    /// <remarks>The recompute is plain causal softmax(q·kᵀ·scaling), so a family joins only with that proof.</remarks>
+    private static readonly HashSet<string> AttentionModelTypes = new(StringComparer.Ordinal)
     {
         "qwen3_5",
-        "qwen3_5_text"
+        "qwen3_5_text",
+        Olmoe
     };
 
     private readonly IBaseCheckpointStore _checkpointStore;
@@ -178,6 +196,9 @@ public sealed class ModelLabCheckpointPreflightService
         var config = await readConfig(ct);
         var steerableBlocks = gguf.SteerableBlockCount;
         var layerTypes = LayerTypesOrNull(config);
+        var attentionRefusal = AttentionRefusalOrNull(config, layerTypes);
+        // Only a family whose forward has routers collects router logits, with capture hooks a trace cannot remove.
+        var routerLogits = config is { ModelType: Olmoe, OutputRouterLogits: true };
         result = result with
         {
             CheckpointHiddenSize = config?.HiddenSize,
@@ -185,8 +206,16 @@ public sealed class ModelLabCheckpointPreflightService
             GgufEmbeddingLength = gguf.EmbeddingLength,
             GgufBlockCount = gguf.BlockCount,
             GgufSteerableBlockCount = steerableBlocks,
+            ModelType = config?.ModelType,
             CheckpointLayerTypes = layerTypes,
             CheckpointAttentionHeads = config?.NumAttentionHeads,
+            AttentionRefusal = attentionRefusal?.Reason,
+            AttentionRefusalMessage = attentionRefusal?.Message,
+            // modellab.trace refuses it too, but only after the weights are on the GPU.
+            TraceRefusal = routerLogits ? ModelLabTraceRefusal.RouterLogitsRequested : null,
+            TraceRefusalMessage = routerLogits
+                ? "This checkpoint's config sets output_router_logits, which a trace does not support. It can still be steered."
+                : null,
             DefaultSteeringLayer = steerableBlocks >= 2 ? ModelLabTraceSpec.DefaultSteeringLayer((int)steerableBlocks.Value, layerTypes) : null
         };
 
@@ -196,10 +225,18 @@ public sealed class ModelLabCheckpointPreflightService
         }
 
         // The type first: another layout's config may name its shape differently, and the reason to give is the layout.
-        if (config is not null && (config.ModelType is not { } modelType || !TracedModelTypes.Contains(modelType)))
+        var architecture = config?.ModelType is { } modelType ? TracedModelTypes.GetValueOrDefault(modelType) : null;
+        if (config is not null && architecture is null)
         {
             return Refuse(result, ModelLabCheckpointRefusal.UnsupportedModelType,
-                $"{repoId} is model type '{config.ModelType ?? "unknown"}', and Model Lab has only traced Qwen3.5 checkpoints: its hooks depend on that model's layout.");
+                $"{repoId} is model type '{config.ModelType ?? "unknown"}', and Model Lab has only traced Qwen3.5 and OLMoE checkpoints: its hooks depend on those models' layouts.");
+        }
+
+        // Equal width and depth do not make two families' residual streams the same space.
+        if (config is not null && gguf.Architecture != architecture)
+        {
+            return Refuse(result, ModelLabCheckpointRefusal.ArchitectureMismatch,
+                $"{repoId} is model type '{config.ModelType}', whose GGUF architecture is '{architecture}', and '{installedModelName}' is '{gguf.Architecture ?? "unknown"}', so a vector from one does not describe the other.");
         }
 
         if (config?.HiddenSize is not { } hiddenSize || config.NumHiddenLayers is not { } blockCount)
@@ -225,22 +262,84 @@ public sealed class ModelLabCheckpointPreflightService
                 $"{repoId} has {blockCount} blocks and '{installedModelName}' has {gguf.BlockCount}, so a layer from one does not name the same layer in the other.{hint}"));
     }
 
-    /// <summary>The config's own kinds, or for a traced type that leaves them out, transformers' rule: block i is full attention when (i + 1) is a multiple of the interval, 4 by default.</summary>
+    /// <summary>Each block's kind by the traced family's rule, as <c>modellablib.layer_kind</c> reads it: OLMoE all full whatever the config states; Qwen3.5 its own list, else its interval.</summary>
+    /// <remarks>transformers' interval rule: block i is full attention when (i + 1) is a multiple of the interval, 4 by default. Another family's blocks are not guessed.</remarks>
     private static IReadOnlyList<string>? LayerTypesOrNull(BaseCheckpointConfigV1? config)
     {
-        if (config?.LayerTypes is { } stated)
+        if (config is not { ModelType: { } modelType } || !TracedModelTypes.ContainsKey(modelType))
+        {
+            return null;
+        }
+
+        if (modelType != Olmoe && config.LayerTypes is { } stated)
         {
             return stated;
         }
 
-        if (config is not { ModelType: { } modelType, NumHiddenLayers: int blocks and > 0 and <= MaxDerivedBlocks } || !TracedModelTypes.Contains(modelType) || config.FullAttentionInterval is <= 0)
+        if (config is not { NumHiddenLayers: int blocks and > 0 and <= MaxDerivedBlocks })
+        {
+            return null;
+        }
+
+        if (modelType == Olmoe)
+        {
+            return [.. Enumerable.Repeat(FullAttention, blocks)];
+        }
+
+        if (config.FullAttentionInterval is <= 0)
         {
             return null;
         }
 
         var interval = config.FullAttentionInterval ?? DefaultFullAttentionInterval;
-        return [.. Enumerable.Range(0, blocks).Select(layer => (layer + 1) % interval == 0 ? "full_attention" : "linear_attention")];
+        return [.. Enumerable.Range(0, blocks).Select(layer => (layer + 1) % interval == 0 ? FullAttention : "linear_attention")];
     }
+
+    /// <summary>Why attention cannot be recorded for this config, or null: <c>modellab.trace</c>'s rule, checking the family, then an OLMoE config's contradictions, then the shape.</summary>
+    /// <remarks>
+    ///     OLMoE's kinds are all full by family rule, so a stated list that is not full attention at every block, or a window, chunk or shared-cache key,
+    ///     means the config describes something the recompute would not match.
+    /// </remarks>
+    internal static AttentionRefusalText? AttentionRefusalOrNull(BaseCheckpointConfigV1? config, IReadOnlyList<string>? layerTypes)
+    {
+        if (config?.ModelType is not { } modelType || !AttentionModelTypes.Contains(modelType))
+        {
+            return new AttentionRefusalText(ModelLabAttentionRefusal.UnsupportedModelType, "Attention capture is implemented for Qwen3.5 and OLMoE checkpoints; start the trace without it.");
+        }
+
+        if (modelType == Olmoe
+            && ((config.LayerTypes is { } stated && (stated.Count != config.NumHiddenLayers || stated.Any(static kind => kind != FullAttention)))
+                || IsSet(config.SlidingWindow)
+                || IsSet(config.AttentionChunkSize)
+                || IsSet(config.NumKvSharedLayers)))
+        {
+            return new AttentionRefusalText(ModelLabAttentionRefusal.NotFullAttention,
+                "This OLMoE checkpoint's config describes attention other than full attention at every block (its layer_types, sliding_window, attention_chunk_size or "
+                + "num_kv_shared_layers), and attention is recorded only for full attention. Start the trace without it.");
+        }
+
+        if (layerTypes is null || config.NumAttentionHeads is not { } heads)
+        {
+            return new AttentionRefusalText(ModelLabAttentionRefusal.ShapeNotStated,
+                "This checkpoint's config does not state its block kinds and attention heads, so attention cannot be recorded. Start the trace without it.");
+        }
+
+        if (ModelLabTraceSpec.AttentionLayersFor(layerTypes).Count == 0)
+        {
+            return new AttentionRefusalText(ModelLabAttentionRefusal.NoFullAttentionBlock,
+                "This checkpoint has no full-attention block, and only those have attention weights to record. Start the trace without it.");
+        }
+
+        return heads is < 1 or > ModelLabTraceSpec.MaxAttentionHeads
+            ? new AttentionRefusalText(ModelLabAttentionRefusal.HeadCountOutOfRange, string.Create(CultureInfo.InvariantCulture,
+                $"This checkpoint has {heads} attention heads per block, and a recording holds 1 to {ModelLabTraceSpec.MaxAttentionHeads}. Start the trace without it."))
+            : null;
+
+        static bool IsSet(JsonElement? value) => value is { ValueKind: not JsonValueKind.Null };
+    }
+
+    /// <summary>An attention refusal's stable code and its English text.</summary>
+    internal readonly record struct AttentionRefusalText(ModelLabAttentionRefusal Reason, string Message);
 
     private async Task<BaseCheckpointConfigV1?> ReadConfigOrNullAsync(BaseCheckpointManifest manifest, CancellationToken ct)
     {

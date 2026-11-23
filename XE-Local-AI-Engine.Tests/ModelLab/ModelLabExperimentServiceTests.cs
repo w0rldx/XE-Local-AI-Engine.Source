@@ -215,6 +215,8 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.Equal(ModelLabTraceSpec.ContractVersion, root.GetProperty("contractVersion").GetInt32());
         AssertEx.Equal(ModelLabTraceSpec.MaxNewTokens, root.GetProperty("maxNewTokens").GetInt32());
         AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(3, ModelLabTraceSpec.MaxNewTokens), root.GetProperty("traceByteCap").GetInt32());
+        AssertEx.Equal(ModelLabTraceSpec.RoutingByteCapFor(24, ModelLabTraceSpec.MaxNewTokens), root.GetProperty("routingByteCap").GetInt32(),
+            "Every trace within the block cap carries one; the script records routing only for a model with routers.");
         AssertEx.Equal("[6,12,18]", root.GetProperty("layers").GetRawText());
         AssertEx.Equal(Prompt, root.GetProperty("prompt").GetString());
         foreach (var attentionField in new[]
@@ -294,7 +296,8 @@ public sealed class ModelLabExperimentServiceTests
     {
         using var process = new ScriptedProcess
         {
-            TraceContent = new string('x', ModelLabTraceSpec.TraceByteCapFor(3, ModelLabTraceSpec.MaxNewTokens) + ModelLabTraceSpec.LensByteCapFor(24, ModelLabTraceSpec.MaxNewTokens) + 1)
+            TraceContent = new string('x', ModelLabTraceSpec.TraceByteCapFor(3, ModelLabTraceSpec.MaxNewTokens) + ModelLabTraceSpec.LensByteCapFor(24, ModelLabTraceSpec.MaxNewTokens)
+                                           + ModelLabTraceSpec.RoutingByteCapFor(24, ModelLabTraceSpec.MaxNewTokens) + 1)
         };
         await using var host = await LabHost.StartAsync(process);
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
@@ -355,12 +358,77 @@ public sealed class ModelLabExperimentServiceTests
             AssertEx.Equal(tokens, root.GetProperty("maxNewTokens").GetInt32());
             AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(3, tokens), root.GetProperty("traceByteCap").GetInt32());
             AssertEx.Equal(ModelLabTraceSpec.LensByteCapFor(24, tokens), root.GetProperty("lensByteCap").GetInt32());
+            AssertEx.Equal(ModelLabTraceSpec.RoutingByteCapFor(24, tokens), root.GetProperty("routingByteCap").GetInt32());
             AssertEx.Equal(ModelLabTraceSpec.AttentionByteCapFor(6, 8, tokens), root.GetProperty("attentionByteCap").GetInt32());
         }
 
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
         AssertEx.True(start.ExperimentId.HasValue);
+    }
+
+    /// <summary>All 16 OLMoE blocks are full attention, so the recording keeps 8 of them evenly, first and last included.</summary>
+    [Test]
+    [Arguments("")]
+    [Arguments(""","layer_types":["full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention"]""")]
+    public async Task AnOlmoeTrace_RecordsAttention_AtEightEvenlySpacedBlocks(string extra)
+    {
+        const int tokens = ModelLabTraceSpec.MaxRequestedNewTokens;
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process, config: OlmoeConfig(extra), ggufBlockCount: 16, ggufArchitecture: "olmoe");
+
+        var start = await host.Service.StartExperimentAsync(host.Request() with
+        {
+            MaxNewTokens = tokens,
+            RecordAttention = true
+        }, CancellationToken.None);
+        AssertEx.True(start.ExperimentId.HasValue, start.RefusalMessage ?? "The trace starts.");
+        await process.Spawned.WaitAsync(TestBudgets.Contended);
+
+        using (var job = JsonDocument.Parse(process.ReadJobFile()))
+        {
+            AssertEx.Equal("[0,2,4,6,8,10,12,15]", job.RootElement.GetProperty("attentionLayers").GetRawText());
+            AssertEx.Equal(expected: 20_971_680, job.RootElement.GetProperty("attentionByteCap").GetInt32());
+            AssertEx.Equal(expected: 746_656, job.RootElement.GetProperty("routingByteCap").GetInt32(), "Routing sized for all 16 blocks at 256 tokens.");
+        }
+
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+    }
+
+    [Test]
+    [Arguments(""","layer_types":["full_attention","linear_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention"]""")]
+    [Arguments(""","sliding_window":4096""")]
+    [Arguments(""","attention_chunk_size":8192""")]
+    public async Task AnOlmoeConfigThatContradictsFullAttention_IsRefusedAttention_BeforeTheGate(string extra)
+    {
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process, config: OlmoeConfig(extra), ggufBlockCount: 16, ggufArchitecture: "olmoe");
+
+        var start = await host.Service.StartExperimentAsync(host.Request() with
+        {
+            RecordAttention = true
+        }, CancellationToken.None);
+
+        AssertEx.Equal(ModelLabStartRefusal.AttentionUnavailable, start.Refusal!.Value);
+        AssertEx.Contains(start.RefusalMessage!, "OLMoE checkpoint's config", StringComparison.Ordinal);
+        AssertEx.Null(process.Request);
+        AssertEx.Null(host.Gate.ExclusiveKind);
+    }
+
+    /// <summary>The script would refuse it only after loading the weights, so the node refuses the trace before the gate.</summary>
+    [Test]
+    public async Task AnOlmoeConfigThatAsksForRouterLogits_IsRefusedATrace_BeforeTheGate()
+    {
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process, config: OlmoeConfig(""","output_router_logits":true"""), ggufBlockCount: 16, ggufArchitecture: "olmoe");
+
+        var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+
+        AssertEx.Equal(ModelLabStartRefusal.PreflightRefused, start.Refusal!.Value);
+        AssertEx.Contains(start.RefusalMessage!, "output_router_logits", StringComparison.Ordinal);
+        AssertEx.Null(process.Request);
+        AssertEx.Null(host.Gate.ExclusiveKind);
     }
 
     [Test]
@@ -404,14 +472,14 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.Null(process.Request);
     }
 
-    /// <summary>Every block of the 24: the store must keep what the scaled cap and the lens cap allow, which is far past the three-layer cap, and nothing past it.</summary>
+    /// <summary>Every block of the 24: the store must keep what the scaled cap, the lens cap and the routing cap allow, which is far past the three-layer cap, and nothing past it.</summary>
     [Test]
     [Arguments(0, ModelLabExperimentStatus.Succeeded)]
     [Arguments(1, ModelLabExperimentStatus.Failed)]
     public async Task AFullDepthTrace_IsKeptUpToItsScaledCap_AndNotPastIt(int bytesOverCap, ModelLabExperimentStatus expected)
     {
         var cap = ModelLabTraceSpec.TraceByteCapFor(24, ModelLabTraceSpec.MaxNewTokens);
-        var fileCap = cap + ModelLabTraceSpec.LensByteCapFor(24, ModelLabTraceSpec.MaxNewTokens);
+        var fileCap = cap + ModelLabTraceSpec.LensByteCapFor(24, ModelLabTraceSpec.MaxNewTokens) + ModelLabTraceSpec.RoutingByteCapFor(24, ModelLabTraceSpec.MaxNewTokens);
         using var process = new ScriptedProcess
         {
             TraceContent = new string('x', fileCap + bytesOverCap)
@@ -1797,6 +1865,10 @@ public sealed class ModelLabExperimentServiceTests
         }
     }
 
+    /// <summary>OLMoE's shape at the test GGUF's embedding width: 16 blocks of 16 heads, no <c>layer_types</c> unless <paramref name="extra" /> adds one.</summary>
+    internal static string OlmoeConfig(string extra) =>
+        $$"""{"model_type":"olmoe","hidden_size":1024,"num_hidden_layers":16,"num_attention_heads":16{{extra}}}""";
+
     /// <summary>A real test host, with one artifact Ready and an installed GGUF that pairs with it.</summary>
     internal sealed class LabHost : IAsyncDisposable
     {
@@ -1843,7 +1915,8 @@ public sealed class ModelLabExperimentServiceTests
             Action<IServiceCollection>? configure = null,
             string config = Config,
             int ggufBlockCount = 24,
-            int warmIdleSeconds = 0)
+            int warmIdleSeconds = 0,
+            string ggufArchitecture = "qwen35")
         {
             var interpreter = Path.Combine(Path.GetTempPath(), "python-" + Guid.NewGuid().ToString("N"));
             var runtime = Substitute.For<ITrainingRuntimeService>();
@@ -1883,7 +1956,7 @@ public sealed class ModelLabExperimentServiceTests
             {
                 Failure = GgufTensorReadFailure.None,
                 Version = 3,
-                Architecture = "qwen35",
+                Architecture = ggufArchitecture,
                 ModelName = null,
                 ParamCount = null,
                 FileType = null,

@@ -44,10 +44,20 @@ export const nextTokenTopics = [
 // The logit lens topics under pages.modelLab.explain.stepper, in the order the stepper's lens panel lists them.
 export const lensTopics = ["lens", "lensChosen", "lensEntropy", "lensLastBlock", "lensCaveats", "lensNotRecorded"] as const;
 
+// The routing topics under pages.modelLab.explain.stepper, in the order the stepper's routing panel lists them.
+export const routingTopics = ["routing", "routingWeights", "routingUsage", "routingCaveats", "routingNotRecorded"] as const;
+
+// A GGUF architecture that shares another's templates apart from some nodes: its own texts first, then the other's. Every
+// text of the other must therefore hold for it too.
+const architectureFallbacks = new Map([["qwen35moe", "qwen35"]]);
+
 // A template node's explanation keys: per block kind, where one id means different operations in different templates, then
-// per GGUF architecture, then shared. A kind text outranks every architecture, so it must hold for each family with that kind.
+// per GGUF architecture (and its fallback), then shared. A kind text outranks every architecture, so it must hold for each
+// family with that kind.
 export function operationCandidates(kind: string, architecture: string | null, id: string): string[] {
-	return [`opByKind.${kind}.${id}`, ...(architecture === null ? [] : [`arch.${architecture}.op.${id}`]), `op.${id}`];
+	const fallback = architecture === null ? undefined : architectureFallbacks.get(architecture);
+	const architectures = [architecture, fallback].filter((name) => typeof name === "string");
+	return [`opByKind.${kind}.${id}`, ...architectures.map((name) => `arch.${name}.op.${id}`), `op.${id}`];
 }
 
 // The first candidate with text at this level, in the page's language or its fallback; null when none has any, so the

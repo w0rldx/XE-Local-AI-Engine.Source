@@ -637,6 +637,9 @@ import type {
 	GetModelLabExperimentLensErrors,
 	GetModelLabExperimentLensResponses,
 	GetModelLabExperimentResponses,
+	GetModelLabExperimentRoutingData,
+	GetModelLabExperimentRoutingErrors,
+	GetModelLabExperimentRoutingResponses,
 	GetModelLabExperimentTraceData,
 	GetModelLabExperimentTraceErrors,
 	GetModelLabExperimentTraceResponses,
@@ -1652,6 +1655,7 @@ import {
 	zGetModelLabExperimentAttentionResponse,
 	zGetModelLabExperimentLensResponse,
 	zGetModelLabExperimentResponse,
+	zGetModelLabExperimentRoutingResponse,
 	zGetModelLabExperimentTraceResponse,
 	zGetModelLabPyTorchIndexResponse,
 	zGetModelLabPyTorchSourceResponse,
@@ -9633,6 +9637,28 @@ export const setModelLabExperimentPin = <ThrowOnError extends boolean = true>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const getModelLabExperimentRouting = <ThrowOnError extends boolean = true>(
+	options: Options<GetModelLabExperimentRoutingData, ThrowOnError>,
+): RequestResult<GetModelLabExperimentRoutingResponses, GetModelLabExperimentRoutingErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetModelLabExperimentRoutingResponses, GetModelLabExperimentRoutingErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelLabExperimentRoutingResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/experiments/{experimentId}/routing",
+		...options,
 	});
 
 export const getModelLabExperimentTrace = <ThrowOnError extends boolean = true>(

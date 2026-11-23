@@ -9,14 +9,15 @@ import {
 	lensTopics,
 	nextTokenTopics,
 	operationCandidates,
+	routingTopics,
 	traceMetrics,
 } from "@/features/modelLab/models/ModelLabExplanation";
 
 // Every component the descriptor can name: the backend's ModelLabArchitectureBuilder constants, as componentLabel lists them.
 const components = ["attention", "embedding", "ffn", "mtp", "norm", "other", "output", "ssm"];
 
-// Every node id the templates send: ModelLabQwen35Architecture (all three templates) and ModelLabLlamaArchitecture, whose
-// ids are a subset of qwen35's full-attention ones.
+// Every node id the templates send: ModelLabQwen35Architecture (all three templates of both families) and
+// ModelLabLlamaArchitecture, whose ids are a subset of qwen35's full-attention ones.
 // shortcut: copied by hand, so a node added there passes here unnoticed (the panel shows no text for it); the llama.cpp
 // pin test that forces a template re-check is the reminder to extend this list. Upgrade to a descriptor fixture if one appears.
 const operations = [
@@ -48,6 +49,22 @@ const operations = [
 	"ffn_up",
 	"ffn_act",
 	"ffn_down",
+	"router",
+	"router_probs",
+	"topk",
+	"topk_weights",
+	"exp_gate",
+	"exp_up",
+	"exp_act",
+	"exp_down",
+	"exp_weighted",
+	"shexp_gate",
+	"shexp_up",
+	"shexp_act",
+	"shexp_down",
+	"shexp_scale",
+	"shexp_gated",
+	"moe_out",
 	"ffn_residual",
 	"control_vector",
 	"output",
@@ -68,6 +85,7 @@ const entries = [
 	...operations.map((id) => `op.${id}`),
 	...traceMetrics.map((metric) => `trace.${metric}`),
 	...lensTopics.map((topic) => `stepper.${topic}`),
+	...routingTopics.map((topic) => `stepper.${topic}`),
 ];
 
 const levels = ["overview", "detail", "math"];
@@ -93,7 +111,7 @@ describe.each([
 	["en", en],
 	["de", de],
 ])("Model Lab explanations (%s)", (_language, bundle) => {
-	it("cover every block kind, component, qwen35 operation, trace value and lens topic at every level", () => {
+	it("cover every block kind, component, template operation, trace value, lens and routing topic at every level", () => {
 		const missing = entries.flatMap((entry) =>
 			levels.flatMap((level) => {
 				const text = valueAt(bundle, `pages.modelLab.explain.${entry}.${level}`);
@@ -115,7 +133,7 @@ describe.each([
 
 	it("override operations only for ids a template sends, each with text at the levels it overrides", () => {
 		const architectures = valueAt(bundle, "pages.modelLab.explain.arch") as Record<string, { op: Record<string, object> }>;
-		expect(Object.keys(architectures).sort()).toEqual(["llama", "qwen35"]);
+		expect(Object.keys(architectures).sort()).toEqual(["llama", "qwen35", "qwen35moe"]);
 		for (const { op } of Object.values(architectures)) {
 			expect(Object.keys(op).filter((id) => !operations.includes(id))).toEqual([]);
 			expect(
@@ -124,6 +142,14 @@ describe.each([
 					.filter((text) => text.trim() === ""),
 			).toEqual([]);
 		}
+	});
+
+	it("write the lens norm with the effective weight γ and name it for both traced families", () => {
+		const math = valueAt(bundle, "pages.modelLab.explain.stepper.lens.math") as string;
+		expect(math).toContain("\\odot \\gamma$$");
+		expect(math).not.toContain("\\odot (1 + w)");
+		expect(math).toContain("$1 + w$");
+		expect(math).toContain("OLMoE");
 	});
 
 	it("never hold i18next interpolation, which would eat the text between the braces", () => {
@@ -168,5 +194,20 @@ describe("operationCandidates", () => {
 		expect(shown("fullAttention", "llama", "detail")).toBe("pages.modelLab.explain.op.attn.detail");
 		expect(shown("fullAttention", "qwen35", "overview")).toBe("pages.modelLab.explain.op.attn.overview");
 		expect(shown("fullAttention", null, "overview")).toBe("pages.modelLab.explain.op.attn.overview");
+	});
+
+	it("try qwen35moe's own texts, then qwen35's, between the kind text and the shared one", () => {
+		expect(operationCandidates("fullAttention", "qwen35moe", "attn")).toEqual([
+			"opByKind.fullAttention.attn",
+			"arch.qwen35moe.op.attn",
+			"arch.qwen35.op.attn",
+			"op.attn",
+		]);
+		// An architecture without a fallback keeps the single architecture step.
+		expect(operationCandidates("fullAttention", "qwen35", "attn")).toEqual([
+			"opByKind.fullAttention.attn",
+			"arch.qwen35.op.attn",
+			"op.attn",
+		]);
 	});
 });

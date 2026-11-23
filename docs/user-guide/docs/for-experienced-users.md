@@ -269,7 +269,7 @@ Everything lives in one directory (`%LOCALAPPDATA%\XE-Local-AI-Engine`), separat
   read from the llama-server already running the GGUF. A long prompt can take a moment. Reading them
   never loads a model: if the model was unloaded or its server stopped, run it again. A trace runs the Hugging Face checkpoint in PyTorch, so a trace's tokens
   and probabilities can differ from the GGUF's for the same prompt.
-- **Model Lab can record real attention in a trace.** With **Record attention** on, a Qwen3.5 trace keeps, for every
+- **Model Lab can record real attention in a trace.** With **Record attention** on, a Qwen3.5 or OLMoE trace keeps, for every
   generated token, the 32 strongest positions each head of the full-attention blocks read, plus the rest of the row.
   The weights are recomputed beside the model's own attention kernel, so the generated text is unchanged. It costs a few
   MB per run and a little time. A weight shows where a head read, not why the model chose a token.
@@ -277,6 +277,13 @@ Everything lives in one directory (`%LOCALAPPDATA%\XE-Local-AI-Engine`), separat
   model's own final norm and output head: its top 5 tokens, the chosen token's probability and rank, and the spread
   of that readout in nats. The last block is the model's real output. It adds about 0.5 MB and a fraction of a second
   per trace. Early blocks are not meant to be read this way, so low agreement there is expected.
+- **Model Lab traces OLMoE and shows its expert routing.** Model Lab traces Qwen3.5 and OLMoE checkpoints. An OLMoE
+  trace records, for every generated token and every mixture-of-experts block, which experts the router chose and the
+  exact weights they received; **Step through** shows them with how often each expert was picked over the run. An
+  expert number is a position in its block, not a topic, and the GGUF in llama.cpp may pick other experts. Traces
+  saved by an older version open as before, without routing. The Architecture tab also describes Qwen3.5/3.6
+  mixture-of-experts GGUFs (`qwen35moe`) in detail. A steering vector is now scaled against the median residual
+  length, so the same scale steers slightly differently on Qwen3.5 than before.
 
 ---
 

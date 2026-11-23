@@ -1,11 +1,15 @@
+import { createInstance } from "i18next";
 import { describe, expect, it } from "vitest";
 
+import de from "@/features/modelLab/locales/model-lab-de.json";
+import en from "@/features/modelLab/locales/model-lab-en.json";
 import {
 	defaultTraceLayers,
 	formatBlockRanges,
 	formatTraceValue,
 	promptExcerpt,
 	summarizeTraceByBlock,
+	valueRelationLabel,
 } from "@/features/modelLab/models/ModelLabArchitecture";
 import { layoutTemplate, maxNodesPerRow } from "@/features/modelLab/models/ModelLabTemplateLayout";
 
@@ -21,6 +25,25 @@ describe("summarizeTraceByBlock", () => {
 		expect(summaries.get(6)).toEqual({ meanNorm: 2, maxP99: 8, topDimensions: [2, 5, 9] });
 		expect(summaries.get(12)).toEqual({ meanNorm: null, maxP99: null, topDimensions: [] });
 		expect(summaries.has(18)).toBe(false);
+	});
+});
+
+describe("valueRelationLabel", () => {
+	it("names a sliced expert tensor as one half of the fused Hugging Face tensor, in both languages", async () => {
+		const i18n = createInstance({
+			lng: "en",
+			fallbackLng: false,
+			resources: { en: { translation: en }, de: { translation: de } },
+		});
+		await i18n.init();
+
+		expect(valueRelationLabel(i18n.t, "sliced")).toBe(
+			"One half of a fused Hugging Face tensor (gate or up rows), assuming the catalog's fused checkpoint layout; a quantized type also changes the values",
+		);
+		await i18n.changeLanguage("de");
+		expect(valueRelationLabel(i18n.t, "sliced")).toBe(
+			"Eine Hälfte eines zusammengefassten Hugging-Face-Tensors (Gate- oder Up-Zeilen), unter der Annahme des zusammengefassten Checkpoint-Layouts im Katalog; ein quantisierter Typ ändert zusätzlich die Werte",
+		);
 	});
 });
 

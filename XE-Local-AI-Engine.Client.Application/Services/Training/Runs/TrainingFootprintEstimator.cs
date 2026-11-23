@@ -157,7 +157,9 @@ public static class TrainingFootprintEstimator
                     MaxPositionEmbeddings = config.MaxPositionEmbeddings ?? text.MaxPositionEmbeddings,
                     TorchDtype = config.TorchDtype ?? text.TorchDtype,
                     LayerTypes = config.LayerTypes ?? text.LayerTypes,
-                    FullAttentionInterval = config.FullAttentionInterval ?? text.FullAttentionInterval
+                    FullAttentionInterval = config.FullAttentionInterval ?? text.FullAttentionInterval,
+                    // The trace reads the text model's own value, as transformers' get_text_config does.
+                    OutputRouterLogits = text.OutputRouterLogits ?? config.OutputRouterLogits
                 };
         }
         catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)

@@ -48,8 +48,26 @@ public sealed class ModelLabCheckpointPreflightResponse
     /// <summary>Blocks a steering vector can reach. A layer must be 1 or more and below this.</summary>
     public required long? SteerableBlockCount { get; init; }
 
-    /// <summary>Each block's kind from the checkpoint's config, in order, or null when it does not say.</summary>
+    /// <summary>The config's <c>model_type</c>, or null when it does not say or was not read.</summary>
+    public required string? ModelType { get; init; }
+
+    /// <summary>Each block's kind by the traced family's rule, in order, or null when the config does not say.</summary>
     public required IReadOnlyList<string>? CheckpointLayerTypes { get; init; }
+
+    /// <summary>A trace of this checkpoint can record attention: its family's capture is implemented and its config states the shape it needs.</summary>
+    public required bool AttentionSupported { get; init; }
+
+    /// <summary>Why a trace of this checkpoint cannot record attention, or null when it can or the config was not read.</summary>
+    public required string? AttentionRefusalMessage { get; init; }
+
+    /// <summary>The stable code of <see cref="AttentionRefusalMessage" />, set together with it.</summary>
+    public required ModelLabAttentionRefusal? AttentionRefusal { get; init; }
+
+    /// <summary>Why this checkpoint cannot be traced while it can still be steered, or null when it can or the config was not read.</summary>
+    public required string? TraceRefusalMessage { get; init; }
+
+    /// <summary>The stable code of <see cref="TraceRefusalMessage" />, set together with it.</summary>
+    public required ModelLabTraceRefusal? TraceRefusal { get; init; }
 
     /// <summary>The layer a steering job takes when none is named.</summary>
     public required int? DefaultSteeringLayer { get; init; }

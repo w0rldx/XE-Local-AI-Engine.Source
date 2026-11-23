@@ -183,7 +183,8 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 			{data?.support === "detailed" &&
 				data.architecture !== null &&
 				i18n.exists(`pages.modelLab.architecture.layoutNote.${data.architecture}`) && (
-					<Alert color="gray" data-testid="model-lab-architecture-layout-note">
+					// A module path is one long word: it breaks anywhere on a narrow screen instead of running out of the box.
+					<Alert color="gray" style={{ overflowWrap: "anywhere" }} data-testid="model-lab-architecture-layout-note">
 						{t(`pages.modelLab.architecture.layoutNote.${data.architecture}`)}
 					</Alert>
 				)}

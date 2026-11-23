@@ -156,6 +156,20 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Model Lab: OLMoE traces with measured expert routing.** Model Lab now traces OLMoE checkpoints
+  (checked on `allenai/OLMoE-1B-7B-0924-Instruct` with its GGUF) besides Qwen3.5, for traces, the logit lens, steering and
+  **Record attention**. A trace of a mixture-of-experts checkpoint records, for every generated token and routed block,
+  the expert ids the router chose and the exact bf16 weights the experts received; the stepper shows them as "Routing
+  used to predict this token" (measured), with the selected block's weights and its most picked experts over the run
+  (derived), and says that the GGUF in llama.cpp may route differently. New `GET model-lab/experiments/{id}/routing`. The
+  checkpoint preflight now returns `modelType`, `attentionSupported` with `attentionRefusalMessage`, and
+  `traceRefusalMessage` (a config with `output_router_logits` set cannot be traced but can be steered), and refuses a
+  checkpoint whose family does not match the GGUF's architecture with `ArchitectureMismatch`, even at equal sizes.
+- **Model Lab: the Architecture tab describes Qwen3.5/3.6 mixture-of-experts GGUFs.** A `qwen35moe` file (such as
+  Qwen3.6-35B-A3B) is now `detailed` instead of `overview`: Hugging Face names for the router, the routed experts and the
+  gated shared expert, and one operation graph per block kind with the router, top-k selection, experts and shared
+  expert, explained at three levels. A row that is one half of a fused `mlp.experts.gate_up_proj` is labelled
+  `sliced`, and a note says the names assume a checkpoint that stores the experts fused.
 - **Model Lab: a logit lens in the trace stepper.** Every Qwen3.5 trace now reads each block through the model's own
   final norm and output head at every generated step: top 5 tokens, the chosen token's probability and rank, and the
   readout's entropy, labelled as a derived analysis. The last block is the model's real output. New
@@ -456,6 +470,13 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Model Lab trace contract 8.** The host and `modellab.py` move together, and cached PyTorch source indexes are
+  rebuilt once. Traces saved at contract 6 or 7 open as before, without routing. Known limitation: going back to an
+  older build cannot read a trace that recorded routing.
+- **Model Lab steering scales against the median residual length.** The vector's reference norm is now the median of
+  every position's residual length at the steered block, for every family, instead of the mean: one very long first
+  position made the mean so large on OLMoE that the default scale collapsed the output. On Qwen3.5 the median is close
+  to the old mean, so the same scale steers slightly differently than before.
 - **Model Lab trace contract 5; traces turn generation watermarking off.** A watermark processor would change scores
   after the trace records them. Cached PyTorch source indexes are rebuilt once.
 - **Model Lab trace contract 4.** The host and `modellab.py` move together; cached PyTorch source indexes are rebuilt once.
@@ -1129,6 +1150,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Internal
 
+- **Bundle budget raised for Model Lab's mixture-of-experts work.** `applicationJavaScriptBytes` and
+  `lazyModelLabJavaScriptBytes` in `config/bundle-budget.json` are set to the measured build plus a small margin.
 - **`TrainingRunStore.DeleteAsync` refuses a run still holding a launch receipt** (`ProcessNotConfirmedStopped`), as Model Lab does: the startup reaper needs that row to
   find a surviving trainer. No route deletes a training run today, so nothing changes for an operator.
 - **One convention for absence** (wiki 16, "Absence"). A lookup where absence is normal returns `T?` and is never named

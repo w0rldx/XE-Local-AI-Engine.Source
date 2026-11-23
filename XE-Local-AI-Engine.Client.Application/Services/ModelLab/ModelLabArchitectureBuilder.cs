@@ -24,13 +24,17 @@ public static class ModelLabArchitectureBuilder
     /// <summary>The relation of a tensor the converter permuted (heads or rotary pairs); it holds whatever the stored type.</summary>
     internal const string Reordered = "reordered";
 
+    /// <summary>The relation of one half of a fused HF tensor the converter split (rows taken out); it holds whatever the stored type.</summary>
+    internal const string Sliced = "sliced";
+
     private const string BlockPrefix = "blk.";
 
     // Adding a family: one IModelLabArchitectureDescriptor and one entry here.
     private static readonly FrozenDictionary<string, IModelLabArchitectureDescriptor> Descriptors =
         new IModelLabArchitectureDescriptor[]
             {
-                new ModelLabQwen35Architecture(),
+                new ModelLabQwen35Architecture(mixtureOfExperts: false),
+                new ModelLabQwen35Architecture(mixtureOfExperts: true),
                 new ModelLabLlamaArchitecture()
             }
             .ToFrozenDictionary(static descriptor => descriptor.Architecture, StringComparer.Ordinal);
@@ -178,7 +182,7 @@ public static class ModelLabArchitectureBuilder
                          Component = group.Key,
                          Provenance = "read",
                          // The MTP block has no HF decoder layer, so none of its tensors gets a layer-indexed HF name.
-                         Tensors = [.. group.Select(tensor => ToTensor(tensor, kind != MtpKind ? descriptor?.BlockHfName(tensor.Name, index, inspection) : null))]
+                         Tensors = [.. group.Select(tensor => ToTensor(tensor, kind != MtpKind ? descriptor?.BlockHfName(tensor.Name, index, kind, inspection) : null))]
                      })
                      .ToList();
 
@@ -221,10 +225,11 @@ public static class ModelLabArchitectureBuilder
             ValueRelation = hf is null ? null : ValueRelation(tensor, hf)
         };
 
-    // A permutation outlives quantization (the converter permutes first), so "reordered" is kept for any stored type.
+    // A permutation or a split outlives quantization (the converter applies it first), so either is kept for any
+    // stored type; the row still shows the quantized type.
     private static string? ValueRelation(GgufTensorInfo tensor, ModelLabHfTensor hf)
     {
-        if (hf.Relation is null or Reordered)
+        if (hf.Relation is null or Reordered or Sliced)
         {
             return hf.Relation;
         }

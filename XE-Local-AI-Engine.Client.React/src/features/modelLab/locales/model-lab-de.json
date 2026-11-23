@@ -20,7 +20,8 @@
 				"inferredBadge": "Aus llama.cpp abgeleitet ({{source}})",
 				"kindUntraceable": "{{kind}} (nicht tracebar)",
 				"layoutNote": {
-					"llama": "Die Hugging-Face-Namen setzen die Standardkonvertierung von LlamaForCausalLM voraus (model.layers.N.…). Eine Datei aus einem anderen Quellformat, etwa dem konsolidierten Format von Mistral oder dem Sprachteil eines Vision-Modells, hat andere Quell-Tensornamen."
+					"llama": "Die Hugging-Face-Namen setzen die Standardkonvertierung von LlamaForCausalLM voraus (model.layers.N.…). Eine Datei aus einem anderen Quellformat, etwa dem konsolidierten Format von Mistral oder dem Sprachteil eines Vision-Modells, hat andere Quell-Tensornamen.",
+					"qwen35moe": "Die Hugging-Face-Namen setzen einen Checkpoint voraus, der die Experten jedes Blocks zusammengefasst speichert (model.language_model.layers.N.mlp.experts.gate_up_proj und …down_proj), wie die Checkpoints im Katalog. Ein Checkpoint pro Experte stapelt stattdessen Tensoren mlp.experts.N.*, und keine Metadaten der Datei sagen, aus welchem Layout sie konvertiert wurde."
 				},
 				"loadFailed": "Die Struktur des Modells konnte nicht gelesen werden.",
 				"noHfName": "Keiner",
@@ -40,7 +41,8 @@
 					"notStated": "Nicht angegeben",
 					"plusOne": "Der Hugging-Face-Wert plus eins",
 					"quantized": "Aus den Hugging-Face-Werten quantisiert",
-					"reordered": "Gegenüber dem Hugging-Face-Tensor umsortiert (Heads oder Rotationspaare umgruppiert); ein quantisierter Typ ändert zusätzlich die Werte"
+					"reordered": "Gegenüber dem Hugging-Face-Tensor umsortiert (Heads oder Rotationspaare umgruppiert); ein quantisierter Typ ändert zusätzlich die Werte",
+					"sliced": "Eine Hälfte eines zusammengefassten Hugging-Face-Tensors (Gate- oder Up-Zeilen), unter der Annahme des zusammengefassten Checkpoint-Layouts im Katalog; ein quantisierter Typ ändert zusätzlich die Werte"
 				},
 				"shape": "Form (GGUF-Reihenfolge)",
 				"tab": "Architektur",
@@ -112,6 +114,20 @@
 							"rope": {
 								"detail": "Wird auf die normierten Queries und Keys angewandt, nicht auf Values; kein gespeichertes Gewicht. qwen35 nutzt mehrachsiges RoPE (MRoPE): Jedes gedrehte Paar gehört zu einer Zeit-, Höhen- oder Breitenposition. Bei Text sind alle drei Positionen gleich, es wirkt dann wie gewöhnliches RoPE. Die Parameter stehen in den Metadaten der Datei.",
 								"math": "$$\\begin{pmatrix} u'_i \\\\ u'_{i+r} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_i \\\\ u_{i+r} \\end{pmatrix}, \\qquad \\theta_i = b^{-i/r}$$\n\n- $u$: ein Query- oder Key-Head; $i < r$.\n- $2r$: Anzahl gedrehter Dimensionen; die übrigen bleiben unverändert.\n- $b$: Basisfrequenz; $p$: Position.\n\nDer Wert $\\langle R_p q, R_s k \\rangle$ hängt dann von $p$ und $s$ nur über $p - s$ ab."
+							}
+						}
+					},
+					"qwen35moe": {
+						"op": {
+							"ffn_residual": {
+								"detail": "Die unnormierte Summe aus der ersten Residual-Addition plus `moe_out`, gerouteter und Shared Expert zusammen; dieser Block hat kein dichtes `ffn_down`. In einem Block des Hauptmodells ist das die Blockausgabe, sofern kein Control Vector geladen ist; im MTP-Block geht sie zur Head-Normierung.",
+								"math": "$$h'' = h' + y$$\n\n- $h'$: Ausgabe der ersten Residual-Addition.\n- $y$: Ausgabe von `moe_out`.",
+								"overview": "Addiert das Mixture-of-Experts-Ergebnis zum Strom."
+							},
+							"topk_weights": {
+								"detail": "qwen35moe normiert immer neu: Die Wahrscheinlichkeiten der gewählten Experten werden durch ihre Summe geteilt, ihre Gewichte ergeben also zusammen 1, gleich wie viel Wahrscheinlichkeit die übrigen Experten hatten. Eine weitere Skalierung der Gewichte gibt es nicht.",
+								"math": "$$w_e = \\frac{p_e}{\\max\\big(\\sum_{j \\in S} p_j,\\ \\epsilon\\big)}, \\qquad e \\in S, \\qquad \\sum_{e \\in S} w_e = 1$$\n\n- $p_e$: Router-Wahrscheinlichkeit von Experte $e$; $S$: die $k$ gewählten Experten.\n- $\\epsilon$: eine winzige Untergrenze, die llama.cpp an die Summe legt, damit nie durch null geteilt wird.\n- Die optionale zusätzliche Skalierung der Gewichte in llama.cpp ist für qwen35moe nicht gesetzt, es gilt also keine.",
+								"overview": "Normiert die Wahrscheinlichkeiten der gewählten Experten neu, sodass ihre Gewichte zusammen 1 ergeben."
 							}
 						}
 					}
@@ -241,6 +257,31 @@
 						"math": "$$\\hat e = \\frac{e}{\\mathrm{rms}(e)} \\odot w_e$$\n\n- $e$: Token-Embedding.\n- $w_e$: `nextn.enorm`.",
 						"overview": "Normiert das Token-Embedding, bevor es mit dem Hidden State des Hauptmodells verbunden wird."
 					},
+					"exp_act": {
+						"detail": "SiLU auf dem Gate-Zweig jedes gewählten Experten, elementweise multipliziert mit seinem Up-Zweig (SwiGLU), für jeden gewählten Experten getrennt. Kein gespeichertes Gewicht.",
+						"math": "$$m_e = \\mathrm{SiLU}(g_e) \\odot u_e, \\qquad e \\in S$$\n\n- $g_e$, $u_e$: Gate- und Up-Zweig von Experte $e$.\n- $\\mathrm{SiLU}(z) = z \\cdot \\mathrm{sigmoid}(z)$.\n- $S$: die gewählten Experten.",
+						"overview": "Verbindet die beiden Zweige jedes gewählten Experten, wie es ein dichtes Feed-Forward-Netz tut."
+					},
+					"exp_down": {
+						"detail": "`ffn_down_exps` stapelt eine Down-Matrix pro Experte (`mlp.experts.down_proj` im Hugging-Face-Checkpoint); nur die Matrizen der gewählten Experten werden genutzt. Das Ergebnis ist weiterhin ein Vektor pro gewähltem Experten; die Router-Gewichte folgen im nächsten Schritt.",
+						"math": "$$E_e(x') = W_{d,e}\\,m_e, \\qquad e \\in S$$\n\n- $m_e$: SiLU-Produkt von Experte $e$.\n- $W_{d,e}$: der Teil von `ffn_down_exps` für Experte $e$, von der Expertenbreite $d_{\\text{exp}}$ auf $d$.\n\nPro Experte: $E_e(x) = W_{d,e}\\big(\\mathrm{SiLU}(W_{g,e}\\,x) \\odot W_{u,e}\\,x\\big)$.",
+						"overview": "Bildet den breiten Vektor jedes gewählten Experten zurück auf die Residualbreite ab."
+					},
+					"exp_gate": {
+						"detail": "`ffn_gate_exps` stapelt eine Gate-Matrix pro Experte in einem Tensor; für dieses Token werden nur die Matrizen der gewählten Experten genutzt. Manche Dateien speichern Gate und Up zusammen als `ffn_gate_up_exps`; dieser Knoten ist dann die logische Gate-Hälfte dieses Tensors und wird genauso berechnet. Im Hugging-Face-Checkpoint sind die Gate-Zeilen die erste Hälfte von `mlp.experts.gate_up_proj`.",
+						"math": "$$g_e = W_{g,e}\\,x', \\qquad e \\in S$$\n\n- $x'$: Ausgabe der Norm vor dem FFN; jeder gewählte Experte liest dasselbe $x'$.\n- $W_{g,e}$: der Teil von `ffn_gate_exps` für Experte $e$ (oder die Gate-Hälfte von `ffn_gate_up_exps`), von $d$ auf die Expertenbreite $d_{\\text{exp}}$.\n- $S$: die gewählten Experten.",
+						"overview": "Jeder gewählte Experte verbreitert den normierten Vektor zu seinem eigenen Gate-Zweig."
+					},
+					"exp_up": {
+						"detail": "`ffn_up_exps` stapelt eine Up-Matrix pro Experte; nur die Matrizen der gewählten Experten werden genutzt, mit derselben Eingabe wie das Gate. Speichert die Datei `ffn_gate_up_exps`, ist dieser Knoten die logische Up-Hälfte dieses Tensors. Im Hugging-Face-Checkpoint sind die Up-Zeilen die zweite Hälfte von `mlp.experts.gate_up_proj`.",
+						"math": "$$u_e = W_{u,e}\\,x', \\qquad e \\in S$$\n\n- $W_{u,e}$: der Teil von `ffn_up_exps` für Experte $e$ (oder die Up-Hälfte von `ffn_gate_up_exps`), von $d$ auf $d_{\\text{exp}}$.\n- $S$: die gewählten Experten.",
+						"overview": "Jeder gewählte Experte verbreitert den normierten Vektor zu seinem eigenen Up-Zweig."
+					},
+					"exp_weighted": {
+						"detail": "Die Ausgabe jedes gewählten Experten wird mit seinem Router-Gewicht multipliziert, und die Ergebnisse werden addiert. llama.cpp wendet die Gewichte nach der Down-Projektion an; weil diese Projektion linear ist, ergäbe eine frühere Gewichtung dieselbe Summe. Nicht gewählte Experten tragen nichts bei.",
+						"math": "$$y_{\\text{routed}} = \\sum_{e \\in S} w_e\\, E_e(x')$$\n\n- $S$: die gewählten Experten; $w_e$: ihre Gewichte.\n- $E_e(x')$: Ausgabe von Experte $e$ nach `ffn_down_exps`.",
+						"overview": "Mischt die Ausgaben der gewählten Experten, jede mit ihrem Router-Gewicht skaliert."
+					},
 					"ffn_act": {
 						"detail": "SiLU auf dem Gate-Zweig, elementweise multipliziert mit dem Up-Zweig (SwiGLU). Kein gespeichertes Gewicht.",
 						"math": "$$m = \\mathrm{SiLU}(g) \\odot u, \\qquad \\mathrm{SiLU}(z) = z \\cdot \\mathrm{sigmoid}(z)$$\n\n- $g$, $u$: Ausgaben von `ffn_gate` und `ffn_up`.",
@@ -331,6 +372,11 @@
 						"math": "$$y = W_O\\,[\\,a^{(1)};\\dots;a^{(n_h)}\\,]$$\n\n- $a^{(j)}$: Attention-Ausgabe von Query-Head $j$.\n- $W_O$: `attn_output`, von $n_h d_h$ auf $d$.",
 						"overview": "Bildet die Attention-Ausgabe aller Heads zurück auf die Residualbreite ab."
 					},
+					"moe_out": {
+						"detail": "Die geroutete Mischung plus der gegatete Shared Expert tritt an die Stelle der `ffn_down`-Ausgabe eines dichten FFN und geht zur zweiten Residual-Addition. Pro Token haben nur die k gewählten Experten und der Shared Expert gerechnet; die Gewichte der übrigen Experten wurden nicht gelesen.",
+						"math": "$$y = \\sum_{e \\in S} w_e\\, E_e(x') + \\mathrm{sigmoid}\\big(g^{\\top} x'\\big)\\, E_{\\text{sh}}(x')$$\n\n$$p = \\mathrm{softmax}(W_r\\,x'), \\qquad S = \\mathrm{TopK}_k(p), \\qquad E(x) = W_d\\big(\\mathrm{SiLU}(W_g\\,x) \\odot W_u\\,x\\big)$$\n\n- $W_r$: der Router `ffn_gate_inp`; $w_e$: die Gewichte der gewählten Experten.\n- $g$: `ffn_gate_inp_shexp`; $E_{\\text{sh}}$: der Shared Expert.",
+						"overview": "Addiert die Mischung der gerouteten Experten und den gegateten Shared Expert: das Feed-Forward-Ergebnis dieses Blocks."
+					},
 					"output": {
 						"detail": "Gleiche Breite wie die Eingabe. Der nächste Block liest ihn als Eingabe; nach dem letzten Block machen `output_norm` und der LM-Head daraus Logits. Model-Lab-Traces messen diesen Vektor, ohne Control Vector.",
 						"math": "$$h^{(i+1)} = h_{\\text{out}}^{(i)}$$\n\nNach dem letzten Block: $\\ell = W_{\\text{out}}\\,\\mathrm{Norm}(h^{(L)})$.\n\n- $\\ell$: Logits; $W_{\\text{out}}$: `output`, bei Kopplung `token_embd`.",
@@ -361,6 +407,46 @@
 						"math": "$$\\begin{pmatrix} u'_{i_1} \\\\ u'_{i_2} \\end{pmatrix} = \\begin{pmatrix} \\cos p\\theta_i & -\\sin p\\theta_i \\\\ \\sin p\\theta_i & \\cos p\\theta_i \\end{pmatrix} \\begin{pmatrix} u_{i_1} \\\\ u_{i_2} \\end{pmatrix}, \\qquad \\theta_i = b^{-i/r}$$\n\n- $u$: ein Query- oder Key-Head; Paar $i < r$ dreht seine Dimensionen $i_1$ und $i_2$.\n- Welche zwei Dimensionen ein Paar bilden, hängt vom Modell ab: Nachbarn ($i_1 = 2i$, $i_2 = 2i + 1$) oder die beiden Hälften ($i_1 = i$, $i_2 = i + r$).\n- $2r$: Anzahl gedrehter Dimensionen; die übrigen bleiben unverändert.\n- $b$: Basisfrequenz; $p$: Position.\n\nDer Wert $\\langle R_p q, R_s k \\rangle$ hängt dann von $p$ und $s$ nur über $p - s$ ab.",
 						"overview": "Kodiert die Position jedes Tokens, indem Wertepaare von Query und Key um einen mit der Position wachsenden Winkel gedreht werden. Der Attention-Wert hängt dann davon ab, wie weit zwei Tokens auseinanderliegen."
 					},
+					"router": {
+						"detail": "`ffn_gate_inp` hat eine Zeile pro Experte (`mlp.gate.weight` im Hugging-Face-Checkpoint). Sein Produkt mit dem normierten Vektor ergibt einen Logit pro Experte; gewählt ist noch nichts. Dateien behalten ihn meist unquantisiert: Er ist klein und entscheidet, welche Experten laufen.",
+						"math": "$$z = W_r\\,x'$$\n\n- $x'$: Ausgabe der Norm vor dem FFN.\n- $W_r$: `ffn_gate_inp`, von $d$ auf $n_{\\text{exp}}$, eine Zeile pro Experte.\n- $z$: Router-Logits, einer pro Experte.",
+						"overview": "Bewertet jeden Experten für dieses Token: ein Logit pro Experte, aus der normierten Eingabe."
+					},
+					"router_probs": {
+						"detail": "Ein Softmax über alle Experten, nicht nur über die, die gewählt werden; die Wahrscheinlichkeiten aller Experten ergeben also zusammen 1. Sowohl die Wahl als auch die Gewichte der gewählten Experten gehen von diesen Wahrscheinlichkeiten aus.",
+						"math": "$$p_e = \\frac{\\exp(z_e)}{\\sum_{j=1}^{n_{\\text{exp}}} \\exp(z_j)}$$\n\n- $z$: Router-Logits; $e$: Index des Experten.\n- $n_{\\text{exp}}$: Anzahl der Experten im Block.\n- $\\sum_e p_e = 1$ über alle Experten.",
+						"overview": "Macht aus den Router-Logits Wahrscheinlichkeiten über alle Experten."
+					},
+					"shexp_act": {
+						"detail": "SiLU auf dem Gate-Zweig des Shared Experts, elementweise multipliziert mit seinem Up-Zweig (SwiGLU). Kein gespeichertes Gewicht.",
+						"math": "$$m_{\\text{sh}} = \\mathrm{SiLU}(g_{\\text{sh}}) \\odot u_{\\text{sh}}$$\n\n- $g_{\\text{sh}}$, $u_{\\text{sh}}$: Ausgaben von `ffn_gate_shexp` und `ffn_up_shexp`.",
+						"overview": "Verbindet die beiden Zweige des Shared Experts."
+					},
+					"shexp_down": {
+						"detail": "`ffn_down_shexp` (`mlp.shared_expert.down_proj` im Hugging-Face-Checkpoint). Seine Ausgabe wird mit dem Gate des Shared Experts skaliert, bevor sie zu den gerouteten Experten kommt.",
+						"math": "$$E_{\\text{sh}}(x') = W_{d,\\text{sh}}\\,m_{\\text{sh}}$$\n\n- $m_{\\text{sh}}$: SiLU-Produkt des Shared Experts.\n- $W_{d,\\text{sh}}$: `ffn_down_shexp`, von der Breite des Shared Experts auf $d$.",
+						"overview": "Bildet den breiten Vektor des Shared Experts zurück auf die Residualbreite ab."
+					},
+					"shexp_gate": {
+						"detail": "Neben den gerouteten Experten hat dieser Block einen Shared Expert: ein gewöhnliches gegatetes Feed-Forward-Netz, das jedes Token durchläuft, gleich was der Router gewählt hat. `ffn_gate_shexp` ist seine Gate-Projektion (`mlp.shared_expert.gate_proj` im Hugging-Face-Checkpoint).",
+						"math": "$$g_{\\text{sh}} = W_{g,\\text{sh}}\\,x'$$\n\n- $x'$: Ausgabe der Norm vor dem FFN.\n- $W_{g,\\text{sh}}$: `ffn_gate_shexp`, von $d$ auf die Breite des Shared Experts.",
+						"overview": "Der Shared Expert, der für jedes Token läuft, verbreitert den normierten Vektor zu seinem Gate-Zweig."
+					},
+					"shexp_gated": {
+						"detail": "Die Ausgabe des Shared Experts, multipliziert mit dem einen Faktor aus seinem Gate. Kein gespeichertes Gewicht.",
+						"math": "$$y_{\\text{sh}} = s\\, E_{\\text{sh}}(x')$$\n\n- $s$: das Gate des Shared Experts.\n- $E_{\\text{sh}}(x')$: Ausgabe von `ffn_down_shexp`.",
+						"overview": "Skaliert die Ausgabe des Shared Experts mit seinem Gate."
+					},
+					"shexp_scale": {
+						"detail": "`ffn_gate_inp_shexp` ist ein einzelner Vektor (`mlp.shared_expert_gate.weight` im Hugging-Face-Checkpoint). Sein Skalarprodukt mit der normierten Eingabe, durch ein Sigmoid geschickt, ergibt einen Faktor für die gesamte Ausgabe des Shared Experts. Anders als der Router wählt es nichts aus; es skaliert nur.",
+						"math": "$$s = \\mathrm{sigmoid}\\big(g^{\\top} x'\\big) \\in (0, 1)$$\n\n- $g$: `ffn_gate_inp_shexp`, ein Wert pro Dimension.\n- $x'$: Ausgabe der Norm vor dem FFN.",
+						"overview": "Bestimmt für jedes Token, wie viel von der Ausgabe des Shared Experts genutzt wird: eine Zahl zwischen 0 und 1."
+					},
+					"shexp_up": {
+						"detail": "`ffn_up_shexp` (`mlp.shared_expert.up_proj` im Hugging-Face-Checkpoint) verbreitert die normierte Eingabe parallel zur Gate-Projektion des Shared Experts.",
+						"math": "$$u_{\\text{sh}} = W_{u,\\text{sh}}\\,x'$$\n\n- $W_{u,\\text{sh}}$: `ffn_up_shexp`, von $d$ auf die Breite des Shared Experts.",
+						"overview": "Verbreitert den normierten Vektor zum Up-Zweig des Shared Experts."
+					},
 					"split": {
 						"detail": "Der erste Teil ergibt die Queries, der nächste die Keys, der Rest die Values, jeweils in Heads umgeformt. Gibt es weniger Key-Heads als Value-Heads, bedient jeder Query- und Key-Head mehrere Value-Heads.",
 						"math": "$$c_t = [\\,q_t\\,;\\,k_t\\,;\\,v_t\\,]$$\n\n- $q_t, k_t \\in \\mathbb{R}^{n_k d_k}$: Queries und Keys, in Heads der Größe $d_k$.\n- $v_t \\in \\mathbb{R}^{n_v d_v}$: Values, in Heads der Größe $d_v$.",
@@ -370,6 +456,16 @@
 						"detail": "Nachgeschlagen in `nextn.embed_tokens`, wenn die Datei es enthält, sonst im gemeinsamen `token_embd`.",
 						"math": "$$e = E[t]$$\n\n- $t$: Token-ID.\n- $E$: `nextn.embed_tokens`, sonst `token_embd`.",
 						"overview": "Das Embedding eines Tokens, die zweite Eingabe des MTP-Blocks: das Token, das das Hauptmodell gerade erzeugt hat."
+					},
+					"topk": {
+						"detail": "Die `n_expert_used` Experten mit den größten Wahrscheinlichkeiten bleiben (k, aus den Metadaten der Datei); die übrigen werden für dieses Token übersprungen. Deshalb rechnet ein Mixture-of-Experts-Modell pro Token nur einen Bruchteil seiner Gewichte. Die Wahl gilt pro Token und pro Block: Das nächste Token oder der nächste Block kann andere Experten wählen.",
+						"math": "$$S = \\mathrm{TopK}_k(p) \\subset \\{1, \\dots, n_{\\text{exp}}\\}, \\qquad |S| = k$$\n\n- $p$: Router-Wahrscheinlichkeiten.\n- $k$: `n_expert_used` aus den Metadaten der Datei.\n- Experten außerhalb von $S$ werden für dieses Token nicht berechnet.",
+						"overview": "Wählt die Experten mit den höchsten Wahrscheinlichkeiten; nur diese laufen für dieses Token."
+					},
+					"topk_weights": {
+						"detail": "Jeder gewählte Experte bekommt seine Router-Wahrscheinlichkeit als Gewicht. Manche Architekturen teilen diese danach durch ihre Summe, sodass die gewählten Gewichte zusammen 1 ergeben; andere lassen sie unverändert, dann ergeben sie zusammen weniger als 1. Welche Form gilt, ist eine Eigenschaft der Architektur.",
+						"math": "$$w_e = p_e \\quad \\text{oder} \\quad w_e = \\frac{p_e}{\\sum_{j \\in S} p_j}, \\qquad e \\in S$$\n\n- $p_e$: Router-Wahrscheinlichkeit von Experte $e$; $S$: die gewählten Experten.\n- Die zweite Form normiert die gewählten Wahrscheinlichkeiten neu, sodass sie zusammen 1 ergeben; die Architektur legt fest, welche Form gilt.",
+						"overview": "Die Gewichte, mit denen die Ausgaben der gewählten Experten gemischt werden, aus den Router-Wahrscheinlichkeiten genommen."
 					},
 					"v": {
 						"detail": "`attn_v` erzeugt einen Value pro Key/Value-Head. Values erhalten weder Normierung noch RoPE; sie kommen unverändert in den KV-Cache.",
@@ -405,18 +501,18 @@
 						"overview": "Die Karte stapelt die Zeilen aller Schritte: eine Zeile pro generiertem Token, eine Spalte pro Key-Position. Eine dunklere Zelle bedeutet mehr Gewicht; die Zeile des aktuellen Schritts ist markiert."
 					},
 					"attentionRow": {
-						"detail": "Die Query gehört zur Position, die der Schritt liest, die Zeile des generierten Tokens $s$ umfasst also die Key-Positionen 0 bis $P+s-1$. Ein Gewicht zeigt, wo der Head liest, nicht was er schreibt: Die Values werden mit diesen Gewichten gemischt, danach entscheiden ein Gate pro Dimension und die Ausgabeprojektion, wie viel im Residualstrom ankommt; ein großes Gewicht auf einem kleinen oder weggegateten Value ändert also wenig. Attention ist daher weder eine Erklärung noch ein Maß für Wichtigkeit. Template-Tokens und das erste Token nehmen oft einen großen Anteil auf (Attention Sinks); ein hohes Gewicht dort sagt nichts über relevanten Inhalt. Die Gewichte werden in fp32 aus den Query- und Key-Tensoren neu berechnet, die der Kernel verwendet hat; nur die größten Keys bleiben erhalten, auf 1/10.000 abgerundet.",
-						"math": "$$a^{(j)}_{t,s} = \\frac{\\exp\\big(\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s / \\sqrt{d_h}\\big)}{\\sum_{u \\le t} \\exp\\big(\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_u / \\sqrt{d_h}\\big)}, \\qquad s \\le t$$\n\n$$o^{(j)}_t = \\mathrm{sigmoid}\\big(g^{(j)}_t\\big) \\odot \\sum_{s \\le t} a^{(j)}_{t,s}\\, v^{(m)}_s, \\qquad y_t = W_O\\big[o^{(1)}_t; \\dots; o^{(H)}_t\\big]$$\n\n- $t$: Query-Position; $s$: Key-Position; $j$: Query-Head; $m$: der Key/Value-Head seiner Gruppe.\n- $\\tilde q = \\mathrm{RoPE}(\\mathrm{RMSNorm}(q))$, $\\tilde k$ ebenso: RMSNorm pro Head (`q_norm`, `k_norm`), dann RoPE nur auf dem ersten Teil jedes Heads; den Anteil legt die Checkpoint-Konfiguration fest.\n- $d_h$: Head-Dimension; dieses Modell skaliert mit genau $1/\\sqrt{d_h}$.\n- $g^{(j)}_t$: Gate-Hälfte der Query-Projektion; $W_O$: `o_proj`.\n\nDie gezeigte Zeile ist $a^{(j)}_{t,\\cdot}$; Values, Gate und $W_O$ wirken danach und werden nicht aufgezeichnet.",
+						"detail": "Die Query gehört zur Position, die der Schritt liest, die Zeile des generierten Tokens $s$ umfasst also die Key-Positionen 0 bis $P+s-1$. Ein Gewicht zeigt, wo der Head liest, nicht was er schreibt: Die Values werden mit diesen Gewichten gemischt, danach entscheidet die Ausgabeprojektion (bei Qwen3.5 nach einem Gate pro Dimension), wie viel im Residualstrom ankommt; ein großes Gewicht auf einem kleinen oder weggegateten Value ändert also wenig. Attention ist daher weder eine Erklärung noch ein Maß für Wichtigkeit. Template-Tokens und das erste Token nehmen oft einen großen Anteil auf (Attention Sinks); ein hohes Gewicht dort sagt nichts über relevanten Inhalt. Die Gewichte werden in fp32 aus den Query- und Key-Tensoren neu berechnet, die der Kernel verwendet hat; nur die größten Keys bleiben erhalten, auf 1/10.000 abgerundet.",
+						"math": "$$a^{(j)}_{t,s} = \\frac{\\exp\\big(\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_s / \\sqrt{d_h}\\big)}{\\sum_{u \\le t} \\exp\\big(\\tilde q^{(j)}_t \\cdot \\tilde k^{(m)}_u / \\sqrt{d_h}\\big)}, \\qquad s \\le t$$\n\n$$o^{(j)}_t = \\mathrm{sigmoid}\\big(g^{(j)}_t\\big) \\odot \\sum_{s \\le t} a^{(j)}_{t,s}\\, v^{(m)}_s \\;\\; (\\text{Qwen3.5}), \\qquad o^{(j)}_t = \\sum_{s \\le t} a^{(j)}_{t,s}\\, v^{(m)}_s \\;\\; (\\text{OLMoE})$$\n\n$$y_t = W_O\\big[o^{(1)}_t; \\dots; o^{(H)}_t\\big]$$\n\n- $t$: Query-Position; $s$: Key-Position; $j$: Query-Head; $m$: der Key/Value-Head seiner Gruppe.\n- Qwen3.5: $\\tilde q = \\mathrm{RoPE}(\\mathrm{RMSNorm}(q))$, $\\tilde k$ ebenso: RMSNorm pro Head (`q_norm`, `k_norm`), dann RoPE nur auf dem ersten Teil jedes Heads; den Anteil legt die Checkpoint-Konfiguration fest.\n- OLMoE: $\\tilde q = \\mathrm{RoPE}(\\mathrm{clip}_c(\\mathrm{RMSNorm}(q)))$, $\\tilde k$ ebenso: RMSNorm über die ganze Projektion, alle Heads auf einmal (`q_norm`, `k_norm`), dann, wenn die Konfiguration `clip_qkv` $= c$ setzt, jeder Wert auf $[-c, c]$ begrenzt (die Values $v$ ebenso), dann RoPE auf dem ganzen Head.\n- $d_h$: Head-Dimension; beide Familien skalieren mit genau $1/\\sqrt{d_h}$.\n- $g^{(j)}_t$: Gate-Hälfte der Query-Projektion, nur bei Qwen3.5; OLMoE hat kein Gate. $W_O$: `o_proj`.\n\nDie gezeigte Zeile ist $a^{(j)}_{t,\\cdot}$; Values, ein etwaiges Gate und $W_O$ wirken danach und werden nicht aufgezeichnet.",
 						"overview": "Für den gewählten Schritt, Block und Head zeigt diese Zeile, wie die Query des Heads ihr Gewicht auf alle früheren Positionen und die eigene verteilt hat. Jedes Gewicht liegt zwischen 0 und 1, und die Zeile ergibt zusammen 1."
 					},
 					"heads": {
-						"detail": "Die Checkpoint-Konfiguration legt die Anzahl der Heads fest. Bei Grouped-Query Attention teilen sich mehrere Query-Heads einen Key/Value-Head: Sie vergleichen mit denselben Keys, aber mit eigener Query, ihre Zeilen unterscheiden sich also trotzdem. Die Standardkonfiguration von Qwen3.5 hat zum Beispiel 16 Query-Heads, die sich 4 Key/Value-Heads teilen (Gruppen zu 4), und jeden 4. Block als Full-Attention-Block; der Lauf nennt die Werte dieses Checkpoints. Ein aufgezeichneter Block speichert alle seine Query-Heads. Head-Nummern sind Positionen im Modell, keine Rangfolge; diese Ansicht bewertet keinen Head als wichtig.",
-						"math": "$$G = H / H_{kv}, \\qquad j = m\\,G + g, \\quad 0 \\le g < G$$\n\n- $H$: Query-Heads; $H_{kv}$: Key/Value-Heads; $G$: Query-Heads pro Gruppe.\n- Query-Head $j$ liest Key/Value-Head $m = \\lfloor j / G \\rfloor$.\n- Heads einer Gruppe teilen $\\tilde k^{(m)}$ und $v^{(m)}$ und unterscheiden sich in $\\tilde q^{(j)}$ und in ihrem Gate.\n\nDie Ausgaben aller $H$ Heads werden vor $W_O$ verkettet; was ein Head beiträgt, hängt also auch von $W_O$ ab.",
+						"detail": "Die Checkpoint-Konfiguration legt die Anzahl der Heads fest. Bei Grouped-Query Attention teilen sich mehrere Query-Heads einen Key/Value-Head: Sie vergleichen mit denselben Keys, aber mit eigener Query, ihre Zeilen unterscheiden sich also trotzdem. Die Standardkonfiguration von Qwen3.5 hat zum Beispiel 16 Query-Heads, die sich 4 Key/Value-Heads teilen (Gruppen zu 4), und jeden 4. Block als Full-Attention-Block; OLMoE-1B-7B hat 16 Query-Heads und 16 Key/Value-Heads (Gruppen zu 1, jeder Head hat also eigene Keys) und Full Attention in jedem Block. Der Lauf nennt die Werte dieses Checkpoints. Ein aufgezeichneter Block speichert alle seine Query-Heads. Head-Nummern sind Positionen im Modell, keine Rangfolge; diese Ansicht bewertet keinen Head als wichtig.",
+						"math": "$$G = H / H_{kv}, \\qquad j = m\\,G + g, \\quad 0 \\le g < G$$\n\n- $H$: Query-Heads; $H_{kv}$: Key/Value-Heads; $G$: Query-Heads pro Gruppe.\n- Query-Head $j$ liest Key/Value-Head $m = \\lfloor j / G \\rfloor$.\n- Heads einer Gruppe teilen $\\tilde k^{(m)}$ und $v^{(m)}$ und unterscheiden sich in $\\tilde q^{(j)}$ (und bei Qwen3.5 in ihrem Gate).\n- Bei $G = 1$ (OLMoE) ist jede Gruppe ein Head, also $m = j$.\n\nDie Ausgaben aller $H$ Heads werden vor $W_O$ verkettet; was ein Head beiträgt, hängt also auch von $W_O$ ab.",
 						"overview": "Attention läuft als mehrere Heads nebeneinander, jeder mit eigener Query und eigenen Gewichten. Sie sehen jeweils einen Head; verschiedene Heads können auf ganz verschiedene Positionen schauen."
 					},
 					"lens": {
-						"detail": "Für jeden generierten Schritt behält der Lauf die Ausgabe jedes Blocks an der Position, die der Schritt liest, schickt die Blöcke vor dem letzten in einem gebündelten Aufruf durch die finale RMSNorm und die Ausgabeprojektion (`lm_head`), nimmt die Zeile des letzten Blocks direkt aus den Ausgabe-Logits des Modells und wendet dann einmal Softmax über das ganze Vokabular an. Die Module sind die des Modells, die Skalierung $(1 + w)$ der Norm, ihre float32-Rechnung und eine etwaige Gewichtsteilung mit den Token-Embeddings sind also genau die der echten Auslesung. Die Lens nutzt die rohen Logits; die Generierungseinstellungen des Checkpoints gelten für sie nicht. Jeder Block behält seine Top-N-Tokens (der Lauf nennt N), Log-Wahrscheinlichkeit und Rang des gewählten Tokens und die Streuung der Auslesung; Log-Wahrscheinlichkeiten werden auf 1/10.000 abgerundet. Am letzten Block ist die Lens die Ausgabe des Modells selbst; an jedem früheren Block ist sie die finale Auslesung, früh angewendet, was das Modell nie tut. Die Vokabulargröße V stammt aus dem Checkpoint (bei Qwen3.5 zum Beispiel etwa 248k Tokens).",
-						"math": "$$p^{(b)}_t = \\mathrm{softmax}\\big(W_U\\, \\mathrm{RMSNorm}_f(h^{(b)}_t)\\big), \\qquad \\mathrm{RMSNorm}_f(x) = \\frac{x}{\\sqrt{\\tfrac{1}{d}\\sum_i x_i^2 + \\epsilon}} \\odot (1 + w)$$\n\n- $h^{(b)}_t$: Ausgabe von Block $b$ an Position $t = P+s-1$, der Position, die Schritt $s$ liest; $b = 0, \\dots, B-1$.\n- $W_U \\in \\mathbb{R}^{V \\times d}$: die Ausgabeprojektion (`lm_head`), ohne Bias; ob sie gleich der Token-Embedding-Matrix ist, hängt von der Checkpoint-Konfiguration ab.\n- $w$, $\\epsilon$: Gewicht und Epsilon der finalen Norm, die in float32 rechnet und ihr Ergebnis zurück nach bf16 wandelt; die Logits bleiben bf16, Softmax rechnet in float32.\n- $B$, $d$ (Hidden-Größe) und $V$ stammen aus dem Checkpoint.\n- Die gezeigte Norm ist die von Qwen3.5, der Familie, die Traces unterstützen; andere Familien skalieren mit $w$ statt $(1 + w)$, und die Lens nutzt immer das Norm-Modul des Checkpoints selbst.\n\nBei $b = B-1$ ist das die Ausgabe des Modells: $W_U\\,\\mathrm{RMSNorm}_f(h^{(B-1)}_t) = \\ell^{(s)}$. Für $b < B-1$ ist es eine Auslesung, die das Modell nie berechnet.",
+						"detail": "Für jeden generierten Schritt behält der Lauf die Ausgabe jedes Blocks an der Position, die der Schritt liest, schickt die Blöcke vor dem letzten in einem gebündelten Aufruf durch die finale RMSNorm und die Ausgabeprojektion (`lm_head`), nimmt die Zeile des letzten Blocks direkt aus den Ausgabe-Logits des Modells und wendet dann einmal Softmax über das ganze Vokabular an. Die Module sind die des Modells, das effektive Gewicht $\\gamma$ der Norm ($1 + w$ bei Qwen3.5, $w$ bei OLMoE), ihre float32-Rechnung und eine etwaige Gewichtsteilung mit den Token-Embeddings sind also genau die der echten Auslesung. Die Lens nutzt die rohen Logits; die Generierungseinstellungen des Checkpoints gelten für sie nicht. Jeder Block behält seine Top-N-Tokens (der Lauf nennt N), Log-Wahrscheinlichkeit und Rang des gewählten Tokens und die Streuung der Auslesung; Log-Wahrscheinlichkeiten werden auf 1/10.000 abgerundet. Am letzten Block ist die Lens die Ausgabe des Modells selbst; an jedem früheren Block ist sie die finale Auslesung, früh angewendet, was das Modell nie tut. Die Vokabulargröße V stammt aus dem Checkpoint (bei Qwen3.5 zum Beispiel etwa 248k Tokens).",
+						"math": "$$p^{(b)}_t = \\mathrm{softmax}\\big(W_U\\, \\mathrm{RMSNorm}_f(h^{(b)}_t)\\big), \\qquad \\mathrm{RMSNorm}_f(x) = \\frac{x}{\\sqrt{\\tfrac{1}{d}\\sum_i x_i^2 + \\epsilon}} \\odot \\gamma$$\n\n- $h^{(b)}_t$: Ausgabe von Block $b$ an Position $t = P+s-1$, der Position, die Schritt $s$ liest; $b = 0, \\dots, B-1$.\n- $W_U \\in \\mathbb{R}^{V \\times d}$: die Ausgabeprojektion (`lm_head`), ohne Bias; ob sie gleich der Token-Embedding-Matrix ist, hängt von der Checkpoint-Konfiguration ab.\n- $\\gamma$: das effektive Gewicht der finalen Norm, $1 + w$ bei Qwen3.5 und $w$ bei OLMoE, wobei $w$ ihr gespeichertes Gewicht ist; $\\epsilon$: ihr Epsilon. Die Norm normiert in float32 und gibt bf16 zurück; die Logits bleiben bf16, Softmax rechnet in float32.\n- $B$, $d$ (Hidden-Größe) und $V$ stammen aus dem Checkpoint.\n- Die Lens nutzt immer das Norm-Modul des Checkpoints selbst, $\\gamma$ ist also das der jeweiligen Familie.\n\nBei $b = B-1$ ist das die Ausgabe des Modells: $W_U\\,\\mathrm{RMSNorm}_f(h^{(B-1)}_t) = \\ell^{(s)}$. Für $b < B-1$ ist es eine Auslesung, die das Modell nie berechnet.",
 						"overview": "Die Logit Lens liest die Ausgabe jedes Blocks in diesem Schritt durch die eigene finale Norm und Ausgabeprojektion des Modells, als hörte das Modell nach diesem Block auf. Sie zeigt, welche Tokens diese frühe Auslesung bevorzugt. Sie ist eine abgeleitete Analyse, neben dem Lauf berechnet, nicht das, was das Modell berechnet hat: Nur die Ausgabe des letzten Blocks erreichte die Ausgabeschicht."
 					},
 					"lensCaveats": {
@@ -453,6 +549,31 @@
 						"detail": "Die Gewichte lassen sich aus einem fertigen Trace nicht rekonstruieren: Sie brauchen Query und Keys jeder Position, und ein Trace behält beides nicht, nur Residualnormen und Kandidaten. Läufe, die vor der Attention-Aufzeichnung gespeichert wurden, haben sie nie. Für einen neuen Lauf schalten Sie im Trace-Formular „Attention aufzeichnen“ ein; das kostet Speicher und etwas Generierungszeit, lassen Sie es also aus, wenn Normen und Kandidaten genügen. Linear-Attention-Blöcke haben in keinem Lauf Gewichte zum Aufzeichnen.",
 						"math": "$$a_{t,s} = \\mathrm{softmax}_s\\big(\\tilde q_t \\cdot \\tilde k_s / \\sqrt{d_h}\\big)$$\n\n- Braucht $\\tilde q_t$ und jedes $\\tilde k_s$, $s \\le t$, des Blocks; ein Trace ohne Aufzeichnung speichert beides nicht.\n- Eine Residualnorm $\\lVert h_t \\rVert$ bestimmt weder $\\tilde q_t$ noch $\\tilde k_s$; die Gewichte lassen sich daraus nicht ableiten.",
 						"overview": "Dieser Lauf hat für diesen Block keine Attention-Gewichte. Sie werden nur aufgezeichnet, wenn ein Trace mit eingeschaltetem „Attention aufzeichnen“ startet, und dann nur für die Full-Attention-Blöcke, die der Node standardmäßig aufzeichnet."
+					},
+					"routing": {
+						"detail": "Der Router jedes Blocks bewertet alle seine Experten an der Position, die der Schritt liest (das letzte Prompt-Token für den ersten Schritt, sonst das davor generierte Token), behält die besten k und gibt ihnen Gewichte. Der Lauf zeichnet genau diese k Experten-IDs und die Gewichte auf, die die Experten erhalten haben, für jeden Block mit Router, gelesen von einem Hook am Router, während das Modell lief. Expertennummern sind Positionen im Block, keine Namen: Experte 12 eines Blocks hat nichts mit Experte 12 eines anderen zu tun. Der Lauf nutzte den Hugging-Face-Checkpoint in PyTorch (bf16); das GGUF, das „Nächstes Token“ ausführt, kann andere Experten wählen.",
+						"math": "$$p^{(b)} = \\mathrm{softmax}\\big(W^{(b)}_r\\, x'^{(b)}_t\\big), \\qquad S^{(b)}_s = \\mathrm{TopK}_k\\big(p^{(b)}\\big)$$\n\n- $t = P+s-1$: die Position, die Schritt $s$ liest; $b$: ein Block mit Router.\n- $x'^{(b)}_t$: die normierte Eingabe des Feed-Forward-Teils von Block $b$ an $t$; $W^{(b)}_r$: sein Router.\n- Aufgezeichnet pro Schritt und Block: die IDs in $S^{(b)}_s$ und ihre Gewichte $w^{(b)}_e$.\n\nAufgezeichnet wird nur die Position, die der Schritt liest; im Prefill lief der Router auch auf jeder anderen Prompt-Position.",
+						"overview": "Für den gewählten Schritt zeigt dies, durch welche Experten jeder Mixture-of-Experts-Block das Token geschickt hat und mit welchen Gewichten. Es ist das Routing, mit dem dieses Token vorhergesagt wurde, gelesen am Router jedes Blocks, während das Modell lief."
+					},
+					"routingCaveats": {
+						"detail": "Drei Grenzen gelten. Ein Experte ist kein Thema und keine Fähigkeit: Router werden darauf trainiert, Tokens über die Experten zu verteilen, und was ein Experte beiträgt, hängt von seinen Gewichten und vom Rest des Blocks ab; eine Bezeichnung wie „der Mathe-Experte“ lässt sich an diesen IDs nicht ablesen. Ein Prompt ist keine Spezialisierung: Die Wahl in einem Lauf spiegelt diesen Prompt und seine Antwort; eine Aussage darüber, was ein Experte übernimmt, braucht viele Prompts und einen kontrollierten Vergleich, den diese Ansicht nicht anstellt. Und dies ist der Hugging-Face-Checkpoint in PyTorch, nicht das GGUF, das „Nächstes Token“ ausführt: Quantisierung verändert die Router-Logits leicht, wo zwei Experten fast gleich bewertet sind, kann das GGUF also den anderen wählen, und dann können sich auch seine Tokens unterscheiden.",
+						"math": "$$S = \\mathrm{TopK}_k\\big(\\mathrm{softmax}(W_r\\,x')\\big)$$\n\n- $p_{(k)}$, $p_{(k+1)}$: die $k$-größte und die $(k+1)$-größte Router-Wahrscheinlichkeit.\n- Eine kleine Änderung an $W_r$ oder $x'$ (Quantisierung, ein anderer Kernel) ändert $S$, wenn sie diese beiden aneinander vorbeischiebt; dafür genügt wenig, wenn $p_{(k)} - p_{(k+1)}$ klein ist.\n- Die IDs in $S$ sind Positionen in den Expertentensoren des Blocks; nichts im Modell gibt ihnen eine Bedeutung.",
+						"overview": "Routing zeigt, welche Experten gelaufen sind, nicht was sie bedeuten. Ein Experte ist kein Thema, ein Prompt zeigt keine Spezialisierung, und das GGUF kann anders routen."
+					},
+					"routingNotRecorded": {
+						"detail": "Das Routing lässt sich aus einem fertigen Trace nicht rekonstruieren: Es braucht die Router-Ausgabe jedes Blocks in jedem Schritt, und ein Trace ohne es behält nur Residualnorm-Statistiken und Ausgabekandidaten. Läufe, die vor der Routing-Aufzeichnung gespeichert wurden, haben es nie, ein dichter Checkpoint hat keinen Router zum Lesen, und Steering-Läufe zeichnen es nicht auf. Hat ein Lauf seine Größengrenze für das Routing erreicht, behalten die ersten Schritte ihre Zeilen, spätere sagen „nicht behalten“; die generierten Tokens sind davon nicht betroffen.",
+						"math": "$$S^{(b)}_s = \\mathrm{TopK}_k\\big(\\mathrm{softmax}(W^{(b)}_r\\, x'^{(b)}_{P+s-1})\\big)$$\n\n- Braucht alle $d$ Komponenten von $x'^{(b)}_{P+s-1}$, der normierten Eingabe des Feed-Forward-Teils von Block $b$, in jedem Schritt; eine Residualnorm oder einige Top-Dimensionen bestimmen sie nicht.\n- Ein dichter Block hat kein $W_r$, es gibt also nichts aufzuzeichnen.",
+						"overview": "Dieser Lauf hat kein Routing. Traces zeichnen es erst ab der Node-Version auf, die es eingeführt hat, und nur für Checkpoints, deren Blöcke einen Mixture-of-Experts-Router haben."
+					},
+					"routingUsage": {
+						"detail": "Für den gewählten Block zählt jeder aufgezeichnete Schritt eine Wahl für jeden Experten, den er gewählt hat; die Liste zeigt die am häufigsten gewählten Experten und in wie vielen Schritten. Hat der Lauf seine Größengrenze für das Routing erreicht, zählen nur die gespeicherten Schritte, und die Ansicht nennt ihre Zahl. Die Zählung beschreibt diesen einen Prompt und seine Antwort: Ein Experte, der hier in vielen Schritten gewählt wurde, ist damit nicht als zuständig für ein Thema gezeigt, und ein anderer Prompt kann die Wahl ganz anders verteilen.",
+						"math": "$$c_e = \\big|\\{\\, s \\in R : e \\in S^{(b)}_s \\,\\}\\big|, \\qquad \\sum_e c_e = k\\,|R|$$\n\n- $R$: die aufgezeichneten Schritte (jedes generierte Token, oder die gespeicherten, wenn der Lauf an seiner Größengrenze gekürzt wurde).\n- $S^{(b)}_s$: die Experten, die Block $b$ in Schritt $s$ gewählt hat; $c_e$: in wie vielen dieser Schritte Experte $e$ gewählt wurde.\n- Verteilte der Router seine Wahl gleichmäßig, würde jeder Experte in etwa $k\\,|R| / n_{\\text{exp}}$ Schritten gewählt.",
+						"overview": "Zählt, wie oft jeder Experte des gewählten Blocks über die Schritte dieses Laufs gewählt wurde. Die Zählung ist aus dem aufgezeichneten Routing abgeleitet, nicht vom Modell berechnet."
+					},
+					"routingWeights": {
+						"detail": "Die Gewichte sind die, die die Experten tatsächlich erhalten haben: die Router-Wahrscheinlichkeiten der gewählten Experten in bf16, Bit für Bit gespeichert; die Chips runden sie nur für die Anzeige. Manche Modelle teilen sie durch ihre Summe, sodass sie zusammen 1 ergeben (der Lauf nennt, ob dieser Checkpoint das tut); andere behalten die rohen Wahrscheinlichkeiten, die dann zusammen weniger als 1 ergeben. Die Ansicht zeigt dann auch ihre Summe: den Anteil der Router-Wahrscheinlichkeit, der auf die gewählten Experten fiel; ein kleiner Anteil heißt, der Router hat seine Wahrscheinlichkeit auf viele Experten verteilt. Ein großes Gewicht heißt, die Ausgabe dieses Experten zählt mehr in der Mischung dieses Blocks, nicht dass der Experte für das Token wichtiger ist: Die Mischung wird danach wie die Ausgabe jedes anderen Blocks zum Residualstrom addiert.",
+						"math": "$$w_e = p_e \\;\\; (\\text{nicht neu normiert}), \\qquad w_e = \\frac{p_e}{\\sum_{j \\in S} p_j} \\;\\; (\\text{neu normiert}), \\qquad e \\in S$$\n\n$$y = \\sum_{e \\in S} w_e\\, E_e(x')$$\n\n- $p_e$: Router-Wahrscheinlichkeit von Experte $e$; $S$: die gewählten Experten; $E_e$: Ausgabe von Experte $e$.\n- Gezeigte Summe, nur wenn nicht neu normiert: $\\sum_{e \\in S} w_e \\le 1$, der Anteil der Wahrscheinlichkeit auf den gewählten Experten.\n- Gespeichert: die 16 Bit jedes bf16-Gewichts; die Ansicht liest also genau den Wert, mit dem die Ausgabe des Experten multipliziert wurde.",
+						"overview": "Das Gewicht jedes gewählten Experten sagt, wie stark seine Ausgabe in der Mischung des Blocks zählt. Die Chips zeigen die Gewichte gerundet; die gespeicherten Werte sind exakt."
 					},
 					"step": {
 						"detail": "Der Prompt-Durchlauf (Prefill) schickt jedes Prompt-Token durch alle Blöcke; die Ausgabe an seiner letzten Position liefert die Kandidaten für das erste generierte Token. Jeder weitere Schritt liest ein Token: Full-Attention-Blöcke holen Keys und Values aller früheren Positionen aus dem KV-Cache, der pro Schritt um einen Eintrag wächst, und Linear-Attention-Blöcke aktualisieren ihren Zustand fester Größe. Der Trace dekodiert greedy, das gewählte Token ist also der beste Kandidat nach den Generierungseinstellungen des Checkpoints. Alles Gezeigte stammt aus diesem einen gespeicherten Lauf des Hugging-Face-Checkpoints in bf16, nicht aus dem GGUF, das „Nächstes Token“ ausführt.",
@@ -868,6 +989,12 @@
 				"recordAttention": {
 					"help": "Speichert zusätzlich für jedes generierte Token, wo jeder Head der Full-Attention-Blöcke gelesen hat: die größten Keys seiner Zeile und das Gewicht des Rests. Die Ausgabe des Modells bleibt unverändert.\n\nDas kostet einige MiB Speicher pro Lauf und macht den Trace etwas langsamer. Schalten Sie es ein, um die Attention eines Laufs schrittweise anzusehen; lassen Sie es aus, wenn Sie nur Normen und Kandidaten brauchen oder Läufe klein halten möchten.",
 					"label": "Attention aufzeichnen",
+					"refusal": {
+						"headCountOutOfRange": "Dieser Checkpoint hat mehr Attention-Heads pro Block, als eine Aufzeichnung fasst. Starten Sie den Trace ohne sie.",
+						"notFullAttention": "Die Konfiguration dieses OLMoE-Checkpoints beschreibt in mindestens einem Block eine andere Attention als Full Attention, und Attention wird nur für Full Attention aufgezeichnet. Starten Sie den Trace ohne sie.",
+						"shapeNotStated": "Die Konfiguration dieses Checkpoints nennt seine Blockarten und Attention-Heads nicht, daher kann keine Attention aufgezeichnet werden. Starten Sie den Trace ohne sie.",
+						"unsupportedModelType": "Die Attention-Aufzeichnung ist für Qwen3.5- und OLMoE-Checkpoints implementiert; starten Sie den Trace ohne sie."
+					},
 					"unavailable": "Dieser Checkpoint hat keinen Full-Attention-Block, daher gibt es keine Attention aufzuzeichnen."
 				},
 				"repo": "Checkpoint-Repository",
@@ -894,7 +1021,7 @@
 					"attention": "Attention in Block {{index}}",
 					"attentionFailed": "Die Attention-Zeilen konnten nicht gelesen werden.",
 					"attentionNotFound": "Dieser Lauf hat für Block {{index}} keine Attention-Zeilen behalten.",
-					"attentionNote": "In fp32 aus den Query-/Key-Tensoren des Kernels neu berechnet, Top K behalten, abgerundet. Dieser Lauf hat pro Zeile und Head die {{topKeys}} größten Keys behalten; seine {{heads}} Query-Heads teilen sich {{kvHeads}} Key/Value-Heads.",
+					"attentionNote": "In fp32 aus den Query-/Key-Tensoren des Kernels neu berechnet, Top K behalten, abgerundet. Dieser Lauf hat pro Zeile und Head die {{topKeys}} größten Keys behalten; das Modell hat {{heads}} Query-Heads und {{kvHeads}} Key/Value-Heads.",
 					"attentionTruncated_one": "Die Attention-Datei hat ihre Obergrenze erreicht: {{count}} Zeile dieses Blocks wurde nicht behalten, die Karte markiert sie als fehlend.",
 					"attentionTruncated_other": "Die Attention-Datei hat ihre Obergrenze erreicht: {{count}} Zeilen dieses Blocks wurden nicht behalten, die Karte markiert sie als fehlend.",
 					"attentionTruncated_zero": "Die Attention-Datei hat ihre Obergrenze erreicht, aber jede Zeile dieses Blocks wurde behalten.",
@@ -971,6 +1098,33 @@
 					"provenanceKernel": "Hugging-Face-Checkpoint, bf16, transformers {{transformers}}, Attention-Kernel {{kernel}}; nicht das GGUF. Jeder Wert unten stammt aus diesem einen gespeicherten Lauf.",
 					"recorded": "{{block}}, Attention aufgezeichnet",
 					"recordedLegend": "Das Auge markiert die Blöcke, deren Attention dieser Lauf aufgezeichnet hat.",
+					"routing": {
+						"block": "Block",
+						"caption": "Experten, die jeder Mixture-of-Experts-Block in Schritt {{step}} gewählt hat, mit ihren Gewichten",
+						"chip": "E{{expert}} {{weight}}",
+						"detailTitle": "Router-Gewichte von Block {{index}}",
+						"experts": "Gewählte Experten und Gewichte",
+						"explain": {
+							"caveats": "Was das Routing nicht sagen kann",
+							"routing": "Was das Routing zeigt",
+							"usage": "Wahlen über den Lauf zählen",
+							"weights": "Die Router-Gewichte"
+						},
+						"failed": "Das Routing konnte nicht gelesen werden.",
+						"notFound": "Dieser Lauf hat kein Routing behalten.",
+						"note": "Am Router jedes Blocks gelesen, während das Modell in PyTorch auf dem Hugging-Face-Checkpoint lief. Das GGUF in llama.cpp kann anders routen.",
+						"share": "Summe der Gewichte",
+						"stepMissing": "Das Routing dieses Schritts wurde nicht behalten.",
+						"title": "Routing, mit dem dieses Token vorhergesagt wurde",
+						"truncated": "Das Routing hat seine Größengrenze erreicht: Die ersten Schritte haben ihre Zeilen behalten, spätere wurden nicht behalten. Die generierten Tokens sind davon nicht betroffen.",
+						"unavailable": "Dieser Lauf hat kein Routing: Er wurde vor der Routing-Aufzeichnung gespeichert, er ist ein Steering-Lauf, sein Checkpoint hat keinen Mixture-of-Experts-Router, oder sein Routing übersteigt, was ein Trace aufzeichnet (mehr als 64 Blöcke, mehr als 1024 Experten oder mehr als 16 Experten pro Token).",
+						"usageCount_one": "E{{expert}}: in {{picks}} von {{count}} Schritt gewählt",
+						"usageCount_other": "E{{expert}}: in {{picks}} von {{count}} Schritten gewählt",
+						"usageTruncated_one": "Am häufigsten gewählt im {{count}} gespeicherten Schritt",
+						"usageTruncated_other": "Am häufigsten gewählt in den {{count}} gespeicherten Schritten",
+						"usage_one": "Am häufigsten gewählt in diesem Lauf ({{count}} Schritt)",
+						"usage_other": "Am häufigsten gewählt in diesem Lauf ({{count}} Schritte)"
+					},
 					"rowCaption": "Gespeicherte Keys von Head {{head}} in Schritt {{step}}, nach Position geordnet, jeweils mit ihren Nachbarn",
 					"rowMissing": "Die Zeile dieses Schritts wurde nicht behalten.",
 					"rowPosition": "Position",
@@ -984,6 +1138,9 @@
 				"tab": "Trace und Steering",
 				"token": "Token",
 				"traceFailed": "Der Trace konnte nicht geladen werden.",
+				"traceRefusal": {
+					"routerLogitsRequested": "Die Konfiguration dieses Checkpoints setzt output_router_logits, was ein Trace nicht unterstützt. Steering ist weiterhin möglich."
+				},
 				"truncated": "Der Trace hat seine Grenze von {{cap}} erreicht: {{dropped}} Einträge wurden nicht behalten. Die Generierung war nicht betroffen.",
 				"tryNextToken": "Unter „Nächstes Token“ ausprobieren",
 				"unsupported": "Der Trace läuft vorerst nur unter Linux, weil er die Python-Trainings-Runtime braucht, die es nur unter Linux gibt. Die anderen Werkzeuge im Model Lab funktionieren hier.",

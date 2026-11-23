@@ -149,11 +149,177 @@ public sealed class ModelLabArchitectureBuilderTests
     }
 
     [Test]
+    public void AQwen36MoeFile_IsDetailed_WithThirtyLinearAndTenFullBlocks_TwoTemplates_AndNoUnmappedTensor()
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, Qwen35MoeTensorFixture.Qwen36_35B_A3B());
+
+        AssertEx.Equal("detailed", descriptor.Support);
+        AssertEx.Equal("qwen35moe", descriptor.Architecture!);
+        AssertEx.Equal(Qwen35MoeTensorFixture.BlockCount, descriptor.Blocks.Count);
+        AssertEx.Equal(expected: 30, descriptor.Blocks.Count(static block => block.Kind == "linearAttention"));
+        AssertEx.Equal(expected: 10, descriptor.Blocks.Count(static block => block.Kind == "fullAttention"));
+        var tensors = AllTensors(descriptor).ToList();
+        AssertEx.Equal(expected: 733, tensors.Count);
+        AssertEx.Empty(tensors.Where(static tensor => tensor.HfName is null).Select(static tensor => tensor.GgufName));
+        AssertEx.Equal("linearAttention,fullAttention", string.Join(',', descriptor.Templates.Select(static template => template.Kind)));
+        AssertEx.True(descriptor.Templates.All(static template => template.Source == "llama.cpp src/models/qwen35moe.cpp @ b12014"));
+        AssertEx.Equal("blk.0.ssm,blk.0.ffn,blk.0.norm", string.Join(',', descriptor.Blocks[0].Groups.Select(static group => group.ComponentId)));
+        // Router, three routed-expert tensors, the shared-expert gate and its three projections.
+        AssertEx.Equal(expected: 8, descriptor.Blocks[0].Groups[1].Tensors.Count);
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(3)]
+    [Arguments(39)]
+    public void EveryRecordedMoeRow_GetsItsHfName_AndValueRelation(int blockIndex)
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, Qwen35MoeTensorFixture.Qwen36_35B_A3B());
+        var rows = Qwen35TensorFixture.IsFull(blockIndex) ? Qwen35MoeTensorFixture.FullBlock : Qwen35MoeTensorFixture.LinearBlock;
+        var byName = descriptor.Blocks[blockIndex].Groups.SelectMany(static group => group.Tensors).ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
+
+        AssertEx.Equal(rows.Length, byName.Count);
+        foreach (var row in rows)
+        {
+            var tensor = byName[$"blk.{blockIndex}.{row.GgufSuffix}"];
+            AssertEx.Equal($"model.language_model.layers.{blockIndex}.{row.HfSuffix}", tensor.HfName, row.GgufSuffix);
+            AssertEx.Equal(row.Relation, tensor.ValueRelation, row.GgufSuffix);
+        }
+    }
+
+    /// <summary>The split halves stay <c>sliced</c> whatever the stored type; the fused tensor is the HF one, so it follows the type like any equal row.</summary>
+    [Test]
+    [Arguments("Q4_K", "quantized")]
+    [Arguments("BF16", "equal")]
+    public void TheExpertHalves_StaySliced_WhileTheFusedTensorAndTheRouterFollowTheStoredType(string ggmlType, string fusedRelation)
+    {
+        var inspection = Qwen35TensorFixture.Inspection("qwen35moe",
+        [
+            Qwen35TensorFixture.Tensor("blk.0.ssm_a", [32], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_gate_inp.weight", [64, 8], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_gate_exps.weight", [64, 16, 8], ggmlType),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_up_exps.weight", [64, 16, 8], ggmlType),
+            Qwen35TensorFixture.Tensor("blk.0.ffn_gate_shexp.weight", [64, 16], "Q8_0"),
+            Qwen35TensorFixture.Tensor("blk.1.ssm_a", [32], "F32"),
+            Qwen35TensorFixture.Tensor("blk.1.ffn_gate_up_exps.weight", [64, 32, 8], ggmlType)
+        ]);
+
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
+
+        var byName = AllTensors(descriptor).ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
+        AssertEx.Equal("sliced", byName["blk.0.ffn_gate_exps.weight"].ValueRelation);
+        AssertEx.Equal("sliced", byName["blk.0.ffn_up_exps.weight"].ValueRelation);
+        AssertEx.Equal("model.language_model.layers.0.mlp.experts.gate_up_proj", byName["blk.0.ffn_up_exps.weight"].HfName);
+        AssertEx.Equal("equal", byName["blk.0.ffn_gate_inp.weight"].ValueRelation);
+        AssertEx.Equal("quantized", byName["blk.0.ffn_gate_shexp.weight"].ValueRelation);
+        AssertEx.Equal("model.language_model.layers.1.mlp.experts.gate_up_proj", byName["blk.1.ffn_gate_up_exps.weight"].HfName);
+        AssertEx.Equal(fusedRelation, byName["blk.1.ffn_gate_up_exps.weight"].ValueRelation);
+    }
+
+    /// <summary>Each family names only its own FFN: a dense row in a <c>qwen35moe</c> file and an expert row in a <c>qwen35</c> file stay unnamed.</summary>
+    [Test]
+    [Arguments("qwen35", "ffn_gate_exps.weight")]
+    [Arguments("qwen35moe", "ffn_gate.weight")]
+    public void AnotherFamilysFfnRow_GetsNoHfName(string architecture, string foreignSuffix)
+    {
+        var inspection = Qwen35TensorFixture.Inspection(architecture,
+        [
+            Qwen35TensorFixture.Tensor("blk.0.attn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor($"blk.0.{foreignSuffix}", [64, 16], "F32")
+        ]);
+
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
+
+        var byName = AllTensors(descriptor).ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
+        AssertEx.NotNull(byName["blk.0.attn_norm.weight"].HfName);
+        AssertEx.Null(byName[$"blk.0.{foreignSuffix}"].HfName);
+    }
+
+    /// <summary>
+    ///     Outside a linear block a fused <c>attn_qkv</c> holds <c>q_proj</c>, <c>k_proj</c> and <c>v_proj</c> together, so it gets no HF
+    ///     name; a linear block's <c>attn_qkv</c> stays <c>in_proj_qkv</c>.
+    /// </summary>
+    [Test]
+    [Arguments("qwen35")]
+    [Arguments("qwen35moe")]
+    public void AFusedQkvInAFullAttentionBlock_GetsNoHfName_WhileALinearBlocksQkvKeepsItsOwn(string architecture)
+    {
+        var inspection = Qwen35TensorFixture.Inspection(architecture,
+        [
+            Qwen35TensorFixture.Tensor("blk.0.ssm_a", [32], "F32"),
+            Qwen35TensorFixture.Tensor("blk.0.attn_qkv.weight", [64, 192], "Q8_0"),
+            Qwen35TensorFixture.Tensor("blk.1.attn_norm.weight", [64], "F32"),
+            Qwen35TensorFixture.Tensor("blk.1.attn_qkv.weight", [64, 160], "Q8_0"),
+            Qwen35TensorFixture.Tensor("blk.1.attn_output.weight", [64, 64], "Q8_0")
+        ], ssmGroupCount: 16, ssmTimeStepRank: 32);
+
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
+
+        AssertEx.Equal("linearAttention,fullAttention", string.Join(',', descriptor.Blocks.Select(static block => block.Kind)));
+        var byName = AllTensors(descriptor).ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
+        AssertEx.Equal("model.language_model.layers.0.linear_attn.in_proj_qkv.weight", byName["blk.0.attn_qkv.weight"].HfName);
+        AssertEx.Equal("reordered", byName["blk.0.attn_qkv.weight"].ValueRelation);
+        AssertEx.Null(byName["blk.1.attn_qkv.weight"].HfName);
+        AssertEx.Null(byName["blk.1.attn_qkv.weight"].ValueRelation);
+        AssertEx.Equal("model.language_model.layers.1.self_attn.o_proj.weight", byName["blk.1.attn_output.weight"].HfName);
+    }
+
+    [Test]
+    public void AMoeFileWithAnMtpBlock_HasThreeTemplates_AndNoHfNameInTheMtpBlock()
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, Qwen35MoeTensorFixture.Qwen36_35B_A3B(withMtpBlock: true));
+
+        AssertEx.Equal("linearAttention,fullAttention,mtp", string.Join(',', descriptor.Templates.Select(static template => template.Kind)));
+        var mtp = descriptor.Blocks[Qwen35MoeTensorFixture.BlockCount];
+        AssertEx.Equal("mtp", mtp.Kind);
+        AssertEx.True(mtp.Groups.Any(static group => group.Component == "ffn"));
+        AssertEx.True(mtp.Groups.SelectMany(static group => group.Tensors).All(static tensor => tensor.HfName is null && tensor.ValueRelation is null));
+    }
+
+    /// <summary>
+    ///     Each <c>qwen35moe</c> template is the <c>qwen35</c> one of its kind with the dense FFN swapped for the frozen MoE nodes and
+    ///     exactly the MoE edges, keeping the trunk's control vector and the MTP head path.
+    /// </summary>
+    [Test]
+    [Arguments("linearAttention")]
+    [Arguments("fullAttention")]
+    [Arguments("mtp")]
+    public void EachMoeTemplate_IsTheDenseOne_WithTheFfnSwappedForExactlyTheMoeNodesAndEdges(string kind)
+    {
+        string[] denseNodes = ["ffn_gate", "ffn_up", "ffn_act", "ffn_down"];
+        string[] denseEdges = ["post_norm->ffn_gate", "post_norm->ffn_up", "ffn_gate->ffn_act", "ffn_up->ffn_act", "ffn_act->ffn_down", "ffn_down->ffn_residual"];
+        var dense = ModelLabArchitectureBuilder.Build(ModelName, Qwen35TensorFixture.Qwen35_27BLike()).Templates.Single(template => template.Kind == kind);
+        var moe = ModelLabArchitectureBuilder.Build(ModelName, Qwen35MoeTensorFixture.Qwen36_35B_A3B(withMtpBlock: true)).Templates.Single(template => template.Kind == kind);
+        var denseEdgeSet = dense.Edges.Select(static edge => $"{edge.From}->{edge.To}").ToHashSet(StringComparer.Ordinal);
+        AssertEx.True(denseEdges.All(denseEdgeSet.Contains), "The dense template draws the SiLU FFN the MoE one replaces.");
+
+        var expectedNodes = dense.Nodes.Select(static node => node.Id).Except(denseNodes, StringComparer.Ordinal).Concat(Qwen35MoeTensorFixture.MoeNodeIds);
+        var expectedEdges = denseEdgeSet.Except(denseEdges, StringComparer.Ordinal).Concat(Qwen35MoeTensorFixture.MoeEdges);
+        AssertEx.Equal(string.Join(',', expectedNodes.Order(StringComparer.Ordinal)), string.Join(',', moe.Nodes.Select(static node => node.Id).Order(StringComparer.Ordinal)));
+        var moeEdges = moe.Edges.Select(static edge => $"{edge.From}->{edge.To}").ToList();
+        AssertEx.Equal(moeEdges.Count, moeEdges.Distinct(StringComparer.Ordinal).Count());
+        AssertEx.Equal(string.Join(',', expectedEdges.Order(StringComparer.Ordinal)), string.Join(',', moeEdges.Order(StringComparer.Ordinal)));
+        AssertEx.True(moe.Nodes.Where(static node => Qwen35MoeTensorFixture.MoeNodeIds.Contains(node.Id, StringComparer.Ordinal)).All(static node => node.Component == "ffn"));
+
+        string[] tail = kind == "mtp"
+            ? ["ffn_residual->head_norm", "head_norm->head", "head->logits"]
+            : ["ffn_residual->control_vector", "control_vector->output"];
+        AssertEx.True(tail.All(moeEdges.Contains), string.Join(',', tail));
+        AssertEx.Equal(kind != "mtp", moe.Nodes.Any(static node => node.Id == "control_vector"));
+    }
+
+    [Test]
     [Arguments("qwen35", 3)]
+    [Arguments("qwen35moe", 3)]
     [Arguments("llama", 1)]
     public void EveryTemplate_IsMarkedInferred_ConnectsOnlyItsOwnNodes_AndNamesOnlyComponentsItsBlocksHave(string architecture, int templateCount)
     {
-        var inspection = architecture == "llama" ? LlamaTensorFixture.Llama3_2_1B() : Qwen35TensorFixture.Qwen35_27BLike();
+        var inspection = architecture switch
+        {
+            "llama" => LlamaTensorFixture.Llama3_2_1B(),
+            "qwen35moe" => Qwen35MoeTensorFixture.Qwen36_35B_A3B(withMtpBlock: true),
+            _ => Qwen35TensorFixture.Qwen35_27BLike()
+        };
         var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
 
         AssertEx.Equal(templateCount, descriptor.Templates.Count);
@@ -179,7 +345,7 @@ public sealed class ModelLabArchitectureBuilderTests
     {
         var descriptors = ModelLabArchitectureBuilder.RegisteredDescriptors.ToList();
 
-        AssertEx.NotEmpty(descriptors);
+        AssertEx.Equal("llama,qwen35,qwen35moe", string.Join(',', descriptors.Select(static descriptor => descriptor.Architecture).Order(StringComparer.Ordinal)));
         // A pin bump fails here on purpose: re-read each descriptor's upstream files at the new tag first.
         foreach (var descriptor in descriptors)
         {

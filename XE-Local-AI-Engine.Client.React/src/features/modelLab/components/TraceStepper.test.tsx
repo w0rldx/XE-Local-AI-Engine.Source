@@ -420,7 +420,7 @@ describe("TraceStepper with recorded attention", () => {
 		const panel = screen.getByTestId("model-lab-stepper-attention");
 		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("What this measurement means");
 		expect(screen.getByTestId("model-lab-stepper-attention-note").textContent).toBe(
-			"Recomputed in fp32 from the kernel's own query/key tensors, top K kept, floored. This run kept the top 2 keys per row and head; its 4 query heads share 2 key/value heads.",
+			"Recomputed in fp32 from the kernel's own query/key tensors, top K kept, floored. This run kept the top 2 keys per row and head; the model has 4 query heads and 2 key/value heads.",
 		);
 		// Position order, never weight order; the key at the query position has no right neighbour.
 		// Weight first, so it stays in view on a narrow screen.
@@ -502,6 +502,23 @@ describe("TraceStepper with recorded attention", () => {
 		expect((await screen.findByTestId("model-lab-stepper-map-capped")).textContent).toBe(
 			"The map shows 256 of 300 key positions; the 44 with the least summed weight are left out.",
 		);
+	});
+
+	it("maps each query head to its own key/value head when the model has as many of each", async () => {
+		stubAttention();
+		await openStepper({ ...v4Result, attention: { ...v4Result.attention, kvHeads: 4 } }, v4Records);
+		fireEvent.click(screen.getByRole("button", { name: fullBlock7 }));
+		await screen.findByTestId("model-lab-stepper-row");
+
+		expect(screen.getByTestId("model-lab-stepper-attention-note").textContent).toBe(
+			"Recomputed in fp32 from the kernel's own query/key tensors, top K kept, floored. This run kept the top 2 keys per row and head; the model has 4 query heads and 4 key/value heads.",
+		);
+		await chooseOption("Head", "Head 3 (key/value head 3)");
+
+		expect(screen.getAllByRole("option", { hidden: true }).map((option) => option.textContent)).toEqual(
+			[0, 1, 2, 3].map((head) => `Head ${head} (key/value head ${head})`),
+		);
+		expect(rowKeyTexts()).toEqual(['100.00%0"<s>" "hel"']);
 	});
 
 	it("counts this block's missing rows in the plural", async () => {
@@ -903,6 +920,219 @@ describe("TraceStepper with a logit lens", () => {
 
 		expect((await screen.findByTestId("model-lab-stepper-lens-failed")).textContent).toBe(
 			"The stored logit lens failed its check.",
+		);
+	});
+});
+
+// A contract-8 run of a mixture-of-experts checkpoint: four full blocks, each with a router choosing 3 of 64 experts, the
+// weights not renormalized. The routing file reached its cap after two steps, so step 3 has no row. Weights are exact
+// bf16 values, so the chips' rounding is the view's alone.
+const v8Result = {
+	...result,
+	layerKinds: "FFFF",
+	attnImplementation: "sdpa",
+	routing: {
+		layers: [0, 1, 2, 3],
+		experts: 64,
+		expertsPerToken: 3,
+		normalizedTopK: false,
+		weightEncoding: "bfloat16-bits",
+		records: 2,
+		truncated: true,
+	},
+};
+const v8Records = [0, 1, 2].map((step) => ({ step, layer: 3, kind: "F", norm: step + 1 }));
+const routed = (layer: number, experts: number[], weights: number[]) => ({ layer, experts, weights });
+const routingSteps = [
+	{
+		step: 0,
+		blocks: [
+			routed(0, [5, 12, 40], [0.0625, 0.3125, 0.1875]),
+			routed(1, [7, 3, 9], [0.5, 0.25, 0.125]),
+			routed(2, [1, 2, 3], [0.25, 0.25, 0.25]),
+			routed(3, [60, 61, 62], [0.125, 0.5, 0.25]),
+		],
+	},
+	{
+		step: 1,
+		blocks: [
+			routed(0, [12, 5, 33], [0.375, 0.25, 0.125]),
+			routed(1, [7, 3, 9], [0.5, 0.25, 0.125]),
+			routed(2, [1, 2, 3], [0.25, 0.25, 0.25]),
+			routed(3, [60, 61, 62], [0.125, 0.5, 0.25]),
+		],
+	},
+];
+
+function routingResponse(overrides: Record<string, unknown> = {}): Response {
+	return HttpResponse.json({
+		layers: [0, 1, 2, 3],
+		experts: 64,
+		expertsPerToken: 3,
+		normalizedTopK: false,
+		steps: routingSteps,
+		truncated: true,
+		droppedSteps: 1,
+		...overrides,
+	});
+}
+
+function stubRouting(respond: () => Response = () => routingResponse()): { requests: number } {
+	const seen = { requests: 0 };
+	server.use(
+		http.get(localApiPath(`model-lab/experiments/${experimentId}/routing`), () => {
+			seen.requests++;
+			return respond();
+		}),
+	);
+	return seen;
+}
+
+function routingRows(): (string | null)[][] {
+	return screen.getAllByTestId("model-lab-stepper-routing-row").map(cellTexts);
+}
+
+describe("TraceStepper with recorded routing", () => {
+	// The explanation texts ship in the route's own bundle, which the page loads.
+	beforeAll(() => loadModelLabStrings("en"));
+
+	it("lists each block's experts by weight with their share, under a measurement badge and its note, fetched once per run", async () => {
+		const routing = stubRouting();
+		await openStepper(v8Result, v8Records);
+
+		const table = await screen.findByTestId("model-lab-stepper-routing-table");
+		const panel = screen.getByTestId("model-lab-stepper-routing");
+		expect(within(panel).getByText("Routing used to predict this token")).toBeTruthy();
+		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("What this measurement means");
+		expect(screen.getByTestId("model-lab-stepper-routing-note").textContent).toBe(
+			"Read from each block's router as the model ran in PyTorch on the Hugging Face checkpoint. The GGUF in llama.cpp may route differently.",
+		);
+		expect(
+			within(table)
+				.getAllByRole("columnheader")
+				.map((header) => header.textContent),
+		).toEqual(["Block", "Chosen experts and weights", "Sum of weights"]);
+		// A chip's label never ellipsizes, so a narrow column cannot cut its weight off.
+		for (const chip of screen.getAllByTestId("model-lab-stepper-routing-chip")) {
+			expect(chip.querySelector<HTMLElement>(".mantine-Badge-label")?.style.overflow).toBe("visible");
+		}
+		// Heaviest first; equal weights by expert id; rounded for display only.
+		expect(routingRows()).toEqual([
+			["F 0", "E12 0.31E40 0.19E5 0.06", "0.56"],
+			["F 1", "E7 0.50E3 0.25E9 0.13", "0.88"],
+			["F 2", "E1 0.25E2 0.25E3 0.25", "0.75"],
+			["F 3", "E61 0.50E62 0.25E60 0.13", "0.88"],
+		]);
+		expect(screen.getAllByTestId("model-lab-stepper-routing-row")[0]?.getAttribute("aria-current")).toBe("true");
+		// The table adds no Tab stop: the block strip stays the selector.
+		expect(table.querySelectorAll("button, a[href], input, [tabindex]")).toHaveLength(0);
+		expect(within(screen.getByTestId("model-lab-stepper-routing-explain")).getAllByRole("button")).toHaveLength(4);
+
+		fireEvent.click(screen.getByRole("button", { name: "Next step" }));
+		expect(routingRows()[0]).toEqual(["F 0", "E12 0.38E5 0.25E33 0.13", "0.75"]);
+		expect(routing.requests).toBe(1);
+	});
+
+	it("shows the selected block's weights as bars and its most picked experts over the saved steps, as derived", async () => {
+		stubRouting();
+		await openStepper(v8Result, v8Records);
+
+		const detail = await screen.findByTestId("model-lab-stepper-routing-detail");
+		expect(within(detail).getByText("Router weights of block 0")).toBeTruthy();
+		const bars = within(detail).getAllByTestId("model-lab-stepper-routing-bar");
+		expect(bars.map((bar) => bar.textContent)).toEqual(["E12 0.31", "E40 0.19", "E5 0.06"]);
+		expect(detail.querySelectorAll(".mantine-Progress-root[aria-hidden='true']")).toHaveLength(3);
+		const usage = screen.getByTestId("model-lab-stepper-routing-usage");
+		expect(within(usage).getByText("Most picked in the 2 saved steps")).toBeTruthy();
+		expect(within(usage).getByTestId("model-lab-explain-basis").textContent).toBe("Derived analysis");
+		expect(screen.getAllByTestId("model-lab-stepper-routing-usage-row").map((row) => row.textContent)).toEqual([
+			"E5: picked in 2 of 2 steps",
+			"E12: picked in 2 of 2 steps",
+			"E33: picked in 1 of 2 steps",
+		]);
+
+		fireEvent.click(screen.getByRole("button", { name: "Block 3, full attention: residual norm 1" }));
+
+		expect(screen.getAllByTestId("model-lab-stepper-routing-row")[3]?.getAttribute("aria-current")).toBe("true");
+		expect(within(screen.getByTestId("model-lab-stepper-routing-detail")).getByText("Router weights of block 3")).toBeTruthy();
+		expect(screen.getAllByTestId("model-lab-stepper-routing-usage-row").map((row) => row.textContent)).toEqual([
+			"E60: picked in 2 of 2 steps",
+			"E61: picked in 2 of 2 steps",
+			"E62: picked in 2 of 2 steps",
+		]);
+	});
+
+	it("leaves the share out when the weights are renormalized, and counts every step of an uncut run", async () => {
+		stubRouting(() => routingResponse({ normalizedTopK: true, truncated: false, droppedSteps: 0 }));
+		await openStepper({ ...v8Result, routing: { ...v8Result.routing, normalizedTopK: true, truncated: false } }, v8Records);
+
+		const table = await screen.findByTestId("model-lab-stepper-routing-table");
+		expect(
+			within(table)
+				.getAllByRole("columnheader")
+				.map((header) => header.textContent),
+		).toEqual(["Block", "Chosen experts and weights"]);
+		expect(routingRows()[0]).toEqual(["F 0", "E12 0.31E40 0.19E5 0.06"]);
+		expect(
+			within(screen.getByTestId("model-lab-stepper-routing-usage")).getByText("Most picked in this run (2 steps)"),
+		).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-stepper-routing-truncated")).toBeNull();
+	});
+
+	it("counts a single saved step in the singular", async () => {
+		stubRouting(() => routingResponse({ steps: routingSteps.slice(0, 1) }));
+		await openStepper(v8Result, v8Records);
+
+		const usage = await screen.findByTestId("model-lab-stepper-routing-usage");
+		expect(within(usage).getByText("Most picked in the 1 saved step")).toBeTruthy();
+		expect(screen.getAllByTestId("model-lab-stepper-routing-usage-row")[0]?.textContent).toBe("E5: picked in 1 of 1 step");
+	});
+
+	it("says a step past the routing cap was not kept", async () => {
+		stubRouting();
+		await openStepper(v8Result, v8Records);
+		await screen.findByTestId("model-lab-stepper-routing-table");
+
+		expect(screen.getByTestId("model-lab-stepper-routing-truncated").textContent).toBe(
+			"The routing reached its size limit: the first steps kept their rows, later steps were not kept. The generated tokens are not affected.",
+		);
+		fireEvent.click(screen.getByRole("button", { name: 'Step 3: "\\n"' }));
+
+		expect(screen.getByTestId("model-lab-stepper-routing-missing").textContent).toBe("This step's routing was not kept.");
+		expect(screen.queryByTestId("model-lab-stepper-routing-table")).toBeNull();
+		expect(screen.queryByTestId("model-lab-stepper-routing-detail")).toBeNull();
+		// The usage still counts the saved steps.
+		expect(screen.getAllByTestId("model-lab-stepper-routing-usage-row")).toHaveLength(3);
+	});
+
+	it("shows a run without routing as not available, with the reason, and never asks for it", async () => {
+		const routing = stubRouting();
+		stubLens();
+		await openStepper(v5Result, v5Records);
+
+		const panel = screen.getByTestId("model-lab-stepper-routing");
+		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("Not available here");
+		expect(screen.getByTestId("model-lab-stepper-routing-unavailable").textContent).toBe(
+			"This run has no routing: it was saved before routing recording, it is a steering run, its checkpoint has no mixture-of-experts router, or its routing is past what a trace records (more than 64 blocks, more than 1024 experts or more than 16 experts per token).",
+		);
+		expect(within(panel).getByTestId("model-lab-explain-entry").textContent).toContain("This run has no routing.");
+		expect(routing.requests).toBe(0);
+	});
+
+	it("says the run kept no routing on a 404", async () => {
+		stubRouting(() => new HttpResponse(null, { status: 404 }));
+		await openStepper(v8Result, v8Records);
+
+		expect((await screen.findByTestId("model-lab-stepper-routing-failed")).textContent).toBe("This run kept no routing.");
+		expect(screen.queryByTestId("model-lab-stepper-routing-table")).toBeNull();
+	});
+
+	it("shows the server's reason when the stored routing does not read back (422)", async () => {
+		stubRouting(() => HttpResponse.json({ statusCode: 422, message: "The stored routing failed its check." }, { status: 422 }));
+		await openStepper(v8Result, v8Records);
+
+		expect((await screen.findByTestId("model-lab-stepper-routing-failed")).textContent).toBe(
+			"The stored routing failed its check.",
 		);
 	});
 });

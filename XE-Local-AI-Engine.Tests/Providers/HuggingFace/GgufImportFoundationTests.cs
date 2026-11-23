@@ -215,6 +215,23 @@ public sealed class GgufImportFoundationTests
     }
 
     [Test]
+    public async Task Inspector_AcceptsAnOlmoeCausalModel()
+    {
+        using var paths = new ImportPaths();
+        var source = paths.WriteSource(BuildCausalGguf(architecture: "olmoe"), "OLMoE-1B-7B-0125-Instruct-Q4_K_M.gguf");
+        var inspector = new GgufImportInspector(Infra.Options(paths.ModelsDirectory));
+
+        var result = await inspector.InspectAsync(new GgufImportSource
+        {
+            AbsolutePath = source
+        }, CancellationToken.None);
+
+        AssertEx.True(result.IsAccepted, string.Join(',', result.Rejections));
+        AssertEx.Equal(GgufImportWorkload.CausalChat, result.Workload);
+        AssertEx.Equal("olmoe", result.Architecture);
+    }
+
+    [Test]
     public async Task Inspector_SourceIdentityToken_ChangesWhenSamePathIsAtomicallyReplaced()
     {
         using var paths = new ImportPaths();

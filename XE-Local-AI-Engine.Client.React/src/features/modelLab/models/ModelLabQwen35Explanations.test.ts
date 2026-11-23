@@ -87,6 +87,33 @@ const qwen35Nodes = {
 	],
 };
 
+// ModelLabQwen35Architecture's mixture-of-experts tail (AddMixtureOfExperts), in place of the dense FFN in every template.
+const denseFfn = ["ffn_gate", "ffn_up", "ffn_act", "ffn_down"];
+const moeFfn = [
+	"router",
+	"router_probs",
+	"topk",
+	"topk_weights",
+	"exp_gate",
+	"exp_up",
+	"exp_act",
+	"exp_down",
+	"exp_weighted",
+	"shexp_gate",
+	"shexp_up",
+	"shexp_act",
+	"shexp_down",
+	"shexp_scale",
+	"shexp_gated",
+	"moe_out",
+];
+const qwen35moeNodes = Object.fromEntries(
+	Object.entries(qwen35Nodes).map(([kind, ids]) => [
+		kind,
+		ids.flatMap((id) => (id === "ffn_gate" ? moeFfn : denseFfn.includes(id) ? [] : [id])),
+	]),
+);
+
 const levels: ExplanationLevel[] = ["overview", "detail", "math"];
 
 // One language only, no fallback: a text missing in German must not pass by showing the English one.
@@ -96,11 +123,19 @@ async function instanceFor(language: string, bundle: object): Promise<I18n> {
 	return instance;
 }
 
-// The text a qwen35 node shows, resolved the way the panel resolves it.
-function shownText(i18n: I18n, kind: string, id: string, level: ExplanationLevel): string | null {
-	const key = explanationKey(i18n, operationCandidates(kind, "qwen35", id), level);
+// The text a node shows, resolved the way the panel resolves it.
+function shownText(
+	i18n: I18n,
+	kind: string,
+	id: string,
+	level: ExplanationLevel,
+	architecture: "qwen35" | "qwen35moe" = "qwen35",
+): string | null {
+	const key = explanationKey(i18n, operationCandidates(kind, architecture, id), level);
 	return key === null ? null : (i18n.getResource(i18n.language, "translation", key) as string);
 }
+
+const textAt = (i18n: I18n, key: string) => i18n.getResource(i18n.language, "translation", `pages.modelLab.explain.${key}`);
 
 describe.each([
 	["en", en],
@@ -136,5 +171,51 @@ describe.each([
 				i18n.getResource(language, "translation", `pages.modelLab.explain.opByKind.mtp.attn_residual.${level}`),
 			);
 		}
+	});
+});
+
+describe.each([
+	["en", en],
+	["de", de],
+])("qwen35moe operation texts (%s)", (language, bundle) => {
+	let i18n: I18n;
+	beforeAll(async () => {
+		i18n = await instanceFor(language, bundle);
+	});
+
+	it("show every node of every template at every level", () => {
+		const missing = Object.entries(qwen35moeNodes).flatMap(([kind, ids]) =>
+			ids.flatMap((id) =>
+				levels.flatMap((level) => (shownText(i18n, kind, id, level, "qwen35moe") ? [] : [`${kind}.${id}.${level}`])),
+			),
+		);
+		expect(missing).toEqual([]);
+	});
+
+	it("show qwen35's texts for every node the two families share", () => {
+		for (const [kind, ids] of Object.entries(qwen35Nodes)) {
+			for (const id of ids.filter((item) => !denseFfn.includes(item) && item !== "ffn_residual")) {
+				for (const level of levels) {
+					expect(shownText(i18n, kind, id, level, "qwen35moe")).toBe(shownText(i18n, kind, id, level));
+				}
+			}
+		}
+		// The fallback reaches qwen35's own overrides, not only the shared texts.
+		expect(shownText(i18n, "fullAttention", "q", "detail", "qwen35moe")).toBe(textAt(i18n, "arch.qwen35.op.q.detail"));
+	});
+
+	it("add moe_out, not ffn_down, at the second residual, and renormalize the chosen weights", () => {
+		for (const level of levels) {
+			for (const kind of Object.keys(qwen35moeNodes)) {
+				expect(shownText(i18n, kind, "ffn_residual", level, "qwen35moe")).toBe(
+					textAt(i18n, `arch.qwen35moe.op.ffn_residual.${level}`),
+				);
+			}
+			expect(shownText(i18n, "fullAttention", "topk_weights", level, "qwen35moe")).toBe(
+				textAt(i18n, `arch.qwen35moe.op.topk_weights.${level}`),
+			);
+		}
+		expect(textAt(i18n, "arch.qwen35moe.op.ffn_residual.math")).toContain("`moe_out`");
+		expect(textAt(i18n, "op.ffn_residual.math")).toContain("`ffn_down`");
 	});
 });

@@ -24,7 +24,7 @@ public sealed class ModelLabTraceContractTests
 
         AssertEx.Equal(ModelLabTraceReadStatus.Found, trace.Status);
         AssertEx.Equal("0:0,0:1,1:0,1:1", string.Join(',', trace.Records.Select(static record => string.Create(CultureInfo.InvariantCulture, $"{record.Step}:{record.Layer}"))),
-            "Lens lines are not hook records.");
+            "Lens and routing lines are not hook records.");
         var first = trace.Records[0];
         AssertEx.Equal("F", first.Kind);
         AssertEx.Equal(expected: 3.5, first.Norm);
@@ -57,6 +57,23 @@ public sealed class ModelLabTraceContractTests
         AssertEx.Equal("0.2,0.6", Joined(masked.Entropies));
         AssertEx.Equal("é", masked.Texts["13"]);
         AssertEx.Equal(expected: 2, AssertEx.NotNull(lens.Footer).Records);
+    }
+
+    [Test]
+    public void TheRoutingLines_ReadAgainstTheResultsRoutingSummary_WithTheirWeightsBitExact()
+    {
+        var result = AssertEx.NotNull(ModelLabTraceSpec.ReadResultOrNull(Bytes(Files.Result)));
+
+        var routing = ModelLabTraceSpec.ParseRouting(Bytes(Files.Trace), AssertEx.NotNull(result.Routing), result.BlockCount, result.Tokens.Count);
+
+        AssertEx.Equal(ModelLabTraceReadStatus.Found, routing.Status);
+        AssertEx.Equal("0,1", string.Join(',', routing.Records.Select(static record => record.Step)));
+        AssertEx.Equal("3,0|1,2", string.Join('|', routing.Records.Select(static record => string.Join(',', record.Experts[0]))));
+        AssertEx.Equal("0.5,0.25|1,0.125",
+            string.Join('|', routing.Records.Select(static record => string.Join(',', record.WeightBits[0].Select(static bits => ModelLabTraceSpec.RoutingWeight(bits).ToString(CultureInfo.InvariantCulture))))));
+        var footer = AssertEx.NotNull(routing.Footer);
+        AssertEx.Equal(expected: 2, footer.Records);
+        AssertEx.Equal(expected: 0, footer.Dropped);
     }
 
     [Test]
@@ -112,6 +129,10 @@ public sealed class ModelLabTraceContractTests
         var lens = AssertEx.NotNull(result.Lens);
         AssertEx.Equal("0,1|2|2|False|True|16",
             string.Create(CultureInfo.InvariantCulture, $"{string.Join(',', lens.Layers)}|{lens.TopTokens}|{lens.Records}|{lens.Truncated}|{lens.TiedEmbeddings}|{lens.VocabSize}"));
+        var routing = AssertEx.NotNull(result.Routing);
+        AssertEx.Equal("1|4|2|False|bfloat16-bits|2|False",
+            string.Create(CultureInfo.InvariantCulture,
+                $"{string.Join(',', routing.Layers)}|{routing.Experts}|{routing.ExpertsPerToken}|{routing.NormalizedTopK}|{routing.WeightEncoding}|{routing.Records}|{routing.Truncated}"));
         var attention = AssertEx.NotNull(result.Attention);
         AssertEx.Equal("1|2|1|8|2|10000|2|False",
             string.Create(CultureInfo.InvariantCulture,
@@ -131,12 +152,36 @@ public sealed class ModelLabTraceContractTests
         AssertEx.True(result.Tokens.All(static token => token.Candidates is { Count: 2 } && token.ProcessedCandidates is { Count: 2 }));
     }
 
+    /// <summary>Rows saved under contracts 6 and 7 (frozen fixtures) still read through every reader: hook records, lens and attention whole, and no routing.</summary>
+    [Test]
+    [Arguments("model-lab-contract-v6.json", 6)]
+    [Arguments("model-lab-contract-v7.json", 7)]
+    public void AnOlderContractsFiles_StillReadThroughEveryReader_WithNoRouting(string name, int version)
+    {
+        var saved = Fixture.Load(name);
+        var result = AssertEx.NotNull(ModelLabTraceSpec.ReadResultOrNull(Bytes(saved.Result)));
+
+        AssertEx.Equal(version, saved.ContractVersion);
+        AssertEx.Null(result.Routing);
+        var trace = ModelLabTraceSpec.ParseTrace(Bytes(saved.Trace));
+        AssertEx.Equal(ModelLabTraceReadStatus.Found, trace.Status);
+        AssertEx.Equal(expected: 4, trace.Records.Count);
+        var lens = ModelLabTraceSpec.ParseLens(Bytes(saved.Trace), AssertEx.NotNull(result.Lens), result.Tokens.Count);
+        AssertEx.Equal(ModelLabTraceReadStatus.Found, lens.Status);
+        AssertEx.Equal(expected: 2, lens.Records.Count);
+        var attention = ModelLabTraceSpec.ParseAttention(Bytes(saved.Attention), AssertEx.NotNull(result.Attention).Heads);
+        AssertEx.Equal(ModelLabTraceReadStatus.Found, attention.Status);
+        AssertEx.Equal(expected: 2, attention.Records.Count);
+    }
+
     /// <summary>A key the script renames or drops makes the file unreadable rather than reading as a default.</summary>
     [Test]
     [Arguments("trace", "\"ti\":", "\"top\":")]
     [Arguments("lens", "{\"lens\":{\"s\":0,", "{\"lens\":{\"step\":0,")]
     [Arguments("trace", "\"dropped\":0,\"payloadBytes\":309", "\"payloadBytes\":309")]
     [Arguments("attention", "\"q\":", "\"query\":")]
+    [Arguments("routing", "\"x\":", "\"experts\":")]
+    [Arguments("routing", "{\"routingFooter\":{\"truncated\":false,\"records\":2,\"dropped\":0,", "{\"routingFooter\":{\"truncated\":false,\"records\":2,")]
     public void ARenamedOrMissingRequiredKey_MakesTheFileUnavailable(string file, string key, string replacement)
     {
         var text = file == "attention" ? Files.Attention : Files.Trace;
@@ -148,6 +193,7 @@ public sealed class ModelLabTraceContractTests
         {
             "attention" => ModelLabTraceSpec.ParseAttention(broken, AssertEx.NotNull(result.Attention).Heads).Status,
             "lens" => ModelLabTraceSpec.ParseLens(broken, AssertEx.NotNull(result.Lens), result.Tokens.Count).Status,
+            "routing" => ModelLabTraceSpec.ParseRouting(broken, AssertEx.NotNull(result.Routing), result.BlockCount, result.Tokens.Count).Status,
             _ => ModelLabTraceSpec.ParseTrace(broken).Status
         };
 
