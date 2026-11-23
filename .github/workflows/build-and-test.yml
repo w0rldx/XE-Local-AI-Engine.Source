@@ -787,6 +787,10 @@ jobs:
       # Program.cs from this checkout — no running backend) and the dependency-cruiser baseline.
       # `pnpm run spellCheck` is deliberately NOT here: it reports ~1.7k unknown words on the
       # current tree, so it is a dictionary task, not a gate.
+      # Same .env as package-velopack.yml, so the bundle budget measures the bundle that ships (VITE_ values are inlined).
+      - name: Use the packaging .env
+        run: cp .env.template .env
+
       - name: Frontend acceptance (validate, coverage, tooling, bundle)
         run: pnpm run acceptance
 
