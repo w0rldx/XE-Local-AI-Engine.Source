@@ -57,6 +57,9 @@ public sealed class GgufTensorInspection
     /// <summary><c>general.parameter_count</c>, else the summed tensor element count of a complete read, else <see langword="null" />.</summary>
     public required long? ParamCount { get; init; }
 
+    /// <summary><c>general.parameter_count</c> only (never the tensor sum), or <see langword="null" /> when absent.</summary>
+    public long? DeclaredParamCount { get; init; }
+
     /// <summary>The <c>general.file_type</c> label (<c>Q4_K_M</c>), its raw number when unnamed, or <see langword="null" /> when absent.</summary>
     public required string? FileType { get; init; }
 
@@ -95,6 +98,18 @@ public sealed class GgufTensorInspection
     public required long? ContextLength { get; init; }
 
     public required long? ExpertCount { get; init; }
+
+    /// <summary>Experts routed per token (<c>{arch}.expert_used_count</c>), or <see langword="null" /> when absent.</summary>
+    public long? ExpertUsedCount { get; init; }
+
+    /// <summary>Per-head key size (<c>{arch}.attention.key_length</c>), or <see langword="null" /> when absent.</summary>
+    public long? AttentionKeyLength { get; init; }
+
+    /// <summary>Per-head value size (<c>{arch}.attention.value_length</c>), or <see langword="null" /> when absent.</summary>
+    public long? AttentionValueLength { get; init; }
+
+    /// <summary>Every Nth block is full attention (<c>{arch}.full_attention_interval</c>), or <see langword="null" /> when absent.</summary>
+    public long? FullAttentionInterval { get; init; }
 
     public required string? ChatTemplate { get; init; }
 

@@ -214,7 +214,7 @@ describe("TraceStepper", () => {
 		// The first block is selected until another is picked: a linear one never has an attention matrix.
 		expect(blocks[0]?.getAttribute("aria-pressed")).toBe("true");
 		const attention = screen.getByTestId("model-lab-stepper-attention");
-		expect(within(attention).getByTestId("model-lab-explain-basis").textContent).toBe("Not available here");
+		expect(within(attention).getByTestId("model-lab-explain-basis").textContent).toBe("Not available");
 		expect(within(attention).getByTestId("model-lab-stepper-attention-reason").textContent).toContain(
 			"has no attention matrix to show",
 		);
@@ -226,7 +226,7 @@ describe("TraceStepper", () => {
 		);
 		expect(screen.getByTestId("model-lab-stepper-selected").textContent).toBe("Block 7, full attention: residual norm 10");
 		const full = screen.getByTestId("model-lab-stepper-attention");
-		expect(within(full).getByTestId("model-lab-explain-basis").textContent).toBe("Not available here");
+		expect(within(full).getByTestId("model-lab-explain-basis").textContent).toBe("Not available");
 		expect(within(full).getByTestId("model-lab-stepper-attention-reason").textContent).toBe("This run did not record attention.");
 
 		fireEvent.click(screen.getByRole("button", { name: "Next step" }));
@@ -264,13 +264,26 @@ describe("TraceStepper", () => {
 	it("shows the step's raw candidates and its processed ones on the switch", async () => {
 		await openStepper();
 
-		expect(screen.getByTestId("model-lab-next-token-measured").textContent).toContain('"Hello"');
+		const measured = screen.getByTestId("model-lab-next-token-measured");
+		expect(measured.textContent).toContain('"Hello"');
+		// The trace's own values, with their raw/processed provenance beside the badge; the rest is computed from them.
+		expect(measured.textContent).toContain("Computed by PyTorch from the model's raw logits over the whole vocabulary");
+		expect(
+			within(measured)
+				.getAllByTestId("model-lab-explain-basis")
+				.map((badge) => badge.textContent),
+		).toEqual(["Measured in the trace", "Derived"]);
+		expect(within(screen.getByTestId("model-lab-next-token-simulated")).getByTestId("model-lab-explain-basis").textContent).toBe(
+			"Simulated on this page",
+		);
 
 		fireEvent.click(screen.getByRole("radio", { name: "Processed scores" }));
 
 		const processed = screen.getByTestId("model-lab-next-token-measured").textContent;
 		expect(processed).toContain('"Hey"');
 		expect(processed).not.toContain('"Hello"');
+		expect(processed).toContain("Computed by PyTorch from the processed scores");
+		expect(processed).toContain("Measured in the trace");
 	});
 
 	it("shows every block when the result names their kinds, marking the untraced ones", () => {
@@ -442,14 +455,16 @@ describe("TraceStepper with recorded attention", () => {
 		expect(attention.requests).toBe(1);
 	});
 
-	it("lists the step's stored keys with their neighbours and the rest, under a measurement badge with its note", async () => {
+	it("lists the step's stored keys with their neighbours and the rest, under a derived badge with its note", async () => {
 		stubAttention();
 		await openStepper(v4Result, v4Records);
 		fireEvent.click(screen.getByRole("button", { name: fullBlock7 }));
 
 		await screen.findByTestId("model-lab-stepper-row");
 		const panel = screen.getByTestId("model-lab-stepper-attention");
-		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("What this measurement means");
+		// Recomputed weights are derived; the head counts the selector lists are the model's own structure.
+		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("Derived");
+		expect(within(panel).getByTestId("model-lab-stepper-heads-basis").textContent).toBe("Read from the file");
 		expect(screen.getByTestId("model-lab-stepper-attention-note").textContent).toBe(
 			"Recomputed in fp32 from the kernel's own query/key tensors, top K kept, floored. This run kept the top 2 keys per row and head; the model has 4 query heads and 2 key/value heads.",
 		);
@@ -600,13 +615,13 @@ describe("TraceStepper with recorded attention", () => {
 		await openStepper(v4Result, v4Records);
 
 		const linear = screen.getByTestId("model-lab-stepper-attention");
-		expect(within(linear).getByTestId("model-lab-explain-basis").textContent).toBe("Not available here");
+		expect(within(linear).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("Not available");
 		expect(within(linear).getByTestId("model-lab-stepper-attention-reason").textContent).toContain("has no attention matrix");
 
 		fireEvent.click(screen.getByRole("button", { name: "Block 3, full attention: residual norm 1" }));
 
 		const uncaptured = screen.getByTestId("model-lab-stepper-attention");
-		expect(within(uncaptured).getByTestId("model-lab-explain-basis").textContent).toBe("Not available here");
+		expect(within(uncaptured).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("Not available");
 		expect(within(uncaptured).getByTestId("model-lab-stepper-attention-reason").textContent).toBe(
 			"This run recorded attention for blocks 7 only; this block was not among them.",
 		);
@@ -720,7 +735,7 @@ describe("TraceStepper with a logit lens", () => {
 
 		const table = await screen.findByTestId("model-lab-stepper-lens-table");
 		const panel = screen.getByTestId("model-lab-stepper-lens");
-		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("Derived analysis");
+		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("Derived");
 		expect(screen.getByTestId("model-lab-stepper-lens-note").textContent).toBe(
 			"The model's final norm and output layer applied to each block's output at this step. A derived readout, not what the model computed: the output layer read only the last block's output.",
 		);
@@ -929,11 +944,13 @@ describe("TraceStepper with a logit lens", () => {
 		await openStepper(v4Result, v4Records);
 
 		const panel = screen.getByTestId("model-lab-stepper-lens");
-		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("Not available here");
+		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("Not available");
 		expect(screen.getByTestId("model-lab-stepper-lens-unavailable").textContent).toBe(
 			"This run has no logit lens: it was saved before lens recording, or its checkpoint has more blocks than the lens limit of 64.",
 		);
-		expect(within(panel).getByTestId("model-lab-explain-entry").textContent).toContain("This run has no logit lens.");
+		const entry = within(panel).getByTestId("model-lab-explain-entry");
+		expect(entry.textContent).toContain("This run has no logit lens.");
+		expect(within(entry).getByTestId("model-lab-explain-basis").textContent).toBe("Not available");
 		expect(lens.requests).toBe(0);
 	});
 
@@ -1027,14 +1044,14 @@ describe("TraceStepper with recorded routing", () => {
 	// The explanation texts ship in the route's own bundle, which the page loads.
 	beforeAll(() => loadModelLabStrings("en"));
 
-	it("lists each block's experts by weight with their share, under a measurement badge and its note, fetched once per run", async () => {
+	it("lists each block's experts by weight with their share, under a measured badge and its note, fetched once per run", async () => {
 		const routing = stubRouting();
 		await openStepper(v8Result, v8Records);
 
 		const table = await screen.findByTestId("model-lab-stepper-routing-table");
 		const panel = screen.getByTestId("model-lab-stepper-routing");
 		expect(within(panel).getByText("Routing used to predict this token")).toBeTruthy();
-		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("What this measurement means");
+		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("Measured in the trace");
 		expect(screen.getByTestId("model-lab-stepper-routing-note").textContent).toBe(
 			"Read from each block's router as the model ran in PyTorch on the Hugging Face checkpoint. The GGUF in llama.cpp may route differently.",
 		);
@@ -1075,7 +1092,7 @@ describe("TraceStepper with recorded routing", () => {
 		expect(detail.querySelectorAll(".mantine-Progress-root[aria-hidden='true']")).toHaveLength(3);
 		const usage = screen.getByTestId("model-lab-stepper-routing-usage");
 		expect(within(usage).getByText("Most picked in the 2 saved steps")).toBeTruthy();
-		expect(within(usage).getByTestId("model-lab-explain-basis").textContent).toBe("Derived analysis");
+		expect(within(usage).getByTestId("model-lab-explain-basis").textContent).toBe("Derived");
 		expect(screen.getAllByTestId("model-lab-stepper-routing-usage-row").map((row) => row.textContent)).toEqual([
 			"E5: picked in 2 of 2 steps",
 			"E12: picked in 2 of 2 steps",
@@ -1142,11 +1159,13 @@ describe("TraceStepper with recorded routing", () => {
 		await openStepper(v5Result, v5Records);
 
 		const panel = screen.getByTestId("model-lab-stepper-routing");
-		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("Not available here");
+		expect(within(panel).getAllByTestId("model-lab-explain-basis")[0]?.textContent).toBe("Not available");
 		expect(screen.getByTestId("model-lab-stepper-routing-unavailable").textContent).toBe(
 			"This run has no routing: it was saved before routing recording, it is a steering run, its checkpoint has no mixture-of-experts router, or its routing is past what a trace records (more than 64 blocks, more than 1024 experts or more than 16 experts per token).",
 		);
-		expect(within(panel).getByTestId("model-lab-explain-entry").textContent).toContain("This run has no routing.");
+		const entry = within(panel).getByTestId("model-lab-explain-entry");
+		expect(entry.textContent).toContain("This run has no routing.");
+		expect(within(entry).getByTestId("model-lab-explain-basis").textContent).toBe("Not available");
 		expect(routing.requests).toBe(0);
 	});
 
@@ -1205,6 +1224,8 @@ describe("TraceStepper with recorded routing", () => {
 
 		expect((await screen.findByTestId("model-lab-stepper-routing-failed")).textContent).toBe("This run kept no routing.");
 		expect(screen.queryByTestId("model-lab-stepper-routing-table")).toBeNull();
+		// A failed read claims no measurement.
+		expect(within(screen.getByTestId("model-lab-stepper-routing")).queryByText("Measured in the trace")).toBeNull();
 	});
 
 	it("shows the server's reason when the stored routing does not read back (422)", async () => {

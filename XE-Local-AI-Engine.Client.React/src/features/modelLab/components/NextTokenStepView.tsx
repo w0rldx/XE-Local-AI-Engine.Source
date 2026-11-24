@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { logprobPercentLabel, logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
 import { FieldInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
+import { BasisBadge } from "@/features/modelLab/components/ArchitectureExplanation";
 import {
 	neutralSamplerSettings,
 	type NextTokenStepEntry,
@@ -104,9 +105,14 @@ export function NextTokenStepView({ entry, stepNumber, trace }: NextTokenStepVie
 			<SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
 				<Paper withBorder={true} p="md">
 					<Stack gap="xs" data-testid="model-lab-next-token-measured">
-						<Text size="sm" fw={600}>
-							{trace?.basis ?? t("pages.modelLab.nextToken.ui.measuredTitle", "Measured by llama.cpp")}
-						</Text>
+						<Group gap="xs">
+							{trace && (
+								<Text size="sm" fw={600}>
+									{trace.basis}
+								</Text>
+							)}
+							<BasisBadge basis={fromTrace ? "measuredTrace" : "measuredLlamaCpp"} />
+						</Group>
 						{entry.alternatives.length === 0 && (
 							<Text size="sm" c="dimmed">
 								{fromTrace
@@ -125,18 +131,25 @@ export function NextTokenStepView({ entry, stepNumber, trace }: NextTokenStepVie
 								color="blue"
 							/>
 						))}
-						<Text size="xs" c="dimmed" data-testid="model-lab-next-token-rest">
-							{t("pages.modelLab.nextToken.ui.rest", "The rest of the vocabulary: {{percent}}", {
-								percent: logprobPercentLabel(Math.log(Math.max(1 - shownProbability, 0))),
-							})}
-						</Text>
+						{/* One minus the shown candidates: computed here, not a value the run returned. */}
+						<Group gap="xs">
+							<Text size="xs" c="dimmed" data-testid="model-lab-next-token-rest">
+								{t("pages.modelLab.nextToken.ui.rest", "The rest of the vocabulary: {{percent}}", {
+									percent: logprobPercentLabel(Math.log(Math.max(1 - shownProbability, 0))),
+								})}
+							</Text>
+							<BasisBadge basis="derived" />
+						</Group>
 					</Stack>
 				</Paper>
 				<Paper withBorder={true} p="md">
 					<Stack gap="xs" data-testid="model-lab-next-token-simulated">
-						<Text size="sm" fw={600}>
-							{t("pages.modelLab.nextToken.ui.simulatedTitle", "Simulated sampler")}
-						</Text>
+						<Group gap="xs">
+							<Text size="sm" fw={600}>
+								{t("pages.modelLab.nextToken.ui.simulatedTitle", "Simulated sampler")}
+							</Text>
+							<BasisBadge basis="simulated" />
+						</Group>
 						<Alert color="grape" p="xs" data-testid="model-lab-next-token-sim-label">
 							<Text size="xs">
 								{fromTrace

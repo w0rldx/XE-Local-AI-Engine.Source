@@ -52871,6 +52871,84 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureHyperparameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fileType",
+          "declaredParamCount",
+          "blockCount",
+          "nextnPredictLayers",
+          "splitCount",
+          "attentionHeadCount",
+          "attentionHeadCountKv",
+          "attentionKeyLength",
+          "attentionValueLength",
+          "embeddingLength",
+          "contextLength",
+          "expertCount",
+          "expertUsedCount",
+          "fullAttentionInterval"
+        ],
+        "properties": {
+          "fileType": {
+            "type": "string",
+            "nullable": true
+          },
+          "declaredParamCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "blockCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "nextnPredictLayers": {
+            "type": "integer",
+            "nullable": true
+          },
+          "splitCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "attentionHeadCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "attentionHeadCountKv": {
+            "type": "integer",
+            "nullable": true
+          },
+          "attentionKeyLength": {
+            "type": "integer",
+            "nullable": true
+          },
+          "attentionValueLength": {
+            "type": "integer",
+            "nullable": true
+          },
+          "embeddingLength": {
+            "type": "integer",
+            "nullable": true
+          },
+          "contextLength": {
+            "type": "integer",
+            "nullable": true
+          },
+          "expertCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "expertUsedCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "fullAttentionInterval": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
       "XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -52881,6 +52959,7 @@
           "support",
           "readFailure",
           "suggestedBaseRepo",
+          "hyperparameters",
           "blocks",
           "templates",
           "nonBlock"
@@ -52907,6 +52986,14 @@
           "suggestedBaseRepo": {
             "type": "string",
             "nullable": true
+          },
+          "hyperparameters": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureHyperparameters"
+              }
+            ]
           },
           "blocks": {
             "type": "array",

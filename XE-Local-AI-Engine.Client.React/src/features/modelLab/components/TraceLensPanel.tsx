@@ -104,7 +104,7 @@ export function TraceLensPanel({ experimentId, result, step, selectedBlock, laye
 				{explanationKey(i18n, notRecorded, level) !== null && (
 					<>
 						<ExplanationLevelSwitch value={level} onChange={setLevel} />
-						<ExplanationEntry candidates={notRecorded} level={level} basis="background" />
+						<ExplanationEntry candidates={notRecorded} level={level} basis="unavailable" />
 					</>
 				)}
 			</Stack>
@@ -347,7 +347,7 @@ export function TraceLensPanel({ experimentId, result, step, selectedBlock, laye
 			<ExplanationList
 				items={explanations}
 				level={level}
-				basis="derived"
+				basis="interpreted"
 				open={open}
 				onOpen={setOpen}
 				data-testid="model-lab-stepper-lens-explain"

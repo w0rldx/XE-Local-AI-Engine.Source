@@ -3,7 +3,9 @@
 		"modelLab": {
 			"architecture": {
 				"blockMissing": "Block {{index}} is not in this file. One possible reason: the file is one part of a split GGUF and the block is in another part.",
+				"blockRouted": "Block {{index}}: {{kind}}, routed",
 				"blockTraced": "Block {{index}}: {{kind}}, traced",
+				"blockTracedRouted": "Block {{index}}: {{kind}}, traced, routed",
 				"blockUntraceable": "Block {{index}}: {{kind}}, not traceable",
 				"clearTrace": "Clear the laid-over trace",
 				"component": {
@@ -19,6 +21,58 @@
 				"ggufName": "GGUF name",
 				"groups": "Tensor groups",
 				"hfName": "Hugging Face name",
+				"hierarchy": {
+					"block": "Block {{index}}",
+					"blocks": "Blocks",
+					"blocksEntry": "Blocks: {{count}} in this file",
+					"breadcrumb": "Where you are in the model",
+					"chipRouted": "{{count}} routed",
+					"chipRun": "{{kind}} ×{{count}}",
+					"chipTraced": "{{count}} traced",
+					"chipUnitRun": "{{count}} {{kind}}",
+					"gap": "… blocks not in this file …",
+					"graph": {
+						"controls": "Graph zoom controls",
+						"fitView": "Fit the graph into view",
+						"indexOrder": "Groups in this file, in index order",
+						"label": "Graph of the groups in this file",
+						"mtp": "Multi-token prediction (separate path)",
+						"order": "Arrows: the order the groups run in",
+						"readOnly": "Read-only graph. Select a group with a pointer, or use the row below to select by keyboard.",
+						"show": "Show graph",
+						"tooLarge": "This file has {{count}} groups, too many to draw readably. The row below shows them all.",
+						"zoomIn": "Zoom in",
+						"zoomOut": "Zoom out"
+					},
+					"kindOperations": "Operations of a {{kind}} block",
+					"kindShort": {
+						"fullAttention": "full",
+						"linearAttention": "linear",
+						"mtp": "MTP",
+						"other": "other"
+					},
+					"layoutDiffers": "The tensors differ from the first block of the same kind at blocks {{blocks}}.",
+					"layoutNothing": "Nothing in this group to compare: no two blocks are of one kind.",
+					"layoutSame": "Blocks of one kind hold the same tensors: component, name and shape.",
+					"model": "Model",
+					"mtpNote": "These blocks predict further tokens on a separate path beside the main stack; they are not one of its blocks.",
+					"openBlock": "Open block {{index}}",
+					"outside": "Outside the blocks: {{groups}}.",
+					"pattern": "{{unit}}, {{count}} times",
+					"patternRun": "{{count}} × {{kind}}",
+					"rangeKinds": "{{count}} blocks: {{runs}}",
+					"rangeMissing": "Blocks {{first}}–{{last}} are not one group in this file. Choose a group from the blocks above.",
+					"rangeRouted": "Routing recorded in the laid-over run: {{blocks}}",
+					"rangeTitle": "Blocks {{first}}–{{last}}",
+					"rangeTraced": "Traced in the laid-over run: {{blocks}}",
+					"rootTitle": "Whole model",
+					"split": "This file is one of the {{count}} parts of a split GGUF. The blocks counted here are the ones in this file.",
+					"stackTitle": "Blocks in this file",
+					"typesDiffer": "Stored types of corresponding tensors differ at blocks {{blocks}}.",
+					"typesNothing": "Nothing in this group to compare: no tensors correspond between blocks of one kind.",
+					"typesSame": "Corresponding tensors use the same stored types.",
+					"typesUnknown": "A stored type is unknown, so the stored types are not compared."
+				},
 				"inferredBadge": "Inferred from llama.cpp ({{source}})",
 				"kindUntraceable": "{{kind}} (not traceable)",
 				"layoutNote": {
@@ -29,6 +83,7 @@
 				"loadFailed": "The model's structure could not be read.",
 				"noHfName": "None",
 				"noOutput": "No separate output tensor in this file; the output may share the embedding weights.",
+				"noOutputSplit": "No separate output tensor in this file; the output may share the embedding weights, or it is in another part of the split GGUF.",
 				"noTemplate": "No operation graph is drawn for this file: its layout, for example mixture-of-experts, is not one the {{architecture}} template describes. The tensor groups are read from the file as usual.",
 				"noTraceChosen": "No trace",
 				"noTraces": "No finished trace of this model yet. A trace started under Trace and steer can be laid over its blocks here.",
@@ -37,10 +92,12 @@
 				"operations": "Operations",
 				"outsideMissing": {
 					"embedding": "Embedding is not in this file. One possible reason: the file is one part of a split GGUF and it is in another part.",
-					"output": "Output is not in this file. One possible reason: the file is one part of a split GGUF and it is in another part."
+					"mtp": "No multi-token prediction blocks are in this file.",
+					"other": "No other tensors outside the blocks are in this file.",
+					"output": "Output is not in this file. One possible reason: the file is one part of a split GGUF and it is in another part.",
+					"stack": "No blocks of the main stack are in this file. One possible reason: the file is one part of a split GGUF and these blocks are in other parts."
 				},
 				"overviewOnly": "No operation graph is shown for the {{architecture}} architecture: only the tensor groups read from the file.",
-				"readBadge": "Read from the file",
 				"relation": {
 					"equal": "Same values as the Hugging Face tensor",
 					"label": "Value relation",
@@ -51,9 +108,12 @@
 					"reordered": "Reordered from the Hugging Face tensor (heads or rotary pairs regrouped); a quantized type also changes the values",
 					"sliced": "One half of a fused Hugging Face tensor (gate or up rows); the architecture's note says where that fused layout comes from. A quantized type also changes the values"
 				},
+				"routedLegend": "A square marks a block whose routing the run recorded.",
 				"routing": {
 					"title": "Experts this block chose in the laid-over run"
 				},
+				"routingFailed": "The run's routing could not be read.",
+				"routingMissing": "The laid-over run recorded no routing.",
 				"shape": "Shape (GGUF order)",
 				"tab": "Architecture",
 				"templateHint": "Selecting a node opens its explanation in the operation list. A solid node uses a tensor group of this block and also selects that group; a dashed node holds no tensors.",
@@ -65,7 +125,74 @@
 				"tracedBlocks": "Traced blocks: {{blocks}} ({{traced}} of {{total}}).",
 				"tracedLegend": "A dot marks a traced block.",
 				"unreadable": "The file could not be read ({{reason}}), so there is no structure to show.",
-				"untraceable": "Not traceable: this multi-token prediction block has no layer in the Hugging Face checkpoint."
+				"untraceable": "Not traceable: this multi-token prediction block has no layer in the Hugging Face checkpoint.",
+				"values": {
+					"attentionHeadCount": {
+						"info": "The query heads of a full-attention block (attention.head_count).",
+						"label": "Attention heads"
+					},
+					"attentionHeadCountKv": {
+						"info": "The key and value heads of a full-attention block (attention.head_count_kv). Fewer than the query heads means several query heads share one key/value head.",
+						"label": "Key/value heads"
+					},
+					"attentionKeyLength": {
+						"info": "The length of each key head (attention.key_length).",
+						"label": "Key head size"
+					},
+					"attentionValueLength": {
+						"info": "The length of each value head (attention.value_length).",
+						"label": "Value head size"
+					},
+					"blockCount": {
+						"info": "The layers the header declares for the whole model (block_count), also those in another part of a split file.",
+						"infoMtp": "The layers the header declares for the whole model (block_count), also those in another part of a split file. It includes the multi-token prediction layers (nextn_predict_layers), which are not part of the main stack.",
+						"label": "Layers"
+					},
+					"blocksInFile": {
+						"info": "Counted from the tensors this file holds, without multi-token prediction blocks. One part of a split GGUF holds only some of the blocks.",
+						"label": "Blocks in this file"
+					},
+					"contextLength": {
+						"info": "The longest context in tokens the header declares (context_length). The context a server runs with is set separately and can be shorter.",
+						"label": "Context length"
+					},
+					"declaredParamCount": {
+						"info": "The parameter count the header declares (general.parameter_count). Not shown when the header has none; it is never summed from the tensors here.",
+						"label": "Parameters"
+					},
+					"embeddingLength": {
+						"info": "The length of each token's vector in the residual stream (embedding_length), the same in every block.",
+						"label": "Width"
+					},
+					"expertCount": {
+						"info": "The experts of a mixture-of-experts block (expert_count).",
+						"label": "Experts"
+					},
+					"expertUsedCount": {
+						"info": "How many experts each token is routed to in a mixture-of-experts block (expert_used_count).",
+						"label": "Experts per token"
+					},
+					"fileType": {
+						"info": "The file type the header declares (general.file_type): the quantization most weights were stored in. A single tensor can use another stored type; each tensor lists its own.",
+						"label": "Quantization"
+					},
+					"fullAttentionInterval": {
+						"info": "Every Nth block uses full attention and the others linear attention, N being this value (full_attention_interval).",
+						"label": "Full-attention interval"
+					},
+					"mtpInFile": {
+						"info": "Multi-token prediction blocks counted from the tensors this file holds.",
+						"label": "MTP blocks in this file"
+					},
+					"nextnPredictLayers": {
+						"info": "The multi-token prediction layers the header declares (nextn_predict_layers). They predict further tokens on a path beside the main stack and are counted in the layers.",
+						"label": "MTP layers"
+					},
+					"vocabulary": {
+						"info": "The number of tokens, from the shape of the token embedding (token_embd.weight, its second axis in GGUF order). Not shown when that tensor is missing or not two-dimensional.",
+						"label": "Vocabulary"
+					}
+				}
 			},
 			"compare": {
 				"modelA": "Model A",
@@ -672,12 +799,13 @@
 					}
 				},
 				"ui": {
-					"basisBackground": "General background",
-					"basisDerived": "Derived analysis",
-					"basisLlamaCpp": "Measured by llama.cpp",
-					"basisMeasurement": "What this measurement means",
+					"basisDerived": "Derived",
+					"basisInterpreted": "Explanation, not measured",
+					"basisMeasuredLlamaCpp": "Measured by llama.cpp",
+					"basisMeasuredTrace": "Measured in the trace",
 					"basisSimulated": "Simulated on this page",
-					"basisUnavailable": "Not available here",
+					"basisStructural": "Read from the file",
+					"basisUnavailable": "Not available",
 					"heading": "Explanation",
 					"level": {
 						"detail": "Detail",
@@ -755,7 +883,6 @@
 					"cut": "Cut",
 					"fromTrace": "Prefilled from a trace. Next token runs the paired GGUF with llama.cpp, so its tokens and probabilities can differ from the trace, which ran the Hugging Face checkpoint in PyTorch.",
 					"lastMissing": "The stream leaves out the last step, and with thinking on some newline steps, so the steps can differ from the text.",
-					"measuredTitle": "Measured by llama.cpp",
 					"minP": "Min-p: {{value}}",
 					"minPLabel": "Simulated min-p",
 					"minPOff": "Min-p: off",
@@ -1031,7 +1158,6 @@
 					"help": "How many tokens the trace generates at most; it stops earlier when the model ends its answer. 128 is the usual choice.\n\nMore tokens follow a longer answer but take longer and store more: the trace and the attention rows grow with each token. Past about 128 tokens a run may keep the next-token candidates for its first steps only, so its saved result stays within its size limit. Lower it for a quick look at the start of an answer.",
 					"label": "Tokens to generate"
 				},
-				"measured": "Measured",
 				"measuredNote": "Read by hooks from the full-precision checkpoint during this run, not from the GGUF. A norm is a measurement, not an explanation of what the model is doing.",
 				"noCandidates": "This trace recorded no candidates (made before this version).",
 				"notes": {

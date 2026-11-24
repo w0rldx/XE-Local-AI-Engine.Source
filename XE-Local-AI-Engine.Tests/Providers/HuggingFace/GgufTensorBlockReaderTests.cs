@@ -33,6 +33,7 @@ public sealed class GgufTensorBlockReaderTests
         AssertEx.Equal(bytes.Length, result.HeaderBytes);
         // No general.parameter_count: the count is the exact sum of element counts (25 600 + 256 + 2 560).
         AssertEx.Equal(expected: 28_416L, result.ParamCount!.Value);
+        AssertEx.Null(result.DeclaredParamCount);
         var embedding = result.Tensors[0];
         AssertEx.Equal("token_embd.weight", embedding.Name);
         AssertEx.Equal("256x100", string.Join(separator: 'x', embedding.Dimensions));
@@ -56,7 +57,30 @@ public sealed class GgufTensorBlockReaderTests
         var result = await ReadAsync(bytes);
 
         AssertEx.Equal(expected: 9_000L, result.ParamCount!.Value);
+        AssertEx.Equal(expected: 9_000L, result.DeclaredParamCount!.Value);
         AssertEx.Equal(expected: 256L, result.Tensors[0].ElementCount);
+    }
+
+    [Test]
+    public async Task Read_ExpertAndAttentionShapeValues_AreReadUnderTheArchitecturePrefix_AndNullWhenAbsent()
+    {
+        var declared = await ReadAsync(BaseHeader()
+                                       .WithUint32("qwen35.expert_used_count", value: 8)
+                                       .WithUint32("qwen35.attention.key_length", value: 256)
+                                       .WithUint32("qwen35.attention.value_length", value: 128)
+                                       .WithUint32("qwen35.full_attention_interval", value: 4)
+                                       .WithTensor("blk.0.attn_norm.weight", [256], F32, offset: 0)
+                                       .Build());
+        var absent = await ReadAsync(BaseHeader().WithTensor("blk.0.attn_norm.weight", [256], F32, offset: 0).Build());
+
+        AssertEx.Equal(expected: 8L, declared.ExpertUsedCount!.Value);
+        AssertEx.Equal(expected: 256L, declared.AttentionKeyLength!.Value);
+        AssertEx.Equal(expected: 128L, declared.AttentionValueLength!.Value);
+        AssertEx.Equal(expected: 4L, declared.FullAttentionInterval!.Value);
+        AssertEx.Null(absent.ExpertUsedCount);
+        AssertEx.Null(absent.AttentionKeyLength);
+        AssertEx.Null(absent.AttentionValueLength);
+        AssertEx.Null(absent.FullAttentionInterval);
     }
 
     [Test]

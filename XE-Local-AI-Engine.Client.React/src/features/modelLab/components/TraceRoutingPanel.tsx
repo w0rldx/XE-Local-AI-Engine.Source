@@ -86,7 +86,7 @@ export function TraceRoutingPanel({
 				{explanationKey(i18n, notRecorded, level) !== null && (
 					<>
 						<ExplanationLevelSwitch value={level} onChange={setLevel} />
-						<ExplanationEntry candidates={notRecorded} level={level} basis="background" />
+						<ExplanationEntry candidates={notRecorded} level={level} basis="unavailable" />
 					</>
 				)}
 			</Stack>
@@ -112,18 +112,14 @@ export function TraceRoutingPanel({
 		routingUsage: t("pages.modelLab.trace.stepper.routing.explain.usage", "Counting picks over the run"),
 		routingCaveats: t("pages.modelLab.trace.stepper.routing.explain.caveats", "What routing cannot tell"),
 	};
-	const explanations = Object.entries(labels).map(([id, label]) => ({
-		id,
-		label,
-		candidates: [`stepper.${id}`],
-		basis: id === "routingUsage" ? ("derived" as const) : undefined,
-	}));
+	const explanations = Object.entries(labels).map(([id, label]) => ({ id, label, candidates: [`stepper.${id}`] }));
 
 	return (
 		<Stack gap="xs" data-testid="model-lab-stepper-routing">
 			<Group gap="xs">
 				{title}
-				<BasisBadge basis="measurement" />
+				{/* Measured only once the routing was read: no claim while it loads or after it failed. */}
+				{data && <BasisBadge basis="measuredTrace" />}
 			</Group>
 			<Text size="xs" c="dimmed" data-testid="model-lab-stepper-routing-note">
 				{routingProvenanceNote(t)}
@@ -266,7 +262,7 @@ export function TraceRoutingPanel({
 			<ExplanationList
 				items={explanations}
 				level={level}
-				basis="measurement"
+				basis="interpreted"
 				open={open}
 				onOpen={setOpen}
 				data-testid="model-lab-stepper-routing-explain"

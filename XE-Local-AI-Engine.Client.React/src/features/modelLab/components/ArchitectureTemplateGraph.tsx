@@ -94,6 +94,8 @@ export function ArchitectureTemplateGraph({
 		<Stack gap={4}>
 			<div style={{ height: 420 }} data-testid="model-lab-architecture-template">
 				<ReactFlow
+					// Its own id: React Flow keys a canvas's markers and descriptions by it, and the model graph can be on screen too.
+					id="model-lab-template-graph"
 					nodes={nodes}
 					edges={edges}
 					minZoom={0.1}

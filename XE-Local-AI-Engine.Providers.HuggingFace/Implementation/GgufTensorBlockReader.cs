@@ -302,6 +302,7 @@ internal static class GgufTensorBlockReader
             SourceRepoUrl = values.TryGetValue("general.source.repo_url", out var source) ? source as string : null,
             BaseModelRepoUrl = values.TryGetValue("general.base_model.0.repo_url", out var baseModel) ? baseModel as string : null,
             ParamCount = header.ParamCount ?? (failure == GgufTensorReadFailure.None ? SumElements(tensors) : null),
+            DeclaredParamCount = header.ParamCount,
             FileType = values.TryGetValue("general.file_type", out var fileType) && fileType is long number
                 ? GgufQuantDetector.FileTypeNames.GetValueOrDefault(number, header.QuantType)
                 : null,
@@ -315,6 +316,10 @@ internal static class GgufTensorBlockReader
             EmbeddingLength = header.EmbeddingLength,
             ContextLength = header.ContextLength,
             ExpertCount = header.ExpertCount,
+            ExpertUsedCount = header.ExpertUsedCount,
+            AttentionKeyLength = header.AttentionKeyLength,
+            AttentionValueLength = header.AttentionValueLength,
+            FullAttentionInterval = header.FullAttentionInterval,
             ChatTemplate = header.ChatTemplate,
             SplitCount = values.TryGetValue("split.count", out var split) && split is long splitCount ? splitCount : null,
             TensorCount = tensorCount,

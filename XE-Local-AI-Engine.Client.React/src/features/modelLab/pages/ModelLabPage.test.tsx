@@ -6,9 +6,10 @@
 
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ModelLabSearch } from "@/features/modelLab/models/ModelLabNavigation";
+import { applyModelLabPatch, type ModelLabSearch } from "@/features/modelLab/models/ModelLabNavigation";
 import { ModelLabPage } from "@/features/modelLab/pages/ModelLabPage";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -65,6 +66,7 @@ const descriptor = {
 	support: "overview",
 	readFailure: null,
 	suggestedBaseRepo: null,
+	hyperparameters: null,
 	blocks: [],
 	templates: [],
 	nonBlock: [],
@@ -394,5 +396,172 @@ describe("ModelLabPage architecture tab", () => {
 
 		fireEvent.click(screen.getByRole("tab", { name: "Architecture" }));
 		await waitFor(() => expect(routes.architectures).toEqual(["org/Tiny-GGUF:Q4_K_M", "org/Tiny-GGUF:Q3_K_XL"]));
+	});
+});
+
+const traceId = "11111111-1111-4111-8111-111111111111";
+const routedTensor = (ggufName: string) => ({
+	ggufName,
+	hfName: null,
+	shape: [8],
+	ggmlType: "F32",
+	byteSize: 32,
+	valueRelation: null,
+});
+// Two full-attention blocks in one chip, of a family whose graph has a router, so a laid-over run may have routing.
+const routedDescriptor = {
+	...descriptor,
+	architecture: "olmoe",
+	support: "detailed",
+	blocks: [0, 1].map((index) => ({
+		index,
+		kind: "fullAttention",
+		byteSize: 1,
+		groups: [
+			{
+				componentId: `blk.${index}.attention`,
+				component: "attention",
+				provenance: "read",
+				tensors: [routedTensor(`blk.${index}.attn_q.weight`)],
+			},
+		],
+	})),
+	templates: [
+		{
+			kind: "fullAttention",
+			provenance: "inferred",
+			source: "llama.cpp src/models/olmoe.cpp",
+			nodes: [{ id: "router", label: "Router", component: null }],
+			edges: [],
+		},
+	],
+	nonBlock: [
+		{ componentId: "embedding", component: "embedding", provenance: "read", tensors: [routedTensor("token_embd.weight")] },
+	],
+};
+
+// The routed descriptor, a finished trace of the model, and a count of every run and PyTorch read.
+function stubRoutedModel(): { trace: number; routing: number; pytorch: number } {
+	const seen = { trace: 0, routing: 0, pytorch: 0 };
+	stubRoutes(() => HttpResponse.json(inspection));
+	server.use(
+		http.get(localApiPath("model-lab/architecture/:modelName"), () => HttpResponse.json(routedDescriptor)),
+		http.get(localApiPath("model-lab/architecture/:modelName/pytorch"), () => {
+			seen.pytorch++;
+			return new HttpResponse(null, { status: 404 });
+		}),
+		http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ items: [] })),
+		http.get(localApiPath("model-lab/experiments"), () =>
+			HttpResponse.json({
+				platformSupported: true,
+				unsupportedMessage: null,
+				activeExperimentId: null,
+				maxRetainedExperiments: 20,
+				maxPinnedExperiments: 20,
+				experiments: [
+					{
+						id: traceId,
+						kind: "Trace",
+						status: "Succeeded",
+						installedModelName: "org/Tiny-GGUF:Q4_K_M",
+						repoId: "allenai/OLMoE-1B-7B-0924-Instruct",
+						revision: "rev",
+						prompt: "hello",
+						errorMessage: null,
+						traceByteCount: 10,
+						result: null,
+						createdAtUtc: "2026-11-23T00:00:00Z",
+						updatedAtUtc: "2026-11-23T00:00:00Z",
+						isPinned: false,
+						appVersion: null,
+						notes: null,
+					},
+				],
+			}),
+		),
+		http.get(localApiPath(`model-lab/experiments/${traceId}/trace`), () => {
+			seen.trace++;
+			return HttpResponse.json({
+				records: [{ step: 0, layer: 1, kind: "F", norm: 2, percentiles: [0, 1, 5], topIndices: [7], topValues: [1] }],
+				truncated: false,
+				droppedRecords: 0,
+				byteCap: 1000,
+			});
+		}),
+		http.get(localApiPath(`model-lab/experiments/${traceId}/routing`), () => {
+			seen.routing++;
+			return HttpResponse.json({
+				layers: [0, 1],
+				experts: 8,
+				expertsPerToken: 2,
+				normalizedTopK: false,
+				steps: [{ step: 0, blocks: [{ layer: 1, experts: [3, 5], weights: [0.5, 0.25] }] }],
+				truncated: false,
+				droppedSteps: 0,
+			});
+		}),
+	);
+	return seen;
+}
+
+// Holds the search as the route would; "Change the URL" applies `external` as Back or an edited link does.
+function SearchHolder({ initial, external }: { initial: ModelLabSearch; external: ModelLabSearch }) {
+	const [search, setSearch] = useState(initial);
+	return (
+		<>
+			<button type="button" onClick={() => setSearch((previous) => applyModelLabPatch(previous, external))}>
+				Change the URL
+			</button>
+			<ModelLabPage search={search} onSearchChange={(update) => setSearch((previous) => applyModelLabPatch(previous, update))} />
+		</>
+	);
+}
+
+describe("ModelLabPage architecture hierarchy", () => {
+	it("moves focus to the new heading when a detail control opens a block, and back up through the breadcrumb", async () => {
+		stubRoutedModel();
+		await renderPage();
+		await pickModel();
+
+		fireEvent.click(await screen.findByRole("button", { name: "0–1 · Full attention ×2" }));
+		fireEvent.click(await screen.findByRole("button", { name: "Open block 1" }));
+
+		expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Block 1: Full attention" }));
+		fireEvent.click(within(screen.getByTestId("model-lab-architecture-breadcrumb")).getByRole("button", { name: "Model" }));
+		expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Whole model" }));
+	});
+
+	it("opens no detail and reads no run while Architecture is hidden, and catches up once it shows", async () => {
+		const seen = stubRoutedModel();
+		await act(async () => {
+			renderWithProviders(
+				<SearchHolder
+					initial={{ model: "org/Tiny-GGUF:Q4_K_M", block: 0 }}
+					external={{ tab: "inspect", block: 1, trace: traceId }}
+				/>,
+				{ withRouter: true },
+			);
+		});
+		await screen.findByRole("heading", { name: "Block 0: Full attention" });
+		await waitFor(() => expect(seen.pytorch).toBe(1));
+
+		// Inspect shows, and the URL now names another block and a run.
+		fireEvent.click(screen.getByRole("button", { name: "Change the URL" }));
+		await screen.findByTestId("model-inspect-panel");
+		await act(async () => undefined);
+
+		expect(seen.trace).toBe(0);
+		expect(seen.routing).toBe(0);
+		expect(seen.pytorch).toBe(1);
+		// The hidden panel still shows block 0: nothing new mounted.
+		expect(screen.getByRole("heading", { name: "Block 0: Full attention", hidden: true })).toBeTruthy();
+		expect(screen.queryByRole("heading", { name: "Block 1: Full attention", hidden: true })).toBeNull();
+
+		fireEvent.click(screen.getByRole("tab", { name: "Architecture" }));
+
+		expect(await screen.findByRole("heading", { name: "Block 1: Full attention" })).toBeTruthy();
+		await waitFor(() => expect(seen.trace).toBe(1));
+		await waitFor(() => expect(seen.routing).toBe(1));
+		expect(await screen.findByRole("button", { name: "Block 1: Full attention, traced, routed" })).toBeTruthy();
 	});
 });

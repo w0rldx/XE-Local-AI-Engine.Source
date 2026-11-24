@@ -188,7 +188,7 @@ export function NextTokenExplorer({ modelName, intent }: NextTokenExplorerProps)
 	const visibleSteps = showThinking ? [...thinkingSteps, ...answerSteps] : answerSteps;
 	const selectedStep = visibleSteps.find((step) => step.index === selected);
 	const thinkingOnly = !showThinking && answerSteps.length === 0 && thinkingSteps.length > 0;
-	const topicLabels: Record<(typeof nextTokenTopics)[number]["id"], string> = {
+	const topicLabels: Record<(typeof nextTokenTopics)[number], string> = {
 		promptTokens: t("pages.modelLab.nextToken.ui.topic.promptTokens", "Prompt tokens"),
 		logits: t("pages.modelLab.nextToken.ui.topic.logits", "Logits"),
 		softmax: t("pages.modelLab.nextToken.ui.topic.softmax", "Softmax"),
@@ -396,9 +396,9 @@ export function NextTokenExplorer({ modelName, intent }: NextTokenExplorerProps)
 				<Stack gap="sm">
 					<ExplanationLevelSwitch value={level} onChange={setLevel} />
 					<ExplanationList
-						items={nextTokenTopics.map((topic) => ({ ...topic, label: topicLabels[topic.id], candidates: [topic.id] }))}
+						items={nextTokenTopics.map((id) => ({ id, label: topicLabels[id], candidates: [id] }))}
 						level={level}
-						basis="background"
+						basis="interpreted"
 						root="pages.modelLab.nextToken.explain"
 						open={openTopic}
 						onOpen={setOpenTopic}

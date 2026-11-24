@@ -7666,6 +7666,23 @@ export const zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse =
 	endpointUrl: z.string(),
 });
 
+export const zXeLocalAiEngineClientServicesModelLabModelLabArchitectureHyperparameters = z.object({
+	fileType: z.string().nullable(),
+	declaredParamCount: z.int().nullable(),
+	blockCount: z.int().nullable(),
+	nextnPredictLayers: z.int().nullable(),
+	splitCount: z.int().nullable(),
+	attentionHeadCount: z.int().nullable(),
+	attentionHeadCountKv: z.int().nullable(),
+	attentionKeyLength: z.int().nullable(),
+	attentionValueLength: z.int().nullable(),
+	embeddingLength: z.int().nullable(),
+	contextLength: z.int().nullable(),
+	expertCount: z.int().nullable(),
+	expertUsedCount: z.int().nullable(),
+	fullAttentionInterval: z.int().nullable(),
+});
+
 export const zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateEdge = z.object({
 	from: z.string(),
 	to: z.string(),
@@ -7721,6 +7738,7 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabArchitectureResponse 
 	support: z.string(),
 	readFailure: z.string().nullable(),
 	suggestedBaseRepo: z.string().nullable(),
+	hyperparameters: zXeLocalAiEngineClientServicesModelLabModelLabArchitectureHyperparameters.nullable(),
 	blocks: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureBlock),
 	templates: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplate),
 	nonBlock: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureGroup),

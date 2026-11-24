@@ -1,8 +1,8 @@
-import { Stack, Text } from "@mantine/core";
+import { Group, Stack, Text } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ExplanationList } from "@/features/modelLab/components/ArchitectureExplanation";
+import { BasisBadge, ExplanationList } from "@/features/modelLab/components/ArchitectureExplanation";
 import { type BlockTraceSummary, formatTraceValue } from "@/features/modelLab/models/ModelLabArchitecture";
 import { type ExplanationLevel, traceMetrics } from "@/features/modelLab/models/ModelLabExplanation";
 
@@ -47,21 +47,25 @@ export function ArchitectureBlockTrace({ untraceable, summaries, blockIndex, lev
 	};
 	return (
 		<Stack gap="xs">
-			<Text size="sm" data-testid="model-lab-architecture-trace-summary">
-				{t(
-					"pages.modelLab.architecture.traceSummary",
-					"Mean norm {{mean}}, highest p99 {{p99}}. Most frequent top dimensions: {{dimensions}}.",
-					{
-						mean: formatValue(summary.meanNorm),
-						p99: formatValue(summary.maxP99),
-						dimensions: summary.topDimensions.length > 0 ? summary.topDimensions.join(", ") : "–",
-					},
-				)}
-			</Text>
+			{/* The summary is computed over the trace's records: derived, not one recorded value. */}
+			<Group gap="xs">
+				<Text size="sm" data-testid="model-lab-architecture-trace-summary">
+					{t(
+						"pages.modelLab.architecture.traceSummary",
+						"Mean norm {{mean}}, highest p99 {{p99}}. Most frequent top dimensions: {{dimensions}}.",
+						{
+							mean: formatValue(summary.meanNorm),
+							p99: formatValue(summary.maxP99),
+							dimensions: summary.topDimensions.length > 0 ? summary.topDimensions.join(", ") : "–",
+						},
+					)}
+				</Text>
+				<BasisBadge basis="derived" data-testid="model-lab-architecture-trace-basis" />
+			</Group>
 			<ExplanationList
 				items={traceMetrics.map((metric) => ({ id: metric, label: metricLabels[metric], candidates: [`trace.${metric}`] }))}
 				level={level}
-				basis="measurement"
+				basis="interpreted"
 				open={openMetric}
 				onOpen={setOpenMetric}
 				data-testid="model-lab-explain-trace"

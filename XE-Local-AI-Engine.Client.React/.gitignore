@@ -36,6 +36,7 @@ dist-ssr
 
 # testing
 /coverage
+/.vitest
 
 # next.js
 /.next/

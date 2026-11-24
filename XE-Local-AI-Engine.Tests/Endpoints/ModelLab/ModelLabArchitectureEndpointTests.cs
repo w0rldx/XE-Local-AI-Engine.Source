@@ -205,6 +205,57 @@ public sealed class ModelLabArchitectureEndpointTests
         AssertEx.Equal("model.embed_tokens.weight", body.NonBlock.Single(static group => group.ComponentId == "embedding").Tensors.Single().HfName);
     }
 
+    [Test]
+    public async Task TheDeclaredHyperparameters_ReachTheWire_AndAValuePastTheJavaScriptSafeRangeIsNull()
+    {
+        using var dir = new TempDirectory("xe-hf-test");
+        var path = dir.FilePath("tiny.gguf");
+        await File.WriteAllBytesAsync(path,
+            new GgufHeaderBytesBuilder()
+                .WithString("general.architecture", "qwen35")
+                .WithUint64("general.parameter_count", value: 9_007_199_254_740_991)
+                .WithUint32("qwen35.block_count", value: 1)
+                .WithUint32("qwen35.attention.key_length", value: 256)
+                .WithUint32("qwen35.full_attention_interval", value: 4)
+                .WithUint32("qwen35.expert_count", value: 0)
+                .WithUint64("qwen35.context_length", value: 9_007_199_254_740_992)
+                .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
+                .Build());
+        await using var factory = CreateFactory(path);
+        using var client = factory.CreateClient();
+
+        using var request = Authorized(factory, Uri.EscapeDataString(RegisteredModel));
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var values = json.RootElement.GetProperty("hyperparameters");
+        AssertEx.Equal(expected: 9_007_199_254_740_991L, values.GetProperty("declaredParamCount").GetInt64());
+        AssertEx.Equal(expected: 256L, values.GetProperty("attentionKeyLength").GetInt64());
+        AssertEx.Equal(expected: 4L, values.GetProperty("fullAttentionInterval").GetInt64());
+        AssertEx.Equal(expected: 0L, values.GetProperty("expertCount").GetInt64());
+        AssertEx.Equal(JsonValueKind.Null, values.GetProperty("contextLength").ValueKind);
+        AssertEx.Equal(JsonValueKind.Null, values.GetProperty("expertUsedCount").ValueKind);
+    }
+
+    [Test]
+    public async Task AnUnreadableFile_CarriesNullHyperparameters()
+    {
+        using var dir = new TempDirectory("xe-hf-test");
+        var path = dir.FilePath("tiny.gguf");
+        await File.WriteAllBytesAsync(path, "this is plainly not a GGUF header"u8.ToArray());
+        await using var factory = CreateFactory(path);
+        using var client = factory.CreateClient();
+
+        using var request = Authorized(factory, Uri.EscapeDataString(RegisteredModel));
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal("unreadable", json.RootElement.GetProperty("support").GetString());
+        AssertEx.Equal(JsonValueKind.Null, json.RootElement.GetProperty("hyperparameters").ValueKind);
+    }
+
     private static string Route(string encodedModelName) =>
         $"/api/local/v1/model-lab/architecture/{encodedModelName}";
 

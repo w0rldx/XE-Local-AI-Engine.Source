@@ -1,26 +1,46 @@
-import { Alert, Button, Group, Loader, Select, Stack, Text } from "@mantine/core";
+import { Alert, Button, Group, Loader, Select, Stack, Switch, Text } from "@mantine/core";
 import { IconArrowRight } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useRef } from "react";
+import { Fragment, type ReactNode, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import {
 	getModelLabArchitectureOptions,
+	getModelLabExperimentRoutingOptions,
 	getModelLabExperimentTraceOptions,
 	listModelLabExperimentsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ArchitectureBlockDetail } from "@/features/modelLab/components/ArchitectureBlockDetail";
-import { ArchitectureOverview } from "@/features/modelLab/components/ArchitectureOverview";
 import {
+	ArchitectureBreadcrumb,
+	ArchitectureMtpDetail,
+	ArchitectureRangeDetail,
+	ArchitectureRootDetail,
+	ArchitectureStackDetail,
+} from "@/features/modelLab/components/ArchitectureHierarchyDetail";
+import { ArchitectureModelGraph } from "@/features/modelLab/components/ArchitectureModelGraph";
+import { ArchitectureOverview, type RoutingFailure } from "@/features/modelLab/components/ArchitectureOverview";
+import { ArchitectureValues } from "@/features/modelLab/components/ArchitectureValues";
+import {
+	type ArchitectureGroup,
 	type ArchitectureSelection,
 	formatBlockRanges,
+	type OutsideEnd,
 	outsideGroups,
 	promptExcerpt,
 	summarizeTraceByBlock,
 } from "@/features/modelLab/models/ModelLabArchitecture";
 import type { ExplanationLevel } from "@/features/modelLab/models/ModelLabExplanation";
+import {
+	type ArchitectureHierarchy,
+	buildArchitectureHierarchy,
+	chipFor,
+	vocabularySize,
+} from "@/features/modelLab/models/ModelLabHierarchy";
+import { breadcrumbFor } from "@/features/modelLab/models/ModelLabHierarchyLabels";
 import { type ModelLabJump, sameExperimentId } from "@/features/modelLab/models/ModelLabNavigation";
 
 interface ArchitectureExplorerProps {
@@ -29,7 +49,8 @@ interface ArchitectureExplorerProps {
 	selection: ArchitectureSelection | null;
 	traceId: string | null;
 	level: ExplanationLevel;
-	onSelect: (selection: ArchitectureSelection) => void;
+	// Null selects the whole model. `onShown` runs only once the page shows that selection: never for a blocked change.
+	onSelect: (selection: ArchitectureSelection | null, onShown?: () => void) => void;
 	onTraceChange: (traceId: string | null) => void;
 	onLevelChange: (level: ExplanationLevel) => void;
 	onJump?: (to: ModelLabJump) => void;
@@ -48,6 +69,7 @@ export function ArchitectureExplorer({
 }: ArchitectureExplorerProps) {
 	const { t, i18n } = useTranslation();
 	const traceInput = useRef<HTMLInputElement>(null);
+	const [graphShown, setGraphShown] = useState(false);
 
 	const descriptor = useQuery({
 		...getModelLabArchitectureOptions({ path: { modelName: modelName ?? "" } }),
@@ -75,16 +97,212 @@ export function ArchitectureExplorer({
 	const traceSummaries = trace.data ? summarizeTraceByBlock(trace.data.records) : undefined;
 
 	const data = descriptor.data;
-	const block = typeof selection === "number" ? data?.blocks.find((candidate) => candidate.index === selection) : undefined;
-	const outsideEnd = selection === "output" ? "output" : "embedding";
-	// A link or a jump can name a block, or an Embedding or Output, the file does not hold.
-	const blockMissing = typeof selection === "number" && block === undefined;
-	const outsideMissing =
-		typeof selection === "string" && data !== undefined && outsideGroups(data.nonBlock, selection).length === 0;
-	const template =
-		block && data?.support === "detailed" ? data.templates.find((candidate) => candidate.kind === block.kind) : undefined;
 	// Only a family whose graph has a router can have routing: a dense model's overlay never asks for it.
 	const routedArchitecture = data?.templates.some((candidate) => candidate.nodes.some((node) => node.id === "router")) ?? false;
+	const routedOverlay = overlayId !== null && routedArchitecture;
+	// The block detail's and the stepper's query: one cache entry per run, whichever view asks first.
+	const routing = useQuery({
+		...getModelLabExperimentRoutingOptions({ path: { experimentId: overlayId ?? "" } }),
+		// A saved run's routing never changes.
+		staleTime: Number.POSITIVE_INFINITY,
+		// A dense or unrouted run answers 404; the stepper is where a real failure is shown and retried.
+		retryOnMount: false,
+		enabled: routedOverlay,
+	});
+	const hierarchy = data ? buildArchitectureHierarchy(data) : null;
+	const displayed = new Set(data?.blocks.map((candidate) => candidate.index));
+	// Only a confirmed 404 means the run recorded no routing; any other failure is unreadable routing.
+	const routingFailure: RoutingFailure | null =
+		routedOverlay && routing.isError
+			? routing.error instanceof ApiError && routing.error.statusCode === 404
+				? "missing"
+				: "unreadable"
+			: null;
+	// The one routed set the row, the graph and the block detail share: the blocks a saved routing step names that this
+	// file shows. None while the routing fails, even when data cached before a failed refetch survives.
+	const routedBlocks =
+		routedOverlay && routing.data && routingFailure === null
+			? new Set(
+					routing.data.steps.flatMap((step) => step.blocks.map((entry) => entry.layer)).filter((index) => displayed.has(index)),
+				)
+			: null;
+	const templates = data?.support === "detailed" ? data.templates : [];
+	const values = data?.hyperparameters ?? null;
+	const tracedBlocks = traceSummaries ? new Set(traceSummaries.keys()) : null;
+
+	// A selection made from a control inside a detail (which unmounts with it) or from an unfocusable graph node moves
+	// focus to the new heading; a row pick keeps focus on the row. The intent is armed only once the page shows the
+	// selection, so a blocked change leaves none behind for a later Back or Forward to the same selection.
+	const focusIntent = useRef<ArchitectureSelection | null | undefined>(undefined);
+	// The mounted heading and the selection it was rendered for, refreshed on every render.
+	const heading = useRef<{ element: HTMLElement; selection: ArchitectureSelection | null } | null>(null);
+	const selectFromRow = (next: ArchitectureSelection | null): void => {
+		focusIntent.current = undefined;
+		onSelect(next);
+	};
+	const selectFromDetail = (next: ArchitectureSelection | null): void => {
+		focusIntent.current = undefined;
+		onSelect(next, () => {
+			// Shown: the heading may already be up for it, else it takes focus when it mounts.
+			if (heading.current?.selection === next) {
+				heading.current.element.focus();
+			} else {
+				focusIntent.current = next;
+			}
+		});
+	};
+	const headingRef = (element: HTMLElement | null): void => {
+		heading.current = element === null ? null : { element, selection };
+		if (element !== null && focusIntent.current !== undefined && focusIntent.current === selection) {
+			focusIntent.current = undefined;
+			element.focus();
+		}
+	};
+
+	const missing = (text: string) => (
+		<Alert color="yellow" tabIndex={-1} ref={headingRef} data-testid="model-lab-architecture-block-missing">
+			{text}
+		</Alert>
+	);
+	const outsideDetail = (end: OutsideEnd, groups: ArchitectureGroup[]) => (
+		<ArchitectureBlockDetail
+			modelName={data?.modelName ?? ""}
+			architecture={data?.architecture ?? null}
+			suggestedBaseRepo={data?.suggestedBaseRepo ?? null}
+			block={undefined}
+			outside={end}
+			groups={groups}
+			template={undefined}
+			traceSummaries={traceSummaries}
+			traceId={overlayId}
+			routed={false}
+			explanationLevel={level}
+			onExplanationLevel={onLevelChange}
+			headingRef={headingRef}
+		/>
+	);
+	// One branch per selection kind; a link or a jump can name something the file does not hold, which is said, never guessed.
+	const detail = (shown: ArchitectureHierarchy, file: NonNullable<typeof data>): ReactNode => {
+		if (selection === null) {
+			return <ArchitectureRootDetail hierarchy={shown} values={values} headingRef={headingRef} />;
+		}
+		if (typeof selection === "number") {
+			const block = file.blocks.find((candidate) => candidate.index === selection);
+			if (block === undefined) {
+				return missing(
+					t(
+						"pages.modelLab.architecture.blockMissing",
+						"Block {{index}} is not in this file. One possible reason: the file is one part of a split GGUF and the block is in another part.",
+						{ index: selection },
+					),
+				);
+			}
+			return (
+				<ArchitectureBlockDetail
+					modelName={file.modelName}
+					architecture={file.architecture}
+					suggestedBaseRepo={file.suggestedBaseRepo}
+					block={block}
+					outside="embedding"
+					groups={block.groups}
+					template={templates.find((candidate) => candidate.kind === block.kind)}
+					traceSummaries={traceSummaries}
+					traceId={overlayId}
+					routed={routedBlocks?.has(block.index) === true}
+					explanationLevel={level}
+					onExplanationLevel={onLevelChange}
+					headingRef={headingRef}
+				/>
+			);
+		}
+		switch (selection) {
+			case "embedding": {
+				const groups = outsideGroups(file.nonBlock, "embedding");
+				return groups.length === 0 ? (
+					missing(
+						t(
+							"pages.modelLab.architecture.outsideMissing.embedding",
+							"Embedding is not in this file. One possible reason: the file is one part of a split GGUF and it is in another part.",
+						),
+					)
+				) : (
+					<Stack gap="sm">
+						<ArchitectureValues
+							values={[
+								{ key: "vocabulary", value: vocabularySize(file), basis: "derived" },
+								{ key: "embeddingLength", value: values?.embeddingLength, basis: "structural" },
+							]}
+							mtpDeclared={values?.nextnPredictLayers != null}
+						/>
+						{outsideDetail("embedding", groups)}
+					</Stack>
+				);
+			}
+			case "output": {
+				const groups = outsideGroups(file.nonBlock, "output");
+				return groups.length === 0
+					? missing(
+							t(
+								"pages.modelLab.architecture.outsideMissing.output",
+								"Output is not in this file. One possible reason: the file is one part of a split GGUF and it is in another part.",
+							),
+						)
+					: outsideDetail("output", groups);
+			}
+			case "other": {
+				const groups = outsideGroups(file.nonBlock, "other");
+				return groups.length === 0
+					? missing(
+							t("pages.modelLab.architecture.outsideMissing.other", "No other tensors outside the blocks are in this file."),
+						)
+					: outsideDetail("other", groups);
+			}
+			case "stack":
+				return shown.trunkBlocks.length === 0 ? (
+					missing(
+						t(
+							"pages.modelLab.architecture.outsideMissing.stack",
+							"No blocks of the main stack are in this file. One possible reason: the file is one part of a split GGUF and these blocks are in other parts.",
+						),
+					)
+				) : (
+					<ArchitectureStackDetail hierarchy={shown} values={values} headingRef={headingRef} onOpen={selectFromDetail} />
+				);
+			case "mtp":
+				return shown.mtp.length === 0 ? (
+					missing(t("pages.modelLab.architecture.outsideMissing.mtp", "No multi-token prediction blocks are in this file."))
+				) : (
+					<ArchitectureMtpDetail hierarchy={shown} values={values} headingRef={headingRef} onOpen={selectFromDetail} />
+				);
+			default: {
+				const chip = chipFor(shown, selection);
+				if (chip === undefined) {
+					const [first, last] = selection.split("-");
+					return missing(
+						t(
+							"pages.modelLab.architecture.hierarchy.rangeMissing",
+							"Blocks {{first}}–{{last}} are not one group in this file. Choose a group from the blocks above.",
+							{ first, last },
+						),
+					);
+				}
+				return (
+					<ArchitectureRangeDetail
+						chip={chip}
+						architecture={file.architecture}
+						templates={templates}
+						values={values}
+						tracedBlocks={tracedBlocks}
+						routedBlocks={routedBlocks}
+						level={level}
+						onLevelChange={onLevelChange}
+						headingRef={headingRef}
+						onOpen={selectFromDetail}
+					/>
+				);
+			}
+		}
+	};
 
 	return (
 		<Stack gap="md">
@@ -193,56 +411,41 @@ export function ArchitectureExplorer({
 						{t(`pages.modelLab.architecture.layoutNote.${data.architecture}`)}
 					</Alert>
 				)}
-			{data && data.support !== "unreadable" && (
+			{data && hierarchy && (
 				<>
-					<ArchitectureOverview
-						blocks={data.blocks}
-						hasOutputGroup={outsideGroups(data.nonBlock, "output").length > 0}
-						hasOutputTensor={data.nonBlock.some((group) => group.component === "output")}
-						selection={selection}
-						tracedBlocks={traceSummaries ? new Set(traceSummaries.keys()) : null}
-						onSelect={onSelect}
+					<Switch
+						size="xs"
+						label={t("pages.modelLab.architecture.hierarchy.graph.show", "Show graph")}
+						checked={graphShown}
+						onChange={(event) => setGraphShown(event.currentTarget.checked)}
+						data-testid="model-lab-architecture-graph-switch"
 					/>
-					{blockMissing && (
-						<Alert color="yellow" data-testid="model-lab-architecture-block-missing">
-							{t(
-								"pages.modelLab.architecture.blockMissing",
-								"Block {{index}} is not in this file. One possible reason: the file is one part of a split GGUF and the block is in another part.",
-								{ index: selection },
-							)}
-						</Alert>
-					)}
-					{outsideMissing && (
-						<Alert color="yellow" data-testid="model-lab-architecture-block-missing">
-							{selection === "output"
-								? t(
-										"pages.modelLab.architecture.outsideMissing.output",
-										"Output is not in this file. One possible reason: the file is one part of a split GGUF and it is in another part.",
-									)
-								: t(
-										"pages.modelLab.architecture.outsideMissing.embedding",
-										"Embedding is not in this file. One possible reason: the file is one part of a split GGUF and it is in another part.",
-									)}
-						</Alert>
-					)}
-					{selection !== null && !blockMissing && !outsideMissing && (
-						<ArchitectureBlockDetail
-							// A same-block jump to another model must not keep the last model's form state.
-							key={`${modelName}:${selection}`}
-							modelName={data.modelName}
-							architecture={data.architecture}
-							suggestedBaseRepo={data.suggestedBaseRepo}
-							block={block}
-							outside={outsideEnd}
-							groups={block?.groups ?? outsideGroups(data.nonBlock, outsideEnd)}
-							template={template}
-							traceSummaries={traceSummaries}
-							traceId={overlayId}
-							routedArchitecture={routedArchitecture}
-							explanationLevel={level}
-							onExplanationLevel={onLevelChange}
+					{graphShown && (
+						<ArchitectureModelGraph
+							// React Flow fits the view only on mount: another model gets a fresh fit, a block pick keeps the view.
+							key={data.modelName}
+							hierarchy={hierarchy}
+							selection={selection}
+							tracedBlocks={tracedBlocks}
+							routedBlocks={routedBlocks}
+							templates={templates}
+							// A node takes no focus, so focus follows the pick to the new heading as from a detail control.
+							onSelect={selectFromDetail}
 						/>
 					)}
+					<ArchitectureOverview
+						hierarchy={hierarchy}
+						hasOutputTensor={data.nonBlock.some((group) => group.component === "output")}
+						split={(values?.splitCount ?? 1) > 1}
+						selection={selection}
+						tracedBlocks={tracedBlocks}
+						routedBlocks={routedBlocks}
+						routingFailure={routingFailure}
+						onSelect={selectFromRow}
+					/>
+					<ArchitectureBreadcrumb crumbs={breadcrumbFor(t, hierarchy, selection)} onOpen={selectFromDetail} />
+					{/* Keyed: a same-block jump to another model must not keep the last model's form state. */}
+					<Fragment key={`${modelName}:${selection}`}>{detail(hierarchy, data)}</Fragment>
 				</>
 			)}
 		</Stack>

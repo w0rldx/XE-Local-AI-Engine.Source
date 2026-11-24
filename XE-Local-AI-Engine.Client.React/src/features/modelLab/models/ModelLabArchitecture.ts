@@ -11,14 +11,24 @@ import { type BlockKind, blockKindColors } from "@/core/models/inspect/GgufInspe
 
 export type { ArchitectureBlock, ArchitectureGroup, ArchitectureTemplate, ArchitectureTensor };
 
-// The overview's selection: a block by its index, or the tensors before or after every block.
-export type ArchitectureSelection = number | "embedding" | "output";
+// A run of blocks by its first and last index, first < last: "0-3".
+export type BlockRangeToken = `${number}-${number}`;
+export type OutsideEnd = "embedding" | "output" | "other";
+// The overview's selection, URL-shaped: a block by its index, a group outside the blocks, every block ("stack"), the
+// multi-token prediction blocks ("mtp") or one chip of blocks. Absent is the whole model.
+export type ArchitectureSelection = number | OutsideEnd | "stack" | "mtp" | BlockRangeToken;
 
-const outputComponentIds = new Set(["output_norm", "output"]);
+const outsideComponentIds: Record<Exclude<OutsideEnd, "other">, readonly string[]> = {
+	embedding: ["embedding"],
+	output: ["output_norm", "output"],
+};
 
-// Output is the final norm and the output head; Embedding is everything else outside the blocks.
-export function outsideGroups(nonBlock: readonly ArchitectureGroup[], end: "embedding" | "output"): ArchitectureGroup[] {
-	return nonBlock.filter((group) => outputComponentIds.has(group.componentId) === (end === "output"));
+// By componentId: Embedding is the token embedding, Output the final norm and the output head, Other everything else.
+export function outsideGroups(nonBlock: readonly ArchitectureGroup[], end: OutsideEnd): ArchitectureGroup[] {
+	const known = Object.values(outsideComponentIds).flat();
+	return nonBlock.filter((group) =>
+		end === "other" ? !known.includes(group.componentId) : outsideComponentIds[end].includes(group.componentId),
+	);
 }
 
 export interface BlockTraceSummary {

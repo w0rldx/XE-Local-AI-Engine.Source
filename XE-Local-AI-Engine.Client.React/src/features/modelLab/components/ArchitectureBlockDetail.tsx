@@ -1,4 +1,4 @@
-import { Badge, Group, Paper, Stack, Text } from "@mantine/core";
+import { Group, Paper, Stack, Text } from "@mantine/core";
 import { useReducedMotion } from "@mantine/hooks";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,7 @@ import { blockKindLabels } from "@/core/models/inspect/GgufInspectInsights";
 import { ArchitectureBlockRouting } from "@/features/modelLab/components/ArchitectureBlockRouting";
 import { ArchitectureBlockTrace } from "@/features/modelLab/components/ArchitectureBlockTrace";
 import {
+	BasisBadge,
 	ExplanationEntry,
 	ExplanationLevelSwitch,
 	ExplanationList,
@@ -23,8 +24,9 @@ import {
 	type BlockTraceSummary,
 	componentIdFor,
 	componentLabel,
+	type OutsideEnd,
 } from "@/features/modelLab/models/ModelLabArchitecture";
-import { type ExplanationLevel, inferredBadgeStyles, operationCandidates } from "@/features/modelLab/models/ModelLabExplanation";
+import { type ExplanationLevel, operationCandidates } from "@/features/modelLab/models/ModelLabExplanation";
 import type { PyTorchCodeTarget } from "@/features/modelLab/models/ModelLabPyTorch";
 
 interface ArchitectureBlockDetailProps {
@@ -34,18 +36,21 @@ interface ArchitectureBlockDetailProps {
 	suggestedBaseRepo: string | null;
 	// Undefined for the tensors outside every block: then `outside` names which end of the model they are.
 	block: ArchitectureBlock | undefined;
-	outside: "embedding" | "output";
+	outside: OutsideEnd;
 	groups: ArchitectureGroup[];
 	// Undefined when this support level or block kind has none: no graph is ever drawn without one.
 	template: ArchitectureTemplate | undefined;
 	traceSummaries: ReadonlyMap<number, BlockTraceSummary> | undefined;
 	// The trace laid over the blocks, null while none is chosen.
 	traceId: string | null;
-	// The file's graph has a router, so a laid-over run can have routing; never asked for otherwise.
-	routedArchitecture: boolean;
+	// The block is in the explorer's one routed set (saved steps of a readable routing that name it), the same set the row
+	// and graph mark; the routing panel shows for nothing else.
+	routed: boolean;
 	// Owned above this panel, so the chosen level stays while the operator moves between blocks.
 	explanationLevel: ExplanationLevel;
 	onExplanationLevel: (level: ExplanationLevel) => void;
+	// Takes focus when this detail was opened from a control that unmounted with the last one.
+	headingRef?: (element: HTMLElement | null) => void;
 }
 
 // One block: what the file holds (read) and, apart from it, the operation order llama.cpp runs over it (inferred).
@@ -59,9 +64,10 @@ export function ArchitectureBlockDetail({
 	template,
 	traceSummaries,
 	traceId,
-	routedArchitecture,
+	routed,
 	explanationLevel,
 	onExplanationLevel,
+	headingRef,
 }: ArchitectureBlockDetailProps) {
 	const { t } = useTranslation();
 	const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
@@ -90,7 +96,7 @@ export function ArchitectureBlockDetail({
 	return (
 		<Paper withBorder={true} p="md" data-testid="model-lab-architecture-detail">
 			<Stack gap="sm">
-				<Text fw={600}>
+				<Text component="h3" fw={600} tabIndex={-1} ref={headingRef} data-testid="model-lab-architecture-detail-heading">
 					{block === undefined
 						? componentLabel(t, outside)
 						: t("pages.models.inspect.blockCell", "Block {{index}}: {{kind}}", {
@@ -103,7 +109,7 @@ export function ArchitectureBlockDetail({
 				<ExplanationEntry
 					candidates={[block === undefined ? `component.${outside}` : `block.${architectureBlockKind(block.kind)}`]}
 					level={explanationLevel}
-					basis={block && template ? { inferredFrom: template.source } : "background"}
+					basis={block && template ? { inferredFrom: template.source } : "interpreted"}
 				/>
 				{block && (
 					<ArchitectureBlockTrace
@@ -114,16 +120,12 @@ export function ArchitectureBlockDetail({
 					/>
 				)}
 				{/* Apart from the residual summary: a block can have routing whatever the trace records say about it. */}
-				{block && traceId !== null && routedArchitecture && (
-					<ArchitectureBlockRouting traceId={traceId} blockIndex={block.index} />
-				)}
+				{block && traceId !== null && routed && <ArchitectureBlockRouting traceId={traceId} blockIndex={block.index} />}
 				<Group gap="xs">
 					<Text size="sm" fw={600}>
 						{t("pages.modelLab.architecture.groups", "Tensor groups")}
 					</Text>
-					<Badge variant="light" color="green" data-testid="model-lab-architecture-read-badge">
-						{t("pages.modelLab.architecture.readBadge", "Read from the file")}
-					</Badge>
+					<BasisBadge basis="structural" data-testid="model-lab-architecture-read-badge" />
 				</Group>
 				<ArchitectureTensorGroups
 					groups={groups}
@@ -143,7 +145,7 @@ export function ArchitectureBlockDetail({
 						title={componentLabel(t, selectedGroup.component)}
 						candidates={[`component.${selectedGroup.component}`]}
 						level={explanationLevel}
-						basis="background"
+						basis="interpreted"
 					/>
 				)}
 				{block && template && (
@@ -152,18 +154,7 @@ export function ArchitectureBlockDetail({
 							<Text size="sm" fw={600}>
 								{t("pages.modelLab.architecture.operations", "Operations")}
 							</Text>
-							{/* Wraps instead of clipping: the pinned llama.cpp tag at its end is the part that matters. */}
-							<Badge
-								variant="light"
-								color="orange"
-								maw="100%"
-								styles={inferredBadgeStyles}
-								data-testid="model-lab-architecture-inferred-badge"
-							>
-								{t("pages.modelLab.architecture.inferredBadge", "Inferred from llama.cpp ({{source}})", {
-									source: template.source,
-								})}
-							</Badge>
+							<BasisBadge basis={{ inferredFrom: template.source }} data-testid="model-lab-architecture-inferred-badge" />
 						</Group>
 						<ArchitectureTemplateGraph
 							template={template}

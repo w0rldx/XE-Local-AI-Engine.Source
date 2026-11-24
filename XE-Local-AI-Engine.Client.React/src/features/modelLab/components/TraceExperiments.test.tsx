@@ -875,7 +875,7 @@ describe("TraceExperiments", () => {
 		renderWithProviders(<Experiments />);
 		fireEvent.click(await screen.findByRole("button", { name: "Qwen/Qwen3.5-0.8B" }));
 
-		expect((await screen.findByTestId("model-lab-trace-measured")).textContent).toContain("Measured");
+		expect((await screen.findByTestId("model-lab-trace-measured")).textContent).toBe("Measured in the trace");
 		expect((await screen.findByTestId("model-lab-trace-table")).textContent).toContain("3.25");
 		expect(screen.getByTestId("model-lab-trace-truncated").textContent).toContain("7 records");
 	});

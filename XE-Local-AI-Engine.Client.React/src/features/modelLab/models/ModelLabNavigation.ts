@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
+import type { BlockRangeToken } from "@/features/modelLab/models/ModelLabArchitecture";
 
 // The page's tabs, in display order. `?tab=` on the route takes one of these, so a tab is linkable and survives a reload.
 export const modelLabTabs = ["architecture", "compare", "nextToken", "inspect", "trace"] as const;
@@ -12,7 +13,19 @@ export const modelLabSearchSchema = z.object({
 	tab: z.enum(modelLabTabs).optional().catch(undefined),
 	model: z.string().min(1).optional().catch(undefined),
 	block: z
-		.union([z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), z.enum(["embedding", "output"])])
+		.union([
+			z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+			z.enum(["embedding", "output", "other", "stack", "mtp"]),
+			// A chip of blocks "first-last": no leading zeros, first < last, both in the int range of a block index.
+			z
+				.string()
+				.regex(/^(0|[1-9]\d{0,9})-(0|[1-9]\d{0,9})$/)
+				.refine((token) => {
+					const [first = 0, last = 0] = token.split("-").map(Number);
+					return first < last && last <= 2_147_483_647;
+				})
+				.transform((token) => token as BlockRangeToken),
+		])
 		.optional()
 		.catch(undefined),
 	trace: z.guid().optional().catch(undefined),

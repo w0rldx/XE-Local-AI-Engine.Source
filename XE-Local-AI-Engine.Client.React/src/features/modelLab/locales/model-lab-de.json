@@ -3,7 +3,9 @@
 		"modelLab": {
 			"architecture": {
 				"blockMissing": "Block {{index}} ist nicht in dieser Datei. Ein möglicher Grund: Die Datei ist ein Teil eines aufgeteilten GGUF, und der Block liegt in einem anderen Teil.",
+				"blockRouted": "Block {{index}}: {{kind}}, geroutet",
 				"blockTraced": "Block {{index}}: {{kind}}, getraced",
+				"blockTracedRouted": "Block {{index}}: {{kind}}, getraced, geroutet",
 				"blockUntraceable": "Block {{index}}: {{kind}}, nicht tracebar",
 				"clearTrace": "Den darübergelegten Trace entfernen",
 				"component": {
@@ -19,6 +21,58 @@
 				"ggufName": "GGUF-Name",
 				"groups": "Tensorgruppen",
 				"hfName": "Hugging-Face-Name",
+				"hierarchy": {
+					"block": "Block {{index}}",
+					"blocks": "Blöcke",
+					"blocksEntry": "Blöcke: {{count}} in dieser Datei",
+					"breadcrumb": "Ihre Position im Modell",
+					"chipRouted": "{{count}} geroutet",
+					"chipRun": "{{kind}} ×{{count}}",
+					"chipTraced": "{{count}} getraced",
+					"chipUnitRun": "{{count}} {{kind}}",
+					"gap": "… Blöcke nicht in dieser Datei …",
+					"graph": {
+						"controls": "Zoomsteuerung des Graphen",
+						"fitView": "Graphen in die Ansicht einpassen",
+						"indexOrder": "Gruppen in dieser Datei, in Indexreihenfolge",
+						"label": "Graph der Gruppen in dieser Datei",
+						"mtp": "Multi-Token-Vorhersage (eigener Pfad)",
+						"order": "Pfeile: die Reihenfolge, in der die Gruppen laufen",
+						"readOnly": "Schreibgeschützter Graph. Wählen Sie eine Gruppe mit dem Zeiger, oder nutzen Sie die Zeile darunter, um per Tastatur zu wählen.",
+						"show": "Graph anzeigen",
+						"tooLarge": "Diese Datei hat {{count}} Gruppen, zu viele für einen lesbaren Graphen. Die Zeile darunter zeigt alle.",
+						"zoomIn": "Vergrößern",
+						"zoomOut": "Verkleinern"
+					},
+					"kindOperations": "Operationen eines Blocks vom Typ {{kind}}",
+					"kindShort": {
+						"fullAttention": "voll",
+						"linearAttention": "linear",
+						"mtp": "MTP",
+						"other": "sonstige"
+					},
+					"layoutDiffers": "Bei den Blöcken {{blocks}} weichen die Tensoren vom ersten Block derselben Art ab.",
+					"layoutNothing": "In dieser Gruppe gibt es nichts zu vergleichen: Keine zwei Blöcke sind von derselben Art.",
+					"layoutSame": "Blöcke derselben Art enthalten dieselben Tensoren: Komponente, Name und Form.",
+					"model": "Modell",
+					"mtpNote": "Diese Blöcke sagen weitere Tokens auf einem eigenen Pfad neben dem Hauptstapel voraus; sie gehören nicht zu seinen Blöcken.",
+					"openBlock": "Block {{index}} öffnen",
+					"outside": "Außerhalb der Blöcke: {{groups}}.",
+					"pattern": "{{unit}}, {{count}}-mal",
+					"patternRun": "{{count}} × {{kind}}",
+					"rangeKinds": "{{count}} Blöcke: {{runs}}",
+					"rangeMissing": "Die Blöcke {{first}}–{{last}} bilden in dieser Datei keine Gruppe. Wählen Sie oben eine Gruppe aus den Blöcken.",
+					"rangeRouted": "Routing im darübergelegten Lauf aufgezeichnet: {{blocks}}",
+					"rangeTitle": "Blöcke {{first}}–{{last}}",
+					"rangeTraced": "Im darübergelegten Lauf getraced: {{blocks}}",
+					"rootTitle": "Ganzes Modell",
+					"split": "Diese Datei ist einer von {{count}} Teilen eines aufgeteilten GGUF. Gezählt werden hier die Blöcke in dieser Datei.",
+					"stackTitle": "Blöcke in dieser Datei",
+					"typesDiffer": "Bei den Blöcken {{blocks}} weichen die gespeicherten Typen entsprechender Tensoren ab.",
+					"typesNothing": "In dieser Gruppe gibt es nichts zu vergleichen: Zwischen Blöcken derselben Art entsprechen sich keine Tensoren.",
+					"typesSame": "Entsprechende Tensoren verwenden dieselben gespeicherten Typen.",
+					"typesUnknown": "Ein gespeicherter Typ ist unbekannt, daher werden die gespeicherten Typen nicht verglichen."
+				},
 				"inferredBadge": "Aus llama.cpp abgeleitet ({{source}})",
 				"kindUntraceable": "{{kind}} (nicht tracebar)",
 				"layoutNote": {
@@ -29,6 +83,7 @@
 				"loadFailed": "Die Struktur des Modells konnte nicht gelesen werden.",
 				"noHfName": "Keiner",
 				"noOutput": "Diese Datei enthält keinen eigenen Ausgabe-Tensor; die Ausgabe nutzt möglicherweise die Embedding-Gewichte mit.",
+				"noOutputSplit": "Diese Datei enthält keinen eigenen Ausgabe-Tensor; die Ausgabe nutzt möglicherweise die Embedding-Gewichte mit, oder sie liegt in einem anderen Teil des aufgeteilten GGUF.",
 				"noTemplate": "Für diese Datei wird kein Operationsgraph gezeichnet: Ihr Aufbau, zum Beispiel Mixture-of-Experts, ist keiner, den die Vorlage für {{architecture}} beschreibt. Die Tensorgruppen werden wie gewohnt aus der Datei gelesen.",
 				"noTraceChosen": "Kein Trace",
 				"noTraces": "Für dieses Modell gibt es noch keinen fertigen Trace. Einen unter „Trace und Steering“ gestarteten Trace können Sie hier über die Blöcke legen.",
@@ -37,10 +92,12 @@
 				"operations": "Operationen",
 				"outsideMissing": {
 					"embedding": "Das Embedding ist nicht in dieser Datei. Ein möglicher Grund: Die Datei ist ein Teil eines aufgeteilten GGUF, und das Embedding liegt in einem anderen Teil.",
-					"output": "Die Ausgabe ist nicht in dieser Datei. Ein möglicher Grund: Die Datei ist ein Teil eines aufgeteilten GGUF, und die Ausgabe liegt in einem anderen Teil."
+					"mtp": "Diese Datei enthält keine Blöcke für die Multi-Token-Vorhersage.",
+					"other": "Diese Datei enthält keine sonstigen Tensoren außerhalb der Blöcke.",
+					"output": "Die Ausgabe ist nicht in dieser Datei. Ein möglicher Grund: Die Datei ist ein Teil eines aufgeteilten GGUF, und die Ausgabe liegt in einem anderen Teil.",
+					"stack": "Diese Datei enthält keine Blöcke des Hauptstapels. Ein möglicher Grund: Die Datei ist ein Teil eines aufgeteilten GGUF, und diese Blöcke liegen in anderen Teilen."
 				},
 				"overviewOnly": "Für die Architektur {{architecture}} wird kein Operationsgraph angezeigt, nur die aus der Datei gelesenen Tensorgruppen.",
-				"readBadge": "Aus der Datei gelesen",
 				"relation": {
 					"equal": "Dieselben Werte wie der Hugging-Face-Tensor",
 					"label": "Wertbeziehung",
@@ -51,9 +108,12 @@
 					"reordered": "Gegenüber dem Hugging-Face-Tensor umsortiert (Heads oder Rotationspaare umgruppiert); ein quantisierter Typ ändert zusätzlich die Werte",
 					"sliced": "Eine Hälfte eines zusammengefassten Hugging-Face-Tensors (Gate- oder Up-Zeilen); der Hinweis zur Architektur sagt, woher dieses zusammengefasste Layout stammt. Ein quantisierter Typ ändert zusätzlich die Werte"
 				},
+				"routedLegend": "Ein Quadrat markiert einen Block, dessen Routing der Lauf aufgezeichnet hat.",
 				"routing": {
 					"title": "Experten, die dieser Block im über die Blöcke gelegten Lauf gewählt hat"
 				},
+				"routingFailed": "Das Routing des Laufs konnte nicht gelesen werden.",
+				"routingMissing": "Der darübergelegte Lauf hat kein Routing aufgezeichnet.",
 				"shape": "Form (GGUF-Reihenfolge)",
 				"tab": "Architektur",
 				"templateHint": "Wenn Sie einen Knoten wählen, öffnet sich seine Erklärung in der Operationsliste. Ein durchgezogener Knoten nutzt eine Tensorgruppe dieses Blocks und wählt auch diese Gruppe; ein gestrichelter Knoten enthält keine Tensoren.",
@@ -65,7 +125,74 @@
 				"tracedBlocks": "Getracete Blöcke: {{blocks}} ({{traced}} von {{total}}).",
 				"tracedLegend": "Ein Punkt markiert einen getraceten Block.",
 				"unreadable": "Die Datei konnte nicht gelesen werden ({{reason}}), daher gibt es keine Struktur anzuzeigen.",
-				"untraceable": "Nicht tracebar: Dieser Block zur Multi-Token-Vorhersage hat keine Schicht im Hugging-Face-Checkpoint."
+				"untraceable": "Nicht tracebar: Dieser Block zur Multi-Token-Vorhersage hat keine Schicht im Hugging-Face-Checkpoint.",
+				"values": {
+					"attentionHeadCount": {
+						"info": "Die Query-Köpfe eines Blocks mit voller Attention (attention.head_count).",
+						"label": "Attention-Köpfe"
+					},
+					"attentionHeadCountKv": {
+						"info": "Die Key- und Value-Köpfe eines Blocks mit voller Attention (attention.head_count_kv). Weniger als Query-Köpfe bedeutet, dass sich mehrere Query-Köpfe einen Key/Value-Kopf teilen.",
+						"label": "Key/Value-Köpfe"
+					},
+					"attentionKeyLength": {
+						"info": "Die Länge jedes Key-Kopfs (attention.key_length).",
+						"label": "Größe eines Key-Kopfs"
+					},
+					"attentionValueLength": {
+						"info": "Die Länge jedes Value-Kopfs (attention.value_length).",
+						"label": "Größe eines Value-Kopfs"
+					},
+					"blockCount": {
+						"info": "Die Schichten, die der Header für das ganze Modell angibt (block_count), auch die in einem anderen Teil einer aufgeteilten Datei.",
+						"infoMtp": "Die Schichten, die der Header für das ganze Modell angibt (block_count), auch die in einem anderen Teil einer aufgeteilten Datei. Sie schließen die Schichten für die Multi-Token-Vorhersage ein (nextn_predict_layers), die nicht zum Hauptstapel gehören.",
+						"label": "Schichten"
+					},
+					"blocksInFile": {
+						"info": "Aus den Tensoren dieser Datei gezählt, ohne Blöcke für die Multi-Token-Vorhersage. Ein Teil eines aufgeteilten GGUF enthält nur einige der Blöcke.",
+						"label": "Blöcke in dieser Datei"
+					},
+					"contextLength": {
+						"info": "Der längste Kontext in Tokens, den der Header angibt (context_length). Mit welchem Kontext ein Server läuft, wird getrennt eingestellt und kann kürzer sein.",
+						"label": "Kontextlänge"
+					},
+					"declaredParamCount": {
+						"info": "Die Parameterzahl, die der Header angibt (general.parameter_count). Ohne diesen Eintrag im Header wird nichts angezeigt; sie wird hier nie aus den Tensoren summiert.",
+						"label": "Parameter"
+					},
+					"embeddingLength": {
+						"info": "Die Länge des Vektors jedes Tokens im Residualstrom (embedding_length), in jedem Block gleich.",
+						"label": "Breite"
+					},
+					"expertCount": {
+						"info": "Die Experten eines Mixture-of-Experts-Blocks (expert_count).",
+						"label": "Experten"
+					},
+					"expertUsedCount": {
+						"info": "An wie viele Experten jedes Token in einem Mixture-of-Experts-Block geleitet wird (expert_used_count).",
+						"label": "Experten pro Token"
+					},
+					"fileType": {
+						"info": "Der Dateityp, den der Header angibt (general.file_type): die Quantisierung, in der die meisten Gewichte gespeichert sind. Ein einzelner Tensor kann einen anderen gespeicherten Typ verwenden; jeder Tensor nennt seinen eigenen.",
+						"label": "Quantisierung"
+					},
+					"fullAttentionInterval": {
+						"info": "Jeder N-te Block verwendet volle Attention, die übrigen lineare Attention; N ist dieser Wert (full_attention_interval).",
+						"label": "Intervall der vollen Attention"
+					},
+					"mtpInFile": {
+						"info": "Blöcke für die Multi-Token-Vorhersage, aus den Tensoren dieser Datei gezählt.",
+						"label": "MTP-Blöcke in dieser Datei"
+					},
+					"nextnPredictLayers": {
+						"info": "Die Schichten für die Multi-Token-Vorhersage, die der Header angibt (nextn_predict_layers). Sie sagen weitere Tokens auf einem Pfad neben dem Hauptstapel voraus und zählen zu den Schichten.",
+						"label": "MTP-Schichten"
+					},
+					"vocabulary": {
+						"info": "Die Zahl der Tokens, aus der Form des Token-Embeddings (token_embd.weight, seine zweite Achse in GGUF-Reihenfolge). Nicht angezeigt, wenn dieser Tensor fehlt oder nicht zweidimensional ist.",
+						"label": "Vokabular"
+					}
+				}
 			},
 			"compare": {
 				"modelA": "Modell A",
@@ -672,12 +799,13 @@
 					}
 				},
 				"ui": {
-					"basisBackground": "Allgemeiner Hintergrund",
-					"basisDerived": "Abgeleitete Analyse",
-					"basisLlamaCpp": "Von llama.cpp gemessen",
-					"basisMeasurement": "Was diese Messung bedeutet",
+					"basisDerived": "Abgeleitet",
+					"basisInterpreted": "Erklärung, nicht gemessen",
+					"basisMeasuredLlamaCpp": "Von llama.cpp gemessen",
+					"basisMeasuredTrace": "Im Trace gemessen",
 					"basisSimulated": "Auf dieser Seite simuliert",
-					"basisUnavailable": "Hier nicht verfügbar",
+					"basisStructural": "Aus der Datei gelesen",
+					"basisUnavailable": "Nicht verfügbar",
 					"heading": "Erklärung",
 					"level": {
 						"detail": "Details",
@@ -755,7 +883,6 @@
 					"cut": "Entfernt",
 					"fromTrace": "Aus einem Trace übernommen. „Nächstes Token“ führt das gepaarte GGUF mit llama.cpp aus, daher können Tokens und Wahrscheinlichkeiten vom Trace abweichen, der den Hugging-Face-Checkpoint in PyTorch ausgeführt hat.",
 					"lastMissing": "Der Stream lässt den letzten Schritt aus und bei aktivem Denken einige Zeilenumbruch-Schritte, daher können die Schritte vom Text abweichen.",
-					"measuredTitle": "Von llama.cpp gemessen",
 					"minP": "Min-p: {{value}}",
 					"minPLabel": "Simuliertes Min-p",
 					"minPOff": "Min-p: aus",
@@ -1031,7 +1158,6 @@
 					"help": "Wie viele Tokens der Trace höchstens generiert; er endet früher, wenn das Modell seine Antwort beendet. 128 ist die übliche Wahl.\n\nMehr Tokens folgen einer längeren Antwort, dauern aber länger und belegen mehr Speicher: Der Trace und die Attention-Zeilen wachsen mit jedem Token. Ab etwa 128 Tokens behält ein Lauf die Kandidaten für das nächste Token unter Umständen nur für seine ersten Schritte, damit sein gespeichertes Ergebnis die Größengrenze einhält. Senken Sie den Wert für einen schnellen Blick auf den Anfang einer Antwort.",
 					"label": "Zu generierende Tokens"
 				},
-				"measured": "Gemessen",
 				"measuredNote": "Von Hooks aus dem Checkpoint in voller Präzision während dieses Laufs gelesen, nicht aus dem GGUF. Eine Norm ist eine Messung, keine Erklärung dessen, was das Modell tut.",
 				"noCandidates": "Dieser Trace hat keine Kandidaten aufgezeichnet (vor dieser Version erstellt).",
 				"notes": {

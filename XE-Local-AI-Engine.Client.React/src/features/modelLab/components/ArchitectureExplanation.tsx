@@ -38,60 +38,47 @@ export function ExplanationLevelSwitch({ value, onChange }: ExplanationLevelSwit
 	);
 }
 
+type NamedBasis = Exclude<ExplanationBasis, { inferredFrom: string }>;
+
+const basisLooks: Record<NamedBasis, { color: string; variant: "light" | "outline" }> = {
+	measuredLlamaCpp: { color: "blue", variant: "light" },
+	measuredTrace: { color: "blue", variant: "light" },
+	derived: { color: "cyan", variant: "light" },
+	structural: { color: "green", variant: "light" },
+	simulated: { color: "grape", variant: "light" },
+	interpreted: { color: "gray", variant: "light" },
+	unavailable: { color: "gray", variant: "outline" },
+};
+
 interface BasisBadgeProps {
 	basis: ExplanationBasis;
+	"data-testid"?: string;
 }
 
-export function BasisBadge({ basis }: BasisBadgeProps) {
+// The one evidence badge of Model Lab: every value or text states what it rests on with this.
+export function BasisBadge({ basis, "data-testid": testId = "model-lab-explain-basis" }: BasisBadgeProps) {
 	const { t } = useTranslation();
-	if (basis === "background") {
+	if (typeof basis === "object") {
 		return (
-			<Badge variant="light" color="gray" data-testid="model-lab-explain-basis">
-				{t("pages.modelLab.explain.ui.basisBackground", "General background")}
+			<Badge variant="light" color="orange" maw="100%" styles={inferredBadgeStyles} data-testid={testId}>
+				{t("pages.modelLab.architecture.inferredBadge", "Inferred from llama.cpp ({{source}})", {
+					source: basis.inferredFrom,
+				})}
 			</Badge>
 		);
 	}
-	if (basis === "llamaCpp") {
-		return (
-			<Badge variant="light" color="blue" data-testid="model-lab-explain-basis">
-				{t("pages.modelLab.explain.ui.basisLlamaCpp", "Measured by llama.cpp")}
-			</Badge>
-		);
-	}
-	if (basis === "simulated") {
-		return (
-			<Badge variant="light" color="grape" data-testid="model-lab-explain-basis">
-				{t("pages.modelLab.explain.ui.basisSimulated", "Simulated on this page")}
-			</Badge>
-		);
-	}
-	if (basis === "measurement") {
-		return (
-			<Badge variant="light" color="blue" data-testid="model-lab-explain-basis">
-				{t("pages.modelLab.explain.ui.basisMeasurement", "What this measurement means")}
-			</Badge>
-		);
-	}
-	if (basis === "derived") {
-		return (
-			<Badge variant="light" color="cyan" data-testid="model-lab-explain-basis">
-				{t("pages.modelLab.explain.ui.basisDerived", "Derived analysis")}
-			</Badge>
-		);
-	}
-	if (basis === "unavailable") {
-		return (
-			<Badge variant="outline" color="gray" data-testid="model-lab-explain-basis">
-				{t("pages.modelLab.explain.ui.basisUnavailable", "Not available here")}
-			</Badge>
-		);
-	}
-	// The same orange badge, wording and key as the operation graph's: one source of truth for "inferred".
+	const labels: Record<NamedBasis, string> = {
+		measuredLlamaCpp: t("pages.modelLab.explain.ui.basisMeasuredLlamaCpp", "Measured by llama.cpp"),
+		measuredTrace: t("pages.modelLab.explain.ui.basisMeasuredTrace", "Measured in the trace"),
+		derived: t("pages.modelLab.explain.ui.basisDerived", "Derived"),
+		structural: t("pages.modelLab.explain.ui.basisStructural", "Read from the file"),
+		simulated: t("pages.modelLab.explain.ui.basisSimulated", "Simulated on this page"),
+		interpreted: t("pages.modelLab.explain.ui.basisInterpreted", "Explanation, not measured"),
+		unavailable: t("pages.modelLab.explain.ui.basisUnavailable", "Not available"),
+	};
 	return (
-		<Badge variant="light" color="orange" maw="100%" styles={inferredBadgeStyles} data-testid="model-lab-explain-basis">
-			{t("pages.modelLab.architecture.inferredBadge", "Inferred from llama.cpp ({{source}})", {
-				source: basis.inferredFrom,
-			})}
+		<Badge variant={basisLooks[basis].variant} color={basisLooks[basis].color} data-testid={testId}>
+			{labels[basis]}
 		</Badge>
 	);
 }
@@ -132,8 +119,6 @@ interface ExplanationListItem {
 	id: string;
 	label: string;
 	candidates: readonly string[];
-	// Overrides the list's basis for this item.
-	basis?: ExplanationBasis;
 }
 
 interface ExplanationListProps {
@@ -158,9 +143,7 @@ export function ExplanationList({ items, level, basis, root, open, onOpen, "data
 					</Accordion.Control>
 					<Accordion.Panel>
 						{/* Only the open item renders its Markdown; a closed panel stays mounted and would parse it for nothing. */}
-						{open === item.id && (
-							<ExplanationEntry candidates={item.candidates} level={level} basis={item.basis ?? basis} root={root} />
-						)}
+						{open === item.id && <ExplanationEntry candidates={item.candidates} level={level} basis={basis} root={root} />}
 					</Accordion.Panel>
 				</Accordion.Item>
 			))}

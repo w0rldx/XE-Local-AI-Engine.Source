@@ -89,7 +89,7 @@ export function TraceAttentionPanel({ experimentId, result, layer, step }: Trace
 				<Text size="sm" fw={600}>
 					{t("pages.modelLab.trace.stepper.attention", "Attention at block {{index}}", { index: layer })}
 				</Text>
-				<BasisBadge basis="measurement" />
+				<BasisBadge basis="derived" />
 			</Group>
 			<Text size="xs" c="dimmed" data-testid="model-lab-stepper-attention-note">
 				{t(
@@ -98,21 +98,25 @@ export function TraceAttentionPanel({ experimentId, result, layer, step }: Trace
 					{ topKeys, heads, kvHeads },
 				)}
 			</Text>
-			<Select
-				label={t("pages.modelLab.trace.stepper.head", "Head")}
-				data={Array.from({ length: heads }, (_, index) => ({
-					value: String(index),
-					label: t("pages.modelLab.trace.stepper.headOption", "Head {{head}} (key/value head {{kvHead}})", {
-						head: index,
-						kvHead: kvHeadOf(index, heads, kvHeads),
-					}),
-				}))}
-				value={String(Math.min(head, Math.max(heads - 1, 0)))}
-				onChange={(value) => setHead(Number(value ?? 0))}
-				allowDeselect={false}
-				w="fit-content"
-				data-testid="model-lab-stepper-head"
-			/>
+			{/* The head counts come from the model's configuration, not from this run's values. */}
+			<Group gap="xs" align="flex-end">
+				<Select
+					label={t("pages.modelLab.trace.stepper.head", "Head")}
+					data={Array.from({ length: heads }, (_, index) => ({
+						value: String(index),
+						label: t("pages.modelLab.trace.stepper.headOption", "Head {{head}} (key/value head {{kvHead}})", {
+							head: index,
+							kvHead: kvHeadOf(index, heads, kvHeads),
+						}),
+					}))}
+					value={String(Math.min(head, Math.max(heads - 1, 0)))}
+					onChange={(value) => setHead(Number(value ?? 0))}
+					allowDeselect={false}
+					w="fit-content"
+					data-testid="model-lab-stepper-head"
+				/>
+				<BasisBadge basis="structural" data-testid="model-lab-stepper-heads-basis" />
+			</Group>
 			{attention.status === "pending" && <Loader size="sm" />}
 			{attention.status === "error" && (
 				<Alert color="red" data-testid="model-lab-stepper-attention-failed">
@@ -213,7 +217,7 @@ export function TraceAttentionPanel({ experimentId, result, layer, step }: Trace
 			<ExplanationList
 				items={explanations}
 				level={level}
-				basis="measurement"
+				basis="interpreted"
 				open={open}
 				onOpen={setOpen}
 				data-testid="model-lab-stepper-attention-explain"

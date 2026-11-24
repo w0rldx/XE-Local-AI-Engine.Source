@@ -349,7 +349,8 @@ function AttentionUnavailable({ block, captured }: { block: StepperBlock; captur
 			{explanationKey(i18n, candidates, level) !== null && (
 				<>
 					<ExplanationLevelSwitch value={level} onChange={setLevel} />
-					<ExplanationEntry candidates={candidates} level={level} basis="background" />
+					{/* A linear block's text explains how it works; a full block's says what this run lacks. */}
+					<ExplanationEntry candidates={candidates} level={level} basis={linear ? "interpreted" : "unavailable"} />
 				</>
 			)}
 		</Stack>

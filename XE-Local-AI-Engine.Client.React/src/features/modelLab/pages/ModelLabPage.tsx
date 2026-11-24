@@ -80,9 +80,17 @@ function ModelLabContent({ search: routeSearch, onSearchChange }: ModelLabPagePr
 	const resolvedModel =
 		models.data !== undefined && search.model !== undefined && modelNames.includes(search.model) ? search.model : null;
 	// Architecture and Inspect read a model's file only once their tab shows that model, from any way of getting there.
-	const [architectureModel, setArchitectureModel] = useState<string | null>(null);
-	if (activeTab === "architecture" && architectureModel !== resolvedModel) {
-		setArchitectureModel(resolvedModel);
+	// Architecture's block and trace follow its model: a hidden tab opens no detail and reads no run for a change.
+	const [architectureView, setArchitectureView] = useState<Pick<ModelLabSearch, "block" | "trace"> & { model: string | null }>({
+		model: null,
+	});
+	if (
+		activeTab === "architecture" &&
+		(architectureView.model !== resolvedModel ||
+			architectureView.block !== search.block ||
+			architectureView.trace !== search.trace)
+	) {
+		setArchitectureView({ model: resolvedModel, block: search.block, trace: search.trace });
 	}
 	const [inspectModel, setInspectModel] = useState<string | null>(null);
 	if (activeTab === "inspect" && inspectModel !== resolvedModel) {
@@ -127,7 +135,10 @@ function ModelLabContent({ search: routeSearch, onSearchChange }: ModelLabPagePr
 		},
 		[write],
 	);
-	const selectBlock = useCallback((block: ArchitectureSelection) => write({ block }), [write]);
+	const selectBlock = useCallback(
+		(block: ArchitectureSelection | null, onShown?: () => void) => write({ block: block ?? undefined }, false, onShown),
+		[write],
+	);
 	const selectTrace = useCallback((trace: string | null) => write({ trace: trace ?? undefined }), [write]);
 	const selectLevel = useCallback((level: ExplanationLevel) => write({ level }), [write]);
 	const openExperiment = useCallback((experiment: string | undefined) => write({ experiment }), [write]);
@@ -205,9 +216,9 @@ function ModelLabContent({ search: routeSearch, onSearchChange }: ModelLabPagePr
 				</StickyBar>
 				<Tabs.Panel value="architecture" pt="md">
 					<ArchitectureExplorer
-						modelName={architectureModel}
-						selection={search.block ?? null}
-						traceId={search.trace ?? null}
+						modelName={architectureView.model}
+						selection={architectureView.block ?? null}
+						traceId={architectureView.trace ?? null}
 						level={search.level ?? "overview"}
 						onSelect={selectBlock}
 						onTraceChange={selectTrace}

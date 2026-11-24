@@ -2,16 +2,19 @@ import type { i18n as I18n } from "i18next";
 
 export type ExplanationLevel = "overview" | "detail" | "math";
 
-// What a shown explanation rests on. The badge states it, so text about inferred structure never reads as read from the file.
+// What a shown value or text rests on. The badge states it, so text about inferred structure never reads as read from the file.
+// Measured: values llama.cpp returned or the trace recorded, shown only with a successful result.
+// Derived: computed here or in the trace from recorded or read values, such as the logit lens or a per-block summary.
+// Structural: read from the model file's header and tensor table. Interpreted: explanatory prose, never a measurement.
 // Unavailable: what the shown run or block cannot provide, so a missing view never reads as an empty measurement.
-// Derived: computed from measured states, but not something the model computed, such as the logit lens.
 export type ExplanationBasis =
-	| "background"
-	| "measurement"
-	| "llamaCpp"
-	| "simulated"
-	| "unavailable"
+	| "measuredLlamaCpp"
+	| "measuredTrace"
 	| "derived"
+	| "structural"
+	| "simulated"
+	| "interpreted"
+	| "unavailable"
 	| { inferredFrom: string };
 
 const explanationRoot = "pages.modelLab.explain";
@@ -25,21 +28,20 @@ export const inferredBadgeStyles = {
 // The trace summary's values, in the order the summary names them.
 export const traceMetrics = ["meanNorm", "maxP99", "topDimensions"] as const;
 
-// The Next token tab's topics under pages.modelLab.nextToken.explain, each with the basis its badge states: what llama.cpp
-// measured, what the sliders simulate, or general background.
+// The Next token tab's topics under pages.modelLab.nextToken.explain. All are explanations; the values they explain carry
+// their own badges.
 export const nextTokenTopics = [
-	{ id: "promptTokens", basis: "llamaCpp" },
-	{ id: "logits", basis: "background" },
-	{ id: "softmax", basis: "background" },
-	{ id: "logprob", basis: "llamaCpp" },
-	{ id: "temperature", basis: "simulated" },
-	{ id: "topK", basis: "simulated" },
-	{ id: "topP", basis: "simulated" },
-	{ id: "minP", basis: "simulated" },
-	{ id: "greedy", basis: "background" },
-	// Background: its math is about the simulation, not a measured value.
-	{ id: "entries", basis: "background" },
-] as const satisfies readonly { id: string; basis: ExplanationBasis }[];
+	"promptTokens",
+	"logits",
+	"softmax",
+	"logprob",
+	"temperature",
+	"topK",
+	"topP",
+	"minP",
+	"greedy",
+	"entries",
+] as const;
 
 // The logit lens topics under pages.modelLab.explain.stepper, in the order the stepper's lens panel lists them.
 export const lensTopics = ["lens", "lensChosen", "lensEntropy", "lensLastBlock", "lensCaveats", "lensNotRecorded"] as const;

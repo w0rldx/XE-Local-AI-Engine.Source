@@ -320,6 +320,15 @@ describe("NextTokenExplorer", () => {
 		expect(bars("model-lab-next-token-measured")).toEqual(['"Hi"60.00%', '"Hello"Chosen30.00%']);
 		expect(screen.getByTestId("model-lab-next-token-rest").textContent).toBe("The rest of the vocabulary: 10.00%");
 		expect(screen.queryByTestId("model-lab-next-token-chosen-missing")).toBeNull();
+		// The candidates are llama.cpp's; the rest is computed from them; the sampler column is a simulation.
+		const measured = within(screen.getByTestId("model-lab-next-token-measured"));
+		expect(measured.getAllByTestId("model-lab-explain-basis").map((badge) => badge.textContent)).toEqual([
+			"Measured by llama.cpp",
+			"Derived",
+		]);
+		expect(within(screen.getByTestId("model-lab-next-token-simulated")).getByTestId("model-lab-explain-basis").textContent).toBe(
+			"Simulated on this page",
+		);
 	});
 
 	it("labels the simulation as over the shown candidates and recomputes it without touching the measured bars", async () => {
@@ -475,7 +484,7 @@ describe("NextTokenExplorer", () => {
 		expect(await screen.findByTestId("model-lab-next-token-none")).toBeTruthy();
 	});
 
-	it("explains each topic with its basis", () => {
+	it("labels a topic's text as an explanation, even one about the simulated sampler", () => {
 		stubModels();
 		renderWithProviders(<Host />);
 		const explain = within(screen.getByTestId("model-lab-next-token-explain"));
@@ -483,7 +492,7 @@ describe("NextTokenExplorer", () => {
 		fireEvent.click(explain.getByRole("button", { name: "Temperature" }));
 
 		expect(explain.getByText("Fixture: temperature.")).toBeTruthy();
-		expect(explain.getByTestId("model-lab-explain-basis").textContent).toBe("Simulated on this page");
+		expect(explain.getByTestId("model-lab-explain-basis").textContent).toBe("Explanation, not measured");
 	});
 
 	it("leaving mid-run cancels it", async () => {
@@ -589,9 +598,13 @@ describe("NextTokenExplorer prompt tokens", () => {
 		expect((await screen.findByTestId("model-lab-prompt-tokens-loading")).textContent).toContain(
 			"A long prompt can take a moment.",
 		);
+		// Nothing measured yet, so no Measured badge.
+		const panel = within(screen.getByTestId("model-lab-prompt-tokens"));
+		expect(panel.queryByTestId("model-lab-explain-basis")).toBeNull();
 		answer(HttpResponse.json(promptTokens));
 		await screen.findByTestId("model-lab-prompt-tokens-count");
 		expect(screen.queryByTestId("model-lab-prompt-tokens-loading")).toBeNull();
+		expect(panel.getByTestId("model-lab-explain-basis").textContent).toBe("Measured by llama.cpp");
 	});
 
 	it("shows any other refusal as an error", async () => {
@@ -604,6 +617,8 @@ describe("NextTokenExplorer prompt tokens", () => {
 
 		expect(await screen.findByTestId("model-lab-prompt-tokens-failed")).toBeTruthy();
 		expect(screen.queryByTestId("model-lab-prompt-tokens-not-loaded")).toBeNull();
+		// A failed read claims no measurement.
+		expect(within(screen.getByTestId("model-lab-prompt-tokens")).queryByTestId("model-lab-explain-basis")).toBeNull();
 	});
 
 	it("says when only the first tokens are shown", async () => {

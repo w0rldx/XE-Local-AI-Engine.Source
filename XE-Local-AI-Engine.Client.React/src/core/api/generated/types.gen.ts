@@ -7193,6 +7193,23 @@ export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureGroup = {
 	tensors: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureTensor>;
 };
 
+export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureHyperparameters = {
+	fileType: string | null;
+	declaredParamCount: number | null;
+	blockCount: number | null;
+	nextnPredictLayers: number | null;
+	splitCount: number | null;
+	attentionHeadCount: number | null;
+	attentionHeadCountKv: number | null;
+	attentionKeyLength: number | null;
+	attentionValueLength: number | null;
+	embeddingLength: number | null;
+	contextLength: number | null;
+	expertCount: number | null;
+	expertUsedCount: number | null;
+	fullAttentionInterval: number | null;
+};
+
 export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureResponse = {
 	descriptorVersion: number;
 	modelName: string;
@@ -7200,6 +7217,7 @@ export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureResponse = 
 	support: string;
 	readFailure: string | null;
 	suggestedBaseRepo: string | null;
+	hyperparameters: XeLocalAiEngineClientServicesModelLabModelLabArchitectureHyperparameters | null;
 	blocks: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureBlock>;
 	templates: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplate>;
 	nonBlock: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureGroup>;

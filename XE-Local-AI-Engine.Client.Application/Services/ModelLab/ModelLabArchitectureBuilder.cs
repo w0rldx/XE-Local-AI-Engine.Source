@@ -29,6 +29,8 @@ public static class ModelLabArchitectureBuilder
 
     private const string BlockPrefix = "blk.";
 
+    private const long MaxSafeInteger = (1L << 53) - 1;
+
     // Adding a family: one IModelLabArchitectureDescriptor and one entry here.
     private static readonly FrozenDictionary<string, IModelLabArchitectureDescriptor> Descriptors =
         new IModelLabArchitectureDescriptor[]
@@ -61,6 +63,7 @@ public static class ModelLabArchitectureBuilder
                 Support = "unreadable",
                 ReadFailure = string.Concat(char.ToLowerInvariant(failure[0]).ToString(), failure[1..]),
                 SuggestedBaseRepo = SuggestedBaseRepo(inspection),
+                Hyperparameters = null,
                 Blocks = [],
                 Templates = [],
                 NonBlock = []
@@ -97,11 +100,34 @@ public static class ModelLabArchitectureBuilder
             Support = descriptor is null ? "overview" : "detailed",
             ReadFailure = null,
             SuggestedBaseRepo = SuggestedBaseRepo(inspection),
+            Hyperparameters = Hyperparameters(inspection),
             Blocks = blocks,
             Templates = descriptor?.TemplatesFor(blocks, inspection) ?? [],
             NonBlock = NonBlockGroups(nonBlockTensors, descriptor)
         };
     }
+
+    private static ModelLabArchitectureHyperparameters Hyperparameters(GgufTensorInspection inspection) =>
+        new()
+        {
+            FileType = inspection.FileType,
+            DeclaredParamCount = SafeInteger(inspection.DeclaredParamCount),
+            BlockCount = SafeInteger(inspection.BlockCount),
+            NextnPredictLayers = SafeInteger(inspection.NextnPredictLayers),
+            SplitCount = SafeInteger(inspection.SplitCount),
+            AttentionHeadCount = SafeInteger(inspection.AttentionHeadCount),
+            AttentionHeadCountKv = SafeInteger(inspection.AttentionHeadCountKv),
+            AttentionKeyLength = SafeInteger(inspection.AttentionKeyLength),
+            AttentionValueLength = SafeInteger(inspection.AttentionValueLength),
+            EmbeddingLength = SafeInteger(inspection.EmbeddingLength),
+            ContextLength = SafeInteger(inspection.ContextLength),
+            ExpertCount = SafeInteger(inspection.ExpertCount),
+            ExpertUsedCount = SafeInteger(inspection.ExpertUsedCount),
+            FullAttentionInterval = SafeInteger(inspection.FullAttentionInterval)
+        };
+
+    // A JavaScript client reads JSON numbers as doubles; past 2^53-1 the value would arrive changed, so it is dropped.
+    private static long? SafeInteger(long? value) => value is >= 0 and <= MaxSafeInteger ? value : null;
 
     /// <summary>The source repo, else the first base model, when its URL is exactly <c>https://huggingface.co/owner/name</c>.</summary>
     internal static string? SuggestedBaseRepo(GgufTensorInspection inspection) =>

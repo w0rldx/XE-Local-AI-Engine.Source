@@ -31,12 +31,41 @@ describe("modelLabSearchSchema", () => {
 		expect(modelLabSearchSchema.parse({ model: "a", block: 1.5, level: "detail" })).toEqual({ model: "a", level: "detail" });
 	});
 
-	it.each([[0], [Number.MAX_SAFE_INTEGER], ["embedding"], ["output"]])("takes block %s", (block) => {
-		expect(modelLabSearchSchema.parse({ block }).block).toBe(block);
+	it.each([[0], [Number.MAX_SAFE_INTEGER], ["embedding"], ["output"], ["other"], ["stack"], ["mtp"], ["0-2"], ["10-2147483647"]])(
+		"takes block %s",
+		(block) => {
+			expect(modelLabSearchSchema.parse({ block }).block).toBe(block);
+		},
+	);
+
+	it.each([
+		[-1],
+		[0.5],
+		[""],
+		["3"],
+		[[1, 2]],
+		[Number.MAX_SAFE_INTEGER + 2],
+		// Past a block index's int range, leading zeros, reversed, a single block, signs and blanks.
+		["0-2147483648"],
+		["0-99999999999"],
+		["01-2"],
+		["0-02"],
+		["2-1"],
+		["2-2"],
+		["-1-2"],
+		["1-"],
+		["1--2"],
+		[" 0-2"],
+	])("drops block %j", (block) => {
+		expect(modelLabSearchSchema.parse({ block }).block).toBeUndefined();
 	});
 
-	it.each([[-1], [0.5], [""], ["3"], [[1, 2]], [Number.MAX_SAFE_INTEGER + 2]])("drops block %j", (block) => {
-		expect(modelLabSearchSchema.parse({ block }).block).toBeUndefined();
+	it("drops a malformed range alone and keeps the other fields", () => {
+		expect(modelLabSearchSchema.parse({ model: "a", block: "3-1", trace: traceA, level: "math" })).toEqual({
+			model: "a",
+			trace: traceA,
+			level: "math",
+		});
 	});
 });
 

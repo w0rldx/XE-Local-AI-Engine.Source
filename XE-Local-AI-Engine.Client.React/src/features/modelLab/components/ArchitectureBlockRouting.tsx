@@ -17,8 +17,8 @@ interface ArchitectureBlockRoutingProps {
 	blockIndex: number;
 }
 
-// How often this block chose each expert over the overlaid run. Nothing at all when the run kept no routing for it: a
-// dense model's run has none, and the stepper is where a routing failure is explained.
+// How often this block chose each expert over the overlaid run. Mounted only for a block the explorer's routed set holds,
+// so the run's routing is already cached and names this block in a saved step.
 export function ArchitectureBlockRouting({ traceId, blockIndex }: ArchitectureBlockRoutingProps) {
 	const { t } = useTranslation();
 	// The stepper's query: one cache entry per run, whichever view asks first.
@@ -31,7 +31,7 @@ export function ArchitectureBlockRouting({ traceId, blockIndex }: ArchitectureBl
 		retryOnMount: false,
 	});
 	const data = routing.data;
-	if (!data?.layers.includes(blockIndex)) {
+	if (data === undefined) {
 		return null;
 	}
 	const usage = expertUsage(data.steps, blockIndex);

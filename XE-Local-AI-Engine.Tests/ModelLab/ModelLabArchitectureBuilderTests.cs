@@ -2,7 +2,9 @@ namespace XE_Local_AI_Engine.Tests.ModelLab;
 
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>The architecture descriptor built from a header inspection: detailed for a registered architecture, an overview otherwise, nothing invented.</summary>
@@ -862,6 +864,98 @@ public sealed class ModelLabArchitectureBuilderTests
         AssertEx.Empty(descriptor.Blocks);
         AssertEx.Empty(descriptor.Templates);
         AssertEx.Empty(descriptor.NonBlock);
+        AssertEx.Null(descriptor.Hyperparameters);
+    }
+
+    [Test]
+    public async Task Hyperparameters_OfAQwen35File_AreTheDeclaredValues_AndNullForAbsentKeys()
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, await ReadAsync(new GgufHeaderBytesBuilder()
+                                                                                    .WithString("general.architecture", "qwen35")
+                                                                                    .WithUint32("general.file_type", value: 15)
+                                                                                    .WithUint64("general.parameter_count", value: 752_393_024)
+                                                                                    .WithUint32("qwen35.block_count", value: 25)
+                                                                                    .WithUint32("qwen35.nextn_predict_layers", value: 1)
+                                                                                    .WithUint32("qwen35.context_length", value: 262_144)
+                                                                                    .WithUint32("qwen35.embedding_length", value: 1_024)
+                                                                                    .WithUint32("qwen35.attention.head_count", value: 8)
+                                                                                    .WithUint32("qwen35.attention.head_count_kv", value: 2)
+                                                                                    .WithUint32("qwen35.attention.key_length", value: 256)
+                                                                                    .WithUint32("qwen35.attention.value_length", value: 128)
+                                                                                    .WithUint32("qwen35.full_attention_interval", value: 4)
+                                                                                    .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
+                                                                                    .Build()));
+
+        var values = AssertEx.NotNull(descriptor.Hyperparameters);
+        AssertEx.Equal("Q4_K_M", values.FileType!);
+        // The declared count, not the 256 elements the file's one tensor sums to.
+        AssertEx.Equal(expected: 752_393_024L, values.DeclaredParamCount!.Value);
+        AssertEx.Equal(expected: 25L, values.BlockCount!.Value);
+        AssertEx.Equal(expected: 1L, values.NextnPredictLayers!.Value);
+        AssertEx.Equal(expected: 262_144L, values.ContextLength!.Value);
+        AssertEx.Equal(expected: 1_024L, values.EmbeddingLength!.Value);
+        AssertEx.Equal(expected: 8L, values.AttentionHeadCount!.Value);
+        AssertEx.Equal(expected: 2L, values.AttentionHeadCountKv!.Value);
+        AssertEx.Equal(expected: 256L, values.AttentionKeyLength!.Value);
+        AssertEx.Equal(expected: 128L, values.AttentionValueLength!.Value);
+        AssertEx.Equal(expected: 4L, values.FullAttentionInterval!.Value);
+        AssertEx.Null(values.ExpertCount);
+        AssertEx.Null(values.ExpertUsedCount);
+        AssertEx.Null(values.SplitCount);
+    }
+
+    [Test]
+    public async Task Hyperparameters_OfAnOlmoeFile_CarryTheExpertCountAndTheExpertsUsedPerToken()
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, await ReadAsync(new GgufHeaderBytesBuilder()
+                                                                                    .WithString("general.architecture", "olmoe")
+                                                                                    .WithUint32("olmoe.block_count", value: 16)
+                                                                                    .WithUint32("olmoe.expert_count", value: 64)
+                                                                                    .WithUint32("olmoe.expert_used_count", value: 8)
+                                                                                    .WithUint32("split.count", value: 2)
+                                                                                    .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
+                                                                                    .Build()));
+
+        var values = AssertEx.NotNull(descriptor.Hyperparameters);
+        AssertEx.Equal(expected: 64L, values.ExpertCount!.Value);
+        AssertEx.Equal(expected: 8L, values.ExpertUsedCount!.Value);
+        AssertEx.Equal(expected: 16L, values.BlockCount!.Value);
+        AssertEx.Equal(expected: 2L, values.SplitCount!.Value);
+        AssertEx.Null(values.FullAttentionInterval);
+        AssertEx.Null(values.DeclaredParamCount);
+        AssertEx.Null(values.FileType);
+    }
+
+    /// <summary>A JavaScript client reads numbers as doubles, so only 0..2^53-1 reaches the wire; zero stays zero.</summary>
+    [Test]
+    [Arguments(0UL, 0L)]
+    [Arguments(9_007_199_254_740_991UL, 9_007_199_254_740_991L)]
+    [Arguments(9_007_199_254_740_992UL, null)]
+    [Arguments(ulong.MaxValue, null)]
+    public async Task Hyperparameters_PassOnlyJavaScriptSafeIntegers(ulong declared, long? expected)
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, await ReadAsync(new GgufHeaderBytesBuilder()
+                                                                                    .WithString("general.architecture", "qwen35")
+                                                                                    .WithUint64("general.parameter_count", declared)
+                                                                                    .WithUint64("qwen35.expert_count", declared)
+                                                                                    .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
+                                                                                    .Build()));
+
+        var values = AssertEx.NotNull(descriptor.Hyperparameters);
+        AssertEx.Equal(expected, values.DeclaredParamCount);
+        AssertEx.Equal(expected, values.ExpertCount);
+    }
+
+    [Test]
+    public async Task Hyperparameters_DropANegativeValue()
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, await ReadAsync(new GgufHeaderBytesBuilder()
+                                                                                    .WithString("general.architecture", "qwen35")
+                                                                                    .WithRawValue("qwen35.context_length", type: 5, BitConverter.GetBytes(-1))
+                                                                                    .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
+                                                                                    .Build()));
+
+        AssertEx.Null(AssertEx.NotNull(descriptor.Hyperparameters).ContextLength);
     }
 
     [Test]
@@ -903,6 +997,12 @@ public sealed class ModelLabArchitectureBuilderTests
     public void SuggestedBaseRepo_IsNull_WhenTheHeaderNamesNoRepo()
     {
         AssertEx.Null(ModelLabArchitectureBuilder.Build(ModelName, Qwen35TensorFixture.Qwen35_0_8B()).SuggestedBaseRepo);
+    }
+
+    private static async Task<GgufTensorInspection> ReadAsync(byte[] bytes)
+    {
+        await using var stream = new MemoryStream(bytes, writable: false);
+        return await GgufTensorBlockReader.ReadAsync(stream, CancellationToken.None);
     }
 
     // The separate-tensor OLMoE nodes as "id: label", with the q, k and v labels replaced.

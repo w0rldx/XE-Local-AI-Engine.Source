@@ -122,7 +122,7 @@ describe.each([
 	});
 
 	it("cover every Next token topic at every level", () => {
-		const missing = nextTokenTopics.flatMap(({ id }) =>
+		const missing = nextTokenTopics.flatMap((id) =>
 			levels.flatMap((level) => {
 				const text = valueAt(bundle, `pages.modelLab.nextToken.explain.${id}.${level}`);
 				return typeof text === "string" && text.trim() !== "" ? [] : [`${id}.${level}`];

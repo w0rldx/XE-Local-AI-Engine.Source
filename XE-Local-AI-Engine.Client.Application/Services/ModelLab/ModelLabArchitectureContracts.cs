@@ -23,6 +23,9 @@ public sealed record ModelLabArchitectureResponse
     /// <remarks>A prefill for the config-only fetch, never trusted as a pairing.</remarks>
     public required string? SuggestedBaseRepo { get; init; }
 
+    /// <summary>The values the header declares; null when the file was unreadable.</summary>
+    public required ModelLabArchitectureHyperparameters? Hyperparameters { get; init; }
+
     /// <summary>One entry per <c>blk.N</c> index in ascending order; empty when the file was unreadable.</summary>
     public required IReadOnlyList<ModelLabArchitectureBlock> Blocks { get; init; }
 

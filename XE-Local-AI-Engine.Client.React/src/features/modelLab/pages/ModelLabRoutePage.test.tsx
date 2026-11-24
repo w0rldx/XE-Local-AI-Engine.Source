@@ -5,7 +5,7 @@
 // restore, and that the URL is read and written in one shape.
 
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, Outlet, RouterProvider } from "@tanstack/react-router";
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -29,8 +29,31 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 		release: vi.fn(),
 	}),
 }));
-// React Flow paints nothing into jsdom; the graph is not what these tests are about.
-vi.mock("@xyflow/react", () => ({ Background: () => null, Controls: () => null, ReactFlow: () => null }));
+// React Flow paints nothing into jsdom, so the mock renders each node as a button wired to the one click the page uses.
+vi.mock("@xyflow/react", () => ({
+	Background: () => null,
+	Controls: () => null,
+	ReactFlow: ({
+		nodes,
+		onNodeClick,
+	}: {
+		nodes: { id: string; data: { label: string } }[];
+		onNodeClick?: (event: unknown, node: unknown) => void;
+	}) => (
+		<div>
+			{nodes.map((node) => (
+				<button
+					key={node.id}
+					type="button"
+					data-testid={`react-flow-node-${node.id}`}
+					onClick={(event) => onNodeClick?.(event, node)}
+				>
+					{node.data.label}
+				</button>
+			))}
+		</div>
+	),
+}));
 vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({ CodeEditor: () => null }));
 // Unchanged by the page's URL: their own tests cover them.
 vi.mock("@/features/modelLab/components/SamePromptComparison", () => ({ SamePromptComparison: () => null }));
@@ -60,6 +83,7 @@ const descriptor = {
 	support: "overview",
 	readFailure: null,
 	suggestedBaseRepo: null,
+	hyperparameters: null,
 	blocks: [0, 1, 2].map((index) => ({
 		index,
 		kind: "fullAttention",
@@ -296,6 +320,9 @@ describe("Model Lab on its route", () => {
 
 		await chooseOption(/Model for Architecture/, gguf);
 		await waitFor(() => expect(searchOf(router)).toEqual({ model: gguf }));
+		fireEvent.click(await screen.findByRole("button", { name: "0–2 · Full attention ×3" }));
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: "0-2", model: gguf }));
+		expect(history.length).toBe(entered);
 		fireEvent.click(await screen.findByRole("button", { name: "Block 1: Full attention" }));
 		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, model: gguf }));
 		fireEvent.click(within(await screen.findByTestId("model-lab-architecture-detail")).getByRole("radio", { name: "Detail" }));
@@ -401,6 +428,7 @@ describe("Model Lab on its route", () => {
 		const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
 		try {
 			await chooseOption(/Model for Architecture/, gguf);
+			fireEvent.click(await screen.findByRole("button", { name: "0–2 · Full attention ×3" }));
 			fireEvent.click(await screen.findByRole("button", { name: "Block 0: Full attention" }));
 			fireEvent.click(screen.getByRole("tab", { name: "Inspect" }));
 			await waitFor(() => expect(searchOf(router)).toEqual({ block: 0, model: gguf, tab: "inspect" }));
@@ -705,9 +733,86 @@ describe("Model Lab on its route", () => {
 		expect((screen.getByLabelText("System prompt (optional)") as HTMLTextAreaElement).value).toBe("Be brief.");
 	});
 
-	it("keeps the page's scroller where it is across a block and a level change", async () => {
+	it("writes a chip as a plain range token that a reload reads back, with the chip open", async () => {
 		stubRoutes();
 		const { router } = await renderRoute(`/model-lab?model=${encodeURIComponent(gguf)}`);
+		fireEvent.click(await screen.findByRole("button", { name: "0–2 · Full attention ×3" }));
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: "0-2", model: gguf }));
+		const href = router.state.location.href;
+		expect(href).toBe(`/model-lab?model=${encodeURIComponent(gguf)}&block=0-2`);
+
+		// A reload: the page starts again from that URL alone.
+		cleanup();
+		const reloaded = await renderRoute(href);
+
+		expect((await screen.findByRole("button", { name: "0–2 · Full attention ×3" })).getAttribute("aria-pressed")).toBe("true");
+		expect(searchOf(reloaded.router)).toEqual({ block: "0-2", model: gguf });
+		expect(screen.getByRole("heading", { name: "Blocks 0–2" })).toBeTruthy();
+	});
+
+	it("moves focus to a block's heading opened from a chip's detail once the router shows it", async () => {
+		stubRoutes();
+		const { router } = await renderRoute(`/model-lab?model=${encodeURIComponent(gguf)}&block=0-2`);
+		fireEvent.click(await screen.findByRole("button", { name: "Open block 2" }));
+
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 2, model: gguf }));
+		await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Block 2: Full attention" })));
+	});
+
+	it("moves focus to a chip's heading picked in the graph once the router shows it", async () => {
+		stubRoutes();
+		const { router } = await renderRoute(`/model-lab?model=${encodeURIComponent(gguf)}`);
+		fireEvent.click(await screen.findByTestId("model-lab-architecture-graph-switch"));
+
+		fireEvent.click(await screen.findByTestId("react-flow-node-0-2"));
+
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: "0-2", model: gguf }));
+		await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Blocks 0–2" })));
+	});
+
+	it("leaves no focus behind from a blocked detail pick: a later arrival at that block keeps focus where it is", async () => {
+		stubRoutes();
+		const { router, history } = await renderRoute(`/model-lab?model=${encodeURIComponent(gguf)}&block=0-2`);
+		const open = await screen.findByRole("button", { name: "Open block 2" });
+		open.focus();
+		const unblock = history.block({ blockerFn: () => true });
+		try {
+			fireEvent.click(open);
+			await act(async () => undefined);
+			expect(searchOf(router)).toEqual({ block: "0-2", model: gguf });
+		} finally {
+			unblock();
+		}
+
+		// An arrival the operator did not ask for from a detail, as Back or Forward brings one.
+		await act(async () => history.push(`/model-lab?model=${encodeURIComponent(gguf)}&block=2`));
+
+		const heading = await screen.findByRole("heading", { name: "Block 2: Full attention" });
+		expect(searchOf(router)).toEqual({ block: 2, model: gguf });
+		expect(document.activeElement).not.toBe(heading);
+	});
+
+	it("goes Back from a block jump to the tab and chip the operator left", async () => {
+		stubRoutes();
+		const { router, history } = await renderRoute(
+			`/model-lab?tab=trace&model=${encodeURIComponent(gguf)}&block=0-2&experiment=${otherTraceId}`,
+		);
+		await screen.findByTestId("model-lab-trace-table");
+
+		fireEvent.click(screen.getByRole("button", { name: "Show block 0 in Architecture" }));
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+		expect(searchOf(router)).toEqual({ block: 0, experiment: otherTraceId, model: otherModel, trace: otherTraceId });
+
+		await act(async () => history.back());
+		await waitFor(() => expect(selectedTab()).toBe("Trace and steer"));
+		expect(searchOf(router)).toEqual({ block: "0-2", experiment: otherTraceId, model: gguf, tab: "trace" });
+		fireEvent.click(screen.getByRole("tab", { name: "Architecture" }));
+		expect((await screen.findByRole("button", { name: "0–2 · Full attention ×3" })).getAttribute("aria-pressed")).toBe("true");
+	});
+
+	it("keeps the page's scroller where it is across a block and a level change", async () => {
+		stubRoutes();
+		const { router } = await renderRoute(`/model-lab?model=${encodeURIComponent(gguf)}&block=0-2`);
 		const block = await screen.findByRole("button", { name: "Block 1: Full attention" });
 		const scroller = screen.getByTestId("page-scroller");
 		scroller.scrollTop = 600;

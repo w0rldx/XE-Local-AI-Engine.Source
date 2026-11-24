@@ -1,7 +1,6 @@
 import {
 	ActionIcon,
 	Alert,
-	Badge,
 	Button,
 	Group,
 	Loader,
@@ -30,6 +29,7 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
+import { BasisBadge } from "@/features/modelLab/components/ArchitectureExplanation";
 import { SteeringExperimentResult } from "@/features/modelLab/components/SteeringExperimentResult";
 import { TraceStepCandidates } from "@/features/modelLab/components/TraceStepCandidates";
 import { TraceStepper } from "@/features/modelLab/components/TraceStepper";
@@ -172,11 +172,7 @@ export function TraceExperimentView({ experimentId, isLive, onJump }: TraceExper
 		<Paper withBorder={true} p="md" data-testid="model-lab-trace-view">
 			<Stack gap="sm">
 				<Group gap="xs">
-					{measured && (
-						<Badge color="blue" data-testid="model-lab-trace-measured">
-							{t("pages.modelLab.trace.measured", "Measured")}
-						</Badge>
-					)}
+					{measured && <BasisBadge basis="measuredTrace" data-testid="model-lab-trace-measured" />}
 					<Text size="sm">{`${data.repoId} @ ${data.revision?.slice(0, 12)}`}</Text>
 				</Group>
 				{measured && (

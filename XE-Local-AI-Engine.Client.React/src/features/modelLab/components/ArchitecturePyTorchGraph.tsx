@@ -113,6 +113,8 @@ export function ArchitecturePyTorchGraph({ graph, rootName, selectedNodeId, onSe
 				<ReactFlow
 					// Another block's graph opens with its own first fit.
 					key={graph.graphId}
+					// Its own id: React Flow keys a canvas's markers and descriptions by it, and other graphs can be on screen too.
+					id="model-lab-pytorch-graph"
 					nodes={nodes}
 					edges={edges}
 					minZoom={0.1}

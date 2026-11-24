@@ -92,7 +92,8 @@ export function NextTokenPromptTokens({ pending, data, error }: NextTokenPromptT
 			<Stack gap="sm">
 				<Group gap="xs" justify="space-between">
 					<Title order={5}>{title}</Title>
-					<BasisBadge basis="llamaCpp" />
+					{/* Measured only once the tokens arrived: no claim while they load or after the read failed. */}
+					{data && <BasisBadge basis="measuredLlamaCpp" />}
 				</Group>
 				{/* The server checks each distinct token on its own, so a long prompt takes a moment. */}
 				{pending && (

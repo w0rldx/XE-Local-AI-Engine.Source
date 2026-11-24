@@ -18,6 +18,7 @@ import {
 	getModelLabExperimentTraceQueryKey,
 	listModelLabExperimentsQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { zGetModelLabArchitectureResponse } from "@/core/api/generated/zod.gen";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ArchitectureExplorer } from "@/features/modelLab/components/ArchitectureExplorer";
 import modelLabEn from "@/features/modelLab/locales/model-lab-en.json";
@@ -33,10 +34,13 @@ import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
+// Counts React Flow mounts: the real one fits the view only on mount, so a new mount id is a new fit.
+const flowMounts = vi.hoisted(() => ({ count: 0 }));
+
 vi.mock("@xyflow/react", () => ({
 	Background: () => null,
 	Controls: () => null,
-	ReactFlow: ({
+	ReactFlow: function MockReactFlow({
 		nodes,
 		onNodeClick,
 		fitViewOptions,
@@ -45,21 +49,27 @@ vi.mock("@xyflow/react", () => ({
 		onNodeClick?: (event: unknown, node: Node) => void;
 		fitViewOptions?: { minZoom?: number };
 		children?: ReactNode;
-	}) => (
-		<div data-testid="react-flow" data-fit-min-zoom={fitViewOptions?.minZoom}>
-			{nodes.map((node) => (
-				<button
-					key={node.id}
-					type="button"
-					data-testid={`react-flow-node-${node.id}`}
-					data-selected={String(node.selected)}
-					onClick={(event) => onNodeClick?.(event, node)}
-				>
-					{node.data.label}
-				</button>
-			))}
-		</div>
-	),
+	}) {
+		const [mount] = useState(() => {
+			flowMounts.count += 1;
+			return flowMounts.count;
+		});
+		return (
+			<div data-testid="react-flow" data-fit-min-zoom={fitViewOptions?.minZoom} data-mount={mount}>
+				{nodes.map((node) => (
+					<button
+						key={node.id}
+						type="button"
+						data-testid={`react-flow-node-${node.id}`}
+						data-selected={String(node.selected)}
+						onClick={(event) => onNodeClick?.(event, node)}
+					>
+						{node.data.label}
+					</button>
+				))}
+			</div>
+		);
+	},
 }));
 
 // Monaco needs a layout engine jsdom lacks; the viewer's contract with the panel is the text, the lines and the reveal.
@@ -146,6 +156,7 @@ const detailed = {
 	support: "detailed",
 	readFailure: null,
 	suggestedBaseRepo: null,
+	hyperparameters: null,
 	blocks: [
 		{
 			index: 0,
@@ -309,15 +320,28 @@ function ControlledExplorer({
 	initial = { model: gguf },
 	jumps = [],
 	onJump,
+	switchTo,
 }: {
 	initial?: ModelLabPatch;
 	jumps?: ArchitectureJump[];
 	onJump?: (to: ModelLabJump) => void;
+	// A model "Switch model" alternates with the first one, as the page's model picker would.
+	switchTo?: string;
 }) {
 	const [search, setSearch] = useState(() => applyModelLabPatch({}, initial));
 	const [at, setAt] = useState(0);
 	return (
 		<>
+			{switchTo !== undefined && (
+				<button
+					type="button"
+					onClick={() =>
+						setSearch((previous) => applyModelLabPatch(previous, { model: previous.model === switchTo ? gguf : switchTo }))
+					}
+				>
+					Switch model
+				</button>
+			)}
 			{jumps.length > 0 && (
 				<button
 					type="button"
@@ -334,7 +358,11 @@ function ControlledExplorer({
 				selection={search.block ?? null}
 				traceId={search.trace ?? null}
 				level={search.level ?? "overview"}
-				onSelect={(block) => setSearch((previous) => applyModelLabPatch(previous, { block }))}
+				onSelect={(block, onShown) => {
+					setSearch((previous) => applyModelLabPatch(previous, { block: block ?? undefined }));
+					// The page without a router: a change is shown as soon as it is made.
+					onShown?.();
+				}}
 				onTraceChange={(trace) => setSearch((previous) => applyModelLabPatch(previous, { trace: trace ?? undefined }))}
 				onLevelChange={(level) => setSearch((previous) => applyModelLabPatch(previous, { level }))}
 				onJump={onJump}
@@ -354,17 +382,37 @@ async function openModel(withRouter = false): Promise<void> {
 }
 
 describe("ArchitectureExplorer", () => {
-	it("lays out embedding, every block and the output, with the MTP block marked not traceable", async () => {
+	it("lays out embedding, the blocks and the output, with the MTP block apart and marked not traceable", async () => {
 		stubRoutes(detailed);
 		await openModel();
 
 		expect(screen.getByRole("button", { name: "Embedding" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Blocks: 2 in this file" })).toBeTruthy();
 		expect(screen.getByRole("button", { name: "Output" })).toBeTruthy();
+		// Two one-block chips: each is the block itself.
 		expect(screen.getByRole("button", { name: "Block 0: Linear attention" })).toBeTruthy();
 		expect(screen.getByRole("button", { name: "Block 1: Full attention" })).toBeTruthy();
+		// The MTP block sits under its own group, open only once that group or the block is selected.
+		expect(screen.queryByRole("button", { name: "Block 2: MTP, not traceable" })).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "MTP" }));
 		expect(screen.getByRole("button", { name: "Block 2: MTP, not traceable" })).toBeTruthy();
 		expect(screen.queryByTestId("model-lab-architecture-overview-only")).toBeNull();
 		expect(screen.queryByTestId("model-lab-architecture-no-output")).toBeNull();
+	});
+
+	it("draws the whole-model graph only once asked, keeps the row below it, and a graph pick selects as the row does", async () => {
+		stubRoutes(detailed);
+		await openModel();
+
+		const toggle = screen.getByRole("switch", { name: "Show graph" });
+		expect((toggle as HTMLInputElement).checked).toBe(false);
+		expect(screen.queryByTestId("model-lab-architecture-model-graph")).toBeNull();
+
+		fireEvent.click(toggle);
+		expect(screen.getByTestId("model-lab-architecture-model-graph")).toBeTruthy();
+		expect(screen.getByTestId("model-lab-architecture-overview")).toBeTruthy();
+		fireEvent.click(screen.getByTestId("react-flow-node-1"));
+		expect(screen.getByTestId("model-lab-architecture-block-1").getAttribute("aria-pressed")).toBe("true");
 	});
 
 	it("offers no Output entry for a file with no output tensors, and says what that may mean without claiming it", async () => {
@@ -594,6 +642,7 @@ describe("ArchitectureExplorer", () => {
 		);
 		fireEvent.click(screen.getByRole("button", { name: "Block 0: Linear attention" }));
 		expect(screen.getByTestId("model-lab-architecture-not-traced")).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: "MTP" }));
 		fireEvent.click(screen.getByRole("button", { name: "Block 2: MTP, not traceable" }));
 		expect(screen.getByTestId("model-lab-architecture-untraceable")).toBeTruthy();
 	});
@@ -1063,7 +1112,8 @@ describe("ArchitectureExplorer PyTorch source", () => {
 	it("says the MTP block has no PyTorch layer", async () => {
 		stubRoutes(detailed);
 		stubPyTorch(pyIndex);
-		await openBlock("Block 2: MTP, not traceable");
+		await openBlock("MTP");
+		fireEvent.click(screen.getByRole("button", { name: "Block 2: MTP, not traceable" }));
 
 		expect((await screen.findByTestId("model-lab-pytorch-mtp")).textContent).toBe("The MTP block has no PyTorch layer.");
 		expect(screen.queryByTestId("model-lab-pytorch-modules")).toBeNull();
@@ -1102,7 +1152,7 @@ describe("ArchitectureExplorer explanations", () => {
 		expect((screen.getByRole("radio", { name: "Math" }) as HTMLInputElement).checked).toBe(true);
 	});
 
-	it("labels every entry with its basis: inferred from llama.cpp, general background, or what a measurement means", async () => {
+	it("labels every entry with its basis: inferred from llama.cpp or an explanation, and the trace summary as derived", async () => {
 		stubRoutes(detailed, [
 			{
 				id: traceId,
@@ -1147,10 +1197,13 @@ describe("ArchitectureExplorer explanations", () => {
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: /^Attention/ }));
-		expect(basisOf("Fixture: what attention is in general.")).toBe("General background");
+		expect(basisOf("Fixture: what attention is in general.")).toBe("Explanation, not measured");
 
+		// The summary is computed from the run's records; the text about it is an explanation.
+		expect(screen.getByTestId("model-lab-architecture-trace-summary").textContent).toContain("Mean norm 2");
+		expect(screen.getByTestId("model-lab-architecture-trace-basis").textContent).toBe("Derived");
 		fireEvent.click(within(screen.getByTestId("model-lab-explain-trace")).getByRole("button", { name: "Mean norm" }));
-		expect(basisOf("Fixture: what a mean norm says and does not say.")).toBe("What this measurement means");
+		expect(basisOf("Fixture: what a mean norm says and does not say.")).toBe("Explanation, not measured");
 	});
 
 	it("opens a dashed node's explanation from the graph, and a per-kind text before the shared one", async () => {
@@ -1403,7 +1456,7 @@ describe("ArchitectureExplorer routing of a laid-over run", () => {
 		const panel = await screen.findByTestId("model-lab-architecture-routing");
 		expect(within(panel).getByText("Experts this block chose in the laid-over run")).toBeTruthy();
 		expect(within(panel).getByText("Most picked in this run (2 steps)")).toBeTruthy();
-		expect(within(panel).getByTestId("model-lab-explain-basis").textContent).toBe("Derived analysis");
+		expect(within(panel).getByTestId("model-lab-explain-basis").textContent).toBe("Derived");
 		expect(screen.getByTestId("model-lab-architecture-routing-note").textContent).toBe(
 			"Read from each block's router as the model ran in PyTorch on the Hugging Face checkpoint. The GGUF in llama.cpp may route differently.",
 		);
@@ -1450,9 +1503,13 @@ describe("ArchitectureExplorer routing of a laid-over run", () => {
 
 		// The block detail is up with the trace laid over it, so the routing panel would have mounted by now.
 		await screen.findByTestId("model-lab-architecture-trace-summary");
-		expect(queryClient.getQueryState(getModelLabExperimentRoutingQueryKey({ path: { experimentId: traceId } }))).toBeUndefined();
+		const state = queryClient.getQueryState(getModelLabExperimentRoutingQueryKey({ path: { experimentId: traceId } }));
+		expect(state?.fetchStatus ?? "idle").toBe("idle");
+		expect(state?.dataUpdateCount ?? 0).toBe(0);
 		expect(routing.requests).toBe(0);
 		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
+		expect(screen.queryByTestId("model-lab-architecture-routing-missing")).toBeNull();
+		expect(screen.getByTestId("model-lab-architecture-block-1").dataset["routed"]).toBe("false");
 	});
 
 	it("adds nothing for a block the run's routing does not cover", async () => {
@@ -1461,7 +1518,7 @@ describe("ArchitectureExplorer routing of a laid-over run", () => {
 		renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} />);
 
 		await screen.findByTestId("model-lab-architecture-trace-summary");
-		fireEvent.click(screen.getByRole("button", { name: "Block 0: Linear attention" }));
+		fireEvent.click(await screen.findByRole("button", { name: "Block 0: Linear attention, routed" }));
 		expect(await screen.findByTestId("model-lab-architecture-routing")).toBeTruthy();
 		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention, traced" }));
 		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
@@ -1489,12 +1546,14 @@ describe("ArchitectureExplorer routing of a laid-over run", () => {
 		renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} />);
 
 		await screen.findByTestId("model-lab-architecture-routing");
-		fireEvent.click(screen.getByRole("button", { name: "Block 0: Linear attention" }));
+		fireEvent.click(screen.getByRole("button", { name: "Block 0: Linear attention, routed" }));
 		expect(usageRows()).toEqual(["E40: picked in 2 of 2 steps", "E41: picked in 2 of 2 steps"]);
 
 		fireEvent.click(screen.getByRole("button", { name: "Next jump" }));
 
-		expect(screen.getByRole("button", { name: "Block 1: Full attention, traced" }).getAttribute("aria-pressed")).toBe("true");
+		expect(screen.getByRole("button", { name: "Block 1: Full attention, traced, routed" }).getAttribute("aria-pressed")).toBe(
+			"true",
+		);
 		expect(usageRows()).toEqual(["E5: picked in 2 of 2 steps", "E9: picked in 1 of 2 steps"]);
 		expect(routing.requests).toBe(1);
 	});
@@ -1586,6 +1645,33 @@ describe("ArchitectureExplorer jumps between models", () => {
 		await screen.findByRole("radio", { name: "Downloaded checkpoint" });
 		expect(screen.queryByRole("textbox", { name: "Repository" })).toBeNull();
 		expect((screen.getByRole("radio", { name: "Downloaded checkpoint" }) as HTMLInputElement).checked).toBe(true);
+	});
+
+	it("fits the graph afresh for each model it shows, and keeps the view on a block pick", async () => {
+		stubRoutes(hybrid);
+		server.use(
+			http.get(localApiPath("model-lab/architecture/:modelName"), ({ params }) =>
+				HttpResponse.json({ ...hybrid, modelName: params["modelName"] }),
+			),
+		);
+		// Kept cached, so coming back to the first model shows its graph in the same render as the switch.
+		renderWithProviders(<ControlledExplorer switchTo="org/Other-GGUF:Q4_K_M" />, {
+			queryClient: new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } } }),
+		});
+		await screen.findByTestId("model-lab-architecture-overview");
+		fireEvent.click(screen.getByTestId("model-lab-architecture-graph-switch"));
+		const mount = () => screen.getByTestId("react-flow").getAttribute("data-mount");
+		const first = mount();
+
+		fireEvent.click(screen.getByTestId("react-flow-node-4-7"));
+		expect(mount()).toBe(first);
+
+		fireEvent.click(screen.getByRole("button", { name: "Switch model" }));
+		await waitFor(() => expect(mount()).not.toBe(first));
+		const other = mount();
+		fireEvent.click(screen.getByRole("button", { name: "Switch model" }));
+
+		expect(mount()).not.toBe(other);
 	});
 });
 
@@ -1698,5 +1784,610 @@ describe("ArchitectureExplorer context from a link", () => {
 
 		expect(await screen.findByText("Fixture: a full-attention block, in detail.")).toBeTruthy();
 		expect((screen.getByRole("radio", { name: "Detail" }) as HTMLInputElement).checked).toBe(true);
+	});
+});
+
+// A hybrid file: 3 linear + 1 full attention, twice, then one MTP block; an Other group outside the blocks.
+const hybridBlock = (index: number, kind: string) => {
+	const component = kind === "linearAttention" ? "ssm" : kind === "mtp" ? "mtp" : "attention";
+	const name = { ssm: "ssm_out", mtp: "nextn.eh_proj", attention: "attn_q" }[component];
+	return {
+		index,
+		kind,
+		byteSize: 1,
+		groups: [
+			{
+				componentId: `blk.${index}.${component}`,
+				component,
+				provenance: "read",
+				tensors: [tensor(`blk.${index}.${name}.weight`, null, null)],
+			},
+		],
+	};
+};
+const header = {
+	fileType: "Q4_K_M",
+	declaredParamCount: 752_393_024,
+	blockCount: 9,
+	nextnPredictLayers: 1,
+	splitCount: null,
+	attentionHeadCount: 8,
+	attentionHeadCountKv: 2,
+	attentionKeyLength: 256,
+	attentionValueLength: 256,
+	embeddingLength: 1024,
+	contextLength: 262_144,
+	expertCount: 0,
+	expertUsedCount: null,
+	fullAttentionInterval: 4,
+};
+const hybrid = {
+	...detailed,
+	hyperparameters: header,
+	blocks: [
+		...[..."LLLFLLLF"].map((letter, index) => hybridBlock(index, letter === "L" ? "linearAttention" : "fullAttention")),
+		hybridBlock(8, "mtp"),
+	],
+	nonBlock: [
+		...detailed.nonBlock,
+		{ componentId: "other", component: "other", provenance: "read", tensors: [tensor("rope_freqs.weight", null, null)] },
+	],
+};
+
+function breadcrumb(): string[] {
+	const nav = screen.getByTestId("model-lab-architecture-breadcrumb");
+	return [...nav.querySelectorAll("button, [aria-current]")].map((item) =>
+		item.hasAttribute("aria-current") ? `[${item.textContent}]` : (item.textContent ?? ""),
+	);
+}
+
+function valueText(key: string): string | null | undefined {
+	return screen.queryByTestId(`model-lab-architecture-value-${key}`)?.textContent;
+}
+
+describe("ArchitectureExplorer hierarchy", () => {
+	it("opens on the whole model: the header's values with their basis, what lies outside the blocks, and the counts", async () => {
+		stubRoutes(hybrid);
+		await openModel();
+
+		expect(breadcrumb()).toEqual(["[Model]"]);
+		const root = within(screen.getByTestId("model-lab-architecture-root"));
+		expect(root.getByRole("heading", { name: "Whole model" })).toBeTruthy();
+		expect(valueText("fileType")).toBe("QuantizationQ4_K_MRead from the file");
+		expect(valueText("declaredParamCount")).toBe("Parameters752,393,024Read from the file");
+		expect(valueText("blockCount")).toBe("Layers9Read from the file");
+		expect(valueText("nextnPredictLayers")).toBe("MTP layers1Read from the file");
+		expect(valueText("blocksInFile")).toBe("Blocks in this file8Derived");
+		expect(valueText("mtpInFile")).toBe("MTP blocks in this file1Derived");
+		expect(valueText("contextLength")).toBe("Context length262,144Read from the file");
+		expect(valueText("embeddingLength")).toBe("Width1,024Read from the file");
+		expect(screen.getByTestId("model-lab-architecture-root-outside").textContent).toBe(
+			"Outside the blocks: Embedding, Output, Other.",
+		);
+		expect(screen.queryByTestId("model-lab-architecture-split")).toBeNull();
+		// The row: the groups outside, the blocks, MTP and Other, with the chips below and no block open.
+		expect(screen.getByRole("button", { name: "Blocks: 8 in this file" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Other" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "0–3 · 3 linear + 1 full" }).getAttribute("aria-pressed")).toBe("false");
+		expect(screen.getByRole("button", { name: "4–7 · 3 linear + 1 full" })).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-architecture-block-0")).toBeNull();
+		expect(screen.queryByTestId("model-lab-architecture-gap")).toBeNull();
+	});
+
+	it("opens a chip's blocks in the row and its detail: kinds, layout, types and operations as text, no graph", async () => {
+		stubRoutes(hybrid);
+		await openModel();
+
+		fireEvent.click(screen.getByRole("button", { name: "0–3 · 3 linear + 1 full" }));
+
+		expect(screen.getByRole("button", { name: "0–3 · 3 linear + 1 full" }).getAttribute("aria-pressed")).toBe("true");
+		expect(screen.getByRole("button", { name: "Block 3: Full attention" })).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-architecture-block-4")).toBeNull();
+		expect(breadcrumb()).toEqual(["Model", "Blocks", "[0–3]"]);
+		const range = within(screen.getByTestId("model-lab-architecture-range"));
+		expect(range.getByRole("heading", { name: "Blocks 0–3" })).toBeTruthy();
+		expect(range.getByTestId("model-lab-architecture-range-kinds").textContent).toBe(
+			"4 blocks: Linear attention ×3 + Full attention ×1",
+		);
+		expect(range.getByTestId("model-lab-architecture-range-layout").textContent).toBe(
+			"Blocks of one kind hold the same tensors: component, name and shape.",
+		);
+		expect(range.getByTestId("model-lab-architecture-range-types").textContent).toBe(
+			"Corresponding tensors use the same stored types.",
+		);
+		// Only the full-attention kind has a template here; the linear kind gets no invented text.
+		const operations = within(range.getByTestId("model-lab-architecture-range-operations-fullAttention"));
+		expect(operations.getAllByRole("button").map((button) => button.textContent)).toEqual([
+			"Residual in",
+			"Gated attention",
+			"SwiGLU FFN",
+		]);
+		expect(range.queryByTestId("model-lab-architecture-range-operations-linearAttention")).toBeNull();
+		const heading = range.getByText("Operations of a Full attention block").parentElement as HTMLElement;
+		expect(within(heading).getByTestId("model-lab-explain-basis").textContent).toBe(
+			"Inferred from llama.cpp (llama.cpp src/models/qwen35.cpp @ b12014)",
+		);
+		// The layout and type lines are computed here from what the file holds.
+		expect(
+			within(range.getByTestId("model-lab-architecture-range-layout").closest(".mantine-Group-root") as HTMLElement).getByTestId(
+				"model-lab-explain-basis",
+			).textContent,
+		).toBe("Derived");
+		expect(valueText("attentionHeadCount")).toBe("Attention heads8Read from the file");
+		expect(screen.queryByTestId("react-flow")).toBeNull();
+		expect(screen.queryByTestId("model-lab-architecture-read-badge")).toBeNull();
+		expect(
+			within(range.getByTestId("model-lab-architecture-open-blocks"))
+				.getAllByRole("button")
+				.map((button) => button.textContent),
+		).toEqual(["Open block 0", "Open block 1", "Open block 2", "Open block 3"]);
+	});
+
+	it.each([
+		[
+			"a chip of one linear and one full block",
+			[
+				hybridBlock(0, "linearAttention"),
+				hybridBlock(1, "fullAttention"),
+				hybridBlock(2, "linearAttention"),
+				hybridBlock(3, "fullAttention"),
+			],
+			"Nothing in this group to compare: no two blocks are of one kind.",
+		],
+		[
+			"a chip whose blocks of one kind share no tensor",
+			[
+				hybridBlock(0, "fullAttention"),
+				{
+					...hybridBlock(1, "fullAttention"),
+					groups: [{ ...hybridBlock(1, "fullAttention").groups[0], tensors: [tensor("blk.1.attn_k.weight", null, null)] }],
+				},
+			],
+			"The tensors differ from the first block of the same kind at blocks 1.",
+		],
+	])("claims no shared layout or stored types for %s", async (_case, blocks, layout) => {
+		stubRoutes({ ...hybrid, hyperparameters: { ...header, blockCount: blocks.length, nextnPredictLayers: null }, blocks });
+		await openModel();
+
+		fireEvent.click(screen.getByTestId("model-lab-architecture-chip-0-1"));
+
+		const range = within(await screen.findByTestId("model-lab-architecture-range"));
+		expect(range.getByTestId("model-lab-architecture-range-layout").textContent).toBe(layout);
+		expect(range.getByTestId("model-lab-architecture-range-types").textContent).toBe(
+			"Nothing in this group to compare: no tensors correspond between blocks of one kind.",
+		);
+	});
+
+	it("moves focus to the new heading when a graph node selects it, since a node takes no focus", async () => {
+		stubRoutes(hybrid);
+		await openModel();
+		const graphSwitch = screen.getByTestId("model-lab-architecture-graph-switch");
+		fireEvent.click(graphSwitch);
+		graphSwitch.focus();
+
+		fireEvent.click(await screen.findByTestId("react-flow-node-4-7"));
+
+		expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Blocks 4–7" }));
+	});
+
+	it("moves focus to each new heading when a detail control or the breadcrumb opens it, and not on a row pick", async () => {
+		stubRoutes(hybrid);
+		await openModel();
+		fireEvent.click(screen.getByRole("button", { name: "4–7 · 3 linear + 1 full" }));
+		expect(document.activeElement).toBe(document.body);
+
+		fireEvent.click(screen.getByRole("button", { name: "Open block 7" }));
+		expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Block 7: Full attention" }));
+		expect(breadcrumb()).toEqual(["Model", "Blocks", "4–7", "[Block 7]"]);
+		expect(screen.getByRole("button", { name: "Block 7: Full attention" }).getAttribute("aria-pressed")).toBe("true");
+
+		fireEvent.click(within(screen.getByTestId("model-lab-architecture-breadcrumb")).getByRole("button", { name: "4–7" }));
+		expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Blocks 4–7" }));
+
+		fireEvent.click(within(screen.getByTestId("model-lab-architecture-breadcrumb")).getByRole("button", { name: "Blocks" }));
+		expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Blocks in this file" }));
+
+		fireEvent.click(within(screen.getByTestId("model-lab-architecture-breadcrumb")).getByRole("button", { name: "Model" }));
+		expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Whole model" }));
+
+		// A row pick leaves focus where it is: the row stays the keyboard path.
+		const row = screen.getByRole("button", { name: "Output" });
+		row.focus();
+		fireEvent.click(row);
+		expect(document.activeElement).toBe(row);
+	});
+
+	it("shows every block's counts per kind, the repeating pattern, the attention values and the chips as buttons", async () => {
+		stubRoutes(hybrid);
+		await openModel();
+
+		fireEvent.click(screen.getByRole("button", { name: "Blocks: 8 in this file" }));
+
+		expect(breadcrumb()).toEqual(["Model", "[Blocks]"]);
+		const stack = within(screen.getByTestId("model-lab-architecture-stack"));
+		expect(stack.getByTestId("model-lab-architecture-kind-counts").textContent).toBe("Linear attention: 6 · Full attention: 2");
+		expect(stack.getByTestId("model-lab-architecture-pattern").textContent).toBe(
+			"3 × Linear attention + 1 × Full attention, 2 times",
+		);
+		expect(valueText("attentionHeadCountKv")).toBe("Key/value heads2Read from the file");
+		expect(valueText("attentionKeyLength")).toBe("Key head size256Read from the file");
+		expect(valueText("fullAttentionInterval")).toBe("Full-attention interval4Read from the file");
+		// Zero experts: a dense file, so neither expert value is shown.
+		expect(valueText("expertCount")).toBeUndefined();
+		expect(valueText("expertUsedCount")).toBeUndefined();
+
+		fireEvent.click(stack.getByRole("button", { name: "4–7 · 3 linear + 1 full" }));
+		expect(screen.getByRole("heading", { name: "Blocks 4–7" })).toBe(document.activeElement);
+	});
+
+	it("keeps MTP apart: its own detail with the separate-path note, and its block under it", async () => {
+		stubRoutes(hybrid);
+		await openModel();
+
+		fireEvent.click(screen.getByRole("button", { name: "MTP" }));
+
+		expect(breadcrumb()).toEqual(["Model", "[MTP]"]);
+		expect(screen.getByTestId("model-lab-architecture-mtp-note").textContent).toBe(
+			"These blocks predict further tokens on a separate path beside the main stack; they are not one of its blocks.",
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Open block 8" }));
+		expect(breadcrumb()).toEqual(["Model", "MTP", "[Block 8]"]);
+		expect(screen.getByRole("button", { name: "Block 8: MTP, not traceable" }).getAttribute("aria-pressed")).toBe("true");
+	});
+
+	it("opens Other and Embedding each with only their own groups, and the embedding's vocabulary and width", async () => {
+		stubRoutes(hybrid);
+		await openModel();
+
+		fireEvent.click(screen.getByRole("button", { name: "Other" }));
+		expect(breadcrumb()).toEqual(["Model", "[Other]"]);
+		expect(screen.getByTestId("model-lab-architecture-group-other")).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-architecture-group-embedding")).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: "Embedding" }));
+		expect(breadcrumb()).toEqual(["Model", "[Embedding]"]);
+		expect(screen.queryByTestId("model-lab-architecture-group-other")).toBeNull();
+		// token_embd.weight is 1024 × 256 in GGUF order: 256 tokens, derived from the shape.
+		expect(valueText("vocabulary")).toBe("Vocabulary256Derived");
+		expect(valueText("embeddingLength")).toBe("Width1,024Read from the file");
+	});
+
+	it("shows a linked block inside its chip without a click, with the chip in the breadcrumb", async () => {
+		stubRoutes(hybrid);
+		renderWithProviders(<ControlledExplorer initial={{ model: gguf, block: 5 }} />);
+
+		const linked = await screen.findByRole("button", { name: "Block 5: Linear attention" });
+		expect(linked.getAttribute("aria-pressed")).toBe("true");
+		expect(screen.getByRole("button", { name: "4–7 · 3 linear + 1 full" }).getAttribute("aria-pressed")).toBe("false");
+		expect(screen.queryByTestId("model-lab-architecture-block-0")).toBeNull();
+		expect(breadcrumb()).toEqual(["Model", "Blocks", "4–7", "[Block 5]"]);
+		// A linked block is not a pick made from a detail: focus stays.
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	it.each([
+		["1-2", { ...hybrid }, "Blocks 1–2 are not one group in this file. Choose a group from the blocks above."],
+		["stack", { ...hybrid, blocks: [] }, "No blocks of the main stack are in this file."],
+		["mtp", { ...detailed, blocks: detailed.blocks.slice(0, 2) }, "No multi-token prediction blocks are in this file."],
+		["other", detailed, "No other tensors outside the blocks are in this file."],
+	] as const)(
+		"says a linked %s the file does not hold as one is not in it, and guesses nothing",
+		async (block, descriptor, text) => {
+			stubRoutes(descriptor);
+			renderWithProviders(<ControlledExplorer initial={{ model: gguf, block }} />);
+
+			expect((await screen.findByTestId("model-lab-architecture-block-missing")).textContent).toContain(text);
+			expect(screen.queryByTestId("model-lab-architecture-range")).toBeNull();
+			expect(screen.queryByTestId("model-lab-architecture-stack")).toBeNull();
+			expect(screen.queryByTestId("model-lab-architecture-mtp")).toBeNull();
+			expect(screen.queryByTestId("model-lab-architecture-detail")).toBeNull();
+		},
+	);
+
+	it("says a file holding only MTP blocks has no main-stack blocks, while it lists the MTP block", async () => {
+		stubRoutes({ ...hybrid, blocks: hybrid.blocks.slice(8) });
+		renderWithProviders(<ControlledExplorer initial={{ model: gguf, block: "stack" }} />);
+
+		expect((await screen.findByTestId("model-lab-architecture-block-missing")).textContent).toBe(
+			"No blocks of the main stack are in this file. One possible reason: the file is one part of a split GGUF and these blocks are in other parts.",
+		);
+		fireEvent.click(screen.getByRole("button", { name: "MTP" }));
+		expect(screen.getByRole("button", { name: "Block 8: MTP, not traceable" })).toBeTruthy();
+	});
+
+	it("marks the blocks a shard lacks, and states no pattern for it", async () => {
+		// Blocks 4 to 7 of 9: the first four are in another part of the split file.
+		stubRoutes({
+			...hybrid,
+			hyperparameters: { ...header, splitCount: 2 },
+			blocks: hybrid.blocks.slice(4, 8),
+			nonBlock: [],
+		});
+		await openModel();
+
+		expect(screen.getAllByTestId("model-lab-architecture-gap").map((gap) => gap.textContent)).toEqual([
+			"… blocks not in this file …",
+		]);
+		expect(screen.getByTestId("model-lab-architecture-split").textContent).toBe(
+			"This file is one of the 2 parts of a split GGUF. The blocks counted here are the ones in this file.",
+		);
+		expect(screen.getByTestId("model-lab-architecture-no-output").textContent).toBe(
+			"No separate output tensor in this file; the output may share the embedding weights, or it is in another part of the split GGUF.",
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Blocks: 4 in this file" }));
+		expect(screen.queryByTestId("model-lab-architecture-pattern")).toBeNull();
+	});
+});
+
+describe("ArchitectureExplorer values", () => {
+	it("shows no header value a file does not hold, and a zero as zero", async () => {
+		stubRoutes({ ...hybrid, hyperparameters: { ...header, fileType: null, declaredParamCount: null, contextLength: 0 } });
+		await openModel();
+
+		expect(valueText("fileType")).toBeUndefined();
+		expect(valueText("declaredParamCount")).toBeUndefined();
+		expect(valueText("contextLength")).toBe("Context length0Read from the file");
+	});
+
+	it("shows only what is counted from the file when the response has no header values", async () => {
+		stubRoutes({ ...hybrid, hyperparameters: null });
+		await openModel();
+
+		expect(
+			[
+				...screen
+					.getByTestId("model-lab-architecture-values")
+					.querySelectorAll("[data-testid^='model-lab-architecture-value-text-']"),
+			].map((value) => value.getAttribute("data-testid")),
+		).toEqual(["model-lab-architecture-value-text-blocksInFile", "model-lab-architecture-value-text-mtpInFile"]);
+	});
+
+	it("shows the experts and the experts per token of a mixture-of-experts file", async () => {
+		stubRoutes({ ...hybrid, hyperparameters: { ...header, expertCount: 64, expertUsedCount: 8 } });
+		await openModel();
+		fireEvent.click(screen.getByRole("button", { name: "Blocks: 8 in this file" }));
+
+		expect(valueText("expertCount")).toBe("Experts64Read from the file");
+		expect(valueText("expertUsedCount")).toBe("Experts per token8Read from the file");
+	});
+
+	it.each([
+		["a rank-1 embedding", [1024]],
+		["a rank-3 embedding", [4, 1024, 32]],
+	])("shows no vocabulary for %s", async (_case, shape) => {
+		stubRoutes({
+			...hybrid,
+			nonBlock: hybrid.nonBlock.map((group) =>
+				group.componentId === "embedding"
+					? { ...group, tensors: [{ ...tensor("token_embd.weight", null, null), shape }] }
+					: group,
+			),
+		});
+		await openModel();
+		fireEvent.click(screen.getByRole("button", { name: "Embedding" }));
+
+		expect(valueText("vocabulary")).toBeUndefined();
+		expect(valueText("embeddingLength")).toBe("Width1,024Read from the file");
+	});
+
+	it("puts every value's (i) in the Tab order with the value's name", async () => {
+		stubRoutes(hybrid);
+		await openModel();
+
+		const infos = screen.getAllByTestId(/^model-lab-architecture-value-info-/);
+		expect(infos).toHaveLength(8);
+		for (const info of infos) {
+			expect(info.tagName).toBe("BUTTON");
+			expect(info.tabIndex).toBe(0);
+			expect(info.getAttribute("aria-label")).toMatch(/^About /);
+		}
+		expect(nextTabStop(infos[0] as HTMLElement)).toBe(infos[1]);
+	});
+
+	it.each([
+		[1, "It includes the multi-token prediction layers"],
+		[null, null],
+	])("says the layers include MTP layers only when the header declares them (%s)", async (nextn, mention) => {
+		stubRoutes({ ...hybrid, hyperparameters: { ...header, nextnPredictLayers: nextn } });
+		await openModel();
+
+		fireEvent.focus(screen.getByRole("button", { name: "About Layers" }));
+
+		const card = await screen.findByText(/^The layers the header declares for the whole model/);
+		if (mention === null) {
+			expect(card.textContent).not.toContain("multi-token");
+		} else {
+			expect(card.textContent).toContain(mention);
+		}
+	});
+});
+
+// Four full-attention blocks in one chip; the run traced block 1, and its routing covers the blocks its steps name.
+const olmoeChip = {
+	...olmoe,
+	blocks: [0, 1, 2, 3].map((index) => hybridBlock(index, "fullAttention")),
+};
+
+describe("ArchitectureExplorer routed markers", () => {
+	it("marks the routed blocks in the row and counts traced and routed blocks on the chip and in its detail", async () => {
+		stubRoutes(olmoeChip, [traceRow(traceId)]);
+		const routing = stubRun(
+			traceId,
+			routingOf(
+				[
+					{ step: 0, blocks: [routed(1, [3, 4]), routed(2, [5, 6])] },
+					// Block 9 is not in this file: never marked.
+					{ step: 1, blocks: [routed(2, [5, 7]), routed(9, [1, 2])] },
+				],
+				false,
+				[1, 2, 9],
+			),
+		);
+		renderWithProviders(<ControlledExplorer initial={{ model: gguf, trace: traceId, block: "0-3" }} />);
+
+		const chip = await screen.findByRole("button", { name: "0–3 · Full attention ×4 · 1 traced · 2 routed" });
+		expect(chip.getAttribute("aria-pressed")).toBe("true");
+		expect(screen.getByRole("button", { name: "Block 1: Full attention, traced, routed" }).dataset["routed"]).toBe("true");
+		expect(screen.getByRole("button", { name: "Block 2: Full attention, routed" })).toBeTruthy();
+		expect(screen.getByTestId("model-lab-architecture-block-0").dataset["routed"]).toBe("false");
+		expect(screen.getByText("A square marks a block whose routing the run recorded.")).toBeTruthy();
+		expect(screen.getByTestId("model-lab-architecture-range-traced").textContent).toBe("Traced in the laid-over run: 1");
+		expect(screen.getByTestId("model-lab-architecture-range-routed").textContent).toBe(
+			"Routing recorded in the laid-over run: 1–2",
+		);
+
+		// The block detail reads the same run's routing from the cache.
+		fireEvent.click(screen.getByRole("button", { name: "Open block 2" }));
+		expect(await screen.findByTestId("model-lab-architecture-routing")).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention, traced, routed" }));
+		// Counted once block 1's detail and its routing panel are up: a remount that asked again would have asked by now.
+		await screen.findByRole("heading", { name: "Block 1: Full attention" });
+		expect(await screen.findByTestId("model-lab-architecture-routing")).toBeTruthy();
+		expect(routing.requests).toBe(1);
+	});
+
+	it.each([
+		["recorded no steps", routingOf([]), "0–3 · Full attention ×4 · 1 traced · 0 routed"],
+		[
+			"was cut after its saved steps",
+			routingOf([{ step: 0, blocks: [routed(3, [1, 2])] }], true),
+			"0–3 · Full attention ×4 · 1 traced · 1 routed",
+		],
+	])("counts only saved steps when a run %s", async (_case, answer, name) => {
+		stubRoutes(olmoeChip, [traceRow(traceId)]);
+		stubRun(traceId, answer);
+		renderWithProviders(<ControlledExplorer initial={{ model: gguf, trace: traceId }} />);
+
+		expect(await screen.findByRole("button", { name })).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-architecture-routing-missing")).toBeNull();
+	});
+
+	it("says a run recorded no routing instead of showing zero, and asks once", async () => {
+		stubRoutes(olmoeChip, [traceRow(traceId)]);
+		const routing = stubRun(traceId, () => new HttpResponse(null, { status: 404 }));
+		renderWithProviders(<ControlledExplorer initial={{ model: gguf, trace: traceId, block: "0-3" }} />);
+
+		expect((await screen.findByTestId("model-lab-architecture-routing-missing")).textContent).toBe(
+			"The laid-over run recorded no routing.",
+		);
+		expect(screen.queryByTestId("model-lab-architecture-routing-failed")).toBeNull();
+		expect(screen.getByRole("button", { name: "0–3 · Full attention ×4 · 1 traced" })).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-architecture-range-routed")).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Block 1: Full attention, traced" }));
+		fireEvent.click(screen.getByRole("button", { name: "Block 2: Full attention" }));
+		// Counted once the last opened detail is up: a remount that asked again would have asked by now.
+		await screen.findByRole("heading", { name: "Block 2: Full attention" });
+		expect(routing.requests).toBe(1);
+	});
+
+	it("says a run's routing could not be read on a failure other than 404, and marks nothing", async () => {
+		stubRoutes(olmoeChip, [traceRow(traceId)]);
+		stubRun(traceId, () => new HttpResponse(null, { status: 500 }));
+		renderWithProviders(<ControlledExplorer initial={{ model: gguf, trace: traceId, block: 1 }} />);
+
+		expect((await screen.findByTestId("model-lab-architecture-routing-failed")).textContent).toBe(
+			"The run's routing could not be read.",
+		);
+		expect(screen.queryByTestId("model-lab-architecture-routing-missing")).toBeNull();
+		expect(screen.getByTestId("model-lab-architecture-block-1").dataset["routed"]).toBe("false");
+		expect(screen.queryByText("A square marks a block whose routing the run recorded.")).toBeNull();
+		// The block detail is up with the trace laid over it, so a routing panel would have shown by now.
+		expect(await screen.findByTestId("model-lab-architecture-trace-summary")).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
+	});
+
+	it("drops every routed marker and the block's routing when a refetch fails, though the earlier answer is cached", async () => {
+		stubRoutes(olmoeChip, [traceRow(traceId)]);
+		const answer = { failing: false };
+		stubRun(traceId, () => (answer.failing ? new HttpResponse(null, { status: 500 }) : routingA()));
+		const { queryClient } = renderWithProviders(<ControlledExplorer initial={{ model: gguf, trace: traceId, block: 1 }} />);
+		expect(await screen.findByTestId("model-lab-architecture-routing")).toBeTruthy();
+
+		answer.failing = true;
+		const key = getModelLabExperimentRoutingQueryKey({ path: { experimentId: traceId } });
+		await act(() => queryClient.invalidateQueries({ queryKey: key }));
+
+		expect(await screen.findByTestId("model-lab-architecture-routing-failed")).toBeTruthy();
+		expect(queryClient.getQueryState(key)?.data).toBeDefined();
+		expect(screen.getByTestId("model-lab-architecture-block-1").dataset["routed"]).toBe("false");
+		expect(screen.getByRole("button", { name: "Block 1: Full attention, traced" })).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
+	});
+
+	it.each([
+		["recorded no steps", routingOf([], false, [0, 1])],
+		["kept only steps naming other blocks", routingOf([{ step: 0, blocks: [routed(1, [3, 4])] }], true, [0, 1])],
+	])("shows no routing in the detail of a block the run's layers name but its saved steps do not (%s)", async (_case, answer) => {
+		stubRoutes(olmoeChip, [traceRow(traceId)]);
+		stubRun(traceId, answer);
+		const { queryClient } = renderWithProviders(<ControlledExplorer initial={{ model: gguf, trace: traceId, block: 0 }} />);
+
+		await screen.findByRole("heading", { name: "Block 0: Full attention" });
+		const key = getModelLabExperimentRoutingQueryKey({ path: { experimentId: traceId } });
+		await waitFor(() => expect(queryClient.getQueryState(key)?.status).toBe("success"));
+		expect(screen.getByTestId("model-lab-architecture-block-0").dataset["routed"]).toBe("false");
+		expect(screen.queryByTestId("model-lab-architecture-routing")).toBeNull();
+	});
+
+	it.each([
+		["cleared", "clear"],
+		["deleted since", "delete"],
+	])("drops the markers of a run that was %s", async (_case, how) => {
+		stubRoutes(olmoeChip, [traceRow(traceId)]);
+		stubRun(traceId, routingA);
+		const { queryClient } = renderWithProviders(<ControlledExplorer initial={{ model: gguf, trace: traceId, block: 1 }} />);
+		expect(await screen.findByRole("button", { name: "Block 1: Full attention, traced, routed" })).toBeTruthy();
+
+		if (how === "clear") {
+			fireEvent.click(screen.getByRole("button", { name: "Clear the laid-over trace" }));
+		} else {
+			stubRoutes(olmoeChip, []);
+			await act(() => queryClient.invalidateQueries({ queryKey: listModelLabExperimentsQueryKey() }));
+		}
+
+		expect(await screen.findByRole("button", { name: "Block 1: Full attention" })).toBeTruthy();
+		expect(screen.getByTestId("model-lab-architecture-block-0").dataset["routed"]).toBe("false");
+		expect(screen.queryByText("A square marks a block whose routing the run recorded.")).toBeNull();
+	});
+
+	it("asks no routing for a linked run of another model and marks nothing", async () => {
+		stubRoutes(olmoeChip, [traceRow(traceId, "org/Other-GGUF:Q4_K_M")]);
+		const routing = stubRun(traceId, routingA);
+		const { queryClient } = renderWithProviders(<ControlledExplorer initial={{ model: gguf, trace: traceId, block: 1 }} />);
+
+		await waitFor(() => expect(queryClient.getQueryState(listModelLabExperimentsQueryKey())?.status).toBe("success"));
+		expect(await screen.findByRole("button", { name: "Block 1: Full attention" })).toBeTruthy();
+		expect(routing.requests).toBe(0);
+		expect(screen.queryByTestId("model-lab-architecture-routing-missing")).toBeNull();
+	});
+});
+
+// The node passes a header value only within 0..2^53-1 (larger ones as null); the generated validator agrees at the edge.
+describe("architecture response validator", () => {
+	const values = {
+		fileType: "Q4_K_M",
+		declaredParamCount: Number.MAX_SAFE_INTEGER,
+		blockCount: 25,
+		nextnPredictLayers: 1,
+		splitCount: null,
+		attentionHeadCount: 8,
+		attentionHeadCountKv: 2,
+		attentionKeyLength: 256,
+		attentionValueLength: 256,
+		embeddingLength: 1024,
+		contextLength: 262144,
+		expertCount: 0,
+		expertUsedCount: null,
+		fullAttentionInterval: 4,
+	};
+
+	it("accepts the largest safe integer, zero and null values", () => {
+		expect(zGetModelLabArchitectureResponse.safeParse({ ...detailed, hyperparameters: values }).success).toBe(true);
+		expect(zGetModelLabArchitectureResponse.safeParse({ ...detailed, hyperparameters: null }).success).toBe(true);
+	});
+
+	it("rejects a value past the safe integer range", () => {
+		const unsafe = { ...values, declaredParamCount: Number.MAX_SAFE_INTEGER + 1 };
+		expect(zGetModelLabArchitectureResponse.safeParse({ ...detailed, hyperparameters: unsafe }).success).toBe(false);
 	});
 });
