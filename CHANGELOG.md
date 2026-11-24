@@ -498,6 +498,14 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Model Lab opens on a model's architecture, with one model for the page and the view in the URL.** `/model-lab`
+  opens on the Architecture tab. One model picker above the tabs, listing every installed llama.cpp GGUF, drives
+  Architecture, Next token and Inspect, which lose their own pickers; Same-prompt A/B and Trace and steer keep theirs.
+  The tab, the model, the open block, the laid-over trace, the explanation level and the open saved experiment live in
+  the URL, so a view can be linked, survives a reload, and keeps its model across tabs. A jump between tabs adds a
+  history entry, every other change replaces the current one. Next token runs chat models only and says why it cannot
+  run another GGUF; a result from a model other than the chosen one says which model it came from. The prompt a trace
+  hands to Next token stays out of the URL, so a reload of that link drops it.
 - **Model Lab trace contract 8.** The host and `modellab.py` move together, and cached PyTorch source indexes are
   rebuilt once. Traces saved at contract 6 or 7 open as before, without routing. Known limitation: going back to an
   older build cannot read a trace that recorded routing.

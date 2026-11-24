@@ -6,10 +6,12 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import i18next from "i18next";
 import { HttpResponse, http } from "msw";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { TraceExperiments } from "@/features/modelLab/components/TraceExperiments";
+import { applyModelLabPatch, type ModelLabUpdate, sameExperimentId } from "@/features/modelLab/models/ModelLabNavigation";
 import { loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
 import { acceptConfirm, cancelConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { localApiPath } from "@/test/msw/Handlers";
@@ -122,6 +124,30 @@ function stubModels(): void {
 	);
 }
 
+// Stands in for the page: it holds `?experiment=` and changes it through the page's transition. "Follow the link" writes
+// `link` as a link or a jump from another tab does. `ignoreChanges` stands in for a navigation that does not commit.
+function Experiments({ initial, link, ignoreChanges }: { initial?: string; link?: string; ignoreChanges?: boolean }) {
+	const [search, setSearch] = useState(() => applyModelLabPatch({}, { experiment: initial }));
+	const write = (update: ModelLabUpdate): void => setSearch((previous) => applyModelLabPatch(previous, update));
+	return (
+		<ConfirmProvider>
+			{link && (
+				<button type="button" onClick={() => write({ experiment: link })}>
+					Follow the link
+				</button>
+			)}
+			<output data-testid="experiment-in-url">{search.experiment ?? ""}</output>
+			<TraceExperiments
+				experimentId={search.experiment}
+				onExperimentChange={(experiment) => ignoreChanges || write({ experiment })}
+				onExperimentDeleted={(removed) =>
+					write((previous) => (sameExperimentId(previous.experiment, removed) ? { experiment: undefined } : {}))
+				}
+			/>
+		</ConfirmProvider>
+	);
+}
+
 async function chooseOption(label: RegExp, option: string): Promise<void> {
 	const select = await screen.findByRole("combobox", { name: label });
 	fireEvent.click(select);
@@ -150,11 +176,7 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 
 		expect((await screen.findByTestId("model-lab-unsupported")).textContent).toContain("Linux only");
 		expect(screen.queryByTestId("model-lab-check")).toBeNull();
@@ -173,11 +195,7 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		await pickCheckpoint();
 
 		expect((await screen.findByTestId("model-lab-refusal")).textContent).toContain("cannot fit this card");
@@ -202,11 +220,7 @@ describe("TraceExperiments", () => {
 			"Der Basis-Checkpoint „Qwen/Qwen3.5-0.8B“ deklariert die Lizenz „apache-2.0“. Ich bestätige, dass ich diese Gewichte herunterladen und Experimente damit durchführen darf.";
 
 		try {
-			renderWithProviders(
-				<ConfirmProvider>
-					<TraceExperiments />
-				</ConfirmProvider>,
-			);
+			renderWithProviders(<Experiments />);
 			await pickCheckpoint();
 			await screen.findByTestId("model-lab-license");
 			await loadModelLabStrings("de");
@@ -263,11 +277,7 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		await pickCheckpoint();
 
 		const download = await screen.findByTestId("model-lab-download");
@@ -299,11 +309,7 @@ describe("TraceExperiments", () => {
 			}),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 
 		expect((await screen.findByTestId("model-lab-chat-wait")).textContent).toContain("wait");
 		const button = screen.getByTestId("model-lab-cancel");
@@ -335,11 +341,7 @@ describe("TraceExperiments", () => {
 			}),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 		fireEvent.click(screen.getByTestId("model-lab-check"));
@@ -374,11 +376,7 @@ describe("TraceExperiments", () => {
 			}),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 		fireEvent.click(screen.getByTestId("model-lab-check"));
@@ -424,11 +422,7 @@ describe("TraceExperiments", () => {
 			}),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 		fireEvent.click(screen.getByTestId("model-lab-check"));
@@ -471,11 +465,7 @@ describe("TraceExperiments", () => {
 			}),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 		fireEvent.click(screen.getByTestId("model-lab-check"));
@@ -511,11 +501,7 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 		fireEvent.click(screen.getByTestId("model-lab-check"));
@@ -557,11 +543,7 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 
 		expect(await screen.findAllByTestId("model-lab-steering-badge")).toHaveLength(1);
 	});
@@ -573,11 +555,7 @@ describe("TraceExperiments", () => {
 			http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ title: "Nope" }, { status: 500 })),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 
 		expect(await screen.findByTestId("model-lab-saved-failed")).toBeTruthy();
 	});
@@ -591,11 +569,7 @@ describe("TraceExperiments", () => {
 			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 
@@ -619,11 +593,7 @@ describe("TraceExperiments", () => {
 			}),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 		fireEvent.click(screen.getByTestId("model-lab-check"));
@@ -656,11 +626,7 @@ describe("TraceExperiments", () => {
 			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 		fireEvent.click(screen.getByTestId("model-lab-check"));
@@ -725,11 +691,7 @@ describe("TraceExperiments", () => {
 			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		await chooseOption(/Installed GGUF/, gguf);
 		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
 		fireEvent.click(screen.getByTestId("model-lab-check"));
@@ -756,11 +718,7 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		await pickCheckpoint();
 		fireEvent.click(await screen.findByRole("checkbox"));
 		fireEvent.click(screen.getByTestId("model-lab-download"));
@@ -806,11 +764,7 @@ describe("TraceExperiments", () => {
 			http.get(localApiPath(`model-lab/experiments/${experimentId}`), () => HttpResponse.json(row())),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		fireEvent.click(await screen.findByRole("button", { name: "Qwen/Qwen3.5-0.8B" }));
 		await screen.findByTestId("model-lab-trace-view");
 		expect(screen.queryByText("The script failed.")).toBeNull();
@@ -857,11 +811,7 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		const button = await screen.findByRole("button", { name: "Delete" });
 		await openConfirm(button, "Delete this experiment?");
 		await cancelConfirm(button);
@@ -922,11 +872,7 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		fireEvent.click(await screen.findByRole("button", { name: "Qwen/Qwen3.5-0.8B" }));
 
 		expect((await screen.findByTestId("model-lab-trace-measured")).textContent).toContain("Measured");
@@ -971,11 +917,7 @@ describe("TraceExperiments", () => {
 			}),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 
 		expect((await screen.findByTestId("model-lab-retention")).textContent).toContain("1 of 20 pinned");
 		expect(screen.getAllByTestId("model-lab-pinned-badge")).toHaveLength(1);
@@ -1010,11 +952,7 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments />);
 		const compare = await screen.findByTestId("model-lab-compare-button");
 		const boxes = screen.getAllByRole("checkbox");
 		const reason = () => screen.queryByTestId("model-lab-compare-reason")?.textContent;
@@ -1048,12 +986,176 @@ describe("TraceExperiments", () => {
 			),
 		);
 
-		renderWithProviders(
-			<ConfirmProvider>
-				<TraceExperiments intent={{ tab: "trace", nonce: 1, experimentId }} />
-			</ConfirmProvider>,
-		);
+		renderWithProviders(<Experiments initial={experimentId} />);
 
 		expect((await screen.findByTestId("model-lab-trace-view")).textContent).toContain("Opened from Architecture");
+	});
+
+	describe("open run from the URL", () => {
+		const otherId = "77777777-7777-4777-8777-777777777777";
+		const unknownId = "99999999-9999-4999-8999-999999999999";
+
+		// Two finished traces, each with its detail and an empty trace, so either can open or be compared.
+		function stubTwoRuns(): { detailRequests: string[] } {
+			const seen = { detailRequests: [] as string[] };
+			stubModels();
+			server.use(
+				http.get(localApiPath("model-lab/experiments"), () =>
+					HttpResponse.json({
+						...emptyList,
+						experiments: [
+							{ ...savedRow(experimentId, "Trace", "Succeeded"), repoId: "org/First" },
+							{ ...savedRow(otherId, "Trace", "Succeeded"), repoId: "org/Second" },
+						],
+					}),
+				),
+				http.get(localApiPath("model-lab/experiments/:id"), ({ params }) => {
+					const id = String(params["id"]);
+					seen.detailRequests.push(id);
+					return HttpResponse.json({
+						...savedRow(id, "Trace", "Succeeded"),
+						repoId: id === experimentId ? "org/First" : "org/Second",
+						result: { promptTokens: 1, tokens: [], text: "", seconds: 1, peakVramBytes: 1 },
+					});
+				}),
+				http.get(localApiPath("model-lab/experiments/:id/trace"), () =>
+					HttpResponse.json({ records: [], truncated: false, droppedRecords: 0, byteCap: 1000 }),
+				),
+			);
+			return seen;
+		}
+
+		async function compareBoth(): Promise<void> {
+			const boxes = await screen.findAllByRole("checkbox");
+			fireEvent.click(boxes[0] as HTMLElement);
+			fireEvent.click(boxes[1] as HTMLElement);
+			fireEvent.click(screen.getByTestId("model-lab-compare-button"));
+			await screen.findByTestId("model-lab-compare-close");
+		}
+
+		it("opens a linked run whatever case its id is spelled in", async () => {
+			stubTwoRuns();
+			renderWithProviders(<Experiments initial={experimentId.toUpperCase()} />);
+
+			expect((await screen.findByTestId("model-lab-trace-view")).textContent).toContain("org/First");
+		});
+
+		it("ignores a linked id the list does not hold: asks for nothing and keeps the comparison open", async () => {
+			const runs = stubTwoRuns();
+			renderWithProviders(<Experiments link={unknownId} />);
+			await compareBoth();
+
+			fireEvent.click(screen.getByRole("button", { name: "Follow the link" }));
+
+			expect(screen.getByTestId("experiment-in-url").textContent).toBe(unknownId);
+			expect(screen.getByTestId("model-lab-compare-close")).toBeTruthy();
+			expect(screen.queryByTestId("model-lab-trace-view")).toBeNull();
+			expect(runs.detailRequests).not.toContain(unknownId);
+		});
+
+		it("shows a linked run instead of the comparison, and Compare selected takes the run out of the URL", async () => {
+			stubTwoRuns();
+			renderWithProviders(<Experiments link={otherId} />);
+			await compareBoth();
+
+			fireEvent.click(screen.getByRole("button", { name: "Follow the link" }));
+
+			expect((await screen.findByTestId("model-lab-trace-view")).textContent).toContain("org/Second");
+			expect(screen.queryByTestId("model-lab-compare-close")).toBeNull();
+
+			fireEvent.click(screen.getByTestId("model-lab-compare-button"));
+
+			expect(screen.getByTestId("experiment-in-url").textContent).toBe("");
+			expect(await screen.findByTestId("model-lab-compare-close")).toBeTruthy();
+			expect(screen.queryByTestId("model-lab-trace-view")).toBeNull();
+
+			fireEvent.click(screen.getByRole("button", { name: "org/First" }));
+
+			expect(screen.getByTestId("experiment-in-url").textContent).toBe(experimentId);
+			expect((await screen.findByTestId("model-lab-trace-view")).textContent).toContain("org/First");
+			expect(screen.queryByTestId("model-lab-compare-close")).toBeNull();
+		});
+
+		it("keeps the comparison when a run's click opens nothing", async () => {
+			stubTwoRuns();
+			renderWithProviders(<Experiments ignoreChanges={true} />);
+			await compareBoth();
+
+			fireEvent.click(screen.getByRole("button", { name: "org/First" }));
+			await act(async () => undefined);
+
+			expect(screen.getByTestId("experiment-in-url").textContent).toBe("");
+			expect(screen.getByTestId("model-lab-compare-close")).toBeTruthy();
+			expect(screen.queryByTestId("model-lab-trace-view")).toBeNull();
+		});
+
+		it("ends the comparison when a run's click opens it", async () => {
+			stubTwoRuns();
+			renderWithProviders(<Experiments />);
+			await compareBoth();
+
+			fireEvent.click(screen.getByRole("button", { name: "org/First" }));
+
+			expect((await screen.findByTestId("model-lab-trace-view")).textContent).toContain("org/First");
+			expect(screen.queryByTestId("model-lab-compare-close")).toBeNull();
+		});
+
+		it("ends the comparison when a linked run opens, so deleting that run does not bring the comparison back", async () => {
+			const thirdId = "88888888-8888-4888-8888-888888888888";
+			stubTwoRuns();
+			server.use(
+				http.get(localApiPath("model-lab/experiments"), () =>
+					HttpResponse.json({
+						...emptyList,
+						experiments: [
+							{ ...savedRow(experimentId, "Trace", "Succeeded"), repoId: "org/First" },
+							{ ...savedRow(otherId, "Trace", "Succeeded"), repoId: "org/Second" },
+							{ ...savedRow(thirdId, "Trace", "Succeeded"), repoId: "org/Third" },
+						],
+					}),
+				),
+				http.delete(localApiPath(`model-lab/experiments/${thirdId}`), () => new HttpResponse(null, { status: 204 })),
+			);
+			renderWithProviders(<Experiments link={thirdId} />);
+			await compareBoth();
+
+			fireEvent.click(screen.getByRole("button", { name: "Follow the link" }));
+			await screen.findByTestId("model-lab-trace-view");
+			const deleteThird = screen.getAllByRole("button", { name: "Delete" })[2];
+			await openConfirm(deleteThird as HTMLElement, "Delete this experiment?");
+			acceptConfirm();
+
+			await waitFor(() => expect(screen.getByTestId("experiment-in-url").textContent).toBe(""));
+			expect(screen.queryByTestId("model-lab-trace-view")).toBeNull();
+			expect(screen.queryByTestId("model-lab-compare-close")).toBeNull();
+		});
+
+		it("takes a deleted open run out of the URL", async () => {
+			stubTwoRuns();
+			server.use(
+				http.delete(localApiPath(`model-lab/experiments/${experimentId}`), () => new HttpResponse(null, { status: 204 })),
+			);
+			renderWithProviders(<Experiments initial={experimentId} />);
+			await screen.findByTestId("model-lab-trace-view");
+
+			const [deleteFirst] = screen.getAllByRole("button", { name: "Delete" });
+			await openConfirm(deleteFirst as HTMLElement, "Delete this experiment?");
+			acceptConfirm();
+
+			await waitFor(() => expect(screen.getByTestId("experiment-in-url").textContent).toBe(""));
+		});
+
+		it("opens a linked steering run, which needs no model", async () => {
+			stubModels();
+			const steering = savedRow(otherId, "Steering", "Succeeded");
+			server.use(
+				http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json({ ...emptyList, experiments: [steering] })),
+				http.get(localApiPath(`model-lab/experiments/${otherId}`), () => HttpResponse.json(steering)),
+			);
+			renderWithProviders(<Experiments initial={otherId} />);
+
+			expect(await screen.findByTestId("model-lab-trace-view")).toBeTruthy();
+			expect(screen.getByTestId("experiment-in-url").textContent).toBe(otherId);
+		});
 	});
 });

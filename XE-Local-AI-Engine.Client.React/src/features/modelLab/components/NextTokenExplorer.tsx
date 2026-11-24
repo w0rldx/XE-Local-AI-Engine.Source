@@ -1,19 +1,6 @@
-import {
-	Alert,
-	Button,
-	Group,
-	type MantineColor,
-	Paper,
-	ScrollArea,
-	Select,
-	Stack,
-	Switch,
-	Text,
-	Textarea,
-	Title,
-} from "@mantine/core";
+import { Alert, Button, Group, type MantineColor, Paper, ScrollArea, Stack, Switch, Text, Textarea, Title } from "@mantine/core";
 import { useMutation } from "@tanstack/react-query";
-import { memo, useMemo, useState } from "react";
+import { memo, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { tokenizeModelLabPromptMutation } from "@/core/api/generated/@tanstack/react-query.gen";
@@ -34,7 +21,6 @@ import { useDirectInferenceModels } from "@/core/directInference/useDirectInfere
 import { type ChatSamplingOptions, toWireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
 import { useStreamCommitScheduler } from "@/core/streaming/useStreamCommitScheduler";
 import { ExplanationLevelSwitch, ExplanationList } from "@/features/modelLab/components/ArchitectureExplanation";
-import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNotice";
 import { NextTokenPromptTokens } from "@/features/modelLab/components/NextTokenPromptTokens";
 import { NextTokenStepView } from "@/features/modelLab/components/NextTokenStepView";
 import { type ExplanationLevel, nextTokenTopics } from "@/features/modelLab/models/ModelLabExplanation";
@@ -97,18 +83,25 @@ function splitSteps(logprobs: readonly DirectInferenceLogprobEntry[] | undefined
 	return { thinking, answer };
 }
 
+interface NextTokenExplorerProps {
+	// The page's model; Next token runs it only if it is a llama.cpp chat model.
+	modelName: string | null;
+	// A Try in Next token jump, handed down only once the router shows this tab.
+	intent?: ModelLabIntent<"nextToken">;
+}
+
 // One prompt on one installed llama.cpp model with the top candidates of every step. Held in this component only: nothing is saved.
-// An intent from another tab prefills the form once; edits after it are the user's.
-export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextToken"> }) {
+// An intent from another tab prefills the form once, for the model it names; edits after it are the user's.
+export function NextTokenExplorer({ modelName, intent }: NextTokenExplorerProps) {
 	const { t } = useTranslation();
-	const { modelGroups, llamaCppModels, reasoningLlamaCppModels, status } = useDirectInferenceModels();
-	const modelItems = modelGroups.flatMap((group) => group.items).filter((item) => llamaCppModels.has(item.value));
-	const [model, setModel] = useState<string | null>(null);
+	const { llamaCppModels, reasoningLlamaCppModels, status } = useDirectInferenceModels();
 	const [systemPrompt, setSystemPrompt] = useState("");
 	const [prompt, setPrompt] = useState("");
 	const [sampling, setSampling] = useState<ChatSamplingOptions>({});
 	const [disableThinking, setDisableThinking] = useState(false);
 	const [result, setResult] = useState<DirectInferenceResult | undefined>();
+	// The model the shown result and its prompt tokens came from.
+	const [resultModel, setResultModel] = useState<string | null>(null);
 	const { running, start, stop } = useAbortableRun();
 	const resultCommits = useStreamCommitScheduler<DirectInferenceResult>(setResult);
 	const [showThinking, setShowThinking] = useState(false);
@@ -118,25 +111,35 @@ export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextTok
 	const [openTopic, setOpenTopic] = useState<string | null>(null);
 	// Set by Try in Next token on a trace: the form holds that trace's prompt and paired GGUF.
 	const [fromTrace, setFromTrace] = useState(false);
+	// Another model starts from its own default again; a jump in the same render then sets its own.
+	const [seenModel, setSeenModel] = useState(modelName);
+	if (modelName !== seenModel) {
+		setSeenModel(modelName);
+		setDisableThinking(false);
+		setFromTrace(false);
+	}
 	const [appliedNonce, setAppliedNonce] = useState<number>();
-	if (intent && intent.nonce !== appliedNonce) {
+	if (intent && intent.nonce !== appliedNonce && intent.modelName === modelName) {
 		setAppliedNonce(intent.nonce);
-		setModel(intent.modelName);
 		setSystemPrompt("");
 		setPrompt(intent.prompt);
 		setDisableThinking(intent.disableThinking);
 		setFromTrace(true);
 	}
+	// An edit while the link's model is still loading wins: a late prefill fills only an untouched form.
+	const consumeIntent = (): void => {
+		if (intent !== undefined) {
+			setAppliedNonce(intent.nonce);
+		}
+	};
 	// Read once per run, after it ends; never on a render.
 	const promptTokens = useMutation(tokenizeModelLabPromptMutation());
 
+	// Next token runs chat models only; the page lists every GGUF. A list kept after a failed refetch still says why.
+	const model = modelName !== null && llamaCppModels.has(modelName) ? modelName : null;
+	const notRunnable = modelName !== null && model === null && status !== "pending";
+	const notRunnableId = useId();
 	const isReasoningModel = model !== null && reasoningLlamaCppModels.has(model);
-	// Another model starts from its own default again.
-	const selectModel = (next: string | null): void => {
-		setModel(next);
-		setDisableThinking(false);
-		setFromTrace(false);
-	};
 
 	const run = async (): Promise<void> => {
 		if (model === null || prompt.trim().length === 0) {
@@ -145,6 +148,7 @@ export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextTok
 		// A stopped run's frame that never painted must not merge into this one.
 		resultCommits.cancel();
 		setSelected(null);
+		setResultModel(model);
 		promptTokens.reset();
 		const sentSystemPrompt = systemPrompt.trim().length > 0 ? systemPrompt : undefined;
 		const sentDisableThinking = isReasoningModel && disableThinking;
@@ -221,7 +225,6 @@ export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextTok
 					)}
 				</Text>
 			</Alert>
-			<ModelPickerNotice status={status} modelCount={modelItems.length} />
 			<Paper withBorder={true} p="md">
 				<Stack gap="sm">
 					{fromTrace && (
@@ -232,15 +235,15 @@ export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextTok
 							)}
 						</Text>
 					)}
-					<Select
-						label={t("pages.modelLab.nextToken.ui.model", "Model")}
-						placeholder={t("pages.directInference.modelPlaceholder", "Choose a model")}
-						data={modelItems}
-						value={model}
-						onChange={selectModel}
-						searchable={true}
-						disabled={running}
-					/>
+					{notRunnable && (
+						<Text size="sm" c="dimmed" id={notRunnableId} data-testid="model-lab-next-token-not-runnable">
+							{t(
+								"pages.modelLab.nextToken.ui.notRunnable",
+								"Next token runs llama.cpp chat models only, and {{model}} is not one. Choose a chat model above.",
+								{ model: modelName },
+							)}
+						</Text>
+					)}
 					<Textarea
 						label={t("pages.directInference.systemPrompt", "System prompt (optional)")}
 						autosize={true}
@@ -249,6 +252,7 @@ export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextTok
 						value={systemPrompt}
 						onChange={(event) => {
 							setSystemPrompt(event.currentTarget.value);
+							consumeIntent();
 							setFromTrace(false);
 						}}
 						disabled={running}
@@ -261,6 +265,7 @@ export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextTok
 						value={prompt}
 						onChange={(event) => {
 							setPrompt(event.currentTarget.value);
+							consumeIntent();
 							// The form no longer holds the trace's input, so the note about it no longer applies.
 							setFromTrace(false);
 						}}
@@ -271,7 +276,12 @@ export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextTok
 					)}
 					<DirectInferenceSamplingFields value={sampling} onChange={setSampling} disabled={running} />
 					<Group>
-						<Button onClick={run} loading={running} disabled={model === null || prompt.trim().length === 0}>
+						<Button
+							onClick={run}
+							loading={running}
+							disabled={model === null || prompt.trim().length === 0}
+							aria-describedby={notRunnable ? notRunnableId : undefined}
+						>
 							{t("pages.modelLab.nextToken.ui.run", "Run")}
 						</Button>
 						{running && (
@@ -282,6 +292,13 @@ export function NextTokenExplorer({ intent }: { intent?: ModelLabIntent<"nextTok
 					</Group>
 				</Stack>
 			</Paper>
+			{result && resultModel !== null && resultModel !== modelName && (
+				<Text size="sm" c="dimmed" data-testid="model-lab-next-token-result-model">
+					{t("pages.modelLab.nextToken.ui.resultModel", "The result below is from {{model}}, not the model chosen above.", {
+						model: resultModel,
+					})}
+				</Text>
+			)}
 			{!promptTokens.isIdle && (
 				<NextTokenPromptTokens pending={promptTokens.isPending} data={promptTokens.data} error={promptTokens.error} />
 			)}

@@ -3,17 +3,19 @@
 // The Next token tab against a stubbed models route (MSW) and a faked shared-hub seam: it offers llama.cpp models only,
 // asks for the top candidates, lists the steps, opens one by keyboard and simulates a sampler over its candidates.
 
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { useQuery } from "@tanstack/react-query";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import i18next from "i18next";
 import { HttpResponse, http } from "msw";
 import { useState } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { DirectInferenceEvent, DirectInferenceRequest } from "@/core/directInference/DirectInferenceModels";
+import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { NextTokenExplorer } from "@/features/modelLab/components/NextTokenExplorer";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
-import { renderWithProviders } from "@/test/RenderWithProviders";
+import { createTestQueryClient, renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
 const hub = vi.hoisted(() => {
@@ -87,14 +89,15 @@ function stubModels(reasoningModels: readonly string[] = []): void {
 				items: [
 					["model-a", "llamacpp"],
 					["model-b", "llamacpp"],
+					["embedder", "llamacpp", "Embedding"],
 					["gpt-6", "CodexOAuth"],
 					["ext:lan/qwen3", "external"],
-				].map(([modelName, provider]) => ({
+				].map(([modelName, provider, kind = "Chat"]) => ({
 					modelName,
 					displayLabel: null,
 					isSelected: false,
-					kind: "Chat",
-					detectedKind: "Chat",
+					kind,
+					detectedKind: kind,
 					capabilities: [],
 					isReasoningCapable: modelName !== undefined && reasoningModels.includes(modelName),
 					isToolCapable: true,
@@ -131,22 +134,49 @@ const logprobs: DirectInferenceEvent = {
 	],
 };
 
-async function openDropdown(): Promise<ReturnType<typeof within>> {
-	const input = screen.getByRole("combobox", { name: "Model" });
-	fireEvent.click(input);
-	return within(
-		await waitFor(() => {
-			const element = document.getElementById(input.getAttribute("aria-controls") ?? "");
-			if (element === null) {
-				throw new Error("the dropdown is not open yet");
-			}
-			return element;
-		}),
+// Stands in for the page's model picker, which lists models once the list has loaded. "Jump again" hands the panel a
+// Try in Next token link for model-a under a new nonce, and the page's model with it, as a jump from a trace does.
+function Host({ jumps = false }: { jumps?: boolean }) {
+	const loaded = useQuery(listLocalModelsOptions()).isSuccess;
+	const [model, setModel] = useState<string | null>(jumps ? "model-a" : null);
+	const [nonce, setNonce] = useState(jumps ? 1 : 0);
+	const intent =
+		nonce > 0
+			? { tab: "nextToken" as const, nonce, modelName: "model-a", prompt: "From the trace.", disableThinking: true }
+			: undefined;
+	return (
+		<>
+			{loaded && (
+				<select aria-label="Page model" value={model ?? ""} onChange={(event) => setModel(event.currentTarget.value || null)}>
+					{["", "model-a", "model-b", "embedder"].map((name) => (
+						<option key={name} value={name}>
+							{name}
+						</option>
+					))}
+				</select>
+			)}
+			{jumps && (
+				<button
+					type="button"
+					onClick={() => {
+						setNonce(nonce + 1);
+						setModel("model-a");
+					}}
+				>
+					Jump again
+				</button>
+			)}
+			<NextTokenExplorer modelName={model} intent={intent} />
+		</>
 	);
 }
 
+async function choose(name: string): Promise<void> {
+	fireEvent.change(await screen.findByRole("combobox", { name: "Page model" }), { target: { value: name } });
+}
+
 async function run(): Promise<void> {
-	fireEvent.click(await (await openDropdown()).findByRole("option", { name: "model-a", hidden: true }));
+	await choose("model-a");
 	fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Say hello." } });
 	fireEvent.click(screen.getByRole("button", { name: "Run" }));
 	await waitFor(() => expect(screen.getAllByTestId("model-lab-next-token-step-button").length).toBeGreaterThan(0));
@@ -174,7 +204,7 @@ describe("NextTokenExplorer", () => {
 
 	it("states what the values are and are not before any run", () => {
 		stubModels();
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 
 		const honesty = screen.getByTestId("model-lab-next-token-honesty").textContent;
 		expect(honesty).toContain("before sampling");
@@ -182,24 +212,53 @@ describe("NextTokenExplorer", () => {
 		expect(honesty).toContain("leaves out the last step");
 	});
 
-	it("offers installed llama.cpp models only", async () => {
+	it("runs llama.cpp chat models only: another GGUF gets the reason and no Run", async () => {
 		stubModels();
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
+		await choose("embedder");
+		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Say hello." } });
 
-		const dropdown = await openDropdown();
+		const reason = await screen.findByTestId("model-lab-next-token-not-runnable");
+		expect(reason.textContent).toBe(
+			"Next token runs llama.cpp chat models only, and embedder is not one. Choose a chat model above.",
+		);
+		expect(screen.getByRole("button", { name: "Run" })).toHaveProperty("disabled", true);
+		expect(screen.getByRole("button", { name: "Run" }).getAttribute("aria-describedby")).toBe(reason.id);
 
-		await dropdown.findByRole("option", { name: "model-a", hidden: true });
-		expect(dropdown.queryByRole("option", { name: "gpt-6", hidden: true })).toBeNull();
-		expect(dropdown.queryByRole("option", { name: "ext:lan/qwen3", hidden: true })).toBeNull();
+		await choose("model-a");
+		expect(screen.queryByTestId("model-lab-next-token-not-runnable")).toBeNull();
+		expect(screen.getByRole("button", { name: "Run" })).toHaveProperty("disabled", false);
+		expect(screen.getByRole("button", { name: "Run" }).getAttribute("aria-describedby")).toBeNull();
+	});
+
+	it("keeps the reason when a later refresh of the model list fails", async () => {
+		stubModels();
+		const queryClient = createTestQueryClient();
+		renderWithProviders(<Host />, { queryClient });
+		await choose("embedder");
+		await screen.findByTestId("model-lab-next-token-not-runnable");
+
+		server.use(http.get(localApiPath("models"), () => HttpResponse.json({ title: "gone" }, { status: 500 })));
+		await act(() => queryClient.refetchQueries({ queryKey: listLocalModelsOptions().queryKey }));
+
+		expect(queryClient.getQueryState(listLocalModelsOptions().queryKey)?.status).toBe("error");
+		const reason = screen.getByTestId("model-lab-next-token-not-runnable");
+		expect(screen.getByRole("button", { name: "Run" }).getAttribute("aria-describedby")).toBe(reason.id);
+	});
+
+	it("gives no reason while the model list is still loading", async () => {
+		stubModels();
+		renderWithProviders(<NextTokenExplorer modelName="model-a" />);
+
+		expect(screen.queryByTestId("model-lab-next-token-not-runnable")).toBeNull();
+		expect(screen.getByRole("button", { name: "Run" })).toHaveProperty("disabled", true);
 	});
 
 	it("offers Thinking off for a reasoning model only, starts each model from its default, and sends it", async () => {
 		stubModels(["model-a"]);
 		hub.state.events = [logprobs, { type: "done" }];
-		renderWithProviders(<NextTokenExplorer />);
-		const pick = async (name: string): Promise<void> => {
-			fireEvent.click(await (await openDropdown()).findByRole("option", { name, hidden: true }));
-		};
+		renderWithProviders(<Host />);
+		const pick = choose;
 
 		await pick("model-b");
 		expect(screen.queryByTestId("direct-inference-thinking-off")).toBeNull();
@@ -224,7 +283,7 @@ describe("NextTokenExplorer", () => {
 	it("asks for the most candidates the server allows and lists answer steps, thinking steps only on request", async () => {
 		stubModels();
 		hub.state.events = [{ type: "delta", textDelta: "Hello there" }, logprobs, { type: "done" }];
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 
 		await run();
 
@@ -243,7 +302,7 @@ describe("NextTokenExplorer", () => {
 	it("moves between steps with the arrow keys and opens one with a native button", async () => {
 		stubModels();
 		hub.state.events = [logprobs, { type: "done" }];
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 		await run();
 		const [first, second] = within(screen.getByRole("group", { name: "Answer" })).getAllByRole("button");
 
@@ -266,7 +325,7 @@ describe("NextTokenExplorer", () => {
 	it("labels the simulation as over the shown candidates and recomputes it without touching the measured bars", async () => {
 		stubModels();
 		hub.state.events = [logprobs, { type: "done" }];
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 		await run();
 		fireEvent.click(screen.getByRole("button", { name: '"Hello"' }));
 
@@ -296,7 +355,7 @@ describe("NextTokenExplorer", () => {
 	it("says when the chosen entry is not among the candidates", async () => {
 		stubModels();
 		hub.state.events = [logprobs, { type: "done" }];
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 		await run();
 
 		fireEvent.click(screen.getByRole("button", { name: '" there"' }));
@@ -310,7 +369,7 @@ describe("NextTokenExplorer", () => {
 	it("simulates min-p, which at its top keeps only the most likely candidate", async () => {
 		stubModels();
 		hub.state.events = [logprobs, { type: "done" }];
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 		await run();
 		fireEvent.click(screen.getByRole("button", { name: '"Hello"' }));
 		expect(screen.getByTestId("model-lab-next-token-server-defaults").textContent).toContain("top-k 40");
@@ -341,7 +400,7 @@ describe("NextTokenExplorer", () => {
 			},
 			{ type: "done" },
 		];
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 		await run();
 
 		fireEvent.click(screen.getByRole("button", { name: '"a"' }));
@@ -360,8 +419,8 @@ describe("NextTokenExplorer", () => {
 				{ type: "logprobs", logprobs: [{ text: "Hmm", logprob: -0.1, isReasoning: true, alternatives: [] }] },
 				{ type: "done", finishReason },
 			];
-			renderWithProviders(<NextTokenExplorer />);
-			fireEvent.click(await (await openDropdown()).findByRole("option", { name: "model-a", hidden: true }));
+			renderWithProviders(<Host />);
+			await choose("model-a");
 			fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Think." } });
 			fireEvent.click(screen.getByRole("button", { name: "Run" }));
 
@@ -379,8 +438,8 @@ describe("NextTokenExplorer", () => {
 		stubModels();
 		hub.state.hangs = true;
 		hub.state.events = [{ type: "logprobs", logprobs: [{ text: "Hmm", logprob: -0.1, isReasoning: true, alternatives: [] }] }];
-		renderWithProviders(<NextTokenExplorer />);
-		fireEvent.click(await (await openDropdown()).findByRole("option", { name: "model-a", hidden: true }));
+		renderWithProviders(<Host />);
+		await choose("model-a");
 		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Think." } });
 		fireEvent.click(screen.getByRole("button", { name: "Run" }));
 
@@ -394,7 +453,7 @@ describe("NextTokenExplorer", () => {
 		const many = (isReasoning: boolean) =>
 			Array.from({ length: 501 }, () => ({ text: "x", logprob: -1, isReasoning, alternatives: [] }));
 		hub.state.events = [{ type: "logprobs", logprobs: [...many(true), ...many(false)] }, { type: "done" }];
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 
 		await run();
 
@@ -408,8 +467,8 @@ describe("NextTokenExplorer", () => {
 			{ type: "delta", textDelta: "Hi" },
 			{ type: "done", elapsedMs: 5 },
 		];
-		renderWithProviders(<NextTokenExplorer />);
-		fireEvent.click(await (await openDropdown()).findByRole("option", { name: "model-a", hidden: true }));
+		renderWithProviders(<Host />);
+		await choose("model-a");
 		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Say hello." } });
 		fireEvent.click(screen.getByRole("button", { name: "Run" }));
 
@@ -418,7 +477,7 @@ describe("NextTokenExplorer", () => {
 
 	it("explains each topic with its basis", () => {
 		stubModels();
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 		const explain = within(screen.getByTestId("model-lab-next-token-explain"));
 
 		fireEvent.click(explain.getByRole("button", { name: "Temperature" }));
@@ -430,8 +489,8 @@ describe("NextTokenExplorer", () => {
 	it("leaving mid-run cancels it", async () => {
 		stubModels();
 		hub.state.hangs = true;
-		const { unmount } = renderWithProviders(<NextTokenExplorer />);
-		fireEvent.click(await (await openDropdown()).findByRole("option", { name: "model-a", hidden: true }));
+		const { unmount } = renderWithProviders(<Host />);
+		await choose("model-a");
 		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Say hello." } });
 		fireEvent.click(screen.getByRole("button", { name: "Run" }));
 		await waitFor(() => expect(hub.state.requests).toHaveLength(1));
@@ -452,7 +511,7 @@ describe("NextTokenExplorer prompt tokens", () => {
 	});
 
 	async function chooseAndRun(prompt: string): Promise<void> {
-		fireEvent.click(await (await openDropdown()).findByRole("option", { name: "model-a", hidden: true }));
+		await choose("model-a");
 		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: prompt } });
 		fireEvent.click(screen.getByRole("button", { name: "Run" }));
 	}
@@ -460,8 +519,8 @@ describe("NextTokenExplorer prompt tokens", () => {
 	it("reads them once per run with the exact inputs it sent, and shows each token's piece and id", async () => {
 		stubModels(["model-a"]);
 		hub.state.events = [{ type: "delta", textDelta: "Hello" }, logprobs, { type: "done" }];
-		renderWithProviders(<NextTokenExplorer />);
-		fireEvent.click(await (await openDropdown()).findByRole("option", { name: "model-a", hidden: true }));
+		renderWithProviders(<Host />);
+		await choose("model-a");
 		fireEvent.change(screen.getByLabelText("System prompt (optional)"), { target: { value: "Be brief." } });
 		fireEvent.click(screen.getByTestId("direct-inference-thinking-off"));
 		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Say hello there." } });
@@ -504,7 +563,7 @@ describe("NextTokenExplorer prompt tokens", () => {
 		stubModels();
 		stubPromptTokens(() => HttpResponse.json({ reason: "ModelNotLoaded", message: "The model is not loaded." }, { status: 409 }));
 		hub.state.events = [logprobs, { type: "done" }];
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 
 		await chooseAndRun("Say hello.");
 
@@ -523,7 +582,7 @@ describe("NextTokenExplorer prompt tokens", () => {
 		});
 		stubPromptTokens(() => reply);
 		hub.state.events = [logprobs, { type: "done" }];
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 
 		await chooseAndRun("Say hello.");
 
@@ -539,7 +598,7 @@ describe("NextTokenExplorer prompt tokens", () => {
 		stubModels();
 		stubPromptTokens(() => HttpResponse.json({ title: "Broken" }, { status: 500 }));
 		hub.state.events = [logprobs, { type: "done" }];
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 
 		await chooseAndRun("Say hello.");
 
@@ -551,7 +610,7 @@ describe("NextTokenExplorer prompt tokens", () => {
 		stubModels();
 		stubPromptTokens(() => HttpResponse.json({ ...promptTokens, tokenCount: 9000, truncated: true }));
 		hub.state.events = [logprobs, { type: "done" }];
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 
 		await chooseAndRun("Say hello.");
 
@@ -564,7 +623,7 @@ describe("NextTokenExplorer prompt tokens", () => {
 	it("reads none for a failed run or one stopped before any output, and reads them for one stopped with output", async () => {
 		stubModels();
 		hub.state.events = [{ type: "error", errorMessage: "No slot." }];
-		renderWithProviders(<NextTokenExplorer />);
+		renderWithProviders(<Host />);
 		await chooseAndRun("Say hello.");
 		await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toHaveProperty("disabled", false));
 
@@ -590,30 +649,14 @@ describe("NextTokenExplorer prefilled from a trace", () => {
 		tokenizeBodies = [];
 	});
 
-	// Stands in for the page: Jump again sends the same link once more under a new nonce.
-	function Harness() {
-		const [nonce, setNonce] = useState(1);
-		return (
-			<>
-				<button type="button" onClick={() => setNonce((value) => value + 1)}>
-					Jump again
-				</button>
-				<NextTokenExplorer
-					intent={{ tab: "nextToken", nonce, modelName: "model-a", prompt: "From the trace.", disableThinking: true }}
-				/>
-			</>
-		);
-	}
-
 	it("fills the paired model, the prompt and thinking off once, says it runs the GGUF, and keeps a later edit", async () => {
 		stubModels(["model-a"]);
-		renderWithProviders(<Harness />);
+		renderWithProviders(<Host jumps={true} />);
 
 		const prompt = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
 		expect(prompt.value).toBe("From the trace.");
 		expect(screen.getByTestId("model-lab-next-token-from-trace").textContent).toContain("runs the paired GGUF with llama.cpp");
 		expect(((await screen.findByTestId("direct-inference-thinking-off")) as HTMLInputElement).checked).toBe(true);
-		await waitFor(() => expect((screen.getByRole("combobox", { name: "Model" }) as HTMLInputElement).value).toBe("model-a"));
 
 		fireEvent.change(prompt, { target: { value: "My own prompt." } });
 		expect(prompt.value).toBe("My own prompt.");
@@ -626,11 +669,123 @@ describe("NextTokenExplorer prefilled from a trace", () => {
 
 	it("drops the trace note when the system prompt is edited", async () => {
 		stubModels(["model-a"]);
-		renderWithProviders(<Harness />);
+		renderWithProviders(<Host jumps={true} />);
 		expect(screen.getByTestId("model-lab-next-token-from-trace")).not.toBeNull();
 
 		fireEvent.change(screen.getByLabelText("System prompt (optional)"), { target: { value: "Be brief." } });
 
 		expect(screen.queryByTestId("model-lab-next-token-from-trace")).toBeNull();
+	});
+
+	// The page's model resolves after the link arrived, as after a failed first model-list load and a later refetch.
+	function Pending() {
+		const [model, setModel] = useState<string | null>(null);
+		return (
+			<>
+				<button type="button" onClick={() => setModel("model-a")}>
+					Show model-a
+				</button>
+				<NextTokenExplorer
+					modelName={model}
+					intent={{ tab: "nextToken", nonce: 1, modelName: "model-a", prompt: "From the trace.", disableThinking: true }}
+				/>
+			</>
+		);
+	}
+
+	it("fills an untouched form once the link's model becomes the page's", async () => {
+		stubModels(["model-a"]);
+		renderWithProviders(<Pending />);
+		const prompt = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
+		expect(prompt.value).toBe("");
+
+		fireEvent.click(screen.getByRole("button", { name: "Show model-a" }));
+
+		expect(prompt.value).toBe("From the trace.");
+		expect(screen.getByTestId("model-lab-next-token-from-trace")).not.toBeNull();
+		expect(((await screen.findByTestId("direct-inference-thinking-off")) as HTMLInputElement).checked).toBe(true);
+	});
+
+	it.each([
+		["Prompt", "My draft."],
+		["System prompt (optional)", "Be brief."],
+	])("keeps an edit to the %s made while the link's model was not yet the page's", async (label, draft) => {
+		stubModels(["model-a"]);
+		renderWithProviders(<Pending />);
+		fireEvent.change(screen.getByLabelText(label), { target: { value: draft } });
+
+		fireEvent.click(screen.getByRole("button", { name: "Show model-a" }));
+
+		expect((screen.getByLabelText(label) as HTMLTextAreaElement).value).toBe(draft);
+		expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).value).not.toBe("From the trace.");
+		expect(screen.queryByTestId("model-lab-next-token-from-trace")).toBeNull();
+		expect(((await screen.findByTestId("direct-inference-thinking-off")) as HTMLInputElement).checked).toBe(false);
+	});
+
+	it("starts model-a from its own default again after the page goes to model-b and back", async () => {
+		stubModels(["model-a"]);
+		renderWithProviders(<Host jumps={true} />);
+		expect(((await screen.findByTestId("direct-inference-thinking-off")) as HTMLInputElement).checked).toBe(true);
+
+		await choose("model-b");
+		await choose("model-a");
+
+		expect((screen.getByTestId("direct-inference-thinking-off") as HTMLInputElement).checked).toBe(false);
+		expect(screen.queryByTestId("model-lab-next-token-from-trace")).toBeNull();
+		expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).value).toBe("From the trace.");
+	});
+});
+
+describe("NextTokenExplorer when the page's model changes", () => {
+	afterEach(() => {
+		tokenizeBodies = [];
+		hub.state.requests = [];
+		hub.state.events = [];
+		hub.state.hangs = false;
+	});
+
+	it("keeps a running job's Stop and names the model its result comes from", async () => {
+		stubModels();
+		hub.state.hangs = true;
+		hub.state.events = [{ type: "delta", textDelta: "Hel" }];
+		renderWithProviders(<Host />);
+		await choose("model-a");
+		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Say hello." } });
+		fireEvent.click(screen.getByRole("button", { name: "Run" }));
+		await waitFor(() => expect(hub.state.requests).toHaveLength(1));
+		expect(screen.queryByTestId("model-lab-next-token-result-model")).toBeNull();
+
+		await choose("model-b");
+
+		expect((await screen.findByTestId("model-lab-next-token-result-model")).textContent).toBe(
+			"The result below is from model-a, not the model chosen above.",
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+		await waitFor(() => expect(hub.dispose).toHaveBeenCalled());
+	});
+
+	it("shows prompt tokens that arrive after a model change as the run's model's", async () => {
+		stubModels();
+		let answer: () => void = () => undefined;
+		const answered = new Promise<void>((resolve) => {
+			answer = resolve;
+		});
+		stubPromptTokens(async () => {
+			await answered;
+			return HttpResponse.json(promptTokens);
+		});
+		hub.state.events = [{ type: "delta", textDelta: "Hello" }, logprobs, { type: "done" }];
+		renderWithProviders(<Host />);
+		await run();
+		await waitFor(() => expect(tokenizeBodies).toHaveLength(1));
+
+		await choose("model-b");
+		answer();
+
+		expect(await screen.findByTestId("model-lab-prompt-tokens-count")).toBeTruthy();
+		expect(screen.getByTestId("model-lab-next-token-result-model").textContent).toBe(
+			"The result below is from model-a, not the model chosen above.",
+		);
+		expect(tokenizeBodies).toEqual([{ modelName: "model-a", prompt: "Say hello.", disableThinking: false }]);
 	});
 });

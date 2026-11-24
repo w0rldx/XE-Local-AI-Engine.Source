@@ -42,5 +42,8 @@ describe("ModelLabPage when its strings will not load", () => {
 
 		await waitFor(() => expect(screen.getByRole("tab", { name: "Trace and steer" })).toBeTruthy(), { timeout: 5000 });
 		expect(attempts.count).toBe(1);
+		// The entry state reads its defaults too: Architecture first, under the page's model picker.
+		expect(screen.getByRole("tab", { selected: true }).textContent).toBe("Architecture");
+		expect(screen.getByRole("combobox", { name: /Model for Architecture, Next token and Inspect/ })).toBeTruthy();
 	});
 });

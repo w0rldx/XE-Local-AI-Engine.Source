@@ -35,6 +35,10 @@
 				"notTraced": "Not traced: the chosen trace did not measure this block.",
 				"openTrace": "Open trace",
 				"operations": "Operations",
+				"outsideMissing": {
+					"embedding": "Embedding is not in this file. One possible reason: the file is one part of a split GGUF and it is in another part.",
+					"output": "Output is not in this file. One possible reason: the file is one part of a split GGUF and it is in another part."
+				},
 				"overviewOnly": "No operation graph is shown for the {{architecture}} architecture: only the tensor groups read from the file.",
 				"readBadge": "Read from the file",
 				"relation": {
@@ -688,7 +692,6 @@
 					}
 				}
 			},
-			"inspectModel": "Installed model",
 			"modelsFailed": "The installed models could not be loaded.",
 			"nextToken": {
 				"explain": {
@@ -756,9 +759,9 @@
 					"minP": "Min-p: {{value}}",
 					"minPLabel": "Simulated min-p",
 					"minPOff": "Min-p: off",
-					"model": "Model",
 					"noCandidates": "The server returned no candidates for this step.",
 					"noCandidatesTrace": "This trace recorded no candidates for this step.",
+					"notRunnable": "Next token runs llama.cpp chat models only, and {{model}} is not one. Choose a chat model above.",
 					"notTokens": "Steps are entries, not tokens: multi-byte text can merge several tokens into one entry, whose values belong to its last token.",
 					"pickStep": "Pick a step to see its candidates.",
 					"preSampling": "The bars show the probabilities llama.cpp computed before sampling: the run's temperature, top-k and top-p do not change them.",
@@ -777,6 +780,7 @@
 						"truncated": "Only the first {{shown}} tokens are shown."
 					},
 					"rest": "The rest of the vocabulary: {{percent}}",
+					"resultModel": "The result below is from {{model}}, not the model chosen above.",
 					"run": "Run",
 					"serverDefaults": "Sampling values a run leaves empty use llama-server's defaults (top-k 40, top-p 0.95, min-p 0.05, temperature 0.8) unless the model file or its launch arguments set others. Top-k 40 is more than the shown candidates, so the simulation may then differ from the server.",
 					"showThinking": "Show thinking steps",
@@ -815,6 +819,12 @@
 			},
 			"noModels": "No installed llama.cpp model is available. Install one under Models first.",
 			"openModels": "Open Models",
+			"pageModel": {
+				"hint": "Same-prompt A/B and Trace and steer choose their own models.",
+				"label": "Model for Architecture, Next token and Inspect",
+				"loading": "Loading the installed models…",
+				"notInstalled": "{{model}} is not installed as a llama.cpp model on this node. Choose an installed model."
+			},
 			"pytorch": {
 				"blockRoot": "(block)",
 				"build": "Build PyTorch index",
@@ -957,7 +967,7 @@
 				"start": "Start steering run",
 				"tests": "Test prompts"
 			},
-			"subtitle": "Compare two local models on one prompt, see the candidates behind each next token, inspect a model's file or its architecture, or trace and steer a checkpoint. Only traces and steering runs are saved.",
+			"subtitle": "Choose an installed model to see its architecture, the candidates behind each next token or its file. Compare two local models on one prompt, or trace and steer a checkpoint. Only traces and steering runs are saved.",
 			"title": "Model Lab",
 			"trace": {
 				"artifact": {

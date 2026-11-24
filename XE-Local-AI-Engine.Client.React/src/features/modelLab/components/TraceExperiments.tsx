@@ -21,47 +21,53 @@ import { TraceCheckpointForm } from "@/features/modelLab/components/TraceCheckpo
 import { TraceExperimentView } from "@/features/modelLab/components/TraceExperimentView";
 import { useModelLabExperimentHub } from "@/features/modelLab/hooks/useModelLabExperimentHub";
 import { compareBlock } from "@/features/modelLab/models/ModelLabComparison";
-import type { ModelLabIntent, ModelLabJump } from "@/features/modelLab/models/ModelLabNavigation";
+import { type ModelLabJump, sameExperimentId } from "@/features/modelLab/models/ModelLabNavigation";
 import { activeJobPollMs } from "@/features/modelLab/models/ModelLabTrace";
 
 const statusColors: Record<string, string> = { Running: "blue", Succeeded: "green", Failed: "red", Cancelled: "gray" };
 
 interface TraceExperimentsProps {
-	// Another tab asked to open this saved experiment.
-	intent?: ModelLabIntent<"trace">;
+	// The saved experiment the URL names: opened once the list holds it.
+	experimentId?: string;
+	onExperimentChange: (experimentId: string | undefined) => void;
+	// The user's own delete of this run finished.
+	onExperimentDeleted: (experimentId: string) => void;
 	onJump?: (to: ModelLabJump) => void;
 }
 
 // Start a trace, follow the one running job, and reopen any saved one.
-export function TraceExperiments({ intent, onJump }: TraceExperimentsProps) {
+export function TraceExperiments({ experimentId, onExperimentChange, onExperimentDeleted, onJump }: TraceExperimentsProps) {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
-	const [selectedId, setSelectedId] = useState<string | null>(null);
 	// Ticked rows, and the runs the open comparison shows.
 	const [checked, setChecked] = useState<string[]>([]);
 	const [comparedIds, setComparedIds] = useState<string[] | null>(null);
-	const [appliedNonce, setAppliedNonce] = useState<number>();
-	if (intent && intent.nonce !== appliedNonce) {
-		setAppliedNonce(intent.nonce);
-		setSelectedId(intent.experimentId);
-		setComparedIds(null);
-	}
 	const compareReasonId = useId();
 	const refreshList = useCallback(
 		() => queryClient.invalidateQueries({ queryKey: listModelLabExperimentsQueryKey() }),
 		[queryClient],
 	);
+	// Two observers of one query: the hub needs the running id, and the poll rate needs the hub's answer.
+	const held = useQuery(listModelLabExperimentsOptions()).data;
+	const activeId = held?.activeExperimentId ?? null;
+	// Only an id the held list positively has is opened: an unknown one asks for nothing and leaves a comparison shown.
+	const openId = held?.experiments?.find((experiment) => sameExperimentId(experiment.id, experimentId))?.id ?? null;
+	// Opening a run, by a click, a link or a jump, ends the comparison, so closing that run later does not bring it back.
+	const [seenOpenId, setSeenOpenId] = useState(openId);
+	if (openId !== seenOpenId) {
+		setSeenOpenId(openId);
+		if (openId !== null) {
+			setComparedIds(null);
+		}
+	}
 	const refresh = useCallback(
 		() =>
 			Promise.all([
 				refreshList(),
-				selectedId &&
-					queryClient.invalidateQueries({ queryKey: getModelLabExperimentQueryKey({ path: { experimentId: selectedId } }) }),
+				openId && queryClient.invalidateQueries({ queryKey: getModelLabExperimentQueryKey({ path: { experimentId: openId } }) }),
 			]),
-		[queryClient, refreshList, selectedId],
+		[queryClient, refreshList, openId],
 	);
-	// Two observers of one query: the hub needs the running id, and the poll rate needs the hub's answer.
-	const activeId = useQuery(listModelLabExperimentsOptions()).data?.activeExperimentId ?? null;
 	const live = useModelLabExperimentHub(activeId, refresh);
 	const list = useQuery({
 		...listModelLabExperimentsOptions(),
@@ -72,9 +78,7 @@ export function TraceExperiments({ intent, onJump }: TraceExperimentsProps) {
 		...deleteModelLabExperimentMutation(),
 		onSuccess: (_data, variables) => {
 			const removed = variables.path.experimentId;
-			if (removed === selectedId) {
-				setSelectedId(null);
-			}
+			onExperimentDeleted(removed);
 			setChecked((ids) => ids.filter((id) => id !== removed));
 			setComparedIds((ids) => (ids?.includes(removed) ? null : ids));
 			return refreshList();
@@ -203,7 +207,7 @@ export function TraceExperiments({ intent, onJump }: TraceExperimentsProps) {
 							aria-describedby={block ? compareReasonId : undefined}
 							onClick={() => {
 								setComparedIds(selected.map((experiment) => experiment.id));
-								setSelectedId(null);
+								onExperimentChange(undefined);
 							}}
 							data-testid="model-lab-compare-button"
 						>
@@ -239,14 +243,7 @@ export function TraceExperiments({ intent, onJump }: TraceExperimentsProps) {
 											</Table.Td>
 											<Table.Td>
 												<Stack gap={2} align="flex-start">
-													<Button
-														variant="subtle"
-														size="compact-sm"
-														onClick={() => {
-															setSelectedId(experiment.id);
-															setComparedIds(null);
-														}}
-													>
+													<Button variant="subtle" size="compact-sm" onClick={() => onExperimentChange(experiment.id)}>
 														{experiment.repoId}
 													</Button>
 													<Group gap={4}>
@@ -327,7 +324,7 @@ export function TraceExperiments({ intent, onJump }: TraceExperimentsProps) {
 					{apiErrorMessage(remove.error, t("pages.modelLab.trace.deleteFailed", "The experiment could not be deleted."))}
 				</Alert>
 			)}
-			{comparedIds && (
+			{comparedIds && openId === null && (
 				<Stack gap="xs">
 					<Group justify="flex-end">
 						<Button size="xs" variant="subtle" onClick={() => setComparedIds(null)} data-testid="model-lab-compare-close">
@@ -337,7 +334,7 @@ export function TraceExperiments({ intent, onJump }: TraceExperimentsProps) {
 					<SavedExperimentComparison key={comparedIds.join()} experimentIds={comparedIds} />
 				</Stack>
 			)}
-			{selectedId && <TraceExperimentView key={selectedId} experimentId={selectedId} isLive={live.isLive} onJump={onJump} />}
+			{openId && <TraceExperimentView key={openId} experimentId={openId} isLive={live.isLive} onJump={onJump} />}
 		</Stack>
 	);
 }

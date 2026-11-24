@@ -1,30 +1,47 @@
-import { Loader, Tabs } from "@mantine/core";
+import { Alert, Group, Loader, Select, Stack, Tabs, Text } from "@mantine/core";
 import { IconFlask } from "@tabler/icons-react";
-import { Suspense, use, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Suspense, use, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { StickyBar } from "@/core/ui/components/StickyBar/StickyBar";
 import { scrollStuckTabsToTop } from "@/core/ui/components/StickyBar/StickyTabsScroll";
 import { ArchitectureExplorer } from "@/features/modelLab/components/ArchitectureExplorer";
 import { InstalledModelInspector } from "@/features/modelLab/components/InstalledModelInspector";
+import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNotice";
 import { NextTokenExplorer } from "@/features/modelLab/components/NextTokenExplorer";
 import { SamePromptComparison } from "@/features/modelLab/components/SamePromptComparison";
 import { TraceExperiments } from "@/features/modelLab/components/TraceExperiments";
+import type { ArchitectureSelection } from "@/features/modelLab/models/ModelLabArchitecture";
+import type { ExplanationLevel } from "@/features/modelLab/models/ModelLabExplanation";
 import {
+	applyModelLabPatch,
+	defaultModelLabTab,
+	installedGgufModels,
+	jumpPatch,
 	type ModelLabIntent,
 	type ModelLabJump,
-	type ModelLabTab,
+	type ModelLabSearch,
+	type ModelLabUpdate,
 	modelLabTabs,
+	sameExperimentId,
 } from "@/features/modelLab/models/ModelLabNavigation";
 import { forgetFailedModelLabStrings, loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
 
-// `tab` and `onTabChange` come from the route's `?tab=`; without them (unit tests) the page keeps its own tab.
-interface ModelLabPageProps {
-	tab?: ModelLabTab;
-	onTabChange?: (tab: ModelLabTab) => void;
-}
+// The route hands down the URL's search and takes every change; without either (unit tests) the page keeps its own.
+// `onShown` runs only once the router shows that change: never for a blocked or failed one.
+type ModelLabPageProps =
+	| {
+			search: ModelLabSearch;
+			onSearchChange: (update: ModelLabUpdate, push: boolean, onShown?: () => void) => void;
+	  }
+	| { search?: undefined; onSearchChange?: undefined };
+
+// The tabs the page's model picker drives; A/B and Trace choose their own models.
+const pickerTabs: ReadonlySet<string> = new Set(["architecture", "nextToken", "inspect"]);
 
 export function ModelLabPage(props: ModelLabPageProps) {
 	// Once per mount, outside the boundary that suspends.
@@ -36,25 +53,90 @@ export function ModelLabPage(props: ModelLabPageProps) {
 	);
 }
 
-function ModelLabContent({ tab, onTabChange }: ModelLabPageProps) {
+function ModelLabContent({ search: routeSearch, onSearchChange }: ModelLabPageProps) {
 	const { t, i18n } = useTranslation();
 	use(loadModelLabStrings(i18n.language));
 	const tabsRef = useRef<HTMLDivElement>(null);
-	const [ownTab, setOwnTab] = useState<ModelLabTab>("compare");
-	const [intent, setIntent] = useState<ModelLabIntent>();
+	const [ownSearch, setOwnSearch] = useState<ModelLabSearch>({});
+	const search = routeSearch ?? ownSearch;
+	const activeTab = search.tab ?? defaultModelLabTab;
+	// Every change goes through one transition; only a jump pushes a history entry.
+	const write = useCallback(
+		(update: ModelLabUpdate, push = false, onShown?: () => void): void => {
+			if (onSearchChange) {
+				onSearchChange(update, push, onShown);
+			} else {
+				setOwnSearch((previous) => applyModelLabPatch(previous, update));
+				onShown?.();
+			}
+		},
+		[onSearchChange],
+	);
+
+	const models = useQuery({ ...listLocalModelsOptions(), staleTime: 30_000 });
+	const modelOptions = installedGgufModels(models.data?.items).map((model) => ({ value: model.modelName, label: model.label }));
+	const modelNames = modelOptions.map((option) => option.value);
+	// The URL's model, once a held list confirms it. A list kept after a failed refetch still counts.
+	const resolvedModel =
+		models.data !== undefined && search.model !== undefined && modelNames.includes(search.model) ? search.model : null;
+	// Architecture and Inspect read a model's file only once their tab shows that model, from any way of getting there.
+	const [architectureModel, setArchitectureModel] = useState<string | null>(null);
+	if (activeTab === "architecture" && architectureModel !== resolvedModel) {
+		setArchitectureModel(resolvedModel);
+	}
+	const [inspectModel, setInspectModel] = useState<string | null>(null);
+	if (activeTab === "inspect" && inspectModel !== resolvedModel) {
+		setInspectModel(resolvedModel);
+	}
+	// Trace opens the URL's run only once its tab shows; an open run stays while another tab is shown.
+	const [traceExperiment, setTraceExperiment] = useState<string | undefined>(undefined);
+	if (activeTab === "trace" && traceExperiment !== search.experiment) {
+		setTraceExperiment(search.experiment);
+	}
+	// Only the Next token prefill is page state; the prompt never enters the URL. A tab switch or another model ends it.
+	const [nextTokenIntent, setNextTokenIntent] = useState<ModelLabIntent<"nextToken">>();
+	const jumpCount = useRef(0);
+
 	const showTab = (value: string | null): void => {
 		const next = modelLabTabs.find((known) => known === value);
 		if (next === undefined) {
 			return;
 		}
-		setOwnTab(next);
-		onTabChange?.(next);
+		setNextTokenIntent(undefined);
+		write({ tab: next });
 		scrollStuckTabsToTop(tabsRef.current);
 	};
-	const jump = (to: ModelLabJump): void => {
-		setIntent((previous) => ({ ...to, nonce: (previous?.nonce ?? 0) + 1 }));
-		showTab(to.tab);
-	};
+	const jump = useCallback(
+		(to: ModelLabJump): void => {
+			jumpCount.current += 1;
+			const nonce = jumpCount.current;
+			// Only a jump the router shows hands anything over: a blocked one leaves no prefill, focus or scroll behind.
+			write(jumpPatch(to), true, () => {
+				setNextTokenIntent(to.tab === "nextToken" ? { ...to, nonce } : undefined);
+				scrollStuckTabsToTop(tabsRef.current);
+				// The button that jumped is in a panel now hidden: focus goes to the target's tab instead.
+				tabsRef.current?.querySelector<HTMLElement>(`[data-model-lab-tab="${to.tab}"]`)?.focus();
+			});
+		},
+		[write],
+	);
+	const selectModel = useCallback(
+		(model: string | null): void => {
+			setNextTokenIntent(undefined);
+			write({ model: model ?? undefined });
+		},
+		[write],
+	);
+	const selectBlock = useCallback((block: ArchitectureSelection) => write({ block }), [write]);
+	const selectTrace = useCallback((trace: string | null) => write({ trace: trace ?? undefined }), [write]);
+	const selectLevel = useCallback((level: ExplanationLevel) => write({ level }), [write]);
+	const openExperiment = useCallback((experiment: string | undefined) => write({ experiment }), [write]);
+	// A delete that finishes after another run was opened must not close that one.
+	const closeDeletedExperiment = useCallback(
+		(removed: string) => write((previous) => (sameExperimentId(previous.experiment, removed) ? { experiment: undefined } : {})),
+		[write],
+	);
+
 	return (
 		<PageShell>
 			<PageHeader
@@ -62,34 +144,93 @@ function ModelLabContent({ tab, onTabChange }: ModelLabPageProps) {
 				title={t("pages.modelLab.title", "Model Lab")}
 				subtitle={t(
 					"pages.modelLab.subtitle",
-					"Compare two local models on one prompt, see the candidates behind each next token, inspect a model's file or its architecture, or trace and steer a checkpoint. Only traces and steering runs are saved.",
+					"Choose an installed model to see its architecture, the candidates behind each next token or its file. Compare two local models on one prompt, or trace and steer a checkpoint. Only traces and steering runs are saved.",
 				)}
 			/>
-			{/* Both panels stay mounted, so switching tabs neither cancels a run nor drops a chosen model. */}
-			<Tabs ref={tabsRef} value={tab ?? ownTab} onChange={showTab}>
+			<Stack gap="xs" mb="md">
+				<Select
+					label={t("pages.modelLab.pageModel.label", "Model for Architecture, Next token and Inspect")}
+					description={t("pages.modelLab.pageModel.hint", "Same-prompt A/B and Trace and steer choose their own models.")}
+					placeholder={t("pages.directInference.modelPlaceholder", "Choose a model")}
+					data={modelOptions}
+					value={resolvedModel}
+					onChange={selectModel}
+					searchable={true}
+				/>
+				{pickerTabs.has(activeTab) && (
+					<>
+						{models.isPending && (
+							<Group gap="xs" role="status" aria-live="polite" data-testid="model-lab-models-loading">
+								<Loader size="xs" />
+								<Text size="sm" c="dimmed">
+									{t("pages.modelLab.pageModel.loading", "Loading the installed models…")}
+								</Text>
+							</Group>
+						)}
+						<ModelPickerNotice status={models.data === undefined ? models.status : "success"} modelCount={modelNames.length} />
+						{/* With no model installed at all, the notice above already says so. */}
+						{models.data !== undefined && search.model !== undefined && resolvedModel === null && modelNames.length > 0 && (
+							// A model name is one long word: it breaks anywhere on a narrow screen instead of running out of the box.
+							<Alert color="yellow" style={{ overflowWrap: "anywhere" }} data-testid="model-lab-model-not-installed">
+								{t(
+									"pages.modelLab.pageModel.notInstalled",
+									"{{model}} is not installed as a llama.cpp model on this node. Choose an installed model.",
+									{ model: search.model },
+								)}
+							</Alert>
+						)}
+					</>
+				)}
+			</Stack>
+			{/* Every panel stays mounted, so switching tabs neither cancels a run nor drops what a panel holds. */}
+			<Tabs ref={tabsRef} value={activeTab} onChange={showTab}>
 				<StickyBar edge="top" data-testid="model-lab-tabs-bar">
 					<Tabs.List>
-						<Tabs.Tab value="compare">{t("pages.modelLab.compare.tab", "Same-prompt A/B")}</Tabs.Tab>
-						<Tabs.Tab value="nextToken">{t("pages.modelLab.nextToken.ui.tab", "Next token")}</Tabs.Tab>
-						<Tabs.Tab value="inspect">{t("pages.models.inspect.tab", "Inspect")}</Tabs.Tab>
-						<Tabs.Tab value="trace">{t("pages.modelLab.trace.tab", "Trace and steer")}</Tabs.Tab>
-						<Tabs.Tab value="architecture">{t("pages.modelLab.architecture.tab", "Architecture")}</Tabs.Tab>
+						<Tabs.Tab value="architecture" data-model-lab-tab="architecture">
+							{t("pages.modelLab.architecture.tab", "Architecture")}
+						</Tabs.Tab>
+						<Tabs.Tab value="compare" data-model-lab-tab="compare">
+							{t("pages.modelLab.compare.tab", "Same-prompt A/B")}
+						</Tabs.Tab>
+						<Tabs.Tab value="nextToken" data-model-lab-tab="nextToken">
+							{t("pages.modelLab.nextToken.ui.tab", "Next token")}
+						</Tabs.Tab>
+						<Tabs.Tab value="inspect" data-model-lab-tab="inspect">
+							{t("pages.models.inspect.tab", "Inspect")}
+						</Tabs.Tab>
+						<Tabs.Tab value="trace" data-model-lab-tab="trace">
+							{t("pages.modelLab.trace.tab", "Trace and steer")}
+						</Tabs.Tab>
 					</Tabs.List>
 				</StickyBar>
+				<Tabs.Panel value="architecture" pt="md">
+					<ArchitectureExplorer
+						modelName={architectureModel}
+						selection={search.block ?? null}
+						traceId={search.trace ?? null}
+						level={search.level ?? "overview"}
+						onSelect={selectBlock}
+						onTraceChange={selectTrace}
+						onLevelChange={selectLevel}
+						onJump={jump}
+					/>
+				</Tabs.Panel>
 				<Tabs.Panel value="compare" pt="md">
 					<SamePromptComparison />
 				</Tabs.Panel>
 				<Tabs.Panel value="nextToken" pt="md">
-					<NextTokenExplorer intent={intent?.tab === "nextToken" ? intent : undefined} />
+					<NextTokenExplorer modelName={resolvedModel} intent={activeTab === "nextToken" ? nextTokenIntent : undefined} />
 				</Tabs.Panel>
 				<Tabs.Panel value="inspect" pt="md">
-					<InstalledModelInspector />
+					<InstalledModelInspector modelName={inspectModel} />
 				</Tabs.Panel>
 				<Tabs.Panel value="trace" pt="md">
-					<TraceExperiments intent={intent?.tab === "trace" ? intent : undefined} onJump={jump} />
-				</Tabs.Panel>
-				<Tabs.Panel value="architecture" pt="md">
-					<ArchitectureExplorer intent={intent?.tab === "architecture" ? intent : undefined} onJump={jump} />
+					<TraceExperiments
+						experimentId={traceExperiment}
+						onExperimentChange={openExperiment}
+						onExperimentDeleted={closeDeletedExperiment}
+						onJump={jump}
+					/>
 				</Tabs.Panel>
 			</Tabs>
 		</PageShell>

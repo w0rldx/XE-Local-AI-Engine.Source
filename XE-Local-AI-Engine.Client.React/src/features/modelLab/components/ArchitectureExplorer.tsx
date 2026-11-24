@@ -1,21 +1,18 @@
 import { Alert, Button, Group, Loader, Select, Stack, Text } from "@mantine/core";
 import { IconArrowRight } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import {
 	getModelLabArchitectureOptions,
 	getModelLabExperimentTraceOptions,
-	listLocalModelsOptions,
 	listModelLabExperimentsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
-import { LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
 import { ArchitectureBlockDetail } from "@/features/modelLab/components/ArchitectureBlockDetail";
 import { ArchitectureOverview } from "@/features/modelLab/components/ArchitectureOverview";
-import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNotice";
 import {
 	type ArchitectureSelection,
 	formatBlockRanges,
@@ -24,33 +21,33 @@ import {
 	summarizeTraceByBlock,
 } from "@/features/modelLab/models/ModelLabArchitecture";
 import type { ExplanationLevel } from "@/features/modelLab/models/ModelLabExplanation";
-import type { ModelLabIntent, ModelLabJump } from "@/features/modelLab/models/ModelLabNavigation";
+import { type ModelLabJump, sameExperimentId } from "@/features/modelLab/models/ModelLabNavigation";
 
 interface ArchitectureExplorerProps {
-	// Another tab asked to show this model with a trace laid over it and one block open.
-	intent?: ModelLabIntent<"architecture">;
+	// The page's model, block, laid-over trace and explanation level, all from the URL.
+	modelName: string | null;
+	selection: ArchitectureSelection | null;
+	traceId: string | null;
+	level: ExplanationLevel;
+	onSelect: (selection: ArchitectureSelection) => void;
+	onTraceChange: (traceId: string | null) => void;
+	onLevelChange: (level: ExplanationLevel) => void;
 	onJump?: (to: ModelLabJump) => void;
 }
 
 // One installed model's structure from its GGUF header, with an optional saved trace of that model laid over its blocks.
-export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerProps) {
+export function ArchitectureExplorer({
+	modelName,
+	selection,
+	traceId,
+	level,
+	onSelect,
+	onTraceChange,
+	onLevelChange,
+	onJump,
+}: ArchitectureExplorerProps) {
 	const { t, i18n } = useTranslation();
-	const models = useQuery({ ...listLocalModelsOptions(), staleTime: 30_000 });
-	const modelNames = (models.data?.items ?? []).flatMap((item) =>
-		item.provider === LLAMACPP_PROVIDER && item.modelName ? [item.modelName] : [],
-	);
-	const [modelName, setModelName] = useState<string | null>(null);
-	const [selection, setSelection] = useState<ArchitectureSelection | null>(null);
-	const [traceId, setTraceId] = useState<string | null>(null);
-	const [explanationLevel, setExplanationLevel] = useState<ExplanationLevel>("overview");
-	const [appliedNonce, setAppliedNonce] = useState<number>();
 	const traceInput = useRef<HTMLInputElement>(null);
-	if (intent && intent.nonce !== appliedNonce) {
-		setAppliedNonce(intent.nonce);
-		setModelName(intent.modelName);
-		setTraceId(intent.traceId);
-		setSelection(intent.blockIndex);
-	}
 
 	const descriptor = useQuery({
 		...getModelLabArchitectureOptions({ path: { modelName: modelName ?? "" } }),
@@ -67,12 +64,10 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 				]
 			: [],
 	);
-	// A run deleted since it was chosen drops out of a refreshed list, and with it out of every overlay. Checked against
-	// whatever list is held: a later failed refetch keeps that data but leaves the success state.
+	// Only a finished trace of this model in the held list is laid over: a link's id is nothing until the list confirms it,
+	// and a run deleted since drops out of a refreshed list. A later failed refetch keeps that data.
 	const overlayId =
-		traceId !== null && experiments.data !== undefined && !traceOptions.some((option) => option.value === traceId)
-			? null
-			: traceId;
+		traceId === null ? null : (traceOptions.find((option) => sameExperimentId(option.value, traceId))?.value ?? null);
 	const trace = useQuery({
 		...getModelLabExperimentTraceOptions({ path: { experimentId: overlayId ?? "" } }),
 		enabled: overlayId !== null,
@@ -81,8 +76,11 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 
 	const data = descriptor.data;
 	const block = typeof selection === "number" ? data?.blocks.find((candidate) => candidate.index === selection) : undefined;
-	// A jump can name a block the file does not hold; Embedding and Output always open.
+	const outsideEnd = selection === "output" ? "output" : "embedding";
+	// A link or a jump can name a block, or an Embedding or Output, the file does not hold.
 	const blockMissing = typeof selection === "number" && block === undefined;
+	const outsideMissing =
+		typeof selection === "string" && data !== undefined && outsideGroups(data.nonBlock, selection).length === 0;
 	const template =
 		block && data?.support === "detailed" ? data.templates.find((candidate) => candidate.kind === block.kind) : undefined;
 	// Only a family whose graph has a router can have routing: a dense model's overlay never asks for it.
@@ -90,19 +88,6 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 
 	return (
 		<Stack gap="md">
-			<ModelPickerNotice status={models.status} modelCount={modelNames.length} />
-			<Select
-				label={t("pages.modelLab.inspectModel", "Installed model")}
-				placeholder={t("pages.directInference.modelPlaceholder", "Choose a model")}
-				data={modelNames}
-				value={modelName}
-				onChange={(value) => {
-					setModelName(value);
-					setSelection(null);
-					setTraceId(null);
-				}}
-				searchable={true}
-			/>
 			{modelName !== null && traceOptions.length > 0 && (
 				<Select
 					label={t("pages.modelLab.architecture.trace", "Trace to lay over the blocks")}
@@ -113,7 +98,7 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 					placeholder={t("pages.modelLab.architecture.noTraceChosen", "No trace")}
 					data={traceOptions}
 					value={overlayId}
-					onChange={setTraceId}
+					onChange={onTraceChange}
 					clearable={true}
 					ref={traceInput}
 					// Mantine leaves the clear button out of the Tab order and unnamed; a keyboard user must reach it too.
@@ -216,7 +201,7 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 						hasOutputTensor={data.nonBlock.some((group) => group.component === "output")}
 						selection={selection}
 						tracedBlocks={traceSummaries ? new Set(traceSummaries.keys()) : null}
-						onSelect={setSelection}
+						onSelect={onSelect}
 					/>
 					{blockMissing && (
 						<Alert color="yellow" data-testid="model-lab-architecture-block-missing">
@@ -227,7 +212,20 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 							)}
 						</Alert>
 					)}
-					{selection !== null && !blockMissing && (
+					{outsideMissing && (
+						<Alert color="yellow" data-testid="model-lab-architecture-block-missing">
+							{selection === "output"
+								? t(
+										"pages.modelLab.architecture.outsideMissing.output",
+										"Output is not in this file. One possible reason: the file is one part of a split GGUF and it is in another part.",
+									)
+								: t(
+										"pages.modelLab.architecture.outsideMissing.embedding",
+										"Embedding is not in this file. One possible reason: the file is one part of a split GGUF and it is in another part.",
+									)}
+						</Alert>
+					)}
+					{selection !== null && !blockMissing && !outsideMissing && (
 						<ArchitectureBlockDetail
 							// A same-block jump to another model must not keep the last model's form state.
 							key={`${modelName}:${selection}`}
@@ -235,14 +233,14 @@ export function ArchitectureExplorer({ intent, onJump }: ArchitectureExplorerPro
 							architecture={data.architecture}
 							suggestedBaseRepo={data.suggestedBaseRepo}
 							block={block}
-							outside={selection === "output" ? "output" : "embedding"}
-							groups={block?.groups ?? outsideGroups(data.nonBlock, selection === "output" ? "output" : "embedding")}
+							outside={outsideEnd}
+							groups={block?.groups ?? outsideGroups(data.nonBlock, outsideEnd)}
 							template={template}
 							traceSummaries={traceSummaries}
 							traceId={overlayId}
 							routedArchitecture={routedArchitecture}
-							explanationLevel={explanationLevel}
-							onExplanationLevel={setExplanationLevel}
+							explanationLevel={level}
+							onExplanationLevel={onLevelChange}
 						/>
 					)}
 				</>

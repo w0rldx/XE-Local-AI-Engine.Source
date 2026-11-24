@@ -1,0 +1,725 @@
+// @vitest-environment jsdom
+
+// The page behind its real route: the route's search schema and adapter on a memory history, with the panels against
+// stubbed routes (MSW). It pins what only the router shows: which writes push and which replace, what Back and Forward
+// restore, and that the URL is read and written in one shape.
+
+import { createMemoryHistory, createRootRoute, createRoute, createRouter, Outlet, RouterProvider } from "@tanstack/react-router";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
+import { describe, expect, it, vi } from "vitest";
+
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
+import { modelLabSearchSchema } from "@/features/modelLab/models/ModelLabNavigation";
+import { ModelLabRoutePage } from "@/features/modelLab/pages/ModelLabRoutePage";
+import { localApiPath } from "@/test/msw/Handlers";
+import { server } from "@/test/msw/Server";
+import { createTestQueryClient, renderWithProviders } from "@/test/RenderWithProviders";
+import { acceptConfirm, openConfirm } from "@/test/ConfirmFlow";
+import { setupMswServer } from "@/test/UseMswServer";
+
+vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
+	acquireHubConnection: () => ({
+		connection: { state: "Disconnected", on: vi.fn(), off: vi.fn(), invoke: vi.fn(), stream: vi.fn() },
+		whenStarted: Promise.resolve(),
+		onReconnected: vi.fn(() => () => undefined),
+		onReconnecting: vi.fn(),
+		onClosed: vi.fn(),
+		release: vi.fn(),
+	}),
+}));
+// React Flow paints nothing into jsdom; the graph is not what these tests are about.
+vi.mock("@xyflow/react", () => ({ Background: () => null, Controls: () => null, ReactFlow: () => null }));
+vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({ CodeEditor: () => null }));
+// Unchanged by the page's URL: their own tests cover them.
+vi.mock("@/features/modelLab/components/SamePromptComparison", () => ({ SamePromptComparison: () => null }));
+vi.mock("@/features/modelLab/components/TraceCheckpointForm", () => ({ TraceCheckpointForm: () => null }));
+
+setupMswServer();
+
+const gguf = "org/Tiny-GGUF:Q4_K_M";
+const otherModel = "org/Other-GGUF:Q8_0";
+const traceId = "11111111-1111-4111-8111-111111111111";
+const otherTraceId = "22222222-2222-4222-8222-222222222222";
+const otherPrompt = "Why is the sky blue?";
+
+const tensor = (ggufName: string) => ({
+	ggufName,
+	hfName: null,
+	shape: [1024],
+	ggmlType: "F32",
+	byteSize: 4096,
+	valueRelation: null,
+});
+
+const descriptor = {
+	descriptorVersion: 1,
+	modelName: gguf,
+	architecture: "llama",
+	support: "overview",
+	readFailure: null,
+	suggestedBaseRepo: null,
+	blocks: [0, 1, 2].map((index) => ({
+		index,
+		kind: "fullAttention",
+		byteSize: 1,
+		groups: [
+			{
+				componentId: `blk.${index}.attention`,
+				component: "attention",
+				provenance: "read",
+				tensors: [tensor(`blk.${index}.attn_q.weight`)],
+			},
+		],
+	})),
+	templates: [],
+	nonBlock: [
+		{ componentId: "embedding", component: "embedding", provenance: "read", tensors: [tensor("token_embd.weight")] },
+		{ componentId: "output", component: "output", provenance: "read", tensors: [tensor("output.weight")] },
+	],
+};
+
+const traceRow = {
+	id: traceId,
+	kind: "Trace",
+	status: "Succeeded",
+	installedModelName: gguf,
+	repoId: "Qwen/Qwen3.5-0.8B",
+	revision: "rev",
+	prompt: "hello",
+	errorMessage: null,
+	traceByteCount: 10,
+	result: null,
+	createdAtUtc: "2026-11-06T00:00:00Z",
+	updatedAtUtc: "2026-11-06T00:00:00Z",
+	isPinned: false,
+	appVersion: null,
+	notes: null,
+};
+
+const inspection = {
+	modelName: gguf,
+	readFailure: null,
+	ggufVersion: 3,
+	architecture: "llama",
+	displayName: "Tiny",
+	parameterCount: 1000,
+	fileType: "Q4_K_M",
+	blockCount: 1,
+	attentionHeadCount: 16,
+	attentionHeadCountKv: 4,
+	embeddingLength: 4096,
+	contextLength: 4096,
+	expertCount: null,
+	chatTemplate: null,
+	splitCount: null,
+	tensorCount: 1,
+	totalTensorBytes: 1024,
+	headerBytes: 2048,
+	fileSizeBytes: 4096,
+	blocks: [],
+	nonBlockTensors: [],
+};
+
+// Run B: the other model's trace, of block 0 only, with no routing.
+const otherRow = { ...traceRow, id: otherTraceId, installedModelName: otherModel, prompt: otherPrompt };
+
+const token = { id: 1, text: "Hi", logprob: Math.log(0.6), candidates: [{ id: 1, text: "Hi", logprob: Math.log(0.6) }] };
+// Run A also recorded its routing: two full blocks, each choosing 2 of 8 experts.
+const routedResult = {
+	promptTokens: 1,
+	tokens: [token],
+	text: "Hi",
+	seconds: 1,
+	peakVramBytes: 1,
+	layerKinds: "FF",
+	attnImplementation: "sdpa",
+	routing: {
+		layers: [0, 1],
+		experts: 8,
+		expertsPerToken: 2,
+		normalizedTopK: false,
+		weightEncoding: "bfloat16-bits",
+		records: 1,
+		truncated: false,
+	},
+};
+
+const traceOf = (layers: number[]) => ({
+	records: layers.map((layer) => ({
+		step: 0,
+		layer,
+		kind: "F",
+		norm: layer + 1,
+		percentiles: [0, 1, 5],
+		topIndices: [7],
+		topValues: [1],
+	})),
+	truncated: false,
+	droppedRecords: 0,
+	byteCap: 1000,
+});
+
+function modelItem(modelName: string) {
+	return {
+		modelName,
+		displayLabel: null,
+		isSelected: false,
+		kind: "Chat",
+		detectedKind: "Chat",
+		capabilities: [],
+		// Run A's model thinks by default, so a jump's Thinking off shows.
+		isReasoningCapable: modelName === gguf,
+		isToolCapable: true,
+		isOverridden: false,
+		provider: "llamacpp",
+	};
+}
+
+function stubRoutes(): void {
+	server.use(
+		http.get(localApiPath("models"), () =>
+			HttpResponse.json({ isAvailable: true, items: [modelItem(gguf), modelItem(otherModel)] }),
+		),
+		http.get(localApiPath("model-lab/architecture/:modelName"), () => HttpResponse.json(descriptor)),
+		http.get(localApiPath("model-lab/architecture/:modelName/pytorch"), () => new HttpResponse(null, { status: 404 })),
+		http.get(localApiPath("models/:modelName/gguf-inspection"), () => HttpResponse.json(inspection)),
+		http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ items: [] })),
+		http.get(localApiPath("model-lab/experiments"), () =>
+			HttpResponse.json({
+				platformSupported: true,
+				unsupportedMessage: null,
+				activeExperimentId: null,
+				maxRetainedExperiments: 20,
+				maxPinnedExperiments: 20,
+				experiments: [traceRow, otherRow],
+			}),
+		),
+		http.get(localApiPath(`model-lab/experiments/${traceId}`), () => HttpResponse.json({ ...traceRow, result: routedResult })),
+		http.get(localApiPath(`model-lab/experiments/${traceId}/trace`), () => HttpResponse.json(traceOf([0, 1]))),
+		http.get(localApiPath(`model-lab/experiments/${traceId}/routing`), () =>
+			HttpResponse.json({
+				layers: [0, 1],
+				experts: 8,
+				expertsPerToken: 2,
+				normalizedTopK: false,
+				steps: [{ step: 0, blocks: [0, 1].map((layer) => ({ layer, experts: [3, 5], weights: [0.5, 0.25] })) }],
+				truncated: false,
+				droppedSteps: 0,
+			}),
+		),
+		http.get(localApiPath(`model-lab/experiments/${otherTraceId}`), () =>
+			HttpResponse.json({ ...otherRow, result: { promptTokens: 1, tokens: [token], text: "Hi", seconds: 1, peakVramBytes: 1 } }),
+		),
+		http.get(localApiPath(`model-lab/experiments/${otherTraceId}/trace`), () => HttpResponse.json(traceOf([0]))),
+	);
+}
+
+// The app's shape: a pathless `_layout` with Model Lab under it inside a scrolling element, as the app shell's, and a
+// page outside it to start from and go back to.
+// `outsideLoaded` holds the outside page's loader open, so a navigation to it stays pending until it settles.
+async function renderRoute(entry: string, outsideLoaded?: Promise<void>) {
+	const rootRoute = createRootRoute({
+		component: () => (
+			<ConfirmProvider>
+				<div data-testid="page-scroller" style={{ overflowY: "auto" }}>
+					<Outlet />
+				</div>
+			</ConfirmProvider>
+		),
+	});
+	const layoutRoute = createRoute({ getParentRoute: () => rootRoute, id: "_layout", component: Outlet });
+	const modelLabRoute = createRoute({
+		getParentRoute: () => layoutRoute,
+		path: "model-lab",
+		validateSearch: modelLabSearchSchema,
+		component: ModelLabRoutePage,
+	});
+	const outsideRoute = createRoute({
+		getParentRoute: () => rootRoute,
+		path: "outside",
+		loader: () => outsideLoaded,
+		component: () => <p>Outside</p>,
+	});
+	const history = createMemoryHistory({ initialEntries: [entry] });
+	const router = createRouter({
+		routeTree: rootRoute.addChildren([layoutRoute.addChildren([modelLabRoute]), outsideRoute]),
+		history,
+		scrollRestoration: true,
+	});
+	const queryClient = createTestQueryClient();
+	// The page suspends on its strings' import, and React retries that inside an awaited act scope only.
+	await act(async () => {
+		// biome-ignore lint/suspicious/noExplicitAny: a locally-built route tree cannot satisfy the app's registered Router type.
+		renderWithProviders(<RouterProvider router={router as any} />, { queryClient });
+	});
+	return { router, history, queryClient };
+}
+
+// The URL's search as the router holds it, in a fixed key order.
+function searchOf(router: { state: { location: { search: unknown } } }): Record<string, unknown> {
+	return Object.fromEntries(Object.entries(router.state.location.search as Record<string, unknown>).sort());
+}
+
+async function chooseOption(label: RegExp, option: string): Promise<void> {
+	const select = await screen.findByRole("combobox", { name: label });
+	fireEvent.click(select);
+	const listbox = await waitFor(() => {
+		const element = document.getElementById(select.getAttribute("aria-controls") ?? "");
+		if (element === null) {
+			throw new Error("the dropdown is not open yet");
+		}
+		return element;
+	});
+	fireEvent.click(await within(listbox).findByRole("option", { name: option, hidden: true }));
+}
+
+function selectedTab(): string | null {
+	return screen.getByRole("tab", { selected: true }).textContent;
+}
+
+function detailLevelChecked(): boolean {
+	const detail = within(screen.getByTestId("model-lab-architecture-detail")).getByRole("radio", { name: "Detail" });
+	return (detail as HTMLInputElement).checked;
+}
+
+describe("Model Lab on its route", () => {
+	it("replaces every in-page change, pushes a jump, and Back and Forward walk exactly those entries", async () => {
+		stubRoutes();
+		const { router, history } = await renderRoute("/outside");
+		await screen.findByText("Outside");
+
+		await act(() => router.navigate({ to: "/model-lab" }));
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+		const entered = history.length;
+
+		await chooseOption(/Model for Architecture/, gguf);
+		await waitFor(() => expect(searchOf(router)).toEqual({ model: gguf }));
+		fireEvent.click(await screen.findByRole("button", { name: "Block 1: Full attention" }));
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, model: gguf }));
+		fireEvent.click(within(await screen.findByTestId("model-lab-architecture-detail")).getByRole("radio", { name: "Detail" }));
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, level: "detail", model: gguf }));
+		expect(history.length).toBe(entered);
+		await chooseOption(/Trace to lay over the blocks/, `hello · Qwen/Qwen3.5-0.8B · ${formatTimestamp(traceRow.createdAtUtc)}`);
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, level: "detail", model: gguf, trace: traceId }));
+		expect(history.length).toBe(entered);
+
+		fireEvent.click(await screen.findByRole("button", { name: "Open trace" }));
+		await waitFor(() => expect(selectedTab()).toBe("Trace and steer"));
+		expect(searchOf(router)).toEqual({
+			block: 1,
+			experiment: traceId,
+			level: "detail",
+			model: gguf,
+			tab: "trace",
+			trace: traceId,
+		});
+		expect(history.length).toBe(entered + 1);
+		await screen.findByTestId("model-lab-trace-view");
+
+		fireEvent.click(screen.getByRole("tab", { name: "Inspect" }));
+		await waitFor(() => expect(selectedTab()).toBe("Inspect"));
+		expect(searchOf(router)).toEqual({
+			block: 1,
+			experiment: traceId,
+			level: "detail",
+			model: gguf,
+			tab: "inspect",
+			trace: traceId,
+		});
+		expect(history.length).toBe(entered + 1);
+
+		await act(async () => history.back());
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+		expect(searchOf(router)).toEqual({ block: 1, level: "detail", model: gguf, trace: traceId });
+		expect((await screen.findByRole("button", { name: "Block 1: Full attention, traced" })).getAttribute("aria-pressed")).toBe(
+			"true",
+		);
+		expect(detailLevelChecked()).toBe(true);
+
+		await act(async () => history.back());
+		await screen.findByText("Outside");
+
+		await act(async () => history.forward());
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+		expect(searchOf(router)).toEqual({ block: 1, level: "detail", model: gguf, trace: traceId });
+		await waitFor(() => expect(detailLevelChecked()).toBe(true));
+
+		await act(async () => history.forward());
+		await waitFor(() => expect(selectedTab()).toBe("Inspect"));
+		expect(searchOf(router)).toEqual({
+			block: 1,
+			experiment: traceId,
+			level: "detail",
+			model: gguf,
+			tab: "inspect",
+			trace: traceId,
+		});
+	});
+
+	it.each([
+		["block=0", 0],
+		["block=3", undefined],
+		["block=embedding", "embedding"],
+		["block=output", "output"],
+	])("reads ?%s and an encoded model name", async (query, block) => {
+		stubRoutes();
+		const { router } = await renderRoute(`/model-lab?model=${encodeURIComponent(gguf)}&${query}`);
+
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+		expect(searchOf(router)).toEqual(block === undefined ? { block: 3, model: gguf } : { block, model: gguf });
+		if (block === undefined) {
+			// The file has blocks 0 to 2 only.
+			expect(await screen.findByTestId("model-lab-architecture-block-missing")).toBeTruthy();
+		} else {
+			expect(await screen.findByTestId("model-lab-architecture-detail")).toBeTruthy();
+		}
+	});
+
+	it.each([
+		["a negative block", "block=-1"],
+		["a fractional block", "block=1.5"],
+		["a blank block", "block="],
+		["a repeated block", "block=1&block=2"],
+		["a malformed trace", `trace=${traceId.slice(1)}`],
+		["an unknown level", "level=deep"],
+	])("drops %s alone and keeps the rest", async (_case, query) => {
+		stubRoutes();
+		const { router } = await renderRoute(`/model-lab?model=${encodeURIComponent(gguf)}&tab=architecture&${query}`);
+
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+		expect(searchOf(router)).toEqual({ model: gguf, tab: "architecture" });
+		expect(await screen.findByTestId("model-lab-architecture-overview")).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-architecture-detail")).toBeNull();
+	});
+
+	it("writes a model name the router reads back unchanged, and moves no scroll position", async () => {
+		stubRoutes();
+		const { router } = await renderRoute("/model-lab");
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+		const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+		try {
+			await chooseOption(/Model for Architecture/, gguf);
+			fireEvent.click(await screen.findByRole("button", { name: "Block 0: Full attention" }));
+			fireEvent.click(screen.getByRole("tab", { name: "Inspect" }));
+			await waitFor(() => expect(searchOf(router)).toEqual({ block: 0, model: gguf, tab: "inspect" }));
+
+			expect(router.state.location.href).toBe(`/model-lab?model=${encodeURIComponent(gguf)}&block=0&tab=inspect`);
+			expect(scrollTo).not.toHaveBeenCalled();
+		} finally {
+			scrollTo.mockRestore();
+		}
+	});
+
+	it("opens Trace from an Operations link that names no model, with no model notice", async () => {
+		stubRoutes();
+		await renderRoute("/model-lab?tab=trace");
+
+		await waitFor(() => expect(selectedTab()).toBe("Trace and steer"));
+		expect(await screen.findByTestId("model-lab-experiments")).toBeTruthy();
+		expect(screen.queryByTestId("model-lab-model-not-installed")).toBeNull();
+		expect(screen.queryByTestId("model-lab-no-models")).toBeNull();
+	});
+
+	it("prefills Next token from a trace with thinking off, and keeps the prompt out of the URL and history", async () => {
+		stubRoutes();
+		const { router, history } = await renderRoute(`/model-lab?tab=trace&experiment=${otherTraceId}`);
+		await screen.findByTestId("model-lab-trace-view");
+		const before = history.length;
+
+		fireEvent.click(await screen.findByTestId("model-lab-trace-try-next-token"));
+
+		await waitFor(() => expect(selectedTab()).toBe("Next token"));
+		await waitFor(() => expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).value).toBe(otherPrompt));
+		expect(screen.getByTestId("model-lab-next-token-from-trace")).toBeTruthy();
+		expect(searchOf(router)).toEqual({ experiment: otherTraceId, model: otherModel, tab: "nextToken" });
+		expect(history.length).toBe(before + 1);
+		expect(router.state.location.href).not.toContain("sky");
+		expect(JSON.stringify(history.location.state)).not.toContain("sky");
+	});
+
+	it("keeps Thinking off from a jump to a model that thinks", async () => {
+		stubRoutes();
+		await renderRoute(`/model-lab?tab=trace&experiment=${traceId}`);
+		await screen.findByTestId("model-lab-trace-view");
+
+		fireEvent.click(await screen.findByTestId("model-lab-trace-try-next-token"));
+
+		await waitFor(() => expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).value).toBe("hello"));
+		expect((screen.getByTestId("direct-inference-thinking-off") as HTMLInputElement).checked).toBe(true);
+	});
+
+	it("opens a Next token URL's run in Trace only once Trace is shown", async () => {
+		stubRoutes();
+		let runRequests = 0;
+		server.events.on("request:start", ({ request }) => {
+			if (new URL(request.url).pathname.includes(`model-lab/experiments/${traceId}`)) {
+				runRequests++;
+			}
+		});
+		try {
+			await renderRoute(`/model-lab?tab=nextToken&model=${encodeURIComponent(gguf)}&experiment=${traceId}`);
+			await waitFor(() => expect(selectedTab()).toBe("Next token"));
+			// The list loads anyway: once it is in, a hidden open run would have asked for its run too.
+			await screen.findAllByRole("button", { name: "Qwen/Qwen3.5-0.8B", hidden: true });
+			await act(async () => undefined);
+			expect(runRequests).toBe(0);
+			expect(screen.queryByTestId("model-lab-trace-view")).toBeNull();
+
+			fireEvent.click(screen.getByRole("tab", { name: "Trace and steer" }));
+
+			expect((await screen.findByTestId("model-lab-trace-view")).textContent).toContain("hello");
+			expect(runRequests).toBeGreaterThan(0);
+		} finally {
+			server.events.removeAllListeners("request:start");
+		}
+	});
+
+	it("keeps an open run across a switch to another tab and back", async () => {
+		stubRoutes();
+		await renderRoute(`/model-lab?tab=trace&experiment=${otherTraceId}`);
+		await screen.findByTestId("model-lab-trace-view");
+
+		fireEvent.click(screen.getByRole("tab", { name: "Architecture" }));
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+		expect(screen.getByTestId("model-lab-trace-view").textContent).toContain(otherPrompt);
+		fireEvent.click(screen.getByRole("tab", { name: "Trace and steer" }));
+
+		await waitFor(() => expect(selectedTab()).toBe("Trace and steer"));
+		expect(screen.getByTestId("model-lab-trace-view").textContent).toContain(otherPrompt);
+	});
+
+	it("leaves the Next token draft alone when the jump's navigation is blocked", async () => {
+		stubRoutes();
+		const { history } = await renderRoute(`/model-lab?tab=nextToken&model=${encodeURIComponent(gguf)}`);
+		await waitFor(() => expect(selectedTab()).toBe("Next token"));
+		fireEvent.change(screen.getByLabelText("System prompt (optional)"), { target: { value: "Be brief." } });
+		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "My draft." } });
+		fireEvent.click(screen.getByRole("tab", { name: "Trace and steer" }));
+		await waitFor(() => expect(selectedTab()).toBe("Trace and steer"));
+		fireEvent.click((await screen.findAllByRole("button", { name: "Qwen/Qwen3.5-0.8B" }))[0] as HTMLElement);
+		await screen.findByTestId("model-lab-trace-view");
+
+		const unblock = history.block({ blockerFn: () => true });
+		fireEvent.click(await screen.findByTestId("model-lab-trace-try-next-token"));
+		await act(async () => undefined);
+		expect(selectedTab()).toBe("Trace and steer");
+		unblock();
+		fireEvent.click(screen.getByRole("tab", { name: "Next token" }));
+
+		await waitFor(() => expect(selectedTab()).toBe("Next token"));
+		expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).value).toBe("My draft.");
+		expect((screen.getByLabelText("System prompt (optional)") as HTMLTextAreaElement).value).toBe("Be brief.");
+		expect(screen.queryByTestId("model-lab-next-token-from-trace")).toBeNull();
+	});
+
+	it("jumps to another model's block 0 from a trace's table, and Back returns to the last model's block", async () => {
+		stubRoutes();
+		const { router, history } = await renderRoute(
+			`/model-lab?tab=trace&model=${encodeURIComponent(gguf)}&block=2&experiment=${otherTraceId}`,
+		);
+		await screen.findByTestId("model-lab-trace-table");
+
+		fireEvent.click(screen.getByRole("button", { name: "Show block 0 in Architecture" }));
+
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+		expect(searchOf(router)).toEqual({ block: 0, experiment: otherTraceId, model: otherModel, trace: otherTraceId });
+		expect((await screen.findByRole("button", { name: "Block 0: Full attention, traced" })).getAttribute("aria-pressed")).toBe(
+			"true",
+		);
+
+		await act(async () => history.back());
+		await waitFor(() => expect(selectedTab()).toBe("Trace and steer"));
+		expect(searchOf(router)).toEqual({ block: 2, experiment: otherTraceId, model: gguf, tab: "trace" });
+	});
+
+	it("jumps to a routed block from the step-through view's routing", async () => {
+		stubRoutes();
+		const { router } = await renderRoute(`/model-lab?tab=trace&experiment=${traceId}`);
+		await screen.findByTestId("model-lab-trace-table");
+		fireEvent.click(screen.getByRole("radio", { name: "Step through" }));
+		await screen.findByTestId("model-lab-stepper-routing-table");
+		fireEvent.click(screen.getByRole("button", { name: /^Block 1, full attention/ }));
+
+		fireEvent.click(
+			within(screen.getByTestId("model-lab-stepper-routing")).getByRole("button", { name: "Show block 1 in Architecture" }),
+		);
+
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+		expect(searchOf(router)).toEqual({ block: 1, experiment: traceId, model: gguf, trace: traceId });
+		expect((await screen.findByRole("button", { name: "Block 1: Full attention, traced" })).getAttribute("aria-pressed")).toBe(
+			"true",
+		);
+	});
+
+	it("keeps another run open when a delete started before it finishes", async () => {
+		stubRoutes();
+		let finish: () => void = () => undefined;
+		const finished = new Promise<void>((resolve) => {
+			finish = resolve;
+		});
+		server.use(
+			http.delete(localApiPath(`model-lab/experiments/${traceId}`), async () => {
+				await finished;
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		const { router } = await renderRoute(`/model-lab?tab=trace&experiment=${traceId}`);
+		await screen.findByTestId("model-lab-trace-view");
+		// A finished delete refreshes the list: the request after it is the sign it is done.
+		let listRequests = 0;
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => {
+				listRequests++;
+				return HttpResponse.json({
+					platformSupported: true,
+					unsupportedMessage: null,
+					activeExperimentId: null,
+					maxRetainedExperiments: 20,
+					maxPinnedExperiments: 20,
+					experiments: [otherRow],
+				});
+			}),
+		);
+
+		const [deleteFirst] = screen.getAllByRole("button", { name: "Delete" });
+		await openConfirm(deleteFirst as HTMLElement, "Delete this experiment?");
+		acceptConfirm();
+		fireEvent.click(screen.getAllByRole("button", { name: "Qwen/Qwen3.5-0.8B" })[1] as HTMLElement);
+		await waitFor(() => expect(searchOf(router)["experiment"]).toBe(otherTraceId));
+
+		await act(async () => finish());
+
+		await waitFor(() => expect(listRequests).toBeGreaterThan(0));
+		expect(searchOf(router)).toEqual({ experiment: otherTraceId, tab: "trace" });
+		expect(screen.getByTestId("model-lab-trace-view").textContent).toContain(otherPrompt);
+	});
+
+	it("leaves the page the operator went to alone when a delete finishes after they left", async () => {
+		stubRoutes();
+		let finish: () => void = () => undefined;
+		const finished = new Promise<void>((resolve) => {
+			finish = resolve;
+		});
+		server.use(
+			http.delete(localApiPath(`model-lab/experiments/${traceId}`), async () => {
+				await finished;
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		const { router, history, queryClient } = await renderRoute(`/model-lab?tab=trace&experiment=${traceId}`);
+		await screen.findByTestId("model-lab-trace-view");
+		const [deleteFirst] = screen.getAllByRole("button", { name: "Delete" });
+		await openConfirm(deleteFirst as HTMLElement, "Delete this experiment?");
+		acceptConfirm();
+		await waitFor(() => expect(queryClient.isMutating()).toBe(1));
+
+		await act(async () => history.push("/outside"));
+		await screen.findByText("Outside");
+		const left = history.length;
+		await act(async () => finish());
+
+		await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+		await act(async () => undefined);
+		expect(history.location.pathname).toBe("/outside");
+		expect(router.state.location.href).toBe("/outside");
+		expect(history.length).toBe(left);
+		expect(screen.getByText("Outside")).toBeTruthy();
+	});
+
+	it("leaves a navigation away alone when a delete finishes while the other page still loads", async () => {
+		stubRoutes();
+		let finish: () => void = () => undefined;
+		const finished = new Promise<void>((resolve) => {
+			finish = resolve;
+		});
+		server.use(
+			http.delete(localApiPath(`model-lab/experiments/${traceId}`), async () => {
+				await finished;
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		let load: () => void = () => undefined;
+		const loaded = new Promise<void>((resolve) => {
+			load = resolve;
+		});
+		const { router, history, queryClient } = await renderRoute(`/model-lab?tab=trace&experiment=${traceId}`, loaded);
+		await screen.findByTestId("model-lab-trace-view");
+		const [deleteFirst] = screen.getAllByRole("button", { name: "Delete" });
+		await openConfirm(deleteFirst as HTMLElement, "Delete this experiment?");
+		acceptConfirm();
+		await waitFor(() => expect(queryClient.isMutating()).toBe(1));
+
+		act(() => history.push("/outside"));
+		await waitFor(() => expect(router.state.status).toBe("pending"));
+		const length = history.length;
+		await act(async () => finish());
+		await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+		await act(async () => undefined);
+		// The delete finished while Model Lab was still the page shown.
+		expect(screen.queryByText("Outside")).toBeNull();
+		await act(async () => load());
+
+		expect(await screen.findByText("Outside")).toBeTruthy();
+		expect(history.location.pathname).toBe("/outside");
+		expect(router.state.location.href).toBe("/outside");
+		expect(history.length).toBe(length);
+	});
+
+	it("hands a blocked jump over nowhere: focus and scroll stay, and Forward keeps the edited draft", async () => {
+		stubRoutes();
+		const { history } = await renderRoute(`/model-lab?tab=trace&experiment=${otherTraceId}`);
+		await screen.findByTestId("model-lab-trace-view");
+		fireEvent.click(await screen.findByTestId("model-lab-trace-try-next-token"));
+		await waitFor(() => expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).value).toBe(otherPrompt));
+		fireEvent.change(screen.getByLabelText("System prompt (optional)"), { target: { value: "Be brief." } });
+		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "My draft." } });
+		await act(async () => history.back());
+		await waitFor(() => expect(selectedTab()).toBe("Trace and steer"));
+
+		// The tab bar has scrolled above the page's scroller, so a shown jump would bring it back to the top.
+		const scroller = screen.getByTestId("page-scroller");
+		scroller.scrollTop = 600;
+		const rects = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+			return { top: this === scroller ? 0 : -100 } as DOMRect;
+		});
+		const tryAgain = await screen.findByTestId("model-lab-trace-try-next-token");
+		tryAgain.focus();
+		const unblock = history.block({ blockerFn: () => true });
+		try {
+			fireEvent.click(tryAgain);
+			await act(async () => undefined);
+
+			expect(selectedTab()).toBe("Trace and steer");
+			expect(document.activeElement).toBe(tryAgain);
+			expect(scroller.scrollTop).toBe(600);
+		} finally {
+			unblock();
+			rects.mockRestore();
+		}
+
+		await act(async () => history.forward());
+		await waitFor(() => expect(selectedTab()).toBe("Next token"));
+		expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).value).toBe("My draft.");
+		expect((screen.getByLabelText("System prompt (optional)") as HTMLTextAreaElement).value).toBe("Be brief.");
+	});
+
+	it("keeps the page's scroller where it is across a block and a level change", async () => {
+		stubRoutes();
+		const { router } = await renderRoute(`/model-lab?model=${encodeURIComponent(gguf)}`);
+		const block = await screen.findByRole("button", { name: "Block 1: Full attention" });
+		const scroller = screen.getByTestId("page-scroller");
+		scroller.scrollTop = 600;
+		// The router restores only what it saw scroll.
+		fireEvent.scroll(scroller);
+
+		fireEvent.click(block);
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, model: gguf }));
+		expect(scroller.scrollTop).toBe(600);
+
+		fireEvent.click(within(await screen.findByTestId("model-lab-architecture-detail")).getByRole("radio", { name: "Detail" }));
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, level: "detail", model: gguf }));
+		expect(scroller.scrollTop).toBe(600);
+	});
+});

@@ -15,12 +15,19 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
 	getModelLabExperimentRoutingQueryKey,
+	getModelLabExperimentTraceQueryKey,
 	listModelLabExperimentsQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ArchitectureExplorer } from "@/features/modelLab/components/ArchitectureExplorer";
 import modelLabEn from "@/features/modelLab/locales/model-lab-en.json";
-import type { ModelLabIntent } from "@/features/modelLab/models/ModelLabNavigation";
+import {
+	applyModelLabPatch,
+	jumpPatch,
+	type ModelLabJump,
+	type ModelLabPatch,
+} from "@/features/modelLab/models/ModelLabNavigation";
+import { loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -294,9 +301,55 @@ async function chooseOption(label: RegExp, option: string): Promise<HTMLElement[
 	return offered;
 }
 
+type ArchitectureJump = Extract<ModelLabJump, { tab: "architecture" }>;
+
+// Stands in for the page: it holds what the URL would and changes it through the page's own transition. Each "Next jump"
+// applies the next of `jumps` as a jump from another tab does.
+function ControlledExplorer({
+	initial = { model: gguf },
+	jumps = [],
+	onJump,
+}: {
+	initial?: ModelLabPatch;
+	jumps?: ArchitectureJump[];
+	onJump?: (to: ModelLabJump) => void;
+}) {
+	const [search, setSearch] = useState(() => applyModelLabPatch({}, initial));
+	const [at, setAt] = useState(0);
+	return (
+		<>
+			{jumps.length > 0 && (
+				<button
+					type="button"
+					onClick={() => {
+						setAt(at + 1);
+						setSearch((previous) => applyModelLabPatch(previous, jumpPatch(jumps[(at + 1) % jumps.length] as ArchitectureJump)));
+					}}
+				>
+					Next jump
+				</button>
+			)}
+			<ArchitectureExplorer
+				modelName={search.model ?? null}
+				selection={search.block ?? null}
+				traceId={search.trace ?? null}
+				level={search.level ?? "overview"}
+				onSelect={(block) => setSearch((previous) => applyModelLabPatch(previous, { block }))}
+				onTraceChange={(trace) => setSearch((previous) => applyModelLabPatch(previous, { trace: trace ?? undefined }))}
+				onLevelChange={(level) => setSearch((previous) => applyModelLabPatch(previous, { level }))}
+				onJump={onJump}
+			/>
+		</>
+	);
+}
+
+// Opened from another tab: the jump's model, trace and block, as the page writes them.
+function JumpingExplorer({ jumps, onJump }: { jumps: ArchitectureJump[]; onJump?: (to: ModelLabJump) => void }) {
+	return <ControlledExplorer initial={jumpPatch(jumps[0] as ArchitectureJump)} jumps={jumps} onJump={onJump} />;
+}
+
 async function openModel(withRouter = false): Promise<void> {
-	renderWithProviders(<ArchitectureExplorer />, { withRouter });
-	await chooseOption(/Installed model/, gguf);
+	renderWithProviders(<ControlledExplorer />, { withRouter });
 	await screen.findByTestId("model-lab-architecture-overview");
 }
 
@@ -415,9 +468,7 @@ describe("ArchitectureExplorer", () => {
 	it("says a block a jump asked for is not in this file, opens no detail, and still opens Embedding", async () => {
 		stubRoutes(detailed, [traceRow(traceId)]);
 		stubRun(traceId, routingA);
-		renderWithProviders(
-			<ArchitectureExplorer intent={{ tab: "architecture", nonce: 1, modelName: gguf, traceId, blockIndex: 9 }} />,
-		);
+		renderWithProviders(<JumpingExplorer jumps={[{ ...jumpTo(traceId), blockIndex: 9 }]} />);
 
 		expect((await screen.findByTestId("model-lab-architecture-block-missing")).textContent).toContain(
 			"Block 9 is not in this file.",
@@ -481,8 +532,7 @@ describe("ArchitectureExplorer", () => {
 
 	it("shows an unreadable file's read failure and no structure", async () => {
 		stubRoutes({ ...detailed, support: "unreadable", readFailure: "truncated", blocks: [], templates: [], nonBlock: [] });
-		renderWithProviders(<ArchitectureExplorer />);
-		await chooseOption(/Installed model/, gguf);
+		renderWithProviders(<ControlledExplorer />);
 
 		expect((await screen.findByTestId("model-lab-architecture-unreadable")).textContent).toContain("(truncated)");
 		expect(screen.queryByTestId("model-lab-architecture-overview")).toBeNull();
@@ -580,12 +630,7 @@ describe("ArchitectureExplorer", () => {
 		);
 		const onJump = vi.fn();
 
-		renderWithProviders(
-			<ArchitectureExplorer
-				intent={{ tab: "architecture", nonce: 1, modelName: gguf, traceId, blockIndex: 1 }}
-				onJump={onJump}
-			/>,
-		);
+		renderWithProviders(<JumpingExplorer jumps={[jumpTo(traceId)]} onJump={onJump} />);
 
 		const traced = await screen.findByRole("button", { name: "Block 1: Full attention, traced" });
 		expect(traced.getAttribute("aria-pressed")).toBe("true");
@@ -957,10 +1002,9 @@ describe("ArchitectureExplorer PyTorch source", () => {
 			}),
 		);
 		// The app's cache keeps an unmounted file for minutes; the suite's default client drops it at once.
-		renderWithProviders(<ArchitectureExplorer />, {
+		renderWithProviders(<ControlledExplorer />, {
 			queryClient: new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }),
 		});
-		await chooseOption(/Installed model/, gguf);
 		fireEvent.click(await screen.findByRole("button", { name: "Block 1: Full attention" }));
 		await screen.findByTestId("model-lab-pytorch-provenance");
 
@@ -1116,7 +1160,7 @@ describe("ArchitectureExplorer explanations", () => {
 		const operations = within(screen.getByTestId("model-lab-explain-operations"));
 		expect(operations.queryByText("Fixture: the residual stream enters the block.")).toBeNull();
 
-		// The model picker's dropdown scrolls its options too; only the graph click is under test.
+		// Only the graph click is under test, not anything that scrolled before it.
 		const scroll = vi.mocked(Element.prototype.scrollIntoView);
 		scroll.mockClear();
 
@@ -1338,21 +1382,6 @@ const routingB = routingOf(
 	true,
 );
 
-type ArchitectureJump = Omit<ModelLabIntent<"architecture">, "nonce">;
-
-// Stands in for the page: each "Next jump" hands the explorer the next jump under a new nonce, as ModelLabPage does.
-function JumpingExplorer({ jumps, onJump }: { jumps: ArchitectureJump[]; onJump?: () => void }) {
-	const [at, setAt] = useState(0);
-	return (
-		<>
-			<button type="button" onClick={() => setAt((value) => value + 1)}>
-				Next jump
-			</button>
-			<ArchitectureExplorer intent={{ ...(jumps[at % jumps.length] as ArchitectureJump), nonce: at + 1 }} onJump={onJump} />
-		</>
-	);
-}
-
 // Every jump lands on block 1, the one both runs trace.
 const jumpTo = (id: string, modelName = gguf): ArchitectureJump => ({
 	tab: "architecture",
@@ -1557,5 +1586,117 @@ describe("ArchitectureExplorer jumps between models", () => {
 		await screen.findByRole("radio", { name: "Downloaded checkpoint" });
 		expect(screen.queryByRole("textbox", { name: "Repository" })).toBeNull();
 		expect((screen.getByRole("radio", { name: "Downloaded checkpoint" }) as HTMLInputElement).checked).toBe(true);
+	});
+});
+
+describe("ArchitectureExplorer context from a link", () => {
+	const traceData = {
+		records: [{ step: 0, layer: 1, kind: "F", norm: 2, percentiles: [0, 1, 5], topIndices: [7], topValues: [1] }],
+		truncated: false,
+		droppedRecords: 0,
+		byteCap: 1000,
+	};
+
+	it.each([
+		["arrives late and names the run another model's", "late"],
+		["fails on its first load", "failed"],
+	])("lays no linked trace over the blocks, asks for none and offers no Open trace while the list %s", async (_case, list) => {
+		stubRoutes(detailed);
+		let traceRequests = 0;
+		let release: () => void = () => undefined;
+		const listed = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), async () => {
+				if (list === "failed") {
+					return new HttpResponse(null, { status: 500 });
+				}
+				await listed;
+				return HttpResponse.json({
+					platformSupported: true,
+					unsupportedMessage: null,
+					activeExperimentId: null,
+					maxRetainedExperiments: 20,
+					maxPinnedExperiments: 20,
+					experiments: [traceRow(traceId, "org/Other-GGUF:Q4_K_M")],
+				});
+			}),
+			http.get(localApiPath(`model-lab/experiments/${traceId}/trace`), () => {
+				traceRequests++;
+				return HttpResponse.json(traceData);
+			}),
+		);
+		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } } });
+		// Another panel already read this run, so a raw id would draw it from the cache without asking.
+		queryClient.setQueryData(getModelLabExperimentTraceQueryKey({ path: { experimentId: traceId } }), traceData);
+		renderWithProviders(<ControlledExplorer initial={{ model: gguf, trace: traceId, block: 1 }} onJump={vi.fn()} />, {
+			queryClient,
+		});
+
+		const expectNoOverlay = (): void => {
+			expect(screen.getByRole("button", { name: "Block 1: Full attention" }).getAttribute("aria-pressed")).toBe("true");
+			expect(screen.queryByTestId("model-lab-architecture-traced-blocks")).toBeNull();
+			expect(screen.queryByTestId("model-lab-architecture-trace-summary")).toBeNull();
+			expect(screen.queryByRole("button", { name: "Open trace" })).toBeNull();
+			expect(traceRequests).toBe(0);
+		};
+		await screen.findByTestId("model-lab-architecture-detail");
+		const listKey = listModelLabExperimentsQueryKey();
+		if (list === "failed") {
+			await waitFor(() => expect(queryClient.getQueryState(listKey)?.status).toBe("error"));
+		} else {
+			expectNoOverlay();
+			release();
+			await waitFor(() => expect(queryClient.getQueryState(listKey)?.status).toBe("success"));
+		}
+
+		expectNoOverlay();
+	});
+
+	it("says a linked Output the file does not hold is not in it, and opens no detail", async () => {
+		stubRoutes({ ...detailed, nonBlock: detailed.nonBlock.filter((group) => group.componentId === "embedding") });
+		renderWithProviders(<ControlledExplorer initial={{ model: gguf, block: "output" }} />);
+
+		expect((await screen.findByTestId("model-lab-architecture-block-missing")).textContent).toBe(
+			"Output is not in this file. One possible reason: the file is one part of a split GGUF and it is in another part.",
+		);
+		expect(screen.queryByTestId("model-lab-architecture-detail")).toBeNull();
+	});
+
+	it.each([
+		[
+			"output",
+			["embedding"],
+			"Die Ausgabe ist nicht in dieser Datei. Ein möglicher Grund: Die Datei ist ein Teil eines aufgeteilten GGUF, und die Ausgabe liegt in einem anderen Teil.",
+		],
+		[
+			"embedding",
+			["output_norm", "output"],
+			"Das Embedding ist nicht in dieser Datei. Ein möglicher Grund: Die Datei ist ein Teil eines aufgeteilten GGUF, und das Embedding liegt in einem anderen Teil.",
+		],
+	] as const)(
+		"says in German, with its article, that a linked %s the file does not hold is not in it",
+		async (block, kept, text) => {
+			stubRoutes({ ...detailed, nonBlock: detailed.nonBlock.filter((group) => kept.some((id) => id === group.componentId)) });
+			renderWithProviders(<ControlledExplorer initial={{ model: gguf, block }} />);
+			await screen.findByTestId("model-lab-architecture-block-missing");
+
+			try {
+				await loadModelLabStrings("de");
+				await act(() => i18next.changeLanguage("de"));
+				expect(screen.getByTestId("model-lab-architecture-block-missing").textContent).toBe(text);
+			} finally {
+				await act(() => i18next.changeLanguage("en"));
+			}
+		},
+	);
+
+	it("opens the linked block at the linked explanation level", async () => {
+		stubRoutes(detailed);
+		renderWithProviders(<ControlledExplorer initial={{ model: gguf, block: 1, level: "detail" }} />);
+
+		expect(await screen.findByText("Fixture: a full-attention block, in detail.")).toBeTruthy();
+		expect((screen.getByRole("radio", { name: "Detail" }) as HTMLInputElement).checked).toBe(true);
 	});
 });

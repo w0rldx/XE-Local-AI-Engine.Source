@@ -35,6 +35,10 @@
 				"notTraced": "Nicht getraced: Der gewählte Trace hat diesen Block nicht gemessen.",
 				"openTrace": "Trace öffnen",
 				"operations": "Operationen",
+				"outsideMissing": {
+					"embedding": "Das Embedding ist nicht in dieser Datei. Ein möglicher Grund: Die Datei ist ein Teil eines aufgeteilten GGUF, und das Embedding liegt in einem anderen Teil.",
+					"output": "Die Ausgabe ist nicht in dieser Datei. Ein möglicher Grund: Die Datei ist ein Teil eines aufgeteilten GGUF, und die Ausgabe liegt in einem anderen Teil."
+				},
 				"overviewOnly": "Für die Architektur {{architecture}} wird kein Operationsgraph angezeigt, nur die aus der Datei gelesenen Tensorgruppen.",
 				"readBadge": "Aus der Datei gelesen",
 				"relation": {
@@ -70,7 +74,7 @@
 				"notIdentical": "Identische Einstellungen garantieren keine identischen Ergebnisse: Modelldatei, Laufzeitvariante oder Hintergrundlast können die Ausgabe trotzdem verändern.",
 				"notRun": "Nicht ausgeführt: gestoppt, bevor dieses Modell begann.",
 				"run": "Beide ausführen",
-				"scope": "Beide Läufe verwenden diesen Knoten und seinen aktuellen llama.cpp-Build, nacheinander. Die Zeiten eines Laufs können das Laden seines Modells enthalten.",
+				"scope": "Beide Läufe verwenden diesen Node und seinen aktuellen llama.cpp-Build, nacheinander. Die Zeiten eines Laufs können das Laden seines Modells enthalten.",
 				"seed": "Seed für beide Läufe: {{seed}}",
 				"tab": "A/B mit gleichem Prompt",
 				"waiting": "Wartet auf das Ende des ersten Laufs."
@@ -688,7 +692,6 @@
 					}
 				}
 			},
-			"inspectModel": "Installiertes Modell",
 			"modelsFailed": "Die installierten Modelle konnten nicht geladen werden.",
 			"nextToken": {
 				"explain": {
@@ -756,9 +759,9 @@
 					"minP": "Min-p: {{value}}",
 					"minPLabel": "Simuliertes Min-p",
 					"minPOff": "Min-p: aus",
-					"model": "Modell",
 					"noCandidates": "Der Server hat für diesen Schritt keine Kandidaten geliefert.",
 					"noCandidatesTrace": "Dieser Trace hat für diesen Schritt keine Kandidaten aufgezeichnet.",
+					"notRunnable": "Nächstes Token führt nur llama.cpp-Chatmodelle aus, und {{model}} ist keines. Bitte wählen Sie oben ein Chatmodell.",
 					"notTokens": "Schritte sind Einträge, keine Tokens: Mehrbyte-Text kann mehrere Tokens zu einem Eintrag zusammenfassen, dessen Werte zu seinem letzten Token gehören.",
 					"pickStep": "Wählen Sie einen Schritt, um seine Kandidaten zu sehen.",
 					"preSampling": "Die Balken zeigen die Wahrscheinlichkeiten, die llama.cpp vor dem Sampling berechnet hat: Temperatur, Top-k und Top-p des Laufs ändern sie nicht.",
@@ -777,6 +780,7 @@
 						"truncated": "Angezeigt werden nur die ersten {{shown}} Tokens."
 					},
 					"rest": "Der Rest des Vokabulars: {{percent}}",
+					"resultModel": "Das Ergebnis unten stammt von {{model}}, nicht von dem oben gewählten Modell.",
 					"run": "Ausführen",
 					"serverDefaults": "Sampling-Werte, die ein Lauf leer lässt, nutzen die Standardwerte von llama-server (Top-k 40, Top-p 0,95, Min-p 0,05, Temperatur 0,8), sofern Modelldatei oder Startargumente keine anderen setzen. Top-k 40 ist mehr als die gezeigten Kandidaten, die Simulation kann dann vom Server abweichen.",
 					"showThinking": "Denkschritte anzeigen",
@@ -815,6 +819,12 @@
 			},
 			"noModels": "Es ist kein installiertes llama.cpp-Modell verfügbar. Bitte installieren Sie zuerst eines unter Modelle.",
 			"openModels": "Modelle öffnen",
+			"pageModel": {
+				"hint": "A/B mit gleichem Prompt sowie Trace und Steering wählen ihre eigenen Modelle.",
+				"label": "Modell für Architektur, Nächstes Token und Untersuchen",
+				"loading": "Die installierten Modelle werden geladen…",
+				"notInstalled": "{{model}} ist auf diesem Node nicht als llama.cpp-Modell installiert. Bitte wählen Sie ein installiertes Modell."
+			},
 			"pytorch": {
 				"blockRoot": "(Block)",
 				"build": "PyTorch-Index erstellen",
@@ -957,7 +967,7 @@
 				"start": "Steering-Lauf starten",
 				"tests": "Test-Prompts"
 			},
-			"subtitle": "Vergleichen Sie zwei lokale Modelle mit einem Prompt, sehen Sie die Kandidaten hinter jedem nächsten Token, untersuchen Sie die Datei oder die Architektur eines Modells, oder tracen und steuern Sie einen Checkpoint. Nur Traces und Steering-Läufe werden gespeichert.",
+			"subtitle": "Wählen Sie ein installiertes Modell, um seine Architektur, die Kandidaten hinter jedem nächsten Token oder seine Datei zu sehen. Vergleichen Sie zwei lokale Modelle mit einem Prompt, oder tracen und steuern Sie einen Checkpoint. Nur Traces und Steering-Läufe werden gespeichert.",
 			"title": "Model Lab",
 			"trace": {
 				"artifact": {
