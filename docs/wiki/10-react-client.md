@@ -59,7 +59,10 @@ those durations. A test rendering through `renderWithProviders` has no provider 
 `config/bundle-budget.json`: `applicationJavaScriptBytes` for everything every user downloads, and
 `lazyEditorJavaScriptBytes` for the Monaco chunks, measured separately so one large lazy vendor chunk cannot mask
 growth in the app bundle. `lazySceneViewerJavaScriptBytes` covers `three`, and `lazyModelLabJavaScriptBytes` the
-`model-lab-*` route chunk plus `ModelInspectPanel-*`, which the model details dialog imports lazily too.
+`model-lab-*` route chunk plus `ModelInspectPanel-*`, which the model details dialog imports lazily too. It rose
+491 000 → 497 000 on 2026-11-24: measured 489 148 bytes before and 494 592 with the German operation headings (the
+`opLabel` strings in the lazy Model Lab German bundle) and the block-detail selection in the URL; the application
+budget was left unchanged (6 024 531 → 6 024 947 bytes, under its limit).
 `lazyMathJavaScriptBytes` covers `ChatMathPlugins-*` (KaTeX, remark-math, rehype-katex), which `ChatMarkdown` loads
 only when a chat message or a Model Lab explanation first contains math. A lazy pattern
 matches the chunk's file name, so a helper those chunks share with another route stays in its own chunk under the app budget. It also fails when `dist/index.html` loads or modulepreloads a lazy asset, because a

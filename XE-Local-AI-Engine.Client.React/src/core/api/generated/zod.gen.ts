@@ -7700,6 +7700,7 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplate 
 	source: z.string(),
 	nodes: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateNode),
 	edges: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateEdge),
+	qkvLayout: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTensor = z.object({

@@ -13,10 +13,10 @@ import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { modelLabSearchSchema } from "@/features/modelLab/models/ModelLabNavigation";
 import { ModelLabRoutePage } from "@/features/modelLab/pages/ModelLabRoutePage";
+import { acceptConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { createTestQueryClient, renderWithProviders } from "@/test/RenderWithProviders";
-import { acceptConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { setupMswServer } from "@/test/UseMswServer";
 
 vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
@@ -103,6 +103,111 @@ const descriptor = {
 		{ componentId: "output", component: "output", provenance: "read", tensors: [tensor("output.weight")] },
 	],
 };
+
+// The same file drawn in detail: each block has an attention and an FFN group, and its template a dashed input node and
+// one solid node per group.
+const detailedDescriptor = {
+	...descriptor,
+	support: "detailed",
+	blocks: descriptor.blocks.map((block) => ({
+		...block,
+		groups: [
+			{
+				componentId: `blk.${block.index}.attention`,
+				component: "attention",
+				provenance: "read",
+				tensors: [tensor(`blk.${block.index}.attn_q.weight`), tensor(`blk.${block.index}.attn_k.weight`)],
+			},
+			{
+				componentId: `blk.${block.index}.ffn`,
+				component: "ffn",
+				provenance: "read",
+				tensors: [tensor(`blk.${block.index}.ffn_down.weight`)],
+			},
+		],
+	})),
+	templates: [
+		{
+			kind: "fullAttention",
+			provenance: "inferred",
+			source: "llama.cpp src/models/llama.cpp @ b1",
+			nodes: [
+				{ id: "input", label: "Residual in", component: null },
+				{ id: "attn", label: "Self-attention", component: "attention" },
+				{ id: "ffn", label: "Feed-forward", component: "ffn" },
+			],
+			edges: [
+				{ from: "input", to: "attn" },
+				{ from: "attn", to: "ffn" },
+			],
+		},
+	],
+};
+
+const modeling = "models/llama/modeling_llama.py";
+const pyModule = (path: string, className: string, classStart: number, classEnd: number) => ({
+	path,
+	class: className,
+	file: modeling,
+	classStart,
+	classEnd,
+	forwardLine: classStart + 1,
+});
+// A PyTorch index joined to the three blocks: each group has a module, and the block has its own class.
+const pyIndex = {
+	indexId: "index-1",
+	modelName: gguf,
+	source: { kind: "huggingface", repoId: "org/Tiny", revision: "rev", baseArtifactId: null },
+	index: {
+		transformersVersion: "5.17.0",
+		torchVersion: "2.13.0",
+		modelType: "llama",
+		textModelType: "llama",
+		modelClass: "LlamaForCausalLM",
+		blockPath: "model.layers",
+		exportMode: "representative",
+		anchoredLines: true,
+		blocks: [0, 1, 2].map((index) => ({
+			index,
+			path: `model.layers.${index}`,
+			class: "LlamaDecoderLayer",
+			layerType: "full_attention",
+			graphId: "g",
+			modules: [
+				pyModule(`model.layers.${index}`, "LlamaDecoderLayer", 400, 450),
+				pyModule(`model.layers.${index}.self_attn`, "LlamaAttention", 210, 280),
+				pyModule(`model.layers.${index}.mlp`, "LlamaMLP", 290, 310),
+			],
+		})),
+		outside: [],
+		outsideGraphId: null,
+		graphs: [{ graphId: "g", nodes: [], edges: [] }],
+		exportError: null,
+		files: [{ file: modeling, sha256: "abc" }],
+	},
+	join: {
+		blocksJoined: true,
+		reason: null,
+		ggufTrunkBlockCount: 3,
+		pyTorchBlockCount: 3,
+		components: [0, 1, 2].flatMap((index) => [
+			{ componentId: `blk.${index}.attention`, modulePaths: [`model.layers.${index}.self_attn`] },
+			{ componentId: `blk.${index}.ffn`, modulePaths: [`model.layers.${index}.mlp`] },
+		]),
+		tensors: [],
+	},
+};
+
+// Every architecture read answers the detailed file; with `withIndex`, the PyTorch index above and its source too.
+function stubDetailed(withIndex = false): void {
+	server.use(http.get(localApiPath("model-lab/architecture/:modelName"), () => HttpResponse.json(detailedDescriptor)));
+	if (withIndex) {
+		server.use(
+			http.get(localApiPath("model-lab/architecture/:modelName/pytorch"), () => HttpResponse.json(pyIndex)),
+			http.get(localApiPath("model-lab/pytorch-source"), () => HttpResponse.json({ file: modeling, sha256: "abc", text: "#" })),
+		);
+	}
+}
 
 const traceRow = {
 	id: traceId,
@@ -306,6 +411,28 @@ function selectedTab(): string | null {
 function detailLevelChecked(): boolean {
 	const detail = within(screen.getByTestId("model-lab-architecture-detail")).getByRole("radio", { name: "Detail" });
 	return (detail as HTMLInputElement).checked;
+}
+
+// Block 1 of the detailed file, with what the detail shows inside it.
+const blockUrl = (inside = "") => `/model-lab?model=${encodeURIComponent(gguf)}&block=1${inside}`;
+
+// An operation's control in the block's operation list.
+function operation(name: string): HTMLElement {
+	return within(screen.getByTestId("model-lab-explain-operations")).getByRole("button", { name });
+}
+
+function groupSelected(componentId: string): string | undefined {
+	return screen.getByTestId(`model-lab-architecture-group-${componentId}`).dataset["selected"];
+}
+
+// The source lines the PyTorch panel shows.
+function codeLines(): string | null {
+	return screen.getByTestId("model-lab-pytorch-file").textContent;
+}
+
+// Every render installs a fresh jsdom stub, so this is the one the current page calls.
+function scroll() {
+	return vi.mocked(Element.prototype.scrollIntoView);
 }
 
 describe("Model Lab on its route", () => {
@@ -826,5 +953,299 @@ describe("Model Lab on its route", () => {
 		fireEvent.click(within(await screen.findByTestId("model-lab-architecture-detail")).getByRole("radio", { name: "Detail" }));
 		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, level: "detail", model: gguf }));
 		expect(scroller.scrollTop).toBe(600);
+	});
+});
+
+describe("Model Lab block detail in the URL", () => {
+	it("writes each pick inside a block as one change that replaces the entry: a tensor, a solid node, a dashed node, the list and a group", async () => {
+		stubRoutes();
+		stubDetailed();
+		const { router, history } = await renderRoute(blockUrl());
+		const entered = history.length;
+
+		fireEvent.click(await screen.findByRole("button", { name: "attn_k.weight" }));
+		await waitFor(() =>
+			expect(searchOf(router)).toEqual({ block: 1, group: "blk.1.attention", model: gguf, tensor: "blk.1.attn_k.weight" }),
+		);
+		expect(screen.getByTestId("model-lab-architecture-tensor").textContent).toContain("blk.1.attn_k.weight");
+
+		// A solid node opens its operation and selects its group in one change, and the tensor goes.
+		fireEvent.click(screen.getByTestId("react-flow-node-attn"));
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, group: "blk.1.attention", model: gguf, op: "attn" }));
+		expect(screen.queryByTestId("model-lab-architecture-tensor")).toBeNull();
+		expect(groupSelected("blk.1.attention")).toBe("true");
+		expect(operation("Self-attention").getAttribute("aria-expanded")).toBe("true");
+
+		// A dashed node and the list change only the operation.
+		fireEvent.click(screen.getByTestId("react-flow-node-input"));
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, group: "blk.1.attention", model: gguf, op: "input" }));
+		fireEvent.click(operation("Feed-forward"));
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, group: "blk.1.attention", model: gguf, op: "ffn" }));
+
+		fireEvent.click(screen.getByRole("button", { name: /blk\.1\.ffn/ }));
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, group: "blk.1.ffn", model: gguf, op: "ffn" }));
+		expect(groupSelected("blk.1.attention")).toBe("false");
+		expect(history.length).toBe(entered);
+	});
+
+	it("opens a link's operation, group and tensor, and scrolls to the operation once", async () => {
+		stubRoutes();
+		stubDetailed();
+		const { router } = await renderRoute(blockUrl("&op=ffn&group=blk.1.ffn&tensor=blk.1.ffn_down.weight"));
+
+		expect((await screen.findByTestId("model-lab-architecture-tensor")).textContent).toContain("blk.1.ffn_down.weight");
+		expect(screen.getByRole("button", { name: "ffn_down.weight" }).getAttribute("aria-pressed")).toBe("true");
+		expect(groupSelected("blk.1.ffn")).toBe("true");
+		expect(groupSelected("blk.1.attention")).toBe("false");
+		expect(screen.getByTestId("react-flow-node-ffn")).toBeTruthy();
+		expect(operation("Feed-forward").getAttribute("aria-expanded")).toBe("true");
+		expect(scroll().mock.contexts).toEqual([operation("Feed-forward").closest("[data-item-id]")]);
+		expect(scroll()).toHaveBeenCalledExactlyOnceWith({ block: "center", behavior: "smooth" });
+		expect(searchOf(router)).toEqual({ block: 1, group: "blk.1.ffn", model: gguf, op: "ffn", tensor: "blk.1.ffn_down.weight" });
+	});
+
+	it("lets a link's tensor decide its group, and ignores what names nothing in the block without writing back", async () => {
+		stubRoutes();
+		stubDetailed();
+		const mismatched = await renderRoute(blockUrl("&group=blk.1.ffn&tensor=blk.1.attn_k.weight"));
+
+		expect((await screen.findByTestId("model-lab-architecture-tensor")).textContent).toContain("blk.1.attn_k.weight");
+		expect(groupSelected("blk.1.attention")).toBe("true");
+		expect(groupSelected("blk.1.ffn")).toBe("false");
+		expect(searchOf(mismatched.router)).toEqual({ block: 1, group: "blk.1.ffn", model: gguf, tensor: "blk.1.attn_k.weight" });
+
+		cleanup();
+		// Another block's group and tensor, and an operation this template does not have.
+		const unknown = await renderRoute(blockUrl("&op=router&group=blk.0.attention&tensor=blk.0.attn_q.weight"));
+
+		await screen.findByRole("heading", { name: "Block 1: Full attention" });
+		expect(screen.queryByTestId("model-lab-architecture-tensor")).toBeNull();
+		expect(groupSelected("blk.1.attention")).toBe("false");
+		expect(groupSelected("blk.1.ffn")).toBe("false");
+		for (const name of ["Residual in", "Self-attention", "Feed-forward"]) {
+			expect(operation(name).getAttribute("aria-expanded")).toBe("false");
+		}
+		expect(scroll()).not.toHaveBeenCalled();
+		expect(searchOf(unknown.router)).toEqual({
+			block: 1,
+			group: "blk.0.attention",
+			model: gguf,
+			op: "router",
+			tensor: "blk.0.attn_q.weight",
+		});
+	});
+
+	it("restores the operation, group and tensor on Back after a jump, scrolling once to the operation it arrives at", async () => {
+		stubRoutes();
+		stubDetailed();
+		const inside = { group: "blk.1.attention", op: "attn", tensor: "blk.1.attn_q.weight" };
+		const { router, history } = await renderRoute(
+			blockUrl(`&trace=${traceId}&op=attn&group=blk.1.attention&tensor=blk.1.attn_q.weight`),
+		);
+		await screen.findByTestId("model-lab-architecture-tensor");
+
+		fireEvent.click(await screen.findByRole("button", { name: "Open trace" }));
+		await screen.findByTestId("model-lab-trace-table");
+		fireEvent.click(screen.getByRole("button", { name: "Show block 0 in Architecture" }));
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+		// Another block: the last one's selection goes.
+		expect(searchOf(router)).toEqual({ block: 0, experiment: traceId, model: gguf, trace: traceId });
+		await screen.findByRole("heading", { name: "Block 0: Full attention" });
+		expect(screen.queryByTestId("model-lab-architecture-tensor")).toBeNull();
+		scroll().mockClear();
+
+		await act(async () => history.back());
+		await waitFor(() => expect(selectedTab()).toBe("Trace and steer"));
+		await act(async () => history.back());
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+
+		expect(searchOf(router)).toEqual({ block: 1, model: gguf, trace: traceId, ...inside });
+		await screen.findByRole("heading", { name: "Block 1: Full attention" });
+		expect(screen.getByTestId("model-lab-architecture-tensor").textContent).toContain("blk.1.attn_q.weight");
+		expect(groupSelected("blk.1.attention")).toBe("true");
+		expect(operation("Self-attention").getAttribute("aria-expanded")).toBe("true");
+		expect(scroll().mock.contexts).toEqual([operation("Self-attention").closest("[data-item-id]")]);
+	});
+
+	it("scrolls the open operation back into view once each time the tab shows the same kept detail again", async () => {
+		stubRoutes();
+		stubDetailed();
+		const { router, history } = await renderRoute(blockUrl(`&trace=${traceId}&op=attn`));
+		const heading = await screen.findByRole("heading", { name: "Block 1: Full attention" });
+		const item = operation("Self-attention").closest("[data-item-id]");
+		expect(scroll().mock.contexts).toEqual([item]);
+
+		fireEvent.click(await screen.findByRole("button", { name: "Open trace" }));
+		await screen.findByTestId("model-lab-trace-table");
+		// Subscribed after the router's scroll restoration, which sets the scroller on Back once the page has rendered and
+		// so cancels a smooth scroll begun before it. jsdom has no layout: only this order is provable here.
+		const rendered = vi.fn();
+		router.subscribe("onRendered", rendered);
+		scroll().mockClear();
+		await act(async () => history.back());
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+
+		expect(searchOf(router)).toEqual({ block: 1, model: gguf, op: "attn", trace: traceId });
+		// The same detail, never remounted: only the tab showing it again scrolls, after the router's restoration.
+		expect(screen.getByRole("heading", { name: "Block 1: Full attention" })).toBe(heading);
+		expect(operation("Self-attention").getAttribute("aria-expanded")).toBe("true");
+		expect(scroll().mock.contexts).toEqual([item]);
+		expect(scroll()).toHaveBeenCalledExactlyOnceWith({ block: "center", behavior: "smooth" });
+		expect(rendered).toHaveBeenCalledOnce();
+		expect(scroll()).toHaveBeenCalledAfter(rendered);
+
+		// A tab click away and back scrolls once more; a list close and reopen after it does not.
+		fireEvent.click(screen.getByRole("tab", { name: "Inspect" }));
+		await waitFor(() => expect(selectedTab()).toBe("Inspect"));
+		fireEvent.click(screen.getByRole("tab", { name: "Architecture" }));
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+		expect(scroll().mock.contexts).toEqual([item, item]);
+		fireEvent.click(operation("Self-attention"));
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, model: gguf, trace: traceId }));
+		fireEvent.click(operation("Self-attention"));
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, model: gguf, op: "attn", trace: traceId }));
+		expect(scroll()).toHaveBeenCalledTimes(2);
+	});
+
+	it("follows Back and Forward within one block: the operation, group, tensor and code change in the same detail", async () => {
+		stubRoutes();
+		stubDetailed(true);
+		const { router, history } = await renderRoute(blockUrl("&group=blk.1.attention"));
+		await waitFor(() => expect(codeLines()).toBe(`${modeling}, lines 210–280`));
+		const heading = screen.getByRole("heading", { name: "Block 1: Full attention" });
+
+		await act(async () => history.push(blockUrl("&op=ffn&group=blk.1.ffn&tensor=blk.1.ffn_down.weight")));
+		await waitFor(() => expect(codeLines()).toBe(`${modeling}, lines 290–310`));
+		expect(groupSelected("blk.1.ffn")).toBe("true");
+		expect(screen.getByTestId("model-lab-architecture-tensor").textContent).toContain("blk.1.ffn_down.weight");
+		expect(operation("Feed-forward").getAttribute("aria-expanded")).toBe("true");
+
+		await act(async () => history.back());
+		await waitFor(() => expect(codeLines()).toBe(`${modeling}, lines 210–280`));
+		expect(searchOf(router)).toEqual({ block: 1, group: "blk.1.attention", model: gguf });
+		expect(groupSelected("blk.1.attention")).toBe("true");
+		expect(screen.queryByTestId("model-lab-architecture-tensor")).toBeNull();
+		expect(operation("Feed-forward").getAttribute("aria-expanded")).toBe("false");
+		// Within one block the detail stays mounted; only what it shows follows the URL.
+		expect(screen.getByRole("heading", { name: "Block 1: Full attention" })).toBe(heading);
+
+		await act(async () => history.forward());
+		await waitFor(() => expect(codeLines()).toBe(`${modeling}, lines 290–310`));
+		expect(groupSelected("blk.1.ffn")).toBe("true");
+		expect(operation("Feed-forward").getAttribute("aria-expanded")).toBe("true");
+	});
+
+	it("returns the code to a group clicked again after a module pick, and keeps the module when that click is blocked", async () => {
+		stubRoutes();
+		stubDetailed(true);
+		const { router, history } = await renderRoute(blockUrl());
+		const attention = await screen.findByRole("button", { name: /blk\.1\.attention/ });
+		const pickBlockModule = async () =>
+			fireEvent.click(within(await screen.findByTestId("model-lab-pytorch-modules")).getByRole("button", { name: "(block)" }));
+
+		fireEvent.click(attention);
+		await waitFor(() => expect(codeLines()).toBe(`${modeling}, lines 210–280`));
+		await pickBlockModule();
+		expect(codeLines()).toBe(`${modeling}, lines 400–450`);
+
+		// The URL stays the same, yet the click asks for the group's code again.
+		fireEvent.click(attention);
+		await waitFor(() => expect(codeLines()).toBe(`${modeling}, lines 210–280`));
+		expect(searchOf(router)).toEqual({ block: 1, group: "blk.1.attention", model: gguf });
+
+		await pickBlockModule();
+		const unblock = history.block({ blockerFn: () => true });
+		try {
+			fireEvent.click(attention);
+			await act(async () => undefined);
+			expect(codeLines()).toBe(`${modeling}, lines 400–450`);
+		} finally {
+			unblock();
+		}
+	});
+
+	it("scrolls to a graph pick each time the router shows it, never for a blocked pick or a list close and reopen", async () => {
+		stubRoutes();
+		stubDetailed();
+		const { router, history } = await renderRoute(blockUrl());
+		const attn = await screen.findByTestId("react-flow-node-attn");
+		expect(scroll()).not.toHaveBeenCalled();
+
+		fireEvent.click(attn);
+		await waitFor(() => expect(scroll()).toHaveBeenCalledOnce());
+		const item = operation("Self-attention").closest("[data-item-id]");
+		expect(scroll().mock.contexts).toEqual([item]);
+		expect(scroll()).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
+		// The same pick again changes no URL, yet the operator asked to see it again.
+		fireEvent.click(attn);
+		await waitFor(() => expect(scroll()).toHaveBeenCalledTimes(2));
+		expect(scroll().mock.contexts).toEqual([item, item]);
+
+		// Closed and opened again from the list, as Enter on the focused control does: it is already where the operator is.
+		const control = operation("Self-attention");
+		control.focus();
+		fireEvent.click(control);
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, group: "blk.1.attention", model: gguf }));
+		fireEvent.click(control);
+		await waitFor(() => expect(searchOf(router)).toEqual({ block: 1, group: "blk.1.attention", model: gguf, op: "attn" }));
+		expect(scroll()).toHaveBeenCalledTimes(2);
+
+		const scroller = screen.getByTestId("page-scroller");
+		scroller.scrollTop = 600;
+		const ffn = screen.getByTestId("react-flow-node-ffn");
+		ffn.focus();
+		const unblock = history.block({ blockerFn: () => true });
+		try {
+			fireEvent.click(ffn);
+			await act(async () => undefined);
+
+			expect(searchOf(router)).toEqual({ block: 1, group: "blk.1.attention", model: gguf, op: "attn" });
+			expect(document.activeElement).toBe(ffn);
+			expect(scroller.scrollTop).toBe(600);
+			expect(scroll()).toHaveBeenCalledTimes(2);
+		} finally {
+			unblock();
+		}
+	});
+
+	it("scrolls without motion to an arrival's operation when the operator asks for reduced motion", async () => {
+		stubRoutes();
+		stubDetailed();
+		const { history } = await renderRoute(`/model-lab?model=${encodeURIComponent(gguf)}`);
+		await screen.findByTestId("model-lab-architecture-overview");
+		const matchMedia = window.matchMedia;
+		window.matchMedia = vi.fn((query: string) => ({
+			...matchMedia(query),
+			matches: query === "(prefers-reduced-motion: reduce)",
+		}));
+		try {
+			await act(async () => history.push(blockUrl("&op=attn")));
+			await screen.findByRole("heading", { name: "Block 1: Full attention" });
+
+			expect(scroll()).toHaveBeenCalledExactlyOnceWith({ block: "center", behavior: "auto" });
+			expect(scroll().mock.contexts).toEqual([operation("Self-attention").closest("[data-item-id]")]);
+		} finally {
+			window.matchMedia = matchMedia;
+		}
+	});
+
+	it("keeps an outside detail's group and tensor in the URL: a reload restores them, the whole model drops them", async () => {
+		stubRoutes();
+		const { router } = await renderRoute(`/model-lab?model=${encodeURIComponent(gguf)}&block=embedding`);
+
+		fireEvent.click(await screen.findByRole("button", { name: "token_embd.weight" }));
+		await waitFor(() =>
+			expect(searchOf(router)).toEqual({ block: "embedding", group: "embedding", model: gguf, tensor: "token_embd.weight" }),
+		);
+		const href = router.state.location.href;
+
+		cleanup();
+		const reloaded = await renderRoute(href);
+
+		expect((await screen.findByTestId("model-lab-architecture-tensor")).textContent).toContain("token_embd.weight");
+		expect(groupSelected("embedding")).toBe("true");
+		fireEvent.click(screen.getByRole("button", { name: "Model" }));
+		await waitFor(() => expect(searchOf(reloaded.router)).toEqual({ model: gguf }));
+		expect(screen.queryByTestId("model-lab-architecture-tensor")).toBeNull();
 	});
 });

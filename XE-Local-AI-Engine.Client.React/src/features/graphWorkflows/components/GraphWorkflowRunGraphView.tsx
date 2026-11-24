@@ -1,4 +1,4 @@
-import { Alert, Badge, Group, Stack, Text } from "@mantine/core";
+import { Alert, Badge, Group, Stack, Text, useComputedColorScheme } from "@mantine/core";
 import {
 	IconArrowsJoin2,
 	IconArrowsSplit2,
@@ -139,6 +139,7 @@ export interface GraphWorkflowRunGraphViewProps {
 
 function GraphWorkflowRunGraphViewInner({ canvas, selectedNodeKey, onSelectNode }: GraphWorkflowRunGraphViewProps) {
 	const { t } = useTranslation();
+	const colorMode = useComputedColorScheme("light");
 	const { fitView } = useReactFlow();
 	const nodes = useMemo(
 		() => canvas.nodes.map((node) => ({ ...node, selected: node.id === selectedNodeKey })),
@@ -203,6 +204,7 @@ function GraphWorkflowRunGraphViewInner({ canvas, selectedNodeKey, onSelectNode 
 			{mismatch}
 			<div style={{ height: "100%", minHeight: 320 }} data-testid="graph-workflow-run-graph">
 				<ReactFlow
+					colorMode={colorMode}
 					nodes={nodes}
 					edges={canvas.edges}
 					nodeTypes={runNodeTypes}

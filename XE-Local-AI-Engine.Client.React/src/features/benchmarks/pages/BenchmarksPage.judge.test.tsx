@@ -102,7 +102,7 @@ function baseRoutes(run: Record<string, unknown> = runRow()) {
 	);
 }
 
-// Every test's FIRST await gates on all of `baseRoutes()`'s concurrent GETs landing — through the generated
+// Every test's FIRST await gates on `baseRoutes()`'s concurrent GETs landing — through the generated
 // client, its interceptor chain, zod response validation and TanStack Query — before the workspace paints a
 // control. Testing Library polls `findBy*` on its own 1000ms window, which `testTimeout` does not raise, and under
 // full-suite CPU contention that fan-in can outlast it. Same reason `useBenchmarks.test.tsx` hands an explicit
@@ -274,7 +274,14 @@ describe("BenchmarksPage judge changes", () => {
 			</ConfirmProvider>,
 		);
 
-		fireEvent.click(await screen.findByTestId("benchmark-rejudge-all", undefined, fanIn));
+		// The button shows once the project lands but stays disabled until its runs do (it re-judges their succeeded
+		// runs), and a click on a disabled button does nothing: wait for it to be enabled, not just present.
+		const rejudgeAll = await waitFor(() => {
+			const button = screen.getByTestId<HTMLButtonElement>("benchmark-rejudge-all");
+			expect(button.disabled).toBe(false);
+			return button;
+		}, fanIn);
+		fireEvent.click(rejudgeAll);
 		fireEvent.click(await screen.findByTestId("benchmark-rejudge-confirm-accept"));
 
 		await waitFor(() => expect(observedBody).toEqual({ expectedVersion: 2 }));
@@ -290,6 +297,8 @@ describe("BenchmarksPage judge changes", () => {
 			</ConfirmProvider>,
 		);
 
-		expect(((await screen.findByTestId("benchmark-rejudge-all", undefined, fanIn)) as HTMLButtonElement).disabled).toBe(true);
+		// After the run row: the button is also disabled while the runs are still loading, which is not what this asserts.
+		await screen.findByTestId(`benchmark-run-row-${runId}`, undefined, fanIn);
+		expect((await screen.findByTestId<HTMLButtonElement>("benchmark-rejudge-all", undefined, fanIn)).disabled).toBe(true);
 	});
 });

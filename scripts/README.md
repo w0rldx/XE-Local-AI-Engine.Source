@@ -47,7 +47,7 @@ Stopping a dev host safely: [README-dev-stop.md](README-dev-stop.md).
 
 - [`compliance/`](compliance/) — Holds `bundle_input_evidence.py`, `capture_bundle_inputs.targets`, `create_bundle_input_manifest.py`, `generate_backend_license_corpus.py`, `nuget-license-overrides.json`, `reconcile_payload_spdx.py` and more.
 - [`lab/`](lab/) — Holds `profiles/`.
-- [`lib/`](lib/) — Holds `build-lock-common.sh`, `discover-llama-server.sh`, `git-env.sh`, `proc-tree.sh`, `smoke-ledger.sh`, `test-sizing.sh`.
+- [`lib/`](lib/) — Holds `build-lock-common.sh`, `discover-llama-server.sh`, `git-env.sh`, `mise-path.sh`, `proc-tree.sh`, `smoke-ledger.sh` and more.
 - [`model-matrix/`](model-matrix/) — Holds `models.json`.
 - [`performance/`](performance/) — Holds `capture_inference_evidence.py`, `capture_windows_vram.ps1`, `inference_evidence/`, `run_scheduling_grid.py`, `tests/`.
 - [`release/`](release/) — Holds `dev-build-identity.py`, `verify-release-authority.py`, `verify-release-envelope.py`.

@@ -39,6 +39,21 @@ export function ModelLabRoutePage() {
 		},
 		[navigate, router],
 	);
+	// Once a history navigation renders, the router restores the scroller, which cancels a scroll started while it was
+	// rendering: such a scroll waits for the router's own restoration, whose listener was registered first.
+	const afterNavigation = useCallback(
+		(run: () => void) => {
+			if (router.state.status !== "pending") {
+				run();
+				return;
+			}
+			const stop = router.subscribe("onRendered", () => {
+				stop();
+				run();
+			});
+		},
+		[router],
+	);
 
-	return <ModelLabPage search={search} onSearchChange={handleSearchChange} />;
+	return <ModelLabPage search={search} onSearchChange={handleSearchChange} afterNavigation={afterNavigation} />;
 }

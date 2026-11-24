@@ -13,7 +13,7 @@ import {
 	componentLabel,
 	formatBlockRanges,
 } from "@/features/modelLab/models/ModelLabArchitecture";
-import { type ExplanationLevel, operationCandidates } from "@/features/modelLab/models/ModelLabExplanation";
+import { type ExplanationLevel, operationCandidates, operationLabel } from "@/features/modelLab/models/ModelLabExplanation";
 import {
 	type ArchitectureHierarchy,
 	allChips,
@@ -220,7 +220,7 @@ function KindOperations({
 	architecture: string | null;
 	level: ExplanationLevel;
 }) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const [open, setOpen] = useState<string | null>(null);
 	return (
 		<Stack gap={4}>
@@ -235,7 +235,7 @@ function KindOperations({
 			<ExplanationList
 				items={template.nodes.map((node) => ({
 					id: node.id,
-					label: node.label,
+					label: operationLabel(i18n, template, architecture, node),
 					candidates: operationCandidates(template.kind, architecture, node.id),
 				}))}
 				level={level}

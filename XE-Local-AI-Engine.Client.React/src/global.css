@@ -11,3 +11,20 @@ body {
 [data-mantine-color-scheme="dark"] ::highlight(node-settings-search) {
 	background-color: rgb(from var(--mantine-color-yellow-5) r g b / 35%);
 }
+
+/* Every React Flow canvas gets `colorMode` from Mantine. React Flow's own dark theme paints an opaque #141414 canvas
+   and near-black edges; these public variables win over its `-default` ones, whichever stylesheet loads later, so the
+   canvas stays on the page background and edges, labels and Controls take Mantine's dark colours. */
+
+.react-flow.dark {
+	--xy-background-color: transparent;
+	--xy-edge-stroke: var(--mantine-color-dark-2);
+	--xy-edge-stroke-selected: var(--mantine-color-dark-0);
+	--xy-edge-label-background-color: var(--mantine-color-body);
+	--xy-edge-label-color: var(--mantine-color-text);
+	--xy-controls-button-background-color: var(--mantine-color-default);
+	--xy-controls-button-background-color-hover: var(--mantine-color-default-hover);
+	--xy-controls-button-color: var(--mantine-color-default-color);
+	--xy-controls-button-color-hover: var(--mantine-color-default-color);
+	--xy-controls-button-border-color: var(--mantine-color-default-border);
+}

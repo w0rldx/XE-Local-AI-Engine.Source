@@ -53046,6 +53046,10 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureTemplateEdge"
             }
+          },
+          "qkvLayout": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { MantineProvider } from "@mantine/core";
 import { fireEvent, screen, within } from "@testing-library/react";
 import type { Edge, Node } from "@xyflow/react";
 import type { ReactNode } from "react";
@@ -16,6 +17,7 @@ import type {
 	ArchitectureTemplate,
 } from "@/features/modelLab/models/ModelLabArchitecture";
 import { buildArchitectureHierarchy } from "@/features/modelLab/models/ModelLabHierarchy";
+import { testMantineTheme } from "@/test/MantineTestRender";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // jsdom gives a canvas no size, so the mock lays the props the graph hands React Flow out as plain elements.
@@ -24,6 +26,7 @@ vi.mock("@xyflow/react", () => ({
 	Controls: () => null,
 	ReactFlow: ({
 		id,
+		colorMode,
 		nodes,
 		edges,
 		onNodeClick,
@@ -35,6 +38,7 @@ vi.mock("@xyflow/react", () => ({
 		ariaLabelConfig,
 	}: {
 		id?: string;
+		colorMode?: string;
 		nodes: Node<{ label: ReactNode }>[];
 		edges: Edge[];
 		onNodeClick?: (event: unknown, node: Node) => void;
@@ -49,6 +53,7 @@ vi.mock("@xyflow/react", () => ({
 		<div
 			data-testid="react-flow"
 			data-flow-id={id}
+			data-color-mode={colorMode}
 			data-fit-min-zoom={fitViewOptions?.minZoom}
 			data-fit-max-zoom={fitViewOptions?.maxZoom}
 			data-fit-padding={fitViewOptions?.padding}
@@ -409,12 +414,29 @@ describe("ArchitectureModelGraph", () => {
 		expect(flow.getAttribute("data-fit-min-zoom")).toBe("0.75");
 		expect(flow.getAttribute("data-nodes-focusable")).toBe("false");
 		expect(flow.getAttribute("data-controls-label")).toBe("Graph zoom controls");
-		// The canvas can be taller than the screen, so neither a wheel nor a drag is taken from the page.
+		// A mouse drag pans; the canvas can be taller than the screen, so the wheel is left to the page.
 		expect(JSON.parse(flow.getAttribute("data-gestures") ?? "")).toEqual({
-			panOnDrag: false,
+			panOnDrag: true,
 			zoomOnScroll: false,
 			preventScrolling: false,
 		});
+	});
+
+	it.each(["light", "dark"] as const)("draws its canvas in the app's %s scheme", (scheme) => {
+		renderWithProviders(
+			<MantineProvider env="test" theme={testMantineTheme} forceColorScheme={scheme}>
+				<ArchitectureModelGraph
+					hierarchy={hierarchyOf(qwen)}
+					selection={null}
+					tracedBlocks={null}
+					routedBlocks={null}
+					templates={[]}
+					onSelect={vi.fn()}
+				/>
+			</MantineProvider>,
+		);
+
+		expect(screen.getByTestId("react-flow").getAttribute("data-color-mode")).toBe(scheme);
 	});
 
 	// 11 nodes (Qwen3.5-9B-like: 8 unit chips) and 20 (Qwen3.8-27B-like: 16 unit chips and MTP).
@@ -494,9 +516,9 @@ describe("ArchitectureModelGraph", () => {
 				/>
 				<ArchitectureTemplateGraph
 					template={template("fullAttention")}
+					architecture={null}
 					groupComponents={new Set()}
 					selectedComponent={null}
-					onSelectComponent={vi.fn()}
 					onSelectNode={vi.fn()}
 				/>
 				<ArchitecturePyTorchGraph

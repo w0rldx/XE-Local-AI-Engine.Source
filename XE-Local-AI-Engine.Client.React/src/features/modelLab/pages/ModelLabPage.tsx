@@ -18,6 +18,7 @@ import { TraceExperiments } from "@/features/modelLab/components/TraceExperiment
 import type { ArchitectureSelection } from "@/features/modelLab/models/ModelLabArchitecture";
 import type { ExplanationLevel } from "@/features/modelLab/models/ModelLabExplanation";
 import {
+	type ArchitectureDetailPatch,
 	applyModelLabPatch,
 	defaultModelLabTab,
 	installedGgufModels,
@@ -32,16 +33,22 @@ import {
 import { forgetFailedModelLabStrings, loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
 
 // The route hands down the URL's search and takes every change; without either (unit tests) the page keeps its own.
-// `onShown` runs only once the router shows that change: never for a blocked or failed one.
+// `onShown` runs only once the router shows that change: never for a blocked or failed one. `afterNavigation` runs a
+// scroll once the router has restored its scroll positions for the navigation it is showing; without it, at once.
 type ModelLabPageProps =
 	| {
 			search: ModelLabSearch;
 			onSearchChange: (update: ModelLabUpdate, push: boolean, onShown?: () => void) => void;
+			afterNavigation?: (run: () => void) => void;
 	  }
-	| { search?: undefined; onSearchChange?: undefined };
+	| { search?: undefined; onSearchChange?: undefined; afterNavigation?: undefined };
+
+const runNow = (run: () => void): void => run();
 
 // The tabs the page's model picker drives; A/B and Trace choose their own models.
 const pickerTabs: ReadonlySet<string> = new Set(["architecture", "nextToken", "inspect"]);
+// The URL fields the Architecture tab shows besides its model.
+const architectureFields = ["block", "trace", "op", "group", "tensor"] as const;
 
 export function ModelLabPage(props: ModelLabPageProps) {
 	// Once per mount, outside the boundary that suspends.
@@ -53,7 +60,7 @@ export function ModelLabPage(props: ModelLabPageProps) {
 	);
 }
 
-function ModelLabContent({ search: routeSearch, onSearchChange }: ModelLabPageProps) {
+function ModelLabContent({ search: routeSearch, onSearchChange, afterNavigation = runNow }: ModelLabPageProps) {
 	const { t, i18n } = useTranslation();
 	use(loadModelLabStrings(i18n.language));
 	const tabsRef = useRef<HTMLDivElement>(null);
@@ -80,17 +87,24 @@ function ModelLabContent({ search: routeSearch, onSearchChange }: ModelLabPagePr
 	const resolvedModel =
 		models.data !== undefined && search.model !== undefined && modelNames.includes(search.model) ? search.model : null;
 	// Architecture and Inspect read a model's file only once their tab shows that model, from any way of getting there.
-	// Architecture's block and trace follow its model: a hidden tab opens no detail and reads no run for a change.
-	const [architectureView, setArchitectureView] = useState<Pick<ModelLabSearch, "block" | "trace"> & { model: string | null }>({
-		model: null,
-	});
+	// Architecture's block, trace and detail selection follow its model: a hidden tab opens no detail and reads no run
+	// for a change.
+	const [architectureView, setArchitectureView] = useState<
+		Pick<ModelLabSearch, (typeof architectureFields)[number]> & { model: string | null }
+	>({ model: null });
 	if (
 		activeTab === "architecture" &&
-		(architectureView.model !== resolvedModel ||
-			architectureView.block !== search.block ||
-			architectureView.trace !== search.trace)
+		(architectureView.model !== resolvedModel || architectureFields.some((field) => architectureView[field] !== search[field]))
 	) {
-		setArchitectureView({ model: resolvedModel, block: search.block, trace: search.trace });
+		const { block, trace, op, group, tensor } = search;
+		setArchitectureView({ model: resolvedModel, block, trace, op, group, tensor });
+	}
+	// Counts the Architecture tab showing again after another tab (Back, or a tab click): its kept detail scrolls the open
+	// operation back into view once per count.
+	const [shownTab, setShownTab] = useState({ tab: activeTab, architectureArrivals: 0 });
+	if (shownTab.tab !== activeTab) {
+		const arrived = activeTab === "architecture" ? 1 : 0;
+		setShownTab({ tab: activeTab, architectureArrivals: shownTab.architectureArrivals + arrived });
 	}
 	const [inspectModel, setInspectModel] = useState<string | null>(null);
 	if (activeTab === "inspect" && inspectModel !== resolvedModel) {
@@ -137,6 +151,10 @@ function ModelLabContent({ search: routeSearch, onSearchChange }: ModelLabPagePr
 	);
 	const selectBlock = useCallback(
 		(block: ArchitectureSelection | null, onShown?: () => void) => write({ block: block ?? undefined }, false, onShown),
+		[write],
+	);
+	const selectDetail = useCallback(
+		(patch: ArchitectureDetailPatch, onShown?: () => void) => write(patch, false, onShown),
 		[write],
 	);
 	const selectTrace = useCallback((trace: string | null) => write({ trace: trace ?? undefined }), [write]);
@@ -219,8 +237,12 @@ function ModelLabContent({ search: routeSearch, onSearchChange }: ModelLabPagePr
 						modelName={architectureView.model}
 						selection={architectureView.block ?? null}
 						traceId={architectureView.trace ?? null}
+						inside={architectureView}
+						arrival={shownTab.architectureArrivals}
+						afterNavigation={afterNavigation}
 						level={search.level ?? "overview"}
 						onSelect={selectBlock}
+						onDetailChange={selectDetail}
 						onTraceChange={selectTrace}
 						onLevelChange={selectLevel}
 						onJump={jump}

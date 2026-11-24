@@ -1,5 +1,5 @@
 .canvas [class~="react-flow__pane"] {
-	/* React Flow's pane takes every touch gesture; this canvas does not pan, so a vertical swipe scrolls the page.
+	/* React Flow's pane takes every touch gesture; a mouse drag pans it, but a vertical swipe still scrolls the page.
 	   Matched by attribute: a module's class selector would be renamed, and React Flow's names are not kebab-case. */
 	touch-action: pan-y;
 }

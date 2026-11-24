@@ -1,6 +1,7 @@
 import { createInstance } from "i18next";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplate as zTemplate } from "@/core/api/generated/zod.gen";
 import { blockKindColors } from "@/core/models/inspect/GgufInspectInsights";
 import de from "@/features/modelLab/locales/model-lab-de.json";
 import en from "@/features/modelLab/locales/model-lab-en.json";
@@ -9,6 +10,8 @@ import {
 	lensTopics,
 	nextTokenTopics,
 	operationCandidates,
+	operationLabel,
+	operationLabelCandidates,
 	routingTopics,
 	traceMetrics,
 } from "@/features/modelLab/models/ModelLabExplanation";
@@ -209,5 +212,140 @@ describe("operationCandidates", () => {
 			"arch.qwen35.op.attn",
 			"op.attn",
 		]);
+	});
+});
+
+describe("operationLabel", () => {
+	// The real feature bundles, in an instance of their own so the page's language stays untouched.
+	const store = (lng: string) =>
+		createInstance({ lng, fallbackLng: "en", resources: { de: { translation: de }, en: { translation: en } } });
+	const german = store("de-DE");
+	const english = store("en");
+	beforeAll(async () => {
+		await Promise.all([german.init(), english.init()]);
+	});
+	const heading = (
+		i18n: typeof german,
+		architecture: string | null,
+		kind: string,
+		qkvLayout: string | null | undefined,
+		id: string,
+		label: string,
+	) => operationLabel(i18n, { kind, qkvLayout }, architecture, { id, label });
+
+	it("tries qwen35moe's own keys, then qwen35's, so a MoE block gets the dense family's German heading", () => {
+		// The same fallback map ModelLabOperationHeadingDriftTests copies.
+		expect(operationLabelCandidates("fullAttention", "qwen35moe", "rope", null)).toEqual([
+			"byKind.qwen35moe.fullAttention.rope",
+			"arch.qwen35moe.rope",
+			"byKind.qwen35.fullAttention.rope",
+			"arch.qwen35.rope",
+			"any.rope",
+		]);
+		expect(heading(german, "qwen35moe", "fullAttention", "separate", "rope", "MRoPE on Q and K")).toBe("MRoPE auf Q und K");
+		expect(heading(german, "qwen35moe", "linearAttention", undefined, "mixer_out", "Output projection · ssm_out")).toBe(
+			"Ausgabeprojektion · ssm_out",
+		);
+	});
+
+	it("tries the layout suffix before the plain key, and only for a layout the backend emits", () => {
+		expect(operationLabelCandidates("fullAttention", "llama", "q", "fused")).toEqual([
+			"byKind.llama.fullAttention.q_fused",
+			"byKind.llama.fullAttention.q",
+			"arch.llama.q_fused",
+			"arch.llama.q",
+			"any.q_fused",
+			"any.q",
+		]);
+		expect(operationLabelCandidates("fullAttention", "llama", "q", "split")).toEqual(
+			operationLabelCandidates("fullAttention", "llama", "q", null),
+		);
+	});
+
+	it("tells the two Qwen output projections apart by block kind", () => {
+		expect(heading(german, "qwen35", "linearAttention", undefined, "mixer_out", "Output projection · ssm_out")).toBe(
+			"Ausgabeprojektion · ssm_out",
+		);
+		expect(heading(german, "qwen35", "fullAttention", "separate", "mixer_out", "Output projection · attn_output")).toBe(
+			"Ausgabeprojektion · attn_output",
+		);
+	});
+
+	it.each([
+		["qwen35", "separate", "Projektion für Query und Gate · attn_q"],
+		["qwen35", "fused", "Query- und Gate-Zeilen der zusammengefassten Projektion · attn_qkv"],
+		["qwen35", "mixed", "Projektion für Query und Gate · attn_q oder Q- und Gate-Zeilen von attn_qkv"],
+		["llama", "separate", "Query-Projektion · attn_q"],
+		["olmoe", "fused", "Query-Zeilen der zusammengefassten Projektion · attn_qkv"],
+		["olmoe", "mixed", "Query-Projektion · attn_q oder Q-Zeilen von attn_qkv"],
+	])("names the %s Q projection of a %s layout in German", (architecture, layout, text) => {
+		expect(heading(german, architecture, "fullAttention", layout, "q", "English")).toBe(text);
+	});
+
+	it.each([
+		["no", undefined],
+		["a null", null],
+		["an unknown", "split"],
+	])("keeps the English Q/K/V heading for %s layout, rather than guess one", (_case, layout) => {
+		for (const id of ["q", "k", "v"]) {
+			expect(heading(german, "llama", "fullAttention", layout, id, `English ${id}`)).toBe(`English ${id}`);
+		}
+		expect(heading(german, "qwen35", "mtp", layout, "gate", "English gate")).toBe("English gate");
+	});
+
+	it("keeps the English heading of an id it has no German text for", () => {
+		expect(heading(german, "qwen35", "fullAttention", "separate", "new_operation", "New operation")).toBe("New operation");
+		expect(heading(german, null, "fullAttention", "separate", "new_operation", "New operation")).toBe("New operation");
+	});
+
+	// What the descriptors send; each tensor name, formula symbol and dotted MTP name must survive the translation.
+	it.each([
+		["qwen35", "linearAttention", undefined, "decay", "Decay gate: softplus(α + ssm_dt) × ssm_a"],
+		["qwen35", "linearAttention", undefined, "beta", "β = sigmoid(ssm_beta · x)"],
+		["qwen35", "mtp", "fused", "gate", "sigmoid(gate half of the Q rows of attn_qkv)"],
+		["qwen35", "mtp", "separate", "eh_proj", "Projection · nextn.eh_proj"],
+		["qwen35", "mtp", "separate", "head", "LM head · nextn.shared_head_head, else output"],
+		[
+			"qwen35moe",
+			"fullAttention",
+			"separate",
+			"exp_gate",
+			"Expert gate projection · ffn_gate_exps (logical half when the file stores ffn_gate_up_exps)",
+		],
+		["qwen35moe", "mtp", "mixed", "topk_weights", "Chosen probabilities ÷ their sum"],
+		["olmoe", "fullAttention", "separate", "q_norm", "RMSNorm over the whole Q projection · attn_q_norm"],
+	])("keeps the tensor names and symbols of %s %s (%s) %s in German", (architecture, kind, layout, id, label) => {
+		// An empty fallback, so a missing German heading cannot pass on the English label's own tokens.
+		const text = heading(german, architecture, kind, layout, id, "");
+		expect(text).not.toBe("");
+		for (const token of label.match(/[a-z0-9]+(?:[._][a-z0-9]+)+|[·×÷αβ]/g) ?? []) {
+			expect(text).toContain(token);
+		}
+	});
+
+	it("shows the descriptor's own label in English, even where German has a heading", () => {
+		expect(
+			heading(english, "qwen35", "fullAttention", "fused", "q", "Query + gate rows of the fused projection · attn_qkv"),
+		).toBe("Query + gate rows of the fused projection · attn_qkv");
+		expect(heading(english, "olmoe", "fullAttention", "separate", "input", "Block input (residual stream)")).toBe(
+			"Block input (residual stream)",
+		);
+	});
+});
+
+describe("the generated template schema", () => {
+	const template = {
+		kind: "fullAttention",
+		provenance: "inferred",
+		source: "llama.cpp src/models/llama.cpp @ b12014",
+		nodes: [{ id: "q", label: "Query projection · attn_q", component: "attention" }],
+		edges: [],
+	};
+
+	it("reads a payload from before qkvLayout, and each layout the backend emits", () => {
+		expect(zTemplate.parse(template).qkvLayout).toBeUndefined();
+		for (const qkvLayout of ["separate", "fused", "mixed", null]) {
+			expect(zTemplate.parse({ ...template, qkvLayout }).qkvLayout).toBe(qkvLayout);
+		}
 	});
 });

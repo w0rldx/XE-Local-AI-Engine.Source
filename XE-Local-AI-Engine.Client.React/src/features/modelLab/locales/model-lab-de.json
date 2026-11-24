@@ -88,6 +88,100 @@
 				"noTraceChosen": "Kein Trace",
 				"noTraces": "Für dieses Modell gibt es noch keinen fertigen Trace. Einen unter „Trace und Steering“ gestarteten Trace können Sie hier über die Blöcke legen.",
 				"notTraced": "Nicht getraced: Der gewählte Trace hat diesen Block nicht gemessen.",
+				"opLabel": {
+					"any": {
+						"attn": "Attention über den KV-Cache",
+						"attn_norm": "RMSNorm · attn_norm",
+						"attn_residual": "Residual addieren",
+						"control_vector": "Steuervektor addieren (wenn einer geladen ist)",
+						"exp_act": "SiLU(gate) × up, je Experte",
+						"exp_down": "Down-Projektion der Experten · ffn_down_exps",
+						"exp_weighted": "× Router-Gewicht, summiert über die gewählten Experten",
+						"ffn_act": "SiLU(gate) × up",
+						"ffn_down": "Down-Projektion · ffn_down",
+						"ffn_gate": "Gate-Projektion · ffn_gate",
+						"ffn_residual": "Residual addieren",
+						"ffn_up": "Up-Projektion · ffn_up",
+						"input": "Blockeingabe (Residualstrom)",
+						"k_fused": "Key-Zeilen der zusammengefassten Projektion · attn_qkv",
+						"k_mixed": "Key-Projektion · attn_k oder K-Zeilen von attn_qkv",
+						"k_norm": "RMSNorm · attn_k_norm",
+						"k_separate": "Key-Projektion · attn_k",
+						"mixer_out": "Ausgabeprojektion · attn_output",
+						"output": "Blockausgabe",
+						"post_norm": "RMSNorm · ffn_norm",
+						"q_fused": "Query-Zeilen der zusammengefassten Projektion · attn_qkv",
+						"q_mixed": "Query-Projektion · attn_q oder Q-Zeilen von attn_qkv",
+						"q_norm": "RMSNorm · attn_q_norm",
+						"q_separate": "Query-Projektion · attn_q",
+						"rope": "RoPE auf Q und K",
+						"router": "Router-Logits · ffn_gate_inp",
+						"router_probs": "Softmax über alle Experten",
+						"topk": "Top-k-Experten",
+						"v_fused": "Value-Zeilen der zusammengefassten Projektion · attn_qkv",
+						"v_mixed": "Value-Projektion · attn_v oder V-Zeilen von attn_qkv",
+						"v_separate": "Value-Projektion · attn_v"
+					},
+					"arch": {
+						"olmoe": {
+							"exp_gate": "Gate-Projektion der Experten · ffn_gate_exps",
+							"exp_up": "Up-Projektion der Experten · ffn_up_exps",
+							"k_norm": "RMSNorm über die ganze K-Projektion · attn_k_norm",
+							"q_norm": "RMSNorm über die ganze Q-Projektion · attn_q_norm",
+							"rope": "Aufteilen in Heads, dann RoPE auf Q und K",
+							"topk_weights": "Gewählte Wahrscheinlichkeiten, unverändert verwendet (nicht renormiert)"
+						},
+						"qwen35": {
+							"alpha": "α-Projektion · ssm_alpha",
+							"beta": "β = sigmoid(ssm_beta · x)",
+							"concat": "Verketten [Embedding, Hidden State]",
+							"conv": "Kausale conv1d · ssm_conv1d (Faltungszustand), danach SiLU",
+							"decay": "Zerfalls-Gate: softplus(α + ssm_dt) × ssm_a",
+							"delta": "Gated Delta Rule (rekurrenter Zustand)",
+							"eh_proj": "Projektion · nextn.eh_proj",
+							"enorm": "RMSNorm · nextn.enorm",
+							"gate_fused": "sigmoid(Gate-Hälfte der Q-Zeilen von attn_qkv)",
+							"gate_mixed": "sigmoid(Gate-Hälfte von attn_q oder der Q-Zeilen von attn_qkv)",
+							"gate_separate": "sigmoid(Gate-Hälfte von attn_q)",
+							"gated": "Attention × Gate",
+							"gated_norm": "RMSNorm · ssm_norm, × SiLU(z)",
+							"head": "LM-Head · nextn.shared_head_head, sonst output",
+							"head_norm": "RMSNorm · nextn.shared_head_norm, sonst output_norm",
+							"hidden": "Hidden State des Hauptmodells nach output_norm",
+							"hnorm": "RMSNorm · nextn.hnorm",
+							"l2_norm": "L2-Norm von Q und K",
+							"logits": "Logits des Entwurfs-Tokens",
+							"post_norm": "RMSNorm · post_attention_norm",
+							"q_fused": "Query- und Gate-Zeilen der zusammengefassten Projektion · attn_qkv",
+							"q_mixed": "Projektion für Query und Gate · attn_q oder Q- und Gate-Zeilen von attn_qkv",
+							"q_separate": "Projektion für Query und Gate · attn_q",
+							"qkv": "QKV-Projektion · attn_qkv",
+							"rope": "MRoPE auf Q und K",
+							"split": "Aufteilen in Q, K, V",
+							"token": "Token-Embedding · nextn.embed_tokens, sonst token_embd",
+							"z": "Projektion des Ausgabe-Gates · attn_gate"
+						},
+						"qwen35moe": {
+							"exp_gate": "Gate-Projektion der Experten · ffn_gate_exps (logische Hälfte, wenn die Datei ffn_gate_up_exps speichert)",
+							"exp_up": "Up-Projektion der Experten · ffn_up_exps (logische Hälfte, wenn die Datei ffn_gate_up_exps speichert)",
+							"moe_out": "Geroutete Experten und Shared Expert addieren",
+							"shexp_act": "SiLU(gate) × up",
+							"shexp_down": "Down-Projektion des Shared Experts · ffn_down_shexp",
+							"shexp_gate": "Gate-Projektion des Shared Experts · ffn_gate_shexp",
+							"shexp_gated": "Shared Expert × sein Gate",
+							"shexp_scale": "sigmoid(ffn_gate_inp_shexp · x)",
+							"shexp_up": "Up-Projektion des Shared Experts · ffn_up_shexp",
+							"topk_weights": "Gewählte Wahrscheinlichkeiten ÷ ihre Summe"
+						}
+					},
+					"byKind": {
+						"qwen35": {
+							"linearAttention": {
+								"mixer_out": "Ausgabeprojektion · ssm_out"
+							}
+						}
+					}
+				},
 				"openTrace": "Trace öffnen",
 				"operations": "Operationen",
 				"outsideMissing": {
@@ -691,7 +785,7 @@
 				},
 				"stepper": {
 					"attentionMap": {
-						"detail": "Spalten sind die Key-Positionen, die in irgendeinem Schritt ein gespeichertes Gewicht für diesen Block und Head haben, in Positionsreihenfolge; über 256 Spalten bleiben die mit der größten Gewichtssumme, und ein Hinweis zählt den Rest. Die Farbskala reicht von 0 bis zum größten Gewicht im Bild, das die Legende nennt; Farben sind daher nicht zwischen Heads oder Blöcken vergleichbar. Zellen ohne gemessenes Gewicht haben eigene Zustände: zukünftige Position (der Key kommt nach der Query, kausale Attention kann ihn nicht lesen), nicht unter den Top K (nicht gespeichert; sein Gewicht steckt im Rest der Zeile), auf 0 abgerundet (gespeichert, aber unter 1/10.000) und Zeile fehlt (der Lauf hat die Zeile dieses Schritts an seiner Größengrenze verworfen). Eine helle Spalte über viele Zeilen ist oft ein Attention Sink auf einem Template- oder ersten Token, kein Zeichen von Relevanz. Die Key-Liste enthält dieselben Werte für die aktuelle Zeile.",
+						"detail": "Spalten sind die Key-Positionen, die in irgendeinem Schritt ein gespeichertes Gewicht für diesen Block und Head haben, in Positionsreihenfolge; über 256 Spalten bleiben die mit der größten Gewichtssumme, und ein Hinweis zählt den Rest. Die Farbskala reicht von 0 bis zum größten Gewicht im Bild, das die Legende nennt; Farben sind daher nicht zwischen Heads oder Blöcken vergleichbar. Neben den eingefärbten Gewichten zeigt die Karte vier eigene Zellzustände: zukünftige Position (der Key kommt nach der Query, kausale Attention kann ihn nicht lesen), nicht unter den Top K (nicht gespeichert; sein Gewicht steckt im Rest der Zeile), auf 0 abgerundet (gespeichert, aber unter 1/10.000) und Zeile fehlt (der Lauf hat die Zeile dieses Schritts an seiner Größengrenze verworfen). Eine helle Spalte über viele Zeilen ist oft ein Attention Sink auf einem Template- oder ersten Token, kein Zeichen von Relevanz. Die Key-Liste enthält dieselben Werte für die aktuelle Zeile.",
 						"math": "$$M_{s,c} = a^{(j)}_{P+s-1,\\,c}$$\n\n- $s$: generiertes Token (Zeile); $c$: Key-Position (Spalte); $j$: der gewählte Head.\n- Zukünftige Position: $c > P+s-1$; die kausale Maske macht $a = 0$.\n- Nicht unter den Top K: $c \\notin \\mathcal{K}$ dieser Zeile; das Gewicht ist unbekannt und im Rest enthalten.\n- Auf 0 abgerundet: $c \\in \\mathcal{K}$ mit $a < 10^{-4}$.\n- Farbe: $M_{s,c} / \\max M$ über die Zellen im Bild.",
 						"overview": "Die Karte stapelt die Zeilen aller Schritte: eine Zeile pro generiertem Token, eine Spalte pro Key-Position. Eine dunklere Zelle bedeutet mehr Gewicht; die Zeile des aktuellen Schritts ist markiert."
 					},

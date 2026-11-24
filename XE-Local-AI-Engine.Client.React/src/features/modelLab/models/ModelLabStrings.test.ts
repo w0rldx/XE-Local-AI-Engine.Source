@@ -19,8 +19,12 @@ describe("Model Lab's lazy strings", () => {
 
 	afterAll(() => i18next.changeLanguage("en"));
 
-	it("hold the same keys in both languages", () => {
-		expect(keyPaths(de)).toEqual(keyPaths(en));
+	// Operation headings are German-only: English shows the descriptor's own label, so an English copy would only drift.
+	it("hold the same keys in both languages, apart from the German operation headings", () => {
+		const opLabel = "pages.modelLab.architecture.opLabel.";
+		expect(keyPaths(de).filter((path) => !path.startsWith(opLabel))).toEqual(keyPaths(en));
+		expect(keyPaths(de).some((path) => path.startsWith(opLabel))).toBe(true);
+		expect(keyPaths(en).filter((path) => path.startsWith(opLabel))).toEqual([]);
 	});
 
 	it("reach the store only when asked, and in German when the page is German", async () => {

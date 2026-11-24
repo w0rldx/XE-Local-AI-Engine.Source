@@ -45,6 +45,15 @@ echo "run" >>"${FAKE_DOTNET_LOG}"
 # The mise variables the isolated HOME would otherwise hide. Recorded rather than asserted here so one case can
 # require a forwarded value and another can require that nothing was exported at all.
 printf '%s\n' "${MISE_DATA_DIR-<unset>}" >"${FAKE_MISE_RECORD}"
+printf '%s\n' "${MISE_TRUSTED_CONFIG_PATHS-<unset>}" >"${FAKE_TRUST_RECORD}"
+# As mise does for a config it reads but nobody trusted: the host dies before readiness.
+IFS=: read -r -a required <<<"${FAKE_REQUIRED_TRUST:-}"
+for config in "${required[@]}"; do
+  if [[ ":${MISE_TRUSTED_CONFIG_PATHS:-}:" != *":${config}:"* ]]; then
+    echo "mise ERROR Config file ${config} is not trusted." >&2
+    exit 1
+  fi
+done
 if [[ -n "${FAKE_MUTATE_ASSEMBLY:-}" ]]; then
   printf 'changed\n' >>"${FAKE_MUTATE_ASSEMBLY}"
 fi
@@ -87,10 +96,14 @@ python3 -c 'import os,urllib.request; assert urllib.request.urlopen(os.environ["
 printf '%s\n' "${OPENAPI_SPEC_URL}" >"${FAKE_PNPM_RECORD}"
 FAKE_PNPM
 chmod 700 "${TEMP_ROOT}/bin/dotnet" "${TEMP_ROOT}/bin/pnpm"
+# The interpreter itself, not a version-manager shim: the cases below move HOME, and a shim reading the moved HOME
+# refuses to run, which would fail the readiness probe for a reason that has nothing to do with the script.
+ln -s "$(python3 -c 'import sys; print(sys.executable)')" "${TEMP_ROOT}/bin/python3"
 
 export PATH="${TEMP_ROOT}/bin:${PATH}"
 export FAKE_PNPM_RECORD="${TEMP_ROOT}/pnpm-record"
 export FAKE_MISE_RECORD="${TEMP_ROOT}/mise-record"
+export FAKE_TRUST_RECORD="${TEMP_ROOT}/trust-record"
 export FAKE_DOTNET_LOG="${TEMP_ROOT}/dotnet.log"
 export OPENAPI_LIVE_TIMEOUT_SECONDS=10
 export OPENAPI_LIVE_CLIENT_RELEASE_ROOT="${TEMP_ROOT}/release"
@@ -104,12 +117,12 @@ refute_grep() {
   if grep "$@"; then echo "unexpected match: grep $*" >&2; return 1; fi
 }
 
-# Runs the script with extra env assignments; fresh dotnet and mise records per run.
+# Runs the script (CHECK_SCRIPT, else this checkout's) with extra env assignments; fresh records per run.
 run_check() {
-  rm -f "${FAKE_MISE_RECORD}" "${FAKE_DOTNET_LOG}"
+  rm -f "${FAKE_MISE_RECORD}" "${FAKE_TRUST_RECORD}" "${FAKE_DOTNET_LOG}"
   : >"${FAKE_DOTNET_LOG}"
   set +e
-  check_output="$(env "$@" "${SCRIPT_DIR}/openapi-live-check.sh" 2>&1)"
+  check_output="$(env "$@" "${CHECK_SCRIPT:-${SCRIPT_DIR}/openapi-live-check.sh}" 2>&1)"
   check_status=$?
   set -e
 }
@@ -180,5 +193,103 @@ printf 'stable\n' >"${TEMP_ROOT}/release/fake.dll"
 run_check FAKE_MUTATE_ASSEMBLY="${TEMP_ROOT}/release/fake.dll"
 [[ "${check_status}" -eq 75 ]]
 [[ "${check_output}" == *"CONTAMINATED RUN — RE-RUN REQUIRED"* ]]
+
+# The mise trust list, from a linked worktree nested in its main checkout as .tmp/worktrees/ is, below a directory
+# with a mise.toml of its own. The fake host refuses to start unless both checkout entries are trusted.
+mkdir -p "${TEMP_ROOT}/outer/main"
+OUTER="$(cd "${TEMP_ROOT}/outer" && pwd -P)"
+MAIN="${OUTER}/main"
+WT="${MAIN}/.tmp/worktrees/wt"
+# One empty commit to branch from: `worktree add --orphan` needs Git 2.42, and older Git ends the run here.
+seed_commit() {
+  git -C "$1" config user.email fixture@example.invalid
+  git -C "$1" config user.name "Contract Fixture"
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$1" commit -q --allow-empty -m base
+}
+git init -q "${MAIN}"
+seed_commit "${MAIN}"
+git -C "${MAIN}" worktree add -q -b fixture-wt "${WT}"
+# The script and what it sources or runs, plus an empty host project, so it runs from that checkout.
+install_checkout() {
+  mkdir -p "$1/scripts" "$1/XE-Local-AI-Engine.Client" "$1/XE-Local-AI-Engine.Client.React"
+  cp "${SCRIPT_DIR}/openapi-live-check.sh" "${SCRIPT_DIR}/with-build-lock.sh" "${SCRIPT_DIR}/assembly-guard.sh" "$1/scripts/"
+  cp -r "${SCRIPT_DIR}/lib" "$1/scripts/"
+  : >"$1/XE-Local-AI-Engine.Client/XE-Local-AI-Engine.Client.csproj"
+}
+for checkout in "${MAIN}" "${WT}"; do install_checkout "${checkout}"; done
+for dir in "${OUTER}" "${MAIN}" "${WT}"; do printf '[tools]\n' >"${dir}/mise.toml"; done
+trusted_pair="${WT}/mise.toml:${MAIN}/mise.toml"
+user_home="${TEMP_ROOT}/user-home"
+mkdir -p "${user_home}/.config/mise"
+printf '[tools]\n' >"${user_home}/.config/mise/config.toml"
+
+# Negative control: the fake host itself refuses a list without the worktree's entry, so a script that dropped it
+# would fail the cases below rather than pass them. Only the refusal itself counts: a timeout (124) or any other
+# failure would say nothing about the trust check.
+set +e
+refusal="$(env MISE_TRUSTED_CONFIG_PATHS="${MAIN}/mise.toml" FAKE_REQUIRED_TRUST="${trusted_pair}" \
+  ASPNETCORE_ENVIRONMENT=Development XDG_DATA_HOME="${TEMP_ROOT}/negative-data" \
+  timeout 10 "${TEMP_ROOT}/bin/dotnet" run --no-build -- --desktop 2>&1)"
+refusal_status=$?
+set -e
+failed_at=''
+[[ "${refusal_status}" -eq 1 && "${refusal}" == "mise ERROR Config file ${WT}/mise.toml is not trusted." ]] \
+  || { echo "the fake host did not refuse the untrusted worktree config (exit ${refusal_status}): ${refusal}" >&2; exit 1; }
+
+# No caller list and no user config: both checkout entries anyway, and nothing from above the main checkout.
+CHECK_SCRIPT="${WT}/scripts/openapi-live-check.sh" run_check HOME="${TEMP_ROOT}/no-such-home" FAKE_REQUIRED_TRUST="${trusted_pair}"
+[[ "${check_status}" -eq 0 ]] || { echo "${check_output}" >&2; exit 1; }
+[[ "$(cat "${FAKE_TRUST_RECORD}")" == "${trusted_pair}" ]] || { echo "trust list: $(cat "${FAKE_TRUST_RECORD}")" >&2; exit 1; }
+refute_grep -q "${OUTER}/mise.toml" "${FAKE_TRUST_RECORD}"
+
+# The user config when it exists, then the checkout entries.
+CHECK_SCRIPT="${WT}/scripts/openapi-live-check.sh" run_check HOME="${user_home}" FAKE_REQUIRED_TRUST="${trusted_pair}"
+[[ "${check_status}" -eq 0 ]] || { echo "${check_output}" >&2; exit 1; }
+[[ "$(cat "${FAKE_TRUST_RECORD}")" == "${user_home}/.config/mise/config.toml:${trusted_pair}" ]] \
+  || { echo "trust list: $(cat "${FAKE_TRUST_RECORD}")" >&2; exit 1; }
+
+# A caller's list is kept as given (it replaces the user config) and an entry it already holds is not repeated.
+CHECK_SCRIPT="${WT}/scripts/openapi-live-check.sh" run_check HOME="${user_home}" FAKE_REQUIRED_TRUST="${trusted_pair}" \
+  MISE_TRUSTED_CONFIG_PATHS="/opt/caller/config.toml:${WT}/mise.toml"
+[[ "${check_status}" -eq 0 ]] || { echo "${check_output}" >&2; exit 1; }
+[[ "$(cat "${FAKE_TRUST_RECORD}")" == "/opt/caller/config.toml:${trusted_pair}" ]] \
+  || { echo "trust list: $(cat "${FAKE_TRUST_RECORD}")" >&2; exit 1; }
+
+# From the main checkout itself the two entries are one.
+CHECK_SCRIPT="${MAIN}/scripts/openapi-live-check.sh" run_check HOME="${TEMP_ROOT}/no-such-home" \
+  FAKE_REQUIRED_TRUST="${MAIN}/mise.toml"
+[[ "${check_status}" -eq 0 ]] || { echo "${check_output}" >&2; exit 1; }
+[[ "$(cat "${FAKE_TRUST_RECORD}")" == "${MAIN}/mise.toml" ]] || { echo "trust list: $(cat "${FAKE_TRUST_RECORD}")" >&2; exit 1; }
+
+# No main checkout holds these, so only their own entry is trusted: a worktree of a bare repository (git marks the
+# first entry bare), and a separate-git-dir checkout and its linked worktree (git lists the git dir as the main
+# worktree). A mise.toml sits beside each git dir, where the parent of the common dir would have pointed.
+mkdir -p "${OUTER}/bare" "${OUTER}/separate/meta"
+git clone -q --bare "${MAIN}" "${OUTER}/bare/repo.git"
+git -C "${OUTER}/bare/repo.git" worktree add -q -b fixture-bare "${OUTER}/bare/wt"
+git init -q --separate-git-dir "${OUTER}/separate/meta/repo.git" "${OUTER}/separate/checkout"
+seed_commit "${OUTER}/separate/checkout"
+git -C "${OUTER}/separate/checkout" worktree add -q -b fixture-linked "${OUTER}/separate/checkout/linked"
+for dir in "${OUTER}/bare" "${OUTER}/separate/meta"; do printf '[tools]\n' >"${dir}/mise.toml"; done
+for checkout in "${OUTER}/bare/wt" "${OUTER}/separate/checkout" "${OUTER}/separate/checkout/linked"; do
+  install_checkout "${checkout}"
+  printf '[tools]\n' >"${checkout}/mise.toml"
+  CHECK_SCRIPT="${checkout}/scripts/openapi-live-check.sh" run_check HOME="${TEMP_ROOT}/no-such-home" \
+    FAKE_REQUIRED_TRUST="${checkout}/mise.toml"
+  [[ "${check_status}" -eq 0 ]] || { echo "${check_output}" >&2; exit 1; }
+  [[ "$(cat "${FAKE_TRUST_RECORD}")" == "${checkout}/mise.toml" ]] \
+    || { echo "trust list from ${checkout}: $(cat "${FAKE_TRUST_RECORD}")" >&2; exit 1; }
+done
+
+# A checkout under a directory whose name holds ':' would split the colon-delimited trust list into wrong entries:
+# refused with exit 2 before the host starts, so nothing is trusted.
+colon_checkout="${OUTER}/co:lon/checkout"
+install_checkout "${colon_checkout}"
+printf '[tools]\n' >"${colon_checkout}/mise.toml"
+CHECK_SCRIPT="${colon_checkout}/scripts/openapi-live-check.sh" run_check HOME="${TEMP_ROOT}/no-such-home"
+[[ "${check_status}" -eq 2 ]] || { echo "colon checkout exited ${check_status}: ${check_output}" >&2; exit 1; }
+[[ "${check_output}" == *"ERROR: ${colon_checkout}/mise.toml contains ':', which MISE_TRUSTED_CONFIG_PATHS cannot hold;"* ]]
+[[ ! -e "${FAKE_TRUST_RECORD}" ]]
+refute_grep -qx run "${FAKE_DOTNET_LOG}"
 
 echo "openapi-live-check.test.sh: PASS"

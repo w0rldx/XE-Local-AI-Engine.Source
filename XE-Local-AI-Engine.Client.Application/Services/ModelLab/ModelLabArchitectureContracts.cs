@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelLab;
 
+using System.Text.Json.Serialization;
+
 /// <summary>An installed GGUF's block layout and tensors keyed by component, read from the header alone.</summary>
 /// <remarks>
 ///     Groups are read from the file; templates are inferred from llama.cpp and carry their source. A component is
@@ -120,6 +122,10 @@ public sealed record ModelLabArchitectureTemplate
     public required IReadOnlyList<ModelLabArchitectureTemplateNode> Nodes { get; init; }
 
     public required IReadOnlyList<ModelLabArchitectureTemplateEdge> Edges { get; init; }
+
+    /// <summary>How the blocks of this kind store Q, K and V: <c>separate</c>, <c>fused</c> or <c>mixed</c>; left out for a kind without them.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? QkvLayout { get; init; }
 }
 
 /// <summary>One operation of a template.</summary>

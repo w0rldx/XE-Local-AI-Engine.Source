@@ -1,4 +1,4 @@
-import { List, Stack, Text } from "@mantine/core";
+import { List, Stack, Text, useComputedColorScheme } from "@mantine/core";
 import { Background, Controls, type Edge, type Node, ReactFlow } from "@xyflow/react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import "@xyflow/react/dist/style.css";
 
 import type { ArchitectureTemplate } from "@/features/modelLab/models/ModelLabArchitecture";
+import { operationLabel } from "@/features/modelLab/models/ModelLabExplanation";
 import { layoutTemplate } from "@/features/modelLab/models/ModelLabTemplateLayout";
 
 // Past this the canvas is unreadable at any zoom; the operations are listed in order instead.
@@ -17,12 +18,14 @@ const fitViewOptions = { minZoom: 0.8 };
 
 interface ArchitectureTemplateGraphProps {
 	template: ArchitectureTemplate;
+	// The GGUF `general.architecture`, for the node headings in the page's language. Null when the file names none.
+	architecture: string | null;
 	// The block's components that have a tensor group; a node naming one selects that group.
 	groupComponents: ReadonlySet<string>;
 	selectedComponent: string | null;
-	onSelectComponent: (component: string) => void;
-	// Every node, dashed ones too: opens that operation's explanation.
-	onSelectNode: (nodeId: string) => void;
+	// Every node, dashed ones too: opens that operation's explanation. `component` is the group's component a solid node
+	// also selects, null for a dashed one; one call per click, so the caller makes one change.
+	onSelectNode: (nodeId: string, component: string | null) => void;
 }
 
 const nodeStyle = {
@@ -36,12 +39,14 @@ const nodeStyle = {
 // the operation list below it is the keyboard path to the same explanations, the tensor groups to the same groups.
 export function ArchitectureTemplateGraph({
 	template,
+	architecture,
 	groupComponents,
 	selectedComponent,
-	onSelectComponent,
 	onSelectNode,
 }: ArchitectureTemplateGraphProps) {
-	const { t } = useTranslation();
+	// Before any early return, so the hook order stays the same when the graph falls back to the list.
+	const colorMode = useComputedColorScheme("light");
+	const { t, i18n } = useTranslation();
 	// React Flow's own screen-reader text offers moving and deleting nodes, which this graph does not allow.
 	const readOnlyDescription = t(
 		"pages.modelLab.architecture.templateReadOnly",
@@ -60,12 +65,13 @@ export function ArchitectureTemplateGraph({
 			),
 		[template],
 	);
-	const nodes: Node[] = template.nodes.map((node) => {
+	const labels = template.nodes.map((node) => operationLabel(i18n, template, architecture, node));
+	const nodes: Node[] = template.nodes.map((node, index) => {
 		const linked = node.component !== null && groupComponents.has(node.component);
 		return {
 			id: node.id,
 			position: positions.get(node.id) ?? { x: 0, y: 0 },
-			data: { label: node.label },
+			data: { label: labels[index] },
 			selected: linked && node.component === selectedComponent,
 			style: {
 				...nodeStyle,
@@ -84,8 +90,8 @@ export function ArchitectureTemplateGraph({
 	if (nodes.length > maxDrawnNodes) {
 		return (
 			<List type="ordered" size="sm" data-testid="model-lab-architecture-template-list">
-				{template.nodes.map((node) => (
-					<List.Item key={node.id}>{node.label}</List.Item>
+				{template.nodes.map((node, index) => (
+					<List.Item key={node.id}>{labels[index]}</List.Item>
 				))}
 			</List>
 		);
@@ -105,15 +111,13 @@ export function ArchitectureTemplateGraph({
 					elementsSelectable={false}
 					fitView={true}
 					fitViewOptions={fitViewOptions}
+					colorMode={colorMode}
 					proOptions={{ hideAttribution: true }}
 					ariaLabelConfig={ariaLabelConfig}
 					aria-label={t("pages.modelLab.architecture.templateLabel", "Operation graph of this block kind")}
 					onNodeClick={(_event, node) => {
-						onSelectNode(node.id);
 						const component = template.nodes.find((candidate) => candidate.id === node.id)?.component;
-						if (component && groupComponents.has(component)) {
-							onSelectComponent(component);
-						}
+						onSelectNode(node.id, component && groupComponents.has(component) ? component : null);
 					}}
 				>
 					<Background />

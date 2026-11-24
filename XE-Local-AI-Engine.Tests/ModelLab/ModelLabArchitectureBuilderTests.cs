@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ModelLab;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
@@ -315,6 +316,10 @@ public sealed class ModelLabArchitectureBuilderTests
         {
             AssertEx.Equal(EdgeLines(reference[kind]), EdgeLines(templates[kind]), kind);
         }
+
+        AssertEx.Equal("fused", templates[fusedKind].QkvLayout);
+        AssertEx.Equal("separate", templates[separateKind].QkvLayout);
+        AssertEx.Null(templates["linearAttention"].QkvLayout);
     }
 
     /// <summary>Full-attention blocks mixing fused and separate Q/K/V get labels true for either, while separate MTP blocks keep theirs.</summary>
@@ -341,6 +346,8 @@ public sealed class ModelLabArchitectureBuilderTests
         AssertEx.Equal("fullAttention,mtp", string.Join(',', templates.Keys));
         AssertEx.Equal(Relabelled(reference["fullAttention"], MixedQwenQkv), NodeLines(templates["fullAttention"]));
         AssertEx.Equal(NodeLines(reference["mtp"]), NodeLines(templates["mtp"]));
+        AssertEx.Equal("mixed", templates["fullAttention"].QkvLayout);
+        AssertEx.Equal("separate", templates["mtp"].QkvLayout);
     }
 
     /// <summary>
@@ -372,6 +379,7 @@ public sealed class ModelLabArchitectureBuilderTests
         AssertEx.Equal("fullAttention,mtp", string.Join(',', templates.Keys));
         AssertEx.Equal(Relabelled(reference["fullAttention"], MixedQwenQkv), NodeLines(templates["fullAttention"]));
         AssertEx.Equal(Relabelled(reference["mtp"], MixedQwenQkv), NodeLines(templates["mtp"]));
+        AssertEx.Equal("mixed,mixed", string.Join(',', templates.Values.Select(static template => template.QkvLayout)));
     }
 
     [Test]
@@ -450,6 +458,16 @@ public sealed class ModelLabArchitectureBuilderTests
                                        .ToHashSet(StringComparer.Ordinal);
             AssertEx.Empty(template.Nodes.Where(node => node.Component is { } component && !components.Contains(component)).Select(static node => node.Id));
         }
+    }
+
+    /// <summary>A template without Q/K/V leaves <c>qkvLayout</c> out of the JSON, so a client reading an older descriptor sees the same shape.</summary>
+    [Test]
+    public void TheQkvLayout_IsOmittedFromTheJson_WhenATemplateHasNone()
+    {
+        var templates = SeparateQwenTemplates("qwen35");
+
+        AssertEx.False(JsonSerializer.Serialize(templates["linearAttention"], JsonSerializerOptions.Web).Contains("qkvLayout", StringComparison.Ordinal));
+        AssertEx.Contains(JsonSerializer.Serialize(templates["fullAttention"], JsonSerializerOptions.Web), "\"qkvLayout\":\"separate\"", StringComparison.Ordinal);
     }
 
     [Test]
@@ -590,6 +608,8 @@ public sealed class ModelLabArchitectureBuilderTests
         AssertEx.True(AllTensors(descriptor).Where(tensor => tensor != qkv).All(static tensor => tensor.HfName is not null));
         AssertEx.Equal(Relabelled(SeparateLlamaTemplate(), FusedQkv), NodeLines(descriptor.Templates.Single()));
         AssertEx.Equal(string.Join(',', LlamaTensorFixture.TemplateEdges), EdgeLines(descriptor.Templates.Single()));
+        AssertEx.Equal("fused", descriptor.Templates.Single().QkvLayout);
+        AssertEx.Equal("separate", SeparateLlamaTemplate().QkvLayout);
     }
 
     /// <summary>A fused <c>attn_qkv.weight</c> beside separate Q/K/V biases is still fused: the fused labels, and the biases keep their reordered HF names.</summary>
@@ -611,6 +631,7 @@ public sealed class ModelLabArchitectureBuilderTests
         var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
 
         AssertEx.Equal(Relabelled(SeparateLlamaTemplate(), FusedQkv), NodeLines(descriptor.Templates.Single()));
+        AssertEx.Equal("fused", descriptor.Templates.Single().QkvLayout);
         var byName = AllTensors(descriptor).ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
         AssertEx.Equal("model.layers.1.self_attn.q_proj.bias reordered", $"{byName["blk.1.attn_q.bias"].HfName} {byName["blk.1.attn_q.bias"].ValueRelation}");
         AssertEx.Equal("model.layers.1.self_attn.v_proj.bias equal", $"{byName["blk.1.attn_v.bias"].HfName} {byName["blk.1.attn_v.bias"].ValueRelation}");
@@ -642,6 +663,7 @@ public sealed class ModelLabArchitectureBuilderTests
 
         AssertEx.Equal(Relabelled(SeparateLlamaTemplate(), MixedQkv), NodeLines(template));
         AssertEx.Equal(string.Join(',', LlamaTensorFixture.TemplateEdges), EdgeLines(template));
+        AssertEx.Equal("mixed", template.QkvLayout);
         AssertEx.Equal("q: Query projection · attn_q\nk: Key projection · attn_k\nv: Value projection · attn_v",
             string.Join('\n', SeparateLlamaTemplate().Nodes.Where(static node => node.Id is "q" or "k" or "v").Select(static node => $"{node.Id}: {node.Label}")));
     }
@@ -762,6 +784,7 @@ public sealed class ModelLabArchitectureBuilderTests
 
         AssertEx.Equal(string.Join('\n', OlmoeTensorFixture.TemplateNodes), string.Join('\n', template.Nodes.Select(static node => $"{node.Id}: {node.Label}")));
         AssertEx.Equal(string.Join(',', OlmoeTensorFixture.TemplateEdges), string.Join(',', template.Edges.Select(static edge => $"{edge.From}->{edge.To}")));
+        AssertEx.Equal("separate", template.QkvLayout);
         AssertEx.Empty(template.Nodes.Where(static node => node.Id.StartsWith("shexp_", StringComparison.Ordinal) || node.Id == "moe_out").Select(static node => node.Id));
         string[] moeNodes = ["router", "router_probs", "topk", "topk_weights", "exp_gate", "exp_up", "exp_act", "exp_down", "exp_weighted"];
         AssertEx.True(template.Nodes.Where(node => moeNodes.Contains(node.Id, StringComparer.Ordinal)).All(static node => node.Component == "ffn"));
@@ -842,6 +865,7 @@ public sealed class ModelLabArchitectureBuilderTests
             _ => node
         });
         AssertEx.Equal(string.Join('\n', expectedNodes), string.Join('\n', template.Nodes.Select(static node => $"{node.Id}: {node.Label}")));
+        AssertEx.Equal("fused", template.QkvLayout);
         AssertEx.Equal(string.Join(',', OlmoeTensorFixture.TemplateEdges), string.Join(',', template.Edges.Select(static edge => $"{edge.From}->{edge.To}")));
         var unnamed = AllTensors(descriptor).Where(static tensor => tensor.HfName is null).ToList();
         AssertEx.Equal(OlmoeTensorFixture.BlockCount, unnamed.Count);
@@ -869,6 +893,7 @@ public sealed class ModelLabArchitectureBuilderTests
         AssertEx.Equal(string.Join('\n', ExpectedOlmoeNodes("Query rows of the fused projection · attn_qkv", "Key rows of the fused projection · attn_qkv",
                 "Value rows of the fused projection · attn_qkv")),
             string.Join('\n', descriptor.Templates.Single().Nodes.Select(static node => $"{node.Id}: {node.Label}")));
+        AssertEx.Equal("fused", descriptor.Templates.Single().QkvLayout);
         var byName = AllTensors(descriptor).ToDictionary(static tensor => tensor.GgufName, StringComparer.Ordinal);
         AssertEx.Equal("model.layers.1.self_attn.q_proj.bias equal", $"{byName["blk.1.attn_q.bias"].HfName} {byName["blk.1.attn_q.bias"].ValueRelation}");
         AssertEx.Equal("model.layers.1.self_attn.k_proj.bias equal", $"{byName["blk.1.attn_k.bias"].HfName} {byName["blk.1.attn_k.bias"].ValueRelation}");
@@ -906,6 +931,7 @@ public sealed class ModelLabArchitectureBuilderTests
                 "Value projection · attn_v or V rows of attn_qkv")),
             string.Join('\n', template.Nodes.Select(static node => $"{node.Id}: {node.Label}")));
         AssertEx.Equal(string.Join(',', OlmoeTensorFixture.TemplateEdges), string.Join(',', template.Edges.Select(static edge => $"{edge.From}->{edge.To}")));
+        AssertEx.Equal("mixed", template.QkvLayout);
     }
 
     [Test]

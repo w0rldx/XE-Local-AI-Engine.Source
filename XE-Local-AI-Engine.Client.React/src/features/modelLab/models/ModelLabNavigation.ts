@@ -8,6 +8,10 @@ export const modelLabTabs = ["architecture", "compare", "nextToken", "inspect", 
 export type ModelLabTab = (typeof modelLabTabs)[number];
 export const defaultModelLabTab: ModelLabTab = "architecture";
 
+// A GGUF tensor name holds at most 256 UTF-8 bytes (GgufTensorBlockReader.MaxTensorNameBytes); ids stay under it too.
+const maxNameBytes = 256;
+const detailName = z.string().min(1).max(maxNameBytes);
+
 // The investigation context in the URL. Each field is checked alone: an invalid one is dropped, the rest are kept.
 export const modelLabSearchSchema = z.object({
 	tab: z.enum(modelLabTabs).optional().catch(undefined),
@@ -31,6 +35,13 @@ export const modelLabSearchSchema = z.object({
 	trace: z.guid().optional().catch(undefined),
 	experiment: z.guid().optional().catch(undefined),
 	level: z.enum(["overview", "detail", "math"]).optional().catch(undefined),
+	// The block detail's open operation (a template node id), tensor group (a component id) and tensor (a GGUF name).
+	op: detailName.optional().catch(undefined),
+	group: detailName.optional().catch(undefined),
+	tensor: detailName
+		.refine((name) => new TextEncoder().encode(name).length <= maxNameBytes)
+		.optional()
+		.catch(undefined),
 });
 export type ModelLabSearch = z.infer<typeof modelLabSearchSchema>;
 
@@ -38,15 +49,24 @@ export type ModelLabSearch = z.infer<typeof modelLabSearchSchema>;
 export type ModelLabPatch = Partial<ModelLabSearch>;
 // A patch, or one computed from the latest search when it must not act on a stale one.
 export type ModelLabUpdate = ModelLabPatch | ((previous: ModelLabSearch) => ModelLabPatch);
+// What the block detail shows inside a block; another model or block drops it.
+export type ArchitectureDetailPatch = Pick<ModelLabPatch, "op" | "group" | "tensor">;
 
 // One transition for the route and the router-free page. Another model drops the block and the overlaid trace of the
-// last one before the patch applies, so a jump's own block and trace survive. Defaults are stored as absent.
+// last one, and another model or block drops the detail's selection, before the patch applies, so a jump's own values
+// survive. Defaults are stored as absent.
 export function applyModelLabPatch(previous: ModelLabSearch, update: ModelLabUpdate): ModelLabSearch {
 	const patch = typeof update === "function" ? update(previous) : update;
 	const next: ModelLabSearch = { ...previous };
-	if ("model" in patch && patch.model !== previous.model) {
+	const otherModel = "model" in patch && patch.model !== previous.model;
+	if (otherModel) {
 		delete next.block;
 		delete next.trace;
+	}
+	if (otherModel || ("block" in patch && patch.block !== previous.block)) {
+		delete next.op;
+		delete next.group;
+		delete next.tensor;
 	}
 	for (const [field, value] of Object.entries(patch) as [keyof ModelLabSearch, unknown][]) {
 		if (value === undefined) {

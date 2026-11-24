@@ -1,5 +1,7 @@
 import type { i18n as I18n } from "i18next";
 
+import type { ArchitectureTemplate } from "@/features/modelLab/models/ModelLabArchitecture";
+
 export type ExplanationLevel = "overview" | "detail" | "math";
 
 // What a shown value or text rests on. The badge states it, so text about inferred structure never reads as read from the file.
@@ -60,6 +62,43 @@ export function operationCandidates(kind: string, architecture: string | null, i
 	const fallback = architecture === null ? undefined : architectureFallbacks.get(architecture);
 	const architectures = [architecture, fallback].filter((name) => typeof name === "string");
 	return [`opByKind.${kind}.${id}`, ...architectures.map((name) => `arch.${name}.op.${id}`), `op.${id}`];
+}
+
+// The values the backend stamps on a template's qkvLayout; any other value (or none) matches no suffixed key.
+const qkvLayouts = new Set(["separate", "fused", "mixed"]);
+
+// A template node's heading keys under pages.modelLab.architecture.opLabel, German only: per block kind, then per
+// architecture, for the architecture and then its fallback, then shared. Each key is tried with the layout suffix first;
+// a Q/K/V id whose label depends on the layout has only suffixed keys. ModelLabOperationHeadingDriftTests copies this order.
+export function operationLabelCandidates(
+	kind: string,
+	architecture: string | null,
+	id: string,
+	layout: string | null | undefined,
+): string[] {
+	const fallback = architecture === null ? undefined : architectureFallbacks.get(architecture);
+	const architectures = [architecture, fallback].filter((name) => typeof name === "string");
+	const keys = [...architectures.flatMap((name) => [`byKind.${name}.${kind}.${id}`, `arch.${name}.${id}`]), `any.${id}`];
+	return layout && qkvLayouts.has(layout) ? keys.flatMap((key) => [`${key}_${layout}`, key]) : keys;
+}
+
+// The node's heading in the page's language: the first candidate holding a nonempty string there, never another
+// language's; else the descriptor's own (English) label.
+export function operationLabel(
+	i18n: I18n,
+	template: Pick<ArchitectureTemplate, "kind" | "qkvLayout">,
+	architecture: string | null,
+	node: { id: string; label: string },
+): string {
+	const options = { lng: i18n.language, fallbackLng: false } as const;
+	for (const candidate of operationLabelCandidates(template.kind, architecture, node.id, template.qkvLayout)) {
+		const key = `pages.modelLab.architecture.opLabel.${candidate}`;
+		const text: unknown = i18n.exists(key, options) ? i18n.t(key, { ...options, returnObjects: true }) : undefined;
+		if (typeof text === "string" && text.trim() !== "") {
+			return text;
+		}
+	}
+	return node.label;
 }
 
 // The first candidate with text at this level, in the page's language or its fallback; null when none has any, so the

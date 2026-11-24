@@ -6,6 +6,7 @@
 // registered `nodeTypes` component, exposes the read-only props as attributes, and wires the two clicks the view
 // listens for. `fitView` is a shared spy, because "a status tick does not re-frame the viewport" is a CALL COUNT.
 
+import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Edge, Node, NodeTypes } from "@xyflow/react";
 import type { ReactElement, ReactNode } from "react";
@@ -22,11 +23,13 @@ import {
 	graphWorkflowTestGraphHash,
 	makeNodeRun,
 } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
+import { testMantineTheme } from "@/test/MantineTestRender";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 const fitView = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
 
 interface ReactFlowMockProps {
+	readonly colorMode?: string;
 	readonly nodes: readonly Node[];
 	readonly edges: readonly Edge[];
 	readonly nodeTypes: NodeTypes;
@@ -48,6 +51,7 @@ vi.mock("@xyflow/react", () => ({
 	ReactFlowProvider: ({ children }: { children: ReactNode }) => children,
 	useReactFlow: () => ({ fitView }),
 	ReactFlow: ({
+		colorMode,
 		nodes,
 		edges,
 		nodeTypes,
@@ -61,6 +65,7 @@ vi.mock("@xyflow/react", () => ({
 	}: ReactFlowMockProps) => (
 		<div
 			data-testid="react-flow"
+			data-color-mode={colorMode}
 			data-edges={edges.map((edge) => edge.id).join(" ")}
 			data-min-zoom={minZoom}
 			data-nodes-draggable={String(nodesDraggable)}
@@ -137,6 +142,20 @@ describe("GraphWorkflowRunGraphView", () => {
 		expect(flow.getAttribute("data-edges-focusable")).toBe("false");
 		// React Flow's default minZoom (0.5) clamps fitView, and a clamped fit opens the graph clipped.
 		expect(flow.getAttribute("data-min-zoom")).toBe("0.1");
+	});
+
+	it("draws its canvas in the app's colour scheme and follows a switch while mounted", () => {
+		const view = (scheme: "light" | "dark") => (
+			<MantineProvider env="test" theme={testMantineTheme} forceColorScheme={scheme}>
+				<GraphWorkflowRunGraphView canvas={matchedCanvas()} onSelectNode={vi.fn()} />
+			</MantineProvider>
+		);
+		const { rerender } = renderView(view("light"));
+		expect(screen.getByTestId("react-flow").getAttribute("data-color-mode")).toBe("light");
+
+		rerender(view("dark"));
+
+		expect(screen.getByTestId("react-flow").getAttribute("data-color-mode")).toBe("dark");
 	});
 
 	it("shows the attempt only once a node has been retried", () => {

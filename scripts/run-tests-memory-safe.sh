@@ -139,6 +139,12 @@
 #   (XE_SIZING_BATCH_GB) plus AVAIL_FLOOR or a running batch finishes; a held launch prints one
 #   ".. holding the next batch" line. Unknown memory never holds.
 #
+# Version-manager shims
+#   A mise shim for dotnet, python3 or node makes the Development sandbox tests refuse their toolchain, so this runner
+#   puts the real tool directories from `mise bin-paths` before the shims on PATH, as the backend gate does (one
+#   helper, scripts/lib/mise-path.sh, xe_mise_tool_dirs_first; rules under run-backend-tests.sh "Version-manager
+#   shims"). On the PATH the gate already fixed it changes nothing and prints nothing.
+#
 # Usage:
 #   scripts/run-tests-memory-safe.sh                # build (Release) + run every namespace batch
 #   XE_TEST_PROFILE=low-memory scripts/run-tests-memory-safe.sh # JOBS=1, PAR=1 unless overridden
@@ -215,6 +221,10 @@ EXE="$PROJ/bin/Release/net10.0/XE-Local-AI-Engine.Tests"
 source "$REPO/scripts/lib/test-sizing.sh"
 # shellcheck source=scripts/lib/proc-tree.sh
 source "$REPO/scripts/lib/proc-tree.sh"
+# shellcheck source=scripts/lib/mise-path.sh
+source "$REPO/scripts/lib/mise-path.sh"
+# Before the build and every batch; under the lock, so it logs once.
+xe_mise_tool_dirs_first "$REPO"
 # Telemetry is overhead in every batch process and no verdict reads it (the gate sets the same pair).
 export TESTINGPLATFORM_TELEMETRY_OPTOUT=1 DOTNET_CLI_TELEMETRY_OPTOUT=1
 SIZING_LINE=""

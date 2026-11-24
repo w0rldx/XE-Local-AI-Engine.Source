@@ -1,4 +1,4 @@
-import { Button, Stack, Table, Text } from "@mantine/core";
+import { Button, Stack, Table, Text, useComputedColorScheme } from "@mantine/core";
 import { Background, Controls, type Edge, type Node, ReactFlow } from "@xyflow/react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -41,6 +41,7 @@ const nodeText = (modulePath: string | undefined, label: string | undefined, roo
 // The ops torch.export recorded for this block, grouped by module and source line. Read-only, as the template graph is.
 export function ArchitecturePyTorchGraph({ graph, rootName, selectedNodeId, onSelectNode }: ArchitecturePyTorchGraphProps) {
 	const { t } = useTranslation();
+	const colorMode = useComputedColorScheme("light");
 	const graphNodes = graph.nodes ?? [];
 	const readOnlyDescription = t(
 		"pages.modelLab.pytorch.graphReadOnly",
@@ -115,6 +116,7 @@ export function ArchitecturePyTorchGraph({ graph, rootName, selectedNodeId, onSe
 					key={graph.graphId}
 					// Its own id: React Flow keys a canvas's markers and descriptions by it, and other graphs can be on screen too.
 					id="model-lab-pytorch-graph"
+					colorMode={colorMode}
 					nodes={nodes}
 					edges={edges}
 					minZoom={0.1}

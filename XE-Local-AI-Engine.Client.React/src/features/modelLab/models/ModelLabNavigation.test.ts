@@ -67,6 +67,31 @@ describe("modelLabSearchSchema", () => {
 			level: "math",
 		});
 	});
+
+	it("keeps the block detail's operation, group and tensor, real dotted ids included", () => {
+		const inside = { op: "attn_q", group: "blk.0.attention", tensor: "blk.0.attn_q.weight" };
+		expect(modelLabSearchSchema.parse({ ...linked, ...inside })).toEqual({ ...linked, ...inside });
+		// A tensor name may take the reader's whole 256 bytes, in two-byte characters too.
+		expect(modelLabSearchSchema.parse({ tensor: "ä".repeat(128) }).tensor).toBe("ä".repeat(128));
+		expect(modelLabSearchSchema.parse({ group: "g".repeat(256) }).group).toBe("g".repeat(256));
+	});
+
+	it.each([
+		["op", ""],
+		["op", "o".repeat(257)],
+		["op", 3],
+		["group", ""],
+		["group", "g".repeat(257)],
+		["group", ["blk.0.attention"]],
+		["tensor", ""],
+		["tensor", "t".repeat(257)],
+		// 129 characters, but 258 UTF-8 bytes: past what the reader takes.
+		["tensor", "ä".repeat(129)],
+	])("drops %s %j alone and keeps the rest", (field, value) => {
+		const inside = { op: "attn", group: "blk.0.attention", tensor: "blk.0.attn_q.weight" };
+		const { [field as keyof typeof inside]: _dropped, ...kept } = inside;
+		expect(modelLabSearchSchema.parse({ ...linked, ...inside, [field]: value })).toEqual({ ...linked, ...kept });
+	});
 });
 
 describe("applyModelLabPatch", () => {
@@ -103,6 +128,48 @@ describe("applyModelLabPatch", () => {
 		expect(
 			applyModelLabPatch(linked, jumpPatch({ tab: "nextToken", modelName: "b", prompt: "secret", disableThinking: true })),
 		).toEqual({ tab: "nextToken", model: "b", level: "math", experiment: traceA });
+	});
+
+	describe("the block detail's selection", () => {
+		const inside = { op: "attn", group: "blk.3.attention", tensor: "blk.3.attn_q.weight" };
+		const opened: ModelLabSearch = { ...linked, ...inside };
+
+		it("drops it on another model and on another block, the whole model included", () => {
+			expect(applyModelLabPatch(opened, { model: "b" })).toEqual({ model: "b", level: "math", experiment: traceA });
+			expect(applyModelLabPatch(opened, { block: 4 })).toEqual({ ...linked, block: 4 });
+			expect(applyModelLabPatch(opened, { block: "0-3" })).toEqual({ ...linked, block: "0-3" });
+			const { block: _block, ...root } = linked;
+			expect(applyModelLabPatch(opened, { block: undefined })).toEqual(root);
+		});
+
+		it("keeps it for the same block and model, a level, tab or trace change, and changes only what a patch names", () => {
+			expect(applyModelLabPatch(opened, { block: 3, model: "a" })).toEqual(opened);
+			expect(applyModelLabPatch(opened, { level: "detail", tab: "trace", trace: traceB })).toEqual({
+				...opened,
+				level: "detail",
+				tab: "trace",
+				trace: traceB,
+			});
+			expect(applyModelLabPatch(opened, { op: "ffn", group: "blk.3.ffn", tensor: undefined })).toEqual({
+				...linked,
+				op: "ffn",
+				group: "blk.3.ffn",
+			});
+		});
+
+		it("keeps a jump's own values while it drops the last block's", () => {
+			expect(applyModelLabPatch(opened, { model: "b", block: 0, op: "ffn", group: "blk.0.ffn" })).toEqual({
+				model: "b",
+				block: 0,
+				op: "ffn",
+				group: "blk.0.ffn",
+				level: "math",
+				experiment: traceA,
+			});
+			expect(
+				applyModelLabPatch(opened, jumpPatch({ tab: "architecture", modelName: "a", traceId: traceB, blockIndex: 0 })),
+			).toEqual({ ...linked, block: 0, trace: traceB });
+		});
 	});
 
 	it("computes a patch from the latest search", () => {

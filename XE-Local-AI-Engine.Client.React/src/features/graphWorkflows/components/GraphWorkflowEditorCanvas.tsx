@@ -7,7 +7,7 @@
 //
 // Layout is the page's business — this is a plain block that fills its container, and there is no drawer here.
 
-import { Alert, Button, Group, Paper, Stack, Text } from "@mantine/core";
+import { Alert, Button, Group, Paper, Stack, Text, useComputedColorScheme } from "@mantine/core";
 import {
 	IconArrowsJoin2,
 	IconArrowsSplit2,
@@ -123,6 +123,7 @@ function GraphWorkflowEditorCanvasInner({
 	toolbar,
 }: GraphWorkflowEditorCanvasProps) {
 	const { t } = useTranslation();
+	const colorMode = useComputedColorScheme("light");
 	const { screenToFlowPosition, fitView } = useReactFlow();
 
 	// A proposal shown, accepted or undone is a different graph from the one framed on load, and the old viewport can
@@ -362,6 +363,7 @@ function GraphWorkflowEditorCanvasInner({
 				data-mode={editor.mode}
 			>
 				<ReactFlow
+					colorMode={colorMode}
 					nodes={renderNodes}
 					edges={renderEdges}
 					nodeTypes={nodeTypes}

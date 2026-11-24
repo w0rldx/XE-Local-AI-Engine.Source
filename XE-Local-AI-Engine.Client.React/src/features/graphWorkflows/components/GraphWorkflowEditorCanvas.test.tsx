@@ -6,6 +6,7 @@
 // hands React Flow, which is where the units under test actually land: the node and edge arrays, and the callbacks a
 // pointer would otherwise have to reach.
 
+import { MantineProvider } from "@mantine/core";
 import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import type { Edge, Node, ReactFlowProps } from "@xyflow/react";
 import { useState } from "react";
@@ -23,6 +24,7 @@ import { GRAPH_WORKFLOW_MAX_NODES, type GraphWorkflowGraph } from "@/features/gr
 import type { GraphWorkflowGraphIssue } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 import { designerChanges, designerProposal, eightNodeGraph } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 import en from "@/locales/en.json";
+import { testMantineTheme } from "@/test/MantineTestRender";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // `dropPosition` is what the mocked `screenToFlowPosition` answers: jsdom has no layout and its synthetic drop event
@@ -298,6 +300,16 @@ function selectEdge(id: string, deselectedNode?: string): void {
 }
 
 describe("GraphWorkflowEditorCanvas selection and issues", () => {
+	it.each(["light", "dark"] as const)("draws its canvas in the app's %s scheme", (scheme) => {
+		renderWithProviders(
+			<MantineProvider env="test" theme={testMantineTheme} forceColorScheme={scheme}>
+				<Harness initial={eightNodeGraph} />
+			</MantineProvider>,
+		);
+
+		expect(flowProps().colorMode).toBe(scheme);
+	});
+
 	it("selects a node, selects an edge, and clears both on a pane click", () => {
 		const onSelectNode = vi.fn();
 		const onSelectEdge = vi.fn();

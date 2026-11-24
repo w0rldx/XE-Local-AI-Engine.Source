@@ -4,6 +4,9 @@
 # that output with --no-build. A failed build stops it (exit 1) before the host starts. It always builds — in CI too,
 # where that is an incremental no-op after the job's solution build — unless OPENAPI_LIVE_SKIP_BUILD=1 (loud: the
 # host then runs whatever Release binaries are already there).
+# The host runs under a scratch HOME; it trusts MISE_TRUSTED_CONFIG_PATHS (else the user's mise config) plus the
+# mise.toml of this checkout and of its main checkout, so it starts from a linked worktree with no extra env. A
+# checkout mise.toml whose path contains ':' cannot enter that colon-delimited list: exit 2, the host is not started.
 
 set -euo pipefail
 
@@ -115,7 +118,9 @@ trap 'exit 130' INT TERM
 # The isolated HOME/XDG_DATA_HOME below hides a mise trust store and every mise tool install, so on a
 # mise-managed box each shim on PATH aborts and the host dies before readiness — which reads as a broken spec
 # endpoint, not as a toolchain problem. Forward the caller's values, else the real user paths when they exist.
-# A box without mise has neither, and nothing is exported. See docs/agent-knowledge.md section 1.
+# The trust list also gets this checkout's mise.toml and the main checkout's (a linked worktree under .tmp/worktrees/
+# sits inside it, so mise reads both), whether or not a user config exists; nothing above the main checkout is
+# trusted. A box with neither mise nor a checkout mise.toml exports nothing. See docs/agent-knowledge.md section 1.
 mise_trusted_config_paths="${MISE_TRUSTED_CONFIG_PATHS:-}"
 mise_data_dir="${MISE_DATA_DIR:-}"
 # ${HOME:-} throughout: this script runs under set -u, and an unset HOME must skip the fallback rather than
@@ -123,6 +128,33 @@ mise_data_dir="${MISE_DATA_DIR:-}"
 if [[ -z "${mise_trusted_config_paths}" && -f "${HOME:-}/.config/mise/config.toml" ]]; then
   mise_trusted_config_paths="${HOME:-}/.config/mise/config.toml"
 fi
+checkout_configs=("${PROJECT_ROOT}/mise.toml")
+# The main checkout is the first worktree git lists, unless it is marked bare. Its config counts only when this
+# checkout is it or sits inside it, so a bare-backed or separate-git-dir worktree (git lists the git dir itself
+# there) trusts nothing outside its own tree; outside a git checkout only this one counts.
+main_checkout=""
+while IFS= read -r line; do
+  case "${line}" in
+    "") break ;;
+    bare) main_checkout=""; break ;;
+    "worktree "*) main_checkout="${line#worktree }" ;;
+  esac
+done < <(git -C "${PROJECT_ROOT}" worktree list --porcelain 2>/dev/null || true)
+if [[ -n "${main_checkout}" ]] && main_checkout="$(cd "${main_checkout}" 2>/dev/null && pwd -P)" \
+    && [[ "${PROJECT_ROOT}/" == "${main_checkout%/}/"* ]]; then
+  checkout_configs+=("${main_checkout}/mise.toml")
+fi
+for config in "${checkout_configs[@]}"; do
+  # The list is colon-delimited: such a path would split into a wrong entry and trust an unrelated prefix.
+  if [[ -f "${config}" && "${config}" == *:* ]]; then
+    echo "[openapi-live] ERROR: ${config} contains ':', which MISE_TRUSTED_CONFIG_PATHS cannot hold;" \
+      "move the checkout to a path without ':'." >&2
+    exit 2
+  fi
+  if [[ -f "${config}" && ":${mise_trusted_config_paths}:" != *":${config}:"* ]]; then
+    mise_trusted_config_paths="${mise_trusted_config_paths:+${mise_trusted_config_paths}:}${config}"
+  fi
+done
 if [[ -z "${mise_data_dir}" && -d "${HOME:-}/.local/share/mise" ]]; then
   mise_data_dir="${HOME:-}/.local/share/mise"
 fi

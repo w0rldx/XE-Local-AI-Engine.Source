@@ -1,4 +1,4 @@
-import { Group, Stack, Text } from "@mantine/core";
+import { Group, Stack, Text, useComputedColorScheme } from "@mantine/core";
 import { Background, Controls, type Edge, type Node, type Position, ReactFlow } from "@xyflow/react";
 import { useTranslation } from "react-i18next";
 
@@ -73,6 +73,7 @@ export function ArchitectureModelGraph({
 	onSelect,
 }: ArchitectureModelGraphProps) {
 	const { t } = useTranslation();
+	const colorMode = useComputedColorScheme("light");
 	// Edges only where the file holds the whole trunk and a template says how llama.cpp runs it.
 	const orderSource = hierarchy.trunkComplete ? (templates.find((candidate) => candidate.kind !== "mtp")?.source ?? null) : null;
 	const entry = (target: ArchitectureSelection, label: string): GraphEntry => ({ id: String(target), label, selection: target });
@@ -203,14 +204,22 @@ export function ArchitectureModelGraph({
 					<BasisBadge basis={{ inferredFrom: orderSource }} data-testid="model-lab-architecture-graph-basis" />
 				</Group>
 			)}
-			<div style={{ height: canvasHeight }} className={classes["canvas"]} data-testid="model-lab-architecture-graph-canvas">
+			<div
+				style={{ height: canvasHeight }}
+				className={classes["canvas"]}
+				data-testid="model-lab-architecture-graph-canvas"
+				// panOnDrag admits touchstart even as a button list, and a pointer media query misses hybrid screens: stopping
+				// touchstart before it reaches React Flow's pane keeps a one-finger swipe scrolling the page while a mouse drag pans.
+				onTouchStartCapture={(event) => event.stopPropagation()}
+			>
 				<ReactFlow
 					id="model-lab-model-graph"
+					colorMode={colorMode}
 					nodes={nodes}
 					edges={edges}
 					minZoom={0.1}
-					// The whole graph is in view and the canvas can be taller than the screen: a wheel or a drag scrolls the page.
-					panOnDrag={false}
+					// A mouse drag pans a zoomed-in graph; the canvas can be taller than the screen, so the wheel scrolls the page.
+					panOnDrag={true}
 					zoomOnScroll={false}
 					preventScrolling={false}
 					nodesDraggable={false}

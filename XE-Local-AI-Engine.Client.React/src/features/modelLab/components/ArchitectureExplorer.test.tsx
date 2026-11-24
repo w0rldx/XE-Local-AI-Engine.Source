@@ -357,10 +357,17 @@ function ControlledExplorer({
 				modelName={search.model ?? null}
 				selection={search.block ?? null}
 				traceId={search.trace ?? null}
+				inside={search}
+				arrival={0}
+				afterNavigation={(run) => run()}
 				level={search.level ?? "overview"}
 				onSelect={(block, onShown) => {
 					setSearch((previous) => applyModelLabPatch(previous, { block: block ?? undefined }));
 					// The page without a router: a change is shown as soon as it is made.
+					onShown?.();
+				}}
+				onDetailChange={(patch, onShown) => {
+					setSearch((previous) => applyModelLabPatch(previous, patch));
 					onShown?.();
 				}}
 				onTraceChange={(trace) => setSearch((previous) => applyModelLabPatch(previous, { trace: trace ?? undefined }))}

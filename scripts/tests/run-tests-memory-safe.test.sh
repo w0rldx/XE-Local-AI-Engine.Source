@@ -16,7 +16,7 @@ PROJ="$FAKE/XE-Local-AI-Engine.Tests"
 BIN="$PROJ/bin/Release/net10.0"
 mkdir -p "$FAKE/scripts/lib" "$PROJ/Cases" "$BIN"
 cp "$ROOT/scripts/run-tests-memory-safe.sh" "$FAKE/scripts/"
-cp "$ROOT/scripts/lib/test-sizing.sh" "$ROOT/scripts/lib/proc-tree.sh" "$FAKE/scripts/lib/"
+cp "$ROOT/scripts/lib/test-sizing.sh" "$ROOT/scripts/lib/proc-tree.sh" "$ROOT/scripts/lib/mise-path.sh" "$FAKE/scripts/lib/"
 printf 'MemAvailable:    6291456 kB\n' >"$TMP/meminfo-6g"
 
 cat >"$FAKE/scripts/with-build-lock.sh" <<'EOF'
@@ -49,6 +49,7 @@ while (($#)); do
   esac
 done
 printf 'max=%s html=%s filter=%s\n' "$max" "${TUNIT_DISABLE_HTML_REPORTER:-}" "$filter" >>"$FAKE_LOG"
+[[ -z "${FAKE_PATH_RECORD:-}" ]] || printf '%s\n' "$PATH" >>"$FAKE_PATH_RECORD"
 # The template pre-warm names one test; the real one publishes the migrated template next to the binary.
 if [[ "$filter" == */TestServerWebAppFactoryTemplateSweepTests/* && -z "${FAKE_NO_TEMPLATE:-}" ]]; then
   mkdir -p "$(dirname "$0")/sqlite-templates" && : >"$(dirname "$0")/sqlite-templates/fake.sqlite"
@@ -393,5 +394,51 @@ for table in live seamed; do
   done
   alive "$UNRELATED" || { echo "kill-$table: SAFETY-KILL took an unrelated process" >&2; exit 1; }
 done
+
+# --- mise shims: scripts/lib/mise-path.sh, the helper the backend gate shares ---
+# A fake mise answers `bin-paths` with a real dotnet directory (plus one that does not exist) and nothing for python3,
+# whose shim therefore still resolves to mise after a pass: only the directory order can tell a fixed PATH from a raw
+# one. The shims entry carries a trailing slash, and an ordinary entry sits before it.
+mkdir -p "$TMP/mise-bin" "$TMP/mise-dotnet" "$TMP/shim" "$TMP/ordinary"
+cat >"$TMP/mise-bin/mise" <<MISE
+#!/usr/bin/env bash
+[[ "\$1" == bin-paths ]] || exit 1
+printf '%s\n' "$TMP/mise-dotnet" "$TMP/mise-missing"
+MISE
+printf '#!/usr/bin/env bash\nexit 0\n' >"$TMP/mise-dotnet/dotnet"
+chmod +x "$TMP/mise-bin/mise" "$TMP/mise-dotnet/dotnet"
+ln -s "$TMP/mise-bin/mise" "$TMP/shim/dotnet"
+ln -s "$TMP/mise-bin/mise" "$TMP/shim/python3"
+raw_path="$TMP/ordinary:$TMP/shim/:/usr/bin:/bin"
+fixed_path="$TMP/ordinary:$TMP/mise-dotnet:$TMP/shim/:/usr/bin:/bin"
+
+# Two passes: the second leaves PATH byte-identical and says nothing.
+two_pass="$(
+  PATH="$raw_path"
+  source "$FAKE/scripts/lib/mise-path.sh"
+  xe_mise_tool_dirs_first "$FAKE"
+  first="$PATH"
+  xe_mise_tool_dirs_first "$FAKE"
+  [[ "$PATH" == "$first" ]] || echo "second pass changed PATH to $PATH"
+  echo "PATH=$PATH"
+)"
+[[ "$(grep -c '^>> mise shims on PATH' <<<"$two_pass")" -eq 1 ]] \
+  || { echo "expected one mise line over two passes:" >&2; printf '%s\n' "$two_pass" >&2; exit 1; }
+grep -Fxq ">> mise shims on PATH: using the real tool directories from 'mise bin-paths' first (1 dirs)" <<<"$two_pass"
+grep -Fxq "PATH=$fixed_path" <<<"$two_pass" || { printf '%s\n' "$two_pass" >&2; exit 1; }
+if grep -Fq 'second pass changed PATH' <<<"$two_pass"; then printf '%s\n' "$two_pass" >&2; exit 1; fi
+
+# The real runner with the raw PATH: its batch (the recording fake host) runs on the fixed PATH, said once.
+write_namespaces XE_Local_AI_Engine.Tests.Ordinary
+run_case mise-raw env PATH="$raw_path" FAKE_PATH_RECORD="$TMP/mise-raw.path"
+[[ "$(grep -c '^>> mise shims on PATH' <<<"$output")" -eq 1 ]] \
+  || { echo "the runner did not print the mise line once:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+[[ "$(sort -u "$TMP/mise-raw.path")" == "$fixed_path" ]] \
+  || { echo "the batch ran on another PATH:" >&2; cat "$TMP/mise-raw.path" >&2; exit 1; }
+# Handed the PATH the gate already fixed, it keeps it and stays silent.
+run_case mise-fixed env PATH="$fixed_path" FAKE_PATH_RECORD="$TMP/mise-fixed.path"
+refute -- '>> mise shims' <<<"$output"
+[[ "$(sort -u "$TMP/mise-fixed.path")" == "$fixed_path" ]] \
+  || { echo "the batch ran on another PATH:" >&2; cat "$TMP/mise-fixed.path" >&2; exit 1; }
 
 echo "run-tests-memory-safe.test.sh: PASS"

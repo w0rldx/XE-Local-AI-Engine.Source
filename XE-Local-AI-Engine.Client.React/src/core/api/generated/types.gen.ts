@@ -7229,6 +7229,7 @@ export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplate = 
 	source: string;
 	nodes: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateNode>;
 	edges: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateEdge>;
+	qkvLayout?: string | null;
 };
 
 export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateEdge = {

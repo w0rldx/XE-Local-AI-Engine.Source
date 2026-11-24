@@ -26,7 +26,8 @@ import {
 	componentLabel,
 	type OutsideEnd,
 } from "@/features/modelLab/models/ModelLabArchitecture";
-import { type ExplanationLevel, operationCandidates } from "@/features/modelLab/models/ModelLabExplanation";
+import { type ExplanationLevel, operationCandidates, operationLabel } from "@/features/modelLab/models/ModelLabExplanation";
+import type { ArchitectureDetailPatch } from "@/features/modelLab/models/ModelLabNavigation";
 import type { PyTorchCodeTarget } from "@/features/modelLab/models/ModelLabPyTorch";
 
 interface ArchitectureBlockDetailProps {
@@ -46,6 +47,14 @@ interface ArchitectureBlockDetailProps {
 	// The block is in the explorer's one routed set (saved steps of a readable routing that name it), the same set the row
 	// and graph mark; the routing panel shows for nothing else.
 	routed: boolean;
+	// The open operation, tensor group and tensor, from the URL; a value naming nothing here is ignored. Each gesture
+	// writes one patch, and `onShown` runs only once the page shows it: never for a blocked change.
+	selection: ArchitectureDetailPatch;
+	// Changes each time the tab shows this detail again: the open operation then scrolls into view once.
+	arrival: number;
+	// Runs that scroll once the router has restored its own scroll positions, which would otherwise cancel it.
+	afterNavigation: (run: () => void) => void;
+	onSelect: (patch: ArchitectureDetailPatch, onShown?: () => void) => void;
 	// Owned above this panel, so the chosen level stays while the operator moves between blocks.
 	explanationLevel: ExplanationLevel;
 	onExplanationLevel: (level: ExplanationLevel) => void;
@@ -65,32 +74,62 @@ export function ArchitectureBlockDetail({
 	traceSummaries,
 	traceId,
 	routed,
+	selection,
+	arrival,
+	afterNavigation,
+	onSelect,
 	explanationLevel,
 	onExplanationLevel,
 	headingRef,
 }: ArchitectureBlockDetailProps) {
-	const { t } = useTranslation();
-	const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
-	const [selectedTensorName, setSelectedTensorName] = useState<string | null>(null);
-	const [codeTarget, setCodeTarget] = useState<PyTorchCodeTarget | null>(null);
-	const [openNodeId, setOpenNodeId] = useState<string | null>(null);
-	const operationsRef = useRef<HTMLDivElement>(null);
-	const reduceMotion = useReducedMotion();
-	// The list sits below the graph, often below the fold: without the scroll a node click looks like it did nothing.
-	// Centred, not "nearest": nearest leaves the item's header on the bottom edge and its opening panel still out of view.
-	const openFromGraph = (nodeId: string): void => {
-		setOpenNodeId(nodeId);
-		const items = operationsRef.current?.querySelectorAll<HTMLElement>("[data-item-id]") ?? [];
-		[...items]
-			.find((item) => item.dataset["itemId"] === nodeId)
-			?.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+	const { t, i18n } = useTranslation();
+	// Read at once, so an arrival's scroll at mount already honours it.
+	const reduceMotion = useReducedMotion(false, { getInitialValueInEffect: false });
+	// The tensor, when it names one here, decides the group; else the group, when it names one.
+	const tensorGroup = groups.find((group) => group.tensors.some((tensor) => tensor.ggufName === selection.tensor));
+	const selectedGroup = tensorGroup ?? groups.find((group) => group.componentId === selection.group);
+	const selectedTensor = tensorGroup?.tensors.find((tensor) => tensor.ggufName === selection.tensor);
+	const openNodeId = template?.nodes.some((node) => node.id === selection.op) ? (selection.op ?? null) : null;
+	// The code panel follows the selected group, unless the operator picked a module or node there for this selection.
+	const shownSelection = JSON.stringify([selectedGroup?.componentId, selectedTensor?.ggufName]);
+	const [pick, setPick] = useState<{ target: PyTorchCodeTarget; forSelection: string } | null>(null);
+	const codeTarget: PyTorchCodeTarget | null =
+		pick?.forSelection === shownSelection
+			? pick.target
+			: selectedGroup
+				? { kind: "component", componentId: selectedGroup.componentId }
+				: null;
+	const clearPick = (): void => setPick(null);
+	const operations = useRef<HTMLDivElement | null>(null);
+	// A link, reload or Back that opens this detail on an operation scrolls to it once, as the list mounts. The tab showing
+	// this kept detail again swaps in a fresh callback, which React attaches in the commit that shows the panel. The
+	// scroll itself waits until the router has restored the scroller for a Back, which would cancel it otherwise.
+	const scrollOnAttach = (nodeId: string | null) => {
+		let pending = nodeId;
+		return (element: HTMLDivElement | null): void => {
+			operations.current = element;
+			if (element !== null && pending !== null) {
+				const target = pending;
+				afterNavigation(() => scrollToOperation(element, target, reduceMotion));
+				pending = null;
+			}
+		};
 	};
-	const selectedTensor = groups.flatMap((group) => group.tensors).find((tensor) => tensor.ggufName === selectedTensorName);
-	const selectedGroup = groups.find((group) => group.componentId === selectedComponentId);
-	const selectGroup = (componentId: string): void => {
-		setSelectedComponentId(componentId);
-		setSelectedTensorName(null);
-		setCodeTarget({ kind: "component", componentId });
+	const [attachOperations, setAttachOperations] = useState(() => ({ arrival, ref: scrollOnAttach(openNodeId) }));
+	if (attachOperations.arrival !== arrival) {
+		setAttachOperations({ arrival, ref: scrollOnAttach(openNodeId) });
+	}
+	// A graph pick scrolls once the page shows it, again on each repeated pick; an accordion or keyboard open never does.
+	const pickNode = (nodeId: string, component: string | null): void => {
+		const scroll = () => scrollToOperation(operations.current, nodeId, reduceMotion);
+		if (component === null || block === undefined) {
+			onSelect({ op: nodeId }, scroll);
+			return;
+		}
+		onSelect({ op: nodeId, group: componentIdFor(block.index, component), tensor: undefined }, () => {
+			clearPick();
+			scroll();
+		});
 	};
 
 	return (
@@ -130,14 +169,10 @@ export function ArchitectureBlockDetail({
 				<ArchitectureTensorGroups
 					groups={groups}
 					blockIndex={block?.index}
-					selectedComponentId={selectedComponentId}
-					selectedTensorName={selectedTensorName}
-					onSelectGroup={selectGroup}
-					onSelectTensor={(componentId, ggufName) => {
-						setSelectedComponentId(componentId);
-						setSelectedTensorName(ggufName);
-						setCodeTarget({ kind: "component", componentId });
-					}}
+					selectedComponentId={selectedGroup?.componentId ?? null}
+					selectedTensorName={selectedTensor?.ggufName ?? null}
+					onSelectGroup={(componentId) => onSelect({ group: componentId, tensor: undefined }, clearPick)}
+					onSelectTensor={(componentId, ggufName) => onSelect({ group: componentId, tensor: ggufName }, clearPick)}
 				/>
 				{selectedTensor && <ArchitectureTensorDetails tensor={selectedTensor} />}
 				{selectedGroup && (
@@ -158,23 +193,23 @@ export function ArchitectureBlockDetail({
 						</Group>
 						<ArchitectureTemplateGraph
 							template={template}
+							architecture={architecture}
 							groupComponents={new Set(groups.map((group) => group.component))}
 							selectedComponent={selectedGroup?.component ?? null}
-							onSelectComponent={(component) => selectGroup(componentIdFor(block.index, component))}
-							onSelectNode={openFromGraph}
+							onSelectNode={pickNode}
 						/>
 						<ExplanationList
 							items={template.nodes.map((node) => ({
 								id: node.id,
-								label: node.label,
+								label: operationLabel(i18n, template, architecture, node),
 								candidates: operationCandidates(template.kind, architecture, node.id),
 							}))}
 							level={explanationLevel}
 							basis={{ inferredFrom: template.source }}
 							open={openNodeId}
-							onOpen={setOpenNodeId}
+							onOpen={(nodeId) => onSelect({ op: nodeId ?? undefined })}
 							data-testid="model-lab-explain-operations"
-							ref={operationsRef}
+							ref={attachOperations.ref}
 						/>
 					</>
 				)}
@@ -183,9 +218,18 @@ export function ArchitectureBlockDetail({
 					suggestedBaseRepo={suggestedBaseRepo}
 					block={block}
 					target={codeTarget}
-					onTarget={setCodeTarget}
+					onTarget={(target) => setPick({ target, forSelection: shownSelection })}
 				/>
 			</Stack>
 		</Paper>
 	);
+}
+
+// The list sits below the graph, often below the fold: without the scroll a node click looks like it did nothing.
+// Centred, not "nearest": nearest leaves the item's header on the bottom edge and its opening panel still out of view.
+function scrollToOperation(list: HTMLElement | null, nodeId: string, reduceMotion: boolean): void {
+	const items = list?.querySelectorAll<HTMLElement>("[data-item-id]") ?? [];
+	[...items]
+		.find((item) => item.dataset["itemId"] === nodeId)
+		?.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
 }

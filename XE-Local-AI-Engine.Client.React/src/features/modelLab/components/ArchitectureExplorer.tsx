@@ -41,16 +41,24 @@ import {
 	vocabularySize,
 } from "@/features/modelLab/models/ModelLabHierarchy";
 import { breadcrumbFor } from "@/features/modelLab/models/ModelLabHierarchyLabels";
-import { type ModelLabJump, sameExperimentId } from "@/features/modelLab/models/ModelLabNavigation";
+import { type ArchitectureDetailPatch, type ModelLabJump, sameExperimentId } from "@/features/modelLab/models/ModelLabNavigation";
 
 interface ArchitectureExplorerProps {
 	// The page's model, block, laid-over trace and explanation level, all from the URL.
 	modelName: string | null;
 	selection: ArchitectureSelection | null;
 	traceId: string | null;
+	// What the block detail shows inside the selection: its open operation, tensor group and tensor.
+	inside: ArchitectureDetailPatch;
+	// Changes each time the tab shows this explorer again: the block detail then scrolls its open operation into view.
+	arrival: number;
+	// Runs an arrival's scroll once the router has restored its own scroll positions.
+	afterNavigation: (run: () => void) => void;
 	level: ExplanationLevel;
 	// Null selects the whole model. `onShown` runs only once the page shows that selection: never for a blocked change.
 	onSelect: (selection: ArchitectureSelection | null, onShown?: () => void) => void;
+	// A selection inside the block detail; `onShown` as for `onSelect`.
+	onDetailChange: (patch: ArchitectureDetailPatch, onShown?: () => void) => void;
 	onTraceChange: (traceId: string | null) => void;
 	onLevelChange: (level: ExplanationLevel) => void;
 	onJump?: (to: ModelLabJump) => void;
@@ -61,8 +69,12 @@ export function ArchitectureExplorer({
 	modelName,
 	selection,
 	traceId,
+	inside,
+	arrival,
+	afterNavigation,
 	level,
 	onSelect,
+	onDetailChange,
 	onTraceChange,
 	onLevelChange,
 	onJump,
@@ -176,6 +188,10 @@ export function ArchitectureExplorer({
 			traceSummaries={traceSummaries}
 			traceId={overlayId}
 			routed={false}
+			selection={inside}
+			arrival={arrival}
+			afterNavigation={afterNavigation}
+			onSelect={onDetailChange}
 			explanationLevel={level}
 			onExplanationLevel={onLevelChange}
 			headingRef={headingRef}
@@ -209,6 +225,10 @@ export function ArchitectureExplorer({
 					traceSummaries={traceSummaries}
 					traceId={overlayId}
 					routed={routedBlocks?.has(block.index) === true}
+					selection={inside}
+					arrival={arrival}
+					afterNavigation={afterNavigation}
+					onSelect={onDetailChange}
 					explanationLevel={level}
 					onExplanationLevel={onLevelChange}
 					headingRef={headingRef}
