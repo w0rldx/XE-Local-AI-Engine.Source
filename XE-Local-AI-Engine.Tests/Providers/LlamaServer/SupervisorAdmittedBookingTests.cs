@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using Microsoft.Extensions.Logging;
 using NSubstitute;
-using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;

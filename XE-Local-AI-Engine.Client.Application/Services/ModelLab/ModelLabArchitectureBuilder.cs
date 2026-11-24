@@ -127,7 +127,8 @@ public static class ModelLabArchitectureBuilder
         };
 
     // A JavaScript client reads JSON numbers as doubles; past 2^53-1 the value would arrive changed, so it is dropped.
-    private static long? SafeInteger(long? value) => value is >= 0 and <= MaxSafeInteger ? value : null;
+    private static long? SafeInteger(long? value) =>
+        value is >= 0 and <= MaxSafeInteger ? value : null;
 
     /// <summary>The source repo, else the first base model, when its URL is exactly <c>https://huggingface.co/owner/name</c>.</summary>
     internal static string? SuggestedBaseRepo(GgufTensorInspection inspection) =>

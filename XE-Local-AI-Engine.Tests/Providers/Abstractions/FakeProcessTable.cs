@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Providers.Abstractions;
 
-using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 

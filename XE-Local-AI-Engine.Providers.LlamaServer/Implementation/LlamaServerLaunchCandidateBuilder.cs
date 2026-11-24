@@ -53,7 +53,8 @@ internal sealed class LlamaServerLaunchCandidateBuilder
             // A ticket issued for another variant: the allocation checked against its booking is the one launched, never a second resolve.
             if (booking is not null && !LlamaServerAdmittedBooking.Fits(allocation, booking.Allocation))
             {
-                throw reject($"The local model launch was admitted for the {booking.Variant} runtime, but the {variant} runtime is served and needs more memory than that admission booked. Align the runtime selection and try again.");
+                throw reject(
+                    $"The local model launch was admitted for the {booking.Variant} runtime, but the {variant} runtime is served and needs more memory than that admission booked. Align the runtime selection and try again.");
             }
         }
         else if (admittedAllocation.Source == ProcessContextAllocationSource.HardwareTier)

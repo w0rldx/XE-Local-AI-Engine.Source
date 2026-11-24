@@ -282,10 +282,23 @@ public sealed class ModelLabArchitectureBuilderTests
         string[] separate = ["attn_q.weight", "attn_k.weight", "attn_v.weight"];
         string[] fused = ["attn_qkv.weight"];
         var inspection = Qwen35TensorFixture.Inspection(architecture,
-            new[] { "ssm_a", "attn_qkv.weight" }.Select(static suffix => $"blk.0.{suffix}")
-                .Concat(new[] { "attn_norm.weight", "attn_output.weight" }.Concat(fusedTrunk ? fused : separate).Select(static suffix => $"blk.1.{suffix}"))
-                .Concat(new[] { "nextn.eh_proj.weight", "attn_norm.weight", "attn_output.weight" }.Concat(fusedTrunk ? separate : fused).Select(static suffix => $"blk.2.{suffix}"))
-                .Select(static name => Qwen35TensorFixture.Tensor(name, [64], "F32")));
+            new[]
+                {
+                    "ssm_a",
+                    "attn_qkv.weight"
+                }.Select(static suffix => $"blk.0.{suffix}")
+                 .Concat(new[]
+                 {
+                     "attn_norm.weight",
+                     "attn_output.weight"
+                 }.Concat(fusedTrunk ? fused : separate).Select(static suffix => $"blk.1.{suffix}"))
+                 .Concat(new[]
+                 {
+                     "nextn.eh_proj.weight",
+                     "attn_norm.weight",
+                     "attn_output.weight"
+                 }.Concat(fusedTrunk ? separate : fused).Select(static suffix => $"blk.2.{suffix}"))
+                 .Select(static name => Qwen35TensorFixture.Tensor(name, [64], "F32")));
 
         var templates = ModelLabArchitectureBuilder.Build(ModelName, inspection).Templates.ToDictionary(static template => template.Kind, StringComparer.Ordinal);
 
@@ -311,7 +324,15 @@ public sealed class ModelLabArchitectureBuilderTests
     public void QwenFullAttentionBlocksMixingQkvLayouts_GetLayoutNeutralLabels_WhileSeparateMtpKeepsItsOwn(string architecture)
     {
         var inspection = Qwen35TensorFixture.Inspection(architecture,
-            new[] { "blk.0.attn_norm.weight", "blk.0.attn_qkv.weight", "blk.1.attn_norm.weight", "blk.1.attn_q.weight", "blk.2.nextn.eh_proj.weight", "blk.2.attn_q.weight" }
+            new[]
+                {
+                    "blk.0.attn_norm.weight",
+                    "blk.0.attn_qkv.weight",
+                    "blk.1.attn_norm.weight",
+                    "blk.1.attn_q.weight",
+                    "blk.2.nextn.eh_proj.weight",
+                    "blk.2.attn_q.weight"
+                }
                 .Select(static name => Qwen35TensorFixture.Tensor(name, [64], "F32")));
 
         var templates = ModelLabArchitectureBuilder.Build(ModelName, inspection).Templates.ToDictionary(static template => template.Kind, StringComparer.Ordinal);
@@ -334,7 +355,15 @@ public sealed class ModelLabArchitectureBuilderTests
     public void AQwenBlockWithoutAQWeight_BesideSeparateBlocks_GetsLayoutNeutralLabels(string architecture, string mtpPartTensor)
     {
         var inspection = Qwen35TensorFixture.Inspection(architecture,
-            new[] { "blk.0.attn_q.weight", "blk.1.attn_q.bias", "blk.2.nextn.eh_proj.weight", "blk.2.attn_q.weight", "blk.3.nextn.eh_proj.weight", $"blk.3.{mtpPartTensor}" }
+            new[]
+                {
+                    "blk.0.attn_q.weight",
+                    "blk.1.attn_q.bias",
+                    "blk.2.nextn.eh_proj.weight",
+                    "blk.2.attn_q.weight",
+                    "blk.3.nextn.eh_proj.weight",
+                    $"blk.3.{mtpPartTensor}"
+                }
                 .Select(static name => Qwen35TensorFixture.Tensor(name, [64], "F32")));
 
         var templates = ModelLabArchitectureBuilder.Build(ModelName, inspection).Templates.ToDictionary(static template => template.Kind, StringComparer.Ordinal);
@@ -568,7 +597,15 @@ public sealed class ModelLabArchitectureBuilderTests
     public void AFusedLlamaQkvWeightWithSeparateBiases_GetsTheFusedLabels_AndTheBiasesKeepTheirHfNames()
     {
         var inspection = Qwen35TensorFixture.Inspection("llama",
-            Enumerable.Range(0, 2).SelectMany(static block => new[] { "attn_norm.weight", "attn_qkv.weight", "attn_q.bias", "attn_k.bias", "attn_v.bias", "attn_output.weight" }
+            Enumerable.Range(0, 2).SelectMany(static block => new[]
+                {
+                    "attn_norm.weight",
+                    "attn_qkv.weight",
+                    "attn_q.bias",
+                    "attn_k.bias",
+                    "attn_v.bias",
+                    "attn_output.weight"
+                }
                 .Select(suffix => Qwen35TensorFixture.Tensor($"blk.{block}.{suffix}", [64], "F32"))));
 
         var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
@@ -585,9 +622,21 @@ public sealed class ModelLabArchitectureBuilderTests
     public void ALlamaFileMixingFusedAndSeparateQkv_GetsLayoutNeutralLabels_OnTheSameGraph()
     {
         var inspection = Qwen35TensorFixture.Inspection("llama",
-            new[] { "attn_norm.weight", "attn_qkv.weight", "attn_output.weight" }.Select(static suffix => Qwen35TensorFixture.Tensor($"blk.0.{suffix}", [64], "F32"))
-                .Concat(new[] { "attn_norm.weight", "attn_q.weight", "attn_k.weight", "attn_v.weight", "attn_output.weight" }
-                    .Select(static suffix => Qwen35TensorFixture.Tensor($"blk.1.{suffix}", [64], "F32"))));
+            new[]
+                {
+                    "attn_norm.weight",
+                    "attn_qkv.weight",
+                    "attn_output.weight"
+                }.Select(static suffix => Qwen35TensorFixture.Tensor($"blk.0.{suffix}", [64], "F32"))
+                 .Concat(new[]
+                     {
+                         "attn_norm.weight",
+                         "attn_q.weight",
+                         "attn_k.weight",
+                         "attn_v.weight",
+                         "attn_output.weight"
+                     }
+                     .Select(static suffix => Qwen35TensorFixture.Tensor($"blk.1.{suffix}", [64], "F32"))));
 
         var template = ModelLabArchitectureBuilder.Build(ModelName, inspection).Templates.Single();
 
@@ -804,7 +853,15 @@ public sealed class ModelLabArchitectureBuilderTests
     public void AFusedQkvWeightWithSeparateBiases_GetsTheFusedLabels_AndTheBiasesKeepTheirHfNames()
     {
         var inspection = Qwen35TensorFixture.Inspection("olmoe",
-            Enumerable.Range(0, 2).SelectMany(static block => new[] { "attn_norm.weight", "attn_qkv.weight", "attn_q.bias", "attn_k.bias", "attn_v.bias", "attn_output.weight" }
+            Enumerable.Range(0, 2).SelectMany(static block => new[]
+                {
+                    "attn_norm.weight",
+                    "attn_qkv.weight",
+                    "attn_q.bias",
+                    "attn_k.bias",
+                    "attn_v.bias",
+                    "attn_output.weight"
+                }
                 .Select(suffix => Qwen35TensorFixture.Tensor($"blk.{block}.{suffix}", [64], "F32"))));
 
         var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
@@ -825,9 +882,21 @@ public sealed class ModelLabArchitectureBuilderTests
     public void AnOlmoeFileMixingFusedAndSeparateQkv_GetsLayoutNeutralLabels_OnTheSameGraph()
     {
         var inspection = Qwen35TensorFixture.Inspection("olmoe",
-            new[] { "attn_norm.weight", "attn_qkv.weight", "attn_output.weight" }.Select(static suffix => Qwen35TensorFixture.Tensor($"blk.0.{suffix}", [64], "F32"))
-                .Concat(Enumerable.Range(1, 2).SelectMany(static block => new[] { "attn_norm.weight", "attn_q.weight", "attn_k.weight", "attn_v.weight", "attn_output.weight" }
-                    .Select(suffix => Qwen35TensorFixture.Tensor($"blk.{block}.{suffix}", [64], "F32")))));
+            new[]
+                {
+                    "attn_norm.weight",
+                    "attn_qkv.weight",
+                    "attn_output.weight"
+                }.Select(static suffix => Qwen35TensorFixture.Tensor($"blk.0.{suffix}", [64], "F32"))
+                 .Concat(Enumerable.Range(1, 2).SelectMany(static block => new[]
+                     {
+                         "attn_norm.weight",
+                         "attn_q.weight",
+                         "attn_k.weight",
+                         "attn_v.weight",
+                         "attn_output.weight"
+                     }
+                     .Select(suffix => Qwen35TensorFixture.Tensor($"blk.{block}.{suffix}", [64], "F32")))));
 
         var descriptor = ModelLabArchitectureBuilder.Build(ModelName, inspection);
 
@@ -871,20 +940,20 @@ public sealed class ModelLabArchitectureBuilderTests
     public async Task Hyperparameters_OfAQwen35File_AreTheDeclaredValues_AndNullForAbsentKeys()
     {
         var descriptor = ModelLabArchitectureBuilder.Build(ModelName, await ReadAsync(new GgufHeaderBytesBuilder()
-                                                                                    .WithString("general.architecture", "qwen35")
-                                                                                    .WithUint32("general.file_type", value: 15)
-                                                                                    .WithUint64("general.parameter_count", value: 752_393_024)
-                                                                                    .WithUint32("qwen35.block_count", value: 25)
-                                                                                    .WithUint32("qwen35.nextn_predict_layers", value: 1)
-                                                                                    .WithUint32("qwen35.context_length", value: 262_144)
-                                                                                    .WithUint32("qwen35.embedding_length", value: 1_024)
-                                                                                    .WithUint32("qwen35.attention.head_count", value: 8)
-                                                                                    .WithUint32("qwen35.attention.head_count_kv", value: 2)
-                                                                                    .WithUint32("qwen35.attention.key_length", value: 256)
-                                                                                    .WithUint32("qwen35.attention.value_length", value: 128)
-                                                                                    .WithUint32("qwen35.full_attention_interval", value: 4)
-                                                                                    .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
-                                                                                    .Build()));
+                                                                                      .WithString("general.architecture", "qwen35")
+                                                                                      .WithUint32("general.file_type", value: 15)
+                                                                                      .WithUint64("general.parameter_count", value: 752_393_024)
+                                                                                      .WithUint32("qwen35.block_count", value: 25)
+                                                                                      .WithUint32("qwen35.nextn_predict_layers", value: 1)
+                                                                                      .WithUint32("qwen35.context_length", value: 262_144)
+                                                                                      .WithUint32("qwen35.embedding_length", value: 1_024)
+                                                                                      .WithUint32("qwen35.attention.head_count", value: 8)
+                                                                                      .WithUint32("qwen35.attention.head_count_kv", value: 2)
+                                                                                      .WithUint32("qwen35.attention.key_length", value: 256)
+                                                                                      .WithUint32("qwen35.attention.value_length", value: 128)
+                                                                                      .WithUint32("qwen35.full_attention_interval", value: 4)
+                                                                                      .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
+                                                                                      .Build()));
 
         var values = AssertEx.NotNull(descriptor.Hyperparameters);
         AssertEx.Equal("Q4_K_M", values.FileType!);
@@ -908,13 +977,13 @@ public sealed class ModelLabArchitectureBuilderTests
     public async Task Hyperparameters_OfAnOlmoeFile_CarryTheExpertCountAndTheExpertsUsedPerToken()
     {
         var descriptor = ModelLabArchitectureBuilder.Build(ModelName, await ReadAsync(new GgufHeaderBytesBuilder()
-                                                                                    .WithString("general.architecture", "olmoe")
-                                                                                    .WithUint32("olmoe.block_count", value: 16)
-                                                                                    .WithUint32("olmoe.expert_count", value: 64)
-                                                                                    .WithUint32("olmoe.expert_used_count", value: 8)
-                                                                                    .WithUint32("split.count", value: 2)
-                                                                                    .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
-                                                                                    .Build()));
+                                                                                      .WithString("general.architecture", "olmoe")
+                                                                                      .WithUint32("olmoe.block_count", value: 16)
+                                                                                      .WithUint32("olmoe.expert_count", value: 64)
+                                                                                      .WithUint32("olmoe.expert_used_count", value: 8)
+                                                                                      .WithUint32("split.count", value: 2)
+                                                                                      .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
+                                                                                      .Build()));
 
         var values = AssertEx.NotNull(descriptor.Hyperparameters);
         AssertEx.Equal(expected: 64L, values.ExpertCount!.Value);
@@ -935,11 +1004,11 @@ public sealed class ModelLabArchitectureBuilderTests
     public async Task Hyperparameters_PassOnlyJavaScriptSafeIntegers(ulong declared, long? expected)
     {
         var descriptor = ModelLabArchitectureBuilder.Build(ModelName, await ReadAsync(new GgufHeaderBytesBuilder()
-                                                                                    .WithString("general.architecture", "qwen35")
-                                                                                    .WithUint64("general.parameter_count", declared)
-                                                                                    .WithUint64("qwen35.expert_count", declared)
-                                                                                    .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
-                                                                                    .Build()));
+                                                                                      .WithString("general.architecture", "qwen35")
+                                                                                      .WithUint64("general.parameter_count", declared)
+                                                                                      .WithUint64("qwen35.expert_count", declared)
+                                                                                      .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
+                                                                                      .Build()));
 
         var values = AssertEx.NotNull(descriptor.Hyperparameters);
         AssertEx.Equal(expected, values.DeclaredParamCount);
@@ -950,10 +1019,10 @@ public sealed class ModelLabArchitectureBuilderTests
     public async Task Hyperparameters_DropANegativeValue()
     {
         var descriptor = ModelLabArchitectureBuilder.Build(ModelName, await ReadAsync(new GgufHeaderBytesBuilder()
-                                                                                    .WithString("general.architecture", "qwen35")
-                                                                                    .WithRawValue("qwen35.context_length", type: 5, BitConverter.GetBytes(-1))
-                                                                                    .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
-                                                                                    .Build()));
+                                                                                      .WithString("general.architecture", "qwen35")
+                                                                                      .WithRawValue("qwen35.context_length", type: 5, BitConverter.GetBytes(-1))
+                                                                                      .WithTensor("blk.0.attn_norm.weight", [256], ggmlType: 0, offset: 0)
+                                                                                      .Build()));
 
         AssertEx.Null(AssertEx.NotNull(descriptor.Hyperparameters).ContextLength);
     }

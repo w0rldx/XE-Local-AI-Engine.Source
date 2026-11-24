@@ -514,7 +514,7 @@ public sealed class StaleProcessReaperTests
         AssertEx.Empty(scanner.KilledPids);
         AssertEx.False(logger.Entries.Any(entry => entry.Message.StartsWith("Reaped ", StringComparison.Ordinal)), "A refused signal is not a reap.");
         AssertEx.True(logger.Entries.Any(entry => entry.Level == LogLevel.Warning && entry.Message.Contains("pid 5031", StringComparison.Ordinal)
-                                                  && entry.Message.Contains(result.ToString(), StringComparison.Ordinal)));
+                                                                                  && entry.Message.Contains(result.ToString(), StringComparison.Ordinal)));
     }
 
     private static void AssertNothingSignalled(FakeStaleProcessScanner scanner)

@@ -335,7 +335,8 @@ public sealed class ModelLabCheckpointPreflightService
                 $"This checkpoint has {heads} attention heads per block, and a recording holds 1 to {ModelLabTraceSpec.MaxAttentionHeads}. Start the trace without it."))
             : null;
 
-        static bool IsSet(JsonElement? value) => value is { ValueKind: not JsonValueKind.Null };
+        static bool IsSet(JsonElement? value) =>
+            value is { ValueKind: not JsonValueKind.Null };
     }
 
     /// <summary>An attention refusal's stable code and its English text.</summary>

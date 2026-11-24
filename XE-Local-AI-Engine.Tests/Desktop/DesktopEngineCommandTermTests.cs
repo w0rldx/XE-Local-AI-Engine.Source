@@ -22,7 +22,10 @@ public sealed class DesktopEngineCommandTermTests
         using var child = Process.Start(new ProcessStartInfo
         {
             FileName = "sleep",
-            ArgumentList = { "30" },
+            ArgumentList =
+            {
+                "30"
+            },
             UseShellExecute = false
         }) ?? throw new InvalidOperationException("sleep did not start.");
         var signals = new List<string>();

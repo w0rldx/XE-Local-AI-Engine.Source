@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
@@ -290,7 +291,7 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
         var handle = await registry.CreateOrAttachAsync(CreateRequest(Key()));
         var killer = new FakeOwnedGroupKiller
         {
-            Outcome = Client.Services.Sandbox.Implementation.Reaping.SandboxGroupKillOutcome.Deferred
+            Outcome = SandboxGroupKillOutcome.Deferred
         };
         using var child = new FakeSandboxChildProcess([]);
         using var teardown = SandboxLaunchTeardown.Create(child, appliedProcessGroup: true, killer);
@@ -300,7 +301,7 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
         registry.RemoveAndTerminate(handle.SandboxId);
         var commandOutcome = teardown.Terminate();
 
-        AssertEx.Equal(Client.Services.Sandbox.Implementation.Reaping.SandboxGroupKillOutcome.Deferred, commandOutcome,
+        AssertEx.Equal(SandboxGroupKillOutcome.Deferred, commandOutcome,
             "the command path keeps its marker on the registry's unverified kill");
         AssertEx.Equal(expected: 1, killer.OwnedKills);
     }

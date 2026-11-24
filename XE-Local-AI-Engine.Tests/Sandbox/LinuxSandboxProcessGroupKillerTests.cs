@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
-using static XE_Local_AI_Engine.Tests.Providers.Training.LinuxTrainingProcessGroupTests;
+using static Providers.Training.LinuxTrainingProcessGroupTests;
 
 /// <summary>The sandbox group kill matrix, foreign (a dead host's marker) and owned (this host's child), over scripted pidfd and kill calls.</summary>
 /// <remarks>Nothing reaches the kernel. A numeric signal other than the signal-0 probe is sent only while the leader is proven alive.</remarks>

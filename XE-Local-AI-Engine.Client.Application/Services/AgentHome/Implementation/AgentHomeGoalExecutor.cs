@@ -178,11 +178,11 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
             // BeginChildScope pushes Depth+1 for the inner run, so any tool that consults SpawnContext (spawn_subagent
             // is not in the list above, but the guard must hold if one ever is) sees a child, not a root.
             using (context.BeginChildScope())
-            // Nobody watches the inner loop's rounds, so its tool ranking never reloads an ejected embedder.
-            using (UnattendedRunScope.Begin())
-            {
-                _ = await agent.AsAIFunction().InvokeAsync(arguments, runCts.Token);
-            }
+                // Nobody watches the inner loop's rounds, so its tool ranking never reloads an ejected embedder.
+                using (UnattendedRunScope.Begin())
+                {
+                    _ = await agent.AsAIFunction().InvokeAsync(arguments, runCts.Token);
+                }
         }
         catch (OperationCanceledException) when (budgetCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {

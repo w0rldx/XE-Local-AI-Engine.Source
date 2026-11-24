@@ -398,8 +398,10 @@ public sealed class ModelLabCheckpointPreflightServiceTests : IDisposable
 
     /// <summary>The family rule names every block full, so a config that says otherwise describes attention the recompute would not match. The trace itself is still allowed.</summary>
     [Test]
-    [Arguments(""","layer_types":["full_attention","linear_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention"]""")]
-    [Arguments(""","layer_types":["full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","sliding_attention"]""")]
+    [Arguments(
+        ""","layer_types":["full_attention","linear_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention"]""")]
+    [Arguments(
+        ""","layer_types":["full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","sliding_attention"]""")]
     [Arguments(""","layer_types":["full_attention","full_attention"]""")]
     [Arguments(""","sliding_window":4096""")]
     [Arguments(""","attention_chunk_size":8192""")]
@@ -420,7 +422,8 @@ public sealed class ModelLabCheckpointPreflightServiceTests : IDisposable
     [Test]
     [Arguments("")]
     [Arguments(""","sliding_window":null,"attention_chunk_size":null""")]
-    [Arguments(""","layer_types":["full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention"]""")]
+    [Arguments(
+        ""","layer_types":["full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention"]""")]
     public async Task AnOlmoeConfigOfPlainFullAttention_CanRecordAttention(string extra)
     {
         GgufHeader(embeddingLength: 1024, blockCount: 16, architecture: "olmoe");

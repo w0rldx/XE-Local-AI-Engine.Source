@@ -688,8 +688,8 @@ public sealed class KnowledgeIngestionEjectVetoTests : IDisposable
     {
         var reuseStore = Substitute.For<IKnowledgeChunkEmbeddingReuseStore>();
         reuseStore.FindManyAsync(Arg.Any<IReadOnlyList<KnowledgeChunkEmbeddingCacheKey>>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
-                  .Returns(call => Task.FromResult<IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>>(
-                      call.Arg<IReadOnlyList<KnowledgeChunkEmbeddingCacheKey>>().Distinct().ToDictionary(static key => key, static _ => new byte[4 * sizeof(float)])));
+                  .Returns(call => Task.FromResult<IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>>(call.Arg<IReadOnlyList<KnowledgeChunkEmbeddingCacheKey>>().Distinct()
+                                                                                                                     .ToDictionary(static key => key, static _ => new byte[4 * sizeof(float)])));
         return new KnowledgeChunkEmbeddingCache(reuseStore, Options.Create(new KnowledgeBaseOptions()), TimeProvider.System);
     }
 

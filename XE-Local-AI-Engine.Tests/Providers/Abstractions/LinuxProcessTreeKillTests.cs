@@ -1,11 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.Providers.Abstractions;
 
+using System.ComponentModel;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>The pidfd tree walk over a scripted process table: who is pinned, verified, stopped and killed, and what the walk reports.</summary>
 /// <remarks>Nothing reaches the kernel. Every walk ends with <see cref="FakeProcessTable.AssertCleanup" /> unless a refused SIGKILL is the point.</remarks>
-[Category(TestCategories.Unit)]
+[TUnit.Core.Category(TestCategories.Unit)]
 public sealed class LinuxProcessTreeKillTests
 {
     private const int Root = 10;
@@ -35,7 +36,10 @@ public sealed class LinuxProcessTreeKillTests
     [Test]
     public void HostNotVerifiable_UsesTheFallbackWithoutOpening()
     {
-        var table = new FakeProcessTable { HostVerifiable = false };
+        var table = new FakeProcessTable
+        {
+            HostVerifiable = false
+        };
         table.Add(Root, 1);
 
         AssertEx.Equal(LinuxProcessTreeKillResult.FallbackKilled, table.Kill(Root));
@@ -106,7 +110,12 @@ public sealed class LinuxProcessTreeKillTests
     {
         var table = new FakeProcessTable();
         table.Add(Root, 1);
-        var foreign = new FakeTreeProcess { Pid = 11, ParentPid = 1, StartTicks = 5000 };
+        var foreign = new FakeTreeProcess
+        {
+            Pid = 11,
+            ParentPid = 1,
+            StartTicks = 5000
+        };
         table.Add(11, Root).ReplacedBeforeOpen = foreign;
 
         AssertEx.Equal(LinuxProcessTreeKillResult.Complete, table.Kill(Root));
@@ -403,7 +412,10 @@ public sealed class LinuxProcessTreeKillTests
     [Test]
     public void MaxMembersReached_IsIncomplete()
     {
-        var table = new FakeProcessTable { MaxMembers = 2 };
+        var table = new FakeProcessTable
+        {
+            MaxMembers = 2
+        };
         table.Add(Root, 1);
         table.Add(11, Root);
         table.Add(12, Root);
@@ -439,8 +451,8 @@ public sealed class LinuxProcessTreeKillTests
             Exception? failure = outcome switch
             {
                 "exited-during-kill" => new InvalidOperationException("exited"),
-                "refused" => new System.ComponentModel.Win32Exception(1),
-                "descendant-survived" => new AggregateException(new System.ComponentModel.Win32Exception(1)),
+                "refused" => new Win32Exception(1),
+                "descendant-survived" => new AggregateException(new Win32Exception(1)),
                 "unsupported" => new NotSupportedException(),
                 _ => null
             };

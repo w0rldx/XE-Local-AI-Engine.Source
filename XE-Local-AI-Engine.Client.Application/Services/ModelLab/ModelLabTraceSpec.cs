@@ -112,7 +112,7 @@ public static class ModelLabTraceSpec
 
     /// <summary>The largest file a trace can write: every layer traced, a lens and routing at every block, at the most tokens; with <see cref="MaxAttentionByteCap" />, the bound on what the blob store keeps.</summary>
     public static readonly int MaxTraceByteCap = TraceByteCapFor(MaxTraceLayers, MaxRequestedNewTokens) + LensByteCapFor(MaxTraceLayers, MaxRequestedNewTokens)
-                                                 + RoutingByteCapFor(MaxTraceLayers, MaxRequestedNewTokens);
+                                                                                                        + RoutingByteCapFor(MaxTraceLayers, MaxRequestedNewTokens);
 
     /// <summary>The largest attention cap a checkpoint can ask for: about 40 MiB.</summary>
     public static readonly int MaxAttentionByteCap = AttentionByteCapFor(MaxAttentionLayers, MaxAttentionHeads, MaxRequestedNewTokens);

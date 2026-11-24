@@ -1,4 +1,5 @@
 // The Desktop shell compiles this file as linked source under its own namespace (it has no engine references).
+
 #if XE_DESKTOP
 namespace XE_Local_AI_Engine.Desktop.Linux;
 #else

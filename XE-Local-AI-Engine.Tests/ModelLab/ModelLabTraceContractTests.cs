@@ -70,7 +70,8 @@ public sealed class ModelLabTraceContractTests
         AssertEx.Equal("0,1", string.Join(',', routing.Records.Select(static record => record.Step)));
         AssertEx.Equal("3,0|1,2", string.Join('|', routing.Records.Select(static record => string.Join(',', record.Experts[0]))));
         AssertEx.Equal("0.5,0.25|1,0.125",
-            string.Join('|', routing.Records.Select(static record => string.Join(',', record.WeightBits[0].Select(static bits => ModelLabTraceSpec.RoutingWeight(bits).ToString(CultureInfo.InvariantCulture))))));
+            string.Join('|',
+                routing.Records.Select(static record => string.Join(',', record.WeightBits[0].Select(static bits => ModelLabTraceSpec.RoutingWeight(bits).ToString(CultureInfo.InvariantCulture))))));
         var footer = AssertEx.NotNull(routing.Footer);
         AssertEx.Equal(expected: 2, footer.Records);
         AssertEx.Equal(expected: 0, footer.Dropped);

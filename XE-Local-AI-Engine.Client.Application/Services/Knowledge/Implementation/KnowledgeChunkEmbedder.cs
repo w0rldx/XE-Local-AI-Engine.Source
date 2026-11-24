@@ -292,8 +292,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
     }
 
     // Eject marks exist only on the llama.cpp supervisor; any other provider never vetoes a background load.
-    private bool IsLlamaProvider =>
-        string.Equals(_options.EmbeddingProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
+    private bool IsLlamaProvider => string.Equals(_options.EmbeddingProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
 
     private ILocalModelProvider ResolveProvider()
     {

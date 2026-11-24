@@ -71,7 +71,8 @@ internal static class TrainingProcessReaper
             else if (receipt.BootId is not null && inspector.CurrentBootId is null)
             {
                 // Bound to a boot this host cannot read: neither same nor previous boot is proven, so it is kept like a deferred kill.
-                logger.LogWarning("The trainer receipt for run {RunId} records a boot, but this boot's id could not be read; nothing was signalled and its receipt was kept so the next startup retries it.",
+                logger.LogWarning(
+                    "The trainer receipt for run {RunId} records a boot, but this boot's id could not be read; nothing was signalled and its receipt was kept so the next startup retries it.",
                     ownerId);
                 return TrainingReapOutcome.NotVerified;
             }

@@ -297,7 +297,7 @@ public sealed class ModelLabExperimentServiceTests
         using var process = new ScriptedProcess
         {
             TraceContent = new string('x', ModelLabTraceSpec.TraceByteCapFor(3, ModelLabTraceSpec.MaxNewTokens) + ModelLabTraceSpec.LensByteCapFor(24, ModelLabTraceSpec.MaxNewTokens)
-                                           + ModelLabTraceSpec.RoutingByteCapFor(24, ModelLabTraceSpec.MaxNewTokens) + 1)
+                                                                                                                + ModelLabTraceSpec.RoutingByteCapFor(24, ModelLabTraceSpec.MaxNewTokens) + 1)
         };
         await using var host = await LabHost.StartAsync(process);
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
@@ -370,7 +370,8 @@ public sealed class ModelLabExperimentServiceTests
     /// <summary>All 16 OLMoE blocks are full attention, so the recording keeps 8 of them evenly, first and last included.</summary>
     [Test]
     [Arguments("")]
-    [Arguments(""","layer_types":["full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention"]""")]
+    [Arguments(
+        ""","layer_types":["full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention"]""")]
     public async Task AnOlmoeTrace_RecordsAttention_AtEightEvenlySpacedBlocks(string extra)
     {
         const int tokens = ModelLabTraceSpec.MaxRequestedNewTokens;
@@ -397,7 +398,8 @@ public sealed class ModelLabExperimentServiceTests
     }
 
     [Test]
-    [Arguments(""","layer_types":["full_attention","linear_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention"]""")]
+    [Arguments(
+        ""","layer_types":["full_attention","linear_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention","full_attention"]""")]
     [Arguments(""","sliding_window":4096""")]
     [Arguments(""","attention_chunk_size":8192""")]
     public async Task AnOlmoeConfigThatContradictsFullAttention_IsRefusedAttention_BeforeTheGate(string extra)

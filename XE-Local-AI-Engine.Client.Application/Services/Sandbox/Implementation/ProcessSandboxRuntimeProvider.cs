@@ -1041,7 +1041,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
         if (markerId is null)
         {
-            _logger.LogWarning("A process group of sandbox {SandboxId}, or a descendant that left it, could not be verified dead, and no orphan marker was recorded for it, so no later start will retry.",
+            _logger.LogWarning(
+                "A process group of sandbox {SandboxId}, or a descendant that left it, could not be verified dead, and no orphan marker was recorded for it, so no later start will retry.",
                 state.Handle.SandboxId);
             return;
         }

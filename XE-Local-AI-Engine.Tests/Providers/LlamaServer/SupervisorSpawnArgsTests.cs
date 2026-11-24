@@ -728,7 +728,7 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.Equal(expected: 1, CountOf(spec.Arguments, "--fit"));
         AssertEx.Equal("on", spec.Arguments[IndexOf(spec.Arguments, "--fit") + 1]);
         AssertEx.False(spec.Arguments.Any(static argument => argument is "-fit" or "-fitt" or "--fit-target" or "-fitc" or "--fit-ctx" or "off" or "100"
-                                                          || argument.StartsWith("--fit=", StringComparison.Ordinal)),
+                                                             || argument.StartsWith("--fit=", StringComparison.Ordinal)),
             $"An operator override must not reach llama.cpp's auto-fit: {string.Join(' ', spec.Arguments)}");
     }
 

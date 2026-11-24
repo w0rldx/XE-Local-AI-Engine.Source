@@ -24,6 +24,7 @@ public sealed class LinuxProcessGroupHandle : IProcessTreeHandle
     private const int Esrch = 3;
 
     private static readonly TimeSpan DefaultGrace = TimeSpan.FromSeconds(2);
+
     // Applied twice after a KILL (leader exit, then the group check): at most ~2 s past the grace, never under the sandbox registry lock,
     // and long enough for init to reap a SIGKILLed member before the kill is reported incomplete.
     private static readonly TimeSpan DefaultKillVerifyBound = TimeSpan.FromSeconds(1);

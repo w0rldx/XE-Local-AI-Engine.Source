@@ -1517,7 +1517,8 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
 
         // The script holds the cap itself. This is the check that does not depend on the script being right.
-        if (trace.Length > job.TraceByteCap + (job.LensByteCap ?? 0) + (job.RoutingByteCap ?? 0) || result.Length > ModelLabTraceSpec.MaxResultBytes || (attention is not null && attention.Length > job.AttentionByteCap))
+        if (trace.Length > job.TraceByteCap + (job.LensByteCap ?? 0) + (job.RoutingByteCap ?? 0) || result.Length > ModelLabTraceSpec.MaxResultBytes ||
+            (attention is not null && attention.Length > job.AttentionByteCap))
         {
             return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, "The Model Lab script wrote more than its byte cap, so nothing was kept.");
         }

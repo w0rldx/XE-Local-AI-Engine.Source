@@ -70,7 +70,10 @@ public sealed class LinuxProcessTreeKillKernelTests
     [SupportedOSPlatform("linux")]
     public async Task Kill_ExitedThenDisposedRoot_IsCompleteAndSendsNothing()
     {
-        var process = Process.Start(new ProcessStartInfo("/bin/true") { UseShellExecute = false })!;
+        var process = Process.Start(new ProcessStartInfo("/bin/true")
+        {
+            UseShellExecute = false
+        })!;
         await process.WaitForExitAsync();
 
         AssertEx.Equal(LinuxProcessTreeKillResult.Complete, LinuxProcessTreeKill.Kill(process));
