@@ -86,11 +86,29 @@ app.MapHub<LiteralHub>("/api/local/v1/literal/hub");`;
 	assert.deepEqual(extractMappedHubPaths(program, routes), ["/api/local/v1/chat/hub", "/api/local/v1/literal/hub"]);
 });
 
+test("accepts a route constant followed by one options-callback identifier", () => {
+	const routes = `
+public static class LocalApiRoutes
+{
+    public static class Chat
+    {
+        public const string Hub = "/api/local/v1/chat/hub";
+    }
+}`;
+	assert.deepEqual(extractMappedHubPaths("app.MapHub<ChatHub>(LocalApiRoutes.Chat.Hub, ConfigureHubTransport);", routes), [
+		"/api/local/v1/chat/hub",
+	]);
+});
+
 test("rejects every unrecognized active MapHub route form", () => {
-	assert.throws(
-		() => extractMappedHubPaths("app.MapHub<ChatHub>(ResolveHubRoute());", ""),
-		/Unrecognized active MapHub route argument/,
-	);
+	for (const invocation of [
+		"app.MapHub<ChatHub>(ResolveHubRoute());",
+		'app.MapHub<ChatHub>(LocalApiRoutes.Chat.Hub, "options");',
+		"app.MapHub<ChatHub>(LocalApiRoutes.Chat.Hub, ConfigureHubTransport, Extra);",
+		"app.MapHub<ChatHub>(Routes.Chat.Hub, ConfigureHubTransport);",
+	]) {
+		assert.throws(() => extractMappedHubPaths(invocation, ""), /Unrecognized active MapHub route argument/, invocation);
+	}
 });
 
 test("rejects unmatched active MapHub invocations", () => {

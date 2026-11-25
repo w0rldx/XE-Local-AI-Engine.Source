@@ -197,9 +197,11 @@ printf '%s' "${line%%$'\t'*}"
 exit "$(cat "${LAB_TEST_CTL}/curl-exit" 2>/dev/null || echo 0)"
 SH
 chmod 755 "${REPO}/scripts/"*.sh "${REPO}/scripts/"*.py "${BIN}/"*
+# Linked after the chmod, which follows symlinks; the real interpreter, as lab-up.sh empties the shim's MISE_DATA_DIR.
+ln -s "$(python3 -c 'import sys; print(sys.executable)')" "${BIN}/python3"
 
 TEST_ENV=(env -u XE_LAB_MODEL_SOURCE_DIR -u GIT_DIR -u GIT_WORK_TREE -u XE_LAB_PLAN -u XE_ASPIRE_APPHOST -u XE_NODE_OPERATOR_SECRET_FILE -u XE_LLAMACPP_VARIANT -u XE_LLAMACPP_SERVER_PATH -u LAB_TEST_PROFILE_ONLY
-  -u XDG_DATA_HOME HOME="${FAKE_HOME}" PATH="${BIN}:${PATH}" LAB_TEST_CTL="${CTL}" LAB_TEST_REAL="${REAL}"
+  -u XDG_DATA_HOME -u MISE_TRUSTED_CONFIG_PATHS -u MISE_DATA_DIR HOME="${FAKE_HOME}" PATH="${BIN}:${PATH}" LAB_TEST_CTL="${CTL}" LAB_TEST_REAL="${REAL}"
   LAB_READY_TIMEOUT_SECONDS=5 LAB_PASSWORD="${PASSWORD}")
 
 ctl() { printf '%b' "$2" >"${CTL}/$1"; }
@@ -531,6 +533,24 @@ run_lab XE_LAB_MODEL_SOURCE_DIR="${TEMP_ROOT}/no-store" --
 check "XE_LAB_MODEL_SOURCE_DIR without an index exits 2" "2" "${STATUS}"
 check_contains "XE_LAB_MODEL_SOURCE_DIR is the dir that was tried" "${TEMP_ROOT}/no-store" "${ERR}"
 rm -f "${CTL}/model-ensure.2.out"
+
+echo "== 7c. model-link reads relative entries from the source dir and writes absolute targets =="
+REL_STORE="${TEMP_ROOT}/rel-store"
+mkdir -p "${REL_STORE}" "${TEMP_ROOT}/rel-cwd"
+printf 'weights' >"${REL_STORE}/${WEIGHT}"
+printf 'projector' >"${REL_STORE}/${PROJECTOR}"
+cat >"${REL_STORE}/index.json" <<JSON
+{ "Models": [ { "ModelName": "${MODEL}", "LocalPath": ".tmp/lab/models/${WEIGHT}",
+  "ProjectorLocalPath": ".tmp/lab/models/${PROJECTOR}" } ] }
+JSON
+(cd "${TEMP_ROOT}/rel-cwd" && python3 "${REAL}/lab-driver.py" model-link --model "${MODEL}" --from "${REL_STORE}" \
+  --into rel-into >/dev/null 2>&1)
+check "relative entries: model-link exits 0 from an unrelated cwd" "0" "$?"
+check "relative entries: the weights are a hard link (same inode)" "$(stat -c %i "${REL_STORE}/${WEIGHT}")" \
+  "$(stat -c %i "${TEMP_ROOT}/rel-cwd/rel-into/${WEIGHT}" 2>/dev/null)"
+check "relative entries: the target index holds absolute paths" \
+  "1 ${TEMP_ROOT}/rel-cwd/rel-into/${WEIGHT} ${TEMP_ROOT}/rel-cwd/rel-into/${PROJECTOR}" \
+  "$(LAB_MODELS="${TEMP_ROOT}/rel-cwd/rel-into" lab_index)"
 
 echo "== 8. settings not verified =="
 ctl settings-ensure.out "changed\texternalAccessProfile\nskipped\tfalse\nverified\tfalse\n"

@@ -31,7 +31,7 @@ function isExpired(expiresAtUtc: string | undefined): boolean {
 
 // accessTokenFactory runs before each negotiate/transport HTTP request. Renew the token
 // when it is missing or near expiry so a long-lived connection keeps authenticating
-// across reconnects. Never log the returned token — it may end up in WS/SSE query strings.
+// across reconnects. Never log the returned token — it travels in request headers and the WebSocket subprotocol list.
 export async function resolveHubAccessToken(): Promise<string> {
 	const state = useNodeAuthStore.getState();
 	if (state.accessToken && !isExpired(state.expiresAtUtc) && tokenCheckedAtLoss === connectionLosses) {

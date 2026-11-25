@@ -57,16 +57,8 @@ done
 if [[ -n "${FAKE_MUTATE_ASSEMBLY:-}" ]]; then
   printf 'changed\n' >>"${FAKE_MUTATE_ASSEMBLY}"
 fi
-port="$((32000 + RANDOM % 10000))"
-# Where the real host writes it: DesktopBootstrap resolves LocalApplicationData from XDG_DATA_HOME on Linux, and
-# DesktopPortStore.Persist appends XE-Local-AI-Engine/desktop-port.txt.
-mkdir -p "${XDG_DATA_HOME}/XE-Local-AI-Engine"
-printf '%s\n' "${port}" >"${XDG_DATA_HOME}/XE-Local-AI-Engine/desktop-port.txt"
-if [[ -z "${FAKE_SUPPRESS_BROWSER_LOG:-}" ]]; then
-  printf '[test INF] Opened the default browser at http://127.0.0.1:%s/.\n' "${port}"
-fi
-exec python3 - "${port}" <<'PY'
-import http.server, json, socketserver, sys
+exec python3 - <<'PY'
+import http.server, os, socketserver
 class Handler(http.server.BaseHTTPRequestHandler):
     health_requests = 0
     def do_GET(self):
@@ -82,7 +74,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200); self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
     def log_message(self, *_): pass
-with socketserver.TCPServer(("127.0.0.1", int(sys.argv[1])), Handler) as server:
+# Port 0: the kernel picks a port that is free at bind time, where a random pick can collide with a busy one.
+with socketserver.TCPServer(("127.0.0.1", 0), Handler) as server:
+    port = server.server_address[1]
+    # Where the real host writes it: DesktopBootstrap resolves LocalApplicationData from XDG_DATA_HOME on Linux, and
+    # DesktopPortStore.Persist appends XE-Local-AI-Engine/desktop-port.txt.
+    data_dir = os.path.join(os.environ["XDG_DATA_HOME"], "XE-Local-AI-Engine")
+    os.makedirs(data_dir, exist_ok=True)
+    with open(os.path.join(data_dir, "desktop-port.txt"), "w") as port_file:
+        port_file.write(f"{port}\n")
+    if not os.environ.get("FAKE_SUPPRESS_BROWSER_LOG"):
+        print(f"[test INF] Opened the default browser at http://127.0.0.1:{port}/.", flush=True)
     server.serve_forever()
 PY
 FAKE_DOTNET

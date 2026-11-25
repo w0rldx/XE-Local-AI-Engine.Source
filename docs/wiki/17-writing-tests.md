@@ -218,6 +218,7 @@ the construction site.
 | `EnableDevelopmentMode` | Turn Development Mode on/off for this host |
 | `EnvironmentName` | Override the host environment — the way to exercise **production-only middleware** such as the rate limiter, which the `Testing` environment skips |
 | `UsePreMigratedDatabase` | Default `true`: seed the host's SQLite file from the process-wide migrated template. Set `false` for a test that asserts on the migration path itself (empty database, pre-migration backup, pending-migration set); ignored when `AdditionalConfiguration` repoints `ConnectionStrings:node-sqlite` |
+| `ServeOnKestrel` | Serve the host on real Kestrel at `127.0.0.1:0` instead of TestServer; `Server` and `CreateClient` are then unavailable, and the bound base address comes from `KestrelAddress`. The class is `Integration` like every host test. Use it only to test a real server request feature that TestHost replaces, such as `UseWebSockets` running before authentication (`HubBearerSubprotocolKestrelTests`) |
 
 Auth helpers: `CreateNodeAccessToken()` / `AddNodeBearerToken(request)` mint an **operator** JWT;
 `CreateNonOperatorAccessToken()` / `AddNonOperatorBearerToken(request)` mint an authenticated principal that

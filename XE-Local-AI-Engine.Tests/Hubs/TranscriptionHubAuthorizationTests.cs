@@ -18,10 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Integration)]
 public sealed class TranscriptionHubAuthorizationTests
 {
-    /// <summary>
-    ///     SignalR's handshake. It does NOT end in <c>/hub</c>, so it authenticates from the Authorization header
-    ///     rather than the <c>access_token</c> query the connection path accepts.
-    /// </summary>
+    /// <summary>SignalR's negotiate, which authenticates only from the Authorization header.</summary>
     private const string NegotiateRoute = LocalApiRoutes.Transcription.Hub + "/negotiate";
 
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

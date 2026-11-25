@@ -1,12 +1,14 @@
 namespace XE_Local_AI_Engine.Tests.Architecture;
 
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.ApiFoundation.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Hubs;
+using XE_Local_AI_Engine.Client.Security;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 using EndpointDefinition = FastEndpoints.EndpointDefinition;
@@ -176,6 +178,32 @@ public sealed class EndpointAuthorizationPolicyTests
         AssertEx.Empty(HubRouteEndpoints(developmentDisabledRoutes, typeof(DevelopmentAttemptHub)),
             "DevelopmentAttemptHub is still mapped with Development Mode off. Its route must disappear with the "
             + "feature, not merely stop being reachable through some other gate.");
+    }
+
+    [Test]
+    public void EveryHub_EchoesTheBearerSubprotocolAndNothingElse()
+    {
+        var negotiates = RouteEndpoints(Factory)
+                         .Where(endpoint => endpoint.Metadata.GetMetadata<HubMetadata>() is not null
+                                            && endpoint.Metadata.GetMetadata<NegotiateMetadata>() is not null)
+                         .ToList();
+
+        AssertEx.Equal(expected: HubTypeCount, negotiates.Count,
+            "Every hub, the Development one included, must map one negotiate endpoint; fewer means this proof covered fewer hubs.");
+
+        foreach (var endpoint in negotiates)
+        {
+            var hubName = endpoint.Metadata.GetMetadata<HubMetadata>()!.HubType.Name;
+            var options = AssertEx.NotNull(endpoint.Metadata.GetMetadata<HttpConnectionDispatcherOptions>(),
+                $"{hubName} carries no HttpConnectionDispatcherOptions metadata, so its subprotocol selector cannot be read.");
+            var selector = AssertEx.NotNull(options.WebSockets.SubProtocolSelector,
+                $"{hubName} was mapped without ConfigureHubTransport: a browser socket offering the bearer subprotocol fails without the echo.");
+
+            AssertEx.Equal(NodeJwtBearerEvents.HubBearerProtocol, selector([NodeJwtBearerEvents.HubBearerProtocol, "x"]),
+                $"{hubName} must echo the bearer marker, never the token after it.");
+            var none = selector([]);
+            AssertEx.Null(none, $"{hubName} must select no subprotocol when none is offered; an empty string kills the socket after the 101.");
+        }
     }
 
     [Test]

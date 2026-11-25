@@ -5,13 +5,13 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.JsonWebTokens;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Security;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -134,8 +134,9 @@ public sealed class NodeHubSignOutTests
                              {
                                  var client = factory.Server.CreateWebSocketClient();
                                  client.ConfigureRequest = request => request.Headers.Origin = "http://localhost";
-                                 var uri = QueryHelpers.AddQueryString(context.Uri.ToString(), "access_token", AssertEx.NotNull(accessToken));
-                                 return await client.ConnectAsync(new Uri(uri), cancellationToken);
+                                 client.SubProtocols.Add(NodeJwtBearerEvents.HubBearerProtocol);
+                                 client.SubProtocols.Add(AssertEx.NotNull(accessToken));
+                                 return await client.ConnectAsync(context.Uri, cancellationToken);
                              };
                          })
                          .WithNodeJsonProtocol()

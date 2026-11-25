@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
@@ -133,10 +134,21 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     /// </summary>
     public bool UsePreMigratedDatabase { get; init; } = true;
 
+    /// <summary>
+    ///     Serves this host on real Kestrel at an ephemeral loopback port instead of TestServer, for a test that needs the
+    ///     real server's request features; <see cref="Server" /> and <see cref="CreateClient" /> are then unavailable.
+    /// </summary>
+    public bool ServeOnKestrel { get; init; }
+
     public IServiceProvider Services => EnsureApp().Services;
 
     // The host's TestServer, for tests that need CreateHandler() to point a SignalR client at the in-memory transport.
     public TestServer Server => EnsureApp().GetTestServer();
+
+    /// <summary>The base address Kestrel bound when <see cref="ServeOnKestrel" /> is set.</summary>
+    public Uri KestrelAddress => ServeOnKestrel
+        ? new Uri(EnsureApp().Urls.Single())
+        : throw new InvalidOperationException($"{nameof(KestrelAddress)} needs {nameof(ServeOnKestrel)} = true; this host runs on TestServer.");
 
     private static bool RunLocalIntegration =>
         string.Equals(Environment.GetEnvironmentVariable("RUN_LOCAL_INTEGRATION"),
@@ -318,7 +330,15 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
                     Configuration = configuration,
                     ConfigureBuilder = builder =>
                     {
-                        builder.WebHost.UseTestServer();
+                        if (ServeOnKestrel)
+                        {
+                            builder.WebHost.UseKestrel().UseUrls("http://127.0.0.1:0");
+                        }
+                        else
+                        {
+                            builder.WebHost.UseTestServer();
+                        }
+
                         ConfigureTestServices(builder.Services);
                         if (ValidateServiceProvider)
                         {

@@ -144,7 +144,8 @@ export function extractMappedHubPaths(programSource, routeSource) {
 		}
 		const closingParenthesis = findMatching(structuralSource, cursor, "(", ")", "MapHub invocation");
 		const argument = programSource.slice(cursor + 1, closingParenthesis).trim();
-		const reference = argument.match(/^LocalApiRoutes\.\w+\.\w+$/)?.[0];
+		// A route constant may be followed by one options-callback identifier (Program.ConfigureHubTransport).
+		const reference = argument.match(/^(LocalApiRoutes\.\w+\.\w+)(?:\s*,\s*[A-Za-z_]\w*)?$/)?.[1];
 		if (reference) {
 			const path = constants.get(reference);
 			if (!path) {

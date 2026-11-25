@@ -36,7 +36,8 @@ const signalRMock = vi.hoisted(() => {
 	return { builder, connection };
 });
 
-vi.mock("@microsoft/signalr", () => ({
+vi.mock("@microsoft/signalr", async () => ({
+	...(await vi.importActual("@microsoft/signalr")),
 	HubConnectionBuilder: vi.fn(function HubConnectionBuilder() {
 		return signalRMock.builder;
 	}),

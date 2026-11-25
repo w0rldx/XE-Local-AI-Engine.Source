@@ -13,7 +13,7 @@ const invoke = vi.fn(() => Promise.resolve());
 let onReconnected: (() => void) | undefined;
 let state = "Disconnected";
 
-vi.mock("@microsoft/signalr", () => {
+vi.mock("@microsoft/signalr", async () => {
 	class FakeBuilder {
 		withUrl() {
 			return this;
@@ -46,6 +46,7 @@ vi.mock("@microsoft/signalr", () => {
 		}
 	}
 	return {
+		...(await vi.importActual("@microsoft/signalr")),
 		HubConnectionBuilder: FakeBuilder,
 		HubConnectionState: { Connected: "Connected", Disconnected: "Disconnected" },
 		LogLevel: { Warning: 3 },

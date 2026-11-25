@@ -958,8 +958,15 @@ Linux-proven only; nothing below has run on Windows. Each item is pass/fail.
    reported missing, or a 500.
 3. **JWT events (`NodeJwtBearerEvents`).** Sign in, reload, let the access token refresh, then change the password in a
    second browser: the first browser's next API call or SignalR reconnect must be refused (security-stamp check) and
-   land on the sign-in page. A SignalR hub must connect with the token from the query string. **Fail:** an old
-   session that keeps working after the password change, or hubs that never connect.
+   land on the sign-in page. Then start the desktop app with `--debug`, open the WebView2 DevTools Network panel and
+   open Chat, then the Scheduler page. Evidence, separately for each of the two hub paths: the hub socket row with
+   status 101, a request URL ending in `…/hub?id=…` and nothing else, the response header
+   `Sec-WebSocket-Protocol: xe.bearer`, and frames received; the console shows no `access_token`. A connected hub
+   status is not evidence: a hub that fell back to long polling reports the same. Use a disposable credential, and
+   never share a HAR or a screenshot of the socket's request headers: a sanitized HAR keeps
+   `Sec-WebSocket-Protocol`, which holds the token, so delete that value first and sign out everywhere afterwards.
+   **Fail:** an old session that keeps working after the password change, a hub path without the 101 socket row and
+   its echoed `xe.bearer`, a socket URL carrying `access_token`, or hubs that never connect.
 4. **Hub wire DTOs moved into `Client/Hubs`.** In the desktop shell, watch a llama.cpp runtime acquisition or
    source build, an image-runtime source build, a GGUF download, an image job, a scheduler run and a knowledge
    document indexing: each progress/status view must update live without a page reload, and the browser console

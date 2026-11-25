@@ -121,43 +121,10 @@ trap 'exit 130' INT TERM
 # The trust list also gets this checkout's mise.toml and the main checkout's (a linked worktree under .tmp/worktrees/
 # sits inside it, so mise reads both), whether or not a user config exists; nothing above the main checkout is
 # trusted. A box with neither mise nor a checkout mise.toml exports nothing. See docs/agent-knowledge.md section 1.
-mise_trusted_config_paths="${MISE_TRUSTED_CONFIG_PATHS:-}"
-mise_data_dir="${MISE_DATA_DIR:-}"
-# ${HOME:-} throughout: this script runs under set -u, and an unset HOME must skip the fallback rather than
-# abort the whole check.
-if [[ -z "${mise_trusted_config_paths}" && -f "${HOME:-}/.config/mise/config.toml" ]]; then
-  mise_trusted_config_paths="${HOME:-}/.config/mise/config.toml"
-fi
-checkout_configs=("${PROJECT_ROOT}/mise.toml")
-# The main checkout is the first worktree git lists, unless it is marked bare. Its config counts only when this
-# checkout is it or sits inside it, so a bare-backed or separate-git-dir worktree (git lists the git dir itself
-# there) trusts nothing outside its own tree; outside a git checkout only this one counts.
-main_checkout=""
-while IFS= read -r line; do
-  case "${line}" in
-    "") break ;;
-    bare) main_checkout=""; break ;;
-    "worktree "*) main_checkout="${line#worktree }" ;;
-  esac
-done < <(git -C "${PROJECT_ROOT}" worktree list --porcelain 2>/dev/null || true)
-if [[ -n "${main_checkout}" ]] && main_checkout="$(cd "${main_checkout}" 2>/dev/null && pwd -P)" \
-    && [[ "${PROJECT_ROOT}/" == "${main_checkout%/}/"* ]]; then
-  checkout_configs+=("${main_checkout}/mise.toml")
-fi
-for config in "${checkout_configs[@]}"; do
-  # The list is colon-delimited: such a path would split into a wrong entry and trust an unrelated prefix.
-  if [[ -f "${config}" && "${config}" == *:* ]]; then
-    echo "[openapi-live] ERROR: ${config} contains ':', which MISE_TRUSTED_CONFIG_PATHS cannot hold;" \
-      "move the checkout to a path without ':'." >&2
-    exit 2
-  fi
-  if [[ -f "${config}" && ":${mise_trusted_config_paths}:" != *":${config}:"* ]]; then
-    mise_trusted_config_paths="${mise_trusted_config_paths:+${mise_trusted_config_paths}:}${config}"
-  fi
-done
-if [[ -z "${mise_data_dir}" && -d "${HOME:-}/.local/share/mise" ]]; then
-  mise_data_dir="${HOME:-}/.local/share/mise"
-fi
+# shellcheck source=scripts/lib/mise-path.sh
+source "${PROJECT_ROOT}/scripts/lib/mise-path.sh" \
+  || { echo "[openapi-live] ERROR: cannot load ${PROJECT_ROOT}/scripts/lib/mise-path.sh — copy scripts/lib/ along with this script." >&2; exit 2; }
+xe_mise_scratch_home_env "${PROJECT_ROOT}" || { echo "[openapi-live] ERROR: ${XE_MISE_ERROR}" >&2; exit 2; }
 
 # A Release host defaults to Production, and Program maps the OpenAPI document only when !IsProduction(), so
 # without this the spec fetch below answers 404 on every path and reads as total contract loss.
@@ -169,11 +136,11 @@ host_env=(
   "XE_LAUNCH_MODE=desktop"
   "FirstRunModel__Enabled=false"
 )
-if [[ -n "${mise_trusted_config_paths}" ]]; then
-  host_env+=("MISE_TRUSTED_CONFIG_PATHS=${mise_trusted_config_paths}")
+if [[ -n "${XE_MISE_TRUSTED_CONFIG_PATHS}" ]]; then
+  host_env+=("MISE_TRUSTED_CONFIG_PATHS=${XE_MISE_TRUSTED_CONFIG_PATHS}")
 fi
-if [[ -n "${mise_data_dir}" ]]; then
-  host_env+=("MISE_DATA_DIR=${mise_data_dir}")
+if [[ -n "${XE_MISE_DATA_DIR}" ]]; then
+  host_env+=("MISE_DATA_DIR=${XE_MISE_DATA_DIR}")
 fi
 
 echo "[openapi-live] Starting an isolated desktop backend (Release, --no-build)."

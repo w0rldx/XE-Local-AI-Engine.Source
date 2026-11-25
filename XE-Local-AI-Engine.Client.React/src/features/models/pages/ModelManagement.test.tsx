@@ -10,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // DownloadProgressPanel which mounts that hook; without this the real HubConnectionBuilder throws in jsdom. The
 // connection is an inert stub (start/stop resolve, on/off no-op) — these tests assert REST-driven download behavior, not
 // live pushes, so no handler needs to be captured here.
-vi.mock("@microsoft/signalr", () => ({
+vi.mock("@microsoft/signalr", async () => ({
+	...(await vi.importActual("@microsoft/signalr")),
 	HubConnectionBuilder: vi.fn(function HubConnectionBuilder() {
 		const builder = {
 			withUrl: vi.fn(() => builder),

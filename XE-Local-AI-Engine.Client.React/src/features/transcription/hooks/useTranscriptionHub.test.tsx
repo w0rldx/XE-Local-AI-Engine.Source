@@ -49,7 +49,7 @@ const invokeSpy = vi.fn((name: string, ...args: unknown[]): Promise<unknown> => 
 
 // Mock the SignalR client exactly as useImageJobHub.test.tsx does, plus a captured `onreconnected` and an `invoke`
 // that answers `SubscribeSession` with a scripted snapshot so the hook's seeding and drain paths are exercised.
-vi.mock("@microsoft/signalr", () => {
+vi.mock("@microsoft/signalr", async () => {
 	class FakeBuilder {
 		withUrl() {
 			return this;
@@ -82,6 +82,7 @@ vi.mock("@microsoft/signalr", () => {
 		}
 	}
 	return {
+		...(await vi.importActual("@microsoft/signalr")),
 		HubConnectionBuilder: FakeBuilder,
 		HubConnectionState: { Connected: "Connected", Disconnected: "Disconnected" },
 		LogLevel: { Warning: 3 },

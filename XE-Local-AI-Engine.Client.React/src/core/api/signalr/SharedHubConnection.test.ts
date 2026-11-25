@@ -24,11 +24,16 @@ interface FakeConnection {
 	resolveStart: () => void;
 }
 
+type WithUrlOptions = { accessTokenFactory?: () => Promise<string> } & Partial<
+	typeof import("@/core/api/signalr/HubBearerTransport").hubBearerTransportOptions
+>;
+
 const hoisted = vi.hoisted(() => {
 	const builtConnections: FakeConnection[] = [];
-	let lastWithUrl: { url: string; options: { accessTokenFactory?: () => Promise<string> } } | undefined;
+	let lastWithUrl: { url: string; options: WithUrlOptions } | undefined;
 
 	let rejectFirstStart: Error | undefined;
+	let lastLogLevel: unknown;
 
 	const makeConnection = (): FakeConnection => {
 		let resolveStart!: () => void;
@@ -77,22 +82,28 @@ const hoisted = vi.hoisted(() => {
 			rejectFirstStart = error;
 		},
 		getLastWithUrl: () => lastWithUrl,
-		setLastWithUrl: (value: { url: string; options: { accessTokenFactory?: () => Promise<string> } }) => {
+		getLastLogLevel: () => lastLogLevel,
+		setLastLogLevel: (level: unknown) => {
+			lastLogLevel = level;
+		},
+		setLastWithUrl: (value: { url: string; options: WithUrlOptions }) => {
 			lastWithUrl = value;
 		},
 	};
 });
 
-vi.mock("@microsoft/signalr", () => ({
+vi.mock("@microsoft/signalr", async () => ({
+	...(await vi.importActual("@microsoft/signalr")),
 	HubConnectionBuilder: class HubConnectionBuilder {
-		withUrl(url: string, options: { accessTokenFactory?: () => Promise<string> }) {
+		withUrl(url: string, options: WithUrlOptions) {
 			hoisted.setLastWithUrl({ url, options });
 			return this;
 		}
 		withAutomaticReconnect() {
 			return this;
 		}
-		configureLogging() {
+		configureLogging(level: unknown) {
+			hoisted.setLastLogLevel(level);
 			return this;
 		}
 		build() {
@@ -133,6 +144,9 @@ vi.mock("@/core/auth/stores/NodeAuthStore", () => ({
 const refreshNodeAuthToken = vi.hoisted(() => vi.fn());
 vi.mock("@/core/auth/api/NodeAuthApi", () => ({ refreshNodeAuthToken }));
 
+import { LogLevel } from "@microsoft/signalr";
+
+import { hubBearerTransportOptions } from "@/core/api/signalr/HubBearerTransport";
 import {
 	acquireHubConnection,
 	hasDegradedHub,
@@ -184,6 +198,16 @@ describe("acquireHubConnection", () => {
 		expect(withUrl?.url).toContain("test/hub");
 		await expect(withUrl?.options.accessTokenFactory?.()).resolves.toBe("test-token");
 		expect(refreshNodeAuthToken).not.toHaveBeenCalled();
+	});
+
+	it("sends the token as a WebSocket subprotocol over WebSockets or long polling and logs nothing below Warning", () => {
+		acquireHubConnection(HUB);
+
+		const options = hoisted.getLastWithUrl()?.options;
+		expect(options?.transport).toBe(hubBearerTransportOptions.transport);
+		expect(options?.WebSocket).toBe(hubBearerTransportOptions.WebSocket);
+		// Information would print the socket URL with the token (SignalR's "WebSocket connected to" line).
+		expect(hoisted.getLastLogLevel()).toBe(LogLevel.Warning);
 	});
 
 	it("token factory refreshes an expired store token before the negotiate", async () => {

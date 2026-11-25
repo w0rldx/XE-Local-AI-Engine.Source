@@ -10,12 +10,11 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
     public required TestServerWebAppFactory Factory { get; init; }
 
-    // The hub connection path itself. The JwtBearer OnMessageReceived handler only reads the
-    // access_token query parameter for request paths ending in "/hub" (see ConfigureServices).
+    // The hub transport endpoint. NodeJwtBearerEvents reads a token there only from the bearer subprotocol of a genuine
+    // WebSocket upgrade, never from the access_token query.
     private const string HubRoute = "/api/local/v1/chat/hub";
 
-    // SignalR exposes the negotiate handshake at <hub-route>/negotiate. The negotiate path does
-    // NOT end in "/hub", so it authenticates via the standard Bearer header, not access_token.
+    // SignalR exposes the negotiate handshake at <hub-route>/negotiate, which authenticates only by the Bearer header.
     private const string HubNegotiateRoute = "/api/local/v1/chat/hub/negotiate";
 
     [Test]
@@ -56,7 +55,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
     }
 
     [Test]
-    public async Task HubConnect_WhenAccessTokenSuppliedViaQueryString_PassesAuthorization()
+    public async Task HubConnect_WhenAccessTokenSuppliedViaQueryString_IsUnauthorized()
     {
         var factory = Factory;
         using var client = factory.CreateClient();
@@ -67,8 +66,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
         using var request = new HttpRequestMessage(HttpMethod.Get, route);
         using var response = await client.SendAsync(request);
 
-        // The access_token query token passes JwtBearer authorization. SignalR then rejects the
-        // non-WebSocket GET at the transport layer, which must never surface as 401 Unauthorized.
-        AssertEx.NotEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+        // A query token authenticates nothing: it is the URL every failed socket line would print.
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }

@@ -75,13 +75,14 @@ revoke **every** session of the user. The desktop command overlay shares the mai
 carry the same `sid`; on show it reloads when the main window is on the sign-in page. `NodeAuthSessionTests` pins
 these paths.
 
-Open hub connections follow the same sign-outs. A WebSocket hub token is validated only at the handshake, so the
-global hub filter `NodeSignOutHubFilter` registers every connection (user, `sid`) in `NodeHubConnectionRegistry` and
+Open hub connections follow the same sign-outs. A WebSocket hub token arrives in the upgrade's
+`Sec-WebSocket-Protocol: xe.bearer, <jwt>` (never in the URL) and is validated, `TokenValidated` included, only at the
+handshake, so the global hub filter `NodeSignOutHubFilter` registers every connection (user, `sid`) in `NodeHubConnectionRegistry` and
 re-runs `NodeSecurityStampCheck.FindRevocationAsync` (the JWT events' own check) on every invocation, streaming ones
 included. After the revoking write commits, `NodeAuthService` aborts the ended session's connections (logout, session
 revoke) or all of the user's, sid-less ones included (sign out everywhere, password change, reset) through
 `INodeLiveConnectionRevoker`. Token expiry alone never closes a connection, so a long chat stream outlives its access
-token. `NodeHubSignOutTests` pins these paths over a real WebSocket.
+token. `NodeHubSignOutTests` pins these paths over a real WebSocket on that subprotocol path.
 
 A non-browser loopback client (the `xe` terminal client) uses **body mode** instead of the cookie: `auth/login` with
 `returnRefreshToken: true` returns `refreshToken` and `refreshTokenExpiresAtUtc` in the body and writes no cookie, and

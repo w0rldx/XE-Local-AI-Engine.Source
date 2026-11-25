@@ -37,7 +37,8 @@ const signalRMock = vi.hoisted(() => {
 
 const refreshMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@microsoft/signalr", () => ({
+vi.mock("@microsoft/signalr", async () => ({
+	...(await vi.importActual("@microsoft/signalr")),
 	HubConnectionBuilder: vi.fn(function HubConnectionBuilder() {
 		return signalRMock.builder;
 	}),
@@ -107,6 +108,23 @@ describe("nodeChatConnection", () => {
 		expect(signalRMock.connection.onreconnecting).toHaveBeenCalled();
 		expect(signalRMock.connection.onreconnected).toHaveBeenCalled();
 		expect(signalRMock.connection.onclose).toHaveBeenCalled();
+	});
+
+	it("sends the token as a WebSocket subprotocol over WebSockets or long polling and logs nothing below Warning", async () => {
+		const { nodeChatConnection } = await loadModules();
+		const { hubBearerTransportOptions } = await import("@/core/api/signalr/HubBearerTransport");
+		const { LogLevel } = await import("@microsoft/signalr");
+		signalRMock.connection.start.mockImplementation(async () => {
+			signalRMock.connection.state = "Connected";
+		});
+
+		await nodeChatConnection.ensureConnection();
+		const options = signalRMock.builder.withUrl.mock.calls[0]?.[1] as Partial<typeof hubBearerTransportOptions>;
+
+		expect(options.transport).toBe(hubBearerTransportOptions.transport);
+		expect(options.WebSocket).toBe(hubBearerTransportOptions.WebSocket);
+		// Information would print the socket URL with the token (SignalR's "WebSocket connected to" line).
+		expect(signalRMock.builder.configureLogging).toHaveBeenCalledWith(LogLevel.Warning);
 	});
 
 	it("uses an existing valid token without refreshing", async () => {

@@ -1,5 +1,6 @@
 import { type HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from "@microsoft/signalr";
 
+import { hubBearerTransportOptions } from "@/core/api/signalr/HubBearerTransport";
 import { markHubConnectionLost, resolveHubAccessToken } from "@/core/api/signalr/ResolveHubAccessToken";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { diagnosticsSignalrHeaders } from "@/core/diagnostics/collectors/Network.signalr";
@@ -90,8 +91,10 @@ class NodeChatConnectionManager {
 				// FE-generated W3C trace header for the SignalR transport — merged with the
 				// existing accessTokenFactory + autoReconnect, never replacing them.
 				headers: diagnosticsSignalrHeaders(hubUrl),
+				...hubBearerTransportOptions,
 			})
 			.withAutomaticReconnect(reconnectDelaysMs)
+			// Never below Warning: SignalR logs the socket URL, token included, at Information.
 			.configureLogging(LogLevel.Warning)
 			.build();
 

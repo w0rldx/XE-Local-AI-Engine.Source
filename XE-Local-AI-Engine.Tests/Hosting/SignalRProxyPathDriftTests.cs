@@ -53,7 +53,7 @@ public sealed class SignalRProxyPathDriftTests
     {
         var source = await File.ReadAllTextAsync(RepositoryPaths.Combine("XE-Local-AI-Engine.Client", "Program.cs"));
         var matches = Regex.Matches(source,
-            @"MapHub<\w+>\(\s*LocalApiRoutes\.(?<path>[A-Za-z0-9_.]+)\s*\)",
+            @"MapHub<\w+>\(\s*LocalApiRoutes\.(?<path>[A-Za-z0-9_.]+)\s*(?:,\s*ConfigureHubTransport\s*)?\)",
             RegexOptions.ExplicitCapture,
             RegexTimeout);
 

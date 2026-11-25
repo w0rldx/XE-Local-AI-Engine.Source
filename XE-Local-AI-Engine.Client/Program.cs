@@ -97,12 +97,14 @@ return Environment.ExitCode;
 namespace XE_Local_AI_Engine.Client
 {
     using System.Diagnostics.CodeAnalysis;
+    using Microsoft.AspNetCore.Http.Connections;
     using Serilog;
     using XE_Local_AI_Engine.Client.Endpoints.Common;
     using XE_Local_AI_Engine.Client.Hosting;
     using XE_Local_AI_Engine.Client.Hosting.Pipeline;
     using XE_Local_AI_Engine.Client.Hubs;
     using XE_Local_AI_Engine.Client.Middleware;
+    using XE_Local_AI_Engine.Client.Security;
     using XE_Local_AI_Engine.Client.Services.Auth;
     using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 
@@ -257,6 +259,9 @@ namespace XE_Local_AI_Engine.Client
 
             // Wrong verbs and bodies on the MCP endpoint answer 405/415 here, before authentication, instead of the JWT fallback's 401.
             app.UseMcpEndpointMethodGuard(new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Mcp.ServerEndpoint}"));
+            // Before authentication so NodeJwtBearerEvents can tell a genuine WebSocket upgrade from a long poll, send or DELETE on
+            // the same hub endpoint; MapConnections' own UseWebSockets then finds the feature and adds nothing.
+            app.UseWebSockets();
             app.UseAuthentication();
             app.UseAuthorization();
 
@@ -273,53 +278,61 @@ namespace XE_Local_AI_Engine.Client
         /// </summary>
         private static void MapNodeHubs(WebApplication app, bool isDevelopmentModeEnabled)
         {
-            app.MapHub<LocalChatHub>(LocalApiRoutes.LocalChat.Hub)
+            app.MapHub<LocalChatHub>(LocalApiRoutes.LocalChat.Hub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<SchedulerHub>(LocalApiRoutes.Scheduler.Hub)
+            app.MapHub<SchedulerHub>(LocalApiRoutes.Scheduler.Hub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<BenchmarkRunHub>(LocalApiRoutes.Benchmarks.Hub)
+            app.MapHub<BenchmarkRunHub>(LocalApiRoutes.Benchmarks.Hub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<DatasetGenerationHub>(LocalApiRoutes.Training.DatasetGenerationHub)
+            app.MapHub<DatasetGenerationHub>(LocalApiRoutes.Training.DatasetGenerationHub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<TrainingRuntimeHub>(LocalApiRoutes.Training.RuntimeHub)
+            app.MapHub<TrainingRuntimeHub>(LocalApiRoutes.Training.RuntimeHub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<TrainingRunHub>(LocalApiRoutes.Training.RunHub)
+            app.MapHub<TrainingRunHub>(LocalApiRoutes.Training.RunHub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<GgufDownloadHub>(LocalApiRoutes.ModelFit.DownloadHub)
+            app.MapHub<GgufDownloadHub>(LocalApiRoutes.ModelFit.DownloadHub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<LlamaCppSourceBuildHub>(LocalApiRoutes.ModelFit.SourceBuildHub)
+            app.MapHub<LlamaCppSourceBuildHub>(LocalApiRoutes.ModelFit.SourceBuildHub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<RuntimeAcquisitionHub>(LocalApiRoutes.ModelFit.LlamaCppAcquisitionHub)
+            app.MapHub<RuntimeAcquisitionHub>(LocalApiRoutes.ModelFit.LlamaCppAcquisitionHub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<RuntimeResidencyHub>(LocalApiRoutes.ModelFit.ResidencyHub)
+            app.MapHub<RuntimeResidencyHub>(LocalApiRoutes.ModelFit.ResidencyHub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<KnowledgeBaseHub>(LocalApiRoutes.KnowledgeBase.Hub)
+            app.MapHub<KnowledgeBaseHub>(LocalApiRoutes.KnowledgeBase.Hub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<ImageJobHub>(LocalApiRoutes.Images.Hub)
+            app.MapHub<ImageJobHub>(LocalApiRoutes.Images.Hub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<StableDiffusionCppSourceBuildHub>(LocalApiRoutes.Images.RuntimeSourceBuildHub)
+            app.MapHub<StableDiffusionCppSourceBuildHub>(LocalApiRoutes.Images.RuntimeSourceBuildHub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<WorkSessionHub>(LocalApiRoutes.WorkSessions.Hub)
+            app.MapHub<WorkSessionHub>(LocalApiRoutes.WorkSessions.Hub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<TranscriptionHub>(LocalApiRoutes.Transcription.Hub)
+            app.MapHub<TranscriptionHub>(LocalApiRoutes.Transcription.Hub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
             // Mapped unconditionally, like the work-session hub: the GraphWorkflows switch is enforced by FeatureSwitchMiddleware
             // above, which answers 404 for the whole prefix — this path included.
-            app.MapHub<GraphWorkflowRunHub>(LocalApiRoutes.GraphWorkflows.Hub)
+            app.MapHub<GraphWorkflowRunHub>(LocalApiRoutes.GraphWorkflows.Hub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
             // And for external apps: the ExternalApps switch is enforced by FeatureSwitchMiddleware above, which
             // answers 404 for the whole prefix — this path and its negotiate included.
-            app.MapHub<ExternalAppHub>(LocalApiRoutes.ExternalApps.Hub)
+            app.MapHub<ExternalAppHub>(LocalApiRoutes.ExternalApps.Hub, ConfigureHubTransport)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
             // Development's hub follows the startup value, like its endpoints and services; a stored change applies after a restart.
             if (isDevelopmentModeEnabled)
             {
-                app.MapHub<DevelopmentAttemptHub>(LocalApiRoutes.Development.Hub)
+                app.MapHub<DevelopmentAttemptHub>(LocalApiRoutes.Development.Hub, ConfigureHubTransport)
                    .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             }
+        }
+
+        /// <summary>Echoes the SPA's bearer subprotocol; browsers fail a socket whose offered protocol is not echoed.</summary>
+        private static void ConfigureHubTransport(HttpConnectionDispatcherOptions options)
+        {
+            // The delegate is declared to return string, but the transport treats null as "no subprotocol". string.Empty is not
+            // an alternative: WebSocketCreationOptions rejects it after the 101 and kills every header client's socket.
+            options.WebSockets.SubProtocolSelector = static requested => NodeJwtBearerEvents.SelectHubSubProtocol(requested)!;
         }
 
         /// <summary>

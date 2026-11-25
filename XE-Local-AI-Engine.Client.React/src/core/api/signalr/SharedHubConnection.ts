@@ -1,5 +1,6 @@
 import { type HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from "@microsoft/signalr";
 
+import { hubBearerTransportOptions } from "@/core/api/signalr/HubBearerTransport";
 import { markHubConnectionLost, resolveHubAccessToken } from "@/core/api/signalr/ResolveHubAccessToken";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 
@@ -143,10 +144,11 @@ export function hasDegradedHub(): boolean {
 function buildEntry(hubPath: string): HubEntry {
 	const connection = new HubConnectionBuilder()
 		.withUrl(buildLocalApiUrl(hubPath), {
-			// Never log the returned token; it can end up in WS query strings.
 			accessTokenFactory: () => resolveHubAccessToken(),
+			...hubBearerTransportOptions,
 		})
 		.withAutomaticReconnect()
+		// Never below Warning: SignalR logs the socket URL, token included, at Information.
 		.configureLogging(LogLevel.Warning)
 		.build();
 

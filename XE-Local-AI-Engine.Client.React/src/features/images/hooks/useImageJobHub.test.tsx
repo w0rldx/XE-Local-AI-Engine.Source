@@ -18,7 +18,7 @@ let connectionState = "Disconnected";
 
 // Mock the SignalR client: `on` captures handlers, `start` flips to Connected, `invoke` is spied, and `state`/
 // `onreconnected` model the connect lifecycle the subscribe logic guards on.
-vi.mock("@microsoft/signalr", () => {
+vi.mock("@microsoft/signalr", async () => {
 	class FakeBuilder {
 		withUrl() {
 			return this;
@@ -49,6 +49,7 @@ vi.mock("@microsoft/signalr", () => {
 		}
 	}
 	return {
+		...(await vi.importActual("@microsoft/signalr")),
 		HubConnectionBuilder: FakeBuilder,
 		HubConnectionState: { Connected: "Connected", Disconnected: "Disconnected" },
 		LogLevel: { Warning: 3 },

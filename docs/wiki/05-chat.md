@@ -1034,7 +1034,7 @@ chats match only with `includeArchived`. Titles and content are ciphertext at re
   warning and `chat_search_indexed_chars_over_threshold` reads 1; it keeps indexing, since a cap would make search miss
   stored text. Dropping back below sets the metric to 0 and re-arms the warning for the next crossing.
 - **Logs.** The search text travels in the `query` query parameter, so the request log redacts that parameter like
-  `access_token` (`SensitiveQueryRedactor`); the ASP.NET Core tracing instrumentation already replaces every query
+  an old client's `access_token` (`SensitiveQueryRedactor`); the ASP.NET Core tracing instrumentation already replaces every query
   value in `url.query` with `Redacted` by default.
 
 The sidebar search box (`ConversationList`) debounces the query (`useConversationContentSearch`) and shows the

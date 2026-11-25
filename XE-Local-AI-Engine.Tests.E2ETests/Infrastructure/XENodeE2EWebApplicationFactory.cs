@@ -236,7 +236,12 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         var settingsStore = scope.ServiceProvider.GetRequiredService<INodeSettingsStore>();
         _ = await settingsStore.UpdateAsync(settings => settings with
         {
-            UiMode = StoredNodeSettings.UiModeAdvanced
+            UiMode = StoredNodeSettings.UiModeAdvanced,
+            // An undecided profile sends every page to /external-access; offline is the preset that downloads nothing.
+            ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline,
+            AutoCheckApplicationUpdates = false,
+            AutoCheckRuntimeUpdates = false,
+            AutoProvisionFirstRunModel = false
         });
     }
 

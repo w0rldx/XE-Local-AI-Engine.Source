@@ -426,7 +426,7 @@ def link_or_copy(source: Path, target: Path) -> str:
 
 def command_model_link(args: argparse.Namespace) -> int:
     """The node rejects a models dir of symlinks (sidecar check): members are hard links, or copies across devices."""
-    source_dir, target_dir = Path(args.source), Path(args.into)
+    source_dir, target_dir = Path(args.source), Path(args.into).absolute()
     try:
         models = json.loads((source_dir / "index.json").read_text(encoding="utf-8")).get("Models") or []
     except FileNotFoundError as error:
@@ -436,9 +436,14 @@ def command_model_link(args: argparse.Namespace) -> int:
     entry = next((m for m in models if isinstance(m, dict) and m.get("ModelName") == args.model), None)
     if entry is None:
         raise NotInSourceError(f"{source_dir}/index.json has no entry named {args.model}")
-    members = [
-        (key, Path(entry[key]), entry.get(size), entry.get(sha)) for key, size, sha in LINK_MEMBERS if entry.get(key)
-    ]
+    members = []
+    for key, size, sha in LINK_MEMBERS:
+        if entry.get(key):
+            path = Path(entry[key])
+            # A relative path was recorded against that node's cwd; members sit directly in the models dir.
+            members.append(
+                (key, path if path.is_absolute() else source_dir / path.name, entry.get(size), entry.get(sha))
+            )
     for key, path, _, _ in members:
         if not path.is_file():
             raise NotInSourceError(f"{args.model}: {key} {path} is missing from the source")
