@@ -94,6 +94,9 @@ internal sealed class FakeGraphWorkflowInvocation : IInvocationRunner
     private readonly ConcurrentQueue<Guid> _cancelled = new();
     private readonly ConcurrentQueue<RuntimePackage> _packages = new();
 
+    /// <summary>What <see cref="ReleaseAll" /> completes; every parked turn also waits on it.</summary>
+    private readonly TaskCompletionSource _releasedAll = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     /// <summary>
     ///     Resolved LAZILY, and it has to be: the real <c>WorkerEventDispatcher</c> takes an
     ///     <see cref="IInvocationRunner" /> of its own, so a fake that asked for the dispatcher in its constructor
@@ -147,6 +150,20 @@ internal sealed class FakeGraphWorkflowInvocation : IInvocationRunner
         var package = context.Package;
         _packages.Enqueue(package);
         var turn = ScriptFor(package);
+        var parks = turn.Outcome is GraphWorkflowTurnOutcome.Parks or GraphWorkflowTurnOutcome.Wedges;
+        var parked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Registered BEFORE the started signal, so a stop or release sent on seeing it always finds this turn.
+        if (parks)
+        {
+            if (turn.Outcome == GraphWorkflowTurnOutcome.Wedges)
+            {
+                _wedged.Add(package.InvocationId);
+            }
+
+            _parked[package.InvocationId] = parked;
+        }
+
         foreach (var fragment in _scripts.Keys.Where(fragment => Prompt(package).Contains(fragment, StringComparison.Ordinal)))
         {
             _ = Started(fragment).TrySetResult();
@@ -154,20 +171,17 @@ internal sealed class FakeGraphWorkflowInvocation : IInvocationRunner
 
         _ = Started(package.InvocationId.ToString()).TrySetResult();
 
-        if (turn.Outcome is GraphWorkflowTurnOutcome.Parks or GraphWorkflowTurnOutcome.Wedges)
+        if (parks)
         {
-            var parked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            _parked[package.InvocationId] = parked;
             if (turn.Outcome == GraphWorkflowTurnOutcome.Wedges)
             {
-                _wedged.Add(package.InvocationId);
-                await parked.Task;
+                _ = await Task.WhenAny(parked.Task, _releasedAll.Task);
             }
             else
             {
                 using (cancellationToken.Register(() => parked.TrySetResult()))
                 {
-                    await parked.Task;
+                    _ = await Task.WhenAny(parked.Task, _releasedAll.Task);
                 }
             }
 
@@ -245,14 +259,12 @@ internal sealed class FakeGraphWorkflowInvocation : IInvocationRunner
         }
     }
 
-    /// <summary>Ends every turn still in flight, so a host teardown never waits on one that ignores its token.</summary>
-    public void ReleaseAll()
-    {
-        foreach (var parked in _parked.Values)
-        {
-            _ = parked.TrySetResult();
-        }
-    }
+    /// <summary>
+    ///     Ends every turn still in flight AND every later one, so a host teardown never waits on one that ignores its
+    ///     token, even one that parked after the release.
+    /// </summary>
+    public void ReleaseAll() =>
+        _ = _releasedAll.TrySetResult();
 
     public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();

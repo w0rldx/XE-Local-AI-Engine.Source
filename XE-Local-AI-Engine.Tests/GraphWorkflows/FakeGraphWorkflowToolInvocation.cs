@@ -70,8 +70,10 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
 
     private readonly ManualResetEventSlim _unblocked = new(initialState: false);
 
+    /// <summary>Sticky like <see cref="_unblocked" />, so a release that lands before a call parks is never lost.</summary>
+    private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     private readonly ConcurrentQueue<GraphWorkflowToolCall> _calls = new();
-    private readonly ConcurrentBag<TaskCompletionSource> _parked = [];
     private readonly ConcurrentDictionary<string, GraphWorkflowScriptedTool> _scripts = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, TaskCompletionSource> _started = new(StringComparer.Ordinal);
     private int _open;
@@ -115,10 +117,7 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
     {
         _ = Interlocked.Exchange(ref _open, value: 1);
         _unblocked.Set();
-        foreach (var parked in _parked)
-        {
-            _ = parked.TrySetResult();
-        }
+        _ = _released.TrySetResult();
     }
 
     public void Dispose() =>
@@ -161,13 +160,12 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
             };
         }
 
-        if (script.Parks && Volatile.Read(ref _open) == 0)
+        if (script.Parks && !_released.Task.IsCompleted)
         {
-            var parked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            _parked.Add(parked);
-            using (cancellationToken.Register(() => parked.TrySetResult()))
+            var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using (cancellationToken.Register(() => cancelled.TrySetResult()))
             {
-                await parked.Task;
+                _ = await Task.WhenAny(_released.Task, cancelled.Task);
             }
 
             if (cancellationToken.IsCancellationRequested)
