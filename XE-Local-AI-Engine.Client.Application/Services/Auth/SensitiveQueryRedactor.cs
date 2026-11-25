@@ -1,15 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Redacts the values of the query parameters that must never reach a log: <c>access_token</c> (a JWT an old
-///     client's SignalR URL may still carry) and <c>query</c> (the conversation search text, plaintext of encrypted
-///     chats).
+///     Redacts the query parameter values that must never reach a log: <c>access_token</c> (a JWT an old client may
+///     send), <c>id</c> (the hub connection token) and <c>query</c> (conversation search text).
 /// </summary>
 public static class SensitiveQueryRedactor
 {
     private const string RedactedValue = "[REDACTED]";
 
-    private static readonly string[] SensitiveParameters = ["access_token", "query"];
+    private static readonly string[] SensitiveParameters = ["access_token", "id", "query"];
 
     public static string Redact(string? queryString)
     {

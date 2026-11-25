@@ -140,6 +140,7 @@ public sealed class SerilogProviderForwardingTests : IDisposable
     public void AddServices_RedactsTheAccessTokenInHostingDiagnosticsRequestLines()
     {
         const string Token = "eyJhbGciOiJIUzI1NiJ9.secret-jwt-body.signature";
+        const string ConnectionToken = "hub-connection-token-7f3a";
         var sink = new CapturingSink();
         var forwarded = new List<string>();
         var builder = CreateBuilder();
@@ -155,7 +156,7 @@ public sealed class SerilogProviderForwardingTests : IDisposable
         // Warning, not the framework's Information, only so the configured minimum level cannot drop the probe.
 #pragma warning disable CA2254 // The framework's exact template is the point of the probe.
         hostingDiagnostics.LogWarning("Request finished {Protocol} {Method} {Scheme}://{Host}{PathBase}{Path}{QueryString} - {StatusCode} {ContentLength} {ContentType} {ElapsedMilliseconds}ms",
-            "HTTP/1.1", "GET", "http", "127.0.0.1:5000", "", "/api/local/v1/hubs/local-chat", $"?id=abc&access_token={Token}",
+            "HTTP/1.1", "GET", "http", "127.0.0.1:5000", "", "/api/local/v1/hubs/local-chat", $"?id={ConnectionToken}&access_token={Token}",
             101, null, null, 1.5);
 #pragma warning restore CA2254
 
@@ -166,6 +167,8 @@ public sealed class SerilogProviderForwardingTests : IDisposable
         AssertEx.True(forwarded.Any(line => line.Contains("access_token=[REDACTED]", StringComparison.Ordinal)),
             "The provider copy (the OTLP path) carries the redacted line.");
         AssertEx.False(forwarded.Any(line => line.Contains(Token, StringComparison.Ordinal)), "No forwarded provider may receive the JWT.");
+        AssertEx.False(rendered.Concat(forwarded).Any(line => line.Contains(ConnectionToken, StringComparison.Ordinal)),
+            "No sink or forwarded provider may receive the hub connection token.");
     }
 
     private WebApplicationBuilder CreateBuilder()

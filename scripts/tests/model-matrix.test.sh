@@ -243,7 +243,8 @@ done
 NODE_URL="http://127.0.0.1:$(cat "${TEMP_ROOT}/node.port" 2>/dev/null)"
 
 # A llama-server serving the same model file that this checkout's node did not spawn (another checkout's, say).
-(exec -a "${TEMP_ROOT}/llama-server" python3 -c 'import time; time.sleep(600)' -m "${TEMP_ROOT}/models/org-small-q4.gguf") &
+# The resolved interpreter, not a PATH python3: a version-manager shim refuses to run under a renamed argv[0].
+(exec -a "${TEMP_ROOT}/llama-server" "$(python3 -c 'import sys; print(sys.executable)')" -c 'import time; time.sleep(600)' -m "${TEMP_ROOT}/models/org-small-q4.gguf") &
 FOREIGN_PID=$!
 
 run_driver() {

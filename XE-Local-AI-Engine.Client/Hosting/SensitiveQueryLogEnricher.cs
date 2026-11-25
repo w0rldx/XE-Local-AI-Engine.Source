@@ -5,8 +5,8 @@ using Serilog.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Redacts <c>access_token</c> and <c>query</c> in every log event's <c>QueryString</c> property, so neither the
-///     SignalR JWT nor a conversation search text a browser sends in the query reaches a sink.
+///     Redacts <c>access_token</c>, <c>id</c> and <c>query</c> in every log event's <c>QueryString</c> property, so no
+///     SignalR JWT, hub connection token or conversation search text from a query reaches a sink.
 /// </summary>
 /// <remarks>
 ///     The framework's <c>Microsoft.AspNetCore.Hosting.Diagnostics</c> "Request starting" and "Request finished" events
