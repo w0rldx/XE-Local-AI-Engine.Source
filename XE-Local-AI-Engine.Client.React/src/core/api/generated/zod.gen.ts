@@ -4922,6 +4922,21 @@ export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabLensResponse = z.o
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundOutcomeResponse = z.object({
+	kind: z.string(),
+	atStep: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	updatesApplied: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunRouteRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokenResponse = z.object({
 	id: z
 		.int()
@@ -7850,6 +7865,81 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabLensSummary = z.objec
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPlaygroundDataset = z.enum(["xor", "spirals"]);
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundConfigResponse = z.object({
+	dataset: zXeLocalAiEngineClientServicesModelLabModelLabPlaygroundDataset,
+	learningRate: z.number(),
+	residual: z.boolean(),
+	sharedBlock: z.boolean(),
+	depth: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	hidden: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	steps: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	seed: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunResponse = z.object({
+	id: z.guid(),
+	template: z.string(),
+	config: zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundConfigResponse,
+	outcome: zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundOutcomeResponse,
+	finalLoss: z.number().nullable(),
+	finalAccuracy: z.number().nullable(),
+	traceByteCount: z.int(),
+	createdAtUtc: z.iso.datetime({ offset: true }),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunDetailResponse = z.object({
+	run: zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunResponse,
+	trace: z.unknown(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunListResponse = z.object({
+	platformSupported: z.boolean(),
+	unsupportedMessage: z.string().nullable(),
+	maxRetainedRuns: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	runs: z.array(zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1StartModelLabPlaygroundRunRequest = z.object({
+	dataset: zXeLocalAiEngineClientServicesModelLabModelLabPlaygroundDataset,
+	learningRate: z.number().gte(0.0001).lte(10),
+	residual: z.boolean(),
+	sharedBlock: z.boolean(),
+	depth: z.int().gte(1).lte(4),
+	hidden: z.int().gte(2).lte(16),
+	steps: z.int().gte(1).lte(2000),
+	seed: z.int().gte(0).lte(2147483647),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPlaygroundRefusal = z.enum([
+	"UnsupportedPlatform",
+	"RuntimeUnavailable",
+	"Busy",
+	"RunFailed",
+	"TraceUnavailable",
+]);
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundBlockedResponse = z.object({
+	reason: zXeLocalAiEngineClientServicesModelLabModelLabPlaygroundRefusal,
+	message: z.string(),
 });
 
 export const zXeLocalAiEngineClientServicesModelLabModelLabPromptPiece = z.object({
@@ -13281,6 +13371,36 @@ export const zGetModelLabExperimentTracePath = z.object({
  * Success
  */
 export const zGetModelLabExperimentTraceResponse = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceResponse;
+
+/**
+ * Success
+ */
+export const zListModelLabPlaygroundRunsResponse = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunListResponse;
+
+export const zStartModelLabPlaygroundRunBody = zXeLocalAiEngineClientEndpointsModelLabV1StartModelLabPlaygroundRunRequest;
+
+/**
+ * Success
+ */
+export const zStartModelLabPlaygroundRunResponse = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunResponse;
+
+export const zDeleteModelLabPlaygroundRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteModelLabPlaygroundRunResponse = z.void();
+
+export const zGetModelLabPlaygroundRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetModelLabPlaygroundRunResponse = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunDetailResponse;
 
 export const zTokenizeModelLabPromptBody = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokensRequest;
 

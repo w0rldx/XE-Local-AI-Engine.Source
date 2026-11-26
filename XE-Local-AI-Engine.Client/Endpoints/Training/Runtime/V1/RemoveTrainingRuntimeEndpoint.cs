@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 /// </summary>
 public sealed class RemoveTrainingRuntimeEndpoint : EndpointWithoutRequest<TrainingRuntimeStatusResponse>
 {
-    private const string GpuJobRunningMessage = "A GPU job is running. Wait for it to finish, or cancel it, before removing the runtime.";
+    private const string GpuJobRunningMessage = "A job that runs from the training runtime is running. Wait for it to finish, or cancel it, before removing the runtime.";
 
     private readonly TrainingRuntimeOrchestrationService _runtime;
 

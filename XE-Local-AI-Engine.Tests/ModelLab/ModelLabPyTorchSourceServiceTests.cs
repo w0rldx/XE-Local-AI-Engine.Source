@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.ModelLab.V1;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
+using XE_Local_AI_Engine.Client.Services.Training.Runtime;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
@@ -458,6 +459,92 @@ public sealed class ModelLabPyTorchSourceServiceTests
         AssertEx.Equal(HttpStatusCode.NotFound, notFound.StatusCode);
     }
 
+    /// <summary>The source job is a registered runtime user while its script runs: an install is refused then, and admitted once the run returned, threw or was stopped.</summary>
+    [Test]
+    public async Task AnInstall_WhileASourceJobRuns_IsRefused_AndAdmittedHoweverTheRunEnds()
+    {
+        using var runtime = new FakeRuntime();
+        var script = new ScriptedSourceJob(runtime)
+        {
+            Hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+        await using var lab = await Lab.StartAsync(runtime, script);
+        AdmitsLikeTheProvider(lab.Host.Runtime);
+        var orchestration = lab.Host.Services.GetRequiredService<TrainingRuntimeOrchestrationService>();
+
+        // Returns.
+        var building = lab.Service.BuildAsync(lab.CheckpointRequest(), CancellationToken.None);
+        await script.Started.Task.WaitAsync(TestBudgets.Contended);
+        AssertEx.Equal(TrainingRuntimeInstallOutcome.GpuJobRunning, (await orchestration.InstallAsync(CancellationToken.None)).Outcome);
+        script.Hold.SetResult();
+        AssertEx.NotNull((await building.WaitAsync(TestBudgets.Contended)).Index);
+        AssertEx.Equal(TrainingRuntimeInstallOutcome.Started, (await orchestration.InstallAsync(CancellationToken.None)).Outcome);
+
+        // Throws: the scripted job breaks while it writes its result. Another config, so the cache cannot answer.
+        lab.ServeHubConfig("""{"model_type":"llama"}""");
+        script.Result = static () => throw new IOException("the scripted job broke");
+        _ = await AssertEx.ThrowsAsync<IOException>(() => lab.Service.BuildAsync(Lab.HubRequest(), CancellationToken.None));
+        AssertEx.Equal(TrainingRuntimeInstallOutcome.Started, (await orchestration.InstallAsync(CancellationToken.None)).Outcome);
+        AssertEx.Equal(expected: 2, script.SpawnCount);
+    }
+
+    /// <summary>A stopped source job gives the runtime back too: the request's cancellation is mapped to a failed build, not an index.</summary>
+    [Test]
+    public async Task AnInstall_AfterAStoppedSourceJob_IsAdmitted()
+    {
+        using var runtime = new FakeRuntime();
+        var script = new ScriptedSourceJob(runtime)
+        {
+            Hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+        await using var lab = await Lab.StartAsync(runtime, script);
+        AdmitsLikeTheProvider(lab.Host.Runtime);
+        var orchestration = lab.Host.Services.GetRequiredService<TrainingRuntimeOrchestrationService>();
+        using var stop = new CancellationTokenSource();
+
+        var building = lab.Service.BuildAsync(lab.CheckpointRequest(), stop.Token);
+        await script.Started.Task.WaitAsync(TestBudgets.Contended);
+        AssertEx.Equal(TrainingRuntimeInstallOutcome.GpuJobRunning, (await orchestration.InstallAsync(CancellationToken.None)).Outcome);
+        await stop.CancelAsync();
+        script.Hold.SetResult();
+
+        var outcome = await building.WaitAsync(TestBudgets.Contended);
+        AssertEx.Equal(ModelLabPyTorchRefusal.IndexFailed, outcome.Refusal!.Value, outcome.RefusalMessage);
+        AssertEx.Equal(TrainingRuntimeInstallOutcome.Started, (await orchestration.InstallAsync(CancellationToken.None)).Outcome);
+    }
+
+    /// <summary>The venv's versions are read again once the job is registered, so a torch change before that names the index the job really ran on.</summary>
+    [Test]
+    public async Task ATorchChange_BetweenThePreCheckAndTheEntry_FilesTheIndexUnderThePostEntryKey()
+    {
+        using var runtime = new FakeRuntime();
+        var script = new ScriptedSourceJob(runtime);
+        await using var lab = await Lab.StartAsync(runtime, script);
+        lab.ServeHubConfig(ModelLabExperimentServiceTests.LabHost.Config, beforeServing: () => runtime.SetTorchVersion("2.14.0+cpu"));
+
+        var outcome = await lab.Service.BuildAsync(Lab.HubRequest(), CancellationToken.None);
+
+        var index = AssertEx.NotNull(outcome.Index, outcome.RefusalMessage ?? "built");
+        AssertEx.True(index.IndexId.EndsWith($"-2.14.0+cpu-{ModelLabTraceSpec.ContractVersion}", StringComparison.Ordinal), index.IndexId);
+        AssertEx.Equal(index.IndexId, (await lab.Service.GetLastAsync(ModelLabExperimentServiceTests.Gguf, CancellationToken.None)).IndexId);
+    }
+
+    /// <summary>The host's runtime substitute runs the admission it is handed, as the provider does inside its start transaction.</summary>
+    internal static void AdmitsLikeTheProvider(ITrainingRuntimeService runtime)
+    {
+        _ = runtime.InstallAsync(Arg.Any<Func<CancellationToken, Task<bool>>?>(), Arg.Any<CancellationToken>())
+                   .Returns(async call => new TrainingRuntimeInstallResult
+                   {
+                       Outcome = await call.Arg<Func<CancellationToken, Task<bool>>>()(CancellationToken.None)
+                           ? TrainingRuntimeInstallOutcome.Started
+                           : TrainingRuntimeInstallOutcome.GpuJobRunning
+                   });
+        _ = runtime.RemoveAsync(Arg.Any<Func<CancellationToken, Task<bool>>?>(), Arg.Any<CancellationToken>())
+                   .Returns(async call => await call.Arg<Func<CancellationToken, Task<bool>>>()(CancellationToken.None)
+                       ? TrainingRuntimeRemoveOutcome.Removed
+                       : TrainingRuntimeRemoveOutcome.GpuJobRunning);
+    }
+
     private static TrainingRuntimeStatus Status(TrainingRuntimePhase phase) =>
         new()
         {
@@ -546,10 +633,12 @@ public sealed class ModelLabPyTorchSourceServiceTests
                 Revision = "main"
             };
 
-        public void ServeHubConfig(string config) =>
+        /// <param name="beforeServing">Runs inside the fetch: after the build's runtime pre-check, before its job is registered.</param>
+        public void ServeHubConfig(string config, Action? beforeServing = null) =>
             Host.Checkpoints.FetchConfigAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(async call =>
                 {
+                    beforeServing?.Invoke();
                     var directory = call.ArgAt<string>(2);
                     _ = Directory.CreateDirectory(directory);
                     var path = Path.Combine(directory, "config.json");

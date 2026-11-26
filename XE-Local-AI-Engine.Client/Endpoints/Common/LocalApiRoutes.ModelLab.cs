@@ -47,5 +47,10 @@ public static partial class LocalApiRoutes
 
         // The residents widget's eject for the warm worker: frees an Idle worker's checkpoint, never a running job's.
         public const string WarmEject = "model-lab/warm/eject";
+
+        // The training stepper's saved runs: GET lists them, POST trains one tiny network on the CPU inside the request and saves it.
+        public const string PlaygroundRuns = "model-lab/playground/runs";
+
+        public const string PlaygroundRun = "model-lab/playground/runs/{runId:guid}";
     }
 }

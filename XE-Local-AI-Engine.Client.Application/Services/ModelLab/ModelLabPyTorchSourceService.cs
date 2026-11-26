@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
+using XE_Local_AI_Engine.Client.Services.Training.Runtime;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
@@ -20,8 +21,8 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 /// <remarks>
 ///     The job loads no weights, so it takes no GPU gate, lease or reservation, which a loaded model would refuse. It runs in the request,
 ///     one at a time, under a two-minute watchdog. The cache key holds the config's hash and the venv's transformers and torch versions.
-///     A file is served only when listed, inside its package, with its hash. Accepted ceiling: no launch receipt, so a host that dies
-///     mid-job leaves the script to finish alone; the startup reaper still deletes its work directory.
+///     A file is served only when listed, inside its package, with its hash. A job is a registered runtime user while its script runs. Accepted
+///     ceiling: no launch receipt, so a host that dies mid-job leaves the script to finish alone; the startup reaper still deletes its work directory.
 /// </remarks>
 public sealed partial class ModelLabPyTorchSourceService
 {
@@ -29,6 +30,7 @@ public sealed partial class ModelLabPyTorchSourceService
     internal const int MaxSourceBytes = 4 * 1024 * 1024;
 
     private const string ConfigFileName = "config.json";
+    private const string NotInstalledMessage = "The Python training runtime is not installed. Install it on the Training page, then build the index again.";
     private const string TorchPrefix = "torch:";
 
     private static readonly TimeSpan MaxJobDuration = TimeSpan.FromMinutes(2);
@@ -39,6 +41,7 @@ public sealed partial class ModelLabPyTorchSourceService
     private readonly GgufInspectionService _gguf;
     private readonly ILogger<ModelLabPyTorchSourceService> _logger;
     private readonly ITrainingRuntimeService _runtime;
+    private readonly TrainingRuntimeUsers _runtimeUsers;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ModelLabScriptRunner _scripts;
 
@@ -49,6 +52,7 @@ public sealed partial class ModelLabPyTorchSourceService
         IBaseCheckpointStore checkpoints,
         GgufInspectionService gguf,
         ITrainingRuntimeService runtime,
+        TrainingRuntimeUsers runtimeUsers,
         ITrainingProcessSpawner spawner,
         ITrainingRunEventBuffer events,
         INodeDataDirectory dataDirectory,
@@ -63,6 +67,7 @@ public sealed partial class ModelLabPyTorchSourceService
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(runtimeUsers);
         ArgumentNullException.ThrowIfNull(scopeFactory);
         ArgumentNullException.ThrowIfNull(spawner);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -72,6 +77,7 @@ public sealed partial class ModelLabPyTorchSourceService
         _gguf = gguf;
         _logger = logger;
         _runtime = runtime;
+        _runtimeUsers = runtimeUsers;
         _scopeFactory = scopeFactory;
         var shared = options.Value;
         var maxDuration = shared.MaxDuration < MaxJobDuration ? shared.MaxDuration : MaxJobDuration;
@@ -83,8 +89,8 @@ public sealed partial class ModelLabPyTorchSourceService
         }, timeProvider);
     }
 
-    /// <summary>The job is Linux only, like the training runtime. A test swaps this to see the other platforms' answer.</summary>
-    internal Func<bool> PlatformProbe { get; set; } = OperatingSystem.IsLinux;
+    /// <summary>The job is Linux x64 only, like the training runtime. A test swaps this to see the other platforms' answer.</summary>
+    internal Func<bool> PlatformProbe { get; set; } = static () => TrainingScripts.IsPlatformSupported;
 
     public bool IsPlatformSupported => PlatformProbe();
 
@@ -102,13 +108,13 @@ public sealed partial class ModelLabPyTorchSourceService
         if (!IsPlatformSupported)
         {
             return Refuse(ModelLabPyTorchRefusal.UnsupportedPlatform,
-                "The PyTorch source index runs on Linux only for now, because it needs the Python training runtime, which is available on Linux only.");
+                "The PyTorch source index runs on Linux x64 only for now, because it needs the Python training runtime, which is available on Linux x64 only.");
         }
 
         var scriptPath = Path.Combine(TrainingScripts.ResolveDirectory(), TrainingScripts.ModelLabScriptName);
         if (ResolvePackagesOrNull() is not { } packages || !File.Exists(scriptPath))
         {
-            return Refuse(ModelLabPyTorchRefusal.RuntimeUnavailable, "The Python training runtime is not installed. Install it on the Training page, then build the index again.");
+            return Refuse(ModelLabPyTorchRefusal.RuntimeUnavailable, NotInstalledMessage);
         }
 
         var modelName = request.ModelName.Trim();
@@ -126,7 +132,8 @@ public sealed partial class ModelLabPyTorchSourceService
             return unusable;
         }
 
-        var indexId = IndexId(Convert.ToHexStringLower(SHA256.HashData(config.Bytes)), packages);
+        var configSha256 = Convert.ToHexStringLower(SHA256.HashData(config.Bytes));
+        var indexId = IndexId(configSha256, packages);
         var index = await ReadIndexOrNullAsync(indexId, ct);
         if (index is null)
         {
@@ -135,17 +142,26 @@ public sealed partial class ModelLabPyTorchSourceService
                 return Refuse(ModelLabPyTorchRefusal.Busy, "Another PyTorch index is being built. Try again when it has finished.");
             }
 
+            ModelLabRuntimeJob? job = null;
             try
             {
+                if (!ModelLabRuntimeJob.TryEnter(_runtimeUsers, _runtime, scriptPath, NotInstalledMessage, out job, out var refusal))
+                {
+                    return Refuse(ModelLabPyTorchRefusal.RuntimeUnavailable, refusal);
+                }
+
+                // Registered now, so the venv cannot change under the job: its versions name the index from here on.
+                if (ResolvePackagesOrNull() is not { } entered)
+                {
+                    return Refuse(ModelLabPyTorchRefusal.RuntimeUnavailable, NotInstalledMessage);
+                }
+
+                indexId = IndexId(configSha256, entered);
                 // The job that held the lock may have just built this very index.
                 index = await ReadIndexOrNullAsync(indexId, ct);
                 if (index is null)
                 {
-                    var built = await RunJobAsync(config.Bytes, packages, new ModelLabScriptRunner.ScriptCommand
-                    {
-                        Interpreter = packages.Interpreter,
-                        ScriptPath = scriptPath
-                    }, ct);
+                    var built = await RunJobAsync(config.Bytes, entered, job, ct);
                     if (built.Refusal is not null)
                     {
                         return built.Refusal;
@@ -160,6 +176,7 @@ public sealed partial class ModelLabPyTorchSourceService
             }
             finally
             {
+                job?.Dispose();
                 Volatile.Write(ref _jobRunning, 0);
             }
         }
@@ -206,7 +223,7 @@ public sealed partial class ModelLabPyTorchSourceService
         ArgumentNullException.ThrowIfNull(file);
         if (!IsPlatformSupported)
         {
-            return RefuseSource(ModelLabPyTorchRefusal.UnsupportedPlatform, "The PyTorch source index runs on Linux only for now.");
+            return RefuseSource(ModelLabPyTorchRefusal.UnsupportedPlatform, "The PyTorch source index runs on Linux x64 only for now.");
         }
 
         const string notListed = "That file is not part of this index.";
@@ -399,7 +416,8 @@ public sealed partial class ModelLabPyTorchSourceService
         return names.Count == 0 ? null : names;
     }
 
-    private async Task<JobBuild> RunJobAsync(byte[] config, RuntimePackages packages, ModelLabScriptRunner.ScriptCommand script, CancellationToken ct)
+    /// <summary>Gives <paramref name="runtimeJob" /> back as soon as the script run returns: what follows reads only the job's own files.</summary>
+    private async Task<JobBuild> RunJobAsync(byte[] config, RuntimePackages packages, ModelLabRuntimeJob runtimeJob, CancellationToken ct)
     {
         var id = Guid.NewGuid();
         var workDirectory = Path.Combine(ModelLabScriptRunner.WorkRoot(_dataDirectory), id.ToString("N"));
@@ -415,7 +433,20 @@ public sealed partial class ModelLabPyTorchSourceService
             TrainingRunWorkspace.CreateOwnerOnlyDirectory(workDirectory);
             TrainingRunWorkspace.CreateOwnerOnlyDirectory(configDirectory);
             await File.WriteAllBytesAsync(Path.Combine(configDirectory, ConfigFileName), config, CancellationToken.None);
-            var run = await _scripts.RunAsync(id, workDirectory, JsonSerializer.SerializeToUtf8Bytes(job, TrainingJson.Options), script, static _ => Task.CompletedTask, ct);
+            ModelLabScriptRunner.ScriptRun run;
+            try
+            {
+                run = await _scripts.RunAsync(id, workDirectory, JsonSerializer.SerializeToUtf8Bytes(job, TrainingJson.Options), new ModelLabScriptRunner.ScriptCommand
+                {
+                    Interpreter = runtimeJob.Interpreter,
+                    ScriptPath = runtimeJob.ScriptPath
+                }, static _ => Task.CompletedTask, ct);
+            }
+            finally
+            {
+                runtimeJob.Dispose();
+            }
+
             if (FailureOrNull(run, ct.IsCancellationRequested) is { } failed)
             {
                 return new JobBuild

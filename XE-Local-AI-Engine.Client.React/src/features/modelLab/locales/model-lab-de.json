@@ -1046,6 +1046,133 @@
 				"loading": "Die installierten Modelle werden geladen…",
 				"notInstalled": "{{model}} ist auf diesem Node nicht als llama.cpp-Modell installiert. Bitte wählen Sie ein installiertes Modell."
 			},
+			"playground": {
+				"after": "{{parameter}} nach dem Update",
+				"before": "{{parameter}} vor dem Update",
+				"check": {
+					"outside": "Größte Abweichung {{residual}}: außerhalb der Toleranz von 1e-12 mal der Größe der Werte.",
+					"within": "Größte Abweichung {{residual}}: innerhalb der Toleranz von 1e-12 mal der Größe der Werte."
+				},
+				"dataset": {
+					"spirals": "Zwei Spiralen (192 Punkte)",
+					"xor": "XOR (4 Punkte)"
+				},
+				"delete": "Löschen",
+				"deleteConfirm": {
+					"description": "Der gespeicherte Lauf und seine aufgezeichneten Schritte werden von diesem Node gelöscht. Das lässt sich nicht rückgängig machen.",
+					"title": "Diesen Lauf löschen?"
+				},
+				"deleteFailed": "Der Lauf konnte nicht gelöscht werden.",
+				"deleteRun": "{{run}} vom {{date}} löschen",
+				"diverged": "Divergiert",
+				"final": "Nach dem letzten Update: Loss {{loss}}, Genauigkeit {{accuracy}}.",
+				"finished": "Abgeschlossen",
+				"gap": {
+					"gradientNotFinite": "Ein Gradient war nicht endlich, daher lief kein Update.",
+					"lossNotFinite": "Der Loss war nicht endlich, daher liefen weder Backward-Pass noch Update.",
+					"nonFinite": "Ein Wert, den diese Prüfung braucht, ist nicht endlich.",
+					"notShared": "Dieser Parameter gehört zu einem Modul, das nur einmal läuft, daher gibt es keine Besuchsgradienten zu addieren.",
+					"shapeMismatch": "Die aufgezeichneten Werte, die diese Prüfung vergleicht, haben nicht dieselbe Form."
+				},
+				"input": "Eingabe von {{module}}",
+				"knob": {
+					"dataset": {
+						"help": "Die Punkte, die das Netz trennen lernt. XOR sind vier Ecken, von denen gegenüberliegende dieselbe Klasse haben: das kleinste Problem, das ein Netz ohne verborgene Schicht nicht lösen kann. Zwei Spiralen sind 192 Punkte auf zwei ineinanderliegenden Spiralen und brauchen ein tieferes Netz.\n\nBeginnen Sie mit XOR. Wechseln Sie zu zwei Spiralen, um zu sehen, dass Tiefe und Residualverbindungen zählen.",
+						"label": "Datensatz"
+					},
+					"depth": {
+						"help": "Wie viele verborgene Blöcke zwischen Eingabe- und Ausgabeschicht laufen, von 1 bis 4. Üblich ist 2.\n\nMehr Blöcke lassen das Netz seine Grenze stärker biegen, aber der Gradient läuft weiter zurück; weniger halten es einfach. Erhöhen Sie den Wert für die Spiralen.",
+						"label": "Tiefe"
+					},
+					"hidden": {
+						"help": "Wie viele Werte jede verborgene Schicht hält, von 2 bis 16. Üblich ist 8.\n\nMehr Einheiten machen das Netz ausdrucksstärker und seine Matrizen größer; weniger machen es leichter nachvollziehbar, aber es passt sich womöglich nicht an. Senken Sie den Wert, um ein zu kleines Netz zu sehen, erhöhen Sie ihn für die Spiralen.",
+						"label": "Verborgene Einheiten"
+					},
+					"learningRate": {
+						"help": "Wie weit jedes Update die Gewichte gegen den Gradienten bewegt: nachher = vorher − Lernrate × Gradient. 0,5 passt für XOR.\n\nEin höherer Wert senkt den Loss schneller, bis die Schritte überschießen und der Loss steigt oder schwankt (bei 10 schwankt er). Ein niedrigerer Wert macht das Training langsamer und gleichmäßiger. Ändern Sie ihn, um einen instabilen oder langsamen Lauf zu sehen.",
+						"label": "Lernrate"
+					},
+					"range": "Geben Sie einen Wert von {{min}} bis {{max}} ein.",
+					"residual": {
+						"help": "Addiert die Eingabe jedes Blocks zu seiner Ausgabe (h + block(h)), statt sie zu ersetzen, sodass ein Signal und sein Gradient einen Block unverändert passieren können. Aus ist der übliche Start.\n\nSchalten Sie es für ein tiefes Netz oder die Spiralen ein, wo es meist viel besser trainiert. Lassen Sie es aus, um einen einfachen Stapel zu sehen.",
+						"label": "Residualverbindungen"
+					},
+					"seed": {
+						"help": "Wählt die Startgewichte; die Daten hängen nicht davon ab. Standard ist 0.\n\nDerselbe Seed und dieselben Einstellungen ergeben auf diesem Node denselben Lauf. Ändern Sie ihn, um zu sehen, ob ein Ergebnis von den Startgewichten abhängt.",
+						"label": "Seed"
+					},
+					"sharedBlock": {
+						"help": "Führt einen Block mit einem Satz Gewichte in jeder Tiefe aus, statt eines eigenen Blocks je Tiefe. Aus ist die übliche Einstellung.\n\nSchalten Sie es ein, um einen Parametersatz mehrfach besucht zu sehen: Die Schrittansicht zeigt Ausgabe und Gradient jedes Besuchs und prüft, dass sich die Besuchsgradienten zu dem einen Gradienten addieren, den das Update verwendet.",
+						"label": "Einen Block über alle Tiefen teilen"
+					},
+					"steps": {
+						"help": "Wie viele Full-Batch-Updates der Lauf macht, von 1 bis 2000. 500 genügen für XOR bei der Standard-Lernrate.\n\nMehr Schritte trainieren länger, aber die Schrittansicht zeichnet höchstens 16 davon gleichmäßig verteilt auf; bei 16 oder weniger wird jeder Schritt aufgezeichnet. Senken Sie den Wert, um ein unfertiges Training zu sehen.",
+						"label": "Trainingsschritte"
+					}
+				},
+				"listFailed": "Die gespeicherten Läufe konnten nicht geladen werden.",
+				"logit": "Logit",
+				"logits": "Logit und Ziel an den gezeigten Punkten",
+				"lossButton": "Schritt {{step}}: Loss {{loss}}",
+				"lossRow": "Loss an den aufgezeichneten Schritten",
+				"lossValue": "Loss {{loss}}, Genauigkeit {{accuracy}} über alle {{count}} Punkte",
+				"next": "Nächster aufgezeichneter Schritt",
+				"noSteps": "Dieser Lauf hat keine Schritte aufgezeichnet.",
+				"notFinite": "nicht endlich",
+				"occurrences": "Module in Ausführungsreihenfolge",
+				"outcome": {
+					"diverged": "Bei Schritt {{step}} divergiert, nach {{updates}} von {{steps}} Updates.",
+					"finished": "Alle {{updates}} Updates abgeschlossen."
+				},
+				"output": "Ausgabe von {{module}}",
+				"outputAfter": "Ausgabe von {{module}} (nach {{activation}})",
+				"outputGrad": "Gradient an der Ausgabe von {{module}}",
+				"outputGradAfter": "Gradient an der Ausgabe von {{module}} (nach {{activation}})",
+				"parameterGrad": "Gradient von {{parameter}}",
+				"parameters": "Parameter",
+				"phase": {
+					"backward": {
+						"about": "Der Gradient des mittleren Loss nach jeder Modulausgabe, wie die Forward-Phase sie zeigt (nach tanh für embed und jeden Block, das Logit für head), an den gezeigten Punkten, und nach jedem Parameter. Der Parameter eines geteilten Blocks erhält einen Gradienten je Besuch, und Autograd addiert sie.",
+						"label": "Backward"
+					},
+					"forward": {
+						"about": "Eingabe und Ausgabe jedes Moduls an den gezeigten Punkten, in der Reihenfolge, in der der Forward-Pass sie ausführte. Ein geteilter Block erscheint einmal je Besuch. Die Ausgabe von embed und jedem Block wird nach seinem tanh erfasst; die Ausgabe von head ist seine Linear-Ausgabe, das Logit.",
+						"label": "Forward"
+					},
+					"loss": {
+						"about": "Die mittlere binäre Kreuzentropie der Logits gegenüber den Zielen über alle Punkte. Die Genauigkeit wertet ein Logit über 0 als Klasse 1.",
+						"label": "Loss"
+					},
+					"update": {
+						"about": "Jeder Parameter vor und nach dem SGD-Update dieses Schritts: nachher = vorher − Lernrate × Gradient.",
+						"label": "Update"
+					}
+				},
+				"phaseLabel": "Phase des Schritts",
+				"point": "Punkt {{index}} ({{x}})",
+				"position": "Aufgezeichneter Schritt {{index}} von {{count}}: Trainingsschritt {{step}} von {{steps}}",
+				"previous": "Vorheriger aufgezeichneter Schritt",
+				"provenance": "Aufgezeichnete Wiedergabe: Diese Werte wurden aufgezeichnet, während der Lauf auf der CPU trainierte. Das Durchschreiten spielt sie ab und führt das Netz nicht erneut aus.",
+				"provenanceRuntime": "PyTorch {{torch}}, float64, Vorlage {{template}}.",
+				"retention": "Die neuesten {{count}} Läufe werden behalten.",
+				"runFailed": "Der gespeicherte Lauf konnte nicht gelesen werden.",
+				"runName": "{{dataset}}, Tiefe {{depth}}, {{hidden}} verborgene Einheiten, {{steps}} Schritte, Lernrate {{learningRate}}, Seed {{seed}}",
+				"scope": "Trainiert ein winziges Netz (eine Eingabeschicht und verborgene Blöcke mit tanh, dann eine lineare Ausgabeschicht) in wenigen Sekunden auf der CPU. Es braucht kein Modell und nutzt die GPU nicht. Der Lauf zeichnet bis zu 16 seiner Schritte für die Schrittansicht unten auf.",
+				"sharedBadge": "Geteilter Block",
+				"slider": "Aufgezeichneter Schritt",
+				"start": "Trainieren",
+				"startFailed": "Der Lauf konnte nicht starten.",
+				"stream": "Residualstrom nach {{module}} (Eingabe + Ausgabe)",
+				"tab": "Trainingsschritte",
+				"target": "Ziel",
+				"traceUnreadable": "Die gespeicherten Schritte dieses Laufs liegen in einer Form vor, die diese Seite nicht lesen kann.",
+				"training": "Trainiert auf der CPU…",
+				"unsupported": "Die Trainingsschritte sind auf der Plattform dieses Nodes nicht verfügbar.",
+				"updateCheck": "Nachher = vorher − Lernrate × Gradient",
+				"visit": "{{module}}, Besuch {{visit}}",
+				"visitGrad": "Gradient von {{parameter}} aus {{module}}",
+				"visitSum": "Besuchsgradienten addieren sich zum Parametergradienten"
+			},
 			"pytorch": {
 				"blockRoot": "(Block)",
 				"build": "PyTorch-Index erstellen",
@@ -1188,7 +1315,7 @@
 				"start": "Steering-Lauf starten",
 				"tests": "Test-Prompts"
 			},
-			"subtitle": "Wählen Sie ein installiertes Modell, um seine Architektur, die Kandidaten hinter jedem nächsten Token oder seine Datei zu sehen. Vergleichen Sie zwei lokale Modelle mit einem Prompt, oder tracen und steuern Sie einen Checkpoint. Nur Traces und Steering-Läufe werden gespeichert.",
+			"subtitle": "Wählen Sie ein installiertes Modell, um seine Architektur, die Kandidaten hinter jedem nächsten Token oder seine Datei zu sehen. Vergleichen Sie zwei lokale Modelle mit einem Prompt, tracen und steuern Sie einen Checkpoint, oder trainieren Sie ein winziges Netz und gehen Sie sein Training Schritt für Schritt durch. Nur Traces, Steering-Läufe und Trainingsläufe werden gespeichert.",
 			"title": "Model Lab",
 			"trace": {
 				"artifact": {

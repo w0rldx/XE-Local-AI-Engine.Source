@@ -151,13 +151,13 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     /// <summary>Times a warm worker's idle TTL. A test swaps in a clock it advances, before the session it times is created.</summary>
     internal TimeProvider IdleClock { get; set; }
 
-    /// <summary>The job is Linux only. A test swaps this to see the other platforms' answer.</summary>
-    internal Func<bool> PlatformProbe { get; set; } = OperatingSystem.IsLinux;
+    /// <summary>The job is Linux x64 only. A test swaps this to see the other platforms' answer.</summary>
+    internal Func<bool> PlatformProbe { get; set; } = static () => TrainingScripts.IsPlatformSupported;
 
     public bool IsPlatformSupported => PlatformProbe();
 
     public static string UnsupportedPlatformMessage =>
-        "Tracing runs on Linux only for now, because it needs the Python training runtime, which is available on Linux only. The other Model Lab tools work here.";
+        "Tracing runs on Linux x64 only for now, because it needs the Python training runtime, which is available on Linux x64 only. The other Model Lab tools work here.";
 
     /// <summary>Runs just before a trace's attention blob is written. A test throws here to fail the second write after the first has landed.</summary>
     internal Action? BeforeAttentionBlobWrite { get; set; }

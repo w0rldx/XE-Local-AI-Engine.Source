@@ -4,7 +4,7 @@ import { LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
 import type { BlockRangeToken } from "@/features/modelLab/models/ModelLabArchitecture";
 
 // The page's tabs, in display order. `?tab=` on the route takes one of these, so a tab is linkable and survives a reload.
-export const modelLabTabs = ["architecture", "compare", "nextToken", "inspect", "trace"] as const;
+export const modelLabTabs = ["architecture", "compare", "nextToken", "inspect", "trace", "playground"] as const;
 export type ModelLabTab = (typeof modelLabTabs)[number];
 export const defaultModelLabTab: ModelLabTab = "architecture";
 
@@ -34,6 +34,8 @@ export const modelLabSearchSchema = z.object({
 		.catch(undefined),
 	trace: z.guid().optional().catch(undefined),
 	experiment: z.guid().optional().catch(undefined),
+	// The training stepper's open saved run.
+	run: z.guid().optional().catch(undefined),
 	level: z.enum(["overview", "detail", "math"]).optional().catch(undefined),
 	// The block detail's open operation (a template node id), tensor group (a component id) and tensor (a GGUF name).
 	op: detailName.optional().catch(undefined),

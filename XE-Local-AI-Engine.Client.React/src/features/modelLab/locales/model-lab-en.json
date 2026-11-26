@@ -952,6 +952,133 @@
 				"loading": "Loading the installed models…",
 				"notInstalled": "{{model}} is not installed as a llama.cpp model on this node. Choose an installed model."
 			},
+			"playground": {
+				"after": "{{parameter}} after the update",
+				"before": "{{parameter}} before the update",
+				"check": {
+					"outside": "Largest difference {{residual}}: outside the tolerance of 1e-12 times the values' size.",
+					"within": "Largest difference {{residual}}: within the tolerance of 1e-12 times the values' size."
+				},
+				"dataset": {
+					"spirals": "Two spirals (192 points)",
+					"xor": "XOR (4 points)"
+				},
+				"delete": "Delete",
+				"deleteConfirm": {
+					"description": "The saved run and its recorded steps are deleted from this node. This cannot be undone.",
+					"title": "Delete this run?"
+				},
+				"deleteFailed": "The run could not be deleted.",
+				"deleteRun": "Delete {{run}} from {{date}}",
+				"diverged": "Diverged",
+				"final": "After the last update: loss {{loss}}, accuracy {{accuracy}}.",
+				"finished": "Finished",
+				"gap": {
+					"gradientNotFinite": "A gradient was not finite, so no update ran.",
+					"lossNotFinite": "The loss was not finite, so no backward pass or update ran.",
+					"nonFinite": "A value this check needs is not finite.",
+					"notShared": "This parameter belongs to a module that runs once, so there are no visit gradients to add up.",
+					"shapeMismatch": "The recorded values this check compares do not have the same shape."
+				},
+				"input": "Input of {{module}}",
+				"knob": {
+					"dataset": {
+						"help": "The points the network learns to separate. XOR is four corners where opposite corners share a class, the smallest problem a network without a hidden layer cannot solve. Two spirals is 192 points on two interleaved spirals and needs a deeper network.\n\nStart with XOR. Switch to two spirals to see depth and residual connections matter.",
+						"label": "Dataset"
+					},
+					"depth": {
+						"help": "How many hidden blocks run between the input layer and the output layer, from 1 to 4. 2 is typical.\n\nMore blocks let the network bend its boundary more, but the gradient travels further back; fewer keep it simple. Raise it for the spirals.",
+						"label": "Depth"
+					},
+					"hidden": {
+						"help": "How many values each hidden layer holds, from 2 to 16. 8 is typical.\n\nMore units make the network more expressive and its matrices larger to read; fewer make it easier to follow but it may fail to fit. Lower it to see a network too small to fit, raise it for the spirals.",
+						"label": "Hidden units"
+					},
+					"learningRate": {
+						"help": "How far each update moves the weights against the gradient: after = before − learning rate × gradient. 0.5 suits XOR.\n\nRaising it makes the loss fall faster until the steps overshoot, and the loss rises or oscillates (at 10 it oscillates). Lowering it makes training slower and steadier. Change it to see an unstable or a slow run.",
+						"label": "Learning rate"
+					},
+					"range": "Enter a value from {{min}} to {{max}}.",
+					"residual": {
+						"help": "Adds each block's input to its output (h + block(h)) instead of replacing it, so a signal and its gradient can pass a block unchanged. Off is the usual start.\n\nTurn it on for a deep network or the spirals, where it usually trains much better. Leave it off to see a plain stack.",
+						"label": "Residual connections"
+					},
+					"seed": {
+						"help": "Picks the starting weights; the data does not depend on it. 0 is the default.\n\nThe same seed and knobs give the same run on this node. Change it to see whether a result depends on the starting weights.",
+						"label": "Seed"
+					},
+					"sharedBlock": {
+						"help": "Runs one block, with one set of weights, at every depth instead of a separate block per depth. Off is the usual setting.\n\nTurn it on to see one parameter set visited several times: the stepper shows each visit's output and gradient, and checks that the visit gradients add up to the one gradient the update uses.",
+						"label": "Share one block across depths"
+					},
+					"steps": {
+						"help": "How many full-batch updates the run makes, from 1 to 2000. 500 fits XOR at the default learning rate.\n\nMore steps train longer, but the stepper still records at most 16 of them, spread evenly; with 16 or fewer every step is recorded. Lower it to see an unfinished fit.",
+						"label": "Training steps"
+					}
+				},
+				"listFailed": "The saved runs could not be loaded.",
+				"logit": "Logit",
+				"logits": "Logit and target at the shown points",
+				"lossButton": "Step {{step}}: loss {{loss}}",
+				"lossRow": "Loss at the recorded steps",
+				"lossValue": "Loss {{loss}}, accuracy {{accuracy}} over all {{count}} points",
+				"next": "Next recorded step",
+				"noSteps": "This run recorded no steps.",
+				"notFinite": "not finite",
+				"occurrences": "Modules in execution order",
+				"outcome": {
+					"diverged": "Diverged at step {{step}}, after {{updates}} of {{steps}} updates.",
+					"finished": "Finished all {{updates}} updates."
+				},
+				"output": "Output of {{module}}",
+				"outputAfter": "Output of {{module}} (after {{activation}})",
+				"outputGrad": "Gradient at the output of {{module}}",
+				"outputGradAfter": "Gradient at the output of {{module}} (after {{activation}})",
+				"parameterGrad": "Gradient of {{parameter}}",
+				"parameters": "Parameters",
+				"phase": {
+					"backward": {
+						"about": "The gradient of the mean loss with respect to each module output as the forward phase shows it (after tanh for embed and each block, the logit for head), at the shown points, and to each parameter. A shared block's parameter gets one gradient per visit, and autograd adds them up.",
+						"label": "Backward"
+					},
+					"forward": {
+						"about": "Each module's input and output at the shown points, in the order the forward pass ran them. A shared block appears once per visit. The output of embed and of each block is taken after its tanh; the output of head is its Linear output, the logit.",
+						"label": "Forward"
+					},
+					"loss": {
+						"about": "The mean binary cross-entropy of the logits against the targets over all points. Accuracy counts a logit above 0 as class 1.",
+						"label": "Loss"
+					},
+					"update": {
+						"about": "Each parameter before and after this step's SGD update: after = before − learning rate × gradient.",
+						"label": "Update"
+					}
+				},
+				"phaseLabel": "Phase of the step",
+				"point": "Point {{index}} ({{x}})",
+				"position": "Recorded step {{index}} of {{count}}: training step {{step}} of {{steps}}",
+				"previous": "Previous recorded step",
+				"provenance": "Recorded playback: these values were recorded while the run trained on the CPU. Stepping replays them and does not run the network again.",
+				"provenanceRuntime": "PyTorch {{torch}}, float64, template {{template}}.",
+				"retention": "The newest {{count}} runs are kept.",
+				"runFailed": "The saved run could not be read.",
+				"runName": "{{dataset}}, depth {{depth}}, {{hidden}} hidden units, {{steps}} steps, learning rate {{learningRate}}, seed {{seed}}",
+				"scope": "Trains one tiny network (a tanh input layer and tanh hidden blocks, then a linear output layer) on the CPU in a few seconds. No model is needed and the GPU is not used. The run records up to 16 of its steps for the stepper below.",
+				"sharedBadge": "Shared block",
+				"slider": "Recorded step",
+				"start": "Train",
+				"startFailed": "The run could not start.",
+				"stream": "Residual stream after {{module}} (input + output)",
+				"tab": "Training stepper",
+				"target": "Target",
+				"traceUnreadable": "The saved steps of this run are not in a shape this page can read.",
+				"training": "Training on the CPU…",
+				"unsupported": "The training stepper is not available on this node's platform.",
+				"updateCheck": "After = before − learning rate × gradient",
+				"visit": "{{module}}, visit {{visit}}",
+				"visitGrad": "Gradient of {{parameter}} from {{module}}",
+				"visitSum": "Visit gradients add up to the parameter gradient"
+			},
 			"pytorch": {
 				"blockRoot": "(block)",
 				"build": "Build PyTorch index",
@@ -1094,7 +1221,7 @@
 				"start": "Start steering run",
 				"tests": "Test prompts"
 			},
-			"subtitle": "Choose an installed model to see its architecture, the candidates behind each next token or its file. Compare two local models on one prompt, or trace and steer a checkpoint. Only traces and steering runs are saved.",
+			"subtitle": "Choose an installed model to see its architecture, the candidates behind each next token or its file. Compare two local models on one prompt, trace and steer a checkpoint, or train a tiny network and step through its training. Only traces, steering runs and training runs are saved.",
 			"title": "Model Lab",
 			"trace": {
 				"artifact": {

@@ -2,12 +2,16 @@ namespace XE_Local_AI_Engine.Tests.Providers.Training;
 
 using System.Net;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.ModelLab;
+using XE_Local_AI_Engine.Client.Services.Training.Runtime;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Python.Contracts;
 using XE_Local_AI_Engine.Providers.Python.Implementation;
 using XE_Local_AI_Engine.Providers.Training;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
+using XE_Local_AI_Engine.Tests.Capacity;
 using XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 using XE_Local_AI_Engine.Tests.Testing;
 using static TrainingRuntimeTestInfrastructure;
@@ -491,6 +495,44 @@ public sealed class TrainingRuntimeServiceTests
 
         AssertEx.Equal(TrainingRuntimeInstallOutcome.Started, result.Outcome);
         AssertEx.Equal(TrainingRuntimePhase.Ready, harness.Service.GetStatus().Phase);
+    }
+
+    /// <summary>
+    ///     An install while a CPU job is registered runs <c>Recover</c> before its admission: a leftover backup beside the active venv goes, the
+    ///     active venv the job runs from stays, and the admission refuses.
+    /// </summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Install_WithARegisteredRuntimeUser_IsRefused_AndRecoverLeavesTheActiveVenvAlone()
+    {
+        using var harness = new Harness(SucceedingRunner());
+        _ = await harness.Service.InstallAsync(admitAsync: null, CancellationToken.None);
+        await harness.Service.DrainAsync(CancellationToken.None);
+        var interpreter = AssertEx.NotNull(harness.Service.ResolveInterpreterPath(), "The installed runtime must resolve an interpreter.");
+        var backup = TrainingRuntimeLayout.BackupVenv(harness.CacheRoot);
+        _ = Directory.CreateDirectory(backup);
+        await File.WriteAllTextAsync(Path.Combine(backup, "marker"), "an earlier runtime");
+        await using var holders = new IdleHolderHarness();
+        var users = new TrainingRuntimeUsers();
+        var orchestration = new TrainingRuntimeOrchestrationService(harness.Service,
+            StubPrerequisiteProbe.Satisfied(),
+            holders.Gate,
+            holders.Broker,
+            holders.Supervisor,
+            Substitute.For<IModelLabActiveJob>(),
+            users);
+        var invocations = harness.Runner.Invocations.Count;
+        using var registered = users.Enter();
+
+        var result = await orchestration.InstallAsync(CancellationToken.None);
+        await harness.Service.DrainAsync(CancellationToken.None);
+
+        AssertEx.Equal(TrainingRuntimeInstallOutcome.GpuJobRunning, result.Outcome);
+        AssertEx.Equal(TrainingRuntimePhase.Ready, harness.Service.GetStatus().Phase);
+        AssertEx.Equal(interpreter, harness.Service.ResolveInterpreterPath());
+        AssertEx.True(File.Exists(interpreter), "The active venv the job runs from is untouched.");
+        AssertEx.False(Directory.Exists(backup), "Recover deletes a backup beside an active venv, and never moves it into place.");
+        AssertEx.Equal(invocations, harness.Runner.Invocations.Count, "A refused install runs no step.");
     }
 
     private sealed class Harness : IDisposable

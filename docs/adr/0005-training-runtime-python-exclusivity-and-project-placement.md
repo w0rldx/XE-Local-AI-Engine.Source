@@ -7,6 +7,7 @@
 - **Relates to:** [ADR 0004](0004-development-mode-container-execution-docker-stopgap.md) — unchanged and unamended by this record. See "Relationship to ADR 0004" below.
 - **Amended by:** [ADR 0016](0016-managed-python-shared-uv-layer.md) (2026-09-27) — Decision §3 only: the generic uv mechanics (uv acquisition and pin, the uv environment allowlist, the scrubbed runner) move to a shared `Providers.Python` that `Providers.Training` references. The text below is unchanged.
 - **Amended:** 2026-11-17 — Decision §2: an idle Model Lab worker may keep the exclusive admission as a preemptible holder. See [the amendment](#amendment-2026-11-17-an-idle-model-lab-worker-holds-the-node-as-a-preemptible-holder).
+- **Amended:** 2026-11-25 — Decision §2: two engine-authored CPU jobs on the training runtime run beside any GPU holder, and a runtime install or remove waits for them. See [the amendment](#amendment-2026-11-25-engine-authored-cpu-jobs-on-the-training-runtime).
 
 ## Context
 
@@ -105,6 +106,46 @@ explicitly), and a path that refuses at once retries once after the idle holder 
 is now a side effect, so a poller must look for work before it asks the gate, or an empty poll evicts the worker. Reads
 that show the exclusive holder as busy must tell an idle holder apart (`IsIdlePreemptible`). A first request after a
 warm period can wait up to 30 s for the eviction. The text of §2 above is unchanged.
+
+## Amendment 2026-11-25: engine-authored CPU jobs on the training runtime
+
+Decision §2 assumed that everything running from the training runtime is a GPU tenant. Two Model Lab jobs are not, and
+this amendment, which touches §2 only, states how they relate to it:
+
+- the **PyTorch source-index job** (`ModelLabPyTorchSourceService`), which builds a model's module tree with
+  `torch.export` on the meta device and loads no weights, and
+- the **training stepper** (`ModelLabPlaygroundService`, `tools/training/nnplayground.py`), which hides CUDA before
+  torch loads, uses one thread, trains one fixed engine-authored template inside the bounds of its knobs under a
+  two-minute watchdog, and produces no model artifact.
+
+**The GPU.** Both jobs hold nothing on the GPU. They are not training runs under §2: they take no `IGpuWorkGate`
+admission, no runtime-mutation lease, no ledger reservation and no idle-holder registration, and they raise no GPU
+demand. Either may run beside any GPU holder, a training run, an export or a Model Lab worker included, and a loaded
+model neither refuses nor queues them.
+
+**The venv.** Holding no GPU admission, they are invisible to the check that keeps a runtime install or remove away from
+a running GPU job (`TrainingRuntimeOrchestrationService.IsGpuJobRunning`), yet both run from the venv that an install or
+remove swaps. They therefore register as runtime users (`TrainingRuntimeUsers`): each is registered from before its
+readiness recheck until its script run returns, and the install and remove admission refuses (`GpuJobRunning`) while
+any user is registered. A job that meets a mutation already in progress is refused instead. Both sides cross a lock, so
+one of them always sees the other. The invariant this buys: **no saved result comes from a swapped venv.** A job saves
+only after a registered script run ended cleanly, and only the host saves.
+
+**Accepted ceiling: host death mid-run.** Neither job writes a launch receipt. After a host death a restarted host may
+install or remove beside the orphaned script, which saves nothing: only the host saves, and the startup reaper deletes
+the Model Lab work root.
+
+Rejected alternatives:
+
+- **Take the GPU admission.** A job that holds no GPU memory would evict a warm Model Lab worker and be refused whenever
+  a model is loaded.
+- **Accept the race.** A saved index or run could come from a half-swapped runtime.
+- **A durable receipt for CPU jobs.** It would cover host death, but a receipt that cannot be proven gone can block every
+  Model Lab start, while the invariant above already holds without one.
+
+Decision §1 holds: the stepper's template and its training meaning live in Python, and C# holds lifecycle, persistence
+and the bounds of the knobs. **User-authored code is not covered.** Running code an operator writes on the training runtime
+is a different trust question and needs its own decision. The text of §2 above is unchanged.
 
 ## Relationship to ADR 0004
 

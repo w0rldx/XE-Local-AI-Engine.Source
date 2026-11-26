@@ -29,6 +29,8 @@ internal static class AddNodeTrainingRuntimeExtensions
         // The Training runtime endpoints' only path to the provider's runtime service and prerequisite probe.
         // Singleton, matching both wrapped registrations.
         builder.Services.AddSingleton<TrainingRuntimeOrchestrationService>();
+        // The gate-free CPU jobs that run from the venv register here, and an install or remove refuses while one does.
+        builder.Services.AddSingleton<TrainingRuntimeUsers>();
 
         _ = builder.Services.AddHuggingFaceBaseCheckpointStore();
 

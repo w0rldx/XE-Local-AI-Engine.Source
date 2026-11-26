@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { modelLabSearchSchema } from "@/features/modelLab/models/ModelLabNavigation";
+import playgroundFixture from "@/features/modelLab/models/playgroundTrace.fixture.json";
 import { ModelLabRoutePage } from "@/features/modelLab/pages/ModelLabRoutePage";
 import { acceptConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { localApiPath } from "@/test/msw/Handlers";
@@ -1247,5 +1248,111 @@ describe("Model Lab block detail in the URL", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Model" }));
 		await waitFor(() => expect(searchOf(reloaded.router)).toEqual({ model: gguf }));
 		expect(screen.queryByTestId("model-lab-architecture-tensor")).toBeNull();
+	});
+});
+
+describe("the training stepper on its route", () => {
+	const runA = "77777777-7777-4777-8777-777777777777";
+	const runB = "88888888-8888-4888-8888-888888888888";
+	const savedRun = (id: string, steps: number) => ({
+		id,
+		template: playgroundFixture.summary.template,
+		config: { ...playgroundFixture.summary.config, steps },
+		outcome: playgroundFixture.summary.outcome,
+		finalLoss: playgroundFixture.summary.finalLoss,
+		finalAccuracy: playgroundFixture.summary.finalAccuracy,
+		traceByteCount: 10,
+		createdAtUtc: "2026-11-25T00:00:00Z",
+	});
+	// Run A and run B differ in their step count, so each row and each open run can be told apart.
+	const runs = [savedRun(runA, 8), savedRun(runB, 9)];
+	const rowName = (steps: number) => `XOR (4 points), depth 2, 4 hidden units, ${steps} steps, learning rate 0.5, seed 0`;
+
+	function stubPlayground(): void {
+		stubRoutes();
+		server.use(
+			http.get(localApiPath("model-lab/playground/runs"), () =>
+				HttpResponse.json({ platformSupported: true, unsupportedMessage: null, maxRetainedRuns: 20, runs }),
+			),
+			http.get(localApiPath("model-lab/playground/runs/:runId"), ({ params }) => {
+				const run = runs.find((item) => item.id === params["runId"]);
+				return HttpResponse.json({ run, trace: { ...playgroundFixture.trace, config: run?.config } });
+			}),
+			// The page's model picker finds no GGUF at all.
+			http.get(localApiPath("models"), () => HttpResponse.json({ isAvailable: true, items: [] })),
+		);
+	}
+
+	const openSteps = () => within(screen.getByTestId("model-lab-playground-stepper")).getByTestId("model-lab-playground-position");
+
+	it("reopens the URL's run on a reload with no GGUF installed, and a run picked from the list replaces its entry", async () => {
+		stubPlayground();
+		const { router, history } = await renderRoute(`/model-lab?tab=playground&run=${runA}`);
+
+		await waitFor(() => expect(selectedTab()).toBe("Training stepper"));
+		await waitFor(() => expect(openSteps().textContent).toContain("training step 1 of 8"));
+		expect(screen.queryByTestId("model-lab-no-models")).toBeNull();
+		const entries = history.length;
+
+		fireEvent.click(await screen.findByRole("button", { name: rowName(9) }));
+
+		await waitFor(() => expect(searchOf(router)).toEqual({ run: runB, tab: "playground" }));
+		await waitFor(() => expect(openSteps().textContent).toContain("training step 1 of 9"));
+		expect(history.length).toBe(entries);
+
+		const href = router.state.location.href;
+		cleanup();
+		await renderRoute(href);
+		await waitFor(() => expect(openSteps().textContent).toContain("training step 1 of 9"));
+	});
+
+	it("keeps the open run through a jump on another tab and Back", async () => {
+		stubPlayground();
+		const { router, history } = await renderRoute(`/model-lab?tab=playground&run=${runA}`);
+		await waitFor(() => expect(openSteps().textContent).toContain("training step 1 of 8"));
+
+		fireEvent.click(screen.getByRole("tab", { name: "Trace and steer" }));
+		fireEvent.click((await screen.findAllByRole("button", { name: "Qwen/Qwen3.5-0.8B" }))[1] as HTMLElement);
+		await screen.findByTestId("model-lab-trace-table");
+		const before = history.length;
+		fireEvent.click(screen.getByRole("button", { name: "Show block 0 in Architecture" }));
+		await waitFor(() => expect(selectedTab()).toBe("Architecture"));
+		expect(history.length).toBe(before + 1);
+
+		await act(async () => history.back());
+		await waitFor(() => expect(selectedTab()).toBe("Trace and steer"));
+		expect(searchOf(router)).toEqual({ experiment: otherTraceId, run: runA, tab: "trace" });
+		fireEvent.click(screen.getByRole("tab", { name: "Training stepper" }));
+		await waitFor(() => expect(selectedTab()).toBe("Training stepper"));
+		expect(openSteps().textContent).toContain("training step 1 of 8");
+	});
+
+	it("keeps another run open when a delete started before it finishes", async () => {
+		stubPlayground();
+		let finish: () => void = () => undefined;
+		const finished = new Promise<void>((resolve) => {
+			finish = resolve;
+		});
+		server.use(
+			http.delete(localApiPath(`model-lab/playground/runs/${runA}`), async () => {
+				await finished;
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		const { router, queryClient } = await renderRoute(`/model-lab?tab=playground&run=${runA}`);
+		await waitFor(() => expect(openSteps().textContent).toContain("training step 1 of 8"));
+
+		await openConfirm(screen.getByRole("button", { name: /^Delete XOR .* 8 steps/ }), "Delete this run?");
+		acceptConfirm();
+		await waitFor(() => expect(queryClient.isMutating()).toBe(1));
+		fireEvent.click(screen.getByRole("button", { name: rowName(9) }));
+		await waitFor(() => expect(searchOf(router)["run"]).toBe(runB));
+
+		await act(async () => finish());
+
+		await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+		await act(async () => undefined);
+		expect(searchOf(router)).toEqual({ run: runB, tab: "playground" });
+		expect(openSteps().textContent).toContain("training step 1 of 9");
 	});
 });

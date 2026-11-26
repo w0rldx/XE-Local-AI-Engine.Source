@@ -13,6 +13,7 @@ import { ArchitectureExplorer } from "@/features/modelLab/components/Architectur
 import { InstalledModelInspector } from "@/features/modelLab/components/InstalledModelInspector";
 import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNotice";
 import { NextTokenExplorer } from "@/features/modelLab/components/NextTokenExplorer";
+import { PlaygroundPanel } from "@/features/modelLab/components/PlaygroundPanel";
 import { SamePromptComparison } from "@/features/modelLab/components/SamePromptComparison";
 import { TraceExperiments } from "@/features/modelLab/components/TraceExperiments";
 import type { ArchitectureSelection } from "@/features/modelLab/models/ModelLabArchitecture";
@@ -115,6 +116,12 @@ function ModelLabContent({ search: routeSearch, onSearchChange, afterNavigation 
 	if (activeTab === "trace" && traceExperiment !== search.experiment) {
 		setTraceExperiment(search.experiment);
 	}
+	// The training stepper reads its list once its tab has shown, and opens the URL's run only while its tab shows; an
+	// open run stays while another tab is shown.
+	const [playground, setPlayground] = useState<{ shown: boolean; run?: string }>({ shown: false });
+	if (activeTab === "playground" && (!playground.shown || playground.run !== search.run)) {
+		setPlayground({ shown: true, run: search.run });
+	}
 	// Only the Next token prefill is page state; the prompt never enters the URL. A tab switch or another model ends it.
 	const [nextTokenIntent, setNextTokenIntent] = useState<ModelLabIntent<"nextToken">>();
 	const jumpCount = useRef(0);
@@ -165,6 +172,11 @@ function ModelLabContent({ search: routeSearch, onSearchChange, afterNavigation 
 		(removed: string) => write((previous) => (sameExperimentId(previous.experiment, removed) ? { experiment: undefined } : {})),
 		[write],
 	);
+	const openRun = useCallback((run: string | undefined) => write({ run }), [write]);
+	const closeDeletedRun = useCallback(
+		(removed: string) => write((previous) => (sameExperimentId(previous.run, removed) ? { run: undefined } : {})),
+		[write],
+	);
 
 	return (
 		<PageShell>
@@ -173,7 +185,7 @@ function ModelLabContent({ search: routeSearch, onSearchChange, afterNavigation 
 				title={t("pages.modelLab.title", "Model Lab")}
 				subtitle={t(
 					"pages.modelLab.subtitle",
-					"Choose an installed model to see its architecture, the candidates behind each next token or its file. Compare two local models on one prompt, or trace and steer a checkpoint. Only traces and steering runs are saved.",
+					"Choose an installed model to see its architecture, the candidates behind each next token or its file. Compare two local models on one prompt, trace and steer a checkpoint, or train a tiny network and step through its training. Only traces, steering runs and training runs are saved.",
 				)}
 			/>
 			<Stack gap="xs" mb="md">
@@ -230,6 +242,9 @@ function ModelLabContent({ search: routeSearch, onSearchChange, afterNavigation 
 						<Tabs.Tab value="trace" data-model-lab-tab="trace">
 							{t("pages.modelLab.trace.tab", "Trace and steer")}
 						</Tabs.Tab>
+						<Tabs.Tab value="playground" data-model-lab-tab="playground">
+							{t("pages.modelLab.playground.tab", "Training stepper")}
+						</Tabs.Tab>
 					</Tabs.List>
 				</StickyBar>
 				<Tabs.Panel value="architecture" pt="md">
@@ -264,6 +279,9 @@ function ModelLabContent({ search: routeSearch, onSearchChange, afterNavigation 
 						onExperimentDeleted={closeDeletedExperiment}
 						onJump={jump}
 					/>
+				</Tabs.Panel>
+				<Tabs.Panel value="playground" pt="md">
+					<PlaygroundPanel shown={playground.shown} runId={playground.run} onRunChange={openRun} onRunDeleted={closeDeletedRun} />
 				</Tabs.Panel>
 			</Tabs>
 		</PageShell>

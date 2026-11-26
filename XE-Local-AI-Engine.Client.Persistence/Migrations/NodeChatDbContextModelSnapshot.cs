@@ -5408,6 +5408,50 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("model_lab_experiments", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelLabPlaygroundRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("result_json");
+
+                    b.Property<string>("TemplateId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("template_id");
+
+                    b.Property<Guid>("TraceBlobId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("trace_blob_id");
+
+                    b.Property<long>("TraceByteCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("trace_byte_count");
+
+                    b.Property<string>("TraceSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("trace_sha256");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc")
+                        .HasDatabaseName("ix_model_lab_playground_runs_created");
+
+                    b.ToTable("model_lab_playground_runs", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelLaunchArguments", b =>
                 {
                     b.Property<string>("ModelName")

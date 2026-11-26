@@ -107,6 +107,7 @@ import {
 	deleteMcpServer,
 	deleteModelKind,
 	deleteModelLabExperiment,
+	deleteModelLabPlaygroundRun,
 	deleteModelLaunchArguments,
 	deleteNodeChatConversation,
 	deletePlaybookAction,
@@ -222,6 +223,7 @@ import {
 	getModelLabExperimentLens,
 	getModelLabExperimentRouting,
 	getModelLabExperimentTrace,
+	getModelLabPlaygroundRun,
 	getModelLabPyTorchIndex,
 	getModelLabPyTorchSource,
 	getModelLaunchArguments,
@@ -318,6 +320,7 @@ import {
 	listLocalModels,
 	listMcpServers,
 	listModelLabExperiments,
+	listModelLabPlaygroundRuns,
 	listNodeAuthSessions,
 	listNodeBackups,
 	listNodeChatConversations,
@@ -443,6 +446,7 @@ import {
 	startLlamaCppSourceBuild,
 	startModelLabCheckpointDownload,
 	startModelLabExperiment,
+	startModelLabPlaygroundRun,
 	startProcessCapture,
 	startStableDiffusionCppSourceBuild,
 	startTrainingExport,
@@ -747,6 +751,8 @@ import type {
 	DeleteModelLabExperimentData,
 	DeleteModelLabExperimentError,
 	DeleteModelLabExperimentResponse,
+	DeleteModelLabPlaygroundRunData,
+	DeleteModelLabPlaygroundRunResponse,
 	DeleteModelLaunchArgumentsData,
 	DeleteModelLaunchArgumentsError,
 	DeleteModelLaunchArgumentsResponse,
@@ -1022,6 +1028,9 @@ import type {
 	GetModelLabExperimentTraceData,
 	GetModelLabExperimentTraceError,
 	GetModelLabExperimentTraceResponse,
+	GetModelLabPlaygroundRunData,
+	GetModelLabPlaygroundRunError,
+	GetModelLabPlaygroundRunResponse,
 	GetModelLabPyTorchIndexData,
 	GetModelLabPyTorchIndexError,
 	GetModelLabPyTorchIndexResponse,
@@ -1245,6 +1254,8 @@ import type {
 	ListMcpServersResponse,
 	ListModelLabExperimentsData,
 	ListModelLabExperimentsResponse,
+	ListModelLabPlaygroundRunsData,
+	ListModelLabPlaygroundRunsResponse,
 	ListNodeAuthSessionsData,
 	ListNodeAuthSessionsResponse,
 	ListNodeBackupsData,
@@ -1572,6 +1583,9 @@ import type {
 	StartModelLabExperimentData,
 	StartModelLabExperimentError,
 	StartModelLabExperimentResponse,
+	StartModelLabPlaygroundRunData,
+	StartModelLabPlaygroundRunError,
+	StartModelLabPlaygroundRunResponse,
 	StartProcessCaptureData,
 	StartProcessCaptureError,
 	StartProcessCaptureResponse,
@@ -9425,6 +9439,98 @@ export const getModelLabExperimentTraceOptions = (options: Options<GetModelLabEx
 			return data;
 		},
 		queryKey: getModelLabExperimentTraceQueryKey(options),
+	});
+
+export const listModelLabPlaygroundRunsQueryKey = (options?: Options<ListModelLabPlaygroundRunsData>) =>
+	createQueryKey("listModelLabPlaygroundRuns", options, false, ["Model-Lab"]);
+
+export const listModelLabPlaygroundRunsOptions = (options?: Options<ListModelLabPlaygroundRunsData>) =>
+	queryOptions<
+		ListModelLabPlaygroundRunsResponse,
+		AxiosError<DefaultError>,
+		ListModelLabPlaygroundRunsResponse,
+		ReturnType<typeof listModelLabPlaygroundRunsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listModelLabPlaygroundRuns({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listModelLabPlaygroundRunsQueryKey(options),
+	});
+
+export const startModelLabPlaygroundRunMutation = (
+	options?: Partial<Options<StartModelLabPlaygroundRunData>>,
+): UseMutationOptions<
+	StartModelLabPlaygroundRunResponse,
+	AxiosError<StartModelLabPlaygroundRunError>,
+	Options<StartModelLabPlaygroundRunData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartModelLabPlaygroundRunResponse,
+		AxiosError<StartModelLabPlaygroundRunError>,
+		Options<StartModelLabPlaygroundRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startModelLabPlaygroundRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteModelLabPlaygroundRunMutation = (
+	options?: Partial<Options<DeleteModelLabPlaygroundRunData>>,
+): UseMutationOptions<
+	DeleteModelLabPlaygroundRunResponse,
+	AxiosError<DefaultError>,
+	Options<DeleteModelLabPlaygroundRunData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteModelLabPlaygroundRunResponse,
+		AxiosError<DefaultError>,
+		Options<DeleteModelLabPlaygroundRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteModelLabPlaygroundRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getModelLabPlaygroundRunQueryKey = (options: Options<GetModelLabPlaygroundRunData>) =>
+	createQueryKey("getModelLabPlaygroundRun", options, false, ["Model-Lab"]);
+
+export const getModelLabPlaygroundRunOptions = (options: Options<GetModelLabPlaygroundRunData>) =>
+	queryOptions<
+		GetModelLabPlaygroundRunResponse,
+		AxiosError<GetModelLabPlaygroundRunError>,
+		GetModelLabPlaygroundRunResponse,
+		ReturnType<typeof getModelLabPlaygroundRunQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelLabPlaygroundRun({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelLabPlaygroundRunQueryKey(options),
 	});
 
 export const tokenizeModelLabPromptMutation = (

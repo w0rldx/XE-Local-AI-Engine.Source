@@ -4895,6 +4895,55 @@ export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabLensTextResponse = {
 	text: string;
 };
 
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundBlockedResponse = {
+	reason: XeLocalAiEngineClientServicesModelLabModelLabPlaygroundRefusal;
+	message: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundConfigResponse = {
+	dataset: XeLocalAiEngineClientServicesModelLabModelLabPlaygroundDataset;
+	learningRate: number;
+	residual: boolean;
+	sharedBlock: boolean;
+	depth: number;
+	hidden: number;
+	steps: number;
+	seed: number;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundOutcomeResponse = {
+	kind: string;
+	atStep: number | null;
+	updatesApplied: number;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunDetailResponse = {
+	run: XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunResponse;
+	trace: unknown;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunListResponse = {
+	platformSupported: boolean;
+	unsupportedMessage: string | null;
+	maxRetainedRuns: number;
+	runs: Array<XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunResponse = {
+	id: string;
+	template: string;
+	config: XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundConfigResponse;
+	outcome: XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundOutcomeResponse;
+	finalLoss: number | null;
+	finalAccuracy: number | null;
+	traceByteCount: number;
+	createdAtUtc: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunRouteRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokenResponse = {
 	id: number;
 	piece: string;
@@ -4984,6 +5033,17 @@ export type XeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentReque
 
 export type XeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentResponse = {
 	experimentId: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1StartModelLabPlaygroundRunRequest = {
+	dataset: XeLocalAiEngineClientServicesModelLabModelLabPlaygroundDataset;
+	learningRate: number;
+	residual: boolean;
+	sharedBlock: boolean;
+	depth: number;
+	hidden: number;
+	steps: number;
+	seed: number;
 };
 
 export type XeLocalAiEngineClientEndpointsNodeBackupsV1NodeAutomaticBackupResponse = {
@@ -7301,6 +7361,15 @@ export type XeLocalAiEngineClientServicesModelLabModelLabLensSummary = {
 	tiedEmbeddings?: boolean;
 	vocabSize?: number;
 };
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPlaygroundDataset = "xor" | "spirals";
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPlaygroundRefusal =
+	| "UnsupportedPlatform"
+	| "RuntimeUnavailable"
+	| "Busy"
+	| "RunFailed"
+	| "TraceUnavailable";
 
 export type XeLocalAiEngineClientServicesModelLabModelLabPromptPiece = {
 	id?: number;
@@ -18461,6 +18530,137 @@ export type GetModelLabExperimentTraceResponses = {
 };
 
 export type GetModelLabExperimentTraceResponse = GetModelLabExperimentTraceResponses[keyof GetModelLabExperimentTraceResponses];
+
+export type ListModelLabPlaygroundRunsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-lab/playground/runs";
+};
+
+export type ListModelLabPlaygroundRunsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListModelLabPlaygroundRunsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunListResponse;
+};
+
+export type ListModelLabPlaygroundRunsResponse = ListModelLabPlaygroundRunsResponses[keyof ListModelLabPlaygroundRunsResponses];
+
+export type StartModelLabPlaygroundRunData = {
+	body: XeLocalAiEngineClientEndpointsModelLabV1StartModelLabPlaygroundRunRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-lab/playground/runs";
+};
+
+export type StartModelLabPlaygroundRunErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundBlockedResponse;
+};
+
+export type StartModelLabPlaygroundRunError = StartModelLabPlaygroundRunErrors[keyof StartModelLabPlaygroundRunErrors];
+
+export type StartModelLabPlaygroundRunResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunResponse;
+};
+
+export type StartModelLabPlaygroundRunResponse = StartModelLabPlaygroundRunResponses[keyof StartModelLabPlaygroundRunResponses];
+
+export type DeleteModelLabPlaygroundRunData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/model-lab/playground/runs/{runId}";
+};
+
+export type DeleteModelLabPlaygroundRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type DeleteModelLabPlaygroundRunResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteModelLabPlaygroundRunResponse =
+	DeleteModelLabPlaygroundRunResponses[keyof DeleteModelLabPlaygroundRunResponses];
+
+export type GetModelLabPlaygroundRunData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/model-lab/playground/runs/{runId}";
+};
+
+export type GetModelLabPlaygroundRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundBlockedResponse;
+};
+
+export type GetModelLabPlaygroundRunError = GetModelLabPlaygroundRunErrors[keyof GetModelLabPlaygroundRunErrors];
+
+export type GetModelLabPlaygroundRunResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunDetailResponse;
+};
+
+export type GetModelLabPlaygroundRunResponse = GetModelLabPlaygroundRunResponses[keyof GetModelLabPlaygroundRunResponses];
 
 export type TokenizeModelLabPromptData = {
 	body: XeLocalAiEngineClientEndpointsModelLabV1ModelLabPromptTokensRequest;

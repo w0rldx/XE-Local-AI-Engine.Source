@@ -121,7 +121,7 @@ internal sealed class ModelLabScriptRunner
                 if (TrainingRunStdioParser.ParseOrNull(line) is { } parsed && string.Equals(parsed.Token, runToken, StringComparison.Ordinal))
                 {
                     watchdog.MarkEvent();
-                    Apply(id, state, watchdog, parsed, handle.KillGroup);
+                    Apply(id, script, state, watchdog, parsed, handle.KillGroup);
                 }
                 else
                 {
@@ -145,13 +145,13 @@ internal sealed class ModelLabScriptRunner
         };
     }
 
-    private void Apply(Guid id, StreamState state, TrainingScriptWatchdog watchdog, TrainingStdioEvent parsed, Action killGroup)
+    private void Apply(Guid id, ScriptCommand script, StreamState state, TrainingScriptWatchdog watchdog, TrainingStdioEvent parsed, Action killGroup)
     {
         switch (parsed.Kind)
         {
             case TrainingStdioEventKind.Handshake:
                 state.HandshakeSeen = true;
-                if (parsed.ContractVersion != ModelLabTraceSpec.ContractVersion)
+                if (parsed.ContractVersion != script.ContractVersion)
                 {
                     watchdog.Fail("The Model Lab script's protocol version does not match this build.");
                     killGroup();
@@ -160,7 +160,11 @@ internal sealed class ModelLabScriptRunner
                 break;
             case TrainingStdioEventKind.Phase:
             case TrainingStdioEventKind.Progress:
-                PublishFrame(_events, id, parsed);
+                if (script.PublishPhases)
+                {
+                    PublishFrame(_events, id, parsed);
+                }
+
                 break;
             case TrainingStdioEventKind.Done:
                 state.Done = true;
@@ -183,6 +187,12 @@ internal sealed class ModelLabScriptRunner
         public required string Interpreter { get; init; }
 
         public required string ScriptPath { get; init; }
+
+        /// <summary>The handshake version this script must speak.</summary>
+        public int ContractVersion { get; init; } = ModelLabTraceSpec.ContractVersion;
+
+        /// <summary>False keeps phase and progress frames out of the event buffer entirely: they still count as liveness.</summary>
+        public bool PublishPhases { get; init; } = true;
     }
 
     internal sealed class ScriptRun

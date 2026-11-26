@@ -25,13 +25,15 @@ public sealed class TrainingRuntimeOrchestrationService
     private readonly ITrainingRuntimeService _runtime;
     private readonly ITrainingRuntimePrerequisiteProbe _prerequisiteProbe;
     private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly TrainingRuntimeUsers _runtimeUsers;
 
     public TrainingRuntimeOrchestrationService(ITrainingRuntimeService runtime,
         ITrainingRuntimePrerequisiteProbe prerequisiteProbe,
         IGpuWorkGate gpuWorkGate,
         IGpuIdleHolderPreemption idlePreemption,
         ILlamaServerProcessSupervisor supervisor,
-        IModelLabActiveJob labJob)
+        IModelLabActiveJob labJob,
+        TrainingRuntimeUsers runtimeUsers)
     {
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
         ArgumentNullException.ThrowIfNull(idlePreemption);
@@ -39,12 +41,14 @@ public sealed class TrainingRuntimeOrchestrationService
         ArgumentNullException.ThrowIfNull(supervisor);
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(prerequisiteProbe);
+        ArgumentNullException.ThrowIfNull(runtimeUsers);
         _gpuWorkGate = gpuWorkGate;
         _idlePreemption = idlePreemption;
         _labJob = labJob;
         _runtime = runtime;
         _prerequisiteProbe = prerequisiteProbe;
         _supervisor = supervisor;
+        _runtimeUsers = runtimeUsers;
     }
 
     /// <summary>True while a job running the training runtime's Python owns the node: it runs from the directory a remove or an install swaps.</summary>
@@ -117,11 +121,12 @@ public sealed class TrainingRuntimeOrchestrationService
     /// <remarks>
     ///     The demand is raised unconditionally, so a worker active now cannot fall back to idle and keep running from the
     ///     directory this install or remove swaps; a busy one stays busy and refuses. A worker not seen to exit gave the gate and
-    ///     the lease back but may still run from that directory, so it refuses too until a reap proves it gone.
+    ///     the lease back but may still run from that directory, so it refuses too until a reap proves it gone. A gate-free CPU job registered
+    ///     in <see cref="TrainingRuntimeUsers" /> refuses it as well.
     /// </remarks>
     private async Task<bool> AdmitAsync(CancellationToken ct)
     {
         _ = await _idlePreemption.WaitForReleaseAsync(GpuWorkAdmission.IdleHolderReleaseBound, ct);
-        return !IsGpuJobRunning && !await _labJob.HasUnconfirmedWorkerAsync(ct);
+        return !IsGpuJobRunning && !await _labJob.HasUnconfirmedWorkerAsync(ct) && !_runtimeUsers.InUse;
     }
 }

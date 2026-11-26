@@ -263,6 +263,10 @@ internal static class NodeEncryptedColumns
             .Optional(entity => entity.LaunchReceiptJson, "model_lab_launch_receipt_json")
             .Optional(entity => entity.Notes, "model_lab_notes"),
 
+        // Node-scoped: a training-stepper run's summary. Its trace is a blob in its own scope, never a column.
+        NodeScoped<ModelLabPlaygroundRun>(entity => entity.Id)
+            .Required(entity => entity.ResultJson, "model_lab_playground_result_json"),
+
         // Evaluations and comparison reports are node-scoped, same flat layout as runs. Membership and verdicts carry distinct AAD column names: membership is what
         // makes a comparison's two sides comparable, and the verdicts are what the deltas are computed from.
         NodeScoped<TrainingEvaluationRun>(entity => entity.Id)

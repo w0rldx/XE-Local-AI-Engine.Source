@@ -298,6 +298,9 @@ import type {
 	DeleteModelLabExperimentData,
 	DeleteModelLabExperimentErrors,
 	DeleteModelLabExperimentResponses,
+	DeleteModelLabPlaygroundRunData,
+	DeleteModelLabPlaygroundRunErrors,
+	DeleteModelLabPlaygroundRunResponses,
 	DeleteModelLaunchArgumentsData,
 	DeleteModelLaunchArgumentsErrors,
 	DeleteModelLaunchArgumentsResponses,
@@ -643,6 +646,9 @@ import type {
 	GetModelLabExperimentTraceData,
 	GetModelLabExperimentTraceErrors,
 	GetModelLabExperimentTraceResponses,
+	GetModelLabPlaygroundRunData,
+	GetModelLabPlaygroundRunErrors,
+	GetModelLabPlaygroundRunResponses,
 	GetModelLabPyTorchIndexData,
 	GetModelLabPyTorchIndexErrors,
 	GetModelLabPyTorchIndexResponses,
@@ -931,6 +937,9 @@ import type {
 	ListModelLabExperimentsData,
 	ListModelLabExperimentsErrors,
 	ListModelLabExperimentsResponses,
+	ListModelLabPlaygroundRunsData,
+	ListModelLabPlaygroundRunsErrors,
+	ListModelLabPlaygroundRunsResponses,
 	ListNodeAuthSessionsData,
 	ListNodeAuthSessionsErrors,
 	ListNodeAuthSessionsResponses,
@@ -1303,6 +1312,9 @@ import type {
 	StartModelLabExperimentData,
 	StartModelLabExperimentErrors,
 	StartModelLabExperimentResponses,
+	StartModelLabPlaygroundRunData,
+	StartModelLabPlaygroundRunErrors,
+	StartModelLabPlaygroundRunResponses,
 	StartProcessCaptureData,
 	StartProcessCaptureErrors,
 	StartProcessCaptureResponses,
@@ -1542,6 +1554,7 @@ import {
 	zDeleteMcpServerResponse,
 	zDeleteModelKindResponse,
 	zDeleteModelLabExperimentResponse,
+	zDeleteModelLabPlaygroundRunResponse,
 	zDeleteModelLaunchArgumentsResponse,
 	zDeleteNodeChatConversationResponse,
 	zDeletePlaybookActionResponse,
@@ -1657,6 +1670,7 @@ import {
 	zGetModelLabExperimentResponse,
 	zGetModelLabExperimentRoutingResponse,
 	zGetModelLabExperimentTraceResponse,
+	zGetModelLabPlaygroundRunResponse,
 	zGetModelLabPyTorchIndexResponse,
 	zGetModelLabPyTorchSourceResponse,
 	zGetModelLaunchArgumentsResponse,
@@ -1753,6 +1767,7 @@ import {
 	zListLocalModelsResponse,
 	zListMcpServersResponse,
 	zListModelLabExperimentsResponse,
+	zListModelLabPlaygroundRunsResponse,
 	zListNodeAuthSessionsResponse,
 	zListNodeBackupsResponse,
 	zListNodeChatConversationsResponse,
@@ -1876,6 +1891,7 @@ import {
 	zStartLlamaCppSourceBuildResponse,
 	zStartModelLabCheckpointDownloadResponse,
 	zStartModelLabExperimentResponse,
+	zStartModelLabPlaygroundRunResponse,
 	zStartProcessCaptureResponse,
 	zStartStableDiffusionCppSourceBuildResponse,
 	zStartTrainingExportResponse,
@@ -9680,6 +9696,97 @@ export const getModelLabExperimentTrace = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/model-lab/experiments/{experimentId}/trace",
+		...options,
+	});
+
+export const listModelLabPlaygroundRuns = <ThrowOnError extends boolean = true>(
+	options?: Options<ListModelLabPlaygroundRunsData, ThrowOnError>,
+): RequestResult<ListModelLabPlaygroundRunsResponses, ListModelLabPlaygroundRunsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListModelLabPlaygroundRunsResponses, ListModelLabPlaygroundRunsErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zListModelLabPlaygroundRunsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/playground/runs",
+		...options,
+	});
+
+export const startModelLabPlaygroundRun = <ThrowOnError extends boolean = true>(
+	options: Options<StartModelLabPlaygroundRunData, ThrowOnError>,
+): RequestResult<StartModelLabPlaygroundRunResponses, StartModelLabPlaygroundRunErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartModelLabPlaygroundRunResponses, StartModelLabPlaygroundRunErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zStartModelLabPlaygroundRunResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/playground/runs",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteModelLabPlaygroundRun = <ThrowOnError extends boolean = true>(
+	options: Options<DeleteModelLabPlaygroundRunData, ThrowOnError>,
+): RequestResult<DeleteModelLabPlaygroundRunResponses, DeleteModelLabPlaygroundRunErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeleteModelLabPlaygroundRunResponses, DeleteModelLabPlaygroundRunErrors, ThrowOnError>({
+		responseValidator: async (data) => await zDeleteModelLabPlaygroundRunResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/playground/runs/{runId}",
+		...options,
+	});
+
+export const getModelLabPlaygroundRun = <ThrowOnError extends boolean = true>(
+	options: Options<GetModelLabPlaygroundRunData, ThrowOnError>,
+): RequestResult<GetModelLabPlaygroundRunResponses, GetModelLabPlaygroundRunErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetModelLabPlaygroundRunResponses, GetModelLabPlaygroundRunErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelLabPlaygroundRunResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/playground/runs/{runId}",
 		...options,
 	});
 

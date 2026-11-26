@@ -23,6 +23,14 @@ public sealed class ModelLabScriptRunnerTests
         ScriptPath = "modellab.py"
     };
 
+    private static readonly ModelLabScriptRunner.ScriptCommand PlaygroundScript = new()
+    {
+        Interpreter = "python",
+        ScriptPath = "nnplayground.py",
+        ContractVersion = ModelLabPlaygroundSpec.ContractVersion,
+        PublishPhases = false
+    };
+
     [Test]
     public async Task FramesWithThisSpawnsToken_AreApplied_AndPublished()
     {
@@ -94,6 +102,64 @@ public sealed class ModelLabScriptRunnerTests
 
         AssertEx.True(process.Killed.Task.IsCompleted);
         AssertEx.Equal("The Model Lab script stopped reporting and was terminated.", run.FailureReason);
+    }
+
+    /// <summary>Unpublished phases still count: they keep the watchdog quiet and the done ends the run, while the buffer gets nothing at all.</summary>
+    [Test]
+    public async Task WithPhasesUnpublished_FramesStillCount_AndNothingReachesTheBuffer()
+    {
+        using var process = new ScriptedProcess();
+        using var work = new TempDirectory("modellab-runner");
+        var events = NewEvents();
+        var published = 0;
+        events.EventPublished += (_, _) => Interlocked.Increment(ref published);
+        var id = Guid.NewGuid();
+
+        var running = Runner(process, events, TimeProvider.System, new ModelLabJobOptions())
+            .RunAsync(id, Path.Combine(work.Path, "job"), JobJson(work.Path), PlaygroundScript, static _ => Task.CompletedTask, CancellationToken.None);
+        await process.Spawned.WaitAsync(TestBudgets.Contended);
+        process.Finish([
+            Stamped("""{"event":"handshake","contractVersion":1}""", process.Request!.RunToken),
+            Stamped("""{"event":"phase","phase":"training"}""", process.Request.RunToken),
+            Stamped("""{"event":"progress","step":1,"totalSteps":2,"vramBytes":0}""", process.Request.RunToken),
+            Stamped("""{"event":"done"}""", process.Request.RunToken)
+        ], exitCode: 0);
+        var run = await running.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.Null(run.FailureOrNull(cancelRequested: false), run.State.WithLastOutput("The stamped run should succeed."));
+        AssertEx.Equal(expected: 0, Volatile.Read(ref published));
+        var replay = events.Replay(id, afterSequence: 0);
+        AssertEx.Empty(replay.Events);
+        AssertEx.Equal(expected: 0L, replay.LatestSequence);
+    }
+
+    /// <summary>The handshake is held to the version the command names, so the playground's contract 1 passes and the tracer's is refused.</summary>
+    [Test]
+    [Arguments(ModelLabPlaygroundSpec.ContractVersion, false)]
+    [Arguments(ModelLabTraceSpec.ContractVersion, true)]
+    public async Task TheHandshake_IsHeldToTheCommandsContractVersion(int spoken, bool refused)
+    {
+        using var process = new ScriptedProcess();
+        using var work = new TempDirectory("modellab-runner");
+
+        var running = Runner(process, NewEvents(), TimeProvider.System, new ModelLabJobOptions())
+            .RunAsync(Guid.NewGuid(), Path.Combine(work.Path, "job"), JobJson(work.Path), PlaygroundScript, static _ => Task.CompletedTask, CancellationToken.None);
+        await process.Spawned.WaitAsync(TestBudgets.Contended);
+        process.Finish([
+            Stamped($$"""{"event":"handshake","contractVersion":{{spoken}}}""", process.Request!.RunToken),
+            Stamped("""{"event":"done"}""", process.Request.RunToken)
+        ], exitCode: 0);
+        var run = await running.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.Equal(refused, process.Killed);
+        if (refused)
+        {
+            AssertEx.Contains(run.FailureReason, "protocol version");
+        }
+        else
+        {
+            AssertEx.Null(run.FailureOrNull(cancelRequested: false), run.State.WithLastOutput("Contract 1 is the playground's own."));
+        }
     }
 
     private static ModelLabScriptRunner Runner(ITrainingProcessSpawner process, TrainingRunEventBuffer events, TimeProvider clock, ModelLabJobOptions options) =>

@@ -17,6 +17,14 @@ describe("modelLabSearchSchema", () => {
 		expect(modelLabSearchSchema.parse({ ...linked, tab: "trace" })).toEqual({ ...linked, tab: "trace" });
 	});
 
+	it("keeps the training stepper's tab and run, and drops a malformed run alone", () => {
+		expect(modelLabSearchSchema.parse({ tab: "playground", run: traceB })).toEqual({ tab: "playground", run: traceB });
+		expect(modelLabSearchSchema.parse({ tab: "playground", run: "not-a-guid", experiment: traceA })).toEqual({
+			tab: "playground",
+			experiment: traceA,
+		});
+	});
+
 	it("drops each invalid field alone and keeps the rest", () => {
 		expect(
 			modelLabSearchSchema.parse({

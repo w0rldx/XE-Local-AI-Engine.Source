@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.ApiFoundation;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Integration)]
@@ -993,6 +994,82 @@ public sealed class OpenApiDocumentTests
         AssertSchemaProperties(schemas, "AuthV1NodeAccessTokenResponse", ["accessToken", "expiresAtUtc", "refreshToken", "refreshTokenExpiresAtUtc"]);
         AssertRequired(schemas, "AuthV1NodeAccessTokenResponse", required: ["accessToken", "expiresAtUtc"],
             optional: ["refreshToken", "refreshTokenExpiresAtUtc"]);
+    }
+
+    /// <summary>The training stepper's knobs reach the generated client with every bound, the double ones included, and the dataset vocabulary as an enum.</summary>
+    [Test]
+    public async Task ModelLabPlaygroundStart_PublishesEveryKnob_WithItsBounds_AndTheDatasetEnum()
+    {
+        using var client = Factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        var start = FindSchema(schemas, "ModelLabV1StartModelLabPlaygroundRunRequest");
+        string[] knobs = ["dataset", "learningRate", "residual", "sharedBlock", "depth", "hidden", "steps", "seed"];
+        AssertRequired(schemas, "ModelLabV1StartModelLabPlaygroundRunRequest", knobs, optional: []);
+
+        var properties = start.GetProperty("properties");
+        AssertBounds(properties, "learningRate", ModelLabPlaygroundSpec.MinLearningRate, ModelLabPlaygroundSpec.MaxLearningRate);
+        AssertBounds(properties, "depth", ModelLabPlaygroundSpec.MinDepth, ModelLabPlaygroundSpec.MaxDepth);
+        AssertBounds(properties, "hidden", ModelLabPlaygroundSpec.MinHidden, ModelLabPlaygroundSpec.MaxHidden);
+        AssertBounds(properties, "steps", ModelLabPlaygroundSpec.MinSteps, ModelLabPlaygroundSpec.MaxSteps);
+        AssertBounds(properties, "seed", ModelLabPlaygroundSpec.MinSeed, ModelLabPlaygroundSpec.MaxSeed);
+        var datasetRef = properties.GetProperty("dataset").GetProperty("$ref").GetString()!;
+        AssertSchemaEnum(schemas, datasetRef[(datasetRef.LastIndexOf('/') + 1)..], ["xor", "spirals"]);
+    }
+
+    /// <summary>The four training-stepper operations, each with the statuses and bodies it really sends.</summary>
+    [Test]
+    public async Task ModelLabPlaygroundRoutes_DeclareTheirStatusesAndBodies()
+    {
+        using var client = Factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
+        var paths = document.RootElement.GetProperty("paths");
+        const string runs = "/api/local/v1/model-lab/playground/runs";
+        const string run = "/api/local/v1/model-lab/playground/runs/{runId}";
+
+        AssertEx.Equal("get, post", string.Join(", ", paths.GetProperty(runs).EnumerateObject().Select(static verb => verb.Name).Order(StringComparer.Ordinal)));
+        AssertEx.Equal("delete, get", string.Join(", ", paths.GetProperty(run).EnumerateObject().Select(static verb => verb.Name).Order(StringComparer.Ordinal)));
+        AssertResponses(paths, runs, "get", ["200", "401", "403"]);
+        AssertResponses(paths, runs, "post", ["200", "400", "401", "403", "409"]);
+        AssertResponses(paths, run, "get", ["200", "401", "403", "404", "409"]);
+        AssertResponses(paths, run, "delete", ["204", "401", "403", "404"]);
+        AssertProblemDetails(paths, runs, "post", "400");
+        AssertBody(paths, runs, "get", "200", "ModelLabV1ModelLabPlaygroundRunListResponse");
+        AssertBody(paths, runs, "post", "200", "ModelLabV1ModelLabPlaygroundRunResponse");
+        AssertBody(paths, runs, "post", "409", "ModelLabV1ModelLabPlaygroundBlockedResponse");
+        AssertBody(paths, run, "get", "200", "ModelLabV1ModelLabPlaygroundRunDetailResponse");
+        AssertBody(paths, run, "get", "409", "ModelLabV1ModelLabPlaygroundBlockedResponse");
+        AssertEx.False(paths.GetProperty(run).GetProperty("delete").TryGetProperty("requestBody", out _), "DELETE reads its id from the route only.");
+
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        AssertSchemaEnum(schemas, "ModelLabModelLabPlaygroundRefusal", ["UnsupportedPlatform", "RuntimeUnavailable", "Busy", "RunFailed", "TraceUnavailable"]);
+        AssertRequired(schemas, "ModelLabV1ModelLabPlaygroundRunListResponse", ["platformSupported", "unsupportedMessage", "maxRetainedRuns", "runs"], optional: []);
+        AssertRequired(schemas, "ModelLabV1ModelLabPlaygroundRunResponse",
+            ["id", "template", "config", "outcome", "finalLoss", "finalAccuracy", "traceByteCount", "createdAtUtc"], optional: []);
+        AssertRequired(schemas, "ModelLabV1ModelLabPlaygroundRunDetailResponse", ["run", "trace"], optional: []);
+    }
+
+    private static void AssertBody(JsonElement paths, string path, string verb, string status, string schemaSuffix)
+    {
+        var schema = paths.GetProperty(path).GetProperty(verb).GetProperty("responses").GetProperty(status).GetProperty("content")
+                          .GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString();
+        AssertEx.True(schema!.EndsWith(schemaSuffix, StringComparison.Ordinal), $"{verb.ToUpperInvariant()} {path} {status} declares {schema}.");
+    }
+
+    private static void AssertBounds(JsonElement properties, string knob, double minimum, double maximum)
+    {
+        var property = properties.GetProperty(knob);
+        AssertEx.True(property.TryGetProperty("minimum", out _) && property.TryGetProperty("maximum", out _), $"{knob} carries no bound: {property.GetRawText()}");
+        AssertEx.Equal(minimum, property.GetProperty("minimum").GetDouble(), property.GetRawText());
+        AssertEx.Equal(maximum, property.GetProperty("maximum").GetDouble(), property.GetRawText());
     }
 
     private static void AssertRequired(JsonElement schemas, string schemaSuffix, IReadOnlyList<string> required, IReadOnlyList<string> optional)
