@@ -41,6 +41,10 @@ That generated document is copied byte-for-byte into `Client.Application/Service
 as an `<EmbeddedResource>`, so the bundled seed and the authoring output can never drift; a test asserts they are
 identical. Neither file is ever hand-edited. See [External Apps](23-external-apps.md).
 
+`website/` is the docs website: a standalone pnpm project (its own `package.json` and `pnpm-lock.yaml`) that builds
+a Docusaurus site from the published folders of `docs/`. No `.csproj`, engine package or release workflow references
+it. Its workflow is described in [Docs website workflow](reference/13-docs-site.md).
+
 ## Project inventory
 
 Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `ProjectReference`) and, where useful, its file set.

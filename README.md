@@ -68,6 +68,8 @@ loopback-only. See the [install guide](docs/agentic-support/agent-install.md), t
 
 - **[User Guide](docs/user-guide/README.md)** — install, first run, troubleshooting and privacy, for non-developers.
 - **[Developer Wiki](docs/wiki/Home.md)** — the code-grounded architecture reference. Start at `Home.md`.
+- **[Docs website](https://w0rldx.github.io/XE-Local-AI-Engine.Source/)** — the user guide, wiki, ADRs, runbooks and
+  security notes as a searchable site, built from `develop`.
 - **[AGENTS.md](AGENTS.md)** — contributor rules, repository map, and the authoritative validation gate set;
   **[CONTRIBUTING.md](CONTRIBUTING.md)** — how to propose a change and what a PR must state.
 - **[Architecture Decision Records](docs/adr/README.md)** — design decisions and their code-level scope.

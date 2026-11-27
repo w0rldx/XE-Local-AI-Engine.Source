@@ -6,6 +6,7 @@
 
 [tools]
 # The major CI's client-react job runs; scripts/CheckNodeMajor.mjs reads the same value from the workflow.
+# docs-site.yml builds the docs website on the same major: bump it there too.
 node = "26"
 # package.json "packageManager".
 pnpm = "12.16.1"

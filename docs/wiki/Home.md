@@ -93,7 +93,7 @@ Lookup material split out of the largest pages. Each is complete on its own and 
 | 09 API & Hubs | [endpoint inventory](reference/09-endpoint-inventory.md) · [SignalR hubs](reference/09-signalr-hubs.md) |
 | 10 React Client | [feature folders](reference/10-feature-folders.md) |
 | 12 Security & Privacy | [admin API surface](reference/12-admin-api-surface.md) · [sandbox modes & options](reference/12-sandbox-modes-and-options.md) |
-| 13 Testing & Validation | [quality review](reference/13-quality-review.md) |
+| 13 Testing & Validation | [quality review](reference/13-quality-review.md) · [docs website workflow](reference/13-docs-site.md) |
 | 21 Graph Workflows | [node kinds](reference/21-node-kinds.md) |
 | 25 Model Lab | [Model Lab reference](reference/25-model-lab.md) |
 

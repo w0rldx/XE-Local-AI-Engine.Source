@@ -143,6 +143,20 @@ class DependabotGroupContractTests(unittest.TestCase):
         cls.package_manifest = json.loads(PACKAGE_MANIFEST.read_text(encoding="utf-8"))
         cls.pnpm_workspace = load_yaml(PNPM_WORKSPACE)
 
+    def test_website_is_one_cooled_down_catch_all_group(self) -> None:
+        websites = [
+            u
+            for u in load_yaml(DEPENDABOT)["updates"]
+            if u.get("package-ecosystem") == "npm" and u.get("directory") == "/website"
+        ]
+        self.assertEqual(1, len(websites), "expected exactly one website npm Dependabot configuration")
+        website = websites[0]
+        self.assertTrue((REPO_ROOT / "website" / "pnpm-lock.yaml").is_file())
+        self.assertEqual("develop", website["target-branch"])
+        self.assertEqual(self.npm_update["schedule"], website["schedule"])
+        self.assertEqual({"default-days": 7}, website["cooldown"])
+        self.assertEqual({"website-all": {"patterns": ["*"]}}, website["groups"])
+
     def test_frontend_schedule_and_scope_are_preserved(self) -> None:
         self.assertEqual("develop", self.npm_update["target-branch"])
         self.assertEqual(3, self.npm_update["open-pull-requests-limit"])

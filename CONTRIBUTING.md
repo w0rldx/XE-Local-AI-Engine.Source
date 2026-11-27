@@ -61,6 +61,25 @@ scripts/lint-release-scripts.sh
 
 End-to-end tests are opt-in and ask-gated: `scripts/run-e2e-local.sh`.
 
+## Docs website
+
+The [docs website](https://w0rldx.github.io/XE-Local-AI-Engine.Source/) is built from `docs/` by the Docusaurus
+project in [`website/`](website/). `docs/` stays the only source: edit the Markdown there, never a copy. To preview,
+with Node 26 and pnpm, run in `website/`:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm start
+```
+
+- Only some folders are published: the user guide, agentic support, troubleshooting, the wiki, the ADRs, the
+  runbooks and the security notes. The list lives in
+  [`website/src/lib/scope.mjs`](website/src/lib/scope.mjs).
+- A link from a published page to a file that is not published becomes a link to that file on GitHub, so links keep
+  working in both places.
+- The build fails on a broken link or anchor. The workflow and the full local check list:
+  [Docs website workflow](docs/wiki/reference/13-docs-site.md).
+
 ## Pull requests
 
 - Branch from and target `develop`.

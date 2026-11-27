@@ -1,0 +1,4 @@
+build/
+.docusaurus/
+node_modules/
+src/data/third-party-notices.generated.json

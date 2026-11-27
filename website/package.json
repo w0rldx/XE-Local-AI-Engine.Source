@@ -1,0 +1,29 @@
+{
+  "name": "xe-local-ai-engine-website",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "scripts": {
+    "start": "node scripts/licenses.mjs generate && docusaurus start",
+    "build": "node scripts/licenses.mjs generate && docusaurus build",
+    "serve": "docusaurus serve",
+    "clear": "docusaurus clear",
+    "test": "node --test",
+    "licenses:check": "node scripts/licenses.mjs check",
+    "verify:build": "node scripts/verify-build.mjs"
+  },
+  "dependencies": {
+    "@docusaurus/core": "3.10.2",
+    "@docusaurus/faster": "3.10.2",
+    "@docusaurus/preset-classic": "3.10.2",
+    "@easyops-cn/docusaurus-search-local": "0.55.3",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "js-yaml": "4.3.2"
+  }
+}

@@ -134,6 +134,23 @@ updates:
           - "typescript"
           - "@types/*"
 
+  # The docs website: build-time only, nothing ships with the engine, so one weekly group is enough.
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:30"
+      timezone: Europe/Berlin
+    target-branch: develop
+    open-pull-requests-limit: 1
+    cooldown:
+      default-days: 7
+    groups:
+      website-all:
+        patterns:
+          - "*"
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

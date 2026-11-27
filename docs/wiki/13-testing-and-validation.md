@@ -495,9 +495,9 @@ packaging. The release workflow is immutable-tag-bound: the environment-protecte
 no assets, but uploads, merges, and remotely verifies the retained matrix output as a draft; a separately approved
 `publish-release` job re-verifies and promotes that same draft without rebuilding or replacing assets.
 
-GitHub Actions is **enabled and green** on this repository, so `build-and-test.yml` is a live PR gate on
-`develop`, not a paper design. The workflow files are still the design of record — read them for intent, and keep
-them accurate if you change the validation commands.
+`build-and-test.yml` is a live PR gate on `develop`. The workflow files are the design of record: keep them accurate
+when you change the validation commands. `docs-site.yml` publishes the docs website and is not a gate:
+[Docs website workflow](reference/13-docs-site.md).
 
 **Where the release-time gates live:** `release.yml`'s `validate` job runs the full backend + frontend gate set via
 `build-and-test.yml` against the exact tagged commit before anything is packed or uploaded — downstream `version`,

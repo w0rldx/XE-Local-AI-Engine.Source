@@ -1,0 +1,14 @@
+minimumReleaseAge: 10080
+minimumReleaseAgeStrict: false
+trustPolicy: no-downgrade
+
+# Deny-by-default install scripts; each entry is a reviewed decision.
+allowBuilds:
+  # @swc/core postinstall only prints/validates the native binding; the platform binary ships as an optional package.
+  '@swc/core': false
+  # core-js postinstall only prints a funding banner.
+  core-js: false
+
+overrides:
+  'tinypool@<2.1.2': '2.1.2'
+  'serialize-javascript@<7.0.3': '7.1.4'
