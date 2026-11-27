@@ -7,6 +7,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadAll } from 'js-yaml';
+import { fromMarkdown } from 'mdast-util-from-markdown';
 import { promisify } from 'node:util';
 
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -154,7 +155,10 @@ export function policyProblems(packages, exceptions, lockIds) {
   return problems;
 }
 
-/** License, NOTICE and COPYING files anywhere in the package (nested ones credit vendored code); else the README's License section. */
+const README_SECTION = ' (License section)';
+const ROOT_LICENSE_FILE = /^(?:licen[cs]e|copying)(?:[-._][^/]*)?$/i;
+
+/** License, NOTICE and COPYING files anywhere in the package (nested ones credit vendored code), plus the README's License section. */
 export function readNoticeTexts(dir) {
   const read = (file) => readFileSync(join(dir, file), 'utf8').replace(/\r\n?/g, '\n').trim();
   const found = [];
@@ -168,31 +172,33 @@ export function readNoticeTexts(dir) {
   };
   visit('');
   const notices = found.sort().map((file) => ({ file, text: read(file) }));
-  if (notices.length > 0) return notices;
   const readme = readdirSync(dir, { withFileTypes: true }).filter((e) => e.isFile()).map((e) => e.name).sort()
     .find((file) => /^readme(\.[a-z]+)?$/i.test(file));
   const section = readme && readmeLicenseSection(read(readme));
-  return section ? [{ file: `${readme} (License section)`, text: section }] : [];
+  return section ? [...notices, { file: `${readme}${README_SECTION}`, text: section }] : notices;
 }
 
-// ATX ("## License") or Setext ("License" underlined with = or -) headings; level 1 = "#" or "===", 2 = "##" or "---"
-const HEADING = /^(?:(#{1,6})[ \t]+(.*?)[ \t#]*|(\S.*)\n(=+|-+)[ \t]*)$/gm;
+const textOf = (node) => node.value ?? node.children?.map(textOf).join('') ?? '';
+
+// A real Markdown parse: headings inside code fences or HTML comments are not heading nodes, so they can neither
+// start nor end a section. Every top-level License/Licence/Licensing/Copyright section is kept (decorations such as
+// "❯ License" or "📄 License" may come first), each running to the next heading of the same or a higher level.
+const NOTICE_HEADING = /^[^\p{L}\p{N}]*(?:licen(?:[cs]e|sing)|copyright)\b/iu;
 
 export function readmeLicenseSection(markdown) {
-  const headings = [...markdown.matchAll(HEADING)].map((m) => ({
-    at: m.index,
-    end: m.index + m[0].length,
-    level: m[1] ? m[1].length : m[4][0] === '=' ? 1 : 2,
-    title: (m[2] ?? m[3]).trim(),
-    raw: m[0].trim(),
-  }));
-  const index = headings.findIndex((h) => /^licen[cs]e\b/i.test(h.title));
-  if (index < 0) return null;
-  const heading = headings[index];
-  const next = headings.slice(index + 1).find((h) => h.level <= heading.level);
-  const body = markdown.slice(heading.end, next?.at ?? markdown.length)
-    .replace(/<!--[\s\S]*?-->/g, '').replace(/\n{3,}/g, '\n\n').trim();
-  return body === '' ? null : `${heading.raw}\n\n${body}`;
+  const headings = fromMarkdown(markdown).children.filter((node) => node.type === 'heading');
+  const sections = [];
+  let takenUntil = -1;
+  headings.forEach((heading, index) => {
+    const start = heading.position.start.offset;
+    if (start < takenUntil || !NOTICE_HEADING.test(textOf(heading).trim())) return;
+    const next = headings.slice(index + 1).find((h) => h.depth <= heading.depth);
+    takenUntil = next?.position.start.offset ?? markdown.length;
+    const raw = markdown.slice(start, heading.position.end.offset).trim();
+    const body = markdown.slice(heading.position.end.offset, takenUntil).replace(/\n{3,}/g, '\n\n').trim();
+    if (body !== '') sections.push(`${raw}\n\n${body}`);
+  });
+  return sections.length > 0 ? sections.join('\n\n') : null;
 }
 
 const byNameThenVersion = (a, b) =>
@@ -227,15 +233,20 @@ export function buildNotices(packages, exceptions) {
     if (repository && repository !== homepage) notice.repository = repository;
     if (exception) notice.note = exception.reason;
     notice.texts = [...pkg.texts].sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
-    if (notice.texts.length === 0 && !exception) {
-      const verdict = licenseVerdict(pkg.license);
-      if (!verdict.ok) {
-        problems.push(`${id}: no license text in the package and ${verdict.why}`);
+    // Attribution from metadata goes on every notice, whatever files a package ships or which policy admitted it.
+    const author = authorName(pkg.author);
+    if (author) notice.author = author;
+    try {
+      notice.spdx = [...new Set(licenseIds(parseSpdx(license)))].map((spdxId) => `https://spdx.org/licenses/${spdxId}.html`);
+    } catch {
+      // an unparseable expression is reported by the policy check; the notice keeps the raw license text
+    }
+    // its own license: a LICENSE/LICENCE/COPYING file at the package root (NOTICE and nested files only credit others)
+    if (!notice.texts.some((text) => ROOT_LICENSE_FILE.test(text.file))) {
+      if (!exception && !licenseVerdict(pkg.license).ok) {
+        problems.push(`${id}: no license file in the package and ${licenseVerdict(pkg.license).why}`);
       } else {
-        notice.missingText = `No license text shipped in the package; licensed ${pkg.license} per package metadata`;
-        const author = authorName(pkg.author);
-        if (author) notice.author = author;
-        notice.spdx = [...new Set(licenseIds(parseSpdx(pkg.license)))].map((spdxId) => `https://spdx.org/licenses/${spdxId}.html`);
+        notice.missingText = `No license file shipped in the package; licensed ${license} per ${exception ? 'the approved exception' : 'package metadata'}`;
       }
     }
     return notice;

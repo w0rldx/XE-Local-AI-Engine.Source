@@ -10,14 +10,10 @@ function Notice({ pkg }) {
       <strong>{id}</strong> ({pkg.license})
       {pkg.homepage && <> · <Link href={pkg.homepage}>homepage</Link></>}
       {pkg.repository && <> · <Link href={pkg.repository}>repository</Link></>}
+      {pkg.spdx?.map((url) => <span key={url}> · <Link href={url}>{url.replace(/^.*\/(.*)\.html$/, '$1')}</Link></span>)}
+      {pkg.author && <> · author {pkg.author}</>}
       {pkg.note && <p className="margin-bottom--none">{pkg.note}</p>}
-      {pkg.missingText && (
-        <p className="margin-bottom--none">
-          {pkg.missingText}
-          {pkg.author && <>; author {pkg.author}</>}
-          {pkg.spdx.map((url) => <span key={url}> · <Link href={url}>{url.replace(/^.*\/(.*)\.html$/, '$1')}</Link></span>)}
-        </p>
-      )}
+      {pkg.missingText && <p className="margin-bottom--none">{pkg.missingText}</p>}
       {pkg.texts.map((text) => (
         <details key={text.file}>
           <summary>{text.file}</summary>

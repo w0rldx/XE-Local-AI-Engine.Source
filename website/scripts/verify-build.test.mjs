@@ -93,3 +93,7 @@ test('authoredWidthProblems pairs a repeated image with its built copies one-to-
   ]);
   assert.deepEqual(authoredWidthProblems(markdown, img(460) + img()), ['<img src="../media/a.png" width="900"> has no built <img>']);
 });
+
+test('attrValues decodes &amp; last, so an escaped entity stays literal', () => {
+  assert.deepEqual(attrValues('<a href="a&amp;quot;b&quot;c&amp;d">', 'href'), ['a&quot;b"c&d']);
+});

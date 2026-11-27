@@ -12,7 +12,8 @@ const EDIT_PREFIX = `${REPO_URL}/edit/${BRANCH}/docs/`;
 
 const TAG = (names) => new RegExp(`<(?:${names})\\b(?:[^>"']|"[^"]*"|'[^']*')*>`, 'gi');
 const ATTR = (name) => new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'=<>\`]+))`, 'gi');
-const decodeEntities = (value) => value.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+// &amp; last, so an escaped entity such as &amp;quot; stays the literal text &quot;
+const decodeEntities = (value) => value.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 
 // Docs route (without baseUrl) for a docs-relative source: file name without extension, README/index = its folder.
 export function routeFor(source) {

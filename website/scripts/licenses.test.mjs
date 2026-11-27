@@ -181,7 +181,7 @@ test('a lockfile-only package without registry license metadata fails', () => {
 });
 
 test('readmeLicenseSection stops at the next heading of the same level', () => {
-  const md = '# x\n\n## License\n\nMIT © Someone\n\n<!-- defs -->\n\n### Sub\n\nkept\n\n## Next\n\ndropped';
+  const md = '# x\n\n## License\n\nMIT © Someone\n\n### Sub\n\nkept\n\n## Next\n\ndropped';
   assert.equal(readmeLicenseSection(md), '## License\n\nMIT © Someone\n\n### Sub\n\nkept');
   assert.equal(readmeLicenseSection('# x\n\nno section'), null);
 });
@@ -217,7 +217,7 @@ test('a package without text but with an allowlisted license is listed from its 
     homepage: 'https://example.com/bare',
     repository: 'https://github.com/x/bare',
     texts: [],
-    missingText: 'No license text shipped in the package; licensed (MIT OR Apache-2.0) per package metadata',
+    missingText: 'No license file shipped in the package; licensed (MIT OR Apache-2.0) per package metadata',
     author: 'Jane Doe',
     spdx: ['https://spdx.org/licenses/MIT.html', 'https://spdx.org/licenses/Apache-2.0.html'],
   });
@@ -225,7 +225,7 @@ test('a package without text but with an allowlisted license is listed from its 
 
 test('a package without text and without usable license metadata fails generation', () => {
   const { problems } = buildNotices([withTexts('bare', '1.0.0', 'Unknown', [])], {});
-  assert.deepEqual(problems, ['bare@1.0.0: no license text in the package and missing or unknown license']);
+  assert.deepEqual(problems, ['bare@1.0.0: no license file in the package and missing or unknown license']);
 });
 
 test('an exception supplies the license and note, and unsafe URLs are dropped', () => {
@@ -303,4 +303,74 @@ test('readmeLicenseSection reads Setext headings underlined with - or =', () => 
   assert.equal(readmeLicenseSection(dashes), 'License (MIT)\n-------------\n\nCopyright (c) Gary Court, Jens Taylor');
   const equals = 'format\n======\n\nLicense\n=======\n\nMIT, Example Author';
   assert.equal(readmeLicenseSection(equals), 'License\n=======\n\nMIT, Example Author');
+});
+
+test('readmeLicenseSection keeps HTML comments as text instead of sanitizing them', () => {
+  assert.equal(readmeLicenseSection('## License\n\nMIT <!-- note --> © Someone'), '## License\n\nMIT <!-- note --> © Someone');
+});
+
+test('a package whose only text is a README License section still gets the metadata fallback', () => {
+  const readmeOnly = { ...withTexts('r', '1.0.0', 'MIT', [{ file: 'README.md (License section)', text: '## License\n\n<!-- TODO -->' }]), author: 'Ann' };
+  const { notices, problems } = buildNotices([readmeOnly], {});
+  assert.deepEqual(problems, []);
+  assert.equal(notices[0].texts.length, 1);
+  assert.equal(notices[0].missingText, 'No license file shipped in the package; licensed MIT per package metadata');
+  assert.equal(notices[0].author, 'Ann');
+  assert.deepEqual(notices[0].spdx, ['https://spdx.org/licenses/MIT.html']);
+});
+
+test('a NOTICE-only package keeps its NOTICE, adds its README License section and gets the metadata fallback', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'notice-only-'));
+  try {
+    writeFileSync(join(dir, 'NOTICE'), 'Thanks to Example Corp');
+    writeFileSync(join(dir, 'README.md'), '# pkg\n\n## License\n\nMIT © Ann\n');
+    const texts = readNoticeTexts(dir);
+    assert.deepEqual(texts.map((t) => t.file), ['NOTICE', 'README.md (License section)']);
+    const { notices, problems } = buildNotices([{ ...withTexts('n', '1.0.0', 'MIT', texts), author: 'Ann' }], {});
+    assert.deepEqual(problems, []);
+    assert.equal(notices[0].missingText, 'No license file shipped in the package; licensed MIT per package metadata');
+    assert.equal(notices[0].author, 'Ann');
+    assert.deepEqual(notices[0].spdx, ['https://spdx.org/licenses/MIT.html']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a fileless package admitted by an exception still gets its author and SPDX link', () => {
+  const pkg = { ...withTexts('m', '2.0.0', 'MPL-2.0', []), author: { name: 'Mo' } };
+  const { notices, problems } = buildNotices([pkg], { 'm@2.0.0': approved('MPL-2.0') });
+  assert.deepEqual(problems, []);
+  assert.equal(notices[0].missingText, 'No license file shipped in the package; licensed MPL-2.0 per the approved exception');
+  assert.equal(notices[0].author, 'Mo');
+  assert.deepEqual(notices[0].spdx, ['https://spdx.org/licenses/MPL-2.0.html']);
+  assert.equal(notices[0].note, 'reviewed');
+});
+
+test('readmeLicenseSection skips License headings inside code fences and HTML comments', () => {
+  const md = '# unified\n\n```markdown\n## License\n\nexample.js tutorial\n```\n\n<!--\n## License\n-->\n\n## License\n\n[MIT][license] © Titus Wormer\n\n## Next\n\ndropped';
+  assert.equal(readmeLicenseSection(md), '## License\n\n[MIT][license] © Titus Wormer');
+});
+
+test('readmeLicenseSection accepts decorated License headings but not other titles', () => {
+  assert.equal(readmeLicenseSection('# p\n\n## ❯ License\n\nMIT © Terkel Gjervig'), '## ❯ License\n\nMIT © Terkel Gjervig');
+  assert.equal(readmeLicenseSection('# a\n\n## 📄 License\n\nMIT'), '## 📄 License\n\nMIT');
+  assert.equal(readmeLicenseSection('# a\n\n## Unlicensed builds\n\nx'), null);
+  assert.equal(readmeLicenseSection('# a\n\n## Our License\n\nx'), null);
+});
+
+test('a Licensing README section reaches the notice next to the root license file', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'licensing-'));
+  try {
+    writeFileSync(join(dir, 'LICENSE'), 'Apache License 2.0');
+    writeFileSync(join(dir, 'README.md'), '# detect-libc\n\n## Licensing\n\nCopyright 2017 Lovell Fuller and others.\n');
+    assert.deepEqual(readNoticeTexts(dir).map((t) => t.text), ['Apache License 2.0', '## Licensing\n\nCopyright 2017 Lovell Fuller and others.']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('readmeLicenseSection also keeps Copyright sections, without repeating nested ones', () => {
+  const md = '# color-helpers\n\n## Copyright\n\nDerived from CSS Color 4, © W3C.\n\n## Usage\n\nskip\n\n## License\n\nMIT\n\n### Copyright notes\n\nnested once';
+  assert.equal(readmeLicenseSection(md), '## Copyright\n\nDerived from CSS Color 4, © W3C.\n\n## License\n\nMIT\n\n### Copyright notes\n\nnested once');
+  assert.equal(readmeLicenseSection('# a\n\n## Copyright : color conversions\n\n© W3C'), '## Copyright : color conversions\n\n© W3C');
 });
